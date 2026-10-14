@@ -115,6 +115,38 @@ public class MainActivity extends Activity {
         teleport.setOnClickListener(v -> runTask(NativeCore::teleport));
         root.addView(teleport);
 
+        root.addView(text("Exact T-gate experiment", 14, true));
+        LinearLayout tRow = new LinearLayout(this);
+        tRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        EditText tQubits = new EditText(this);
+        tQubits.setText("4");
+        tQubits.setHint("qubits");
+        tQubits.setTextColor(Color.WHITE);
+        tQubits.setHintTextColor(Color.GRAY);
+        tQubits.setInputType(InputType.TYPE_CLASS_NUMBER);
+        tRow.addView(tQubits, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        EditText tCount = new EditText(this);
+        tCount.setText("8");
+        tCount.setHint("T gates");
+        tCount.setTextColor(Color.WHITE);
+        tCount.setHintTextColor(Color.GRAY);
+        tCount.setInputType(InputType.TYPE_CLASS_NUMBER);
+        tRow.addView(tCount, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        root.addView(tRow, fullWidth());
+
+        Button tExperiment = button("RUN EXACT T EXPERIMENT");
+        tExperiment.setOnClickListener(v -> runTask(() -> {
+            int tq = readBounded(tQubits, 4, 1, 16);
+            int tt = readBounded(tCount, 8, 0, 12);
+            return NativeCore.tExperiment(tq, tt);
+        }));
+        root.addView(tExperiment);
+
         root.addView(text("Qubits para GHZ / escala", 14, true));
         qubits = new EditText(this);
         qubits.setText("1000");
