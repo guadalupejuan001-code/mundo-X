@@ -37,6 +37,10 @@ jobs:
           .\build\Release\mundo_x.exe t-experiment 4 8
           .\build\Release\mundo_x.exe t-experiment 4 10
           .\build\Release\mundo_x.exe t-experiment 4 12
+          .\build\Release\mundo_x.exe t-reduced-experiment 4 12
+          .\build\Release\mundo_x.exe t-reduced-experiment 6 12
+          .\build\Release\mundo_x.exe t-reduced-experiment 8 24
+          .\build\Release\mundo_x.exe t-reduced-experiment 8 64
 
       - name: Stage
         shell: pwsh
