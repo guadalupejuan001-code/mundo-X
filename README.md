@@ -266,6 +266,69 @@ funciones, macros y más adelante un modelo operativo propio.
 
 ---
 
+# Benchmark 2D cluster-state — resultado grande
+
+Se añadió un benchmark de **estado cluster 2D**, una estructura de
+entrelazamiento mucho más rica que GHZ y relevante para computación cuántica
+basada en mediciones.
+
+## Validación 4×4
+
+El mismo circuito se ejecutó con Compact Core y Dense Core:
+
+```
+CLUSTER_COMPACT rows=4 cols=4 qubits=16
+state_bytes=272
+signature=PASS
+ms=0.005
+```
+
+```
+CLUSTER_DENSE rows=4 cols=4 qubits=16
+state_bytes=524288
+state_mib=0.500
+signature=PASS
+ms=22.329
+```
+
+Ambos motores validaron la firma del mismo estado cluster.
+
+## Escala 32×32
+
+Después se ejecutó:
+
+```
+32 × 32 = 1,024 qubits
+```
+
+con Compact Core:
+
+```
+CLUSTER_COMPACT rows=32 cols=32 qubits=1024
+state_bytes=263168
+state_mib=0.251
+signature=PASS
+ms=10.206
+```
+
+Resultado:
+
+- **1,024 qubits**
+- **~257 KiB de estado**
+- **firma del cluster: PASS**
+- **~10.2 ms** en el runner Linux de GitHub Actions
+
+Un statevector denso de 1,024 qubits requeriría `2^1024` amplitudes y no es una
+representación materializable en hardware convencional.
+
+> Este resultado sigue perteneciendo a la familia Clifford/stabilizer. No demuestra
+> simulación universal arbitraria de 1,024 qubits. Demuestra que una estructura
+> cuántica 2D altamente entrelazada puede representarse y validarse compactamente
+> sin materializar un statevector completo.
+
+
+---
+
 # Próxima meta: Compact X general
 
 Compact Core ya demuestra la idea de representación estructurada dentro de
