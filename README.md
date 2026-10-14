@@ -1,51 +1,50 @@
 # Mundo X
 
-**Mundo X** es un prototipo experimental para explorar computación basada en estados ondulatorios compactos.
+**Mundo X** es un prototipo experimental de un nuevo sustrato computacional.
 
-## Transformer X
+## Orden del proyecto
 
-Representación mínima actual:
+1. **Quantum Core X** — montar primero un espacio de estados cuánticos válido.
+2. **Transformer X** — investigar después cómo aprender/transformar dentro o alrededor de ese espacio.
+3. **Interfaz X** — traducir información externa cuando el núcleo ya tenga comportamiento verificable.
+4. Memoria, pliegue y modo operativo — solo después de medir las etapas anteriores.
 
-- **posición del modo = frecuencia/identidad implícita**
-- **estado del modo =** `z = Re + i·Im = A·e^(iφ)`
-- solo necesitamos materializar los modos que participan
+## Quantum Core X v0.1
 
-La primera etapa crea un puente con la computación actual:
-
-```
-archivo / memoria / bytes actuales
-              ↓
-           Bridge X
-              ↓
-       modos + estado z
-              ↓
-        Transformer X
-              ↓
-       siguiente estado z
-```
-
-La máquina convencional sigue usando bits debajo. La hipótesis de Mundo X es que el **modelo no tiene que razonar en bits**: Bridge X traduce la entrada y Transformer X opera en un espacio de modos.
-
-## Experimento v0.1
-
-1. Leer bytes de un archivo real.
-2. Dividirlos en ventanas.
-3. Cada valor de byte (0–255) ocupa un modo fijo.
-4. Para cada modo activo, Bridge X calcula:
-   - amplitud = frecuencia relativa de aparición;
-   - fase = posición media circular dentro de la ventana.
-5. Transformer X observa el campo de una ventana.
-6. Predice cómo estarán esos mismos modos en la ventana siguiente.
-7. Se compara contra un baseline simple que supone que el estado no cambia.
-
-El experimento solo cuenta como aprendizaje si:
+El núcleo actual representa estados:
 
 ```
-loss(Transformer X) < loss(identity baseline)
+|psi> = alpha|0> + beta|1>
 ```
 
-en datos no usados para actualizar los pesos.
+y para varios qubits:
+
+```
+|psi> = sum(alpha_k |k>)
+```
+
+con norma total igual a 1.
+
+La primera prueba incluye:
+
+- superposición;
+- fase;
+- interferencia;
+- CNOT;
+- entrelazamiento de Bell;
+- medición.
+
+Ejecuta:
+
+```bash
+python experiments/quantum_interference_v0_1.py
+```
 
 ## Estado científico
 
-Esto es un prototipo digital de representación ondulatoria. **No demuestra computación cuántica ni ventaja computacional.** Su función es producir evidencia medible antes de añadir memoria, pliegue o hardware físico.
+Quantum Core X es actualmente una **simulación clásica de matemáticas
+cuánticas**. Todavía no existe hardware cuántico propio ni se ha demostrado
+ventaja computacional.
+
+Transformer X permanece en el repositorio como experimento separado, pero
+no define el núcleo cuántico.
