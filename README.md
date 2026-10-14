@@ -327,6 +327,68 @@ representación materializable en hardware convencional.
 > sin materializar un statevector completo.
 
 
+## Verificación real en Android
+
+La APK fue instalada y ejecutada en un teléfono Android arm64 real.
+
+### GHZ — 1,000 qubits
+
+Salida observada en el dispositivo:
+
+```
+COMPACT X
+qubits=1000
+state_bytes=257000
+state_mib=0.245
+GHZ=PASS
+time_ms=8.909
+
+Android process PSS ~= 68563 kB
+```
+
+Resultado:
+
+- **1,000 qubits GHZ**
+- **257,000 bytes de estado**
+- **~0.245 MiB de estado**
+- **GHZ: PASS**
+- **~8.9 ms**
+- proceso Android completo: **~68.6 MB PSS**
+
+### Cluster 2D — 32×32 = 1,024 qubits
+
+Salida observada en el mismo dispositivo:
+
+```
+2D CLUSTER STATE
+rows=32
+cols=32
+qubits=1024
+state_bytes=263168
+state_mib=0.251
+signature=PASS
+time_ms=53.212
+
+Android process PSS ~= 63318 kB
+```
+
+Resultado:
+
+- **1,024 qubits**
+- **263,168 bytes de estado**
+- **~0.251 MiB de estado**
+- **firma del cluster: PASS**
+- **~53.2 ms**
+- proceso Android completo: **~63.3 MB PSS**
+
+El PSS corresponde a **todo el proceso Android**: runtime, interfaz, librerías,
+APK y memoria nativa. No debe confundirse con el tamaño del estado cuántico
+compacto, que en estas pruebas fue de ~0.25 MiB.
+
+Estas mediciones confirman que los resultados del runtime compilado también se
+reproducen en hardware móvil real.
+
+
 ---
 
 # Próxima meta: Compact X general
@@ -406,7 +468,7 @@ Build verificado:
 
 ```
 workflow: Build Mundo X Lab APK
-run: #5
+última verificación relevante: run #16
 status: success
 artifact: Mundo-X-Lab-APK
 ```
@@ -443,8 +505,11 @@ Este build es un **debug APK** firmado por el toolchain de Android. No es una
 release firmada para publicación en Google Play.
 
 La estructura del APK fue inspeccionada tras la compilación y contiene el DEX,
-manifest, recursos y la librería nativa esperada. La instalación física en un
-teléfono debe comprobarse en un dispositivo Android arm64.
+manifest, recursos y la librería nativa esperada.
+
+La instalación física **ya fue verificada en un dispositivo Android arm64**.
+En ese dispositivo pasaron tanto el benchmark GHZ de 1,000 qubits como el
+cluster-state 2D de 1,024 qubits.
 
 
 ---
