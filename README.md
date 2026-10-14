@@ -207,11 +207,12 @@ menos memoria
 ## Orden del proyecto
 
 ```
-1. Quantum Core          -> referencia cuántica correcta        [ACTUAL]
-2. Compact Quantum Core  -> atacar representación y memoria      [SIGUIENTE]
-3. Interface X           -> entrada/salida de información
-4. Transformer X         -> usar aprendizaje solo si aporta
-5. Fold / modo operativo -> investigar dinámica posterior
+1. Quantum Core          -> referencia cuántica densa            [HECHO]
+2. Compact Quantum Core  -> baseline Clifford compilable          [ACTIVO]
+3. Compact X general     -> superar límites del baseline          [SIGUIENTE]
+4. Interface X           -> entrada/salida de información
+5. Transformer X         -> usar aprendizaje solo si aporta
+6. Fold / modo operativo -> investigar dinámica posterior
 ```
 
 Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con una prueba.
