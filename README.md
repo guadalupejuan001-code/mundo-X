@@ -917,6 +917,49 @@ FPS hasta medirla en hardware real.
 
 ---
 
+# Android HOME launcher
+
+Mundo X ya puede registrarse como **launcher HOME real de Android**.
+
+Al pulsar el botón Home, Android puede ofrecer `Mundo X` como pantalla principal
+predeterminada.
+
+Funciones actuales:
+
+- reloj y fecha;
+- HUD de RAM disponible/total;
+- temperatura de batería;
+- estado térmico;
+- indicador de Battery Saver;
+- cajón de aplicaciones;
+- búsqueda por nombre o paquete;
+- apertura directa de cualquier app;
+- pulsación larga para abrir la información de la app;
+- accesos directos a ajustes, Performance Launcher y Mundo X Lab.
+
+El launcher usa una interfaz deliberadamente ligera y no requiere root.
+
+Limitaciones:
+
+- no sustituye el kernel de Android;
+- no controla clocks CPU/GPU;
+- no modifica aplicaciones;
+- no elimina procesos ajenos;
+- no cambia permisos del sistema.
+
+Build verificado:
+
+```
+workflow: Build Mundo X Lab APK
+run: #42
+status: success
+commit: 60425ffffd6e5dd3e4868b0ae9e39b812f1251b1
+APK size: 1,059,117 bytes
+sha256: db094151347b039b0909eda9302557928b66a017286cbc436510c9dddd6fa1d0
+```
+
+---
+
 # Wild Rift low-end mode — Android
 
 Mundo X Lab incluye una capa de preparación para **League of Legends: Wild Rift**
