@@ -769,6 +769,58 @@ results/visual_android_samsung_a16_5g_2026-10-14.md
 
 ---
 
+# Teletransportación cuántica en Compact Core
+
+Mundo X ya incluye una prueba reproducible de **teletransportación de estado
+cuántico** implementada directamente sobre Compact Core.
+
+Ruta:
+
+```
+q0: estado origen
+q1-q2: par entrelazado
+CNOT(q0,q1)
+H(q0)
+medir q0 -> m0
+medir q1 -> m1
+X(q2)^m1
+Z(q2)^m0
+q2: estado destino
+```
+
+Se validaron los seis estados estabilizadores de un qubit:
+
+```
+|0>   -> +Z
+|1>   -> -Z
+|+>   -> +X
+|->   -> -X
+|+i>  -> +Y
+|-i>  -> -Y
+```
+
+y las cuatro ramas de medición `00`, `01`, `10`, `11` para cada estado.
+
+Resultado de GitHub Actions run #33:
+
+```
+passed=24/24
+compact_state_bytes=51
+result=PASS
+```
+
+Esto demuestra teletransportación correcta del **estado cuántico** dentro del
+dominio Clifford/estabilizador actual de Compact Core. No implica transporte de
+materia ni hardware cuántico físico.
+
+Registro completo:
+
+```
+results/compact_quantum_teleportation_2026-10-14.md
+```
+
+---
+
 # Wild Rift low-end mode — Android
 
 Mundo X Lab incluye una capa de preparación para **League of Legends: Wild Rift**
