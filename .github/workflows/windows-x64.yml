@@ -33,6 +33,8 @@ jobs:
           .\build\Release\mundo_x.exe run examples\bell.x
           .\build\Release\mundo_x.exe cluster 4 4 --dense
           .\build\Release\mundo_x.exe cluster 32 32
+          .\build\Release\mundo_x.exe t-experiment 4 4
+          .\build\Release\mundo_x.exe t-experiment 4 8
 
       - name: Stage
         shell: pwsh
