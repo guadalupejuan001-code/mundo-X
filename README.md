@@ -241,6 +241,58 @@ menos memoria
 
 Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con una prueba.
 
+
+---
+
+# Mundo X Lab APK v0.1
+
+La primera APK de Mundo X ya compila correctamente en GitHub Actions.
+
+Build verificado:
+
+```
+workflow: Build Mundo X Lab APK
+run: #5
+status: success
+artifact: Mundo-X-Lab-APK
+```
+
+Archivo extraído y verificado:
+
+```
+Mundo-X-Lab-v0.1.apk
+size: 983,977 bytes
+sha256: d2673d4599b39327e34e0f13602001f23f3c9f0f5ce7fee97a15cee05be9199e
+ABI: arm64-v8a
+minSdk: 26
+targetSdk: 35
+```
+
+El APK contiene el núcleo nativo:
+
+```
+lib/arm64-v8a/libmundox.so
+```
+
+y expone desde Android:
+
+- **HELLO X** — compara Dense Core y Compact Core en el circuito mínimo;
+- **RUN COMPACT** — crea un estado GHZ compacto de 2 a 10,000 qubits;
+- **COMPARE DENSE** — compara ambos motores con límite de seguridad de 22 qubits para Dense;
+- **PRACTICE** — permite ejecutar comandos `h`, `x`, `z`, `s`, `cx`, `show`, `bytes`;
+- lectura del **PSS aproximado del proceso Android** después de cada experimento.
+
+La app usa Java únicamente para la interfaz. El cálculo principal se ejecuta en
+C++17 mediante JNI y reutiliza los motores nativos de Mundo X.
+
+Este build es un **debug APK** firmado por el toolchain de Android. No es una
+release firmada para publicación en Google Play.
+
+La estructura del APK fue inspeccionada tras la compilación y contiene el DEX,
+manifest, recursos y la librería nativa esperada. La instalación física en un
+teléfono debe comprobarse en un dispositivo Android arm64.
+
+
 ---
 
 ## Estado científico
