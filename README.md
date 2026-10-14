@@ -559,6 +559,78 @@ El paquete Windows incluye el ejecutable y los programas de ejemplo.
 
 ---
 
+# Experimento visual: representación explícita vs generativa
+
+La APK incluye un experimento visual Android diseñado para poner a prueba una
+idea central de Mundo X:
+
+```
+estado mínimo + regla + fase/frecuencia + perspectiva + tiempo
+-> estado visible
+```
+
+La escena no pretende demostrar que el Compact Core de estabilizadores acelere
+gráficos. Es un experimento separado de representación procedural/generativa.
+
+Modos:
+
+### CLASSIC
+
+Mantiene estado explícito por elemento:
+
+- posición x/y;
+- velocidad x/y;
+- fase;
+- tamaño;
+- color.
+
+Para `N` elementos, el estado explícito instrumentado es aproximadamente:
+
+```
+N * 28 bytes
+```
+
+### GENERATIVE
+
+No mantiene arrays por objeto para describir la escena. Cada elemento visible se
+reconstruye por índice desde una semilla global, reglas deterministas, tiempo,
+fase, perspectiva y feedback de interacción.
+
+El contador `explicit_scene_state` reporta solo el estado lógico explícito de
+la representación, no el overhead completo del runtime Android ni Canvas.
+
+### Interacción / pliegue
+
+Tocar la escena inyecta energía a una variable global de feedback. Esa variable
+se decae con el tiempo y modifica la siguiente evolución visual, creando un
+bucle:
+
+```
+estado visible
+-> interacción
+-> feedback
+-> nueva evolución
+-> nuevo estado visible
+```
+
+### STRESS
+
+El modo normal renderiza 6.000 elementos y STRESS sube a 24.000.
+
+La pantalla reporta en vivo:
+
+- FPS suavizado;
+- tiempo por frame;
+- objetos;
+- estado explícito estimado;
+- PSS total del proceso Android;
+- feedback e interacción.
+
+Los resultados de rendimiento no se documentarán como ganancia hasta medirlos
+en hardware Android real.
+
+---
+
 # Wild Rift low-end mode — Android
 
 Mundo X Lab incluye una capa de preparación para **League of Legends: Wild Rift**
