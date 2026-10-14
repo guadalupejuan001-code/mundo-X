@@ -355,9 +355,6 @@ public class ProceduralGameDemoActivity extends Activity {
             skyProgram = link(SKY_VS, SKY_FS);
             buildingProgram = link(BUILDING_VS, BUILDING_FS);
             groundProgram = link(GROUND_VS, GROUND_FS);
-            birdProgram = link(SKY_VS.replace("out vec2 vUv;","").replace("vec2 p=V[gl_VertexID];vUv=p*.5+.5;gl_Position=vec4(p,0.0,1.0);","gl_Position=vec4(0.0);"), BIRD_FS);
-            // Replace the placeholder bird vertex program with its dedicated shader.
-            GLES30.glDeleteProgram(birdProgram);
             birdProgram = link(BIRD_VS, BIRD_FS);
             postProgram = link(SKY_VS, POST_FS);
 
