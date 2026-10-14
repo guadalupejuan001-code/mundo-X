@@ -35,6 +35,8 @@ jobs:
           .\build\Release\mundo_x.exe cluster 32 32
           .\build\Release\mundo_x.exe t-experiment 4 4
           .\build\Release\mundo_x.exe t-experiment 4 8
+          .\build\Release\mundo_x.exe t-experiment 4 10
+          .\build\Release\mundo_x.exe t-experiment 4 12
 
       - name: Stage
         shell: pwsh
