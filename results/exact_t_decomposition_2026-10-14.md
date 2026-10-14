@@ -435,3 +435,200 @@ the Pauli differences / state labels plus complex coefficients, while preserving
 all relative phases. That implementation must be validated without using a dense
 statevector as part of its runtime representation.
 
+
+---
+
+# Reduced representation during evolution
+
+A second implementation now exploits the measured redundancy **while the circuit
+is evolving**.
+
+Instead of storing one Compact Core tableau for every naive T branch, it stores:
+
+```
+one shared Compact Core stabilizer tableau
++ canonical Pauli-difference labels
++ complex coefficients
+```
+
+Equivalent Pauli labels are canonicalized modulo the current stabilizer group and
+their coefficients are combined immediately.
+
+Dense Core is not used by the evolution itself. It is invoked only after the
+experiment to validate the final state for small qubit counts.
+
+## Linux / GitHub Actions run #77
+
+### 4 qubits / 12 T
+
+Naive exact representation:
+
+```
+branches=4096
+approx_explicit_bytes=737562
+wall_time_ms=27.868
+```
+
+Reduced representation:
+
+```
+naive_branches=4096
+reduced_components=16
+component_upper_bound=16
+base_tableau_bytes=68
+logical_payload_bytes=1072
+dense_reference_bytes=128
+fidelity=1.000000000
+reduced_norm=0.999999797
+result=PASS
+wall_time_ms=0.106
+```
+
+Compared with the project's own naive branch implementation:
+
+```
+logical payload reduction ~= 688x
+end-to-end experiment time reduction ~= 263x
+```
+
+The timing comparison includes each implementation's validation overhead and
+must not be interpreted as quantum hardware speedup.
+
+### 6 qubits / 12 T
+
+Naive exact representation:
+
+```
+branches=4096
+approx_explicit_bytes=876844
+wall_time_ms=108.897
+```
+
+Reduced representation:
+
+```
+naive_branches=4096
+reduced_components=64
+component_upper_bound=64
+base_tableau_bytes=102
+logical_payload_bytes=2678
+dense_reference_bytes=512
+fidelity=1.000000000
+reduced_norm=0.999999797
+result=PASS
+wall_time_ms=0.247
+```
+
+Compared with the project's naive branch implementation:
+
+```
+logical payload reduction ~= 327x
+end-to-end experiment time reduction ~= 441x
+```
+
+### 8 qubits / 24 T
+
+The naive expansion would contain:
+
+```
+16,777,216 branches
+```
+
+The reduced implementation never materialized them:
+
+```
+reduced_components=256
+component_upper_bound=256
+base_tableau_bytes=136
+logical_payload_bytes=9324
+dense_reference_bytes=2048
+fidelity=1.000000000
+result=PASS
+wall_time_ms=1.753
+```
+
+### 8 qubits / 64 T
+
+The naive expansion would contain:
+
+```
+2^64 branches
+```
+
+Those branches were **not materialized**.
+
+Observed:
+
+```
+reduced_components=256
+component_upper_bound=256
+base_tableau_bytes=136
+logical_payload_bytes=10764
+dense_reference_bytes=2048
+fidelity=1.000000000
+result=PASS
+wall_time_ms=4.736
+```
+
+## Windows x64 cross-check
+
+The same reduced representation passed independently on Windows.
+
+Examples:
+
+```
+4q / 12T:
+reduced_components=16
+fidelity=1.000000000
+result=PASS
+wall_time_ms=0.292
+```
+
+```
+8q / 64T:
+naive_branches=2^64 (not materialized)
+reduced_components=256
+fidelity=1.000000000
+result=PASS
+wall_time_ms=8.531
+```
+
+## Scientific interpretation
+
+This is materially different from the earlier diagnostic.
+
+Earlier:
+
+```
+generate 2^T branches
+-> detect duplicates afterward
+```
+
+Now:
+
+```
+shared stabilizer state
+-> T creates Pauli alternatives
+-> canonicalize modulo stabilizer
+-> merge coefficients immediately
+-> never create duplicate full tableaus
+```
+
+For the tested circuit family, the number of retained components saturated at
+`2^n` rather than `2^T`.
+
+This removes the branch-count dependence on T count for these experiments.
+
+It does **not** remove the general exponential dependence on qubit count. In the
+saturated tests, the reduced representation is still larger than a dense
+statevector for the same small number of qubits because every retained component
+stores a Pauli label plus a complex coefficient and a shared stabilizer tableau.
+
+Therefore the demonstrated result is:
+
+> exact elimination of the naive `2^T` branch explosion for the tested
+> Clifford+T construction, while preserving fidelity 1 against Dense Core.
+
+It is not yet a demonstration of asymptotic superiority over dense statevectors
+in the worst case.
+
