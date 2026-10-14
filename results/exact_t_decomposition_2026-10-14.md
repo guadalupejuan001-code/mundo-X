@@ -718,3 +718,127 @@ symbolic relation, decision structure, or query-specific computation.
 
 No claim is made that all possible basis choices have been exhausted.
 
+
+---
+
+# Gate-by-gate growth trace
+
+A gate-by-gate trace was added to determine exactly when the reduced
+representation loses compacity.
+
+Test:
+
+```
+8 qubits
+12 T gates
+same reduced Clifford+T circuit family
+GitHub Actions run #84
+```
+
+The trace records after every gate:
+
+- retained component count;
+- active coefficient count;
+- maximum coefficient cut rank;
+- logical payload bytes.
+
+## Main observation
+
+During the initial Clifford preparation:
+
+```
+components=1
+active=1
+max_cut_rank=1
+```
+
+The first eight T gates then populate the coefficient space one qubit at a time:
+
+```
+T0 -> 2 components
+T1 -> 4
+T2 -> 8
+T3 -> 16
+T4 -> 32
+T5 -> 64
+T6 -> 128
+T7 -> 256
+```
+
+At that point:
+
+```
+components=256 = 2^8
+active=256
+```
+
+After saturation, additional T gates no longer increase component count:
+
+```
+T0 -> 256
+T1 -> 256
+T2 -> 256
+T3 -> 256
+```
+
+The final state still validates:
+
+```
+fidelity=1.000000000
+reduced_norm=0.999999797
+result=PASS
+```
+
+## Important distinction discovered
+
+Two different kinds of growth are now visible.
+
+### 1. Support growth
+
+The T gates are what populate new Pauli-equivalence components:
+
+```
+1 -> 2 -> 4 -> 8 -> ... -> 256
+```
+
+Once the full 8-qubit quotient support is occupied, more T gates do not create
+additional components.
+
+### 2. Internal correlation / rank growth
+
+The component count can remain fixed at 256 while the coefficient structure
+continues becoming harder to factor.
+
+Observed:
+
+```
+after T7:
+components=256
+max_cut_rank=2
+
+after H7:
+components=256
+max_cut_rank=8
+
+later after H2:
+components=256
+max_cut_rank=16
+```
+
+CNOT and S gates in the traced locations preserved the component count and did
+not cause these rank jumps.
+
+Therefore, for this circuit, the first loss of sparsity is driven by T gates,
+while later loss of simple factorability is driven by Hadamard mixing after the
+support has already saturated.
+
+This separates two problems that were previously mixed together:
+
+```
+T gates        -> fill the support
+Hadamard gates -> mix/correlate the occupied coefficients
+```
+
+This result does not prove that every Clifford+T circuit behaves this way, but it
+identifies a concrete mechanism to investigate next.
+
