@@ -183,7 +183,7 @@ public class VisualExperimentActivity extends Activity {
             }
 
             long explicitBytes = generative ? 64L : (long) count * (6L * 4L + 4L);
-            int pssKb = Debug.getPss();
+            long pssKb = Debug.getPss();
 
             String text = String.format(Locale.US,
                     "mode=%s  objects=%d  fps=%.1f  frame=%.2f ms\nexplicit_scene_state=%d bytes (%.3f MiB)  process_PSS=%d kB\nformula: minimal state + rule + phase + perspective + time -> visible state\nfeedback=%.3f  touch=(%.2f, %.2f)",
