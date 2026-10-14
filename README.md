@@ -626,8 +626,29 @@ La pantalla reporta en vivo:
 - PSS total del proceso Android;
 - feedback e interacción.
 
-Los resultados de rendimiento no se documentarán como ganancia hasta medirlos
-en hardware Android real.
+Resultados medidos en hardware Android real (captura del 2026-10-14):
+
+```
+mode=GENERATIVE
+objects=6000
+fps=17.0
+frame=60.42 ms
+explicit_scene_state=64 bytes
+process_PSS=105660 kB
+feedback=1.475
+touch=(0.62, 0.64)
+```
+
+Lectura del experimento:
+
+- la escena generativa compleja se produjo con 64 bytes de estado lógico explícito instrumentado;
+- el proceso Android completo ocupó ~105.7 MB PSS, por lo que el estado de la representación no debe confundirse con el overhead total de Android/Java/Canvas/framebuffer;
+- 60.42 ms por frame está muy por encima del presupuesto de ~16.67 ms requerido para 60 FPS;
+- el cuello de botella actual es cómputo por frame, no el tamaño del estado explícito de escena;
+- este resultado demuestra compacidad de representación en esta demo, no una mejora global de rendimiento gráfico.
+
+Próximo objetivo experimental: reducir el costo de reconstrucción visual por frame sin aumentar de forma significativa el estado explícito.
+
 
 ---
 
