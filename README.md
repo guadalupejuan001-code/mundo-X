@@ -586,7 +586,158 @@ qubits: el número de componentes puede llegar a `2^n`.
 Dense Core sigue apareciendo únicamente al final de estas pruebas pequeñas como
 oracle de fidelidad; no forma parte de la evolución reducida.
 
-Registro:
+## Magic: confirmado directamente
+
+Hasta esta etapa se estaba usando `T / magic / no-Clifford` como frontera
+teórica. Ya existe una prueba directa dentro del proyecto.
+
+Circuito mínimo:
+
+```
+|0> -> H -> T
+```
+
+Después de `H`:
+
+```
+|+> = (|0> + |1>) / sqrt(2)
+```
+
+Después de `T`:
+
+```
+(|0> + exp(i*pi/4)|1>) / sqrt(2)
+```
+
+Para un qubit puro, los seis estados stabilizer posibles son:
+
+```
+|0>
+|1>
+|+>
+|->
+|+i>
+|-i>
+```
+
+El estado preparado se comparó contra los seis.
+
+Resultado verificado:
+
+```
+bloch_x=0.707106727
+bloch_y=0.707106727
+bloch_z=0.000000042
+max_fidelity_to_any_1q_pure_stabilizer=0.853553325
+non_stabilizer=PASS
+expected_magic_geometry=PASS
+result=PASS
+```
+
+Si el estado fuera stabilizer, su fidelidad con alguno de esos seis estados
+tendría que ser `1.0`.
+
+Por tanto, el circuito `H -> T` produjo directamente un estado puro
+**no-stabilizer**. En la terminología habitual de teoría de recursos para
+Clifford+T, este es un **magic state**.
+
+Lectura simple:
+
+```
+Clifford solamente
+-> permanece dentro del espacio stabilizer
+-> Compact Core lo representa con un tableau
+
+T sobre una superposición adecuada
+-> puede sacar al estado fuera de stabilizer
+-> aparece el recurso no-Clifford / magic
+```
+
+Esto confirma que la representación reducida no está resolviendo solamente
+variantes stabilizer: está siendo usada para reproducir estados no-stabilizer en
+las pruebas realizadas.
+
+## Qué puertas hacen crecer la representación
+
+Se añadió una traza puerta por puerta.
+
+Primer circuito, `8 qubits / 12 T`:
+
+```
+1 -> 2 -> 4 -> 8 -> 16 -> 32 -> 64 -> 128 -> 256 componentes
+```
+
+Los aumentos de soporte aparecieron al aplicar puertas `T`.
+
+Una observación inicial mostró además saltos del rango interno después de algunos
+Hadamard, por ejemplo:
+
+```
+256 componentes, max_cut_rank=2
+H
+256 componentes, max_cut_rank=8
+...
+H
+256 componentes, max_cut_rank=16
+```
+
+Eso sugería inicialmente:
+
+```
+T -> llena soporte
+H -> aumenta mezcla interna
+```
+
+pero esa segunda parte todavía necesitaba comprobarse.
+
+### Segundo circuito independiente
+
+Se construyó otra estructura con:
+
+```
+Hadamards locales distintos
+CZ en anillo
+S alternadas
+T en otro orden
+mezcla CZ/CNOT diferente
+```
+
+Resultado:
+
+```
+support_increases_on_T=7
+support_increases_on_non_T=0
+rank_increases_on_H=0
+rank_increases_on_non_H=0
+final_components=128
+fidelity=1.000000000
+result=PASS
+```
+
+Conclusión actual:
+
+> **En los dos circuitos probados, todos los aumentos observados del número de
+> componentes ocurrieron en puertas T. No toda T tiene que aumentar el soporte,
+> pero ninguna puerta no-T lo aumentó en estas dos pruebas.**
+
+La hipótesis más fuerte:
+
+```
+H siempre aumenta la complejidad interna
+```
+
+**no quedó confirmada**. Ocurrió en el primer circuito, pero no en el segundo.
+Por tanto se conserva como comportamiento dependiente del circuito, no como regla
+general.
+
+Esto separa dos preguntas que ahora deben investigarse por separado:
+
+```
+1. ¿Cuándo una T añade realmente una nueva dirección/componente independiente?
+2. ¿Qué estructura del circuito hace crecer la correlación/rango de los coeficientes?
+```
+
+Registro completo:
 
 ```
 results/exact_t_decomposition_2026-10-14.md
@@ -615,8 +766,11 @@ Una mejora será interesante solo si:
 3. T exacta por suma de estabilizadores -> baseline no-Clifford exacto         [HECHO EXPERIMENTAL]
 4. Redundancia exacta de ramas          -> 4q/6q verificada                     [HECHO DIAGNÓSTICO]
 5. Explotar estructura durante evolución -> 2^T evitado en pruebas             [HECHO EXPERIMENTAL]
-6. Buscar ventaja sobre 2^n / mantener dispersión -> siguiente frontera          [SIGUIENTE]
-7. Transformer X / otras estructuras    -> solo si aportan mediblemente
+6. Magic state directo H->T             -> no-stabilizer verificado              [HECHO]
+7. T como origen observado de crecimiento de soporte -> 2 circuitos              [EVIDENCIA]
+8. Entender crecimiento de rango/correlación -> comportamiento depende del circuito [SIGUIENTE]
+9. Buscar ventaja sobre 2^n / mantener dispersión -> frontera posterior          [SIGUIENTE]
+10. Transformer X / otras estructuras   -> solo si aportan mediblemente
 ```
 
 Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con
