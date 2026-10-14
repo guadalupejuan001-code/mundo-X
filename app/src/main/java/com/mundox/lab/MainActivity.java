@@ -74,6 +74,11 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, InternetSyncActivity.class)));
         root.addView(internet);
 
+        Button syncedVisual = button("OPEN TWO-PHONE SYNC");
+        syncedVisual.setOnClickListener(v ->
+                startActivity(new Intent(this, SyncedGpuActivity.class)));
+        root.addView(syncedVisual);
+
         root.addView(text("Wild Rift low-end mode", 18, true));
         root.addView(text(
                 "No root. No Riot files modified. Preflight → launch → Mundo X exits.",
