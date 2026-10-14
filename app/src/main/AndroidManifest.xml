@@ -19,6 +19,7 @@
         <activity android:name=".GpuVisualActivity" android:screenOrientation="portrait" />
         <activity android:name=".PerformanceLauncherActivity" android:screenOrientation="portrait" />
         <activity android:name=".InternetSyncActivity" android:screenOrientation="portrait" />
+        <activity android:name=".SyncedGpuActivity" android:screenOrientation="portrait" />
         <activity
             android:name=".DeviceLauncherActivity"
             android:exported="true"
