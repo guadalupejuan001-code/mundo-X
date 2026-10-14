@@ -1021,6 +1021,85 @@ class ReducedExactTRepresentation {
   std::vector<ExactExperimentGate> base_circuit_;
 };
 
+inline ExactTExperimentResult run_reduced_growth_trace(
+    std::size_t qubits, std::size_t t_gates) {
+  if (qubits == 0 || qubits > 10)
+    throw std::invalid_argument("trace validation limit is 1..10 qubits");
+  if (t_gates > 32)
+    throw std::invalid_argument("trace safety limit is 32 T gates");
+
+  ReducedExactTRepresentation q(qubits);
+  std::ostringstream out;
+  out << "REDUCED T GROWTH TRACE\n";
+  out << "qubits=" << qubits << "\n";
+  out << "t_gates=" << t_gates << "\n";
+
+  std::size_t step = 0;
+  auto emit = [&](const std::string& gate) {
+    const auto profile = q.coefficient_structure_profile();
+    out << "step=" << step
+        << " gate=" << gate
+        << " components=" << q.component_count()
+        << " active=" << profile.active_coefficients
+        << " max_cut_rank=" << profile.max_cut_rank
+        << " payload_bytes=" << q.logical_payload_bytes()
+        << "\n";
+    ++step;
+  };
+
+  emit("START");
+
+  q.hadamard(0);
+  emit("H0");
+
+  for (std::size_t i = 1; i < qubits; ++i) {
+    q.cnot(i - 1, i);
+    emit("CX" + std::to_string(i - 1) + "_" + std::to_string(i));
+    if ((i & 1U) == 0U) {
+      q.phase_s(i);
+      emit("S" + std::to_string(i));
+    }
+  }
+
+  for (std::size_t k = 0; k < t_gates; ++k) {
+    const std::size_t a = k % qubits;
+    const std::size_t b = (a + 1) % qubits;
+
+    q.phase_t(a);
+    emit("T" + std::to_string(a));
+
+    q.hadamard(a);
+    emit("H" + std::to_string(a));
+
+    if (qubits > 1) {
+      q.cnot(a, b);
+      emit("CX" + std::to_string(a) + "_" + std::to_string(b));
+    }
+
+    if ((k & 1U) != 0U) {
+      q.phase_s(b);
+      emit("S" + std::to_string(b));
+    }
+  }
+
+  const double fidelity = q.fidelity();
+  const double norm = q.reduced_norm();
+  const bool ok =
+      std::abs(fidelity - 1.0) < 3e-5 &&
+      std::abs(norm - 1.0) < 3e-5;
+
+  out << std::fixed << std::setprecision(9);
+  out << "final_components=" << q.component_count() << "\n";
+  out << "fidelity=" << fidelity << "\n";
+  out << "reduced_norm=" << norm << "\n";
+  out << "result=" << (ok ? "PASS" : "FAIL") << "\n";
+
+  ExactTExperimentResult result;
+  result.all_passed = ok;
+  result.report = out.str();
+  return result;
+}
+
 inline ExactTExperimentResult run_reduced_exact_t_experiment(
     std::size_t qubits, std::size_t t_gates) {
   if (qubits == 0 || qubits > 12)
