@@ -54,6 +54,11 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, VisualExperimentActivity.class)));
         root.addView(visual);
 
+        Button gameDemo = button("OPEN <5 MB GAME GRAPHICS TEST");
+        gameDemo.setOnClickListener(v ->
+                startActivity(new Intent(this, ProceduralGameDemoActivity.class)));
+        root.addView(gameDemo);
+
         Button gpuVisual = button("OPEN GPU VISUAL EXPERIMENT");
         gpuVisual.setOnClickListener(v ->
                 startActivity(new Intent(this, GpuVisualActivity.class)));
