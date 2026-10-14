@@ -842,3 +842,91 @@ Hadamard gates -> mix/correlate the occupied coefficients
 This result does not prove that every Clifford+T circuit behaves this way, but it
 identifies a concrete mechanism to investigate next.
 
+
+---
+
+# Direct magic-state witness
+
+A direct one-qubit witness was added to avoid using "magic" only as a theoretical
+label.
+
+Circuit:
+
+```
+|0> -> H -> T
+```
+
+which prepares:
+
+```
+(|0> + exp(i*pi/4)|1>) / sqrt(2)
+```
+
+GitHub Actions run #87 produced:
+
+```
+bloch_x=0.707106727
+bloch_y=0.707106727
+bloch_z=0.000000042
+max_fidelity_to_any_1q_pure_stabilizer=0.853553325
+non_stabilizer=PASS
+expected_magic_geometry=PASS
+result=PASS
+```
+
+For one pure qubit, the pure stabilizer states are the six Pauli-axis states
+`|0>, |1>, |+>, |->, |+i>, |-i>`.
+
+The prepared state has fidelity below 1 with every one of those six states and
+has the expected Bloch vector approximately:
+
+```
+(1/sqrt(2), 1/sqrt(2), 0)
+```
+
+Therefore the test directly confirms that `H -> T` created a non-stabilizer
+pure state. In the usual resource-theory terminology, this is a one-qubit magic
+resource state.
+
+---
+
+# Independent gate-growth trace
+
+A second circuit with a different structure was used to test whether the earlier
+gate-by-gate interpretation generalized.
+
+Different preparation and mixing included:
+
+- local Hadamards on alternating qubits;
+- a CZ ring;
+- alternating S gates;
+- a different permutation of T-gate locations;
+- mixed CZ/CNOT coupling;
+- Hadamards applied to different qubits than in the first trace.
+
+Result:
+
+```
+support_increases_on_T=7
+support_increases_on_non_T=0
+rank_increases_on_H=0
+rank_increases_on_non_H=0
+final_components=128
+fidelity=1.000000000
+reduced_norm=0.999999762
+result=PASS
+```
+
+Interpretation:
+
+- in this second circuit, every observed increase in support/component count was
+  caused by a T gate;
+- no non-T gate increased support;
+- the earlier observation that some Hadamards increased coefficient cut rank did
+  **not** repeat in this circuit;
+- therefore "T fills support" gained a second supporting example, while
+  "H increases internal rank" must remain circuit-dependent rather than a general
+  rule.
+
+This is intentionally recorded as a correction to the earlier hypothesis.
+
