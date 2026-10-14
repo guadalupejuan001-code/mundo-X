@@ -263,3 +263,52 @@ weighted sum of Compact Core tableaux
 This is an important correctness baseline, but not yet a compact universal
 quantum simulator.
 
+
+---
+
+# Android physical device confirmation
+
+The exact T experiment was executed from the Mundo X Android APK on a physical
+Android device.
+
+Observed configuration:
+
+```
+qubits=4
+t_gates=8
+branches=256
+expected_branches=256
+tableau_bytes=17408
+approx_explicit_bytes=46278
+dense_reference_bytes=128
+fidelity=1.000000000
+decomposition_norm=0.999999797
+branch_tableaus=PASS
+branches_exact=PASS
+result=PASS
+```
+
+Two consecutive executions were captured:
+
+```
+run A:
+wall_time_ms=8.863
+Android process PSS ~= 93275 kB
+
+run B:
+wall_time_ms=3.918
+Android process PSS ~= 86685 kB
+```
+
+Interpretation:
+
+- the exact 8-T decomposition also reproduces correctly on physical Android
+  hardware;
+- timing varies between runs, so these two measurements are not treated as a
+  controlled performance benchmark;
+- fidelity and branch validation are the primary correctness result;
+- process PSS is total Android process memory and is not the branch-state size;
+- the explicit branch representation for this tiny 4-qubit case is larger than
+  the dense reference, so this result demonstrates correctness, not memory
+  advantage.
+
