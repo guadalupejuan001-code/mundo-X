@@ -81,6 +81,10 @@ public class MainActivity extends Activity {
         hello.setOnClickListener(v -> runTask(NativeCore::hello));
         root.addView(hello);
 
+        Button teleport = button("TELEPORT QUANTUM STATE");
+        teleport.setOnClickListener(v -> runTask(NativeCore::teleport));
+        root.addView(teleport);
+
         root.addView(text("Qubits para GHZ / escala", 14, true));
         qubits = new EditText(this);
         qubits.setText("1000");
