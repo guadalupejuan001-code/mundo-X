@@ -17,15 +17,15 @@ import java.util.Locale;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-/**
- * Tiny procedural graphics experiment.
- * The scene is reconstructed by GLSL at runtime: no bitmap textures,
- * model files, videos, or pre-rendered scene assets are bundled.
- */
 public class ProceduralGameDemoActivity extends Activity {
     private GLSurfaceView gl;
     private TextView hud;
     private DemoRenderer renderer;
+
+    private int movePointer = -1;
+    private int lookPointer = -1;
+    private float moveStartX, moveStartY;
+    private float lookLastX, lookLastY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,9 +48,9 @@ public class ProceduralGameDemoActivity extends Activity {
         hud.setTextColor(Color.WHITE);
         hud.setTextSize(10);
         hud.setTypeface(android.graphics.Typeface.MONOSPACE);
-        hud.setBackgroundColor(0x72000000);
+        hud.setBackgroundColor(0x70000000);
         hud.setPadding(dp(10), dp(7), dp(10), dp(7));
-        hud.setText("PROCEDURAL GAME GRAPHICS TEST\ninitializing...");
+        hud.setText("PROCEDURAL OPEN WORLD\ninitializing...");
 
         FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -59,32 +59,86 @@ public class ProceduralGameDemoActivity extends Activity {
         hp.setMargins(dp(10), dp(10), dp(10), dp(10));
         root.addView(hud, hp);
 
-        TextView hint = new TextView(this);
-        hint.setTextColor(0xFFE8E8E8);
-        hint.setTextSize(10);
-        hint.setTypeface(android.graphics.Typeface.MONOSPACE);
-        hint.setBackgroundColor(0x66000000);
-        hint.setPadding(dp(8), dp(5), dp(8), dp(5));
-        hint.setText("DRAG = CAMERA • adaptive internal resolution • no external assets");
+        TextView moveLabel = controlLabel("MOVE\nleft side");
+        FrameLayout.LayoutParams mlp = new FrameLayout.LayoutParams(dp(118), dp(72));
+        mlp.gravity = Gravity.BOTTOM | Gravity.START;
+        mlp.setMargins(dp(22), 0, 0, dp(22));
+        root.addView(moveLabel, mlp);
 
-        FrameLayout.LayoutParams pp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        pp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        pp.setMargins(dp(8), dp(8), dp(8), dp(12));
-        root.addView(hint, pp);
+        TextView lookLabel = controlLabel("LOOK\nright side");
+        FrameLayout.LayoutParams llp = new FrameLayout.LayoutParams(dp(118), dp(72));
+        llp.gravity = Gravity.BOTTOM | Gravity.END;
+        llp.setMargins(0, 0, dp(22), dp(22));
+        root.addView(lookLabel, llp);
 
-        gl.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN ||
-                    e.getAction() == MotionEvent.ACTION_MOVE) {
-                renderer.touchX = e.getX() / Math.max(1f, gl.getWidth());
-                renderer.touchY = e.getY() / Math.max(1f, gl.getHeight());
-                return true;
-            }
-            return true;
-        });
-
+        gl.setOnTouchListener((v, e) -> handleTouch(e));
         setContentView(root);
+    }
+
+    private TextView controlLabel(String s) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setGravity(Gravity.CENTER);
+        t.setTextColor(0xFFDDDDDD);
+        t.setTextSize(11);
+        t.setTypeface(android.graphics.Typeface.MONOSPACE);
+        t.setBackgroundColor(0x44000000);
+        return t;
+    }
+
+    private boolean handleTouch(MotionEvent e) {
+        final int action = e.getActionMasked();
+        final int actionIndex = e.getActionIndex();
+        final int id = e.getPointerId(actionIndex);
+        final float half = gl.getWidth() * 0.5f;
+
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            float x = e.getX(actionIndex);
+            float y = e.getY(actionIndex);
+            if (x < half && movePointer == -1) {
+                movePointer = id;
+                moveStartX = x;
+                moveStartY = y;
+            } else if (lookPointer == -1) {
+                lookPointer = id;
+                lookLastX = x;
+                lookLastY = y;
+            }
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            for (int i = 0; i < e.getPointerCount(); i++) {
+                int pid = e.getPointerId(i);
+                float x = e.getX(i);
+                float y = e.getY(i);
+
+                if (pid == movePointer) {
+                    float radius = Math.max(90f, gl.getWidth() * 0.12f);
+                    renderer.moveX = clamp((x - moveStartX) / radius, -1f, 1f);
+                    renderer.moveY = clamp((moveStartY - y) / radius, -1f, 1f);
+                } else if (pid == lookPointer) {
+                    float dx = (x - lookLastX) / Math.max(1f, gl.getWidth());
+                    float dy = (y - lookLastY) / Math.max(1f, gl.getHeight());
+                    renderer.addLook(dx * 3.6f, -dy * 2.8f);
+                    lookLastX = x;
+                    lookLastY = y;
+                }
+            }
+        } else if (action == MotionEvent.ACTION_UP ||
+                action == MotionEvent.ACTION_POINTER_UP ||
+                action == MotionEvent.ACTION_CANCEL) {
+            if (id == movePointer || action == MotionEvent.ACTION_CANCEL) {
+                movePointer = -1;
+                renderer.moveX = 0f;
+                renderer.moveY = 0f;
+            }
+            if (id == lookPointer || action == MotionEvent.ACTION_CANCEL) {
+                lookPointer = -1;
+            }
+        }
+        return true;
+    }
+
+    private float clamp(float v, float lo, float hi) {
+        return Math.max(lo, Math.min(hi, v));
     }
 
     private int dp(int v) {
@@ -114,17 +168,25 @@ public class ProceduralGameDemoActivity extends Activity {
 
     private final class DemoRenderer implements GLSurfaceView.Renderer {
         private int sceneProgram, postProgram, vao;
-        private int sceneTime, sceneRes, sceneTouch;
+        private int sceneTime, sceneRes, sceneCam, sceneAngles;
         private int postTex, postTexel;
 
         private int fbo, colorTex;
         private int width = 1, height = 1, renderW = 1, renderH = 1;
-        private float renderScale = 0.72f;
+        private float renderScale = 0.68f;
 
         private long startNs, lastNs, hudNs, scaleDecisionNs;
         private float fpsSmooth = 0f;
-        volatile float touchX = 0.5f;
-        volatile float touchY = 0.5f;
+
+        volatile float moveX = 0f;
+        volatile float moveY = 0f;
+        private float camX = 0f, camY = 1.62f, camZ = 0f;
+        private float yaw = 0f, pitch = -0.03f;
+
+        synchronized void addLook(float dyaw, float dpitch) {
+            yaw += dyaw;
+            pitch = Math.max(-0.68f, Math.min(0.68f, pitch + dpitch));
+        }
 
         private final String VS =
                 "#version 300 es\n" +
@@ -136,82 +198,72 @@ public class ProceduralGameDemoActivity extends Activity {
         private final String SCENE_FS =
                 "#version 300 es\n" +
                 "precision highp float;\n" +
-                "uniform vec2 uRes; uniform float uTime; uniform vec2 uTouch;\n" +
+                "uniform vec2 uRes; uniform float uTime; uniform vec3 uCam; uniform vec2 uAngles;\n" +
                 "in vec2 vUv; out vec4 fragColor;\n" +
                 "float h1(float n){return fract(sin(n*127.1)*43758.5453123);}\n" +
                 "float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n" +
                 "vec3 pal(float x){return .5+.5*cos(6.28318*(vec3(.02,.18,.34)+x*vec3(1.0,.73,.47)));}\n" +
                 "float boxSDF(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);}\n" +
                 "float cityMap(vec3 p,out float bid,out vec2 cell){\n" +
-                "  float block=5.0; cell=floor((p.xz+2.5)/block);\n" +
-                "  vec2 q=mod(p.xz+2.5,block)-2.5;\n" +
+                "  float block=7.0; cell=floor((p.xz+3.5)/block);\n" +
+                "  vec2 q=mod(p.xz+3.5,block)-3.5;\n" +
                 "  float rnd=h2(cell);\n" +
-                "  float roadX=1.0-step(2.0,abs(q.x)); float roadZ=1.0-step(2.0,abs(q.y));\n" +
-                "  float onRoad=max(roadX,roadZ);\n" +
-                "  float h=2.5+10.0*h2(cell+vec2(7.3,19.1));\n" +
-                "  vec2 footprint=vec2(1.45+0.25*h2(cell+3.0),1.45+0.25*h2(cell+9.0));\n" +
+                "  float h=3.5+15.0*h2(cell+vec2(7.3,19.1));\n" +
+                "  vec2 fp=vec2(2.0+0.35*h2(cell+3.0),2.0+0.35*h2(cell+9.0));\n" +
                 "  vec3 bp=vec3(q.x,p.y-h*.5,q.y);\n" +
-                "  float b=boxSDF(bp,vec3(footprint.x,h*.5,footprint.y));\n" +
+                "  float mainB=boxSDF(bp,vec3(fp.x,h*.5,fp.y));\n" +
+                "  float crownH=.8+2.1*h2(cell+21.0);\n" +
+                "  float crown=boxSDF(vec3(q.x,p.y-h-crownH*.5,q.y),vec3(fp*.52,crownH*.5));\n" +
+                "  float b=min(mainB,crown);\n" +
                 "  bid=rnd;\n" +
-                "  float ground=p.y;\n" +
-                "  return min(mix(b,1000.0,onRoad),ground);\n" +
+                "  return min(b,p.y);\n" +
                 "}\n" +
-                "vec3 normalAt(vec3 p){float id;vec2 cell;float e=.002;float d=cityMap(p,id,cell);return normalize(vec3(cityMap(p+vec3(e,0,0),id,cell)-d,cityMap(p+vec3(0,e,0),id,cell)-d,cityMap(p+vec3(0,0,e),id,cell)-d));}\n" +
-                "vec3 shade(vec3 p,vec3 n,vec3 rd,float bid,vec2 cell){\n" +
-                "  vec3 base=mix(vec3(.018,.028,.045),vec3(.055,.075,.105),bid);\n" +
-                "  float side=abs(n.y)<.5?1.0:0.0;\n" +
+                "vec3 normalAt(vec3 p){float id;vec2 c;float e=.004;float d=cityMap(p,id,c);return normalize(vec3(cityMap(p+vec3(e,0,0),id,c)-d,cityMap(p+vec3(0,e,0),id,c)-d,cityMap(p+vec3(0,0,e),id,c)-d));}\n" +
+                "vec3 material(vec3 p,vec3 n,vec3 rd,float bid,vec2 cell){\n" +
+                "  if(n.y>.75){\n" +
+                "    float gx=abs(fract((p.x+3.5)/7.0)-.5); float gz=abs(fract((p.z+3.5)/7.0)-.5);\n" +
+                "    float road=max(step(.29,gx),step(.29,gz));\n" +
+                "    vec3 g=mix(vec3(.018,.023,.030),vec3(.006,.009,.014),road);\n" +
+                "    float stripe=(1.0-step(.018,abs(fract(p.x*.14)-.5)))*road;\n" +
+                "    g+=vec3(.72,.45,.08)*stripe*.55;\n" +
+                "    return g;\n" +
+                "  }\n" +
+                "  vec3 base=mix(vec3(.028,.043,.070),vec3(.070,.095,.130),bid);\n" +
                 "  vec2 wp=abs(n.x)>.5?p.zy:p.xy;\n" +
-                "  vec2 g=fract(wp*vec2(1.35,.55));\n" +
-                "  float win=side*step(.18,g.x)*step(g.x,.78)*step(.17,g.y)*step(g.y,.72);\n" +
-                "  float lit=step(.50,h2(floor(wp*vec2(1.35,.55))+cell*7.0));\n" +
-                "  vec3 wc=mix(vec3(1.0,.42,.10),pal(bid+.15),.55);\n" +
-                "  vec3 sun=normalize(vec3(-.35,.72,-.42));\n" +
-                "  float dif=max(.12,dot(n,sun));\n" +
-                "  float rim=pow(max(0.0,1.0-dot(n,-rd)),2.0);\n" +
-                "  vec3 c=base*dif+wc*win*lit*2.1+vec3(.06,.09,.15)*rim;\n" +
-                "  if(n.y>.8){float lane=max(step(.92,fract(p.x*.22)),step(.92,fract(p.z*.22)));c+=vec3(.08,.13,.18)*lane;}\n" +
-                "  return c;\n" +
+                "  vec2 g=fract(wp*vec2(1.05,.48));\n" +
+                "  float win=step(.16,g.x)*step(g.x,.78)*step(.16,g.y)*step(g.y,.70);\n" +
+                "  float lit=step(.55,h2(floor(wp*vec2(1.05,.48))+cell*9.0));\n" +
+                "  vec3 wc=mix(vec3(1.0,.45,.12),pal(bid+.12),.62);\n" +
+                "  vec3 sun=normalize(vec3(-.45,.72,-.35));\n" +
+                "  float dif=max(.16,dot(n,sun));\n" +
+                "  return base*dif+wc*win*lit*2.35+vec3(.03,.05,.08)*pow(max(0.0,1.0-dot(n,-rd)),2.0);\n" +
                 "}\n" +
                 "void main(){\n" +
                 " vec2 uv=(gl_FragCoord.xy-.5*uRes)/uRes.y;\n" +
-                " float t=uTime;\n" +
-                " float yaw=(uTouch.x-.5)*1.2 + sin(t*.10)*.10;\n" +
-                " float pitch=(.5-uTouch.y)*.40-.05;\n" +
-                " vec3 ro=vec3(sin(t*.08)*2.0,1.45,t*1.65);\n" +
-                " vec3 fw=normalize(vec3(sin(yaw),pitch,cos(yaw)));\n" +
-                " vec3 rt=normalize(cross(vec3(0,1,0),fw));\n" +
-                " vec3 up=cross(fw,rt);\n" +
-                " vec3 rd=normalize(fw+uv.x*rt+uv.y*up);\n" +
-                " float dist=0.0; float hit=0.0; float bid=0.0; vec2 cell=vec2(0); vec3 p=ro;\n" +
-                " for(int i=0;i<28;i++){p=ro+rd*dist;float d=cityMap(p,bid,cell);if(d<.012){hit=1.0;break;}dist+=max(.035,d*.72);if(dist>65.0)break;}\n" +
-                " vec3 sky=mix(vec3(.006,.010,.028),vec3(.045,.075,.13),clamp(rd.y*.8+.45,0.0,1.0));\n" +
-                " float moon=pow(max(0.0,dot(rd,normalize(vec3(.45,.40,.78)))),500.0); sky+=vec3(1.0,.84,.58)*moon*5.0;\n" +
+                " float cy=cos(uAngles.x),sy=sin(uAngles.x),cp=cos(uAngles.y),sp=sin(uAngles.y);\n" +
+                " vec3 fw=normalize(vec3(sy*cp,sp,cy*cp));\n" +
+                " vec3 rt=normalize(vec3(cy,0.0,-sy));\n" +
+                " vec3 up=normalize(cross(rt,fw));\n" +
+                " vec3 rd=normalize(fw+uv.x*1.45*rt+uv.y*1.10*up);\n" +
+                " vec3 ro=uCam; float dist=0.0,hit=0.0,bid=0.0;vec2 cell=vec2(0);vec3 p=ro;\n" +
+                " for(int i=0;i<42;i++){p=ro+rd*dist;float d=cityMap(p,bid,cell);if(d<.012){hit=1.0;break;}dist+=max(.025,d*.68);if(dist>92.0)break;}\n" +
+                " vec3 sky=mix(vec3(.005,.010,.026),vec3(.055,.090,.15),clamp(rd.y*.75+.42,0.0,1.0));\n" +
+                " float moon=pow(max(0.0,dot(rd,normalize(vec3(.40,.34,.85)))),650.0);sky+=vec3(1.0,.84,.62)*moon*6.0;\n" +
+                " float stars=step(.9985,h2(floor((rd.xy+rd.z)*vec2(620.0,360.0))));sky+=stars*vec3(.65,.78,1.0);\n" +
                 " vec3 col=sky;\n" +
-                " if(hit>0.5){vec3 n=normalAt(p);col=shade(p,n,rd,bid,cell);\n" +
-                "   float fog=1.0-exp(-dist*.020);col=mix(col,sky,fog);\n" +
-                "   if(n.y>.8){float wet=.35+.65*h2(floor(p.xz*7.0));col+=pal(p.x*.05+t*.01)*pow(wet,8.0)*.12;}\n" +
+                " if(hit>.5){vec3 n=normalAt(p);col=material(p,n,rd,bid,cell);\n" +
+                "   float fog=1.0-exp(-dist*.017);col=mix(col,sky,fog);\n" +
+                "   if(n.y>.75){float wet=h2(floor(p.xz*5.0));col+=pal(p.x*.035+uTime*.008)*pow(wet,10.0)*.09;}\n" +
                 " }\n" +
-                " float glow=0.0;for(int i=0;i<4;i++){float fi=float(i);vec3 lp=vec3(-6.0+fi*4.0,1.7,ro.z+7.0+fi*9.0);float a=max(0.0,dot(normalize(lp-ro),rd));glow+=pow(a,700.0);}col+=vec3(.1,.45,1.0)*glow*2.0;\n" +
-                " float vig=1.0-smoothstep(.50,1.18,length(uv*vec2(.72,1.0)));col*=.68+.32*vig;\n" +
-                " col=1.0-exp(-col*1.55);col=pow(col,vec3(.86));\n" +
-                " fragColor=vec4(col,1.0);\n" +
+                " float vig=1.0-smoothstep(.56,1.30,length(uv*vec2(.66,1.0)));col*=.72+.28*vig;\n" +
+                " col=1.0-exp(-col*1.58);col=pow(col,vec3(.86));fragColor=vec4(col,1.0);\n" +
                 "}\n";
 
         private final String POST_FS =
                 "#version 300 es\n" +
                 "precision highp float;\n" +
                 "uniform sampler2D uTex; uniform vec2 uTexel; in vec2 vUv; out vec4 fragColor;\n" +
-                "void main(){\n" +
-                " vec3 c=texture(uTex,vUv).rgb;\n" +
-                " vec3 n=texture(uTex,vUv+vec2(0.0,uTexel.y)).rgb;\n" +
-                " vec3 s=texture(uTex,vUv-vec2(0.0,uTexel.y)).rgb;\n" +
-                " vec3 e=texture(uTex,vUv+vec2(uTexel.x,0.0)).rgb;\n" +
-                " vec3 w=texture(uTex,vUv-vec2(uTexel.x,0.0)).rgb;\n" +
-                " vec3 sharp=c*1.38-(n+s+e+w)*.095;\n" +
-                " float l=dot(sharp,vec3(.2126,.7152,.0722));\n" +
-                " sharp=mix(vec3(l),sharp,1.12);\n" +
-                " fragColor=vec4(clamp(sharp,0.0,1.0),1.0);\n" +
-                "}\n";
+                "void main(){vec3 c=texture(uTex,vUv).rgb;vec3 n=texture(uTex,vUv+vec2(0,uTexel.y)).rgb;vec3 s=texture(uTex,vUv-vec2(0,uTexel.y)).rgb;vec3 e=texture(uTex,vUv+vec2(uTexel.x,0)).rgb;vec3 w=texture(uTex,vUv-vec2(uTexel.x,0)).rgb;vec3 q=c*1.34-(n+s+e+w)*.085;fragColor=vec4(clamp(q,0.0,1.0),1.0);}\n";
 
         @Override
         public void onSurfaceCreated(GL10 unused, EGLConfig config) {
@@ -225,13 +277,12 @@ public class ProceduralGameDemoActivity extends Activity {
 
             sceneTime = GLES30.glGetUniformLocation(sceneProgram, "uTime");
             sceneRes = GLES30.glGetUniformLocation(sceneProgram, "uRes");
-            sceneTouch = GLES30.glGetUniformLocation(sceneProgram, "uTouch");
-
+            sceneCam = GLES30.glGetUniformLocation(sceneProgram, "uCam");
+            sceneAngles = GLES30.glGetUniformLocation(sceneProgram, "uAngles");
             postTex = GLES30.glGetUniformLocation(postProgram, "uTex");
             postTexel = GLES30.glGetUniformLocation(postProgram, "uTexel");
 
             GLES30.glDisable(GLES30.GL_DEPTH_TEST);
-
             startNs = System.nanoTime();
             lastNs = startNs;
             hudNs = startNs;
@@ -260,8 +311,7 @@ public class ProceduralGameDemoActivity extends Activity {
             colorTex = ids[0];
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, colorTex);
             GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA,
-                    renderW, renderH, 0, GLES30.GL_RGBA,
-                    GLES30.GL_UNSIGNED_BYTE, null);
+                    renderW, renderH, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
             GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
             GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
             GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
@@ -280,32 +330,38 @@ public class ProceduralGameDemoActivity extends Activity {
             long now = System.nanoTime();
             float dt = (now - lastNs) / 1_000_000_000f;
             lastNs = now;
-            if (dt > 0f && dt < 1f) {
+            if (dt > 0f && dt < .12f) {
                 float fps = 1f / dt;
                 fpsSmooth = fpsSmooth == 0f ? fps : fpsSmooth * .92f + fps * .08f;
+
+                float speed = 6.0f;
+                float sy = (float)Math.sin(yaw), cy = (float)Math.cos(yaw);
+                float forwardX = sy, forwardZ = cy;
+                float rightX = cy, rightZ = -sy;
+                camX += (forwardX * moveY + rightX * moveX) * speed * dt;
+                camZ += (forwardZ * moveY + rightZ * moveX) * speed * dt;
             }
 
             if (now - scaleDecisionNs > 2_000_000_000L && fpsSmooth > 0f) {
                 scaleDecisionNs = now;
                 float old = renderScale;
-                if (fpsSmooth < 43f) renderScale = Math.max(.54f, renderScale - .06f);
-                else if (fpsSmooth > 57f) renderScale = Math.min(.82f, renderScale + .03f);
+                if (fpsSmooth < 46f) renderScale = Math.max(.50f, renderScale - .06f);
+                else if (fpsSmooth > 58f) renderScale = Math.min(.80f, renderScale + .03f);
                 if (Math.abs(old - renderScale) > .001f) rebuildTarget();
             }
 
             float time = (now - startNs) / 1_000_000_000f;
 
-            // Pass 1: expensive procedural scene at adaptive internal resolution.
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo);
             GLES30.glViewport(0, 0, renderW, renderH);
             GLES30.glUseProgram(sceneProgram);
             GLES30.glBindVertexArray(vao);
             GLES30.glUniform1f(sceneTime, time);
             GLES30.glUniform2f(sceneRes, renderW, renderH);
-            GLES30.glUniform2f(sceneTouch, touchX, touchY);
+            GLES30.glUniform3f(sceneCam, camX, camY, camZ);
+            GLES30.glUniform2f(sceneAngles, yaw, pitch);
             GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
 
-            // Pass 2: inexpensive full-resolution upscale + sharpening.
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
             GLES30.glViewport(0, 0, width, height);
             GLES30.glUseProgram(postProgram);
@@ -318,20 +374,19 @@ public class ProceduralGameDemoActivity extends Activity {
             if (now - hudNs > 350_000_000L) {
                 hudNs = now;
                 final float fps = fpsSmooth;
-                final int w = width, h = height, rw = renderW, rh = renderH;
+                final int rw = renderW, rh = renderH;
+                final float x = camX, z = camZ, yv = yaw;
                 final float scale = renderScale;
                 runOnUiThread(() -> hud.setText(String.format(Locale.US,
-                        "REAL-TIME PROCEDURAL GRAPHICS\n" +
-                        "APK installed: %s\n" +
+                        "PROCEDURAL OPEN WORLD\n" +
+                        "APK: %s\n" +
                         "FPS: %.1f   frame: %.2f ms\n" +
-                        "display: %dx%d\n" +
-                        "internal: %dx%d  scale: %.0f%%\n" +
-                        "draw calls/frame: 2\n" +
-                        "image textures: 0  mesh assets: 0\n" +
-                        "scene: GLSL procedural + sharpen upscale\n" +
-                        "target: APK < 5 MiB",
+                        "internal: %dx%d (%.0f%%)\n" +
+                        "position: %.1f, %.1f   yaw: %.0f deg\n" +
+                        "textures: 0   mesh assets: 0\n" +
+                        "LEFT=move   RIGHT=look",
                         apkSizeText(), fps, fps > 0 ? 1000f / fps : 0f,
-                        w, h, rw, rh, scale * 100f)));
+                        rw, rh, scale * 100f, x, z, Math.toDegrees(yv))));
             }
         }
 
