@@ -2,6 +2,10 @@
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
     <queries>
         <package android:name="com.riotgames.league.wildrift" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
@@ -12,6 +16,16 @@
         <activity android:name=".VisualExperimentActivity" android:screenOrientation="portrait" />
         <activity android:name=".GpuVisualActivity" android:screenOrientation="portrait" />
         <activity android:name=".PerformanceLauncherActivity" android:screenOrientation="portrait" />
+        <activity
+            android:name=".DeviceLauncherActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".MainActivity"
             android:exported="true"
