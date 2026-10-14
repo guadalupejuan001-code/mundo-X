@@ -42,6 +42,8 @@ jobs:
           ./native-build/mundo_x cluster 4 4 --dense
           echo "=== 32x32 cluster: Compact ==="
           ./native-build/mundo_x cluster 32 32
+          echo "=== Compact quantum teleportation ==="
+          ./native-build/mundo_x teleport
 
       - name: Install Android packages
         shell: bash
