@@ -122,133 +122,70 @@ No define el núcleo de Mundo X y todavía no se usa como prueba de ventaja comp
 
 ---
 
-## Lo que todavía NO hemos resuelto
+## Estado actual de eficiencia
 
-Quantum Core todavía usa un **vector de estado denso**.
+El README principal ya no usa el statevector denso como referencia visual principal.
+Ese método queda únicamente como **baseline histórico** dentro de los resultados de
+benchmark.
 
-Con `complex64`, el estado necesita aproximadamente:
-
-```
-RAM_estado = 2^n * 8 bytes
-```
-
-Ejemplos del **Dense Quantum Core** (vector de estado completo, NO Compact Core):
-
-| Qubits | Estado denso |
-|---:|---:|
-| 10 | 8 KiB |
-| 20 | 8 MiB |
-| 25 | 256 MiB |
-| 30 | 8 GiB |
-| 40 | 8 TiB |
-
-La cifra de **40 qubits = 8 TiB** corresponde exclusivamente al baseline denso:
-`2^40 amplitudes × 8 bytes`.
-
-## Comparación con Compact Core actual
-
-Para circuitos Clifford/stabilizer soportados por el Compact Core, no guardamos
-las `2^n` amplitudes. Usamos una representación bit-packed estructurada.
+El estado actual de Mundo X es **Compact Core**.
 
 Resultados medidos:
 
-| Prueba | Dense Core | Compact Core |
-|---|---:|---:|
-| GHZ 24 qubits | 128 MiB de estado | **408 bytes** |
-| GHZ 10,000 qubits | impracticable como statevector denso | **~23.97 MiB** |
+| Prueba | Compact Core |
+|---|---:|
+| GHZ 24 qubits | **408 bytes de estado** |
+| GHZ 40 qubits | **~680 bytes de estado** |
+| GHZ 10,000 qubits | **~23.97 MiB de estado** |
 
-Para 40 qubits, el Compact Core actual necesita aproximadamente **680 bytes de
-estado estructurado** para esta familia Clifford, frente a **8 TiB** del vector
-denso.
+## Capacidad teórica con 1 GB
 
-Esto **no significa** que podamos representar cualquier estado arbitrario de
-40 qubits en 680 bytes. Significa que, para estados/circuitos con la estructura
-que Compact Core soporta, evitamos almacenar información redundante.
-
-Por tanto, **el problema exponencial sigue existiendo en el baseline denso,
-pero ya no se aplica a todas las pruebas estructuradas que ejecutamos con Compact Core**.
-
-## ¿Cuántos qubits caben en 1 GB?
-
-Usando exactamente las representaciones actuales de Mundo X:
-
-### Dense Core
-
-El estado denso usa:
-
-```
-2^n * 8 bytes
-```
-
-Con **1 GB decimal = 1,000,000,000 bytes**:
-
-- 26 qubits caben;
-- 27 qubits requieren 1,073,741,824 bytes y ya exceden 1 GB.
-
-Resultado:
-
-```
-Dense Core con 1 GB: 26 qubits
-```
-
-### Compact Core actual
-
-La representación bit-packed actual usa aproximadamente:
+Para la representación bit-packed actual:
 
 ```
 16 * n * ceil(n / 64) + n bytes
 ```
 
-Con **1,000,000,000 bytes**, el máximo que entra según esa fórmula es:
+Con **1 GB decimal = 1,000,000,000 bytes**:
 
 ```
-63,232 qubits
-```
-
-Uso calculado:
-
-```
-999,634,688 bytes
-```
-
-El siguiente valor ya excede el límite:
-
-```
+63,232 qubits -> 999,634,688 bytes
 63,233 qubits -> 1,000,662,225 bytes
 ```
 
-Comparación:
+Por tanto:
 
-| Memoria de estado | Dense Core | Compact Core actual |
-|---|---:|---:|
-| 1 GB decimal | **26 qubits** | **63,232 qubits** |
+```
+Compact Core actual con 1 GB: 63,232 qubits
+```
 
-Eso equivale a aproximadamente **2,432× más qubits representables** dentro de
-la familia Clifford/stabilizer que soporta este Compact Core.
+Con **1 GiB = 1,073,741,824 bytes**:
 
-> Esta comparación NO significa 63,232 qubits universales arbitrarios.
-> Significa 63,232 qubits dentro de la clase estructurada que el motor compacto
-> actual puede representar sin materializar un statevector completo.
+```
+65,532 qubits
+```
 
-Referencia adicional:
+> Estos valores corresponden a la familia Clifford/stabilizer soportada por el
+> Compact Core actual. No representan qubits universales arbitrarios.
 
-- con **1 GiB = 1,073,741,824 bytes**, el Compact Core actual llega a **65,532 qubits**.
+Los resultados comparativos contra el motor denso se conservan en:
 
-Esto es deliberado: primero necesitamos una referencia correcta contra la cual medir cualquier representación nueva.
+```
+results/native_benchmark_2026-10-13.md
+```
+
+para reproducibilidad, pero ya no definen el estado actual del proyecto.
 
 ---
 
-# Próxima meta: Compact Quantum Core
+# Próxima meta: Compact X general
 
-La siguiente etapa no es agregar más qubits.
+Compact Core ya demuestra la idea de representación estructurada dentro de
+Clifford/stabilizer.
 
-Es reemplazar:
-
-```
-[alpha_0, alpha_1, alpha_2, ..., alpha_(2^n-1)]
-```
-
-por una representación estructurada que solo materialice lo necesario.
+La siguiente etapa es conservar esa eficiencia al salir de esa familia,
+empezando por recursos no-Clifford como la puerta `T` / magic, sin volver a
+materializar un statevector completo.
 
 Ideas que se pueden explorar y comparar:
 
