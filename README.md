@@ -767,6 +767,49 @@ results/visual_android_samsung_a16_5g_2026-10-14.md
 ```
 
 
+## Ruta GPU para eliminar el cuello de botella de Canvas
+
+Se añadió una segunda ruta visual Android usando **OpenGL ES 3.0**.
+
+Objetivo:
+
+```
+Compact Core
+-> 8 parámetros derivados del tableau
+-> uniforms GPU
+-> 1 draw call
+-> 6,000 / 24,000 / 96,000 elementos
+```
+
+La CPU ya no calcula posición, color, profundidad y forma de cada elemento ni
+ejecuta miles de llamadas `Canvas.draw*` por frame.
+
+En esta ruta:
+
+- el índice de cada elemento nace en GPU mediante `gl_VertexID`;
+- posición, color, fase, frecuencia, profundidad y forma se reconstruyen dentro
+  del vertex/fragment shader;
+- Compact Core sigue evolucionando en CPU y entrega solamente su firma compacta;
+- la interacción táctil continúa perturbando uno de los 32 qubits;
+- el estado lógico instrumentado se mantiene en ~**608 bytes**;
+- el render masivo se envía mediante **una sola llamada `glDrawArrays` por frame**.
+
+Build verificado:
+
+```
+workflow: Build Mundo X Lab APK
+run: #36
+status: success
+commit: d2a2b8839ce5acf75dfe61a562fdc263e0925178
+APK size: 1,042,561 bytes
+sha256: 56a10c49d33cfb446b685fbdc76b456281dfe4d0389bfb1b2c49742735ca01ed
+```
+
+La APK compila correctamente, pero **todavía no se documenta una ganancia de FPS**
+para esta ruta GPU hasta medirla en el Samsung A16 5G real.
+
+
+
 ---
 
 # Teletransportación cuántica en Compact Core
