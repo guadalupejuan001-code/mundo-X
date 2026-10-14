@@ -569,8 +569,14 @@ estado mínimo + regla + fase/frecuencia + perspectiva + tiempo
 -> estado visible
 ```
 
-La escena no pretende demostrar que el Compact Core de estabilizadores acelere
-gráficos. Es un experimento separado de representación procedural/generativa.
+El experimento ahora tiene tres rutas. `CLASSIC` y `GENERATIVE` sirven como
+baselines visuales. `COMPACT -> VISUAL` conecta directamente el estado del
+Compact Core con los parámetros que gobiernan la escena.
+
+Esto **no** significa que exista hardware cuántico ni que Compact Core ya acelere
+gráficos. Compact Core sigue siendo una simulación clásica de estados
+Clifford/stabilizer. Lo nuevo es que el estado visual ya puede depender de ese
+estado cuántico simulado compacto.
 
 Modos:
 
@@ -598,6 +604,56 @@ fase, perspectiva y feedback de interacción.
 
 El contador `explicit_scene_state` reporta solo el estado lógico explícito de
 la representación, no el overhead completo del runtime Android ni Canvas.
+
+### COMPACT -> VISUAL
+
+Este modo mantiene un estado de **32 qubits** dentro de Compact Core y lo hace
+evolucionar con las operaciones Clifford ya soportadas:
+
+```
+H
+S
+X
+Z
+CNOT
+```
+
+Cada frame se extrae del tableau compacto una firma numérica derivada de:
+
+- densidad de X;
+- densidad de Z;
+- densidad de Y;
+- fases activas;
+- actividad diagonal X/Z;
+- correlación local aproximada;
+- hash determinista del tableau.
+
+Esa firma controla directamente:
+
+- color;
+- frecuencia;
+- fase;
+- profundidad;
+- deformación;
+- distribución/tipo de formas.
+
+La ruta es:
+
+```
+Compact Core (32q)
+-> firma del tableau
+-> parámetros visuales
+-> escena
+```
+
+El estado de Compact Core para 32 qubits ocupa **544 bytes** con la
+representación actual. Sumado al estado global mínimo instrumentado del renderer,
+el modo reporta aproximadamente **608 bytes de estado lógico explícito** antes
+del overhead del proceso Android.
+
+Tocar una zona de la pantalla se mapea a uno de los 32 qubits y aplica una
+perturbación Clifford al estado, de modo que la interacción modifica tanto el
+feedback visual como el estado compacto que alimenta los siguientes frames.
 
 ### Interacción / pliegue
 
@@ -648,6 +704,29 @@ Lectura del experimento:
 - este resultado demuestra compacidad de representación en esta demo, no una mejora global de rendimiento gráfico.
 
 Próximo objetivo experimental: reducir el costo de reconstrucción visual por frame sin aumentar de forma significativa el estado explícito.
+
+## Build con acoplamiento Compact Core -> visual
+
+Build verificado en GitHub Actions:
+
+```
+workflow: Build Mundo X Lab APK
+run: #26
+status: success
+commit: 52e64a88f7b1ff31ea75e3e5c548ef88a7d5a2d7
+```
+
+APK extraída:
+
+```
+Mundo-X-Lab-debug.apk
+size: 1,034,605 bytes
+sha256: 497135ba9b1ad0dc0ca1214dfb735761174460876e9eda16aa64235feda6824e
+```
+
+Todavía no se registra una ventaja de FPS/RAM para `COMPACT -> VISUAL`.
+Ese resultado debe medirse en el teléfono real antes de hacer una afirmación de
+rendimiento.
 
 
 ---
