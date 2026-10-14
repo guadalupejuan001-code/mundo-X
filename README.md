@@ -168,6 +168,72 @@ que Compact Core soporta, evitamos almacenar información redundante.
 Por tanto, **el problema exponencial sigue existiendo en el baseline denso,
 pero ya no se aplica a todas las pruebas estructuradas que ejecutamos con Compact Core**.
 
+## ¿Cuántos qubits caben en 1 GB?
+
+Usando exactamente las representaciones actuales de Mundo X:
+
+### Dense Core
+
+El estado denso usa:
+
+```
+2^n * 8 bytes
+```
+
+Con **1 GB decimal = 1,000,000,000 bytes**:
+
+- 26 qubits caben;
+- 27 qubits requieren 1,073,741,824 bytes y ya exceden 1 GB.
+
+Resultado:
+
+```
+Dense Core con 1 GB: 26 qubits
+```
+
+### Compact Core actual
+
+La representación bit-packed actual usa aproximadamente:
+
+```
+16 * n * ceil(n / 64) + n bytes
+```
+
+Con **1,000,000,000 bytes**, el máximo que entra según esa fórmula es:
+
+```
+63,232 qubits
+```
+
+Uso calculado:
+
+```
+999,634,688 bytes
+```
+
+El siguiente valor ya excede el límite:
+
+```
+63,233 qubits -> 1,000,662,225 bytes
+```
+
+Comparación:
+
+| Memoria de estado | Dense Core | Compact Core actual |
+|---|---:|---:|
+| 1 GB decimal | **26 qubits** | **63,232 qubits** |
+
+Eso equivale a aproximadamente **2,432× más qubits representables** dentro de
+la familia Clifford/stabilizer que soporta este Compact Core.
+
+> Esta comparación NO significa 63,232 qubits universales arbitrarios.
+> Significa 63,232 qubits dentro de la clase estructurada que el motor compacto
+> actual puede representar sin materializar un statevector completo.
+
+Referencia adicional:
+
+- con **1 GiB = 1,073,741,824 bytes**, el Compact Core actual llega a **65,532 qubits**.
+
 Esto es deliberado: primero necesitamos una referencia correcta contra la cual medir cualquier representación nueva.
 
 ---
