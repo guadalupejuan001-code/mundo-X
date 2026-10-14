@@ -68,6 +68,16 @@ class DenseCore {
     }
   }
 
+  void phase_t(std::size_t q) {
+    check(q);
+    const std::size_t bit = std::size_t{1} << q;
+    const float s = 1.0f / std::sqrt(2.0f);
+    const Complex phase{s, s};
+    for (std::size_t i = 0; i < state_.size(); ++i) {
+      if (i & bit) state_[i] *= phase;
+    }
+  }
+
   void controlled_z(std::size_t a, std::size_t b) {
     check(a);
     check(b);
