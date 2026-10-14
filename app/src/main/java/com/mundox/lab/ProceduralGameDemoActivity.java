@@ -140,54 +140,60 @@ public class ProceduralGameDemoActivity extends Activity {
                 "in vec2 vUv; out vec4 fragColor;\n" +
                 "float h1(float n){return fract(sin(n*127.1)*43758.5453123);}\n" +
                 "float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n" +
-                "vec3 neon(float x){return .56+.44*cos(6.28318*(vec3(.03,.18,.34)+x*vec3(1.0,.71,.43)));}\n" +
-                "float rect(vec2 p,vec2 c,vec2 s){vec2 q=abs(p-c)-s;return 1.0-step(0.0,max(q.x,q.y));}\n" +
-                "vec3 skyline(vec2 uv,float z,float seed,vec3 tint){\n" +
-                " float cols=mix(9.0,22.0,z); float gx=(uv.x+1.65+seed*.01)*cols; float id=floor(gx); float fx=fract(gx)-.5;\n" +
-                " float r=h1(id+seed); float hh=mix(.13,.60,h1(id*1.73+seed*4.1))*(.62+.38*z);\n" +
-                " float base=-.13+(.12*(1.0-z)); float bw=mix(.31,.44,h1(id+seed*9.7));\n" +
-                " float inside=step(abs(fx),bw)*step(base,uv.y)*step(uv.y,base+hh);\n" +
-                " vec3 b=tint*(.32+.55*r)*inside;\n" +
-                " float edge=(1.0-step(abs(fx),bw-.025))*inside; b+=edge*vec3(.025,.055,.10);\n" +
-                " vec2 wp=vec2((fx+bw)/(bw*2.0), (uv.y-base)/max(hh,.01));\n" +
-                " vec2 wg=fract(wp*vec2(5.0,14.0));\n" +
-                " float pane=step(.18,wg.x)*step(wg.x,.78)*step(.20,wg.y)*step(wg.y,.70);\n" +
-                " float lit=step(.58,h2(vec2(floor(wp.x*5.0)+id*7.0,floor(wp.y*14.0)+seed)));\n" +
-                " vec3 wc=mix(vec3(1.0,.44,.10),neon(r+seed*.03),.58);\n" +
-                " b+=inside*pane*lit*wc*(1.3+1.1*z);\n" +
-                " float roof=step(base+hh-.007,uv.y)*step(uv.y,base+hh+.010)*step(abs(fx),bw*.62);\n" +
-                " b+=roof*neon(r+uTime*.01)*.48;\n" +
-                " return b;\n" +
+                "vec3 pal(float x){return .5+.5*cos(6.28318*(vec3(.02,.18,.34)+x*vec3(1.0,.73,.47)));}\n" +
+                "float boxSDF(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);}\n" +
+                "float cityMap(vec3 p,out float bid,out vec2 cell){\n" +
+                "  float block=5.0; cell=floor((p.xz+2.5)/block);\n" +
+                "  vec2 q=mod(p.xz+2.5,block)-2.5;\n" +
+                "  float rnd=h2(cell);\n" +
+                "  float roadX=1.0-step(2.0,abs(q.x)); float roadZ=1.0-step(2.0,abs(q.y));\n" +
+                "  float onRoad=max(roadX,roadZ);\n" +
+                "  float h=2.5+10.0*h2(cell+vec2(7.3,19.1));\n" +
+                "  vec2 footprint=vec2(1.45+0.25*h2(cell+3.0),1.45+0.25*h2(cell+9.0));\n" +
+                "  vec3 bp=vec3(q.x,p.y-h*.5,q.y);\n" +
+                "  float b=boxSDF(bp,vec3(footprint.x,h*.5,footprint.y));\n" +
+                "  bid=rnd;\n" +
+                "  float ground=p.y;\n" +
+                "  return min(mix(b,1000.0,onRoad),ground);\n" +
+                "}\n" +
+                "vec3 normalAt(vec3 p){float id;vec2 cell;float e=.002;float d=cityMap(p,id,cell);return normalize(vec3(cityMap(p+vec3(e,0,0),id,cell)-d,cityMap(p+vec3(0,e,0),id,cell)-d,cityMap(p+vec3(0,0,e),id,cell)-d));}\n" +
+                "vec3 shade(vec3 p,vec3 n,vec3 rd,float bid,vec2 cell){\n" +
+                "  vec3 base=mix(vec3(.018,.028,.045),vec3(.055,.075,.105),bid);\n" +
+                "  float side=abs(n.y)<.5?1.0:0.0;\n" +
+                "  vec2 wp=abs(n.x)>.5?p.zy:p.xy;\n" +
+                "  vec2 g=fract(wp*vec2(1.35,.55));\n" +
+                "  float win=side*step(.18,g.x)*step(g.x,.78)*step(.17,g.y)*step(g.y,.72);\n" +
+                "  float lit=step(.50,h2(floor(wp*vec2(1.35,.55))+cell*7.0));\n" +
+                "  vec3 wc=mix(vec3(1.0,.42,.10),pal(bid+.15),.55);\n" +
+                "  vec3 sun=normalize(vec3(-.35,.72,-.42));\n" +
+                "  float dif=max(.12,dot(n,sun));\n" +
+                "  float rim=pow(max(0.0,1.0-dot(n,-rd)),2.0);\n" +
+                "  vec3 c=base*dif+wc*win*lit*2.1+vec3(.06,.09,.15)*rim;\n" +
+                "  if(n.y>.8){float lane=max(step(.92,fract(p.x*.22)),step(.92,fract(p.z*.22)));c+=vec3(.08,.13,.18)*lane;}\n" +
+                "  return c;\n" +
                 "}\n" +
                 "void main(){\n" +
                 " vec2 uv=(gl_FragCoord.xy-.5*uRes)/uRes.y;\n" +
-                " float yaw=(uTouch.x-.5)*.34; float pitch=(uTouch.y-.5)*.11; uv+=vec2(yaw,pitch);\n" +
                 " float t=uTime;\n" +
-                " vec3 col=mix(vec3(.008,.012,.028),vec3(.025,.055,.105),clamp(uv.y+.35,0.0,1.0));\n" +
-                " float stars=step(.996,h2(floor((uv+vec2(t*.002,0.0))*vec2(620.0,360.0))))*step(.02,uv.y);\n" +
-                " col+=stars*vec3(.65,.78,1.0);\n" +
-                " vec2 moonP=uv-vec2(.48,.31); float moon=1.0-smoothstep(.055,.061,length(moonP));\n" +
-                " col+=moon*vec3(1.0,.86,.61)*1.4;\n" +
-                " col+=skyline(uv,0.22,3.0,vec3(.045,.065,.105))*.48;\n" +
-                " col+=skyline(uv,0.52,19.0,vec3(.045,.080,.135))*.75;\n" +
-                " col+=skyline(uv,0.92,41.0,vec3(.035,.070,.120))*1.08;\n" +
-                " float horizon=-.18; float ground=step(uv.y,horizon);\n" +
-                " vec3 road=vec3(.006,.009,.014);\n" +
-                " float d=max(.018,horizon-uv.y+.035); float px=uv.x/d;\n" +
-                " float lane=1.0-smoothstep(.014,.032,abs(abs(px)-1.18));\n" +
-                " float center=1.0-smoothstep(.012,.026,abs(px));\n" +
-                " float dash=step(.50,fract((1.0/d)*.11+t*.55));\n" +
-                " road+=vec3(.025,.16,.34)*lane*.85+vec3(.72,.42,.08)*center*dash*.40;\n" +
-                " float gx=floor((uv.x+1.6)*18.0); float signPick=step(.72,h1(gx+77.0));\n" +
-                " float sx=(gx+.5)/18.0-1.6; float sign=rect(uv,vec2(sx,-.015+h1(gx)*.22),vec2(.018,.035+.028*h1(gx+8.0)))*signPick;\n" +
-                " col+=sign*neon(h1(gx+11.0))*2.2;\n" +
-                " float wet=h2(vec2(floor(uv.x*120.0),floor(uv.y*210.0+t*5.0)));\n" +
-                " vec3 refl=neon(uv.x*.25+t*.018)*pow(max(0.0,wet-.68),2.0)*2.2;\n" +
-                " road+=refl*.42;\n" +
-                " col=mix(col,road,ground*.94);\n" +
-                " float fog=clamp((-.02-uv.y)*.36,0.0,.18)+.035; col=mix(col,vec3(.055,.075,.095),fog);\n" +
-                " float vig=1.0-smoothstep(.48,1.08,length(uv*vec2(.68,1.0))); col*=.66+.34*vig;\n" +
-                " col=1.0-exp(-col*1.45); col=pow(col,vec3(.86));\n" +
+                " float yaw=(uTouch.x-.5)*1.2 + sin(t*.10)*.10;\n" +
+                " float pitch=(.5-uTouch.y)*.40-.05;\n" +
+                " vec3 ro=vec3(sin(t*.08)*2.0,1.45,t*1.65);\n" +
+                " vec3 fw=normalize(vec3(sin(yaw),pitch,cos(yaw)));\n" +
+                " vec3 rt=normalize(cross(vec3(0,1,0),fw));\n" +
+                " vec3 up=cross(fw,rt);\n" +
+                " vec3 rd=normalize(fw+uv.x*rt+uv.y*up);\n" +
+                " float dist=0.0; float hit=0.0; float bid=0.0; vec2 cell=vec2(0); vec3 p=ro;\n" +
+                " for(int i=0;i<28;i++){p=ro+rd*dist;float d=cityMap(p,bid,cell);if(d<.012){hit=1.0;break;}dist+=max(.035,d*.72);if(dist>65.0)break;}\n" +
+                " vec3 sky=mix(vec3(.006,.010,.028),vec3(.045,.075,.13),clamp(rd.y*.8+.45,0.0,1.0));\n" +
+                " float moon=pow(max(0.0,dot(rd,normalize(vec3(.45,.40,.78)))),500.0); sky+=vec3(1.0,.84,.58)*moon*5.0;\n" +
+                " vec3 col=sky;\n" +
+                " if(hit>0.5){vec3 n=normalAt(p);col=shade(p,n,rd,bid,cell);\n" +
+                "   float fog=1.0-exp(-dist*.020);col=mix(col,sky,fog);\n" +
+                "   if(n.y>.8){float wet=.35+.65*h2(floor(p.xz*7.0));col+=pal(p.x*.05+t*.01)*pow(wet,8.0)*.12;}\n" +
+                " }\n" +
+                " float glow=0.0;for(int i=0;i<4;i++){float fi=float(i);vec3 lp=vec3(-6.0+fi*4.0,1.7,ro.z+7.0+fi*9.0);float a=max(0.0,dot(normalize(lp-ro),rd));glow+=pow(a,700.0);}col+=vec3(.1,.45,1.0)*glow*2.0;\n" +
+                " float vig=1.0-smoothstep(.50,1.18,length(uv*vec2(.72,1.0)));col*=.68+.32*vig;\n" +
+                " col=1.0-exp(-col*1.55);col=pow(col,vec3(.86));\n" +
                 " fragColor=vec4(col,1.0);\n" +
                 "}\n";
 
