@@ -312,3 +312,126 @@ Interpretation:
   the dense reference, so this result demonstrates correctness, not memory
   advantage.
 
+
+---
+
+# Branch redundancy probe
+
+The naive exact representation creates `2^T` stabilizer branches. A diagnostic
+was added to determine how many of those branches are actually distinct.
+
+Two independent counts are reported:
+
+- `unique_tableaus`: distinct Compact Core generator tableaus;
+- `oracle_unique_physical_states`: distinct stabilizer states up to global
+  phase, checked with Dense Core only as a small-circuit oracle.
+
+The oracle also combines equivalent states with their correct relative phase and
+reconstructs the total state again. This grouped reconstruction must retain
+fidelity 1.
+
+## Four-qubit circuit
+
+### 4 T
+
+```
+branches=16
+unique_tableaus=16
+oracle_unique_physical_states=16
+oracle_mergeable_branches=0
+oracle_reduction_factor=1
+oracle_grouped_fidelity=1.000000000
+```
+
+### 8 T
+
+```
+branches=256
+unique_tableaus=16
+oracle_unique_physical_states=16
+oracle_mergeable_branches=240
+oracle_reduction_factor=16
+oracle_grouped_fidelity=1.000000000
+```
+
+### 10 T
+
+```
+branches=1024
+unique_tableaus=16
+oracle_unique_physical_states=16
+oracle_mergeable_branches=1008
+oracle_reduction_factor=64
+oracle_grouped_fidelity=1.000000000
+```
+
+### 12 T
+
+```
+branches=4096
+unique_tableaus=16
+oracle_unique_physical_states=16
+oracle_mergeable_branches=4080
+oracle_reduction_factor=256
+oracle_grouped_fidelity=1.000000000
+```
+
+For four qubits, the observed distinct-state count saturated at:
+
+```
+16 = 2^4
+```
+
+while the naive branch expansion continued to `4096 = 2^12`.
+
+## Six-qubit cross-check
+
+A second circuit was tested to check whether the four-qubit result was merely a
+small-circuit coincidence.
+
+```
+qubits=6
+t_gates=12
+branches=4096
+unique_tableaus=64
+oracle_unique_physical_states=64
+oracle_mergeable_branches=4032
+oracle_reduction_factor=64
+oracle_grouped_fidelity=1.000000000
+result=PASS
+wall_time_ms=150.465
+```
+
+The distinct-state count saturated at:
+
+```
+64 = 2^6
+```
+
+This matches the expected size of the Pauli orbit of a pure n-qubit stabilizer
+state up to stabilizer equivalence.
+
+## Interpretation
+
+For the tested Clifford+T construction:
+
+```
+naive expansion:       2^T branches
+observed distinct:     <= 2^n stabilizer states
+```
+
+This is not yet an implementation that stores only `2^n` states. The current
+runtime still materializes all naive branches and the dense oracle is used to
+identify exact phase-correct equivalences after the fact.
+
+Therefore this result demonstrates **measurable exact redundancy**, not yet a
+new compact universal simulator.
+
+The next implementation target is to exploit this structure during evolution,
+rather than generate `2^T` branches and merge them afterward.
+
+A likely exact route is to share the common stabilizer structure and track only
+the Pauli differences / state labels plus complex coefficients, while preserving
+all relative phases. That implementation must be validated without using a dense
+statevector as part of its runtime representation.
+
