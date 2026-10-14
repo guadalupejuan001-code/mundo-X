@@ -574,9 +574,11 @@ baselines visuales. `COMPACT -> VISUAL` conecta directamente el estado del
 Compact Core con los parámetros que gobiernan la escena.
 
 Esto **no** significa que exista hardware cuántico ni que Compact Core ya acelere
-gráficos. Compact Core sigue siendo una simulación clásica de estados
-Clifford/stabilizer. Lo nuevo es que el estado visual ya puede depender de ese
-estado cuántico simulado compacto.
+gráficos. Compact Core es un **simulador cuántico compacto de estados
+Clifford/estabilizadores**: representa y evoluciona esos estados mediante un
+tableau bit-packed sin materializar el statevector completo de `2^n` amplitudes.
+Lo nuevo es que ese estado cuántico compacto ya participa directamente en la
+generación visual.
 
 Modos:
 
@@ -810,20 +812,27 @@ en un teléfono real.
 
 ## Estado científico
 
-Mundo X corre actualmente sobre hardware clásico.
+Mundo X corre actualmente sobre **hardware convencional** (CPU ARM64/x86_64).
 
-**Quantum Core es una simulación clásica de matemáticas cuánticas.**
+**Quantum Core y Compact Core simulan sistemas cuánticos.** La diferencia es que
+Quantum Core usa un statevector denso como referencia, mientras Compact Core usa
+una representación estructurada bit-packed para estados Clifford/estabilizadores,
+evitando materializar el vector completo de `2^n` amplitudes en esa familia.
 
 Todavía no se ha demostrado:
 
-- ventaja cuántica;
-- hardware cuántico propio;
-- eliminación general del crecimiento exponencial;
-- superioridad frente a simuladores existentes;
+- ventaja cuántica de hardware;
+- hardware cuántico físico propio;
+- eliminación general del crecimiento exponencial para estados arbitrarios;
+- superioridad general frente a todos los simuladores existentes;
 - una nueva teoría física.
 
 Eso no invalida el objetivo. Define exactamente qué falta demostrar.
 
 La hipótesis de trabajo de Mundo X es más limitada y comprobable:
 
-> **Para ciertos estados y problemas estructurados, quizá podamos obtener el comportamiento útil sin representar explícitamente todo lo que una simulación densa almacena.**
+> **Para estados y problemas estructurados compatibles, Compact Core demuestra que
+> es posible representar y evolucionar el comportamiento cuántico relevante sin
+> materializar el statevector denso completo. El reto abierto es extender esa
+> eficiencia fuera de Clifford/estabilizadores sin perder corrección ni trasladar
+> el costo a otra estructura oculta.**
