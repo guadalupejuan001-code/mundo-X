@@ -11,6 +11,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <unordered_map>
+#include <algorithm>
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
@@ -215,6 +217,107 @@ class ExactTExperiment {
     return norm;
   }
 
+  struct RedundancyAnalysis {
+    std::size_t total_branches = 0;
+    std::size_t unique_tableaus = 0;
+    std::size_t max_tableau_multiplicity = 0;
+    std::size_t unique_physical_states = 0;
+    std::size_t max_physical_multiplicity = 0;
+    double grouped_fidelity = 0.0;
+    double grouped_norm = 0.0;
+  };
+
+  RedundancyAnalysis analyze_redundancy_dense_oracle() const {
+    ensure_dense_safe();
+
+    RedundancyAnalysis out;
+    out.total_branches = branches_.size();
+
+    std::unordered_map<std::string, std::size_t> tableau_counts;
+    for (const auto& branch : branches_) {
+      std::ostringstream key;
+      for (std::size_t r = 0; r < branch.state.qubits(); ++r) {
+        key << branch.state.generator_string(r) << '|';
+      }
+      const std::size_t count = ++tableau_counts[key.str()];
+      out.max_tableau_multiplicity =
+          std::max(out.max_tableau_multiplicity, count);
+    }
+    out.unique_tableaus = tableau_counts.size();
+
+    struct Group {
+      std::vector<std::complex<double>> canonical;
+      std::complex<double> weight{0.0, 0.0};
+      std::size_t multiplicity = 0;
+    };
+
+    std::unordered_map<std::string, Group> groups;
+
+    for (const auto& branch : branches_) {
+      DenseCore dense(n_);
+      replay_branch(dense, branch);
+      auto state = to_double(dense.state());
+
+      std::complex<double> phase{1.0, 0.0};
+      for (const auto& a : state) {
+        const double mag = std::abs(a);
+        if (mag > 1e-8) {
+          phase = a / mag;
+          break;
+        }
+      }
+
+      std::vector<std::complex<double>> canonical(state.size());
+      std::ostringstream key;
+      key << std::setprecision(0) << std::fixed;
+      constexpr double quant = 1e6;
+
+      for (std::size_t i = 0; i < state.size(); ++i) {
+        canonical[i] = state[i] / phase;
+        const long long re =
+            static_cast<long long>(std::llround(canonical[i].real() * quant));
+        const long long im =
+            static_cast<long long>(std::llround(canonical[i].imag() * quant));
+        key << re << ',' << im << ';';
+      }
+
+      auto& group = groups[key.str()];
+      if (group.multiplicity == 0) group.canonical = std::move(canonical);
+      group.weight += branch.coefficient * phase;
+      ++group.multiplicity;
+      out.max_physical_multiplicity =
+          std::max(out.max_physical_multiplicity, group.multiplicity);
+    }
+
+    out.unique_physical_states = groups.size();
+
+    const std::size_t dim = std::size_t{1} << n_;
+    std::vector<std::complex<double>> grouped(dim, {0.0, 0.0});
+    for (const auto& entry : groups) {
+      const auto& group = entry.second;
+      for (std::size_t i = 0; i < dim; ++i)
+        grouped[i] += group.weight * group.canonical[i];
+    }
+
+    const auto reference = dense_reference();
+    std::complex<double> overlap{0.0, 0.0};
+    double ref_norm = 0.0;
+    double grouped_norm = 0.0;
+
+    for (std::size_t i = 0; i < dim; ++i) {
+      overlap += std::conj(reference[i]) * grouped[i];
+      ref_norm += std::norm(reference[i]);
+      grouped_norm += std::norm(grouped[i]);
+    }
+
+    out.grouped_norm = grouped_norm;
+    if (ref_norm > 0.0 && grouped_norm > 0.0)
+      out.grouped_fidelity =
+          std::norm(overlap) / (ref_norm * grouped_norm);
+
+    return out;
+  }
+
   bool branch_tableaus_match_dense(double tolerance = 2e-4) const {
     ensure_dense_safe();
     for (const auto& branch : branches_) {
@@ -369,12 +472,17 @@ inline ExactTExperimentResult run_exact_t_experiment(std::size_t qubits,
   const double fidelity = q.fidelity();
   const double norm = q.decomposition_norm();
   const bool tableau_ok = q.branch_tableaus_match_dense();
+  const auto redundancy = q.analyze_redundancy_dense_oracle();
 
   const std::size_t expected_branches =
       t_gates >= 63 ? 0 : (std::size_t{1} << t_gates);
   const bool branches_ok = q.branch_count() == expected_branches;
   const bool fidelity_ok = std::abs(fidelity - 1.0) < 2e-5;
   const bool norm_ok = std::abs(norm - 1.0) < 2e-5;
+  const bool grouped_fidelity_ok =
+      std::abs(redundancy.grouped_fidelity - 1.0) < 2e-5;
+  const bool grouped_norm_ok =
+      std::abs(redundancy.grouped_norm - 1.0) < 2e-5;
 
   DenseCore dense(qubits);
   const std::size_t dense_bytes = dense.state_bytes();
@@ -393,13 +501,25 @@ inline ExactTExperimentResult run_exact_t_experiment(std::size_t qubits,
   out << "decomposition_norm=" << norm << "\n";
   out << "branch_tableaus=" << (tableau_ok ? "PASS" : "FAIL") << "\n";
   out << "branches_exact=" << (branches_ok ? "PASS" : "FAIL") << "\n";
+  out << "unique_tableaus=" << redundancy.unique_tableaus << "\n";
+  out << "max_tableau_multiplicity=" << redundancy.max_tableau_multiplicity << "\n";
+  out << "oracle_unique_physical_states="
+      << redundancy.unique_physical_states << "\n";
+  out << "oracle_max_physical_multiplicity="
+      << redundancy.max_physical_multiplicity << "\n";
+  out << "oracle_grouped_fidelity=" << redundancy.grouped_fidelity << "\n";
+  out << "oracle_grouped_norm=" << redundancy.grouped_norm << "\n";
+  out << "oracle_mergeable_branches="
+      << (redundancy.total_branches - redundancy.unique_physical_states) << "\n";
   out << "result="
-      << ((tableau_ok && branches_ok && fidelity_ok && norm_ok) ? "PASS" : "FAIL")
+      << ((tableau_ok && branches_ok && fidelity_ok && norm_ok &&
+           grouped_fidelity_ok && grouped_norm_ok) ? "PASS" : "FAIL")
       << "\n";
-  out << "note=no pruning, no branch merging, dense used only as validation oracle\n";
+  out << "note=no pruning in representation; oracle grouping is diagnostic only\n";
 
   ExactTExperimentResult result;
-  result.all_passed = tableau_ok && branches_ok && fidelity_ok && norm_ok;
+  result.all_passed = tableau_ok && branches_ok && fidelity_ok && norm_ok &&
+                      grouped_fidelity_ok && grouped_norm_ok;
   result.report = out.str();
   return result;
 }
