@@ -59,6 +59,11 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, GpuVisualActivity.class)));
         root.addView(gpuVisual);
 
+        Button performanceLauncher = button("OPEN PERFORMANCE LAUNCHER");
+        performanceLauncher.setOnClickListener(v ->
+                startActivity(new Intent(this, PerformanceLauncherActivity.class)));
+        root.addView(performanceLauncher);
+
         root.addView(text("Wild Rift low-end mode", 18, true));
         root.addView(text(
                 "No root. No Riot files modified. Preflight → launch → Mundo X exits.",
