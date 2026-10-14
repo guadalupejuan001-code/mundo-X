@@ -54,6 +54,11 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, VisualExperimentActivity.class)));
         root.addView(visual);
 
+        Button gpuVisual = button("OPEN GPU VISUAL EXPERIMENT");
+        gpuVisual.setOnClickListener(v ->
+                startActivity(new Intent(this, GpuVisualActivity.class)));
+        root.addView(gpuVisual);
+
         root.addView(text("Wild Rift low-end mode", 18, true));
         root.addView(text(
                 "No root. No Riot files modified. Preflight → launch → Mundo X exits.",
