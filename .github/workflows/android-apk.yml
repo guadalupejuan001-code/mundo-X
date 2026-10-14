@@ -33,6 +33,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Native cluster benchmark
+        shell: bash
+        run: |
+          cmake -S . -B native-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build native-build -j2
+          echo "=== 4x4 cluster: Compact vs Dense ==="
+          ./native-build/mundo_x cluster 4 4 --dense
+          echo "=== 32x32 cluster: Compact ==="
+          ./native-build/mundo_x cluster 32 32
+
       - name: Install Android packages
         shell: bash
         run: |
