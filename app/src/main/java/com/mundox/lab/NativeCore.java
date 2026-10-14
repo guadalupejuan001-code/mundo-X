@@ -11,4 +11,5 @@ public final class NativeCore {
     public static native String bench(int qubits, boolean includeDense);
     public static native String cluster(int rows, int cols, boolean includeDense);
     public static native String practice(int qubits, String script);
+    public static native float[] quantumVisualStep(int touchQubit, boolean reset);
 }
