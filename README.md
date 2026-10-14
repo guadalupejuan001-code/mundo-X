@@ -518,10 +518,47 @@ Por ejemplo:
 La frontera científica cambió. Ya no es simplemente "hacer que T funcione": esa
 prueba exacta ya existe.
 
-La siguiente pregunta es:
+La siguiente pregunta era:
 
 > ¿Podemos reducir, factorizar o representar estas ramas de forma más compacta
 > sin perder exactitud ni esconder el mismo costo exponencial en otra estructura?
+
+Ya se añadió una primera prueba de redundancia exacta. En los circuitos
+controlados evaluados se observó:
+
+```
+4 qubits / 12 T:
+4096 ramas ingenuas -> 16 estados físicos distintos
+factor de reducción observable = 256x
+
+6 qubits / 12 T:
+4096 ramas ingenuas -> 64 estados físicos distintos
+factor de reducción observable = 64x
+```
+
+En ambos casos, reagrupar las ramas equivalentes con la fase correcta mantuvo:
+
+```
+fidelity=1.000000000
+```
+
+Esto es un diagnóstico con Dense Core como oracle para circuitos pequeños; la
+representación actual todavía genera primero todas las ramas.
+
+El siguiente objetivo ya es implementar esa estructura durante la evolución:
+
+```
+estructura estabilizadora compartida
++ diferencias Pauli
++ coeficientes complejos
+-> evitar materializar 2^T tableaus completos
+```
+
+Registro:
+
+```
+results/exact_t_decomposition_2026-10-14.md
+```
 
 La regla sigue siendo estricta:
 
@@ -544,8 +581,9 @@ Una mejora será interesante solo si:
 1. Quantum Core                         -> referencia cuántica densa          [HECHO]
 2. Compact Core Clifford/estabilizador  -> representación compacta            [HECHO/ACTIVO]
 3. T exacta por suma de estabilizadores -> baseline no-Clifford exacto         [HECHO EXPERIMENTAL]
-4. Reducir crecimiento de ramas         -> siguiente frontera científica      [SIGUIENTE]
-5. Transformer X / otras estructuras    -> solo si aportan mediblemente
+4. Redundancia exacta de ramas          -> 4q/6q verificada                     [HECHO DIAGNÓSTICO]
+5. Explotar estructura durante evolución -> siguiente frontera científica      [SIGUIENTE]
+6. Transformer X / otras estructuras    -> solo si aportan mediblemente
 ```
 
 Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con
