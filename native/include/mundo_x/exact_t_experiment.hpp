@@ -443,8 +443,8 @@ struct ExactTExperimentResult {
 inline ExactTExperimentResult run_exact_t_experiment(std::size_t qubits,
                                                       std::size_t t_gates) {
   if (qubits == 0) throw std::invalid_argument("qubits must be >= 1");
-  if (qubits > 16)
-    throw std::invalid_argument("experiment validation limit is 16 qubits");
+  if (qubits > 10)
+    throw std::invalid_argument("experiment validation limit is 10 qubits");
   if (t_gates > 12)
     throw std::invalid_argument("experiment safety limit is 12 T gates");
 
@@ -511,6 +511,14 @@ inline ExactTExperimentResult run_exact_t_experiment(std::size_t qubits,
   out << "oracle_grouped_norm=" << redundancy.grouped_norm << "\n";
   out << "oracle_mergeable_branches="
       << (redundancy.total_branches - redundancy.unique_physical_states) << "\n";
+  out << "oracle_reduction_factor="
+      << (redundancy.unique_physical_states == 0
+              ? 0.0
+              : static_cast<double>(redundancy.total_branches) /
+                    static_cast<double>(redundancy.unique_physical_states))
+      << "\n";
+  out << "stabilizer_pauli_orbit_upper_bound="
+      << (std::size_t{1} << qubits) << "\n";
   out << "result="
       << ((tableau_ok && branches_ok && fidelity_ok && norm_ok &&
            grouped_fidelity_ok && grouped_norm_ok) ? "PASS" : "FAIL")
