@@ -11,6 +11,7 @@
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
+#include "mundo_x/teleport.hpp"
 
 using mundo_x::CompactCore;
 using mundo_x::DenseCore;
@@ -305,4 +306,15 @@ Java_com_mundox_lab_NativeCore_quantumVisualStep(JNIEnv* env, jclass,
   jfloatArray out = env->NewFloatArray(10);
   if (out != nullptr) env->SetFloatArrayRegion(out, 0, 10, values);
   return out;
+}
+
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_teleport(JNIEnv* env, jclass) {
+  try {
+    const auto result = mundo_x::run_compact_teleportation();
+    return as_jstring(env, result.report);
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
 }
