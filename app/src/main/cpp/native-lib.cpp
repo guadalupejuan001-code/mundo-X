@@ -115,6 +115,89 @@ Java_com_mundox_lab_NativeCore_bench(JNIEnv* env, jclass, jint qubits,
   }
 }
 
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_cluster(JNIEnv* env, jclass, jint rows_in,
+                                       jint cols_in, jboolean include_dense) {
+  try {
+    std::size_t rows = static_cast<std::size_t>(rows_in);
+    std::size_t cols = static_cast<std::size_t>(cols_in);
+
+    if (rows < 1) rows = 1;
+    if (cols < 1) cols = 1;
+    if (rows > 64) rows = 64;
+    if (cols > 64) cols = 64;
+
+    const std::size_t n = rows * cols;
+
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(3);
+
+    const auto c0 = std::chrono::steady_clock::now();
+
+    CompactCore compact(n);
+    for (std::size_t v = 0; v < n; ++v) compact.hadamard(v);
+
+    for (std::size_t r = 0; r < rows; ++r) {
+      for (std::size_t col = 0; col < cols; ++col) {
+        const std::size_t v = r * cols + col;
+        if (col + 1 < cols) compact.controlled_z(v, v + 1);
+        if (r + 1 < rows) compact.controlled_z(v, v + cols);
+      }
+    }
+
+    const auto c1 = std::chrono::steady_clock::now();
+    const double cms =
+        std::chrono::duration<double, std::milli>(c1 - c0).count();
+
+    out << "2D CLUSTER STATE\n"
+        << "rows=" << rows << "\n"
+        << "cols=" << cols << "\n"
+        << "qubits=" << n << "\n"
+        << "state_bytes=" << compact.state_bytes() << "\n"
+        << "state_mib=" << mib(compact.state_bytes()) << "\n"
+        << "signature="
+        << (compact.is_cluster_signature(rows, cols) ? "PASS" : "FAIL")
+        << "\n"
+        << "time_ms=" << cms << "\n";
+
+    if (include_dense) {
+      if (n > 20) {
+        out << "\nDENSE skipped: safety limit is 20 qubits for cluster validation.\n";
+      } else {
+        const auto d0 = std::chrono::steady_clock::now();
+
+        DenseCore dense(n);
+        for (std::size_t v = 0; v < n; ++v) dense.hadamard(v);
+
+        for (std::size_t r = 0; r < rows; ++r) {
+          for (std::size_t col = 0; col < cols; ++col) {
+            const std::size_t v = r * cols + col;
+            if (col + 1 < cols) dense.controlled_z(v, v + 1);
+            if (r + 1 < rows) dense.controlled_z(v, v + cols);
+          }
+        }
+
+        const bool ok = dense.cluster_is_valid(rows, cols);
+
+        const auto d1 = std::chrono::steady_clock::now();
+        const double dms =
+            std::chrono::duration<double, std::milli>(d1 - d0).count();
+
+        out << "\nDENSE VALIDATION\n"
+            << "state_bytes=" << dense.state_bytes() << "\n"
+            << "state_mib=" << mib(dense.state_bytes()) << "\n"
+            << "signature=" << (ok ? "PASS" : "FAIL") << "\n"
+            << "time_ms=" << dms << "\n";
+      }
+    }
+
+    return as_jstring(env, out.str());
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_mundox_lab_NativeCore_practice(JNIEnv* env, jclass, jint qubits,
                                         jstring script) {
