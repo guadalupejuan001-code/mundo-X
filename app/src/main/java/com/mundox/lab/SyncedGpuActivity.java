@@ -2,6 +2,11 @@ package com.mundox.lab;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
+import android.net.Network;
 import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
@@ -39,6 +44,7 @@ public class SyncedGpuActivity extends Activity {
     private final ExecutorService net = Executors.newCachedThreadPool();
 
     private TextView stats;
+    private TextView localIpLabel;
     private EditText hostField;
     private GLSurfaceView glView;
     private SceneRenderer renderer;
@@ -60,11 +66,20 @@ public class SyncedGpuActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.BLACK);
 
+        localIpLabel = new TextView(this);
+        localIpLabel.setTextColor(Color.WHITE);
+        localIpLabel.setTextSize(12);
+        localIpLabel.setTypeface(android.graphics.Typeface.MONOSPACE);
+        localIpLabel.setPadding(10, 4, 10, 4);
+        root.addView(localIpLabel, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
         LinearLayout netRow = new LinearLayout(this);
         netRow.setOrientation(LinearLayout.HORIZONTAL);
 
         hostField = new EditText(this);
-        hostField.setHint("Host IP");
+        hostField.setHint("HOST IP — ONLY FOR JOIN");
         hostField.setSingleLine(true);
         hostField.setTextColor(Color.WHITE);
         hostField.setHintTextColor(Color.GRAY);
@@ -72,7 +87,7 @@ public class SyncedGpuActivity extends Activity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.6f));
 
         Button host = new Button(this);
-        host.setText("HOST");
+        host.setText("HOST THIS PHONE");
         host.setOnClickListener(v -> host());
         netRow.addView(host, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -161,8 +176,7 @@ public class SyncedGpuActivity extends Activity {
         root.addView(controls);
         setContentView(root);
 
-        String local = localIpv4();
-        if (local != null) hostField.setHint("Host IP; this phone=" + local);
+        refreshLocalIpLabel();
     }
 
     private LinearLayout.LayoutParams weighted() {
@@ -183,8 +197,16 @@ public class SyncedGpuActivity extends Activity {
         disconnect();
         hosting = true;
         final String ip = localIpv4();
-        stats.setText("HOSTING " + (ip == null ? "unknown-ip" : ip) + ":" + PORT +
-                "\nWaiting for phone B...");
+        refreshLocalIpLabel();
+
+        if (ip == null) {
+            stats.setText("HOST starting on port " + PORT +
+                    "\nCould not read local IPv4 yet. Make sure Wi-Fi is connected." +
+                    "\nPhone B still needs this phone's LAN IP to JOIN.");
+        } else {
+            stats.setText("HOSTING " + ip + ":" + PORT +
+                    "\nPhone B: type " + ip + " and press JOIN.");
+        }
 
         net.submit(() -> {
             try {
@@ -307,7 +329,44 @@ public class SyncedGpuActivity extends Activity {
         peer = "-";
     }
 
+    private void refreshLocalIpLabel() {
+        String ip = localIpv4();
+        if (localIpLabel == null) return;
+
+        if (ip == null) {
+            localIpLabel.setText("THIS PHONE: IP unavailable — connect both phones to same Wi-Fi");
+        } else {
+            localIpLabel.setText("THIS PHONE HOST IP: " + ip + ":" + PORT +
+                    "\nHOST needs no IP. JOIN phone types only: " + ip);
+        }
+    }
+
     private String localIpv4() {
+        // Preferred Android API: inspect all active link properties and prefer
+        // private LAN IPv4 addresses.
+        try {
+            ConnectivityManager cm =
+                    (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+
+            if (cm != null) {
+                Network active = cm.getActiveNetwork();
+                if (active != null) {
+                    String candidate = ipv4FromLinkProperties(cm.getLinkProperties(active));
+                    if (candidate != null) return candidate;
+                }
+
+                Network[] networks = cm.getAllNetworks();
+                if (networks != null) {
+                    for (Network network : networks) {
+                        String candidate =
+                                ipv4FromLinkProperties(cm.getLinkProperties(network));
+                        if (candidate != null) return candidate;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        // Fallback for devices whose ConnectivityManager hides link addresses.
         try {
             Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
             for (NetworkInterface ni : Collections.list(ifaces)) {
@@ -315,16 +374,40 @@ public class SyncedGpuActivity extends Activity {
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
                     if (a instanceof Inet4Address && !a.isLoopbackAddress()) {
                         String ip = a.getHostAddress();
-                        if (ip != null && (ip.startsWith("192.168.") ||
-                                ip.startsWith("10.") ||
-                                ip.startsWith("172."))) {
-                            return ip;
-                        }
+                        if (isPrivateIpv4(ip)) return ip;
                     }
                 }
             }
         } catch (Throwable ignored) {}
+
         return null;
+    }
+
+    private String ipv4FromLinkProperties(LinkProperties lp) {
+        if (lp == null) return null;
+
+        for (LinkAddress la : lp.getLinkAddresses()) {
+            InetAddress address = la.getAddress();
+            if (address instanceof Inet4Address && !address.isLoopbackAddress()) {
+                String ip = address.getHostAddress();
+                if (isPrivateIpv4(ip)) return ip;
+            }
+        }
+        return null;
+    }
+
+    private boolean isPrivateIpv4(String ip) {
+        if (ip == null) return false;
+        if (ip.startsWith("10.") || ip.startsWith("192.168.")) return true;
+
+        if (ip.startsWith("172.")) {
+            try {
+                String[] p = ip.split("\\.");
+                int second = Integer.parseInt(p[1]);
+                return second >= 16 && second <= 31;
+            } catch (Throwable ignored) {}
+        }
+        return false;
     }
 
     @Override
