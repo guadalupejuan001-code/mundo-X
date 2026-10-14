@@ -559,6 +559,47 @@ El paquete Windows incluye el ejecutable y los programas de ejemplo.
 
 ---
 
+# Wild Rift low-end mode — Android
+
+Mundo X Lab incluye una capa de preparación para **League of Legends: Wild Rift**
+sin root y sin modificar archivos del juego.
+
+Paquete oficial detectado:
+
+```
+com.riotgames.league.wildrift
+```
+
+Funciones:
+
+- comprueba si Wild Rift está instalado;
+- lee RAM total y disponible;
+- detecta el flag de memoria baja de Android;
+- lee Battery Saver;
+- lee estado térmico cuando Android lo expone;
+- lee temperatura y nivel de batería;
+- genera un preset recomendado para hardware low-end;
+- abre Wild Rift mediante su Intent oficial;
+- cierra Mundo X ~1.2 s después del lanzamiento para liberar su propia RAM.
+
+El modo **no** modifica APK, archivos, memoria ni anti-cheat de Riot. Tampoco
+fuerza frecuencias de CPU/GPU ni cambia resolución de otra app, porque Android no
+permite esas acciones a una app normal sin privilegios especiales.
+
+Objetivo experimental:
+
+```
+preflight del teléfono
+-> configuración gráfica recomendada
+-> lanzar Wild Rift
+-> Mundo X sale de memoria
+```
+
+Los benchmarks FPS/temperatura antes vs después se documentarán cuando se midan
+en un teléfono real.
+
+---
+
 ## Estado científico
 
 Mundo X corre actualmente sobre hardware clásico.
