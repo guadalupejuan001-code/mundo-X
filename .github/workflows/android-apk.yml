@@ -66,6 +66,10 @@ jobs:
           ./native-build/mundo_x t-reduced-experiment 8 64
           echo "=== Gate-by-gate reduced T trace: 8 qubits / 12 T ==="
           ./native-build/mundo_x t-trace 8 12
+          echo "=== Magic-state witness ==="
+          ./native-build/mundo_x magic-witness
+          echo "=== Independent gate-growth trace: 8 qubits / 12 T ==="
+          ./native-build/mundo_x t-trace-variant 8 12
 
       - name: Install Android packages
         shell: bash
