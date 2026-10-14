@@ -17,6 +17,7 @@
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity android:name=".VisualExperimentActivity" android:screenOrientation="portrait" />
         <activity android:name=".GpuVisualActivity" android:screenOrientation="portrait" />
+        <activity android:name=".ProceduralGameDemoActivity" android:screenOrientation="landscape" />
         <activity android:name=".PerformanceLauncherActivity" android:screenOrientation="portrait" />
         <activity android:name=".InternetSyncActivity" android:screenOrientation="portrait" />
         <activity android:name=".SyncedGpuActivity" android:screenOrientation="portrait" />
