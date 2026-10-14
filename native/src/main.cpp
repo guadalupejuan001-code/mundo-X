@@ -91,6 +91,78 @@ static int bench(std::size_t n, bool run_dense) {
   return 0;
 }
 
+
+static int cluster(std::size_t rows, std::size_t cols, bool run_dense) {
+  if (rows == 0 || cols == 0) return 2;
+  const std::size_t n = rows * cols;
+
+  std::cout << std::fixed << std::setprecision(3);
+
+  {
+    const auto start = std::chrono::steady_clock::now();
+
+    CompactCore q(n);
+    for (std::size_t v = 0; v < n; ++v) q.hadamard(v);
+
+    for (std::size_t r = 0; r < rows; ++r) {
+      for (std::size_t col = 0; col < cols; ++col) {
+        const std::size_t v = r * cols + col;
+        if (col + 1 < cols) q.controlled_z(v, v + 1);
+        if (r + 1 < rows) q.controlled_z(v, v + cols);
+      }
+    }
+
+    const auto end = std::chrono::steady_clock::now();
+    const double ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+
+    std::cout << "CLUSTER_COMPACT rows=" << rows
+              << " cols=" << cols
+              << " qubits=" << n
+              << " state_bytes=" << q.state_bytes()
+              << " state_mib=" << mib(q.state_bytes())
+              << " signature="
+              << (q.is_cluster_signature(rows, cols) ? "PASS" : "FAIL")
+              << " ms=" << ms << "\n";
+  }
+
+  if (run_dense) {
+    if (n > 20) {
+      std::cout << "CLUSTER_DENSE skipped=safety_limit_20_qubits\n";
+      return 0;
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+
+    DenseCore q(n);
+    for (std::size_t v = 0; v < n; ++v) q.hadamard(v);
+
+    for (std::size_t r = 0; r < rows; ++r) {
+      for (std::size_t col = 0; col < cols; ++col) {
+        const std::size_t v = r * cols + col;
+        if (col + 1 < cols) q.controlled_z(v, v + 1);
+        if (r + 1 < rows) q.controlled_z(v, v + cols);
+      }
+    }
+
+    const bool ok = q.cluster_is_valid(rows, cols);
+
+    const auto end = std::chrono::steady_clock::now();
+    const double ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+
+    std::cout << "CLUSTER_DENSE rows=" << rows
+              << " cols=" << cols
+              << " qubits=" << n
+              << " state_bytes=" << q.state_bytes()
+              << " state_mib=" << mib(q.state_bytes())
+              << " signature=" << (ok ? "PASS" : "FAIL")
+              << " ms=" << ms << "\n";
+  }
+
+  return 0;
+}
+
 static int run_program(const std::string& path) {
   try {
     const auto start = std::chrono::steady_clock::now();
@@ -178,13 +250,29 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     std::cerr
         << "usage: mundo_x hello | bench <qubits> [--dense] | "
-           "practice <qubits> | run <program.x>\n";
+           "cluster <rows> <cols> [--dense] | practice <qubits> | "
+           "run <program.x>\n";
     return 2;
   }
 
   const std::string cmd = argv[1];
 
   if (cmd == "hello") return hello();
+
+  if (cmd == "cluster") {
+    if (argc < 4) return 2;
+    const std::size_t rows =
+        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
+    const std::size_t cols =
+        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+
+    bool dense = false;
+    for (int i = 4; i < argc; ++i) {
+      if (std::string(argv[i]) == "--dense") dense = true;
+    }
+
+    return cluster(rows, cols, dense);
+  }
 
   if (cmd == "run") {
     if (argc < 3) return 2;
