@@ -23,6 +23,7 @@ Resultados confirmados destacados:
 - GHZ de 1,000 qubits en Android: PASS;
 - cluster 2D de 1,024 qubits en Android: PASS;
 - teletransportación de estado cuántico estabilizador: **24/24 PASS**;
+- primera descomposición exacta de puerta `T` fuera de Clifford: **fidelidad 1.0** en pruebas de 1, 4 y 8 puertas `T`;
 - conexión Compact Core -> escena visual;
 - OpenGL ES: **96,000 elementos a ~60–65 FPS** en Samsung A16 5G;
 - prueba procedural ~1.03 MiB medida físicamente;
@@ -435,72 +436,120 @@ reproducen en hardware móvil real.
 
 ---
 
-# Próxima meta: Compact X general
+# Primera salida exacta fuera de Clifford: puerta T
 
-Compact Core ya demuestra la idea de representación estructurada dentro de
-Clifford/stabilizer.
+Compact Core por sí solo sigue representando un único estado
+Clifford/estabilizador.
 
-La siguiente etapa es conservar esa eficiencia al salir de esa familia,
-empezando por recursos no-Clifford como la puerta `T` / magic, sin volver a
-materializar un statevector completo.
+Se añadió un experimento exacto para representar una puerta no-Clifford `T`
+como combinación lineal de ramas estabilizadoras:
 
-Ideas que se pueden explorar y comparar:
+```
+T = alpha I + beta Z
+```
 
-- estados generados por reglas;
-- representaciones dispersas;
-- simetrías;
-- factorizaciones;
-- redes tensoriales;
-- modos/frecuencias;
-- relaciones locales;
-- transformaciones implícitas;
-- combinaciones híbridas.
+con:
 
-La regla es estricta:
+```
+alpha = (1 + exp(i*pi/4)) / 2
+beta  = (1 - exp(i*pi/4)) / 2
+```
+
+Cada rama sigue siendo un estado Compact Core válido. El estado total puede dejar
+de ser estabilizador porque ahora se representa como una suma ponderada de varias
+ramas.
+
+La primera versión no poda, no aproxima y no fusiona ramas.
+
+Resultados verificados en GitHub Actions:
+
+```
+3 qubits / 1 T
+branches=2
+fidelity=1.000000000
+result=PASS
+
+4 qubits / 4 T
+branches=16
+fidelity=1.000000000
+result=PASS
+
+4 qubits / 8 T
+branches=256
+fidelity=1.000000000
+result=PASS
+```
+
+Los tableaus de cada rama también se validaron contra reconstrucción densa:
+
+```
+branch_tableaus=PASS
+```
+
+La misma prueba pasó en Linux/GitHub Actions y Windows x64.
+
+Registro completo:
+
+```
+results/exact_t_decomposition_2026-10-14.md
+```
+
+## Qué significa y qué no
+
+Esto demuestra una primera representación **exacta** de estados no-Clifford
+mediante una suma de estados Compact Core.
+
+No demuestra todavía eficiencia general.
+
+Sin reducción de ramas:
+
+```
+branches = 2^(T gates)
+```
+
+Por ejemplo:
+
+```
+1 T -> 2 ramas
+4 T -> 16 ramas
+8 T -> 256 ramas
+```
+
+La frontera científica cambió. Ya no es simplemente "hacer que T funcione": esa
+prueba exacta ya existe.
+
+La siguiente pregunta es:
+
+> ¿Podemos reducir, factorizar o representar estas ramas de forma más compacta
+> sin perder exactitud ni esconder el mismo costo exponencial en otra estructura?
+
+La regla sigue siendo estricta:
 
 > **No vale reducir memoria en un lugar si el mismo costo reaparece oculto en otra tabla, caché o estructura.**
 
----
+## Criterio de éxito para la siguiente etapa
 
-## Criterio de éxito
+Una mejora será interesante solo si:
 
-Una nueva representación de Quantum Core será interesante solo si cumple simultáneamente:
+1. mantiene fidelidad ~1 contra Dense Core en circuitos pequeños;
+2. conserva fases relativas;
+3. usa menos ramas o menos memoria explícita que la expansión ingenua;
+4. cuenta toda la metadata adicional;
+5. no reconstruye secretamente el statevector completo durante la ejecución;
+6. escala mejor que `2^T` para alguna familia no trivial y reproducible.
 
-1. reproduce resultados del núcleo de referencia dentro de una tolerancia definida;
-2. conserva normalización y fase cuando sean necesarias;
-3. reproduce interferencia y entrelazamiento en los casos compatibles;
-4. usa menos memoria explícita para la familia de estados evaluada;
-5. no materializa secretamente el vector completo durante el cálculo;
-6. permite medir tiempo, memoria y error contra el baseline denso.
-
-Nuestro objetivo no es decir:
-
-> "Mundo X es más poderoso."
-
-Nuestro objetivo es poder demostrar algo del tipo:
+## Orden actualizado
 
 ```
-misma tarea
-mismo resultado dentro de tolerancia
-menos representación explícita
-menos memoria
+1. Quantum Core                         -> referencia cuántica densa          [HECHO]
+2. Compact Core Clifford/estabilizador  -> representación compacta            [HECHO/ACTIVO]
+3. T exacta por suma de estabilizadores -> baseline no-Clifford exacto         [HECHO EXPERIMENTAL]
+4. Reducir crecimiento de ramas         -> siguiente frontera científica      [SIGUIENTE]
+5. Transformer X / otras estructuras    -> solo si aportan mediblemente
 ```
 
----
-
-## Orden del proyecto
-
-```
-1. Quantum Core          -> referencia cuántica densa            [HECHO]
-2. Compact Quantum Core  -> baseline Clifford compilable          [ACTIVO]
-3. Compact X general     -> superar límites del baseline          [SIGUIENTE]
-4. Interface X           -> entrada/salida de información
-5. Transformer X         -> usar aprendizaje solo si aporta
-6. Fold / modo operativo -> investigar dinámica posterior
-```
-
-Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con una prueba.
-
+Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con
+una prueba reproducible.
 
 ---
 
