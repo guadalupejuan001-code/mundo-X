@@ -68,6 +68,15 @@ class DenseCore {
     }
   }
 
+  void controlled_z(std::size_t a, std::size_t b) {
+    check(a);
+    check(b);
+    if (a == b) throw std::invalid_argument("a == b");
+    hadamard(b);
+    cnot(a, b);
+    hadamard(b);
+  }
+
   void cnot(std::size_t control, std::size_t target) {
     check(control);
     check(target);
@@ -79,6 +88,48 @@ class DenseCore {
         std::swap(state_[i], state_[i | tbit]);
       }
     }
+  }
+
+  float cluster_generator_expectation(std::size_t vertex,
+                                      std::size_t rows,
+                                      std::size_t cols) const {
+    if (rows == 0 || cols == 0 || rows * cols != n_)
+      throw std::invalid_argument("invalid cluster dimensions");
+    check(vertex);
+
+    const std::size_t vr = vertex / cols;
+    const std::size_t vc = vertex % cols;
+    const std::size_t xbit = std::size_t{1} << vertex;
+
+    std::vector<std::size_t> neighbors;
+    if (vr > 0) neighbors.push_back((vr - 1) * cols + vc);
+    if (vr + 1 < rows) neighbors.push_back((vr + 1) * cols + vc);
+    if (vc > 0) neighbors.push_back(vr * cols + (vc - 1));
+    if (vc + 1 < cols) neighbors.push_back(vr * cols + (vc + 1));
+
+    Complex sum{0.0f, 0.0f};
+    for (std::size_t i = 0; i < state_.size(); ++i) {
+      float phase = 1.0f;
+      for (const auto q : neighbors) {
+        if (i & (std::size_t{1} << q)) phase = -phase;
+      }
+
+      const std::size_t j = i ^ xbit;
+      sum += std::conj(state_[i]) * phase * state_[j];
+    }
+
+    return sum.real();
+  }
+
+  bool cluster_is_valid(std::size_t rows, std::size_t cols,
+                        float tolerance = 1e-4f) const {
+    if (rows == 0 || cols == 0 || rows * cols != n_) return false;
+    for (std::size_t v = 0; v < n_; ++v) {
+      if (std::abs(cluster_generator_expectation(v, rows, cols) - 1.0f) >
+          tolerance)
+        return false;
+    }
+    return true;
   }
 
   float probability(std::size_t index) const {
