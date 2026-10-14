@@ -184,6 +184,25 @@ static int t_experiment(std::size_t qubits, std::size_t t_gates) {
   }
 }
 
+static int t_reduced_experiment(std::size_t qubits, std::size_t t_gates) {
+  try {
+    const auto start = std::chrono::steady_clock::now();
+    const auto result =
+        mundo_x::run_reduced_exact_t_experiment(qubits, t_gates);
+    const auto end = std::chrono::steady_clock::now();
+    const double ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+
+    std::cout << result.report;
+    std::cout << std::fixed << std::setprecision(3)
+              << "wall_time_ms=" << ms << "\n";
+    return result.all_passed ? 0 : 1;
+  } catch (const std::exception& e) {
+    std::cerr << "REDUCED T EXPERIMENT ERROR: " << e.what() << "\n";
+    return 1;
+  }
+}
+
 static int teleport() {
   const auto result = mundo_x::run_compact_teleportation();
   std::cout << result.report;
@@ -277,8 +296,8 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     std::cerr
         << "usage: mundo_x hello | teleport | t-experiment <qubits> <t_gates> | "
-           "bench <qubits> [--dense] | cluster <rows> <cols> [--dense] | "
-           "practice <qubits> | run <program.x>\n";
+           "t-reduced-experiment <qubits> <t_gates> | bench <qubits> [--dense] | "
+           "cluster <rows> <cols> [--dense] | practice <qubits> | run <program.x>\n";
     return 2;
   }
 
@@ -294,6 +313,15 @@ int main(int argc, char** argv) {
     const std::size_t t_gates =
         static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
     return t_experiment(n, t_gates);
+  }
+
+  if (cmd == "t-reduced-experiment") {
+    if (argc < 4) return 2;
+    const std::size_t n =
+        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
+    const std::size_t t_gates =
+        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+    return t_reduced_experiment(n, t_gates);
   }
 
   if (cmd == "cluster") {
