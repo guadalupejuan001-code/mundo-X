@@ -864,6 +864,59 @@ results/compact_quantum_teleportation_2026-10-14.md
 
 ---
 
+# Performance launcher Android
+
+La APK incluye una pantalla de preparación de rendimiento para lanzar Wild Rift
+o cualquier otra app elegida por el usuario.
+
+Ruta:
+
+```
+preflight del teléfono
+-> recomendación
+-> lanzar app
+-> Mundo X termina su propio proceso
+```
+
+El preflight mide:
+
+- RAM total y disponible;
+- flag `lowMemory` de Android;
+- Battery Saver;
+- estado térmico;
+- temperatura y nivel de batería;
+- tasa de refresco reportada por la pantalla.
+
+También ofrece accesos directos a ajustes de batería y pantalla.
+
+Cuando se lanza la app objetivo, Mundo X ejecuta liberación de sus propios
+objetos, abre la app mediante Intent oficial y termina su propio proceso después
+de ~0.9 s para no permanecer compitiendo por RAM.
+
+Límites deliberados:
+
+- no requiere root;
+- no modifica otras apps;
+- no fuerza clocks CPU/GPU;
+- no cambia governors;
+- no mata procesos ajenos;
+- no altera anti-cheat ni archivos de juegos.
+
+Build verificado:
+
+```
+workflow: Build Mundo X Lab APK
+run: #39
+status: success
+commit: 579723969a6d62ca06a99af3b6b306957784f93f
+APK size: 1,042,601 bytes
+```
+
+Este launcher prepara y reduce overhead propio; no se documenta una ganancia de
+FPS hasta medirla en hardware real.
+
+---
+
 # Wild Rift low-end mode — Android
 
 Mundo X Lab incluye una capa de preparación para **League of Legends: Wild Rift**
