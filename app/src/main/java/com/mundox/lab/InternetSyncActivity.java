@@ -16,15 +16,17 @@ import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class InternetSyncActivity extends Activity {
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final ExecutorService io = Executors.newCachedThreadPool();
 
     private EditText host;
     private EditText port;
@@ -33,6 +35,9 @@ public class InternetSyncActivity extends Activity {
     private TextView output;
 
     private volatile Socket socket;
+    private volatile ServerSocket relayServer;
+    private volatile boolean relayRunning = false;
+    private final CopyOnWriteArrayList<RelayPeer> relayPeers = new CopyOnWriteArrayList<>();
     private volatile BufferedWriter writer;
     private volatile boolean connected = false;
     private volatile long sentBytes = 0;
@@ -67,6 +72,14 @@ public class InternetSyncActivity extends Activity {
         Button testInternet = button("TEST INTERNET");
         testInternet.setOnClickListener(v -> testInternet());
         root.addView(testInternet);
+
+        Button startRelay = button("START RELAY HERE");
+        startRelay.setOnClickListener(v -> startRelayHere());
+        root.addView(startRelay);
+
+        Button stopRelay = button("STOP RELAY HERE");
+        stopRelay.setOnClickListener(v -> stopRelayHere());
+        root.addView(stopRelay);
 
         Button connect = button("CONNECT TO RELAY");
         connect.setOnClickListener(v -> connectRelay());
@@ -127,6 +140,117 @@ public class InternetSyncActivity extends Activity {
                 if (c != null) c.disconnect();
             }
         });
+    }
+
+
+    private void startRelayHere() {
+        final int p;
+        try {
+            p = Integer.parseInt(port.getText().toString().trim());
+        } catch (Exception e) {
+            append("\nInvalid port.\n");
+            return;
+        }
+
+        stopRelayHere();
+        relayRunning = true;
+        append("\n[RELAY] starting on this phone, port " + p + "...\n");
+
+        io.submit(() -> {
+            try {
+                relayServer = new ServerSocket(p);
+                appendUi("[RELAY] LISTENING on 0.0.0.0:" + p +
+                        "\nUse this phone's local Wi-Fi IP from the sync screen on the other device." +
+                        "\nFor a same-phone test, set host=127.0.0.1 then CONNECT TO RELAY.\n");
+
+                while (relayRunning) {
+                    Socket s = relayServer.accept();
+                    s.setTcpNoDelay(true);
+                    RelayPeer peer = new RelayPeer(s);
+                    relayPeers.add(peer);
+                    appendUi("[RELAY] peer connected " +
+                            s.getInetAddress().getHostAddress() + "\n");
+                    io.submit(() -> handleRelayPeer(peer));
+                }
+            } catch (Throwable t) {
+                if (relayRunning) {
+                    appendUi("[RELAY] FAIL " + t.getClass().getSimpleName() + ": " +
+                            String.valueOf(t.getMessage()) + "\n");
+                }
+            } finally {
+                stopRelayHereInternal();
+            }
+        });
+    }
+
+    private void handleRelayPeer(RelayPeer peer) {
+        try {
+            BufferedReader r = new BufferedReader(new InputStreamReader(
+                    peer.socket.getInputStream(), StandardCharsets.UTF_8));
+            peer.writer = new BufferedWriter(new OutputStreamWriter(
+                    peer.socket.getOutputStream(), StandardCharsets.UTF_8));
+
+            String line;
+            while (relayRunning && (line = r.readLine()) != null) {
+                if (line.startsWith("JOIN ")) {
+                    String[] p = line.trim().split("\\s+");
+                    if (p.length >= 2) peer.room = p[1];
+                    peer.name = p.length >= 3 ? p[2] : "peer";
+                    appendUi("[RELAY] JOIN room=" + peer.room +
+                            " name=" + peer.name + "\n");
+                    continue;
+                }
+
+                for (RelayPeer other : relayPeers) {
+                    if (other == peer) continue;
+                    if (!peer.room.equals(other.room)) continue;
+                    BufferedWriter w = other.writer;
+                    if (w == null) continue;
+                    synchronized (other) {
+                        w.write(line);
+                        w.write("\n");
+                        w.flush();
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            if (relayRunning) {
+                appendUi("[RELAY] peer closed " + t.getClass().getSimpleName() + "\n");
+            }
+        } finally {
+            relayPeers.remove(peer);
+            try { peer.socket.close(); } catch (Throwable ignored) {}
+        }
+    }
+
+    private void stopRelayHere() {
+        if (!relayRunning && relayServer == null) return;
+        append("\n[RELAY] stopping...\n");
+        stopRelayHereInternal();
+    }
+
+    private synchronized void stopRelayHereInternal() {
+        relayRunning = false;
+        try {
+            if (relayServer != null) relayServer.close();
+        } catch (Throwable ignored) {}
+        relayServer = null;
+
+        for (RelayPeer peer : relayPeers) {
+            try { peer.socket.close(); } catch (Throwable ignored) {}
+        }
+        relayPeers.clear();
+    }
+
+    private static final class RelayPeer {
+        final Socket socket;
+        volatile BufferedWriter writer;
+        volatile String room = "mundo-x";
+        volatile String name = "peer";
+
+        RelayPeer(Socket socket) {
+            this.socket = socket;
+        }
     }
 
     private void connectRelay() {
@@ -289,6 +413,7 @@ public class InternetSyncActivity extends Activity {
     @Override
     protected void onDestroy() {
         disconnect();
+        stopRelayHereInternal();
         io.shutdownNow();
         super.onDestroy();
     }
