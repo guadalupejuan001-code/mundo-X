@@ -1,50 +1,239 @@
 # Mundo X
 
-**Mundo X** es un prototipo experimental de un nuevo sustrato computacional.
+**Mundo X** es un proyecto experimental de computación orientado a una idea central:
 
-## Orden del proyecto
+> **No buscamos más potencia por fuerza bruta. Buscamos representar y transformar solo lo necesario.**
 
-1. **Quantum Core X** — montar primero un espacio de estados cuánticos válido.
-2. **Transformer X** — investigar después cómo aprender/transformar dentro o alrededor de ese espacio.
-3. **Interfaz X** — traducir información externa cuando el núcleo ya tenga comportamiento verificable.
-4. Memoria, pliegue y modo operativo — solo después de medir las etapas anteriores.
+El objetivo no es abandonar la computadora clásica. El objetivo es explorar si podemos usar una computadora clásica como soporte de un modelo cuántico/ondulatorio mucho más eficiente, evitando materializar información que el sistema puede describir mediante estructura, relaciones, fase, interferencia o reglas de evolución.
 
-## Quantum Core X v0.1
+---
 
-El núcleo actual representa estados:
+## Objetivo principal
+
+La simulación cuántica clásica habitual representa un estado de `n` qubits mediante:
 
 ```
-|psi> = alpha|0> + beta|1>
+2^n amplitudes complejas
 ```
 
-y para varios qubits:
+Eso funciona, pero el costo de memoria crece exponencialmente.
+
+**Mundo X quiere atacar esa representación, no comprar más RAM.**
+
+La pregunta del proyecto es:
+
+> ¿Qué familias útiles de estados y operaciones cuánticas pueden describirse y evolucionar sin almacenar explícitamente todo el vector de `2^n` amplitudes?
+
+No pretendemos afirmar que todo estado cuántico arbitrario puede comprimirse. Queremos descubrir qué estructura puede explotarse sin perder el comportamiento que nos importa.
+
+---
+
+# Quantum Core
+
+**Quantum Core** es el núcleo actual de Mundo X.
+
+Su función inicial es servir como referencia correcta de matemáticas cuánticas antes de intentar comprimir la representación.
+
+Actualmente implementa:
+
+- estados complejos normalizados;
+- superposición;
+- fase relativa;
+- interferencia;
+- Pauli-X;
+- Hadamard;
+- CNOT;
+- entrelazamiento de Bell;
+- medición y colapso.
+
+Estado general de referencia:
 
 ```
 |psi> = sum(alpha_k |k>)
 ```
 
-con norma total igual a 1.
+con:
 
-La primera prueba incluye:
+```
+sum(|alpha_k|^2) = 1
+```
 
-- superposición;
-- fase;
-- interferencia;
-- CNOT;
-- entrelazamiento de Bell;
-- medición.
+## Hello Mundo X
+
+El experimento mínimo es:
+
+```
+|0>
+ ↓ H
+(|0> + |1>) / sqrt(2)
+ ↓ phase(pi)
+(|0> - |1>) / sqrt(2)
+ ↓ H
+|1>
+```
 
 Ejecuta:
 
 ```bash
-python experiments/quantum_interference_v0_1.py
+python hello_mundo_x.py
 ```
+
+Resultado observado con la implementación actual:
+
+```
+inicio             -> probabilidades [1, 0]
+Hadamard           -> probabilidades [0.5, 0.5]
+cambio de fase pi  -> probabilidades [0.5, 0.5]
+interferencia      -> probabilidades [~0, 1]
+
+Mundo X says: 1
+TEST: PASS
+```
+
+El residuo numérico observado para el estado 0 fue aproximadamente `3.7e-33`, esencialmente cero dentro de precisión de coma flotante.
+
+Esto verifica en el simulador la cadena:
+
+**superposición → fase → interferencia → resultado.**
+
+---
+
+## Lo que ya funciona
+
+### Quantum Core
+
+Funciona como simulador de referencia para las primitivas cuánticas anteriores.
+
+### Entrelazamiento
+
+Puede construir el estado de Bell:
+
+```
+(|00> + |11>) / sqrt(2)
+```
+
+mediante Hadamard + CNOT.
+
+### Transformer X
+
+Existe como componente experimental separado para explorar representación y aprendizaje sobre estados compactos.
+
+No define el núcleo de Mundo X y todavía no se usa como prueba de ventaja computacional.
+
+---
+
+## Lo que todavía NO hemos resuelto
+
+Quantum Core todavía usa un **vector de estado denso**.
+
+Con `complex64`, el estado necesita aproximadamente:
+
+```
+RAM_estado = 2^n * 8 bytes
+```
+
+Ejemplos:
+
+| Qubits | Estado denso |
+|---:|---:|
+| 10 | 8 KB |
+| 20 | 8 MB |
+| 25 | 256 MB |
+| 30 | 8 GB |
+| 40 | 8 TB |
+
+Por tanto, **el problema de memoria todavía existe en la implementación de referencia**.
+
+Esto es deliberado: primero necesitamos una referencia correcta contra la cual medir cualquier representación nueva.
+
+---
+
+# Próxima meta: Compact Quantum Core
+
+La siguiente etapa no es agregar más qubits.
+
+Es reemplazar:
+
+```
+[alpha_0, alpha_1, alpha_2, ..., alpha_(2^n-1)]
+```
+
+por una representación estructurada que solo materialice lo necesario.
+
+Ideas que se pueden explorar y comparar:
+
+- estados generados por reglas;
+- representaciones dispersas;
+- simetrías;
+- factorizaciones;
+- redes tensoriales;
+- modos/frecuencias;
+- relaciones locales;
+- transformaciones implícitas;
+- combinaciones híbridas.
+
+La regla es estricta:
+
+> **No vale reducir memoria en un lugar si el mismo costo reaparece oculto en otra tabla, caché o estructura.**
+
+---
+
+## Criterio de éxito
+
+Una nueva representación de Quantum Core será interesante solo si cumple simultáneamente:
+
+1. reproduce resultados del núcleo de referencia dentro de una tolerancia definida;
+2. conserva normalización y fase cuando sean necesarias;
+3. reproduce interferencia y entrelazamiento en los casos compatibles;
+4. usa menos memoria explícita para la familia de estados evaluada;
+5. no materializa secretamente el vector completo durante el cálculo;
+6. permite medir tiempo, memoria y error contra el baseline denso.
+
+Nuestro objetivo no es decir:
+
+> "Mundo X es más poderoso."
+
+Nuestro objetivo es poder demostrar algo del tipo:
+
+```
+misma tarea
+mismo resultado dentro de tolerancia
+menos representación explícita
+menos memoria
+```
+
+---
+
+## Orden del proyecto
+
+```
+1. Quantum Core          -> referencia cuántica correcta        [ACTUAL]
+2. Compact Quantum Core  -> atacar representación y memoria      [SIGUIENTE]
+3. Interface X           -> entrada/salida de información
+4. Transformer X         -> usar aprendizaje solo si aporta
+5. Fold / modo operativo -> investigar dinámica posterior
+```
+
+Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con una prueba.
+
+---
 
 ## Estado científico
 
-Quantum Core X es actualmente una **simulación clásica de matemáticas
-cuánticas**. Todavía no existe hardware cuántico propio ni se ha demostrado
-ventaja computacional.
+Mundo X corre actualmente sobre hardware clásico.
 
-Transformer X permanece en el repositorio como experimento separado, pero
-no define el núcleo cuántico.
+**Quantum Core es una simulación clásica de matemáticas cuánticas.**
+
+Todavía no se ha demostrado:
+
+- ventaja cuántica;
+- hardware cuántico propio;
+- eliminación general del crecimiento exponencial;
+- superioridad frente a simuladores existentes;
+- una nueva teoría física.
+
+Eso no invalida el objetivo. Define exactamente qué falta demostrar.
+
+La hipótesis de trabajo de Mundo X es más limitada y comprobable:
+
+> **Para ciertos estados y problemas estructurados, quizá podamos obtener el comportamiento útil sin representar explícitamente todo lo que una simulación densa almacena.**
