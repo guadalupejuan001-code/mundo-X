@@ -1,0 +1,61 @@
+name: Build Mundo X Windows 10 x64
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'native/**'
+      - 'examples/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/windows-x64.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Smoke tests
+        shell: pwsh
+        run: |
+          .\build\Release\mundo_x.exe hello
+          .\build\Release\mundo_x.exe run examples\bell.x
+          .\build\Release\mundo_x.exe cluster 4 4 --dense
+          .\build\Release\mundo_x.exe cluster 32 32
+
+      - name: Stage
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\examples | Out-Null
+          Copy-Item build\Release\mundo_x.exe dist\mundo_x.exe
+          Copy-Item examples\*.x dist\examples\
+          @"
+          MUNDO X - Windows 10 x64
+
+          Quick start:
+            mundo_x.exe hello
+            mundo_x.exe bench 1000
+            mundo_x.exe cluster 32 32
+            mundo_x.exe run examples\bell.x
+            mundo_x.exe practice 2
+
+          This build targets Windows x64 and uses the native Compact Core runtime.
+          "@ | Out-File -Encoding utf8 dist\WINDOWS-README.txt
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-Windows10-x64
+          path: dist/**
+          if-no-files-found: error
