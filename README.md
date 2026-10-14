@@ -542,17 +542,49 @@ En ambos casos, reagrupar las ramas equivalentes con la fase correcta mantuvo:
 fidelity=1.000000000
 ```
 
-Esto es un diagnóstico con Dense Core como oracle para circuitos pequeños; la
-representación actual todavía genera primero todas las ramas.
-
-El siguiente objetivo ya es implementar esa estructura durante la evolución:
+Ese diagnóstico ya se convirtió en una implementación reducida durante la
+evolución:
 
 ```
-estructura estabilizadora compartida
-+ diferencias Pauli
+1 tableau estabilizador compartido
++ diferencias Pauli canonicalizadas
 + coeficientes complejos
--> evitar materializar 2^T tableaus completos
 ```
+
+Las equivalencias se fusionan durante cada operación; ya no se crean primero los
+`2^T` tableaus completos.
+
+Resultados verificados:
+
+```
+4 qubits / 12 T:
+4096 ramas ingenuas -> 16 componentes
+fidelity=1.000000000
+
+6 qubits / 12 T:
+4096 ramas ingenuas -> 64 componentes
+fidelity=1.000000000
+
+8 qubits / 24 T:
+16,777,216 ramas teóricas -> 256 componentes
+fidelity=1.000000000
+
+8 qubits / 64 T:
+2^64 ramas teóricas NO materializadas
+-> 256 componentes
+fidelity=1.000000000
+```
+
+En Linux/GitHub Actions, por ejemplo, el caso `4q / 12T` pasó de aproximadamente
+`737,562` bytes de payload explícito en la expansión ingenua a `1,072` bytes
+de payload lógico en la representación reducida.
+
+Esto elimina la explosión ingenua con el número de puertas T para la familia de
+circuitos probada, pero no elimina el peor caso exponencial con el número de
+qubits: el número de componentes puede llegar a `2^n`.
+
+Dense Core sigue apareciendo únicamente al final de estas pruebas pequeñas como
+oracle de fidelidad; no forma parte de la evolución reducida.
 
 Registro:
 
@@ -582,8 +614,9 @@ Una mejora será interesante solo si:
 2. Compact Core Clifford/estabilizador  -> representación compacta            [HECHO/ACTIVO]
 3. T exacta por suma de estabilizadores -> baseline no-Clifford exacto         [HECHO EXPERIMENTAL]
 4. Redundancia exacta de ramas          -> 4q/6q verificada                     [HECHO DIAGNÓSTICO]
-5. Explotar estructura durante evolución -> siguiente frontera científica      [SIGUIENTE]
-6. Transformer X / otras estructuras    -> solo si aportan mediblemente
+5. Explotar estructura durante evolución -> 2^T evitado en pruebas             [HECHO EXPERIMENTAL]
+6. Buscar ventaja sobre 2^n / mantener dispersión -> siguiente frontera          [SIGUIENTE]
+7. Transformer X / otras estructuras    -> solo si aportan mediblemente
 ```
 
 Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con
