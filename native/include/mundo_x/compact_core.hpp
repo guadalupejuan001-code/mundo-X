@@ -219,7 +219,115 @@ class CompactCore {
     };
   }
 
+
+  // Projective Z measurement for a branch whose result is chosen explicitly.
+  // Returns false only when Z_q is already deterministic in the current state.
+  // This is useful for reproducible Clifford experiments such as teleportation,
+  // where both Bell-measurement outcomes are non-deterministic branches.
+  bool measure_z_forced(std::size_t q, bool outcome_one) {
+    check(q);
+
+    std::size_t pivot = n_;
+    for (std::size_t r = 0; r < n_; ++r) {
+      if (get(x_, r, q)) {
+        pivot = r;
+        break;
+      }
+    }
+
+    if (pivot == n_) return false;
+
+    // Make every non-pivot generator commute with the measured Z_q by
+    // eliminating X/Y on the measured column.
+    for (std::size_t r = 0; r < n_; ++r) {
+      if (r != pivot && get(x_, r, q)) multiply_rows(r, pivot);
+    }
+
+    clear_row(pivot);
+    set(z_, pivot, q, true);
+    phase_[pivot] = outcome_one ? 1 : 0;
+
+    // Canonicalize the measured qubit so all other rows are identity there.
+    for (std::size_t r = 0; r < n_; ++r) {
+      if (r != pivot && get(z_, r, q)) multiply_rows(r, pivot);
+    }
+
+    return true;
+  }
+
+  // Returns I/X/Y/Z when an explicit single-qubit stabilizer generator is
+  // present after canonicalization. The optional output receives its sign.
+  char single_qubit_stabilizer(std::size_t q, bool* negative = nullptr) const {
+    check(q);
+    for (std::size_t r = 0; r < n_; ++r) {
+      bool only_q = true;
+      for (std::size_t k = 0; k < n_; ++k) {
+        if (k == q) continue;
+        if (get(x_, r, k) || get(z_, r, k)) {
+          only_q = false;
+          break;
+        }
+      }
+      if (!only_q) continue;
+
+      const bool xb = get(x_, r, q);
+      const bool zb = get(z_, r, q);
+      if (!xb && !zb) continue;
+
+      if (negative) *negative = phase_[r] != 0;
+      if (xb && zb) return 'Y';
+      if (xb) return 'X';
+      return 'Z';
+    }
+
+    if (negative) *negative = false;
+    return 'I';
+  }
+
  private:
+  static int local_product_phase(int a, int b) {
+    // Canonical Pauli codes: I=0, X=1, Z=2, Y=3.
+    // Return exponent k in i^k for P(a)P(b).
+    if (a == 0 || b == 0 || a == b) return 0;
+    if ((a == 1 && b == 3) ||
+        (a == 3 && b == 2) ||
+        (a == 2 && b == 1))
+      return 1;
+    return 3;
+  }
+
+  void clear_row(std::size_t row) {
+    for (std::size_t w = 0; w < words_; ++w) {
+      x_[row * words_ + w] = 0;
+      z_[row * words_ + w] = 0;
+    }
+    phase_[row] = 0;
+  }
+
+  void multiply_rows(std::size_t target, std::size_t source) {
+    int phase_exp =
+        2 * static_cast<int>(phase_[target]) +
+        2 * static_cast<int>(phase_[source]);
+
+    for (std::size_t q = 0; q < n_; ++q) {
+      const int a = (get(x_, target, q) ? 1 : 0) |
+                    (get(z_, target, q) ? 2 : 0);
+      const int b = (get(x_, source, q) ? 1 : 0) |
+                    (get(z_, source, q) ? 2 : 0);
+      phase_exp += local_product_phase(a, b);
+    }
+
+    for (std::size_t q = 0; q < n_; ++q) {
+      set(x_, target, q, get(x_, target, q) ^ get(x_, source, q));
+      set(z_, target, q, get(z_, target, q) ^ get(z_, source, q));
+    }
+
+    phase_exp &= 3;
+    if (phase_exp & 1)
+      throw std::logic_error("attempted to multiply non-commuting stabilizers");
+    phase_[target] = static_cast<std::uint8_t>(phase_exp == 2 ? 1 : 0);
+  }
+
   void check(std::size_t q) const {
     if (q >= n_) throw std::out_of_range("qubit");
   }
