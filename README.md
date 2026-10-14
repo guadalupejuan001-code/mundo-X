@@ -924,6 +924,67 @@ results/compact_quantum_teleportation_2026-10-14.md
 
 ---
 
+# Sincronización visual entre dos teléfonos
+
+Se añadió una prueba directa entre dos dispositivos en la **misma red Wi‑Fi**.
+
+Objetivo:
+
+```
+teléfono A toca
+-> evento mínimo
+-> TCP local
+-> teléfono B
+-> aplica el mismo cambio
+-> su mundo reacciona
+```
+
+La escena no se transmite como imagen ni como lista de 96,000 objetos.
+
+Se envían solamente eventos compactos como:
+
+```
+T <x> <y> <qubit>
+C <object_count>
+R
+```
+
+Funciones:
+
+- un teléfono puede pulsar `HOST` y escuchar en el puerto `7777`;
+- el otro escribe la IP local del primero y pulsa `JOIN`;
+- tocar cualquiera de los dos envía coordenadas normalizadas y el qubit perturbado;
+- cambios de 6,000 / 24,000 / 96,000 elementos también se sincronizan;
+- RESET se replica;
+- la pantalla muestra bytes TX/RX para medir cuánto tráfico hace falta;
+- ambos renderizan localmente mediante GPU.
+
+Ruta:
+
+```
+evento mínimo
+-> red local
+-> estado/interacción remota
+-> reconstrucción GPU local
+```
+
+Build verificado:
+
+```
+workflow: Build Mundo X Lab APK
+run: #48
+status: success
+commit: 9095830dc9dca3f135bf72d058c5ac1fdd7d90fd
+APK size: 1,059,285 bytes
+sha256: a0eb09247f3297096db33dacefcbe5b0b0f190244d8f4216bb87b1d7830160b4
+```
+
+Esta primera versión usa la LAN para que el experimento sea reproducible sin
+depender de infraestructura externa. La misma lógica puede colocarse detrás de
+un relay público para Internet real entre redes distintas.
+
+---
+
 # Performance launcher Android
 
 La APK incluye una pantalla de preparación de rendimiento para lanzar Wild Rift
