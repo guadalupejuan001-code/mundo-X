@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <mutex>
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
@@ -249,4 +250,59 @@ Java_com_mundox_lab_NativeCore_practice(JNIEnv* env, jclass, jint qubits,
   } catch (const std::exception& e) {
     return as_jstring(env, std::string("ERROR: ") + e.what());
   }
+}
+
+
+namespace {
+std::mutex g_visual_mutex;
+CompactCore g_visual_state(32);
+std::uint64_t g_visual_step = 0;
+
+void reset_visual_state() {
+  g_visual_state = CompactCore(32);
+  // Begin from a structured entangled Clifford state rather than |0...0>.
+  g_visual_state.hadamard(0);
+  for (std::size_t i = 1; i < 32; ++i) g_visual_state.cnot(i - 1, i);
+  g_visual_step = 0;
+}
+}  // namespace
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_mundox_lab_NativeCore_quantumVisualStep(JNIEnv* env, jclass,
+                                                 jint touch_qubit,
+                                                 jboolean reset) {
+  std::lock_guard<std::mutex> lock(g_visual_mutex);
+
+  if (reset) reset_visual_state();
+
+  const std::size_t n = g_visual_state.qubits();
+  const std::size_t a = static_cast<std::size_t>(g_visual_step % n);
+  const std::size_t b = static_cast<std::size_t>((g_visual_step * 5ULL + 3ULL) % n);
+  const std::size_t cidx = static_cast<std::size_t>((g_visual_step * 7ULL + 11ULL) % n);
+
+  g_visual_state.hadamard(a);
+  g_visual_state.phase_s(b);
+  if (a != cidx) g_visual_state.cnot(a, cidx);
+  if ((g_visual_step & 3ULL) == 0ULL) g_visual_state.pauli_z(b);
+  if ((g_visual_step & 7ULL) == 3ULL) g_visual_state.pauli_x(cidx);
+
+  if (touch_qubit >= 0) {
+    const std::size_t tq = static_cast<std::size_t>(touch_qubit) % n;
+    const std::size_t neighbor = (tq + 1) % n;
+    g_visual_state.hadamard(tq);
+    g_visual_state.cnot(tq, neighbor);
+    if ((touch_qubit & 1) != 0) g_visual_state.phase_s(neighbor);
+  }
+
+  ++g_visual_step;
+
+  const auto m = g_visual_state.visual_metrics();
+  jfloat values[10];
+  for (std::size_t i = 0; i < 8; ++i) values[i] = m[i];
+  values[8] = static_cast<jfloat>(g_visual_state.state_bytes());
+  values[9] = static_cast<jfloat>(g_visual_step);
+
+  jfloatArray out = env->NewFloatArray(10);
+  if (out != nullptr) env->SetFloatArrayRegion(out, 0, 10, values);
+  return out;
 }
