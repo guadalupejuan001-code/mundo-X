@@ -62,6 +62,15 @@ class CompactCore {
     }
   }
 
+  void controlled_z(std::size_t a, std::size_t b) {
+    check(a);
+    check(b);
+    if (a == b) throw std::invalid_argument("a == b");
+    hadamard(b);
+    cnot(a, b);
+    hadamard(b);
+  }
+
   void cnot(std::size_t control, std::size_t target) {
     check(control);
     check(target);
@@ -82,6 +91,34 @@ class CompactCore {
   bool hello_is_one() const {
     if (n_ != 1) return false;
     return !get(x_, 0, 0) && get(z_, 0, 0) && phase_[0] == 1;
+  }
+
+  bool is_cluster_signature(std::size_t rows, std::size_t cols) const {
+    if (rows == 0 || cols == 0 || rows * cols != n_) return false;
+
+    auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+      const std::size_t ar = a / cols;
+      const std::size_t ac = a % cols;
+      const std::size_t br = b / cols;
+      const std::size_t bc = b % cols;
+      const std::size_t dr = ar > br ? ar - br : br - ar;
+      const std::size_t dc = ac > bc ? ac - bc : bc - ac;
+      return (dr + dc) == 1;
+    };
+
+    for (std::size_t r = 0; r < n_; ++r) {
+      if (phase_[r]) return false;
+
+      for (std::size_t q = 0; q < n_; ++q) {
+        const bool expected_x = (q == r);
+        const bool expected_z = is_neighbor(r, q);
+
+        if (get(x_, r, q) != expected_x) return false;
+        if (get(z_, r, q) != expected_z) return false;
+      }
+    }
+
+    return true;
   }
 
   bool is_ghz_signature() const {
