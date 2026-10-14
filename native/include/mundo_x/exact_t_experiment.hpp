@@ -436,6 +436,11 @@ class ExactTExperiment {
 };
 
 
+struct ExactTExperimentResult {
+  bool all_passed = false;
+  std::string report;
+};
+
 class ReducedExactTRepresentation {
  public:
   struct PauliKey {
@@ -952,11 +957,6 @@ inline ExactTExperimentResult run_reduced_exact_t_experiment(
   result.report = out.str();
   return result;
 }
-
-struct ExactTExperimentResult {
-  bool all_passed = false;
-  std::string report;
-};
 
 inline ExactTExperimentResult run_exact_t_experiment(std::size_t qubits,
                                                       std::size_t t_gates) {
