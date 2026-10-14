@@ -56,6 +56,43 @@ public class MainActivity extends Activity {
         compare.setOnClickListener(v -> runTask(() -> NativeCore.bench(readQubits(), true)));
         root.addView(compare);
 
+        root.addView(text("2D cluster-state stress test", 14, true));
+
+        LinearLayout clusterDims = new LinearLayout(this);
+        clusterDims.setOrientation(LinearLayout.HORIZONTAL);
+
+        EditText clusterRows = new EditText(this);
+        clusterRows.setText("32");
+        clusterRows.setTextColor(Color.WHITE);
+        clusterRows.setInputType(InputType.TYPE_CLASS_NUMBER);
+        clusterDims.addView(clusterRows, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        EditText clusterCols = new EditText(this);
+        clusterCols.setText("32");
+        clusterCols.setTextColor(Color.WHITE);
+        clusterCols.setInputType(InputType.TYPE_CLASS_NUMBER);
+        clusterDims.addView(clusterCols, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        root.addView(clusterDims, fullWidth());
+
+        Button clusterRun = button("RUN 2D CLUSTER");
+        clusterRun.setOnClickListener(v -> runTask(() -> {
+            int rows = readBounded(clusterRows, 32, 1, 64);
+            int cols = readBounded(clusterCols, 32, 1, 64);
+            return NativeCore.cluster(rows, cols, false);
+        }));
+        root.addView(clusterRun);
+
+        Button clusterCompare = button("COMPARE 2D CLUSTER (dense <= 20 qubits)");
+        clusterCompare.setOnClickListener(v -> runTask(() -> {
+            int rows = readBounded(clusterRows, 4, 1, 64);
+            int cols = readBounded(clusterCols, 4, 1, 64);
+            return NativeCore.cluster(rows, cols, true);
+        }));
+        root.addView(clusterCompare);
+
         root.addView(text("Practice script", 14, true));
         practice = new EditText(this);
         practice.setText("h 0\ncx 0 1\nshow\nbytes");
@@ -92,6 +129,15 @@ public class MainActivity extends Activity {
             return Math.max(2, Math.min(n, 10000));
         } catch (Exception e) {
             return 1000;
+        }
+    }
+
+    private int readBounded(EditText field, int fallback, int min, int max) {
+        try {
+            int n = Integer.parseInt(field.getText().toString().trim());
+            return Math.max(min, Math.min(n, max));
+        } catch (Exception e) {
+            return fallback;
         }
     }
 
