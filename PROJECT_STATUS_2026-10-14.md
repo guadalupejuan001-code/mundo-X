@@ -1,6 +1,8 @@
 # Mundo X — estado del proyecto — 2026-10-14
 
-Este archivo congela el estado real del proyecto al cierre de esta etapa.
+> **SNAPSHOT HISTÓRICO.** Este archivo conserva el cierre de una etapa anterior del mismo día. El proyecto fue reanudado posteriormente. Para el estado funcional actualizado, usar `TESTED_FUNCTIONAL_STATUS_2026-10-14.md`.
+
+Este archivo congela el estado real del proyecto al cierre de aquella etapa.
 
 ## 1. Núcleos existentes
 
@@ -277,11 +279,12 @@ Mundo X todavía no implementa de forma compacta y general:
 La siguiente frontera científica sería salir de Clifford/estabilizadores sin
 volver a un statevector denso ni esconder el costo en otra estructura.
 
-## 11. Estado de esta rama
+## 11. Estado de este snapshot
 
 ```
-STATUS: PAUSED / FROZEN
+STATUS DEL SNAPSHOT: PAUSED / FROZEN
 DATE: 2026-10-14
+SUPERSEDED BY: TESTED_FUNCTIONAL_STATUS_2026-10-14.md
 ```
 
 La etapa queda preservada con código, commits, builds, APKs, benchmarks y
