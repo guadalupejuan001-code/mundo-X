@@ -586,7 +586,71 @@ No existe todavía evidencia de que Transformer X mejore el Compact Core ni de q
 
 ---
 
-# 12. Qué está científicamente demostrado hoy
+# 12. Primera representación exacta no-Clifford con T — VERIFICADA EN CI
+
+Se añadió una descomposición exacta:
+
+```
+T = alpha I + beta Z
+```
+
+con:
+
+```
+alpha = (1 + exp(i*pi/4)) / 2
+beta  = (1 - exp(i*pi/4)) / 2
+```
+
+Cada rama sigue siendo un estado Clifford/estabilizador representado por Compact
+Core, pero la suma ponderada completa puede ser un estado no-Clifford.
+
+No se usa poda, truncación ni fusión aproximada.
+
+Resultados verificados en Linux/GitHub Actions:
+
+```
+3 qubits / 1 T
+branches=2
+fidelity=1.000000000
+branch_tableaus=PASS
+result=PASS
+```
+
+```
+4 qubits / 4 T
+branches=16
+fidelity=1.000000000
+branch_tableaus=PASS
+result=PASS
+```
+
+```
+4 qubits / 8 T
+branches=256
+fidelity=1.000000000
+branch_tableaus=PASS
+result=PASS
+```
+
+Windows x64 también pasó los casos de 4 y 8 puertas T.
+
+Registro completo:
+
+```
+results/exact_t_decomposition_2026-10-14.md
+```
+
+La APK Android más reciente ya expone un botón para ejecutar este experimento con
+qubits y cantidad de puertas T configurables dentro de los límites de validación.
+
+Importante:
+
+> esto demuestra corrección exacta para los circuitos probados, no eficiencia
+> escalable general. Sin reducción de ramas, el costo actual crece como `2^T`.
+
+---
+
+# 13. Qué está científicamente demostrado hoy
 
 Sí está demostrado dentro del proyecto:
 
@@ -594,29 +658,32 @@ Sí está demostrado dentro del proyecto:
 2. GHZ y cluster 2D pasan las firmas implementadas.
 3. Las mismas ideas funcionan en Android físico y en runtime nativo.
 4. La teletransportación de estado estabilizador pasa 24/24 pruebas.
-5. Un estado Compact puede controlar una escena visual.
-6. La reconstrucción en GPU puede generar cantidades muy grandes de elementos con estado lógico pequeño.
-7. GPU + batching eliminó el cuello de botella observado en Canvas.
-8. Una escena procedural puede ocupar muy poco almacenamiento.
-9. La navegación 3D y la generación urbana procedural son funcionales como prototipos.
-10. El cambio de ray marching a geometría rasterizada/instanciada es técnicamente funcional y compila correctamente.
+5. Una suma ponderada exacta de ramas Compact Core reproduce circuitos pequeños con puerta T y fidelidad 1.0 en los casos probados.
+6. Las ramas estabilizadoras de esos experimentos también validan individualmente contra Dense Core.
+7. Un estado Compact puede controlar una escena visual.
+8. La reconstrucción en GPU puede generar cantidades muy grandes de elementos con estado lógico pequeño.
+9. GPU + batching eliminó el cuello de botella observado en Canvas.
+10. Una escena procedural puede ocupar muy poco almacenamiento.
+11. La navegación 3D y la generación urbana procedural son funcionales como prototipos.
+12. El cambio de ray marching a geometría rasterizada/instanciada es técnicamente funcional y compila correctamente.
 
 No está demostrado:
 
 1. computación cuántica universal compacta;
-2. soporte eficiente general para T / magic states;
-3. ventaja cuántica física;
-4. que Mundo X supere a hardware cuántico real;
-5. que el renderer supere Unreal Engine;
-6. que una ciudad AAA pueda almacenarse en ~1 MB;
-7. que Compact Core sea la causa de mejoras de FPS;
-8. que las aves/reflejos actuales alcancen calidad visual de juego AAA;
-9. coherencia urbana comparable con una ciudad diseñada profesionalmente;
-10. sincronización completa de dos teléfonos en una prueba física extremo a extremo.
+2. reducción eficiente general del crecimiento `2^T` para circuitos no-Clifford;
+3. representación compacta general de magic states arbitrarios;
+4. ventaja cuántica física;
+5. que Mundo X supere a hardware cuántico real;
+6. que el renderer supere Unreal Engine;
+7. que una ciudad AAA pueda almacenarse en ~1 MB;
+8. que Compact Core sea la causa de mejoras de FPS;
+9. que las aves/reflejos actuales alcancen calidad visual de juego AAA;
+10. coherencia urbana comparable con una ciudad diseñada profesionalmente;
+11. sincronización completa de dos teléfonos en una prueba física extremo a extremo.
 
 ---
 
-# 13. ¿Es tecnología cuántica?
+# 14. ¿Es tecnología cuántica?
 
 ## Sí, en una parte concreta
 
@@ -624,11 +691,15 @@ No está demostrado:
 
 Representan estados y operaciones cuánticas matemáticamente válidas.
 
-Compact Core explota la estructura especial de estados Clifford/estabilizadores para evitar almacenar un statevector denso completo.
+Compact Core explota la estructura especial de estados Clifford/estabilizadores
+para evitar almacenar un statevector denso completo.
+
+Ahora existe además una capa experimental que representa exactamente estados
+no-Clifford pequeños como suma de ramas estabilizadoras tras aplicar puertas T.
 
 En ese sentido, es correcto describir esa parte del proyecto como:
 
-> **tecnología de software cuántico / simulación cuántica compacta**
+> **tecnología de software cuántico / simulación cuántica compacta y experimental no-Clifford**
 
 ## No, en el sentido de hardware cuántico
 
@@ -653,35 +724,54 @@ pero la GPU sigue haciendo gráficos clásicos.
 
 Por tanto, el proyecto completo es mejor descrito hoy como:
 
-> **arquitectura híbrida de software: simulación cuántica compacta + computación clásica/GPU/red**
+> **arquitectura híbrida de software: simulación cuántica compacta + experimentos no-Clifford + computación clásica/GPU/red**
 
 ---
 
-# 14. Frontera científica principal
+# 15. Frontera científica principal
 
-La frontera sigue siendo la misma:
+La frontera cambió.
+
+Antes era:
+
+```
+¿podemos representar T exactamente?
+```
+
+Ahora esa prueba exacta existe para circuitos pequeños.
+
+La nueva frontera es:
 
 ```
 Clifford/stabilizer
         |
         v
-T / magic / no-Clifford
+T exacta por suma de ramas
         |
         v
-¿puede conservarse compacidad sin volver a 2^n?
+2^T ramas
+        |
+        v
+¿podemos reducir/factorizar/representar esas ramas
+sin perder exactitud ni esconder el mismo costo?
 ```
 
-Hasta resolver o avanzar esa frontera con pruebas reproducibles, no debe afirmarse computación cuántica universal compacta.
+Ese es ahora el problema principal.
+
+Hasta demostrar una mejora reproducible sobre el crecimiento ingenuo `2^T`, no
+debe afirmarse computación cuántica universal compacta.
 
 ---
 
-# 15. Estado actual
+# 16. Estado actual
 
 ```
 DATE: 2026-10-14
 STATUS: ACTIVE EXPERIMENTAL
-LATEST VERIFIED ANDROID BUILD: GitHub Actions run #61
-LATEST VERIFIED COMMIT: cbef11d4c8168fdcc4e0f68cb88b592b5d70cf23
+LATEST VERIFIED ANDROID BUILD: GitHub Actions run #68
+LATEST VERIFIED ANDROID COMMIT: 370686361d8ca6cf5b773a2c7a3d762f5e1685b5
+LATEST VERIFIED T TEST WORKFLOW: GitHub Actions run #65
+LATEST VERIFIED WINDOWS T TEST: GitHub Actions run #9
 ```
 
 El archivo `PROJECT_STATUS_2026-10-14.md` queda preservado como snapshot histórico de una etapa anterior.
