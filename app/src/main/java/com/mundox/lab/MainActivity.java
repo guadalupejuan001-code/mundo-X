@@ -54,7 +54,7 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, VisualExperimentActivity.class)));
         root.addView(visual);
 
-        Button gameDemo = button("OPEN <5 MB GAME GRAPHICS TEST");
+        Button gameDemo = button("OPEN PROCEDURAL OPEN WORLD • QUALITY");
         gameDemo.setOnClickListener(v ->
                 startActivity(new Intent(this, ProceduralGameDemoActivity.class)));
         root.addView(gameDemo);
