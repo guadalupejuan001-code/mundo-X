@@ -1021,6 +1021,197 @@ class ReducedExactTRepresentation {
   std::vector<ExactExperimentGate> base_circuit_;
 };
 
+
+inline ExactTExperimentResult run_magic_state_witness() {
+  DenseCore magic(1);
+  magic.hadamard(0);
+  magic.phase_t(0);
+
+  const auto& psi = magic.state();
+
+  auto overlap_fidelity = [&](const std::vector<std::complex<double>>& phi) {
+    std::complex<double> overlap{0.0, 0.0};
+    for (std::size_t i = 0; i < phi.size(); ++i) {
+      overlap += std::conj(phi[i]) *
+                 std::complex<double>{psi[i].real(), psi[i].imag()};
+    }
+    return std::norm(overlap);
+  };
+
+  const double s = 1.0 / std::sqrt(2.0);
+  const std::complex<double> I{0.0, 1.0};
+
+  std::vector<std::vector<std::complex<double>>> stabilizers = {
+      {{1.0, 0.0}, {0.0, 0.0}},
+      {{0.0, 0.0}, {1.0, 0.0}},
+      {{s, 0.0}, {s, 0.0}},
+      {{s, 0.0}, {-s, 0.0}},
+      {{s, 0.0}, I * s},
+      {{s, 0.0}, -I * s},
+  };
+
+  double max_stabilizer_fidelity = 0.0;
+  for (const auto& phi : stabilizers) {
+    max_stabilizer_fidelity =
+        std::max(max_stabilizer_fidelity, overlap_fidelity(phi));
+  }
+
+  const std::complex<double> a0{psi[0].real(), psi[0].imag()};
+  const std::complex<double> a1{psi[1].real(), psi[1].imag()};
+  const double x_expectation =
+      2.0 * (std::conj(a0) * a1).real();
+  const double y_expectation =
+      2.0 * (std::conj(a0) * a1).imag();
+  const double z_expectation =
+      std::norm(a0) - std::norm(a1);
+
+  const bool non_stabilizer = max_stabilizer_fidelity < 1.0 - 1e-6;
+  const bool expected_geometry =
+      std::abs(x_expectation - s) < 2e-5 &&
+      std::abs(y_expectation - s) < 2e-5 &&
+      std::abs(z_expectation) < 2e-5;
+
+  std::ostringstream out;
+  out << std::fixed << std::setprecision(9);
+  out << "MAGIC STATE WITNESS\n";
+  out << "circuit=|0> -> H -> T\n";
+  out << "state=(|0> + exp(i*pi/4)|1>)/sqrt(2)\n";
+  out << "bloch_x=" << x_expectation << "\n";
+  out << "bloch_y=" << y_expectation << "\n";
+  out << "bloch_z=" << z_expectation << "\n";
+  out << "max_fidelity_to_any_1q_pure_stabilizer="
+      << max_stabilizer_fidelity << "\n";
+  out << "non_stabilizer=" << (non_stabilizer ? "PASS" : "FAIL") << "\n";
+  out << "expected_magic_geometry="
+      << (expected_geometry ? "PASS" : "FAIL") << "\n";
+  out << "result="
+      << ((non_stabilizer && expected_geometry) ? "PASS" : "FAIL") << "\n";
+
+  ExactTExperimentResult result;
+  result.all_passed = non_stabilizer && expected_geometry;
+  result.report = out.str();
+  return result;
+}
+
+inline ExactTExperimentResult run_reduced_growth_trace_variant(
+    std::size_t qubits, std::size_t t_gates) {
+  if (qubits < 4 || qubits > 10)
+    throw std::invalid_argument("variant trace requires 4..10 qubits");
+  if (t_gates > 24)
+    throw std::invalid_argument("variant trace safety limit is 24 T gates");
+
+  ReducedExactTRepresentation q(qubits);
+  std::ostringstream out;
+  out << "REDUCED T GROWTH TRACE VARIANT\n";
+  out << "qubits=" << qubits << "\n";
+  out << "t_gates=" << t_gates << "\n";
+
+  std::size_t step = 0;
+  std::size_t previous_components = q.component_count();
+  std::size_t previous_rank =
+      q.coefficient_structure_profile().max_cut_rank;
+  std::size_t t_support_increases = 0;
+  std::size_t non_t_support_increases = 0;
+  std::size_t h_rank_increases = 0;
+  std::size_t non_h_rank_increases = 0;
+
+  auto emit = [&](const std::string& gate, bool is_t, bool is_h) {
+    const auto profile = q.coefficient_structure_profile();
+    const std::size_t components = q.component_count();
+
+    if (components > previous_components) {
+      if (is_t) ++t_support_increases;
+      else ++non_t_support_increases;
+    }
+    if (profile.max_cut_rank > previous_rank) {
+      if (is_h) ++h_rank_increases;
+      else ++non_h_rank_increases;
+    }
+
+    out << "step=" << step
+        << " gate=" << gate
+        << " components=" << components
+        << " active=" << profile.active_coefficients
+        << " max_cut_rank=" << profile.max_cut_rank
+        << " payload_bytes=" << q.logical_payload_bytes()
+        << "\n";
+
+    previous_components = components;
+    previous_rank = profile.max_cut_rank;
+    ++step;
+  };
+
+  emit("START", false, false);
+
+  // Structurally different Clifford preparation:
+  // local superpositions + CZ ring + alternating S.
+  for (std::size_t qidx = 0; qidx < qubits; qidx += 2) {
+    q.hadamard(qidx);
+    emit("H" + std::to_string(qidx), false, true);
+  }
+  for (std::size_t qidx = 0; qidx < qubits; ++qidx) {
+    const std::size_t next = (qidx + 1) % qubits;
+    q.controlled_z(qidx, next);
+    emit("CZ" + std::to_string(qidx) + "_" + std::to_string(next),
+         false, false);
+  }
+  for (std::size_t qidx = 1; qidx < qubits; qidx += 2) {
+    q.phase_s(qidx);
+    emit("S" + std::to_string(qidx), false, false);
+  }
+
+  // Different T placement and mixing schedule from the original trace.
+  for (std::size_t k = 0; k < t_gates; ++k) {
+    const std::size_t a = (3 * k + 1) % qubits;
+    const std::size_t hq = (a + 2 + (k & 1U)) % qubits;
+    const std::size_t b = (a + 3) % qubits;
+    const std::size_t czb = (a + 5) % qubits;
+
+    q.phase_t(a);
+    emit("T" + std::to_string(a), true, false);
+
+    if ((k & 1U) == 0U) {
+      q.controlled_z(a, czb);
+      emit("CZ" + std::to_string(a) + "_" + std::to_string(czb),
+           false, false);
+    } else {
+      q.cnot(a, b);
+      emit("CX" + std::to_string(a) + "_" + std::to_string(b),
+           false, false);
+    }
+
+    q.hadamard(hq);
+    emit("H" + std::to_string(hq), false, true);
+
+    if ((k % 3U) == 2U) {
+      const std::size_t sq = (a + 1) % qubits;
+      q.phase_s(sq);
+      emit("S" + std::to_string(sq), false, false);
+    }
+  }
+
+  const double fidelity = q.fidelity();
+  const double norm = q.reduced_norm();
+  const bool ok =
+      std::abs(fidelity - 1.0) < 3e-5 &&
+      std::abs(norm - 1.0) < 3e-5;
+
+  out << std::fixed << std::setprecision(9);
+  out << "support_increases_on_T=" << t_support_increases << "\n";
+  out << "support_increases_on_non_T=" << non_t_support_increases << "\n";
+  out << "rank_increases_on_H=" << h_rank_increases << "\n";
+  out << "rank_increases_on_non_H=" << non_h_rank_increases << "\n";
+  out << "final_components=" << q.component_count() << "\n";
+  out << "fidelity=" << fidelity << "\n";
+  out << "reduced_norm=" << norm << "\n";
+  out << "result=" << (ok ? "PASS" : "FAIL") << "\n";
+
+  ExactTExperimentResult result;
+  result.all_passed = ok;
+  result.report = out.str();
+  return result;
+}
+
 inline ExactTExperimentResult run_reduced_growth_trace(
     std::size_t qubits, std::size_t t_gates) {
   if (qubits == 0 || qubits > 10)
