@@ -1,0 +1,169 @@
+#include <jni.h>
+
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+
+#include "mundo_x/compact_core.hpp"
+#include "mundo_x/dense_core.hpp"
+
+using mundo_x::CompactCore;
+using mundo_x::DenseCore;
+
+static jstring as_jstring(JNIEnv* env, const std::string& s) {
+  return env->NewStringUTF(s.c_str());
+}
+
+static double mib(std::size_t bytes) {
+  return static_cast<double>(bytes) / (1024.0 * 1024.0);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_hello(JNIEnv* env, jclass) {
+  try {
+    DenseCore dense(1);
+    dense.hadamard(0);
+    dense.pauli_z(0);
+    dense.hadamard(0);
+
+    CompactCore compact(1);
+    compact.hadamard(0);
+    compact.pauli_z(0);
+    compact.hadamard(0);
+
+    const bool dense_ok = dense.probability(1) > 0.999999f;
+    const bool compact_ok = compact.hello_is_one();
+
+    std::ostringstream out;
+    out << "HELLO MUNDO X\n"
+        << "Dense:   " << (dense_ok ? "PASS" : "FAIL") << "\n"
+        << "Compact: " << (compact_ok ? "PASS" : "FAIL") << "\n"
+        << "Result:  |1>\n"
+        << "Dense state: " << dense.state_bytes() << " bytes\n"
+        << "Compact state: " << compact.state_bytes() << " bytes\n";
+    return as_jstring(env, out.str());
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_bench(JNIEnv* env, jclass, jint qubits,
+                                     jboolean include_dense) {
+  try {
+    std::size_t n = static_cast<std::size_t>(qubits);
+    if (n < 2) n = 2;
+    if (n > 10000) n = 10000;
+
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(3);
+
+    const auto c0 = std::chrono::steady_clock::now();
+    CompactCore compact(n);
+    compact.hadamard(0);
+    for (std::size_t i = 1; i < n; ++i) compact.cnot(i - 1, i);
+    const auto c1 = std::chrono::steady_clock::now();
+    const double cms =
+        std::chrono::duration<double, std::milli>(c1 - c0).count();
+
+    out << "COMPACT X\n"
+        << "qubits=" << n << "\n"
+        << "state_bytes=" << compact.state_bytes() << "\n"
+        << "state_mib=" << mib(compact.state_bytes()) << "\n"
+        << "GHZ=" << (compact.is_ghz_signature() ? "PASS" : "FAIL") << "\n"
+        << "time_ms=" << cms << "\n";
+
+    if (include_dense) {
+      if (n > 22) {
+        out << "\nDENSE skipped: Android safety limit is 22 qubits.\n";
+      } else {
+        const auto d0 = std::chrono::steady_clock::now();
+        DenseCore dense(n);
+        dense.hadamard(0);
+        for (std::size_t i = 1; i < n; ++i) dense.cnot(i - 1, i);
+        const auto d1 = std::chrono::steady_clock::now();
+
+        const double dms =
+            std::chrono::duration<double, std::milli>(d1 - d0).count();
+        const std::size_t last = (std::size_t{1} << n) - 1;
+        const bool ok =
+            std::abs(dense.probability(0) - 0.5f) < 1e-5f &&
+            std::abs(dense.probability(last) - 0.5f) < 1e-5f;
+
+        out << "\nDENSE CORE\n"
+            << "state_bytes=" << dense.state_bytes() << "\n"
+            << "state_mib=" << mib(dense.state_bytes()) << "\n"
+            << "GHZ=" << (ok ? "PASS" : "FAIL") << "\n"
+            << "time_ms=" << dms << "\n";
+
+        if (compact.state_bytes() > 0) {
+          out << "state_size_ratio_dense_over_compact="
+              << static_cast<double>(dense.state_bytes()) /
+                     static_cast<double>(compact.state_bytes())
+              << "x\n";
+        }
+      }
+    }
+
+    return as_jstring(env, out.str());
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_practice(JNIEnv* env, jclass, jint qubits,
+                                        jstring script) {
+  const char* raw = env->GetStringUTFChars(script, nullptr);
+  std::string source = raw ? raw : "";
+  if (raw) env->ReleaseStringUTFChars(script, raw);
+
+  try {
+    std::size_t n = static_cast<std::size_t>(qubits);
+    if (n < 1) n = 1;
+    if (n > 64) n = 64;
+    CompactCore q(n);
+
+    std::istringstream lines(source);
+    std::ostringstream out;
+    std::string line;
+
+    while (std::getline(lines, line)) {
+      std::istringstream in(line);
+      std::string cmd;
+      in >> cmd;
+      if (cmd.empty()) continue;
+      out << "> " << line << "\n";
+
+      if (cmd == "h") {
+        std::size_t a; in >> a; q.hadamard(a);
+      } else if (cmd == "x") {
+        std::size_t a; in >> a; q.pauli_x(a);
+      } else if (cmd == "z") {
+        std::size_t a; in >> a; q.pauli_z(a);
+      } else if (cmd == "s") {
+        std::size_t a; in >> a; q.phase_s(a);
+      } else if (cmd == "cx") {
+        std::size_t a, b; in >> a >> b; q.cnot(a, b);
+      } else if (cmd == "show") {
+        for (std::size_t r = 0; r < n; ++r)
+          out << q.generator_string(r) << "\n";
+      } else if (cmd == "bytes") {
+        out << "state_bytes=" << q.state_bytes() << "\n";
+      } else if (cmd == "reset") {
+        q = CompactCore(n);
+        out << "reset |0...0>\n";
+      } else {
+        out << "unknown command\n";
+      }
+    }
+
+    return as_jstring(env, out.str());
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
+}
