@@ -169,3 +169,69 @@ Registrar para cada caso:
 - estado lógico reportado.
 
 Eso permitirá separar una observación prometedora de una mejora reproducible.
+
+
+---
+
+## Compact Core -> GPU — 96,000 objetos
+
+Después de mover la reconstrucción visual desde Java/Canvas a OpenGL ES 3.0,
+se midió la ruta GPU en el mismo Samsung A16 5G.
+
+Arquitectura:
+
+```
+Compact Core (32q)
+-> 8 métricas derivadas del tableau
+-> uniforms OpenGL ES
+-> shader
+-> 1 draw call
+-> 96,000 elementos
+```
+
+### Captura A — baja estimulación
+
+```
+mode=COMPACT->GPU
+objects=96000
+fps=64.6
+frame=16.99 ms
+draw_calls/frame=1
+logical_state=608 B
+CompactCore=32q
+core_bytes=544
+feedback≈0.144
+```
+
+### Captura B — estimulación máxima
+
+```
+mode=COMPACT->GPU
+objects=96000
+fps=60.5
+frame=16.66 ms
+draw_calls/frame=1
+logical_state=608 B
+CompactCore=32q
+core_bytes=544
+feedback=4.000
+```
+
+### Lectura
+
+Comparado con la ruta Canvas anterior:
+
+- 24,000 elementos generativos: ~4.1 FPS / ~252 ms por frame;
+- 24,000 elementos Compact->Visual: ~5–5.9 FPS / ~171–210 ms por frame;
+- 96,000 elementos Compact->GPU: ~60–65 FPS / ~16.7 ms por frame.
+
+La diferencia principal de implementación es que la ruta GPU elimina miles de
+operaciones y draw calls individuales en Java/Canvas. La CPU entrega únicamente
+estado/tiempo/interacción y la GPU reconstruye los elementos en paralelo.
+
+Este resultado demuestra que el cuello de botella observado estaba en la ruta de
+render CPU/Canvas, no en mantener el Compact Core de 32 qubits.
+
+No se atribuye esta mejora al carácter cuántico del estado: la mejora de FPS se
+explica por el cambio de arquitectura de render a GPU y batching de una sola
+llamada por frame.
