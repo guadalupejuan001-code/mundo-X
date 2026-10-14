@@ -50,6 +50,10 @@ jobs:
           ./native-build/mundo_x t-experiment 4 4
           echo "=== Exact T decomposition: 8 T ==="
           ./native-build/mundo_x t-experiment 4 8
+          echo "=== Exact T decomposition: 10 T ==="
+          ./native-build/mundo_x t-experiment 4 10
+          echo "=== Exact T decomposition: 12 T ==="
+          ./native-build/mundo_x t-experiment 4 12
 
       - name: Install Android packages
         shell: bash
