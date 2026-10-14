@@ -69,6 +69,11 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, DeviceLauncherActivity.class)));
         root.addView(deviceLauncher);
 
+        Button internet = button("OPEN MUNDO X INTERNET");
+        internet.setOnClickListener(v ->
+                startActivity(new Intent(this, InternetSyncActivity.class)));
+        root.addView(internet);
+
         root.addView(text("Wild Rift low-end mode", 18, true));
         root.addView(text(
                 "No root. No Riot files modified. Preflight → launch → Mundo X exits.",
