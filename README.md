@@ -178,6 +178,94 @@ para reproducibilidad, pero ya no definen el estado actual del proyecto.
 
 ---
 
+# XASM v0.1 — primer lenguaje de Mundo X
+
+Mundo X ya no se usa únicamente llamando funciones C++ directamente.
+
+Ahora incluye **XASM v0.1**, un lenguaje mínimo que ejecuta programas sobre
+Compact Core.
+
+Ejemplo Bell:
+
+```text
+qubits 2
+h 0
+cx 0 1
+show
+bytes
+assert ghz
+```
+
+Compilar el runtime:
+
+```bash
+cmake -S . -B build
+cmake --build build -j
+```
+
+Ejecutar un programa:
+
+```bash
+./build/mundo_x run examples/bell.x
+```
+
+Instrucciones actuales:
+
+| XASM | Operación |
+|---|---|
+| `qubits N` | crea el espacio de N qubits |
+| `h q` | Hadamard |
+| `x q` | Pauli-X |
+| `z q` | Pauli-Z |
+| `s q` | fase S |
+| `cx c t` | CNOT control→target |
+| `show` | muestra los generadores compactos |
+| `bytes` | muestra bytes del estado |
+| `assert one` | valida el Hello X de 1 qubit |
+| `assert ghz` | valida Bell/GHZ |
+
+## Resultados compilados de XASM v0.1
+
+Los tres programas iniciales fueron compilados y ejecutados con éxito:
+
+```
+examples/hello.x
+qubits=1
+instructions=3
+state_bytes=17
+ASSERT one PASS
+```
+
+```
+examples/bell.x
+qubits=2
+instructions=2
+state_bytes=34
+STATE
++XX
++ZZ
+ASSERT ghz PASS
+```
+
+```
+examples/ghz4.x
+qubits=4
+instructions=4
+state_bytes=68
+STATE
++XXXX
++ZZII
++IZZI
++IIZZ
+ASSERT ghz PASS
+```
+
+Esto convierte Compact Core en un **runtime programable**. Todavía no es una red
+de comunicación nueva; es el sustrato sobre el cual ya podemos definir programas,
+funciones, macros y más adelante un modelo operativo propio.
+
+---
+
 # Próxima meta: Compact X general
 
 Compact Core ya demuestra la idea de representación estructurada dentro de
