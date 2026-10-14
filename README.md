@@ -724,9 +724,45 @@ size: 1,034,605 bytes
 sha256: 497135ba9b1ad0dc0ca1214dfb735761174460876e9eda16aa64235feda6824e
 ```
 
-Todavía no se registra una ventaja de FPS/RAM para `COMPACT -> VISUAL`.
-Ese resultado debe medirse en el teléfono real antes de hacer una afirmación de
-rendimiento.
+## Primera medición física de COMPACT -> VISUAL
+
+En un **Samsung A16 5G** se observó:
+
+```
+mode=COMPACT->VISUAL
+objects=6000
+fps=24.8
+frame=40.28 ms
+logical_state=608 bytes
+process_PSS=108494 kB
+CompactCore=32q
+core_bytes=544
+step=1067
+```
+
+La captura fue tomada mientras se movía el dedo en círculos sobre la escena.
+
+Comparada con la captura previa de `GENERATIVE` a 6,000 objetos:
+
+| Medición | GENERATIVE | COMPACT -> VISUAL |
+|---|---:|---:|
+| FPS observados | 17.0 | **24.8** |
+| Tiempo por frame | 60.42 ms | **40.28 ms** |
+| Estado lógico | 64 B | 608 B |
+| PSS del proceso | 105,660 kB | 108,494 kB |
+
+En estas dos observaciones, `COMPACT -> VISUAL` mostró aproximadamente **+45.9% FPS**
+y **-33.3% tiempo por frame**, con ~**+2.7% PSS**.
+
+> Esta comparación todavía no es un benchmark A/B controlado y no demuestra que
+> Compact Core sea la causa de la mejora. Temperatura, interacción, carga del
+> sistema y momento de la medición no fueron controlados.
+
+El registro completo, incluida la prueba STRESS de 24,000 objetos, está en:
+
+```
+results/visual_android_samsung_a16_5g_2026-10-14.md
+```
 
 
 ---
