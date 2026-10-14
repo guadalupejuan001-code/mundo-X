@@ -645,8 +645,36 @@ qubits y cantidad de puertas T configurables dentro de los límites de validaci�
 
 Importante:
 
-> esto demuestra corrección exacta para los circuitos probados, no eficiencia
-> escalable general. Sin reducción de ramas, el costo actual crece como `2^T`.
+> esto demuestra corrección exacta para los circuitos probados. La representación
+> ingenua todavía genera `2^T` ramas, pero ya se midió que muchas pueden ser
+> físicamente equivalentes.
+
+Se añadió un diagnóstico exacto de redundancia:
+
+```
+4 qubits / 12 T
+4096 ramas
+16 estados físicos distintos
+4080 ramas mergeables
+factor observable = 256x
+fidelity agrupada = 1.000000000
+```
+
+y una comprobación con más qubits:
+
+```
+6 qubits / 12 T
+4096 ramas
+64 estados físicos distintos
+4032 ramas mergeables
+factor observable = 64x
+fidelity agrupada = 1.000000000
+```
+
+Los conteos observados coinciden con `2^n` para estos circuitos.
+
+El runtime actual **todavía no explota esa reducción durante la evolución**:
+primero genera las ramas y después el oracle de validación detecta equivalencias.
 
 ---
 
@@ -670,7 +698,7 @@ Sí está demostrado dentro del proyecto:
 No está demostrado:
 
 1. computación cuántica universal compacta;
-2. reducción eficiente general del crecimiento `2^T` para circuitos no-Clifford;
+2. una implementación general que evite materializar las `2^T` ramas durante la evolución, aunque ya se demostró redundancia exacta en circuitos 4q/6q;
 3. representación compacta general de magic states arbitrarios;
 4. ventaja cuántica física;
 5. que Mundo X supere a hardware cuántico real;
@@ -749,11 +777,14 @@ Clifford/stabilizer
 T exacta por suma de ramas
         |
         v
-2^T ramas
+2^T ramas ingenuas
         |
         v
-¿podemos reducir/factorizar/representar esas ramas
-sin perder exactitud ni esconder el mismo costo?
+redundancia exacta observada (4q/6q)
+        |
+        v
+¿podemos explotar esa redundancia DURANTE la evolución
+sin generar primero todas las ramas?
 ```
 
 Ese es ahora el problema principal.
