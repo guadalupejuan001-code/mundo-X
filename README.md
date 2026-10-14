@@ -1,28 +1,47 @@
 # Mundo X
 
-## Estado congelado de esta etapa
+## Estado actual — 2026-10-14
 
-A fecha **2026-10-14**, esta rama queda documentada como un prototipo funcional y
-reproducible. No se añaden más funciones en esta etapa.
+Mundo X continúa en **estado experimental activo**.
 
-Resumen de resultados confirmados:
+El snapshot anterior se conserva en:
+
+```
+PROJECT_STATUS_2026-10-14.md
+```
+
+pero el registro funcional actualizado, separando lo probado en hardware real,
+lo verificado en CI y lo que sigue siendo experimental, está en:
+
+```
+TESTED_FUNCTIONAL_STATUS_2026-10-14.md
+```
+
+Resultados confirmados destacados:
 
 - Compact Core Clifford/estabilizador bit-packed;
 - GHZ de 1,000 qubits en Android: PASS;
 - cluster 2D de 1,024 qubits en Android: PASS;
 - teletransportación de estado cuántico estabilizador: **24/24 PASS**;
 - conexión Compact Core -> escena visual;
-- ruta OpenGL ES con **96,000 elementos a ~60–65 FPS** en Samsung A16 5G;
+- OpenGL ES: **96,000 elementos a ~60–65 FPS** en Samsung A16 5G;
+- prueba procedural ~1.03 MiB medida físicamente;
+- resolución interna adaptativa medida en hardware real;
+- mundo procedural navegable probado;
+- transición posterior de ciudad ray-marched a geometría 3D rasterizada e instancing GPU;
 - runtime Windows x64;
 - APK Android;
 - Performance Launcher;
-- launcher HOME de Android.
+- launcher HOME;
+- cliente/relay experimental y sincronización por eventos mínimos.
 
-Documento de estado completo:
+La clasificación científica actual del proyecto es:
 
-```
-PROJECT_STATUS_2026-10-14.md
-```
+> **plataforma experimental híbrida de software: simulación cuántica compacta + computación clásica/GPU/red.**
+
+Quantum Core y Compact Core sí pertenecen al software de computación/simulación
+cuántica. El hardware subyacente actual sigue siendo convencional; Mundo X no es
+un computador cuántico físico.
 
 
 **Mundo X** es un proyecto experimental de computación orientado a una idea central:
