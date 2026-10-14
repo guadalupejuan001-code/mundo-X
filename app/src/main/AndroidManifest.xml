@@ -8,6 +8,7 @@
         android:label="Mundo X Lab"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity android:name=".VisualExperimentActivity" android:screenOrientation="portrait" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
