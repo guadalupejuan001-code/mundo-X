@@ -132,17 +132,41 @@ Con `complex64`, el estado necesita aproximadamente:
 RAM_estado = 2^n * 8 bytes
 ```
 
-Ejemplos:
+Ejemplos del **Dense Quantum Core** (vector de estado completo, NO Compact Core):
 
 | Qubits | Estado denso |
 |---:|---:|
-| 10 | 8 KB |
-| 20 | 8 MB |
-| 25 | 256 MB |
-| 30 | 8 GB |
-| 40 | 8 TB |
+| 10 | 8 KiB |
+| 20 | 8 MiB |
+| 25 | 256 MiB |
+| 30 | 8 GiB |
+| 40 | 8 TiB |
 
-Por tanto, **el problema de memoria todavía existe en la implementación de referencia**.
+La cifra de **40 qubits = 8 TiB** corresponde exclusivamente al baseline denso:
+`2^40 amplitudes × 8 bytes`.
+
+## Comparación con Compact Core actual
+
+Para circuitos Clifford/stabilizer soportados por el Compact Core, no guardamos
+las `2^n` amplitudes. Usamos una representación bit-packed estructurada.
+
+Resultados medidos:
+
+| Prueba | Dense Core | Compact Core |
+|---|---:|---:|
+| GHZ 24 qubits | 128 MiB de estado | **408 bytes** |
+| GHZ 10,000 qubits | impracticable como statevector denso | **~23.97 MiB** |
+
+Para 40 qubits, el Compact Core actual necesita aproximadamente **680 bytes de
+estado estructurado** para esta familia Clifford, frente a **8 TiB** del vector
+denso.
+
+Esto **no significa** que podamos representar cualquier estado arbitrario de
+40 qubits en 680 bytes. Significa que, para estados/circuitos con la estructura
+que Compact Core soporta, evitamos almacenar información redundante.
+
+Por tanto, **el problema exponencial sigue existiendo en el baseline denso,
+pero ya no se aplica a todas las pruebas estructuradas que ejecutamos con Compact Core**.
 
 Esto es deliberado: primero necesitamos una referencia correcta contra la cual medir cualquier representación nueva.
 
