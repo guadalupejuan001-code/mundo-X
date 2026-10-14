@@ -50,7 +50,7 @@ public class ProceduralGameDemoActivity extends Activity {
         hud.setTypeface(android.graphics.Typeface.MONOSPACE);
         hud.setBackgroundColor(0x70000000);
         hud.setPadding(dp(10), dp(7), dp(10), dp(7));
-        hud.setText("PROCEDURAL OPEN WORLD\ninitializing...");
+        hud.setText("PROCEDURAL OPEN WORLD • QUALITY\ninitializing...");
 
         FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -173,7 +173,7 @@ public class ProceduralGameDemoActivity extends Activity {
 
         private int fbo, colorTex;
         private int width = 1, height = 1, renderW = 1, renderH = 1;
-        private float renderScale = 0.68f;
+        private float renderScale = 0.74f;
 
         private long startNs, lastNs, hudNs, scaleDecisionNs;
         private float fpsSmooth = 0f;
@@ -202,61 +202,88 @@ public class ProceduralGameDemoActivity extends Activity {
                 "in vec2 vUv; out vec4 fragColor;\n" +
                 "float h1(float n){return fract(sin(n*127.1)*43758.5453123);}\n" +
                 "float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n" +
+                "float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+1.0),f.x),f.y);}\n" +
                 "vec3 pal(float x){return .5+.5*cos(6.28318*(vec3(.02,.18,.34)+x*vec3(1.0,.73,.47)));}\n" +
                 "float boxSDF(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);}\n" +
                 "float cityMap(vec3 p,out float bid,out vec2 cell){\n" +
-                "  float block=7.0; cell=floor((p.xz+3.5)/block);\n" +
-                "  vec2 q=mod(p.xz+3.5,block)-3.5;\n" +
-                "  float rnd=h2(cell);\n" +
-                "  float h=3.5+15.0*h2(cell+vec2(7.3,19.1));\n" +
-                "  vec2 fp=vec2(2.0+0.35*h2(cell+3.0),2.0+0.35*h2(cell+9.0));\n" +
-                "  vec3 bp=vec3(q.x,p.y-h*.5,q.y);\n" +
-                "  float mainB=boxSDF(bp,vec3(fp.x,h*.5,fp.y));\n" +
-                "  float crownH=.8+2.1*h2(cell+21.0);\n" +
-                "  float crown=boxSDF(vec3(q.x,p.y-h-crownH*.5,q.y),vec3(fp*.52,crownH*.5));\n" +
-                "  float b=min(mainB,crown);\n" +
-                "  bid=rnd;\n" +
+                "  float block=10.0; cell=floor((p.xz+5.0)/block);\n" +
+                "  vec2 q=mod(p.xz+5.0,block)-5.0; bid=h2(cell);\n" +
+                "  float h=5.0+24.0*h2(cell+vec2(7.3,19.1));\n" +
+                "  vec2 fp=vec2(2.35+1.00*h2(cell+3.0),2.35+.95*h2(cell+9.0));\n" +
+                "  float podH=1.0+1.8*h2(cell+12.0);\n" +
+                "  float podium=boxSDF(vec3(q.x,p.y-podH*.5,q.y),vec3(fp*1.22,podH*.5));\n" +
+                "  float tower=boxSDF(vec3(q.x,p.y-podH-(h-podH)*.5,q.y),vec3(fp,(h-podH)*.5));\n" +
+                "  float setH=h*.66;\n" +
+                "  float setBack=boxSDF(vec3(q.x,p.y-setH-(h-setH)*.5,q.y),vec3(fp*.72,(h-setH)*.5));\n" +
+                "  float crownH=.9+2.4*h2(cell+21.0);\n" +
+                "  float crown=boxSDF(vec3(q.x,p.y-h-crownH*.5,q.y),vec3(fp*.42,crownH*.5));\n" +
+                "  float b=min(min(podium,tower),min(setBack,crown));\n" +
                 "  return min(b,p.y);\n" +
                 "}\n" +
                 "vec3 normalAt(vec3 p){float id;vec2 c;float e=.004;float d=cityMap(p,id,c);return normalize(vec3(cityMap(p+vec3(e,0,0),id,c)-d,cityMap(p+vec3(0,e,0),id,c)-d,cityMap(p+vec3(0,0,e),id,c)-d));}\n" +
+                "vec3 skyColor(vec3 rd){\n" +
+                "  vec3 sky=mix(vec3(.004,.008,.020),vec3(.055,.095,.18),clamp(rd.y*.85+.42,0.0,1.0));\n" +
+                "  float moon=pow(max(0.0,dot(rd,normalize(vec3(.42,.34,.84)))),720.0);sky+=vec3(1.0,.86,.65)*moon*7.0;\n" +
+                "  float cloud=n2(rd.xz*3.4+vec2(uTime*.012,0.0))*n2(rd.xz*8.0-uTime*.007);\n" +
+                "  sky+=vec3(.06,.075,.11)*smoothstep(.48,.80,cloud)*smoothstep(-.05,.55,rd.y);\n" +
+                "  float stars=step(.9988,h2(floor((rd.xy+rd.z)*vec2(760.0,430.0))));sky+=stars*vec3(.72,.82,1.0);\n" +
+                "  return sky;\n" +
+                "}\n" +
                 "vec3 material(vec3 p,vec3 n,vec3 rd,float bid,vec2 cell){\n" +
                 "  if(n.y>.75){\n" +
-                "    float gx=abs(fract((p.x+3.5)/7.0)-.5); float gz=abs(fract((p.z+3.5)/7.0)-.5);\n" +
-                "    float road=max(step(.29,gx),step(.29,gz));\n" +
-                "    vec3 g=mix(vec3(.018,.023,.030),vec3(.006,.009,.014),road);\n" +
-                "    float stripe=(1.0-step(.018,abs(fract(p.x*.14)-.5)))*road;\n" +
-                "    g+=vec3(.72,.45,.08)*stripe*.55;\n" +
+                "    vec2 q=mod(p.xz+5.0,10.0)-5.0;\n" +
+                "    float road=max(step(3.2,abs(q.x)),step(3.2,abs(q.y)));\n" +
+                "    float curb=max(step(2.80,abs(q.x)),step(2.80,abs(q.y)))-road;\n" +
+                "    vec3 g=mix(vec3(.032,.035,.038),vec3(.006,.009,.014),road);\n" +
+                "    g=mix(g,vec3(.105,.11,.105),curb*.68);\n" +
+                "    float laneX=(1.0-step(.035,abs(fract(p.x*.10)-.5)))*step(3.2,abs(q.y));\n" +
+                "    float laneZ=(1.0-step(.035,abs(fract(p.z*.10)-.5)))*step(3.2,abs(q.x));\n" +
+                "    float crossX=step(.78,fract(p.z*.42))*step(abs(q.y),3.2)*step(4.4,abs(q.x));\n" +
+                "    float crossZ=step(.78,fract(p.x*.42))*step(abs(q.x),3.2)*step(4.4,abs(q.y));\n" +
+                "    g+=vec3(.72,.52,.16)*(laneX+laneZ)*.50+vec3(.75)*(crossX+crossZ)*.16;\n" +
+                "    vec3 refl=skyColor(reflect(rd,n));\n" +
+                "    float puddle=smoothstep(.56,.88,n2(p.xz*.55));\n" +
+                "    float wet=road*(.16+.34*puddle);\n" +
+                "    g=mix(g,g+refl*.46,wet);\n" +
+                "    g+=pal(p.x*.026+p.z*.018+uTime*.008)*pow(max(0.0,n2(p.xz*4.0)-.72),3.0)*road*.42;\n" +
                 "    return g;\n" +
                 "  }\n" +
-                "  vec3 base=mix(vec3(.028,.043,.070),vec3(.070,.095,.130),bid);\n" +
+                "  vec3 base=mix(vec3(.025,.040,.067),vec3(.095,.115,.145),bid);\n" +
                 "  vec2 wp=abs(n.x)>.5?p.zy:p.xy;\n" +
-                "  vec2 g=fract(wp*vec2(1.05,.48));\n" +
-                "  float win=step(.16,g.x)*step(g.x,.78)*step(.16,g.y)*step(g.y,.70);\n" +
-                "  float lit=step(.55,h2(floor(wp*vec2(1.05,.48))+cell*9.0));\n" +
-                "  vec3 wc=mix(vec3(1.0,.45,.12),pal(bid+.12),.62);\n" +
+                "  vec2 g=fract(wp*vec2(.88,.43));\n" +
+                "  float win=step(.14,g.x)*step(g.x,.80)*step(.15,g.y)*step(g.y,.72);\n" +
+                "  float lit=step(.47,h2(floor(wp*vec2(.88,.43))+cell*11.0));\n" +
+                "  float mullion=step(.92,fract(wp.x*.22))+step(.95,fract(wp.y*.18));\n" +
+                "  vec3 wc=mix(vec3(1.0,.48,.15),pal(bid+.12),.64);\n" +
                 "  vec3 sun=normalize(vec3(-.45,.72,-.35));\n" +
-                "  float dif=max(.16,dot(n,sun));\n" +
-                "  return base*dif+wc*win*lit*2.35+vec3(.03,.05,.08)*pow(max(0.0,1.0-dot(n,-rd)),2.0);\n" +
+                "  float dif=max(.14,dot(n,sun));\n" +
+                "  float fres=pow(max(0.0,1.0-dot(n,-rd)),3.0);\n" +
+                "  vec3 facade=base*dif+wc*win*lit*(1.9+.5*h1(cell.x+cell.y));\n" +
+                "  facade+=vec3(.025,.04,.065)*mullion*.18+skyColor(reflect(rd,n))*fres*.16;\n" +
+                "  return facade;\n" +
+                "}\n" +
+                "float birdMask(vec2 uv,vec3 ro,vec3 fw,vec3 rt,vec3 up,float idx){\n" +
+                "  float a=idx*1.91;float z=18.0+mod(uTime*2.2+idx*8.7,42.0);\n" +
+                "  vec3 wp=ro+fw*z+rt*(sin(a+uTime*.28)*13.0+cos(idx*2.7)*5.0)+vec3(0.0,7.0+sin(a*1.7+uTime*.7)*2.0,0.0);\n" +
+                "  vec3 v=wp-ro;float vz=dot(v,fw);if(vz<1.0)return 0.0;\n" +
+                "  vec2 p=vec2(dot(v,rt),dot(v,up))/vz;\n" +
+                "  vec2 d=uv-p;float wing=abs(d.y+.34*abs(d.x));\n" +
+                "  return (1.0-smoothstep(.010,.020,wing))* (1.0-smoothstep(.035,.080,abs(d.x)));\n" +
                 "}\n" +
                 "void main(){\n" +
                 " vec2 uv=(gl_FragCoord.xy-.5*uRes)/uRes.y;\n" +
                 " float cy=cos(uAngles.x),sy=sin(uAngles.x),cp=cos(uAngles.y),sp=sin(uAngles.y);\n" +
-                " vec3 fw=normalize(vec3(sy*cp,sp,cy*cp));\n" +
-                " vec3 rt=normalize(vec3(cy,0.0,-sy));\n" +
-                " vec3 up=normalize(cross(rt,fw));\n" +
-                " vec3 rd=normalize(fw+uv.x*1.45*rt+uv.y*1.10*up);\n" +
-                " vec3 ro=uCam; float dist=0.0,hit=0.0,bid=0.0;vec2 cell=vec2(0);vec3 p=ro;\n" +
-                " for(int i=0;i<42;i++){p=ro+rd*dist;float d=cityMap(p,bid,cell);if(d<.012){hit=1.0;break;}dist+=max(.025,d*.68);if(dist>92.0)break;}\n" +
-                " vec3 sky=mix(vec3(.005,.010,.026),vec3(.055,.090,.15),clamp(rd.y*.75+.42,0.0,1.0));\n" +
-                " float moon=pow(max(0.0,dot(rd,normalize(vec3(.40,.34,.85)))),650.0);sky+=vec3(1.0,.84,.62)*moon*6.0;\n" +
-                " float stars=step(.9985,h2(floor((rd.xy+rd.z)*vec2(620.0,360.0))));sky+=stars*vec3(.65,.78,1.0);\n" +
-                " vec3 col=sky;\n" +
-                " if(hit>.5){vec3 n=normalAt(p);col=material(p,n,rd,bid,cell);\n" +
-                "   float fog=1.0-exp(-dist*.017);col=mix(col,sky,fog);\n" +
-                "   if(n.y>.75){float wet=h2(floor(p.xz*5.0));col+=pal(p.x*.035+uTime*.008)*pow(wet,10.0)*.09;}\n" +
-                " }\n" +
-                " float vig=1.0-smoothstep(.56,1.30,length(uv*vec2(.66,1.0)));col*=.72+.28*vig;\n" +
-                " col=1.0-exp(-col*1.58);col=pow(col,vec3(.86));fragColor=vec4(col,1.0);\n" +
+                " vec3 fw=normalize(vec3(sy*cp,sp,cy*cp));vec3 rt=normalize(vec3(cy,0.0,-sy));vec3 up=normalize(cross(rt,fw));\n" +
+                " vec3 rd=normalize(fw+uv.x*1.58*rt+uv.y*1.18*up);\n" +
+                " vec3 ro=uCam;float dist=0.0,hit=0.0,bid=0.0;vec2 cell=vec2(0);vec3 p=ro;\n" +
+                " for(int i=0;i<56;i++){p=ro+rd*dist;float d=cityMap(p,bid,cell);if(d<.010){hit=1.0;break;}dist+=max(.020,d*.64);if(dist>135.0)break;}\n" +
+                " vec3 sky=skyColor(rd);vec3 col=sky;\n" +
+                " if(hit>.5){vec3 n=normalAt(p);col=material(p,n,rd,bid,cell);float fog=1.0-exp(-dist*.0105);col=mix(col,sky,fog);}\n" +
+                " float traffic=0.0;for(int i=0;i<5;i++){float fi=float(i);vec3 lp=ro+fw*(8.0+fi*9.0)+rt*(-5.5+mod(fi*3.7+uTime*3.1,11.0));float a=max(0.0,dot(normalize(lp-ro),rd));traffic+=pow(a,900.0);}\n" +
+                " col+=vec3(.18,.50,1.0)*traffic*2.0;\n" +
+                " float birds=0.0;for(int i=0;i<7;i++)birds=max(birds,birdMask(uv,ro,fw,rt,up,float(i)));col=mix(col,vec3(.02,.025,.035),birds*.88);\n" +
+                " float vig=1.0-smoothstep(.62,1.42,length(uv*vec2(.62,1.0)));col*=.74+.26*vig;\n" +
+                " col=1.0-exp(-col*1.62);col=pow(col,vec3(.84));fragColor=vec4(col,1.0);\n" +
                 "}\n";
 
         private final String POST_FS =
