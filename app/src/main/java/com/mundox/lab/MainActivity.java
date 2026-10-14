@@ -64,6 +64,11 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, PerformanceLauncherActivity.class)));
         root.addView(performanceLauncher);
 
+        Button deviceLauncher = button("OPEN DEVICE HOME LAUNCHER");
+        deviceLauncher.setOnClickListener(v ->
+                startActivity(new Intent(this, DeviceLauncherActivity.class)));
+        root.addView(deviceLauncher);
+
         root.addView(text("Wild Rift low-end mode", 18, true));
         root.addView(text(
                 "No root. No Riot files modified. Preflight → launch → Mundo X exits.",
