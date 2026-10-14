@@ -147,6 +147,14 @@ public class MainActivity extends Activity {
         }));
         root.addView(tExperiment);
 
+        Button tReduced = button("RUN REDUCED EXACT T");
+        tReduced.setOnClickListener(v -> runTask(() -> {
+            int tq = readBounded(tQubits, 8, 1, 12);
+            int tt = readBounded(tCount, 64, 0, 128);
+            return NativeCore.tReducedExperiment(tq, tt);
+        }));
+        root.addView(tReduced);
+
         root.addView(text("Qubits para GHZ / escala", 14, true));
         qubits = new EditText(this);
         qubits.setText("1000");
