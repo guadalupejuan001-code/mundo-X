@@ -10,6 +10,7 @@
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
 #include "mundo_x/xasm.hpp"
+#include "mundo_x/teleport.hpp"
 
 using mundo_x::CompactCore;
 using mundo_x::DenseCore;
@@ -163,6 +164,12 @@ static int cluster(std::size_t rows, std::size_t cols, bool run_dense) {
   return 0;
 }
 
+static int teleport() {
+  const auto result = mundo_x::run_compact_teleportation();
+  std::cout << result.report;
+  return result.all_passed ? 0 : 1;
+}
+
 static int run_program(const std::string& path) {
   try {
     const auto start = std::chrono::steady_clock::now();
@@ -249,7 +256,7 @@ static int practice(std::size_t n) {
 int main(int argc, char** argv) {
   if (argc < 2) {
     std::cerr
-        << "usage: mundo_x hello | bench <qubits> [--dense] | "
+        << "usage: mundo_x hello | teleport | bench <qubits> [--dense] | "
            "cluster <rows> <cols> [--dense] | practice <qubits> | "
            "run <program.x>\n";
     return 2;
@@ -258,6 +265,7 @@ int main(int argc, char** argv) {
   const std::string cmd = argv[1];
 
   if (cmd == "hello") return hello();
+  if (cmd == "teleport") return teleport();
 
   if (cmd == "cluster") {
     if (argc < 4) return 2;
