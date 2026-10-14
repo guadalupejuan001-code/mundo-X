@@ -632,3 +632,89 @@ Therefore the demonstrated result is:
 It is not yet a demonstration of asymptotic superiority over dense statevectors
 in the worst case.
 
+
+---
+
+# Internal coefficient factorization probe
+
+After eliminating the naive `2^T` branch explosion, the next question was
+whether the remaining coefficient space could also be represented with a simple
+low-rank sequential factorization.
+
+The reduced coefficient map was converted into coordinates of the stabilizer
+quotient space. For every bipartition of those coordinates, the numerical
+complex matrix rank was measured.
+
+This diagnostic does not alter the simulation. It asks whether a straightforward
+tensor-chain style factorization would use fewer complex scalars than the flat
+coefficient vector.
+
+## Results
+
+### 4 qubits / 12 T
+
+```
+active_coefficients=16
+full_coefficient_space=16
+coefficient_cut_ranks=2,4,2
+max_cut_rank=4
+factorized_complex_scalars=40
+dense_coefficient_scalars=16
+```
+
+### 6 qubits / 12 T
+
+```
+active_coefficients=62
+full_coefficient_space=64
+coefficient_cut_ranks=2,4,8,4,2
+max_cut_rank=8
+factorized_complex_scalars=168
+dense_coefficient_scalars=64
+```
+
+### 8 qubits / 24 T
+
+```
+active_coefficients=256
+full_coefficient_space=256
+coefficient_cut_ranks=2,4,8,16,8,4,2
+max_cut_rank=16
+factorized_complex_scalars=680
+dense_coefficient_scalars=256
+```
+
+### 8 qubits / 64 T
+
+```
+active_coefficients=256
+full_coefficient_space=256
+coefficient_cut_ranks=2,4,8,16,8,4,2
+max_cut_rank=16
+factorized_complex_scalars=680
+dense_coefficient_scalars=256
+fidelity=1.000000000
+result=PASS
+```
+
+## Interpretation
+
+For this circuit family and this quotient-coordinate ordering, the coefficient
+tensor reaches the maximum possible bipartition ranks.
+
+Therefore a straightforward sequential low-rank factorization is **not a
+compression** here:
+
+```
+8q flat coefficient vector:       256 complex scalars
+8q factorized estimate:           680 complex scalars
+```
+
+This is a negative result and is intentionally retained.
+
+It means the next reduction cannot simply assume low tensor rank in the current
+basis. Any further exact compression must exploit a different structure, basis,
+symbolic relation, decision structure, or query-specific computation.
+
+No claim is made that all possible basis choices have been exhausted.
+
