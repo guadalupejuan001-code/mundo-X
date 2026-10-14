@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -155,6 +156,67 @@ class CompactCore {
       out << p;
     }
     return out.str();
+  }
+
+  // Compact, deterministic observables used by the Android visual experiment.
+  // These are derived from the stabilizer tableau itself; they do not expose or
+  // materialize a dense 2^n statevector.
+  std::array<float, 8> visual_metrics() const {
+    std::uint64_t x_count = 0;
+    std::uint64_t z_count = 0;
+    std::uint64_t y_count = 0;
+    std::uint64_t phase_count = 0;
+    std::uint64_t diagonal_x = 0;
+    std::uint64_t diagonal_z = 0;
+    std::uint64_t neighbor_activity = 0;
+    std::uint64_t hash = 1469598103934665603ULL;
+
+    for (std::size_t r = 0; r < n_; ++r) {
+      phase_count += phase_[r] ? 1ULL : 0ULL;
+      for (std::size_t q = 0; q < n_; ++q) {
+        const bool xb = get(x_, r, q);
+        const bool zb = get(z_, r, q);
+        x_count += xb ? 1ULL : 0ULL;
+        z_count += zb ? 1ULL : 0ULL;
+        y_count += (xb && zb) ? 1ULL : 0ULL;
+        if (r == q) {
+          diagonal_x += xb ? 1ULL : 0ULL;
+          diagonal_z += zb ? 1ULL : 0ULL;
+        }
+        if (q + 1 < n_ && (xb || zb) &&
+            (get(x_, r, q + 1) || get(z_, r, q + 1))) {
+          neighbor_activity += 1ULL;
+        }
+
+        const std::uint64_t code =
+            (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+            ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+        hash ^= code;
+        hash *= 1099511628211ULL;
+      }
+      hash ^= static_cast<std::uint64_t>(phase_[r]) + (r << 8ULL);
+      hash *= 1099511628211ULL;
+    }
+
+    const float cells = static_cast<float>(n_ * n_);
+    const float rows = static_cast<float>(n_);
+    const float neighbor_den =
+        n_ > 1 ? static_cast<float>(neighbor_activity) /
+                     static_cast<float>(n_ * (n_ - 1))
+               : 0.0f;
+    const float hash_unit =
+        static_cast<float>((hash >> 40ULL) & 0xFFFFFFULL) / 16777215.0f;
+
+    return {
+        static_cast<float>(x_count) / cells,
+        static_cast<float>(z_count) / cells,
+        static_cast<float>(y_count) / cells,
+        static_cast<float>(phase_count) / rows,
+        static_cast<float>(diagonal_x) / rows,
+        static_cast<float>(diagonal_z) / rows,
+        neighbor_den,
+        hash_unit,
+    };
   }
 
  private:
