@@ -215,6 +215,29 @@ static int t_growth_trace(std::size_t qubits, std::size_t t_gates) {
   }
 }
 
+static int magic_witness() {
+  try {
+    const auto result = mundo_x::run_magic_state_witness();
+    std::cout << result.report;
+    return result.all_passed ? 0 : 1;
+  } catch (const std::exception& e) {
+    std::cerr << "MAGIC WITNESS ERROR: " << e.what() << "\n";
+    return 1;
+  }
+}
+
+static int t_growth_trace_variant(std::size_t qubits, std::size_t t_gates) {
+  try {
+    const auto result =
+        mundo_x::run_reduced_growth_trace_variant(qubits, t_gates);
+    std::cout << result.report;
+    return result.all_passed ? 0 : 1;
+  } catch (const std::exception& e) {
+    std::cerr << "T TRACE VARIANT ERROR: " << e.what() << "\n";
+    return 1;
+  }
+}
+
 static int teleport() {
   const auto result = mundo_x::run_compact_teleportation();
   std::cout << result.report;
@@ -307,8 +330,11 @@ static int practice(std::size_t n) {
 int main(int argc, char** argv) {
   if (argc < 2) {
     std::cerr
-        << "usage: mundo_x hello | teleport | t-experiment <qubits> <t_gates> | "
-           "t-reduced-experiment <qubits> <t_gates> | t-trace <qubits> <t_gates> | "
+        << "usage: mundo_x hello | teleport | magic-witness | "
+           "t-experiment <qubits> <t_gates> | "
+           "t-reduced-experiment <qubits> <t_gates> | "
+           "t-trace <qubits> <t_gates> | "
+           "t-trace-variant <qubits> <t_gates> | "
            "bench <qubits> [--dense] | "
            "cluster <rows> <cols> [--dense] | practice <qubits> | run <program.x>\n";
     return 2;
@@ -318,6 +344,7 @@ int main(int argc, char** argv) {
 
   if (cmd == "hello") return hello();
   if (cmd == "teleport") return teleport();
+  if (cmd == "magic-witness") return magic_witness();
 
   if (cmd == "t-experiment") {
     if (argc < 4) return 2;
@@ -344,6 +371,15 @@ int main(int argc, char** argv) {
     const std::size_t t_gates =
         static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
     return t_growth_trace(n, t_gates);
+  }
+
+  if (cmd == "t-trace-variant") {
+    if (argc < 4) return 2;
+    const std::size_t n =
+        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
+    const std::size_t t_gates =
+        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+    return t_growth_trace_variant(n, t_gates);
   }
 
   if (cmd == "cluster") {
