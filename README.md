@@ -514,6 +514,51 @@ cluster-state 2D de 1,024 qubits.
 
 ---
 
+# Windows 10 x64 — build nativo verificado
+
+Mundo X ya compila como ejecutable nativo de Windows x64 usando MSVC.
+
+Build de GitHub Actions:
+
+```
+workflow: Build Mundo X Windows 10 x64
+run: #1
+status: success
+```
+
+Archivo principal:
+
+```
+mundo_x.exe
+size: 83,968 bytes
+format: PE32+ x86-64
+```
+
+El workflow ejecutó antes de publicar el artefacto:
+
+```
+mundo_x.exe hello
+mundo_x.exe run examples\\bell.x
+mundo_x.exe cluster 4 4 --dense
+mundo_x.exe cluster 32 32
+```
+
+Todos los smoke tests terminaron correctamente.
+
+Uso rápido en Windows 10 x64:
+
+```powershell
+.\\mundo_x.exe hello
+.\\mundo_x.exe bench 1000
+.\\mundo_x.exe cluster 32 32
+.\\mundo_x.exe run examples\\bell.x
+.\\mundo_x.exe practice 2
+```
+
+El paquete Windows incluye el ejecutable y los programas de ejemplo.
+
+---
+
 ## Estado científico
 
 Mundo X corre actualmente sobre hardware clásico.
