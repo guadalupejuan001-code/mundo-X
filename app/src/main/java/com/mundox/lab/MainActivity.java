@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
 
         Button tExperiment = button("RUN EXACT T EXPERIMENT");
         tExperiment.setOnClickListener(v -> runTask(() -> {
-            int tq = readBounded(tQubits, 4, 1, 16);
+            int tq = readBounded(tQubits, 4, 1, 10);
             int tt = readBounded(tCount, 8, 0, 12);
             return NativeCore.tExperiment(tq, tt);
         }));
