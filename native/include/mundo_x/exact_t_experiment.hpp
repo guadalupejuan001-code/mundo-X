@@ -591,6 +591,84 @@ class ReducedExactTRepresentation {
     return norm;
   }
 
+  struct CoefficientStructureProfile {
+    std::size_t full_coefficients = 0;
+    std::size_t active_coefficients = 0;
+    std::vector<std::size_t> cut_ranks;
+    std::size_t max_cut_rank = 0;
+    std::size_t factorized_complex_scalars = 0;
+  };
+
+  CoefficientStructureProfile coefficient_structure_profile() const {
+    if (n_ > 20)
+      throw std::runtime_error("coefficient profile safety limit is 20 qubits");
+
+    const auto basis = stabilizer_basis();
+
+    std::vector<bool> is_pivot(2 * n_, false);
+    for (const auto p : basis.pivots) is_pivot[p] = true;
+
+    std::vector<std::size_t> free_cols;
+    free_cols.reserve(n_);
+    for (std::size_t col = 0; col < 2 * n_; ++col) {
+      if (!is_pivot[col]) free_cols.push_back(col);
+    }
+    if (free_cols.size() != n_)
+      throw std::runtime_error("unexpected stabilizer quotient dimension");
+
+    const std::size_t dim = std::size_t{1} << n_;
+    std::vector<std::complex<double>> coeffs(dim, {0.0, 0.0});
+
+    for (const auto& entry : components_) {
+      const Pauli p{entry.first.x, entry.first.z, 0};
+      std::size_t index = 0;
+      for (std::size_t bit = 0; bit < free_cols.size(); ++bit) {
+        if (bit_at(p, n_, free_cols[bit]))
+          index |= (std::size_t{1} << bit);
+      }
+      coeffs[index] += entry.second;
+    }
+
+    CoefficientStructureProfile out;
+    out.full_coefficients = dim;
+    for (const auto& a : coeffs) {
+      if (std::abs(a) > 1e-12) ++out.active_coefficients;
+    }
+
+    if (n_ <= 1) {
+      out.factorized_complex_scalars = dim;
+      return out;
+    }
+
+    out.cut_ranks.reserve(n_ - 1);
+    for (std::size_t cut = 1; cut < n_; ++cut) {
+      const std::size_t rows = std::size_t{1} << cut;
+      const std::size_t cols = std::size_t{1} << (n_ - cut);
+
+      std::vector<std::complex<double>> matrix(rows * cols);
+      for (std::size_t index = 0; index < dim; ++index) {
+        const std::size_t row = index & (rows - 1);
+        const std::size_t col = index >> cut;
+        matrix[row * cols + col] = coeffs[index];
+      }
+
+      const std::size_t rank = complex_matrix_rank(matrix, rows, cols);
+      out.cut_ranks.push_back(rank);
+      out.max_cut_rank = std::max(out.max_cut_rank, rank);
+    }
+
+    std::size_t previous_rank = 1;
+    for (std::size_t site = 0; site < n_; ++site) {
+      const std::size_t next_rank =
+          (site + 1 == n_) ? 1 : out.cut_ranks[site];
+      out.factorized_complex_scalars +=
+          2 * previous_rank * next_rank;
+      previous_rank = next_rank;
+    }
+
+    return out;
+  }
+
  private:
   struct Pauli {
     std::uint64_t x = 0;
@@ -605,6 +683,49 @@ class ReducedExactTRepresentation {
 
   using ComponentMap =
       std::unordered_map<PauliKey, std::complex<double>, PauliKeyHash>;
+
+  static std::size_t complex_matrix_rank(
+      std::vector<std::complex<double>> matrix,
+      std::size_t rows, std::size_t cols) {
+    double scale = 0.0;
+    for (const auto& v : matrix) scale = std::max(scale, std::abs(v));
+    if (scale == 0.0) return 0;
+
+    const double tolerance = scale * 1e-10;
+    std::size_t rank = 0;
+
+    for (std::size_t col = 0; col < cols && rank < rows; ++col) {
+      std::size_t pivot = rank;
+      double best = std::abs(matrix[pivot * cols + col]);
+      for (std::size_t r = rank + 1; r < rows; ++r) {
+        const double candidate = std::abs(matrix[r * cols + col]);
+        if (candidate > best) {
+          best = candidate;
+          pivot = r;
+        }
+      }
+
+      if (best <= tolerance) continue;
+
+      if (pivot != rank) {
+        for (std::size_t c = col; c < cols; ++c)
+          std::swap(matrix[rank * cols + c], matrix[pivot * cols + c]);
+      }
+
+      const auto pivot_value = matrix[rank * cols + col];
+      for (std::size_t r = rank + 1; r < rows; ++r) {
+        const auto value = matrix[r * cols + col];
+        if (std::abs(value) <= tolerance) continue;
+        const auto factor = value / pivot_value;
+        for (std::size_t c = col; c < cols; ++c)
+          matrix[r * cols + c] -= factor * matrix[rank * cols + c];
+      }
+
+      ++rank;
+    }
+
+    return rank;
+  }
 
   void check(std::size_t q) const {
     if (q >= n_) throw std::out_of_range("qubit");
@@ -927,6 +1048,7 @@ inline ExactTExperimentResult run_reduced_exact_t_experiment(
 
   const double fidelity = q.fidelity();
   const double norm = q.reduced_norm();
+  const auto structure = q.coefficient_structure_profile();
   const bool fidelity_ok = std::abs(fidelity - 1.0) < 3e-5;
   const bool norm_ok = std::abs(norm - 1.0) < 3e-5;
 
@@ -944,6 +1066,18 @@ inline ExactTExperimentResult run_reduced_exact_t_experiment(
     out << "naive_branches=2^" << t_gates << " (not materialized)\n";
   out << "reduced_components=" << q.component_count() << "\n";
   out << "component_upper_bound=" << (std::uint64_t{1} << qubits) << "\n";
+  out << "active_coefficients=" << structure.active_coefficients << "\n";
+  out << "full_coefficient_space=" << structure.full_coefficients << "\n";
+  out << "coefficient_cut_ranks=";
+  for (std::size_t i = 0; i < structure.cut_ranks.size(); ++i) {
+    if (i) out << ",";
+    out << structure.cut_ranks[i];
+  }
+  out << "\n";
+  out << "max_cut_rank=" << structure.max_cut_rank << "\n";
+  out << "factorized_complex_scalars="
+      << structure.factorized_complex_scalars << "\n";
+  out << "dense_coefficient_scalars=" << structure.full_coefficients << "\n";
   out << "base_tableau_bytes=" << q.base_tableau_bytes() << "\n";
   out << "logical_payload_bytes=" << q.logical_payload_bytes() << "\n";
   out << "dense_reference_bytes=" << dense_bytes << "\n";
