@@ -49,6 +49,11 @@ public class MainActivity extends Activity {
         root.addView(text("MUNDO X LAB", 28, true));
         root.addView(text("Quantum Core • Compact Core • Android native lab", 14, false));
 
+        Button visual = button("OPEN VISUAL EXPERIMENT");
+        visual.setOnClickListener(v ->
+                startActivity(new Intent(this, VisualExperimentActivity.class)));
+        root.addView(visual);
+
         root.addView(text("Wild Rift low-end mode", 18, true));
         root.addView(text(
                 "No root. No Riot files modified. Preflight → launch → Mundo X exits.",
