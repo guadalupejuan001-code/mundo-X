@@ -91,7 +91,7 @@ static int bench(std::size_t n, bool run_dense) {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "usage: mundo_x hello | bench <qubits> [--dense]\n";
+    std::cerr << "usage: mundo_x hello | bench <qubits> [--dense] | practice <qubits>\n";
     return 2;
   }
 
