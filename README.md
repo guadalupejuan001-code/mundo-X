@@ -1,5 +1,30 @@
 # Mundo X
 
+## Estado congelado de esta etapa
+
+A fecha **2026-10-14**, esta rama queda documentada como un prototipo funcional y
+reproducible. No se añaden más funciones en esta etapa.
+
+Resumen de resultados confirmados:
+
+- Compact Core Clifford/estabilizador bit-packed;
+- GHZ de 1,000 qubits en Android: PASS;
+- cluster 2D de 1,024 qubits en Android: PASS;
+- teletransportación de estado cuántico estabilizador: **24/24 PASS**;
+- conexión Compact Core -> escena visual;
+- ruta OpenGL ES con **96,000 elementos a ~60–65 FPS** en Samsung A16 5G;
+- runtime Windows x64;
+- APK Android;
+- Performance Launcher;
+- launcher HOME de Android.
+
+Documento de estado completo:
+
+```
+PROJECT_STATUS_2026-10-14.md
+```
+
+
 **Mundo X** es un proyecto experimental de computación orientado a una idea central:
 
 > **No buscamos más potencia por fuerza bruta. Buscamos representar y transformar solo lo necesario.**
@@ -805,8 +830,43 @@ APK size: 1,042,561 bytes
 sha256: 56a10c49d33cfb446b685fbdc76b456281dfe4d0389bfb1b2c49742735ca01ed
 ```
 
-La APK compila correctamente, pero **todavía no se documenta una ganancia de FPS**
-para esta ruta GPU hasta medirla en el Samsung A16 5G real.
+La ruta GPU ya fue medida en el Samsung A16 5G real.
+
+Resultados observados a **96,000 elementos**:
+
+```
+captura A:
+fps=64.6
+frame=16.99 ms
+feedback≈0.144
+
+captura B:
+fps=60.5
+frame=16.66 ms
+feedback=4.000
+```
+
+En ambos casos:
+
+```
+draw_calls/frame=1
+logical_state=608 B
+CompactCore=32q
+core_bytes=544
+```
+
+Frente a la ruta Canvas previa (24,000 elementos a ~4–6 FPS), mover la generación
+visual a GPU eliminó el cuello de botella principal y permitió cuadruplicar la
+cantidad de elementos manteniendo ~60 FPS.
+
+El resultado se atribuye al cambio de arquitectura de render (GPU + batching),
+no a una supuesta aceleración física cuántica.
+
+Registro completo:
+
+```
+results/visual_android_samsung_a16_5g_2026-10-14.md
+```
 
 
 
