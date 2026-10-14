@@ -12,6 +12,7 @@
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
 #include "mundo_x/teleport.hpp"
+#include "mundo_x/exact_t_experiment.hpp"
 
 using mundo_x::CompactCore;
 using mundo_x::DenseCore;
@@ -308,6 +309,32 @@ Java_com_mundox_lab_NativeCore_quantumVisualStep(JNIEnv* env, jclass,
   return out;
 }
 
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_tExperiment(JNIEnv* env, jclass,
+                                           jint qubits_in, jint t_gates_in) {
+  try {
+    std::size_t qubits = static_cast<std::size_t>(qubits_in);
+    std::size_t t_gates = static_cast<std::size_t>(t_gates_in);
+    if (qubits < 1) qubits = 1;
+    if (qubits > 16) qubits = 16;
+    if (t_gates > 12) t_gates = 12;
+
+    const auto start = std::chrono::steady_clock::now();
+    const auto result = mundo_x::run_exact_t_experiment(qubits, t_gates);
+    const auto end = std::chrono::steady_clock::now();
+    const double ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+
+    std::ostringstream out;
+    out << result.report
+        << std::fixed << std::setprecision(3)
+        << "wall_time_ms=" << ms << "\n";
+    return as_jstring(env, out.str());
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
+}
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_mundox_lab_NativeCore_teleport(JNIEnv* env, jclass) {
