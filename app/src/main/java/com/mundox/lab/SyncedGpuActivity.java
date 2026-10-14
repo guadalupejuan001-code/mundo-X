@@ -66,6 +66,19 @@ public class SyncedGpuActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.BLACK);
 
+        // Android 15/16 may place app content edge-to-edge. Keep every control
+        // inside the real touchable area, clear of the status/navigation bars.
+        final int sidePadding = dp(8);
+        root.setPadding(sidePadding, sidePadding, sidePadding, sidePadding);
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            v.setPadding(
+                    sidePadding,
+                    insets.getSystemWindowInsetTop() + dp(6),
+                    sidePadding,
+                    insets.getSystemWindowInsetBottom() + dp(6));
+            return insets;
+        });
+
         localIpLabel = new TextView(this);
         localIpLabel.setTextColor(Color.WHITE);
         localIpLabel.setTextSize(12);
@@ -75,42 +88,55 @@ public class SyncedGpuActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        LinearLayout netRow = new LinearLayout(this);
-        netRow.setOrientation(LinearLayout.HORIZONTAL);
-
-        hostField = new EditText(this);
-        hostField.setHint("HOST IP — ONLY FOR JOIN");
-        hostField.setSingleLine(true);
-        hostField.setTextColor(Color.WHITE);
-        hostField.setHintTextColor(Color.GRAY);
-        netRow.addView(hostField, new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.6f));
+        // Row 1: actions that do not require typing an IP.
+        LinearLayout hostRow = new LinearLayout(this);
+        hostRow.setOrientation(LinearLayout.HORIZONTAL);
 
         Button host = new Button(this);
         host.setText("HOST THIS PHONE");
+        host.setMinHeight(dp(52));
         host.setOnClickListener(v -> host());
-        netRow.addView(host, new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        Button join = new Button(this);
-        join.setText("JOIN");
-        join.setOnClickListener(v -> join());
-        netRow.addView(join, new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        hostRow.addView(host, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 2f));
 
         Button stop = new Button(this);
         stop.setText("STOP");
+        stop.setMinHeight(dp(52));
         stop.setOnClickListener(v -> disconnect());
-        netRow.addView(stop, new LinearLayout.LayoutParams(
+        hostRow.addView(stop, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        root.addView(netRow);
+        root.addView(hostRow);
+
+        // Row 2: JOIN is intentionally separate so narrow phones do not push
+        // buttons outside the screen or make the IP field untouchable.
+        LinearLayout joinRow = new LinearLayout(this);
+        joinRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        hostField = new EditText(this);
+        hostField.setHint("IP FROM HOST");
+        hostField.setSingleLine(true);
+        hostField.setTextSize(14);
+        hostField.setMinHeight(dp(52));
+        hostField.setTextColor(Color.WHITE);
+        hostField.setHintTextColor(Color.GRAY);
+        joinRow.addView(hostField, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 2.2f));
+
+        Button join = new Button(this);
+        join.setText("JOIN");
+        join.setMinHeight(dp(52));
+        join.setOnClickListener(v -> join());
+        joinRow.addView(join, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        root.addView(joinRow);
 
         stats = new TextView(this);
         stats.setTextColor(Color.WHITE);
         stats.setTextSize(10);
         stats.setTypeface(android.graphics.Typeface.MONOSPACE);
-        stats.setPadding(10, 4, 10, 4);
+        stats.setPadding(dp(6), dp(3), dp(6), dp(3));
         stats.setText("Two-phone sync ready. Same Wi-Fi recommended.");
         root.addView(stats, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -152,21 +178,25 @@ public class SyncedGpuActivity extends Activity {
 
         Button b6 = new Button(this);
         b6.setText("6000");
+        b6.setMinHeight(dp(48));
         b6.setOnClickListener(v -> setCountAndSend(6000));
         controls.addView(b6, weighted());
 
         Button b24 = new Button(this);
         b24.setText("24000");
+        b24.setMinHeight(dp(48));
         b24.setOnClickListener(v -> setCountAndSend(24000));
         controls.addView(b24, weighted());
 
         Button b96 = new Button(this);
         b96.setText("96000");
+        b96.setMinHeight(dp(48));
         b96.setOnClickListener(v -> setCountAndSend(96000));
         controls.addView(b96, weighted());
 
         Button reset = new Button(this);
         reset.setText("RESET");
+        reset.setMinHeight(dp(48));
         reset.setOnClickListener(v -> {
             renderer.requestReset();
             send("R");
@@ -177,6 +207,10 @@ public class SyncedGpuActivity extends Activity {
         setContentView(root);
 
         refreshLocalIpLabel();
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private LinearLayout.LayoutParams weighted() {
