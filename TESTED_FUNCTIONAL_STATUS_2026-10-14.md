@@ -673,8 +673,44 @@ fidelity agrupada = 1.000000000
 
 Los conteos observados coinciden con `2^n` para estos circuitos.
 
-El runtime actual **todavía no explota esa reducción durante la evolución**:
-primero genera las ramas y después el oracle de validación detecta equivalencias.
+La reducción ya se explota durante la evolución.
+
+La implementación actual mantiene:
+
+```
+1 tableau estabilizador compartido
++ etiquetas Pauli canonicalizadas
++ coeficientes complejos
+```
+
+y fusiona equivalencias inmediatamente, sin materializar primero las `2^T`
+copias de Compact Core.
+
+Resultados verificados:
+
+```
+4q / 12T:
+4096 ramas teóricas -> 16 componentes
+logical_payload_bytes=1072
+fidelity=1.000000000
+
+6q / 12T:
+4096 -> 64 componentes
+logical_payload_bytes=2678
+fidelity=1.000000000
+
+8q / 24T:
+16,777,216 ramas teóricas -> 256 componentes
+fidelity=1.000000000
+
+8q / 64T:
+2^64 ramas teóricas NO materializadas
+-> 256 componentes
+fidelity=1.000000000
+```
+
+La evolución reducida no usa Dense Core. Dense se usa únicamente al final de
+estas pruebas pequeñas para validar fidelidad.
 
 ---
 
@@ -698,7 +734,7 @@ Sí está demostrado dentro del proyecto:
 No está demostrado:
 
 1. computación cuántica universal compacta;
-2. una implementación general que evite materializar las `2^T` ramas durante la evolución, aunque ya se demostró redundancia exacta en circuitos 4q/6q;
+2. ventaja general frente al límite `2^n`; la explosión ingenua `2^T` ya se evita en la representación reducida probada;
 3. representación compacta general de magic states arbitrarios;
 4. ventaja cuántica física;
 5. que Mundo X supere a hardware cuántico real;
@@ -777,14 +813,15 @@ Clifford/stabilizer
 T exacta por suma de ramas
         |
         v
-2^T ramas ingenuas
+redundancia exacta observada
         |
         v
-redundancia exacta observada (4q/6q)
+representación reducida durante evolución
+(2^T ramas no materializadas)
         |
         v
-¿podemos explotar esa redundancia DURANTE la evolución
-sin generar primero todas las ramas?
+¿podemos mantener pocos componentes al crecer n
+y superar el peor caso 2^n?
 ```
 
 Ese es ahora el problema principal.
@@ -799,8 +836,8 @@ debe afirmarse computación cuántica universal compacta.
 ```
 DATE: 2026-10-14
 STATUS: ACTIVE EXPERIMENTAL
-LATEST VERIFIED ANDROID BUILD: GitHub Actions run #68
-LATEST VERIFIED ANDROID COMMIT: 370686361d8ca6cf5b773a2c7a3d762f5e1685b5
+LATEST VERIFIED ANDROID BUILD: GitHub Actions run #80
+LATEST VERIFIED ANDROID COMMIT: a5a97635228e3b1838de2efb0ff594c7c5d0e4ab
 LATEST VERIFIED T TEST WORKFLOW: GitHub Actions run #65
 LATEST VERIFIED WINDOWS T TEST: GitHub Actions run #9
 ```
