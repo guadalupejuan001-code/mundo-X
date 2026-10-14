@@ -1020,6 +1020,89 @@ sha256: db094151347b039b0909eda9302557928b66a017286cbc436510c9dddd6fa1d0
 
 ---
 
+# Internet state sync
+
+Mundo X ya incluye una primera capa de conexión real a Internet/red.
+
+Objetivo experimental:
+
+```
+no transmitir la escena completa
+-> transmitir solo eventos / estado mínimo
+-> reconstruir localmente
+```
+
+Android incluye ahora:
+
+- permiso `INTERNET`;
+- prueba HTTPS de conectividad;
+- cliente TCP;
+- conexión por host/IP + puerto;
+- salas lógicas;
+- nombre de dispositivo;
+- envío manual de eventos;
+- envío de la firma actual de Compact Core;
+- contadores de bytes TX/RX y PSS del proceso.
+
+La pantalla se abre desde:
+
+```
+OPEN MUNDO X INTERNET
+```
+
+El botón `SEND COMPACT STATE` transmite una línea compacta con:
+
+```
+step
+X/Z/Y density
+phase
+diagX/diagZ
+correlation
+hash
+state bytes
+```
+
+No transmite los 96,000 elementos renderizados.
+
+También existe un relay mínimo en:
+
+```
+tools/mundox_relay.py
+```
+
+Uso:
+
+```bash
+python tools/mundox_relay.py
+```
+
+El relay escucha por defecto en TCP `7777` y reenvía los mensajes únicamente a
+otros clientes de la misma sala.
+
+Protocolo inicial:
+
+```
+JOIN <room> <device>
+STATE ...
+EVENT ...
+```
+
+Esta primera versión no incluye cifrado ni autenticación y es solo para
+experimentos controlados. No debe usarse para enviar secretos.
+
+Build Android verificado:
+
+```
+workflow: Build Mundo X Lab APK
+run: #45
+status: success
+commit: d5c208ba5b134c95b823be5d7538f79568bafa03
+APK size: 1,059,257 bytes
+sha256: 8bc059a2fc1ebc60af205935049dce9be9dab2f679315714a996346b3c0e81bf
+```
+
+---
+
 # Wild Rift low-end mode — Android
 
 Mundo X Lab incluye una capa de preparación para **League of Legends: Wild Rift**
