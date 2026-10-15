@@ -237,7 +237,7 @@ public class QuantumInterfaceActivity extends Activity {
             }
 
             final String finalResult = result;
-            final int pss = Debug.getPss();
+            final long pss = Debug.getPss();
             runOnUiThread(() -> {
                 output.append(finalResult);
                 output.append("\nAndroid process PSS ~= " + pss + " kB\n");
