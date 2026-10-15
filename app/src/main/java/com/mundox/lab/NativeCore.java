@@ -11,6 +11,8 @@ public final class NativeCore {
     public static native String teleport();
     public static native String tExperiment(int qubits, int tGates);
     public static native String tReducedExperiment(int qubits, int tGates);
+    public static native String magicWitness();
+    public static native String tTraceVariant(int qubits, int tGates);
     public static native String bench(int qubits, boolean includeDense);
     public static native String cluster(int rows, int cols, boolean includeDense);
     public static native String practice(int qubits, String script);
