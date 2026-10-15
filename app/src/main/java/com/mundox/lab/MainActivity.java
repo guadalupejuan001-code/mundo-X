@@ -49,6 +49,11 @@ public class MainActivity extends Activity {
         root.addView(text("MUNDO X LAB", 28, true));
         root.addView(text("Quantum Core • Compact Core • Android native lab", 14, false));
 
+        Button quantumInterface = button("OPEN QUANTUM INTERFACE");
+        quantumInterface.setOnClickListener(v ->
+                startActivity(new Intent(this, QuantumInterfaceActivity.class)));
+        root.addView(quantumInterface);
+
         Button visual = button("OPEN VISUAL EXPERIMENT");
         visual.setOnClickListener(v ->
                 startActivity(new Intent(this, VisualExperimentActivity.class)));
