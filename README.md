@@ -1,1526 +1,396 @@
 # Mundo X
 
-## Estado actual — 2026-10-14
+**Plataforma de computación basada en representaciones compactas, simulación cuántica por software y reconstrucción de información mediante reglas.**
 
-Mundo X continúa en **estado experimental activo**.
+**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 14 de octubre de 2026.
 
-El snapshot anterior se conserva en:
+> **Principio de diseño:** representar y transformar lo necesario; no materializar todos los estados, ramas u objetos cuando su comportamiento puede obtenerse a partir de estructuras, relaciones y reglas de evolución.
 
-```
-PROJECT_STATUS_2026-10-14.md
-```
+Mundo X **no nació como una app Android**. La aplicación móvil, el runtime de Windows y los experimentos gráficos sirven para probar la arquitectura en contextos distintos. El núcleo del proyecto es investigar **cómo representar información y calcular su evolución** sin depender, siempre, de una enumeración explícita de cada elemento posible.
 
-pero el registro funcional actualizado, separando lo probado en hardware real,
-lo verificado en CI y lo que sigue siendo experimental, está en:
+El software **funciona en los casos documentados**, está en desarrollo y no se presenta aquí como producto terminado. La rama actual contiene simuladores, un runtime programable, pruebas de circuitos, aplicaciones de demostración y una línea neuronal independiente.
 
-```
-TESTED_FUNCTIONAL_STATUS_2026-10-14.md
-```
+## Índice
 
-Resultados confirmados destacados:
-
-- Compact Core Clifford/estabilizador bit-packed;
-- GHZ de 1,000 qubits en Android: PASS;
-- cluster 2D de 1,024 qubits en Android: PASS;
-- teletransportación de estado cuántico estabilizador: **24/24 PASS**;
-- primera descomposición exacta de puerta `T` fuera de Clifford: **fidelidad 1.0** en pruebas de 1, 4 y 8 puertas `T`;
-- conexión Compact Core -> escena visual;
-- OpenGL ES: **96,000 elementos a ~60–65 FPS** en Samsung A16 5G;
-- prueba procedural ~1.03 MiB medida físicamente;
-- resolución interna adaptativa medida en hardware real;
-- mundo procedural navegable probado;
-- transición posterior de ciudad ray-marched a geometría 3D rasterizada e instancing GPU;
-- runtime Windows x64;
-- APK Android;
-- Performance Launcher;
-- launcher HOME;
-- cliente/relay experimental y sincronización por eventos mínimos.
-
-La clasificación científica actual del proyecto es:
-
-> **plataforma experimental híbrida de software: simulación cuántica compacta + computación clásica/GPU/red.**
-
-Quantum Core y Compact Core sí pertenecen al software de computación/simulación
-cuántica. El hardware subyacente actual sigue siendo convencional; Mundo X no es
-un computador cuántico físico.
-
-
-**Mundo X** es un proyecto experimental de computación orientado a una idea central:
-
-> **No buscamos más potencia por fuerza bruta. Buscamos representar y transformar solo lo necesario.**
-
-El objetivo no es abandonar la computadora clásica. El objetivo es explorar si podemos usar una computadora clásica como soporte de un modelo cuántico/ondulatorio mucho más eficiente, evitando materializar información que el sistema puede describir mediante estructura, relaciones, fase, interferencia o reglas de evolución.
+- [Principio y arquitectura](#principio-y-arquitectura)
+- [Componentes y responsabilidades](#componentes-y-responsabilidades)
+- [Resultados medidos](#resultados-medidos)
+- [Aplicaciones y plataformas](#aplicaciones-y-plataformas)
+- [Cómo ejecutar las pruebas](#cómo-ejecutar-las-pruebas)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Alcance, límites y próximos pasos](#alcance-límites-y-próximos-pasos)
+- [Registros técnicos y autoría](#registros-técnicos-y-autoría)
 
 ---
 
-## Objetivo principal
+## Principio y arquitectura
 
-La simulación cuántica clásica habitual representa un estado de `n` qubits mediante:
+### El problema que aborda
 
-```
-2^n amplitudes complejas
-```
+Un simulador cuántico denso representa `n` qubits con **`2^n` amplitudes complejas**. Esa representación es útil y general para circuitos pequeños, pero su memoria crece exponencialmente.
 
-Eso funciona, pero el costo de memoria crece exponencialmente.
+Mundo X desarrolla y prueba **otras formas de representar y transformar estados**. Cuando se conoce una estructura explotable, el programa puede:
 
-**Mundo X quiere atacar esa representación, no comprar más RAM.**
+1. Conservar relaciones y generadores, en lugar de enumerar todas las amplitudes.
+2. Actualizar esa estructura al aplicar operaciones.
+3. Compartir información común entre estados relacionados.
+4. Fusionar equivalencias durante la evolución, antes de producir copias innecesarias.
+5. Reconstruir los resultados que se necesiten en la etapa de validación, visualización o consulta.
 
-La pregunta del proyecto es:
+Esto **no significa que la CPU deje de usar bits o ejecutar instrucciones convencionales**. Significa que el diseño del algoritmo evita, en los casos adecuados, representar explícitamente todos los objetos o estados que podría producir. El enfoque del proyecto no se limita a recorrer un vector denso como única manera de computar.
 
-> ¿Qué familias útiles de estados y operaciones cuánticas pueden describirse y evolucionar sin almacenar explícitamente todo el vector de `2^n` amplitudes?
+### Vista general
 
-No pretendemos afirmar que todo estado cuántico arbitrario puede comprimirse. Queremos descubrir qué estructura puede explotarse sin perder el comportamiento que nos importa.
+~~~text
+                           MUNDO X
+             Representación y evolución de estados
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+   Cálculo cuántico       Aprendizaje        Aplicaciones
+     por software        de estados          y validación
+          |                   |                   |
+    Dense / Quantum       Bridge X           Android Lab
+    Core (referencia)        |                Windows x64
+          |             Transformer X        Render GPU/3D
+    Compact Core           (separado)         Red / relay
+          |
+    Clifford / tableau
+          |
+    Exact T / Reduced Exact T
+          |
+     Teleport / XASM / pruebas de equivalencia
+~~~
 
----
+**Aclaración de integración:** Compact Core y Reduced Exact T pertenecen al motor nativo C++. Transformer X es un módulo PyTorch separado: **no está conectado actualmente al simulador compacto**. Las escenas GPU son gráficos clásicos que pueden recibir parámetros del estado simulado; no emplean una GPU cuántica.
 
-# Quantum Core
+## Componentes y responsabilidades
 
-**Quantum Core** es el núcleo actual de Mundo X.
+### 1. Quantum Core y Dense Core — referencia matemática
 
-Su función inicial es servir como referencia correcta de matemáticas cuánticas antes de intentar comprimir la representación.
+**Archivos:** [`src/quantum_core.py`](src/quantum_core.py), [`native/include/mundo_x/dense_core.hpp`](native/include/mundo_x/dense_core.hpp).
 
-Actualmente implementa:
+Son simuladores de vectores de estado completos, útiles para verificar que las transformaciones del resto del sistema conservan el comportamiento esperado. Contienen primitivas para superposición, fase, interferencia, puertas como H/X/CNOT, entrelazamiento y otras operaciones según la implementación.
 
-- estados complejos normalizados;
-- superposición;
-- fase relativa;
-- interferencia;
-- Pauli-X;
-- Hadamard;
-- CNOT;
-- entrelazamiento de Bell;
-- medición y colapso.
+Su función principal dentro de Mundo X es ser la **referencia de corrección**, no la representación de escala que se pretende utilizar en producción.
 
-Estado general de referencia:
+### 2. Compact Core — núcleo de simulación compacta
 
-```
-|psi> = sum(alpha_k |k>)
-```
+**Archivo:** [`native/include/mundo_x/compact_core.hpp`](native/include/mundo_x/compact_core.hpp).
 
-con:
+Motor C++17 que representa estados **Clifford/estabilizadores** mediante un *tableau* binario empaquetado. No almacena un vector completo de `2^n` amplitudes para esa familia.
 
-```
-sum(|alpha_k|^2) = 1
-```
+Operaciones implementadas:
 
-## Hello Mundo X
+- Hadamard (`H`), fase (`S`), Pauli (`X`/`Z`).
+- CNOT (`CX`) y CZ.
+- Medición proyectiva `Z` y operaciones de validación de estados.
+- Construcción y comprobación de GHZ, estados cluster 2D y firmas de estabilizadores.
 
-El experimento mínimo es:
+El almacenamiento del tableau escala aproximadamente con **`O(n²)` bits**, en vez de `O(2^n)` amplitudes complejas. Este resultado se refiere a **estados compatibles con estabilizadores**, no a todos los posibles estados cuánticos.
 
-```
-|0>
- ↓ H
-(|0> + |1>) / sqrt(2)
- ↓ phase(pi)
-(|0> - |1>) / sqrt(2)
- ↓ H
-|1>
-```
+### 3. Exact T y Reduced Exact T — evolución no-Clifford
 
-Ejecuta:
+**Archivo:** [`native/include/mundo_x/exact_t_experiment.hpp`](native/include/mundo_x/exact_t_experiment.hpp).
 
-```bash
-python hello_mundo_x.py
-```
+El proyecto tiene dos representaciones que permiten estudiar circuitos con puerta no-Clifford `T`:
 
-Resultado observado con la implementación actual:
+**A. Exact T, referencia por ramas.** Utiliza la identidad matemática:
 
-```
-inicio             -> probabilidades [1, 0]
-Hadamard           -> probabilidades [0.5, 0.5]
-cambio de fase pi  -> probabilidades [0.5, 0.5]
-interferencia      -> probabilidades [~0, 1]
+~~~text
+T = αI + βZ
+α = (1 + exp(iπ/4)) / 2
+β = (1 - exp(iπ/4)) / 2
+~~~
 
-Mundo X says: 1
-TEST: PASS
-```
+Cada aplicación de `T` crea dos alternativas estabilizadoras ponderadas. Esta referencia preserva las ramas para estudiar corrección; su costo ingenuo crece como `2^T` en el número de puertas T.
 
-El residuo numérico observado para el estado 0 fue aproximadamente `3.7e-33`, esencialmente cero dentro de precisión de coma flotante.
+**B. Reduced Exact T, representación durante la evolución.** No almacena un tableau independiente por cada rama ingenua. Mantiene:
 
-Esto verifica en el simulador la cadena:
+~~~text
+base estabilizadora compartida
++ etiquetas Pauli canónicas
++ coeficientes complejos
++ registro de operaciones
+~~~
 
-**superposición → fase → interferencia → resultado.**
+Las etiquetas equivalentes módulo el grupo estabilizador se identifican y **sus coeficientes se acumulan en el momento de operar**. Así se evita generar las `2^T` ramas completas en los circuitos probados.
 
----
+La reconstrucción densa se utiliza **para validar al final los circuitos pequeños**, no como estado interno de evolución de la implementación reducida. La fidelidad numérica contra Dense Core fue cercana a 1 en los casos registrados.
 
-## Lo que ya funciona
+**Límite importante:** evitar las `2^T` ramas no demuestra evitar el crecimiento `2^n` en el peor caso. Los circuitos probados de 8 qubits llegaron a 256 componentes; todavía hay un problema abierto de escalabilidad de coeficientes.
 
-### Quantum Core
+#### Estado *magic* y crecimiento de componentes
 
-Funciona como simulador de referencia para las primitivas cuánticas anteriores.
+El comando `magic-witness` comprueba el estado `H → T` de un qubit: compara su geometría con los seis estados estabilizadores puros de un qubit. **Ese testigo concreto usa Dense Core**. Es una prueba de estado no-estabilizador, distinta de la validación de Reduced Exact T.
 
-### Entrelazamiento
+También hay trazas puerta por puerta para estudiar cuándo crece el número de componentes y cuándo aumenta su dificultad de factorización. Se observó crecimiento de soporte asociado a T en dos circuitos distintos; **no se confirmó** que Hadamard siempre incremente el rango interno.
 
-Puede construir el estado de Bell:
+### 4. Teletransportación de estado cuántico simulado
 
-```
-(|00> + |11>) / sqrt(2)
-```
+**Archivo:** [`native/include/mundo_x/teleport.hpp`](native/include/mundo_x/teleport.hpp).
 
-mediante Hadamard + CNOT.
+Ejecuta el protocolo de teletransportación de **estado** usando un par de Bell, mediciones y correcciones clásicas. Verifica seis estados estabilizadores de un qubit frente a las cuatro ramas de medición, para **24 comprobaciones**.
 
-### Transformer X
+No transporta materia ni transmite un qubit físico: es una simulación matemática del protocolo.
 
-Existe como componente experimental separado para explorar representación y aprendizaje sobre estados compactos.
+### 5. XASM — lenguaje mínimo para el runtime
 
-No define el núcleo de Mundo X y todavía no se usa como prueba de ventaja computacional.
+**Archivo:** [`native/include/mundo_x/xasm.hpp`](native/include/mundo_x/xasm.hpp).
 
----
+Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Actualmente incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes` y comprobaciones `assert`. **La puerta T reducida se ejecuta desde el runtime nativo o el laboratorio Android, no desde XASM v0.1.**
 
-## Estado actual de eficiencia
-
-El README principal ya no usa el statevector denso como referencia visual principal.
-Ese método queda únicamente como **baseline histórico** dentro de los resultados de
-benchmark.
-
-El estado actual de Mundo X es **Compact Core**.
-
-Resultados medidos:
-
-| Prueba | Compact Core |
-|---|---:|
-| GHZ 24 qubits | **408 bytes de estado** |
-| GHZ 40 qubits | **~680 bytes de estado** |
-| GHZ 10,000 qubits | **~23.97 MiB de estado** |
-
-## Capacidad teórica con 1 GB
-
-Para la representación bit-packed actual:
-
-```
-16 * n * ceil(n / 64) + n bytes
-```
-
-Con **1 GB decimal = 1,000,000,000 bytes**:
-
-```
-63,232 qubits -> 999,634,688 bytes
-63,233 qubits -> 1,000,662,225 bytes
-```
-
-Por tanto:
-
-```
-Compact Core actual con 1 GB: 63,232 qubits
-```
-
-Con **1 GiB = 1,073,741,824 bytes**:
-
-```
-65,532 qubits
-```
-
-> Estos valores corresponden a la familia Clifford/stabilizer soportada por el
-> Compact Core actual. No representan qubits universales arbitrarios.
-
-Los resultados comparativos contra el motor denso se conservan en:
-
-```
-results/native_benchmark_2026-10-13.md
-```
-
-para reproducibilidad, pero ya no definen el estado actual del proyecto.
-
----
-
-# XASM v0.1 — primer lenguaje de Mundo X
-
-Mundo X ya no se usa únicamente llamando funciones C++ directamente.
-
-Ahora incluye **XASM v0.1**, un lenguaje mínimo que ejecuta programas sobre
-Compact Core.
-
-Ejemplo Bell:
-
-```text
+~~~text
 qubits 2
 h 0
 cx 0 1
 show
 bytes
 assert ghz
-```
+~~~
 
-Compilar el runtime:
+Ejemplos reales: [`examples/hello.x`](examples/hello.x), [`examples/bell.x`](examples/bell.x), [`examples/ghz4.x`](examples/ghz4.x).
 
-```bash
-cmake -S . -B build
-cmake --build build -j
-```
+### 6. Bridge X y Transformer X — aprendizaje sobre modos
 
-Ejecutar un programa:
+**Archivos:** [`src/bridge_x.py`](src/bridge_x.py), [`src/transformer_x.py`](src/transformer_x.py), [`experiments/train_file_v0_1.py`](experiments/train_file_v0_1.py).
 
-```bash
+**Bridge X** transforma fragmentos de bytes en hasta 256 modos identificables. Para cada modo activo representa actividad y posición mediante una pareja de componentes reales e imaginarias `z = [Re, Im]`, de la que pueden obtenerse amplitud y fase.
+
+**Transformer X** es una red neuronal PyTorch real, con *TransformerEncoder*, atención y parámetros entrenables. Recibe identificadores de modo y estados complejos representados como dos números reales. Aprende a estimar una corrección:
+
+~~~text
+identidad de modo + estado (Re, Im)
+       ↓
+Transformer X
+       ↓
+corrección Δz
+       ↓
+estado estimado z + Δz
+~~~
+
+El script de entrenamiento usa ventanas consecutivas de un archivo e informa error de validación frente a una predicción identidad. **No es un modelo conversacional ni está integrado todavía a Compact Core**; el repositorio tampoco incluye un checkpoint entrenado listo para usarse como modelo general. Su utilidad práctica deberá medirse contra alternativas equivalentes.
+
+## Resultados medidos
+
+Las siguientes cifras proceden de ejecuciones registradas del proyecto y, donde corresponde, de capturas en hardware Android real. **No todas son benchmarks A/B controlados ni pruebas independientes de terceros.**
+
+| Área / prueba | Resultado registrado | Alcance |
+|---|---|---|
+| GHZ 24 qubits, Compact Core | 408 bytes de estado | Runtime nativo |
+| GHZ 10,000 qubits, Compact Core | ~23.97 MiB de estado | Estado estabilizador estructurado |
+| GHZ 1,000 qubits, Android | 257,000 bytes; 8.909 ms | Captura en dispositivo |
+| Cluster 2D 32 × 32, Android | 1,024 qubits; 263,168 bytes; 53.212 ms | Firma del cluster PASS |
+| Teletransportación simulada | 24/24 PASS; 51 bytes de estado | Seis estados × cuatro ramas |
+| Exact T, 4 qubits / 8 T | 256 ramas; fidelidad 1.000000000 | Referencia de ramas; también probado en Android |
+| Reduced Exact T, 4 qubits / 12 T | 4,096 ramas teóricas → 16 componentes | Fidelidad 1.000000000 en CI |
+| Reduced Exact T, 8 qubits / 64 T | `2^64` ramas teóricas **no materializadas** → 256 componentes | Fidelidad 1.000000000 en CI |
+| GPU visual, Samsung A16 5G | 96,000 elementos a ~60–65 FPS | OpenGL ES, una llamada de dibujo por fotograma |
+
+En la prueba `4 qubits / 12 T`, el registro reporta **737,562 bytes** para la representación ingenua explícita frente a **1,072 bytes de carga lógica** en la representación reducida. Son mediciones de estructuras diferentes dentro del programa; **la carga lógica no equivale a la RAM total del proceso**.
+
+En la investigación posterior, una factorización secuencial de bajo rango **no** comprimió los coeficientes del caso de 8 qubits: el vector de 256 coeficientes complejos dio una estimación de 680 escalares para esa factorización. Se conserva ese resultado negativo porque identifica una limitación técnica real.
+
+**Precisión sobre el renderizado:** los 608 bytes que aparece en las capturas `COMPACT → GPU` representan el **estado lógico explícito instrumentado**, no toda la memoria que emplea Android, los shaders o la GPU. La mejora de FPS registrada provino del traslado del renderizado Canvas a OpenGL ES, el procesamiento por lotes y la reconstrucción local; no se atribuye a una aceleración cuántica física.
+
+Para los detalles, resultados y limitaciones de cada medición:
+
+- [Estado funcional y validaciones](TESTED_FUNCTIONAL_STATUS_2026-10-14.md).
+- [Resultados de Exact T, Reduced T, magic y trazas](results/exact_t_decomposition_2026-10-14.md).
+- [Benchmark nativo: Compact frente a Dense](results/native_benchmark_2026-10-13.md).
+- [Capturas y mediciones visuales Android](results/visual_android_samsung_a16_5g_2026-10-14.md).
+- [Teletransportación cuántica simulada](results/compact_quantum_teleportation_2026-10-14.md).
+
+## Aplicaciones y plataformas
+
+Estas aplicaciones son **usos y bancos de prueba del proyecto**. No constituyen el propósito completo de Mundo X ni demuestran por sí mismas una ventaja cuántica.
+
+### Android: Mundo X Lab
+
+Código en [`app/`](app/). Se comunica con el motor C++ mediante **JNI**; la aplicación requiere OpenGL ES 3.0 para sus funciones gráficas.
+
+La interfaz incluye:
+
+- `HELLO X`, GHZ, cluster 2D, teletransportación de estado y pruebas Exact T / Reduced Exact T.
+- Consola de práctica con operaciones sobre qubits simulados.
+- Comparadores visuales `CLASSIC`, `GENERATIVE`, `COMPACT → VISUAL` y renderizador GPU.
+- Una escena 3D procedural navegable; primero se exploró *ray marching* y después geometría rasterizada e instancing. La coherencia urbana todavía necesita desarrollo.
+- Sincronización por eventos/estado mínimo con opciones `HOST` y `JOIN`.
+- Un launcher HOME y un lanzador de aplicaciones con observación de RAM, batería y estado térmico.
+- Una opción de preparación y apertura de Wild Rift sin root y sin modificar el juego.
+
+Una demostración procedural temprana informó una APK de **~1.03 MiB**. Esa cifra corresponde a aquella compilación y **no es una promesa de tamaño para todas las versiones ni una ciudad AAA completa**.
+
+### Gráficos reconstruidos desde estado compacto
+
+~~~text
+Compact Core (32 qubits)
+   → métricas del estado y entradas del usuario
+   → parámetros / uniforms de OpenGL ES
+   → shaders en GPU
+   → elementos visuales generados localmente
+~~~
+
+Esta ruta conecta funcionalmente la simulación con una salida visual. La GPU continúa siendo convencional; la escena no es un vector de amplitudes renderizado directamente.
+
+### Red y sincronización
+
+- [`tools/mundox_relay.py`](tools/mundox_relay.py): servidor TCP simple con salas; puerto predeterminado `7777`.
+- `InternetSyncActivity`: pruebas de conectividad, cliente TCP y relay embebido.
+- `SyncedGpuActivity`: botones HOST/JOIN, envío de eventos táctiles y reconstrucción local.
+
+El objetivo es **transmitir cambios o eventos, no enviar una escena de miles de objetos completa**. La ruta cuenta con código y compilaciones; todavía falta una validación física completa y documentada entre dos dispositivos para afirmar fiabilidad extremo a extremo. **El protocolo actual no ofrece cifrado ni autenticación y no debe utilizarse para datos confidenciales ni exponerse sin protección.**
+
+### Windows y Linux
+
+El motor nativo está escrito en **C++17**, se construye con **CMake** y se valida mediante GitHub Actions en Linux y Windows x64. Su ejecutable `mundo_x` permite correr circuitos, tests de escalabilidad y experimentos de reducción sin utilizar Android.
+
+## Cómo ejecutar las pruebas
+
+### Motor nativo en Linux
+
+Requisitos: compilador C++17 y CMake.
+
+~~~bash
+git clone https://github.com/guadalupejuan001-code/mundo-X.git
+cd mundo-X
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2
+
+./build/mundo_x hello
 ./build/mundo_x run examples/bell.x
-```
+./build/mundo_x bench 24 --dense
+./build/mundo_x cluster 4 4 --dense
+./build/mundo_x cluster 32 32
+./build/mundo_x teleport
+./build/mundo_x t-experiment 4 8
+./build/mundo_x t-reduced-experiment 8 64
+./build/mundo_x magic-witness
+./build/mundo_x t-trace-variant 8 12
+~~~
 
-Instrucciones actuales:
+Los comandos devuelven salidas de comprobación; `PASS` significa que la condición implementada ha sido satisfecha, **no que se haya certificado universalmente el sistema**.
 
-| XASM | Operación |
-|---|---|
-| `qubits N` | crea el espacio de N qubits |
-| `h q` | Hadamard |
-| `x q` | Pauli-X |
-| `z q` | Pauli-Z |
-| `s q` | fase S |
-| `cx c t` | CNOT control→target |
-| `show` | muestra los generadores compactos |
-| `bytes` | muestra bytes del estado |
-| `assert one` | valida el Hello X de 1 qubit |
-| `assert ghz` | valida Bell/GHZ |
+### Windows x64
 
-## Resultados compilados de XASM v0.1
+Con MSVC, CMake y un entorno de compilación configurado:
 
-Los tres programas iniciales fueron compilados y ejecutados con éxito:
+~~~powershell
+cmake -S . -B build -A x64
+cmake --build build --config Release
+.\build\Release\mundo_x.exe hello
+.\build\Release\mundo_x.exe teleport
+.\build\Release\mundo_x.exe t-reduced-experiment 8 64
+~~~
 
-```
-examples/hello.x
-qubits=1
-instructions=3
-state_bytes=17
-ASSERT one PASS
-```
+También puede recuperarse el ejecutable como **artefacto de una ejecución exitosa** del workflow [Build Mundo X Windows 10 x64](.github/workflows/windows-x64.yml).
 
-```
-examples/bell.x
-qubits=2
-instructions=2
-state_bytes=34
-STATE
-+XX
-+ZZ
-ASSERT ghz PASS
-```
+### Android
 
-```
-examples/ghz4.x
-qubits=4
-instructions=4
-state_bytes=68
-STATE
-+XXXX
-+ZZII
-+IZZI
-+IIZZ
-ASSERT ghz PASS
-```
+El workflow [Build Mundo X Lab APK](.github/workflows/android-apk.yml) compila las pruebas nativas y el APK de depuración. En GitHub: **Actions → Build Mundo X Lab APK → una ejecución exitosa → Artifacts → Mundo-X-Lab-APK**.
 
-Esto convierte Compact Core en un **runtime programable**. Todavía no es una red
-de comunicación nueva; es el sustrato sobre el cual ya podemos definir programas,
-funciones, macros y más adelante un modelo operativo propio.
+Para construir localmente se necesitan el Android SDK, NDK, CMake, Java 17 y Gradle 8.9; las versiones concretas están definidas en el workflow. No se incluye `gradlew`, por lo que el comando local presupone Gradle instalado:
 
----
+~~~bash
+gradle --no-daemon :app:assembleDebug
+~~~
 
-# Benchmark 2D cluster-state — resultado grande
+La instalación y las mediciones sobre dispositivo físico requieren una ejecución aparte: **compilar no equivale a haber medido rendimiento real**.
 
-Se añadió un benchmark de **estado cluster 2D**, una estructura de
-entrelazamiento mucho más rica que GHZ y relevante para computación cuántica
-basada en mediciones.
+### Python: referencia y Transformer X
 
-## Validación 4×4
+Requisitos: Python 3.10+, PyTorch y, para tests Python, pytest.
 
-El mismo circuito se ejecutó con Compact Core y Dense Core:
+~~~bash
+python -m pip install -r requirements.txt pytest
+python hello_mundo_x.py
+python -m pytest tests/test_quantum_core.py
+python src/transformer_x.py
+python experiments/train_file_v0_1.py ruta/a/un_archivo --epochs 20
+~~~
 
-```
-CLUSTER_COMPACT rows=4 cols=4 qubits=16
-state_bytes=272
-signature=PASS
-ms=0.005
-```
+El entrenamiento utiliza el contenido binario del archivo que se le indique. Conviene utilizar datos propios o autorizados. El entrenamiento guarda un checkpoint local `transformer_x_v0_1.pt`: **ese archivo no viene publicado en el repositorio**.
 
-```
-CLUSTER_DENSE rows=4 cols=4 qubits=16
-state_bytes=524288
-state_mib=0.500
-signature=PASS
-ms=22.329
-```
+### Relay local
 
-Ambos motores validaron la firma del mismo estado cluster.
-
-## Escala 32×32
-
-Después se ejecutó:
-
-```
-32 × 32 = 1,024 qubits
-```
-
-con Compact Core:
-
-```
-CLUSTER_COMPACT rows=32 cols=32 qubits=1024
-state_bytes=263168
-state_mib=0.251
-signature=PASS
-ms=10.206
-```
-
-Resultado:
-
-- **1,024 qubits**
-- **~257 KiB de estado**
-- **firma del cluster: PASS**
-- **~10.2 ms** en el runner Linux de GitHub Actions
-
-Un statevector denso de 1,024 qubits requeriría `2^1024` amplitudes y no es una
-representación materializable en hardware convencional.
-
-> Este resultado sigue perteneciendo a la familia Clifford/stabilizer. No demuestra
-> simulación universal arbitraria de 1,024 qubits. Demuestra que una estructura
-> cuántica 2D altamente entrelazada puede representarse y validarse compactamente
-> sin materializar un statevector completo.
-
-
-## Verificación real en Android
-
-La APK fue instalada y ejecutada en un teléfono Android arm64 real.
-
-### GHZ — 1,000 qubits
-
-Salida observada en el dispositivo:
-
-```
-COMPACT X
-qubits=1000
-state_bytes=257000
-state_mib=0.245
-GHZ=PASS
-time_ms=8.909
-
-Android process PSS ~= 68563 kB
-```
-
-Resultado:
-
-- **1,000 qubits GHZ**
-- **257,000 bytes de estado**
-- **~0.245 MiB de estado**
-- **GHZ: PASS**
-- **~8.9 ms**
-- proceso Android completo: **~68.6 MB PSS**
-
-### Cluster 2D — 32×32 = 1,024 qubits
-
-Salida observada en el mismo dispositivo:
-
-```
-2D CLUSTER STATE
-rows=32
-cols=32
-qubits=1024
-state_bytes=263168
-state_mib=0.251
-signature=PASS
-time_ms=53.212
-
-Android process PSS ~= 63318 kB
-```
-
-Resultado:
-
-- **1,024 qubits**
-- **263,168 bytes de estado**
-- **~0.251 MiB de estado**
-- **firma del cluster: PASS**
-- **~53.2 ms**
-- proceso Android completo: **~63.3 MB PSS**
-
-El PSS corresponde a **todo el proceso Android**: runtime, interfaz, librerías,
-APK y memoria nativa. No debe confundirse con el tamaño del estado cuántico
-compacto, que en estas pruebas fue de ~0.25 MiB.
-
-Estas mediciones confirman que los resultados del runtime compilado también se
-reproducen en hardware móvil real.
-
-
----
-
-# Primera salida exacta fuera de Clifford: puerta T
-
-Compact Core por sí solo sigue representando un único estado
-Clifford/estabilizador.
-
-Se añadió un experimento exacto para representar una puerta no-Clifford `T`
-como combinación lineal de ramas estabilizadoras:
-
-```
-T = alpha I + beta Z
-```
-
-con:
-
-```
-alpha = (1 + exp(i*pi/4)) / 2
-beta  = (1 - exp(i*pi/4)) / 2
-```
-
-Cada rama sigue siendo un estado Compact Core válido. El estado total puede dejar
-de ser estabilizador porque ahora se representa como una suma ponderada de varias
-ramas.
-
-La primera versión no poda, no aproxima y no fusiona ramas.
-
-Resultados verificados en GitHub Actions:
-
-```
-3 qubits / 1 T
-branches=2
-fidelity=1.000000000
-result=PASS
-
-4 qubits / 4 T
-branches=16
-fidelity=1.000000000
-result=PASS
-
-4 qubits / 8 T
-branches=256
-fidelity=1.000000000
-result=PASS
-```
-
-Los tableaus de cada rama también se validaron contra reconstrucción densa:
-
-```
-branch_tableaus=PASS
-```
-
-La misma prueba pasó en Linux/GitHub Actions y Windows x64.
-
-Registro completo:
-
-```
-results/exact_t_decomposition_2026-10-14.md
-```
-
-## Qué significa y qué no
-
-Esto demuestra una primera representación **exacta** de estados no-Clifford
-mediante una suma de estados Compact Core.
-
-No demuestra todavía eficiencia general.
-
-Sin reducción de ramas:
-
-```
-branches = 2^(T gates)
-```
-
-Por ejemplo:
-
-```
-1 T -> 2 ramas
-4 T -> 16 ramas
-8 T -> 256 ramas
-```
-
-La frontera científica cambió. Ya no es simplemente "hacer que T funcione": esa
-prueba exacta ya existe.
-
-La siguiente pregunta era:
-
-> ¿Podemos reducir, factorizar o representar estas ramas de forma más compacta
-> sin perder exactitud ni esconder el mismo costo exponencial en otra estructura?
-
-Ya se añadió una primera prueba de redundancia exacta. En los circuitos
-controlados evaluados se observó:
-
-```
-4 qubits / 12 T:
-4096 ramas ingenuas -> 16 estados físicos distintos
-factor de reducción observable = 256x
-
-6 qubits / 12 T:
-4096 ramas ingenuas -> 64 estados físicos distintos
-factor de reducción observable = 64x
-```
-
-En ambos casos, reagrupar las ramas equivalentes con la fase correcta mantuvo:
-
-```
-fidelity=1.000000000
-```
-
-Ese diagnóstico ya se convirtió en una implementación reducida durante la
-evolución:
-
-```
-1 tableau estabilizador compartido
-+ diferencias Pauli canonicalizadas
-+ coeficientes complejos
-```
-
-Las equivalencias se fusionan durante cada operación; ya no se crean primero los
-`2^T` tableaus completos.
-
-Resultados verificados:
-
-```
-4 qubits / 12 T:
-4096 ramas ingenuas -> 16 componentes
-fidelity=1.000000000
-
-6 qubits / 12 T:
-4096 ramas ingenuas -> 64 componentes
-fidelity=1.000000000
-
-8 qubits / 24 T:
-16,777,216 ramas teóricas -> 256 componentes
-fidelity=1.000000000
-
-8 qubits / 64 T:
-2^64 ramas teóricas NO materializadas
--> 256 componentes
-fidelity=1.000000000
-```
-
-En Linux/GitHub Actions, por ejemplo, el caso `4q / 12T` pasó de aproximadamente
-`737,562` bytes de payload explícito en la expansión ingenua a `1,072` bytes
-de payload lógico en la representación reducida.
-
-Esto elimina la explosión ingenua con el número de puertas T para la familia de
-circuitos probada, pero no elimina el peor caso exponencial con el número de
-qubits: el número de componentes puede llegar a `2^n`.
-
-Dense Core sigue apareciendo únicamente al final de estas pruebas pequeñas como
-oracle de fidelidad; no forma parte de la evolución reducida.
-
-## Magic: confirmado directamente
-
-Hasta esta etapa se estaba usando `T / magic / no-Clifford` como frontera
-teórica. Ya existe una prueba directa dentro del proyecto.
-
-Circuito mínimo:
-
-```
-|0> -> H -> T
-```
-
-Después de `H`:
-
-```
-|+> = (|0> + |1>) / sqrt(2)
-```
-
-Después de `T`:
-
-```
-(|0> + exp(i*pi/4)|1>) / sqrt(2)
-```
-
-Para un qubit puro, los seis estados stabilizer posibles son:
-
-```
-|0>
-|1>
-|+>
-|->
-|+i>
-|-i>
-```
-
-El estado preparado se comparó contra los seis.
-
-Resultado verificado:
-
-```
-bloch_x=0.707106727
-bloch_y=0.707106727
-bloch_z=0.000000042
-max_fidelity_to_any_1q_pure_stabilizer=0.853553325
-non_stabilizer=PASS
-expected_magic_geometry=PASS
-result=PASS
-```
-
-Si el estado fuera stabilizer, su fidelidad con alguno de esos seis estados
-tendría que ser `1.0`.
-
-Por tanto, el circuito `H -> T` produjo directamente un estado puro
-**no-stabilizer**. En la terminología habitual de teoría de recursos para
-Clifford+T, este es un **magic state**.
-
-Lectura simple:
-
-```
-Clifford solamente
--> permanece dentro del espacio stabilizer
--> Compact Core lo representa con un tableau
-
-T sobre una superposición adecuada
--> puede sacar al estado fuera de stabilizer
--> aparece el recurso no-Clifford / magic
-```
-
-Esto confirma que la representación reducida no está resolviendo solamente
-variantes stabilizer: está siendo usada para reproducir estados no-stabilizer en
-las pruebas realizadas.
-
-## Qué puertas hacen crecer la representación
-
-Se añadió una traza puerta por puerta.
-
-Primer circuito, `8 qubits / 12 T`:
-
-```
-1 -> 2 -> 4 -> 8 -> 16 -> 32 -> 64 -> 128 -> 256 componentes
-```
-
-Los aumentos de soporte aparecieron al aplicar puertas `T`.
-
-Una observación inicial mostró además saltos del rango interno después de algunos
-Hadamard, por ejemplo:
-
-```
-256 componentes, max_cut_rank=2
-H
-256 componentes, max_cut_rank=8
-...
-H
-256 componentes, max_cut_rank=16
-```
-
-Eso sugería inicialmente:
-
-```
-T -> llena soporte
-H -> aumenta mezcla interna
-```
-
-pero esa segunda parte todavía necesitaba comprobarse.
-
-### Segundo circuito independiente
-
-Se construyó otra estructura con:
-
-```
-Hadamards locales distintos
-CZ en anillo
-S alternadas
-T en otro orden
-mezcla CZ/CNOT diferente
-```
-
-Resultado:
-
-```
-support_increases_on_T=7
-support_increases_on_non_T=0
-rank_increases_on_H=0
-rank_increases_on_non_H=0
-final_components=128
-fidelity=1.000000000
-result=PASS
-```
-
-Conclusión actual:
-
-> **En los dos circuitos probados, todos los aumentos observados del número de
-> componentes ocurrieron en puertas T. No toda T tiene que aumentar el soporte,
-> pero ninguna puerta no-T lo aumentó en estas dos pruebas.**
-
-La hipótesis más fuerte:
-
-```
-H siempre aumenta la complejidad interna
-```
-
-**no quedó confirmada**. Ocurrió en el primer circuito, pero no en el segundo.
-Por tanto se conserva como comportamiento dependiente del circuito, no como regla
-general.
-
-Esto separa dos preguntas que ahora deben investigarse por separado:
-
-```
-1. ¿Cuándo una T añade realmente una nueva dirección/componente independiente?
-2. ¿Qué estructura del circuito hace crecer la correlación/rango de los coeficientes?
-```
-
-Registro completo:
-
-```
-results/exact_t_decomposition_2026-10-14.md
-```
-
-La regla sigue siendo estricta:
-
-> **No vale reducir memoria en un lugar si el mismo costo reaparece oculto en otra tabla, caché o estructura.**
-
-## Criterio de éxito para la siguiente etapa
-
-Una mejora será interesante solo si:
-
-1. mantiene fidelidad ~1 contra Dense Core en circuitos pequeños;
-2. conserva fases relativas;
-3. usa menos ramas o menos memoria explícita que la expansión ingenua;
-4. cuenta toda la metadata adicional;
-5. no reconstruye secretamente el statevector completo durante la ejecución;
-6. escala mejor que `2^T` para alguna familia no trivial y reproducible.
-
-## Orden actualizado
-
-```
-1. Quantum Core                         -> referencia cuántica densa          [HECHO]
-2. Compact Core Clifford/estabilizador  -> representación compacta            [HECHO/ACTIVO]
-3. T exacta por suma de estabilizadores -> baseline no-Clifford exacto         [HECHO EXPERIMENTAL]
-4. Redundancia exacta de ramas          -> 4q/6q verificada                     [HECHO DIAGNÓSTICO]
-5. Explotar estructura durante evolución -> 2^T evitado en pruebas             [HECHO EXPERIMENTAL]
-6. Magic state directo H->T             -> no-stabilizer verificado              [HECHO]
-7. T como origen observado de crecimiento de soporte -> 2 circuitos              [EVIDENCIA]
-8. Entender crecimiento de rango/correlación -> comportamiento depende del circuito [SIGUIENTE]
-9. Buscar ventaja sobre 2^n / mantener dispersión -> frontera posterior          [SIGUIENTE]
-10. Transformer X / otras estructuras   -> solo si aportan mediblemente
-```
-
-Nada se añade porque "suene cuántico". Cada etapa debe justificar su costo con
-una prueba reproducible.
-
----
-
-# Mundo X Lab APK v0.1
-
-La primera APK de Mundo X ya compila correctamente en GitHub Actions.
-
-Build verificado:
-
-```
-workflow: Build Mundo X Lab APK
-última verificación relevante: run #16
-status: success
-artifact: Mundo-X-Lab-APK
-```
-
-Archivo extraído y verificado:
-
-```
-Mundo-X-Lab-v0.1.apk
-size: 983,977 bytes
-sha256: d2673d4599b39327e34e0f13602001f23f3c9f0f5ce7fee97a15cee05be9199e
-ABI: arm64-v8a
-minSdk: 26
-targetSdk: 35
-```
-
-El APK contiene el núcleo nativo:
-
-```
-lib/arm64-v8a/libmundox.so
-```
-
-y expone desde Android:
-
-- **HELLO X** — compara Dense Core y Compact Core en el circuito mínimo;
-- **RUN COMPACT** — crea un estado GHZ compacto de 2 a 10,000 qubits;
-- **COMPARE DENSE** — compara ambos motores con límite de seguridad de 22 qubits para Dense;
-- **PRACTICE** — permite ejecutar comandos `h`, `x`, `z`, `s`, `cx`, `show`, `bytes`;
-- lectura del **PSS aproximado del proceso Android** después de cada experimento.
-
-La app usa Java únicamente para la interfaz. El cálculo principal se ejecuta en
-C++17 mediante JNI y reutiliza los motores nativos de Mundo X.
-
-Este build es un **debug APK** firmado por el toolchain de Android. No es una
-release firmada para publicación en Google Play.
-
-La estructura del APK fue inspeccionada tras la compilación y contiene el DEX,
-manifest, recursos y la librería nativa esperada.
-
-La instalación física **ya fue verificada en un dispositivo Android arm64**.
-En ese dispositivo pasaron tanto el benchmark GHZ de 1,000 qubits como el
-cluster-state 2D de 1,024 qubits.
-
-
----
-
-# Windows 10 x64 — build nativo verificado
-
-Mundo X ya compila como ejecutable nativo de Windows x64 usando MSVC.
-
-Build de GitHub Actions:
-
-```
-workflow: Build Mundo X Windows 10 x64
-run: #1
-status: success
-```
-
-Archivo principal:
-
-```
-mundo_x.exe
-size: 83,968 bytes
-format: PE32+ x86-64
-```
-
-El workflow ejecutó antes de publicar el artefacto:
-
-```
-mundo_x.exe hello
-mundo_x.exe run examples\\bell.x
-mundo_x.exe cluster 4 4 --dense
-mundo_x.exe cluster 32 32
-```
-
-Todos los smoke tests terminaron correctamente.
-
-Uso rápido en Windows 10 x64:
-
-```powershell
-.\\mundo_x.exe hello
-.\\mundo_x.exe bench 1000
-.\\mundo_x.exe cluster 32 32
-.\\mundo_x.exe run examples\\bell.x
-.\\mundo_x.exe practice 2
-```
-
-El paquete Windows incluye el ejecutable y los programas de ejemplo.
-
----
-
-# Experimento visual: representación explícita vs generativa
-
-La APK incluye un experimento visual Android diseñado para poner a prueba una
-idea central de Mundo X:
-
-```
-estado mínimo + regla + fase/frecuencia + perspectiva + tiempo
--> estado visible
-```
-
-El experimento ahora tiene tres rutas. `CLASSIC` y `GENERATIVE` sirven como
-baselines visuales. `COMPACT -> VISUAL` conecta directamente el estado del
-Compact Core con los parámetros que gobiernan la escena.
-
-Esto **no** significa que exista hardware cuántico ni que Compact Core ya acelere
-gráficos. Compact Core es un **simulador cuántico compacto de estados
-Clifford/estabilizadores**: representa y evoluciona esos estados mediante un
-tableau bit-packed sin materializar el statevector completo de `2^n` amplitudes.
-Lo nuevo es que ese estado cuántico compacto ya participa directamente en la
-generación visual.
-
-Modos:
-
-### CLASSIC
-
-Mantiene estado explícito por elemento:
-
-- posición x/y;
-- velocidad x/y;
-- fase;
-- tamaño;
-- color.
-
-Para `N` elementos, el estado explícito instrumentado es aproximadamente:
-
-```
-N * 28 bytes
-```
-
-### GENERATIVE
-
-No mantiene arrays por objeto para describir la escena. Cada elemento visible se
-reconstruye por índice desde una semilla global, reglas deterministas, tiempo,
-fase, perspectiva y feedback de interacción.
-
-El contador `explicit_scene_state` reporta solo el estado lógico explícito de
-la representación, no el overhead completo del runtime Android ni Canvas.
-
-### COMPACT -> VISUAL
-
-Este modo mantiene un estado de **32 qubits** dentro de Compact Core y lo hace
-evolucionar con las operaciones Clifford ya soportadas:
-
-```
-H
-S
-X
-Z
-CNOT
-```
-
-Cada frame se extrae del tableau compacto una firma numérica derivada de:
-
-- densidad de X;
-- densidad de Z;
-- densidad de Y;
-- fases activas;
-- actividad diagonal X/Z;
-- correlación local aproximada;
-- hash determinista del tableau.
-
-Esa firma controla directamente:
-
-- color;
-- frecuencia;
-- fase;
-- profundidad;
-- deformación;
-- distribución/tipo de formas.
-
-La ruta es:
-
-```
-Compact Core (32q)
--> firma del tableau
--> parámetros visuales
--> escena
-```
-
-El estado de Compact Core para 32 qubits ocupa **544 bytes** con la
-representación actual. Sumado al estado global mínimo instrumentado del renderer,
-el modo reporta aproximadamente **608 bytes de estado lógico explícito** antes
-del overhead del proceso Android.
-
-Tocar una zona de la pantalla se mapea a uno de los 32 qubits y aplica una
-perturbación Clifford al estado, de modo que la interacción modifica tanto el
-feedback visual como el estado compacto que alimenta los siguientes frames.
-
-### Interacción / pliegue
-
-Tocar la escena inyecta energía a una variable global de feedback. Esa variable
-se decae con el tiempo y modifica la siguiente evolución visual, creando un
-bucle:
-
-```
-estado visible
--> interacción
--> feedback
--> nueva evolución
--> nuevo estado visible
-```
-
-### STRESS
-
-El modo normal renderiza 6.000 elementos y STRESS sube a 24.000.
-
-La pantalla reporta en vivo:
-
-- FPS suavizado;
-- tiempo por frame;
-- objetos;
-- estado explícito estimado;
-- PSS total del proceso Android;
-- feedback e interacción.
-
-Resultados medidos en hardware Android real (captura del 2026-10-14):
-
-```
-mode=GENERATIVE
-objects=6000
-fps=17.0
-frame=60.42 ms
-explicit_scene_state=64 bytes
-process_PSS=105660 kB
-feedback=1.475
-touch=(0.62, 0.64)
-```
-
-Lectura del experimento:
-
-- la escena generativa compleja se produjo con 64 bytes de estado lógico explícito instrumentado;
-- el proceso Android completo ocupó ~105.7 MB PSS, por lo que el estado de la representación no debe confundirse con el overhead total de Android/Java/Canvas/framebuffer;
-- 60.42 ms por frame está muy por encima del presupuesto de ~16.67 ms requerido para 60 FPS;
-- el cuello de botella actual es cómputo por frame, no el tamaño del estado explícito de escena;
-- este resultado demuestra compacidad de representación en esta demo, no una mejora global de rendimiento gráfico.
-
-Próximo objetivo experimental: reducir el costo de reconstrucción visual por frame sin aumentar de forma significativa el estado explícito.
-
-## Build con acoplamiento Compact Core -> visual
-
-Build verificado en GitHub Actions:
-
-```
-workflow: Build Mundo X Lab APK
-run: #26
-status: success
-commit: 52e64a88f7b1ff31ea75e3e5c548ef88a7d5a2d7
-```
-
-APK extraída:
-
-```
-Mundo-X-Lab-debug.apk
-size: 1,034,605 bytes
-sha256: 497135ba9b1ad0dc0ca1214dfb735761174460876e9eda16aa64235feda6824e
-```
-
-## Primera medición física de COMPACT -> VISUAL
-
-En un **Samsung A16 5G** se observó:
-
-```
-mode=COMPACT->VISUAL
-objects=6000
-fps=24.8
-frame=40.28 ms
-logical_state=608 bytes
-process_PSS=108494 kB
-CompactCore=32q
-core_bytes=544
-step=1067
-```
-
-La captura fue tomada mientras se movía el dedo en círculos sobre la escena.
-
-Comparada con la captura previa de `GENERATIVE` a 6,000 objetos:
-
-| Medición | GENERATIVE | COMPACT -> VISUAL |
-|---|---:|---:|
-| FPS observados | 17.0 | **24.8** |
-| Tiempo por frame | 60.42 ms | **40.28 ms** |
-| Estado lógico | 64 B | 608 B |
-| PSS del proceso | 105,660 kB | 108,494 kB |
-
-En estas dos observaciones, `COMPACT -> VISUAL` mostró aproximadamente **+45.9% FPS**
-y **-33.3% tiempo por frame**, con ~**+2.7% PSS**.
-
-> Esta comparación todavía no es un benchmark A/B controlado y no demuestra que
-> Compact Core sea la causa de la mejora. Temperatura, interacción, carga del
-> sistema y momento de la medición no fueron controlados.
-
-El registro completo, incluida la prueba STRESS de 24,000 objetos, está en:
-
-```
-results/visual_android_samsung_a16_5g_2026-10-14.md
-```
-
-
-## Ruta GPU para eliminar el cuello de botella de Canvas
-
-Se añadió una segunda ruta visual Android usando **OpenGL ES 3.0**.
-
-Objetivo:
-
-```
-Compact Core
--> 8 parámetros derivados del tableau
--> uniforms GPU
--> 1 draw call
--> 6,000 / 24,000 / 96,000 elementos
-```
-
-La CPU ya no calcula posición, color, profundidad y forma de cada elemento ni
-ejecuta miles de llamadas `Canvas.draw*` por frame.
-
-En esta ruta:
-
-- el índice de cada elemento nace en GPU mediante `gl_VertexID`;
-- posición, color, fase, frecuencia, profundidad y forma se reconstruyen dentro
-  del vertex/fragment shader;
-- Compact Core sigue evolucionando en CPU y entrega solamente su firma compacta;
-- la interacción táctil continúa perturbando uno de los 32 qubits;
-- el estado lógico instrumentado se mantiene en ~**608 bytes**;
-- el render masivo se envía mediante **una sola llamada `glDrawArrays` por frame**.
-
-Build verificado:
-
-```
-workflow: Build Mundo X Lab APK
-run: #36
-status: success
-commit: d2a2b8839ce5acf75dfe61a562fdc263e0925178
-APK size: 1,042,561 bytes
-sha256: 56a10c49d33cfb446b685fbdc76b456281dfe4d0389bfb1b2c49742735ca01ed
-```
-
-La ruta GPU ya fue medida en el Samsung A16 5G real.
-
-Resultados observados a **96,000 elementos**:
-
-```
-captura A:
-fps=64.6
-frame=16.99 ms
-feedback≈0.144
-
-captura B:
-fps=60.5
-frame=16.66 ms
-feedback=4.000
-```
-
-En ambos casos:
-
-```
-draw_calls/frame=1
-logical_state=608 B
-CompactCore=32q
-core_bytes=544
-```
-
-Frente a la ruta Canvas previa (24,000 elementos a ~4–6 FPS), mover la generación
-visual a GPU eliminó el cuello de botella principal y permitió cuadruplicar la
-cantidad de elementos manteniendo ~60 FPS.
-
-El resultado se atribuye al cambio de arquitectura de render (GPU + batching),
-no a una supuesta aceleración física cuántica.
-
-Registro completo:
-
-```
-results/visual_android_samsung_a16_5g_2026-10-14.md
-```
-
-
-
----
-
-# Teletransportación cuántica en Compact Core
-
-Mundo X ya incluye una prueba reproducible de **teletransportación de estado
-cuántico** implementada directamente sobre Compact Core.
-
-Ruta:
-
-```
-q0: estado origen
-q1-q2: par entrelazado
-CNOT(q0,q1)
-H(q0)
-medir q0 -> m0
-medir q1 -> m1
-X(q2)^m1
-Z(q2)^m0
-q2: estado destino
-```
-
-Se validaron los seis estados estabilizadores de un qubit:
-
-```
-|0>   -> +Z
-|1>   -> -Z
-|+>   -> +X
-|->   -> -X
-|+i>  -> +Y
-|-i>  -> -Y
-```
-
-y las cuatro ramas de medición `00`, `01`, `10`, `11` para cada estado.
-
-Resultado de GitHub Actions run #33:
-
-```
-passed=24/24
-compact_state_bytes=51
-result=PASS
-```
-
-Esto demuestra teletransportación correcta del **estado cuántico** dentro del
-dominio Clifford/estabilizador actual de Compact Core. No implica transporte de
-materia ni hardware cuántico físico.
-
-Registro completo:
-
-```
-results/compact_quantum_teleportation_2026-10-14.md
-```
-
----
-
-# Sincronización visual entre dos teléfonos
-
-Se añadió una prueba directa entre dos dispositivos en la **misma red Wi‑Fi**.
-
-Objetivo:
-
-```
-teléfono A toca
--> evento mínimo
--> TCP local
--> teléfono B
--> aplica el mismo cambio
--> su mundo reacciona
-```
-
-La escena no se transmite como imagen ni como lista de 96,000 objetos.
-
-Se envían solamente eventos compactos como:
-
-```
-T <x> <y> <qubit>
-C <object_count>
-R
-```
-
-Funciones:
-
-- un teléfono puede pulsar `HOST` y escuchar en el puerto `7777`;
-- el otro escribe la IP local del primero y pulsa `JOIN`;
-- tocar cualquiera de los dos envía coordenadas normalizadas y el qubit perturbado;
-- cambios de 6,000 / 24,000 / 96,000 elementos también se sincronizan;
-- RESET se replica;
-- la pantalla muestra bytes TX/RX para medir cuánto tráfico hace falta;
-- ambos renderizan localmente mediante GPU.
-
-Ruta:
-
-```
-evento mínimo
--> red local
--> estado/interacción remota
--> reconstrucción GPU local
-```
-
-Build verificado:
-
-```
-workflow: Build Mundo X Lab APK
-run: #48
-status: success
-commit: 9095830dc9dca3f135bf72d058c5ac1fdd7d90fd
-APK size: 1,059,285 bytes
-sha256: a0eb09247f3297096db33dacefcbe5b0b0f190244d8f4216bb87b1d7830160b4
-```
-
-Esta primera versión usa la LAN para que el experimento sea reproducible sin
-depender de infraestructura externa. La misma lógica puede colocarse detrás de
-un relay público para Internet real entre redes distintas.
-
----
-
-# Performance launcher Android
-
-La APK incluye una pantalla de preparación de rendimiento para lanzar Wild Rift
-o cualquier otra app elegida por el usuario.
-
-Ruta:
-
-```
-preflight del teléfono
--> recomendación
--> lanzar app
--> Mundo X termina su propio proceso
-```
-
-El preflight mide:
-
-- RAM total y disponible;
-- flag `lowMemory` de Android;
-- Battery Saver;
-- estado térmico;
-- temperatura y nivel de batería;
-- tasa de refresco reportada por la pantalla.
-
-También ofrece accesos directos a ajustes de batería y pantalla.
-
-Cuando se lanza la app objetivo, Mundo X ejecuta liberación de sus propios
-objetos, abre la app mediante Intent oficial y termina su propio proceso después
-de ~0.9 s para no permanecer compitiendo por RAM.
-
-Límites deliberados:
-
-- no requiere root;
-- no modifica otras apps;
-- no fuerza clocks CPU/GPU;
-- no cambia governors;
-- no mata procesos ajenos;
-- no altera anti-cheat ni archivos de juegos.
-
-Build verificado:
-
-```
-workflow: Build Mundo X Lab APK
-run: #39
-status: success
-commit: 579723969a6d62ca06a99af3b6b306957784f93f
-APK size: 1,042,601 bytes
-```
-
-Este launcher prepara y reduce overhead propio; no se documenta una ganancia de
-FPS hasta medirla en hardware real.
-
----
-
-# Android HOME launcher
-
-Mundo X ya puede registrarse como **launcher HOME real de Android**.
-
-Al pulsar el botón Home, Android puede ofrecer `Mundo X` como pantalla principal
-predeterminada.
-
-Funciones actuales:
-
-- reloj y fecha;
-- HUD de RAM disponible/total;
-- temperatura de batería;
-- estado térmico;
-- indicador de Battery Saver;
-- cajón de aplicaciones;
-- búsqueda por nombre o paquete;
-- apertura directa de cualquier app;
-- pulsación larga para abrir la información de la app;
-- accesos directos a ajustes, Performance Launcher y Mundo X Lab.
-
-El launcher usa una interfaz deliberadamente ligera y no requiere root.
-
-Limitaciones:
-
-- no sustituye el kernel de Android;
-- no controla clocks CPU/GPU;
-- no modifica aplicaciones;
-- no elimina procesos ajenos;
-- no cambia permisos del sistema.
-
-Build verificado:
-
-```
-workflow: Build Mundo X Lab APK
-run: #42
-status: success
-commit: 60425ffffd6e5dd3e4868b0ae9e39b812f1251b1
-APK size: 1,059,117 bytes
-sha256: db094151347b039b0909eda9302557928b66a017286cbc436510c9dddd6fa1d0
-```
-
----
-
-# Internet state sync
-
-Mundo X ya incluye una primera capa de conexión real a Internet/red.
-
-Objetivo experimental:
-
-```
-no transmitir la escena completa
--> transmitir solo eventos / estado mínimo
--> reconstruir localmente
-```
-
-Android incluye ahora:
-
-- permiso `INTERNET`;
-- prueba HTTPS de conectividad;
-- cliente TCP;
-- conexión por host/IP + puerto;
-- salas lógicas;
-- nombre de dispositivo;
-- envío manual de eventos;
-- envío de la firma actual de Compact Core;
-- contadores de bytes TX/RX y PSS del proceso.
-
-La pantalla se abre desde:
-
-```
-OPEN MUNDO X INTERNET
-```
-
-El botón `SEND COMPACT STATE` transmite una línea compacta con:
-
-```
-step
-X/Z/Y density
-phase
-diagX/diagZ
-correlation
-hash
-state bytes
-```
-
-No transmite los 96,000 elementos renderizados.
-
-También existe un relay mínimo en:
-
-```
-tools/mundox_relay.py
-```
-
-Uso:
-
-```bash
+~~~bash
 python tools/mundox_relay.py
-```
+~~~
 
-El relay escucha por defecto en TCP `7777` y reenvía los mensajes únicamente a
-otros clientes de la misma sala.
+Arranca un relay de pruebas que escucha en el puerto `7777`. Úsalo solo en una red de confianza o un entorno aislado.
 
-Protocolo inicial:
+## Estructura del repositorio
 
-```
-JOIN <room> <device>
-STATE ...
-EVENT ...
-```
+~~~text
+mundo-X/
+├── native/
+│   ├── include/mundo_x/
+│   │   ├── dense_core.hpp            # statevector de referencia
+│   │   ├── compact_core.hpp          # estados estabilizadores compactos
+│   │   ├── exact_t_experiment.hpp    # T, reducción y diagnósticos
+│   │   ├── teleport.hpp              # teletransportación simulada
+│   │   └── xasm.hpp                  # intérprete .x
+│   └── src/main.cpp                  # ejecutable y comandos
+├── src/
+│   ├── quantum_core.py               # referencia PyTorch
+│   ├── bridge_x.py                   # codificador de modos
+│   └── transformer_x.py              # modelo neuronal
+├── experiments/                      # scripts y entrenamiento
+├── tests/                            # pruebas Python
+├── examples/                         # programas XASM
+├── app/                              # Android Lab: JNI, GPU, red, UI
+├── tools/mundox_relay.py             # relay TCP
+├── results/                           # resultados históricos
+├── docs/                              # explicaciones técnicas
+├── .github/workflows/                 # builds de Android y Windows
+├── CMakeLists.txt
+└── README.md
+~~~
 
-Esta primera versión no incluye cifrado ni autenticación y es solo para
-experimentos controlados. No debe usarse para enviar secretos.
+## Alcance, límites y próximos pasos
 
-Build Android verificado:
+### Qué está implementado y validado
 
-```
-workflow: Build Mundo X Lab APK
-run: #45
-status: success
-commit: d5c208ba5b134c95b823be5d7538f79568bafa03
-APK size: 1,059,257 bytes
-sha256: 8bc059a2fc1ebc60af205935049dce9be9dab2f679315714a996346b3c0e81bf
-```
+- Simulación compacta de circuitos Clifford/estabilizadores dentro de los casos probados.
+- Ejecución de experimentos no-Clifford con puerta T y comparación de fidelidad frente a una referencia densa pequeña.
+- Reducción **durante** la evolución de componentes equivalentes para circuitos Clifford+T definidos.
+- Protocolo de teletransportación de estados simulados, pruebas GHZ/cluster y un intérprete XASM.
+- Compilaciones Android y Windows, demos gráficas e integración de un estado compacto con GPU.
+
+### Qué no se ha demostrado todavía
+
+- Simulación eficiente de **todos** los estados cuánticos arbitrarios.
+- Eliminación general de la dependencia exponencial en el número de qubits.
+- Superioridad global frente a todos los simuladores cuánticos existentes.
+- Ventaja de **hardware cuántico**, uso de qubits físicos o una teoría física nueva.
+- Aceleración gráfica causada específicamente por efectos cuánticos.
+- Fiabilidad multi-dispositivo en red pública o un motor 3D de calidad comercial.
+- Una mejora medible de Compact Core gracias a Transformer X.
+
+### Próximas comprobaciones propuestas
+
+1. Crear circuitos Clifford+T adicionales, aleatorios y adversos; comparar resultados, tiempos y memoria con referencias independientes.
+2. Medir memoria **total del proceso**, carga lógica, número de componentes y costo de evolución por separado.
+3. Estudiar la estructura y el rango de los coeficientes cuando aumenta el número de qubits, sin asumir que siempre podrán factorizarse con bajo rango.
+4. Completar pruebas de dos dispositivos, corregir límites del generador urbano y seguir midiendo en hardware limitado.
+5. Entrenar y evaluar Transformer X con métricas reproducibles **antes** de decidir si debe integrarse al núcleo.
+6. Ampliar tests automatizados y detectar fallos con códigos de salida adecuados.
+
+La conclusión de cada prueba se conserva aunque el resultado sea negativo. Mundo X es **un proyecto de ingeniería y cálculo en evolución**: los componentes ya implementados no pierden su funcionalidad porque queden preguntas abiertas.
+
+## Registros técnicos y autoría
+
+- [Estado funcional más detallado — 2026-10-14](TESTED_FUNCTIONAL_STATUS_2026-10-14.md)
+- [Estado histórico preservado](PROJECT_STATUS_2026-10-14.md)
+- [Quantum Core v0.1 — fundamentos](docs/quantum_core_v0_1.md)
+- [Resultados cuánticos no-Clifford](results/exact_t_decomposition_2026-10-14.md)
+- [Historial de commits](../../commits/main)
+- [Compilaciones y resultados de CI](../../actions)
+
+**Mundo X es un proyecto concebido y dirigido por el titular del repositorio.** El historial Git documenta el desarrollo y las revisiones del código y de sus resultados.
+
+**Estado de distribución:** el código está visible en este repositorio, pero la presencia pública no significa que el proyecto se haya lanzado como producto terminado. En la raíz actual no se incluye un archivo `LICENSE`; no se declara aquí una licencia de reutilización ni se conceden permisos adicionales mediante este README.
 
 ---
 
-# Wild Rift low-end mode — Android
-
-Mundo X Lab incluye una capa de preparación para **League of Legends: Wild Rift**
-sin root y sin modificar archivos del juego.
-
-Paquete oficial detectado:
-
-```
-com.riotgames.league.wildrift
-```
-
-Funciones:
-
-- comprueba si Wild Rift está instalado;
-- lee RAM total y disponible;
-- detecta el flag de memoria baja de Android;
-- lee Battery Saver;
-- lee estado térmico cuando Android lo expone;
-- lee temperatura y nivel de batería;
-- genera un preset recomendado para hardware low-end;
-- abre Wild Rift mediante su Intent oficial;
-- cierra Mundo X ~1.2 s después del lanzamiento para liberar su propia RAM.
-
-El modo **no** modifica APK, archivos, memoria ni anti-cheat de Riot. Tampoco
-fuerza frecuencias de CPU/GPU ni cambia resolución de otra app, porque Android no
-permite esas acciones a una app normal sin privilegios especiales.
-
-Objetivo experimental:
-
-```
-preflight del teléfono
--> configuración gráfica recomendada
--> lanzar Wild Rift
--> Mundo X sale de memoria
-```
-
-Los benchmarks FPS/temperatura antes vs después se documentarán cuando se midan
-en un teléfono real.
-
----
-
-## Estado científico
-
-Mundo X corre actualmente sobre **hardware convencional** (CPU ARM64/x86_64).
-
-**Quantum Core y Compact Core simulan sistemas cuánticos.** La diferencia es que
-Quantum Core usa un statevector denso como referencia, mientras Compact Core usa
-una representación estructurada bit-packed para estados Clifford/estabilizadores,
-evitando materializar el vector completo de `2^n` amplitudes en esa familia.
-
-Todavía no se ha demostrado:
-
-- ventaja cuántica de hardware;
-- hardware cuántico físico propio;
-- eliminación general del crecimiento exponencial para estados arbitrarios;
-- superioridad general frente a todos los simuladores existentes;
-- una nueva teoría física.
-
-Eso no invalida el objetivo. Define exactamente qué falta demostrar.
-
-La hipótesis de trabajo de Mundo X es más limitada y comprobable:
-
-> **Para estados y problemas estructurados compatibles, Compact Core demuestra que
-> es posible representar y evolucionar el comportamiento cuántico relevante sin
-> materializar el statevector denso completo. El reto abierto es extender esa
-> eficiencia fuera de Clifford/estabilizadores sin perder corrección ni trasladar
-> el costo a otra estructura oculta.**
+**Mundo X — representar, transformar, verificar.**
