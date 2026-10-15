@@ -365,6 +365,34 @@ Java_com_mundox_lab_NativeCore_tReducedExperiment(JNIEnv* env, jclass,
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_magicWitness(JNIEnv* env, jclass) {
+  try {
+    const auto result = mundo_x::run_magic_state_witness();
+    return as_jstring(env, result.report);
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_tTraceVariant(JNIEnv* env, jclass,
+                                             jint qubits_in,
+                                             jint t_gates_in) {
+  try {
+    std::size_t qubits = static_cast<std::size_t>(qubits_in);
+    std::size_t t_gates = static_cast<std::size_t>(t_gates_in);
+    if (qubits < 4) qubits = 4;
+    if (qubits > 10) qubits = 10;
+    if (t_gates > 24) t_gates = 24;
+    const auto result =
+        mundo_x::run_reduced_growth_trace_variant(qubits, t_gates);
+    return as_jstring(env, result.report);
+  } catch (const std::exception& e) {
+    return as_jstring(env, std::string("ERROR: ") + e.what());
+  }
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_mundox_lab_NativeCore_teleport(JNIEnv* env, jclass) {
   try {
     const auto result = mundo_x::run_compact_teleportation();
