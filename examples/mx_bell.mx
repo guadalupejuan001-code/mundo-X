@@ -1,0 +1,13 @@
+# Mundo X v0.1: un circuito reutilizable sobre Compact Core.
+backend compact;
+qubits 2;
+
+circuit bell(a: qubit, b: qubit) {
+    h(a);
+    cx(a, b);
+}
+
+bell(q[0], q[1]);
+show;
+bytes;
+assert ghz;

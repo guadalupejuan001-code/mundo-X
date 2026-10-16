@@ -8,6 +8,8 @@ on:
       - 'native/**'
       - 'examples/**'
       - 'tests/native_tests.cpp'
+      - 'tests/mxlang_tests.cpp'
+      - 'tests/check_mx_cli.cmake'
       - 'CMakeLists.txt'
       - 'build.gradle'
       - 'settings.gradle'

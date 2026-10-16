@@ -7,6 +7,8 @@ on:
       - 'native/**'
       - 'examples/**'
       - 'tests/native_tests.cpp'
+      - 'tests/mxlang_tests.cpp'
+      - 'tests/check_mx_cli.cmake'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-x64.yml'
   workflow_dispatch:
@@ -55,6 +57,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist\examples | Out-Null
           Copy-Item build\Release\mundo_x.exe dist\mundo_x.exe
           Copy-Item examples\*.x dist\examples\
+          Copy-Item examples\*.mx dist\examples\
           @"
           MUNDO X - Windows 10 x64
 
@@ -63,6 +66,7 @@ jobs:
             mundo_x.exe bench 1000
             mundo_x.exe cluster 32 32
             mundo_x.exe run examples\bell.x
+            mundo_x.exe run-mx examples\mx_layers.mx
             mundo_x.exe practice 2
 
           This build targets Windows x64 and uses the native Compact Core runtime.
