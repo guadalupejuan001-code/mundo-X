@@ -6,6 +6,11 @@ on:
     paths:
       - 'app/**'
       - 'native/**'
+      - 'examples/**'
+      - 'tests/native_tests.cpp'
+      - 'tests/mxlang_tests.cpp'
+      - 'tests/check_mx_cli.cmake'
+      - 'CMakeLists.txt'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
@@ -70,6 +75,9 @@ jobs:
           ./native-build/mundo_x magic-witness
           echo "=== Independent gate-growth trace: 8 qubits / 12 T ==="
           ./native-build/mundo_x t-trace-variant 8 12
+
+      - name: Native core and XASM tests
+        run: ctest --test-dir native-build --output-on-failure
 
       - name: Install Android packages
         shell: bash

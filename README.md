@@ -2,7 +2,7 @@
 
 **Plataforma de computación basada en representaciones compactas, simulación cuántica por software y reconstrucción de información mediante reglas.**
 
-**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 14 de octubre de 2026.
+**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 16 de octubre de 2026.
 
 > **Principio de diseño:** representar y transformar lo necesario; no materializar todos los estados, ramas u objetos cuando su comportamiento puede obtenerse a partir de estructuras, relaciones y reglas de evolución.
 
@@ -138,7 +138,9 @@ No transporta materia ni transmite un qubit físico: es una simulación matemát
 
 **Archivo:** [`native/include/mundo_x/xasm.hpp`](native/include/mundo_x/xasm.hpp).
 
-Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Actualmente incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes` y comprobaciones `assert`. **La puerta T reducida se ejecuta desde el runtime nativo o el laboratorio Android, no desde XASM v0.1.**
+Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `cz`, `show`, `bytes` y comprobaciones `assert`.
+
+**XASM v0.2** añade el modo experimental `backend reduced`, declarado antes de `qubits`, para programar circuitos Clifford+T con `t <q>`. Conserva Compact Core como modo predeterminado. El modo reducido permite de 1 a 12 qubits y hasta 128 puertas T; `assert fidelity` y `assert norm` activan explícitamente la validación densa. `show` informa componentes y puertas T, y `bytes` identifica la carga lógica estimada; esa cifra no mide la RAM total. Consulta [sintaxis, límites y ejemplos de XASM v0.2](docs/xasm_v0_2.md).
 
 ~~~text
 qubits 2
@@ -149,9 +151,26 @@ bytes
 assert ghz
 ~~~
 
-Ejemplos reales: [`examples/hello.x`](examples/hello.x), [`examples/bell.x`](examples/bell.x), [`examples/ghz4.x`](examples/ghz4.x).
+Ejemplos reales: [`examples/hello.x`](examples/hello.x), [`examples/bell.x`](examples/bell.x), [`examples/ghz4.x`](examples/ghz4.x), [`examples/magic_t.x`](examples/magic_t.x), [`examples/clifford_t.x`](examples/clifford_t.x).
 
-### 6. Bridge X y Transformer X — aprendizaje sobre modos
+### 6. Lenguaje de alto nivel Mundo X — prototipo `.mx`
+
+El compilador [`mxlang.hpp`](native/include/mundo_x/mxlang.hpp) permite describir circuitos mediante constantes, expresiones, repeticiones y bloques reutilizables con parámetros de tipo `qubit` o `count`. Así se evita escribir manualmente cada instrucción. El comando `compile` genera XASM v0.2 y `run-mx` compila y ejecuta con los motores existentes; la compilación comprueba tipos, índices, límites y ubicaciones de origen antes de ejecutar.
+
+~~~text
+backend compact;
+qubits 2;
+circuit bell(a: qubit, b: qubit) {
+    h(a);
+    cx(a, b);
+}
+bell(q[0], q[1]);
+assert ghz;
+~~~
+
+La primera versión es un **lenguaje estático de circuitos**, con reglas documentadas y expansión acotada. Sus bloques se convierten en una secuencia XASM; no añade ejecución paralela ni nuevas operaciones matemáticas al motor. Consulta la [guía del lenguaje `.mx`](docs/mx_language_v0_1.md) y los ejemplos [`mx_bell.mx`](examples/mx_bell.mx), [`mx_magic.mx`](examples/mx_magic.mx) y [`mx_layers.mx`](examples/mx_layers.mx).
+
+### 7. Bridge X y Transformer X — aprendizaje sobre modos
 
 **Archivos:** [`src/bridge_x.py`](src/bridge_x.py), [`src/transformer_x.py`](src/transformer_x.py), [`experiments/train_file_v0_1.py`](experiments/train_file_v0_1.py).
 
@@ -256,9 +275,14 @@ git clone https://github.com/guadalupejuan001-code/mundo-X.git
 cd mundo-X
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
+ctest --test-dir build --output-on-failure
 
 ./build/mundo_x hello
 ./build/mundo_x run examples/bell.x
+./build/mundo_x run examples/magic_t.x
+./build/mundo_x run examples/clifford_t.x
+./build/mundo_x run-mx examples/mx_layers.mx
+./build/mundo_x compile examples/mx_bell.mx > bell_generated.x
 ./build/mundo_x bench 24 --dense
 ./build/mundo_x cluster 4 4 --dense
 ./build/mundo_x cluster 32 32
@@ -278,7 +302,10 @@ Con MSVC, CMake y un entorno de compilación configurado:
 ~~~powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 .\build\Release\mundo_x.exe hello
+.\build\Release\mundo_x.exe run examples\magic_t.x
+.\build\Release\mundo_x.exe run-mx examples\mx_bell.mx
 .\build\Release\mundo_x.exe teleport
 .\build\Release\mundo_x.exe t-reduced-experiment 8 64
 ~~~
@@ -329,7 +356,8 @@ mundo-X/
 │   │   ├── compact_core.hpp          # estados estabilizadores compactos
 │   │   ├── exact_t_experiment.hpp    # T, reducción y diagnósticos
 │   │   ├── teleport.hpp              # teletransportación simulada
-│   │   └── xasm.hpp                  # intérprete .x
+│   │   ├── xasm.hpp                  # intérprete .x
+│   │   └── mxlang.hpp                # compilador de alto nivel .mx → .x
 │   └── src/main.cpp                  # ejecutable y comandos
 ├── src/
 │   ├── quantum_core.py               # referencia PyTorch
@@ -337,7 +365,7 @@ mundo-X/
 │   └── transformer_x.py              # modelo neuronal
 ├── experiments/                      # scripts y entrenamiento
 ├── tests/                            # pruebas Python
-├── examples/                         # programas XASM
+├── examples/                         # programas XASM y fuente .mx
 ├── app/                              # Android Lab: JNI, GPU, red, UI
 ├── tools/mundox_relay.py             # relay TCP
 ├── results/                           # resultados históricos
