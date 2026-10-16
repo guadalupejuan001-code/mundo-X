@@ -400,8 +400,15 @@ La conclusión de cada prueba se conserva aunque el resultado sea negativo. Mund
 
 La ruta opcional `AdaptivePhaseCore` ejecuta fases de ángulo general, conserva
 estados producto y pasa al motor reducido cuando aparece entrelazamiento.
-El sumador de 50 qubits de la comparación se ejecutó y validó; la ventaja
-medida se limita a las cargas documentadas. También se publicó un caso con
-superposición donde Aer fue más rápido.
+La transición predeterminada transfiere el estado ya calculado, sin guardar
+ni repetir todas las puertas anteriores. La reproducción original sigue
+disponible mediante `adaptive-replay`.
 
-[Uso, pruebas, resultados y límites](docs/phase-engine.md).
+En el sumador de 50 qubits, la carga lógica del motor producto es ahora de
+1.600 bytes. Se verificaron 131 circuitos por las tres rutas (393 ejecuciones)
+y otras 16 entradas de 50 qubits. Esta funcionalidad nativa aún no está
+conectada a la interfaz Android.
+
+[Transferencia de estado, resultados y límites](docs/state-transfer.md).
+Los [resultados de la primera versión](docs/phase-engine.md) se conservan
+identificados por su revisión.

@@ -14,25 +14,31 @@ namespace mundo_x {
 
 // Optional front end for circuits with arbitrary phases. Product states are
 // kept as one two-amplitude vector per qubit. A genuinely entangling operation
-// replays the original gate history into ReducedExactTRepresentation. It never
+// transfers that product state into ReducedExactTRepresentation. It never
 // infers the answer from an adder or assumes particular register values.
 //
 // A small local rank-one residual is permitted to absorb floating point noise.
 // This tolerance is explicit; the sum of accepted residuals is reported. It is
-// not a rigorous bound on all floating point error. Fallback replays all original
-// gates, so accepted product approximations do not enter the reduced state.
+// not a rigorous bound on all floating point error. Transfer keeps the accepted
+// product approximations and their residual report. Replay remains available
+// explicitly when reconstruction from the original gates is desired.
 class AdaptivePhaseCore {
  public:
   using Complex = std::complex<double>;
   using Pair = std::array<Complex, 2>;
+  enum class Transition { Transfer, Replay };
 
   explicit AdaptivePhaseCore(std::size_t n, double product_tolerance = 1e-14,
-                             std::size_t max_components = 65536)
-      : n_(n), tolerance_(product_tolerance), max_components_(max_components) {
+                             std::size_t max_components = 65536,
+                             Transition transition = Transition::Transfer)
+      : n_(n), tolerance_(product_tolerance), max_components_(max_components),
+        transition_(transition) {
     if (n == 0 || n > 63) throw std::invalid_argument("supports 1..63 qubits");
     if (!std::isfinite(tolerance_) || tolerance_ < 0. || tolerance_ > 1e-8)
       throw std::invalid_argument("invalid product tolerance");
     if (max_components_ == 0) throw std::invalid_argument("zero component limit");
+    if (transition_ != Transition::Transfer && transition_ != Transition::Replay)
+      throw std::invalid_argument("invalid transition policy");
     product_.assign(n, Pair{Complex{1., 0.}, Complex{0., 0.}});
   }
 
@@ -41,6 +47,9 @@ class AdaptivePhaseCore {
   double product_residual_sum() const { return residual_sum_; }
   std::size_t gate_count() const { return gate_count_; }
   std::size_t fallback_count() const { return reduced_ ? 1 : 0; }
+  std::size_t history_gate_count() const { return history_.size(); }
+  std::size_t replayed_gate_count() const { return replayed_gates_; }
+  std::size_t transferred_qubit_count() const { return transferred_qubits_; }
   std::size_t component_count() const { return reduced_ ? reduced_->component_count() : 1; }
   std::size_t peak_component_count() const { return peak_components_; }
   std::size_t logical_payload_bytes() const {
@@ -129,23 +138,34 @@ class AdaptivePhaseCore {
       throw std::length_error("reduced component budget exceeded; no result available");
     }
   }
-  void fallback() {
-    auto candidate = std::make_unique<ReducedExactTRepresentation>(n_);
-    for (const auto& g : history_) {
-      apply_reduced(*candidate, g);
+  void fallback(const Gate& current) {
+    std::unique_ptr<ReducedExactTRepresentation> candidate;
+    if (transition_ == Transition::Transfer) {
+      candidate = std::make_unique<ReducedExactTRepresentation>(
+          ReducedExactTRepresentation::from_product(product_, max_components_));
       check_components(*candidate);
+      apply_reduced(*candidate, current);
+      check_components(*candidate);
+      transferred_qubits_ = n_;
+    } else {
+      candidate = std::make_unique<ReducedExactTRepresentation>(n_);
+      for (const auto& g : history_) {
+        apply_reduced(*candidate, g);
+        check_components(*candidate);
+      }
+      replayed_gates_ = history_.size();
+      residual_sum_ = 0.;
     }
     reduced_ = std::move(candidate);
     std::vector<Pair>().swap(product_);
     std::vector<Gate>().swap(history_);
-    residual_sum_ = 0.;
   }
   void single(const Gate& g) {
     check(g.a);
     if (reduced_) {
       apply_reduced(*reduced_, g); check_components(*reduced_); ++gate_count_; return;
     }
-    history_.push_back(g);
+    if (transition_ == Transition::Replay) history_.push_back(g);
     auto& p = product_[g.a];
     switch (g.op) {
       case 'H': {
@@ -168,7 +188,7 @@ class AdaptivePhaseCore {
     if (reduced_) {
       apply_reduced(*reduced_, g); check_components(*reduced_); ++gate_count_; return;
     }
-    history_.push_back(g);
+    if (transition_ == Transition::Replay) history_.push_back(g);
     const auto& a = product_[g.a];
     const auto& b = product_[g.b];
     std::array<Complex, 4> v{a[0]*b[0], a[0]*b[1], a[1]*b[0], a[1]*b[1]};
@@ -192,8 +212,8 @@ class AdaptivePhaseCore {
       product_[g.a] = control; product_[g.b] = target;
       residual_sum_ += relative_error;
     } else {
-      try { fallback(); }
-      catch (...) { history_.pop_back(); throw; }
+      try { fallback(g); }
+      catch (...) { failed_ = true; throw; }
     }
     ++gate_count_;
   }
@@ -202,6 +222,8 @@ class AdaptivePhaseCore {
   double tolerance_, residual_sum_ = 0.;
   bool failed_ = false;
   std::size_t max_components_, gate_count_ = 0, peak_components_ = 1;
+  Transition transition_;
+  std::size_t replayed_gates_ = 0, transferred_qubits_ = 0;
   std::vector<Pair> product_;
   std::vector<Gate> history_;
   std::unique_ptr<ReducedExactTRepresentation> reduced_;

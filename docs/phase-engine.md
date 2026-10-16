@@ -11,14 +11,20 @@ representación, sin expandir el vector de amplitudes.
 qubit mientras el estado sea producto. Cada puerta de dos qubits se aplica
 primero a sus cuatro amplitudes; se comprueba si el resultado sigue siendo
 separable. Si aparece entrelazamiento por encima de la tolerancia, se
-reproduce el historial original en el motor reducido. No se reconoce una
+transfiere el estado producto al motor reducido. La reproducción del historial
+original queda disponible como `adaptive-replay`. No se reconoce una
 suma por su nombre ni se sustituye el circuito por aritmética clásica.
 
 Los motores anteriores permanecen disponibles. El nuevo ejecutable es
 `mundo_x_phase`; esta ampliación no cambia automáticamente el motor de la
 interfaz Android.
 
-## Resultado y decisión
+La [transferencia de estado](state-transfer.md) documenta la implementación
+actual y sus comprobaciones. Los resultados de las secciones siguientes son
+históricos: corresponden a `40a9c8215fbe3e0bdc7a1242b3f9a982344d8d4e`, antes
+de eliminar el historial de la ruta producto predeterminada.
+
+## Resultado y decisión de la primera versión
 
 Se conserva la ruta opcional: pasó la prueba principal, superó el umbral
 de mejora del 15% frente a Aer MPS y las cinco cargas anteriores quedaron
@@ -81,8 +87,10 @@ El rival no tuvo límite impuesto a la dimensión de enlace.
 La ruta producto admite un residuo relativo local de factorización de
 `1e-14`, para absorber ruido de coma flotante. Es una tolerancia explícita;
 `product_residual_sum()` informa la suma de residuos aceptados. No es una
-cota rigurosa de todo el error numérico. Si la ruta pasa al motor reducido,
-reproduce las puertas originales y descarta las aproximaciones producto.
+cota rigurosa de todo el error numérico. En `adaptive-replay`, pasar al motor
+reducido reproduce las puertas originales y descarta las aproximaciones
+producto. En `adaptive`, la transferencia conserva las amplitudes calculadas
+y el registro de sus residuos aceptados; no borra ese historial de error.
 
 El motor reducido no poda componentes por ser pequeños. La ruta adaptativa
 usa por defecto un presupuesto de 65.536 componentes, comprobado al final
@@ -111,6 +119,9 @@ La salida es JSON con tiempos, observables ordenados X/Y/Z por qubit,
 modo usado, norma y carga lógica. El argumento final `dump` añade todas
 las amplitudes para circuitos pequeños. `reduced` selecciona directamente
 el motor de cosets para diagnóstico; no es la ruta rápida del ensayo grande.
+`adaptive-replay` conserva la transición anterior. Los contadores
+`history_gates`, `replayed_gates` y `transferred_qubits` explican qué transición
+ocurrió. La validación actual ejecuta tres rutas: 393 comprobaciones.
 
 Pruebas independientes, con Python 3.12 y `tests/phase_requirements.txt`:
 

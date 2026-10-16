@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -24,6 +25,18 @@ class DenseCore {
   std::size_t amplitudes() const { return state_.size(); }
   std::size_t state_bytes() const { return state_.size() * sizeof(Complex); }
   const std::vector<Complex>& state() const { return state_; }
+
+  // Small-circuit reference initialization; does not normalize or drop phases.
+  void initialize_product(
+      const std::vector<std::array<std::complex<double>, 2>>& product) {
+    if (product.size() != n_) throw std::invalid_argument("product size mismatch");
+    for (std::size_t i = 0; i < state_.size(); ++i) {
+      std::complex<double> value{1., 0.};
+      for (std::size_t q = 0; q < n_; ++q) value *= product[q][(i >> q) & 1U];
+      state_[i] = Complex{static_cast<float>(value.real()),
+                          static_cast<float>(value.imag())};
+    }
+  }
 
   void hadamard(std::size_t q) {
     check(q);

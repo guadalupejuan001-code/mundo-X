@@ -1,0 +1,174 @@
+{
+  "previous_commit": "40a9c8215fbe3e0bdc7a1242b3f9a982344d8d4e",
+  "scope": "Mundo X only; initialization, evolution and local XYZ readout",
+  "memory_note": "Logical engine payload, not allocator capacity, runner circuit, or process RSS",
+  "cases": [
+    {
+      "case": "adder50",
+      "qubits": 50,
+      "gates": 1000,
+      "repetitions": 35,
+      "previous_median_us": 46.118,
+      "current_median_us": 42.322,
+      "previous_logical_bytes": 33600,
+      "current_logical_bytes": 1600,
+      "previous_components": 1,
+      "current_components": 1,
+      "transferred_qubits": 0,
+      "replayed_gates": 0,
+      "max_observable_difference": 0,
+      "legacy_replay_difference": 0,
+      "norm_error": 1.021405182655144e-13
+    },
+    {
+      "case": "superposed_adder12",
+      "qubits": 12,
+      "gates": 66,
+      "repetitions": 7,
+      "previous_median_us": 2524.291,
+      "current_median_us": 2002.838,
+      "previous_logical_bytes": 7846,
+      "current_logical_bytes": 7150,
+      "previous_components": 128,
+      "current_components": 128,
+      "transferred_qubits": 12,
+      "replayed_gates": 0,
+      "max_observable_difference": 7.980389172278286e-16,
+      "legacy_replay_difference": 0.0,
+      "norm_error": 3.1086244689504383e-15
+    },
+    {
+      "case": "ghz50",
+      "qubits": 50,
+      "gates": 50,
+      "repetitions": 7,
+      "previous_median_us": 7362.043,
+      "current_median_us": 7018.032,
+      "previous_logical_bytes": 1482,
+      "current_logical_bytes": 1476,
+      "previous_components": 1,
+      "current_components": 1,
+      "transferred_qubits": 50,
+      "replayed_gates": 0,
+      "max_observable_difference": 0,
+      "legacy_replay_difference": 0,
+      "norm_error": 4.440892098500626e-16
+    },
+    {
+      "case": "late_transfer50",
+      "qubits": 50,
+      "gates": 10003,
+      "repetitions": 3,
+      "previous_median_us": 326997.891,
+      "current_median_us": 6667.202,
+      "previous_logical_bytes": 140950,
+      "current_logical_bytes": 938,
+      "previous_components": 2,
+      "current_components": 2,
+      "transferred_qubits": 50,
+      "replayed_gates": 0,
+      "max_observable_difference": 2.2482016248643138e-15,
+      "legacy_replay_difference": 0.0,
+      "norm_error": 8.260059303211165e-14
+    }
+  ],
+  "basis_inputs": [
+    {
+      "a": 16886238,
+      "b": 26526223,
+      "sum_mod_25": 9858029,
+      "error": 9.42055475210265e-16
+    },
+    {
+      "a": 10742799,
+      "b": 21232662,
+      "sum_mod_25": 31975461,
+      "error": 7.850462293418877e-16
+    },
+    {
+      "a": 27412731,
+      "b": 26762261,
+      "sum_mod_25": 20620560,
+      "error": 5.289997179028338e-16
+    },
+    {
+      "a": 21019816,
+      "b": 16687540,
+      "sum_mod_25": 4152924,
+      "error": 3.14018491736755e-16
+    },
+    {
+      "a": 1789937,
+      "b": 7109030,
+      "sum_mod_25": 8898967,
+      "error": 4.293576322493524e-16
+    },
+    {
+      "a": 15803806,
+      "b": 6556682,
+      "sum_mod_25": 22360488,
+      "error": 3.24086897059953e-16
+    },
+    {
+      "a": 17257892,
+      "b": 24362309,
+      "sum_mod_25": 8065769,
+      "error": 3.998382286590535e-16
+    },
+    {
+      "a": 1040043,
+      "b": 33553075,
+      "sum_mod_25": 1038686,
+      "error": 8.201999831289198e-16
+    },
+    {
+      "a": 7009198,
+      "b": 18085375,
+      "sum_mod_25": 25094573,
+      "error": 4.997770564273196e-16
+    },
+    {
+      "a": 6111705,
+      "b": 10107420,
+      "sum_mod_25": 16219125,
+      "error": 4.997222863121305e-16
+    },
+    {
+      "a": 19886360,
+      "b": 28715047,
+      "sum_mod_25": 15046975,
+      "error": 4.119470363754748e-16
+    },
+    {
+      "a": 6066843,
+      "b": 5528618,
+      "sum_mod_25": 11595461,
+      "error": 4.768032847304882e-16
+    },
+    {
+      "a": 12733805,
+      "b": 5506783,
+      "sum_mod_25": 18240588,
+      "error": 5.20790520910658e-16
+    },
+    {
+      "a": 13892925,
+      "b": 32925467,
+      "sum_mod_25": 13263960,
+      "error": 7.850462293418873e-16
+    },
+    {
+      "a": 31741575,
+      "b": 1705973,
+      "sum_mod_25": 33447548,
+      "error": 9.979378741141725e-16
+    },
+    {
+      "a": 16109240,
+      "b": 32761065,
+      "sum_mod_25": 15315873,
+      "error": 5.595361107714228e-16
+    }
+  ],
+  "all_passed": true
+}

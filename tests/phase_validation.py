@@ -57,7 +57,7 @@ def main():
             v = reference.get_vector()
             expected = expected_paulis(v,n)
             write_program(program,n,gates)
-            for backend in ("adaptive","reduced"):
+            for backend in ("adaptive","adaptive-replay","reduced"):
                 run=subprocess.run([args.runner,str(program),backend,"1","dump"],text=True,capture_output=True,timeout=20)
                 if run.returncode: raise RuntimeError((name,backend,run.stderr))
                 r=json.loads(run.stdout)

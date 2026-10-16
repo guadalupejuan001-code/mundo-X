@@ -44,11 +44,11 @@ void array(const std::vector<double>& values) {
 int main(int argc, char** argv) {
   try {
     if (argc < 3 || argc > 5)
-      throw std::invalid_argument("usage: mundo_x_phase PROGRAM adaptive|reduced [REPS] [dump]");
+      throw std::invalid_argument("usage: mundo_x_phase PROGRAM adaptive|adaptive-replay|reduced [REPS] [dump]");
     const std::string backend = argv[2];
     const int reps = argc >= 4 ? std::stoi(argv[3]) : 1;
     const bool dump = argc == 5 && std::string(argv[4]) == "dump";
-    if (reps < 1 || (backend != "adaptive" && backend != "reduced"))
+    if (reps < 1 || (backend != "adaptive" && backend != "adaptive-replay" && backend != "reduced"))
       throw std::invalid_argument("invalid backend or repetitions");
     std::ifstream input(argv[1]);
     std::size_t n;
@@ -77,8 +77,10 @@ int main(int argc, char** argv) {
     for (int rep = (reps > 1 ? -3 : 0); rep < reps; ++rep) {
       adaptive.reset(); reduced.reset();
       const auto start = Clock::now();
-      if (backend == "adaptive") {
-        adaptive = std::make_unique<mundo_x::AdaptivePhaseCore>(n);
+      if (backend != "reduced") {
+        using Core = mundo_x::AdaptivePhaseCore;
+        adaptive = std::make_unique<Core>(n, 1e-14, 65536,
+            backend == "adaptive-replay" ? Core::Transition::Replay : Core::Transition::Transfer);
         for (const auto& g : gates) apply(*adaptive, g);
       } else {
         reduced = std::make_unique<mundo_x::ReducedExactTRepresentation>(n);
@@ -101,6 +103,9 @@ int main(int argc, char** argv) {
               << "\",\"qubits\":" << n << ",\"gates\":" << gates.size()
               << ",\"product\":" << (adaptive && adaptive->is_product() ? "true" : "false")
               << ",\"product_residual_sum\":" << (adaptive ? adaptive->product_residual_sum() : 0.)
+              << ",\"history_gates\":" << (adaptive ? adaptive->history_gate_count() : 0)
+              << ",\"replayed_gates\":" << (adaptive ? adaptive->replayed_gate_count() : 0)
+              << ",\"transferred_qubits\":" << (adaptive ? adaptive->transferred_qubit_count() : 0)
               << ",\"components\":" << (adaptive ? adaptive->component_count() : reduced->component_count())
               << ",\"peak_components\":" << (adaptive ? adaptive->peak_component_count() : peak_components)
               << ",\"logical_payload_bytes\":" << (adaptive ? adaptive->logical_payload_bytes() : reduced->logical_payload_bytes())

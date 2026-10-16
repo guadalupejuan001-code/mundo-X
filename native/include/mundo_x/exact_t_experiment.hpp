@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -446,6 +448,8 @@ struct ExactTExperimentResult {
 
 class ReducedExactTRepresentation {
  public:
+  using ProductPair = std::array<std::complex<double>, 2>;
+
   struct PauliKey {
     std::uint64_t x = 0;
     std::uint64_t z = 0;
@@ -470,6 +474,67 @@ class ReducedExactTRepresentation {
     components_[PauliKey{}] = {1.0, 0.0};
   }
 
+  // Import an already evolved product state, including its complex phase and
+  // norm. Pick a local Pauli eigenbasis to avoid expanding stabilizer products.
+  // Only exactly zero coefficients are omitted: there is no magnitude cutoff.
+  static ReducedExactTRepresentation from_product(
+      const std::vector<ProductPair>& product,
+      std::size_t max_components = 65536) {
+    if (max_components == 0) throw std::invalid_argument("zero component limit");
+    ReducedExactTRepresentation out(product.size());
+    const std::complex<double> imaginary{0., 1.};
+    const double scale = 1. / std::sqrt(2.);
+    for (std::size_t q = 0; q < product.size(); ++q) {
+      const auto a = product[q][0], b = product[q][1];
+      const double norm = std::norm(a) + std::norm(b);
+      if (!std::isfinite(a.real()) || !std::isfinite(a.imag()) ||
+          !std::isfinite(b.real()) || !std::isfinite(b.imag()) ||
+          !std::isfinite(norm) || !(norm > 0.))
+        throw std::invalid_argument("invalid product amplitudes");
+      const std::array<ProductPair, 3> candidates{{
+          {a, b}, {(a+b)*scale, (a-b)*scale},
+          {(a-imaginary*b)*scale, (a+imaginary*b)*scale}}};
+      auto count = [](const ProductPair& p) {
+        return std::size_t(p[0] != std::complex<double>{}) +
+               std::size_t(p[1] != std::complex<double>{});
+      };
+      std::size_t axis = 0;
+      for (std::size_t candidate = 1; candidate < candidates.size(); ++candidate)
+        if (count(candidates[candidate]) < count(candidates[axis])) axis = candidate;
+      const auto& coefficients = candidates[axis];
+      const auto branches = count(coefficients);
+      if (branches == 0) throw std::invalid_argument("underflowed product amplitudes");
+      if (out.components_.size() > max_components / branches)
+        throw std::length_error("product transfer exceeds reduced component budget");
+      if (axis != 0) {
+        const ExactExperimentGate h{ExactExperimentOp::H, out.narrow(q), 0};
+        out.update_base(h); out.base_circuit_.push_back(h);
+      }
+      if (axis == 2) {
+        const ExactExperimentGate s{ExactExperimentOp::S, out.narrow(q), 0};
+        out.update_base(s); out.base_circuit_.push_back(s);
+      }
+      ComponentMap next;
+      next.reserve(out.components_.size() * branches);
+      const auto mask = std::uint64_t{1} << q;
+      for (const auto& entry : out.components_) {
+        if (coefficients[0] != std::complex<double>{})
+          next.emplace(entry.first, entry.second * coefficients[0]);
+        if (coefficients[1] != std::complex<double>{}) {
+          auto flipped = entry.first;
+          if (axis == 0) flipped.x |= mask;
+          else flipped.z |= mask;
+          next.emplace(flipped, entry.second * coefficients[1]);
+        }
+      }
+      out.components_ = std::move(next);
+    }
+    // The full-vector reference is unavailable above 23 qubits; only retain
+    // the seed where that existing validation interface can actually use it.
+    if (product.size() < 24) out.reference_product_ = product;
+    return out;
+  }
+
   std::size_t qubits() const { return n_; }
   std::size_t t_count() const { return t_count_; }
   std::size_t component_count() const { return components_.size(); }
@@ -481,7 +546,8 @@ class ReducedExactTRepresentation {
                (sizeof(PauliKey) + sizeof(std::complex<double>)) +
            circuit_.size() * sizeof(ExactExperimentGate) +
            base_circuit_.size() * sizeof(ExactExperimentGate) +
-           phase_angles_.size() * sizeof(double);
+           phase_angles_.size() * sizeof(double) +
+           reference_product_.size() * sizeof(ProductPair);
   }
 
   void hadamard(std::size_t q) {
@@ -616,6 +682,7 @@ class ReducedExactTRepresentation {
   std::vector<std::complex<double>> dense_reference() const {
     ensure_dense_safe();
     DenseCore dense(n_);
+    if (!reference_product_.empty()) dense.initialize_product(reference_product_);
     std::size_t phase_index = 0;
     for (const auto& gate : circuit_) {
       if (gate.op == ExactExperimentOp::P)
@@ -1103,6 +1170,7 @@ class ReducedExactTRepresentation {
   std::vector<ExactExperimentGate> circuit_;
   std::vector<ExactExperimentGate> base_circuit_;
   std::vector<double> phase_angles_;
+  std::vector<ProductPair> reference_product_;
 };
 
 
