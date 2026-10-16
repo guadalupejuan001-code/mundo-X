@@ -78,6 +78,16 @@ class DenseCore {
     }
   }
 
+  void phase(std::size_t q, double theta) {
+    check(q);
+    if (!std::isfinite(theta)) throw std::invalid_argument("non-finite phase");
+    const auto bit = std::size_t{1} << q;
+    const Complex factor{static_cast<float>(std::cos(theta)),
+                         static_cast<float>(std::sin(theta))};
+    for (std::size_t i = 0; i < state_.size(); ++i)
+      if (i & bit) state_[i] *= factor;
+  }
+
   void controlled_z(std::size_t a, std::size_t b) {
     check(a);
     check(b);

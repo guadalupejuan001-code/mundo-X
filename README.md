@@ -394,3 +394,14 @@ La conclusión de cada prueba se conserva aunque el resultado sea negativo. Mund
 ---
 
 **Mundo X — representar, transformar, verificar.**
+
+
+## Fases generales y sumador de 50 qubits
+
+La ruta opcional `AdaptivePhaseCore` ejecuta fases de ángulo general, conserva
+estados producto y pasa al motor reducido cuando aparece entrelazamiento.
+El sumador de 50 qubits de la comparación se ejecutó y validó; la ventaja
+medida se limita a las cargas documentadas. También se publicó un caso con
+superposición donde Aer fue más rápido.
+
+[Uso, pruebas, resultados y límites](docs/phase-engine.md).

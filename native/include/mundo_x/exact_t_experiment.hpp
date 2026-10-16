@@ -45,6 +45,7 @@ enum class ExactExperimentOp : std::uint8_t {
   CX,
   CZ,
   T,
+  P,  // arbitrary phase; angle stored separately by ReducedExactTRepresentation
 };
 
 struct ExactExperimentGate {
@@ -369,6 +370,8 @@ class ExactTExperiment {
       case ExactExperimentOp::CX: dense.cnot(gate.a, gate.b); break;
       case ExactExperimentOp::CZ: dense.controlled_z(gate.a, gate.b); break;
       case ExactExperimentOp::T: dense.phase_t(gate.a); break;
+      case ExactExperimentOp::P:
+        throw std::logic_error("arbitrary phase requires its angle log");
     }
   }
 
@@ -477,7 +480,8 @@ class ReducedExactTRepresentation {
            components_.size() *
                (sizeof(PauliKey) + sizeof(std::complex<double>)) +
            circuit_.size() * sizeof(ExactExperimentGate) +
-           base_circuit_.size() * sizeof(ExactExperimentGate);
+           base_circuit_.size() * sizeof(ExactExperimentGate) +
+           phase_angles_.size() * sizeof(double);
   }
 
   void hadamard(std::size_t q) {
@@ -540,10 +544,84 @@ class ReducedExactTRepresentation {
     ++t_count_;
   }
 
+  // P(theta) = (1+exp(i theta))/2 I + (1-exp(i theta))/2 Z.
+  // This preserves the existing Pauli-coset representation and does not
+  // approximate theta with a Clifford+T synthesis or discard components.
+  void phase(std::size_t q, double theta) {
+    check(q);
+    if (!std::isfinite(theta)) throw std::invalid_argument("non-finite phase");
+    const std::complex<double> e{std::cos(theta), std::sin(theta)};
+    const auto alpha = (std::complex<double>{1., 0.} + e) * .5;
+    const auto beta = (std::complex<double>{1., 0.} - e) * .5;
+    const auto basis = stabilizer_basis();
+    ComponentMap next;
+    next.reserve(std::min<std::size_t>(
+        std::size_t{1} << std::min<std::size_t>(n_, 20),
+        components_.size() * 2 + 1));
+    for (const auto& entry : components_) {
+      const Pauli p{entry.first.x, entry.first.z, 0};
+      accumulate(next, p, entry.second * alpha, basis);
+      accumulate(next, multiply(pauli_z_op(q), p), entry.second * beta, basis);
+    }
+    // Reserve log entries before changing the state (allocation failure safety).
+    if (circuit_.size() == circuit_.capacity())
+      circuit_.reserve(std::max<std::size_t>(1, circuit_.capacity() * 2));
+    if (phase_angles_.size() == phase_angles_.capacity())
+      phase_angles_.reserve(std::max<std::size_t>(1, phase_angles_.capacity() * 2));
+    components_ = std::move(next);
+    circuit_.push_back({ExactExperimentOp::P, narrow(q), 0});
+    phase_angles_.push_back(theta);
+  }
+
+  void controlled_phase(std::size_t control, std::size_t target, double theta) {
+    check(control); check(target);
+    if (control == target) throw std::invalid_argument("control == target");
+    if (!std::isfinite(theta)) throw std::invalid_argument("non-finite phase");
+    phase(control, theta * .5);
+    phase(target, theta * .5);
+    cnot(control, target);
+    phase(target, -theta * .5);
+    cnot(control, target);
+  }
+
+  // Different canonical cosets of a pure stabilizer are orthogonal. These
+  // queries operate on the represented state without expanding 2^n amplitudes.
+  double coefficient_norm_squared() const {
+    double norm = 0.;
+    for (const auto& entry : components_) norm += std::norm(entry.second);
+    return norm;
+  }
+
+  double pauli_expectation(char axis, std::size_t q) const {
+    check(q);
+    Pauli observable;
+    if (axis == 'X') observable = pauli_x_op(q);
+    else if (axis == 'Y') observable = pauli_y_op(q);
+    else if (axis == 'Z') observable = pauli_z_op(q);
+    else throw std::invalid_argument("axis must be X, Y or Z");
+    const auto basis = stabilizer_basis();
+    std::complex<double> value{0., 0.};
+    for (const auto& entry : components_) {
+      const Pauli p{entry.first.x, entry.first.z, 0};
+      const auto acted = canonicalize(multiply(observable, p), basis);
+      const auto found = components_.find(PauliKey{acted.x, acted.z});
+      if (found != components_.end())
+        value += std::conj(found->second) * entry.second * phase_unit(acted.phase);
+    }
+    const double norm = coefficient_norm_squared();
+    if (!(norm > 0.)) throw std::runtime_error("zero state norm");
+    return value.real() / norm;
+  }
+
   std::vector<std::complex<double>> dense_reference() const {
     ensure_dense_safe();
     DenseCore dense(n_);
-    for (const auto& gate : circuit_) apply_dense_gate(dense, gate);
+    std::size_t phase_index = 0;
+    for (const auto& gate : circuit_) {
+      if (gate.op == ExactExperimentOp::P)
+        dense.phase(gate.a, phase_angles_.at(phase_index++));
+      else apply_dense_gate(dense, gate);
+    }
     return to_double_state(dense.state());
   }
 
@@ -900,7 +978,8 @@ class ReducedExactTRepresentation {
         }
         break;
       case ExactExperimentOp::T:
-        throw std::logic_error("T is not Clifford");
+      case ExactExperimentOp::P:
+        throw std::logic_error("non-Clifford phase");
     }
     return p;
   }
@@ -926,7 +1005,8 @@ class ReducedExactTRepresentation {
       case ExactExperimentOp::CZ:
         break;
       case ExactExperimentOp::T:
-        throw std::logic_error("T is not Clifford");
+      case ExactExperimentOp::P:
+        throw std::logic_error("non-Clifford phase");
     }
     return p;
   }
@@ -949,7 +1029,8 @@ class ReducedExactTRepresentation {
       case ExactExperimentOp::CX: base_.cnot(gate.a, gate.b); break;
       case ExactExperimentOp::CZ: base_.controlled_z(gate.a, gate.b); break;
       case ExactExperimentOp::T:
-        throw std::logic_error("T cannot update stabilizer base");
+      case ExactExperimentOp::P:
+        throw std::logic_error("non-Clifford phase cannot update stabilizer base");
     }
   }
 
@@ -981,6 +1062,8 @@ class ReducedExactTRepresentation {
       case ExactExperimentOp::CX: dense.cnot(gate.a, gate.b); break;
       case ExactExperimentOp::CZ: dense.controlled_z(gate.a, gate.b); break;
       case ExactExperimentOp::T: dense.phase_t(gate.a); break;
+      case ExactExperimentOp::P:
+        throw std::logic_error("arbitrary phase requires its angle log");
     }
   }
 
@@ -1019,6 +1102,7 @@ class ReducedExactTRepresentation {
   ComponentMap components_;
   std::vector<ExactExperimentGate> circuit_;
   std::vector<ExactExperimentGate> base_circuit_;
+  std::vector<double> phase_angles_;
 };
 
 

@@ -1,0 +1,4 @@
+numpy==2.3.5
+qiskit==2.6.0
+qiskit-aer==0.17.2
+qulacs==0.6.14
