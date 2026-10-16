@@ -1,0 +1,153 @@
+name: Build and test Mundo X Ecos APK
+
+on:
+  push:
+    branches: [codex/quantum-echo-android]
+    paths:
+      - 'echoes/**'
+      - 'native/**'
+      - 'scripts/echo_android_smoke.py'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/quantum-echo-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quantum-echo-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Test native observable engine and quantum echo
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git rev-parse HEAD > dist/SOURCE_COMMIT.txt
+          for test in sparse_observable_test quantum_echo_test; do
+            g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Inative/include "native/tests/${test}.cpp" -o "$RUNNER_TEMP/$test"
+            "$RUNNER_TEMP/$test" 2>&1 | tee "dist/${test}.log"
+          done
+
+      - name: Install Android packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Build standalone debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace :echoes:assembleDebug 2>&1 | tee dist/android-build.log
+          cp echoes/build/outputs/apk/debug/echoes-debug.apk dist/Mundo-X-Ecos-debug.apk
+          sha256sum dist/Mundo-X-Ecos-debug.apk > dist/SHA256SUMS.txt
+
+      - name: Verify package, signature, ABIs and 16 KB alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Mundo-X-Ecos-debug.apk | tee dist/apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -v -c -P 16 4 dist/Mundo-X-Ecos-debug.apk > dist/apk-zipalign.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Mundo-X-Ecos-debug.apk > dist/apk-badging.txt
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import tempfile
+          import zipfile
+
+          badging = Path('dist/apk-badging.txt').read_text()
+          assert "package: name='com.mundox.echoes'" in badging, badging
+          assert "application-label:'Mundo X Ecos'" in badging, badging
+          assert "sdkVersion:'26'" in badging, badging
+          readelf = Path(os.environ['ANDROID_HOME']) / 'ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf'
+          report = []
+          with zipfile.ZipFile('dist/Mundo-X-Ecos-debug.apk') as apk, tempfile.TemporaryDirectory() as tmp:
+              names = apk.namelist()
+              for abi in ('arm64-v8a', 'x86_64'):
+                  assert f'lib/{abi}/libmundox_echoes.so' in names, f'Missing JNI library for {abi}'
+                  for name in names:
+                      if not name.startswith(f'lib/{abi}/') or not name.endswith('.so'):
+                          continue
+                      path = Path(apk.extract(name, tmp))
+                      headers = subprocess.check_output([str(readelf), '-lW', str(path)], text=True)
+                      loads = [line.split() for line in headers.splitlines() if re.match(r'\s*LOAD\s', line)]
+                      assert loads and all(int(fields[-1], 16) >= 16384 for fields in loads), (name, headers)
+                      report.append(f'{name}: LOAD alignment >= 16384 bytes')
+          Path('dist/apk-elf-alignment.txt').write_text('\n'.join(report) + '\n')
+          print('\n'.join(report))
+          PY
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install, run and verify the echo on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          heap-size: 256M
+          disk-size: 2048M
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
+          script: python3 scripts/echo_android_smoke.py
+
+      - name: Upload Android APK
+        if: always() && hashFiles('dist/Mundo-X-Ecos-debug.apk') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-Ecos-Android
+          path: |
+            dist/Mundo-X-Ecos-debug.apk
+            dist/SHA256SUMS.txt
+            dist/SOURCE_COMMIT.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload validation and Android diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-Ecos-validation
+          path: |
+            dist/*.log
+            dist/*.txt
+            dist/*.json
+            dist/*.xml
+            dist/*.png
+          if-no-files-found: warn
+          retention-days: 30
