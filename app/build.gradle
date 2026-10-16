@@ -16,7 +16,7 @@ android {
         targetSdk 35
         versionCode vmTestBuild ? 2 : 1
         versionName vmTestBuild ? '0.2.0-vm-prototype' : '0.1.0'
-        manifestPlaceholders = [appLabel: vmTestBuild ? 'Mundo X VM' : 'Mundo X Lab']
+        resValue 'string', 'app_name', vmTestBuild ? 'Mundo X VM' : 'Mundo X Lab'
 
         ndk {
             if (vmTestBuild) {
