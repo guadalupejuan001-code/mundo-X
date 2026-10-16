@@ -49,6 +49,15 @@ public class MainActivity extends Activity {
         root.addView(text("MUNDO X LAB", 28, true));
         root.addView(text("Quantum Core • Compact Core • Android native lab", 14, false));
 
+        Button basisVm = button("PROBAR MÁQUINA MUNDO X");
+        basisVm.setContentDescription("Abrir máquina Mundo X");
+        basisVm.setTextColor(Color.rgb(9, 15, 27));
+        basisVm.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                Color.rgb(120, 240, 196)));
+        basisVm.setOnClickListener(v ->
+                startActivity(new Intent(this, BasisVmActivity.class)));
+        root.addView(basisVm);
+
         Button quantumInterface = button("OPEN QUANTUM INTERFACE");
         quantumInterface.setOnClickListener(v ->
                 startActivity(new Intent(this, QuantumInterfaceActivity.class)));

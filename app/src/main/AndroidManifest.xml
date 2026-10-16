@@ -12,9 +12,13 @@
 
     <application
         android:allowBackup="true"
-        android:label="Mundo X Lab"
+        android:label="${appLabel}"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity
+            android:name=".BasisVmActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity android:name=".QuantumInterfaceActivity" android:screenOrientation="portrait" />
         <activity android:name=".VisualExperimentActivity" android:screenOrientation="portrait" />
         <activity android:name=".GpuVisualActivity" android:screenOrientation="portrait" />

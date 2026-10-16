@@ -15,3 +15,6 @@ target_include_directories(
 )
 
 target_compile_options(mundox PRIVATE -O3 -Wall -Wextra -Wpedantic)
+
+# NDK 27: allow the native library to load on 4 KB and 16 KB Android devices.
+target_link_options(mundox PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,-z,common-page-size=16384")

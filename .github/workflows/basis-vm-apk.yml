@@ -1,0 +1,277 @@
+name: Build and test Mundo X VM APK
+
+on:
+  push:
+    branches: [codex/basis-vm-android]
+    paths:
+      - 'app/**'
+      - 'native/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/basis-vm-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: basis-vm-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Test native basis VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git rev-parse HEAD > dist/source-commit.txt
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Inative/include native/tests/basis_vm_test.cpp -o "$RUNNER_TEMP/basis_vm_test"
+          "$RUNNER_TEMP/basis_vm_test" --exhaustive 2>&1 | tee dist/native-vm-test.log
+
+      - name: Install Android packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Build independent debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace -PvmTestBuild=true :app:assembleDebug 2>&1 | tee dist/android-build.log
+          cp app/build/outputs/apk/debug/app-debug.apk dist/Mundo-X-VM-debug.apk
+          sha256sum dist/Mundo-X-VM-debug.apk > dist/SHA256SUMS.txt
+
+      - name: Verify package, signature, ABIs and 16 KB alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/Mundo-X-VM-debug.apk | tee dist/apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -v -c -P 16 4 dist/Mundo-X-VM-debug.apk > dist/apk-zipalign.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/Mundo-X-VM-debug.apk > dist/apk-badging.txt
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import tempfile
+          import zipfile
+
+          badging = Path('dist/apk-badging.txt').read_text()
+          assert "package: name='com.mundox.lab.vmtest'" in badging, badging
+          assert "application-label:'Mundo X VM'" in badging, badging
+          readelf = Path(os.environ['ANDROID_HOME']) / 'ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf'
+          report = []
+          with zipfile.ZipFile('dist/Mundo-X-VM-debug.apk') as apk, tempfile.TemporaryDirectory() as tmp:
+              names = apk.namelist()
+              for abi in ('arm64-v8a', 'x86_64'):
+                  assert f'lib/{abi}/libmundox.so' in names, f'Missing JNI library for {abi}'
+                  for name in names:
+                      if not name.startswith(f'lib/{abi}/') or not name.endswith('.so'):
+                          continue
+                      path = Path(apk.extract(name, tmp))
+                      headers = subprocess.check_output([str(readelf), '-lW', str(path)], text=True)
+                      loads = [line.split() for line in headers.splitlines() if re.match(r'\s*LOAD\s', line)]
+                      assert loads and all(int(fields[-1], 16) >= 16384 for fields in loads), (name, headers)
+                      report.append(f'{name}: LOAD alignment >= 16384 bytes')
+          Path('dist/apk-elf-alignment.txt').write_text('\n'.join(report) + '\n')
+          print('\n'.join(report))
+          PY
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Prepare Android UI smoke test
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/basis_vm_smoke.py" <<'PY'
+          import json
+          from pathlib import Path
+          import re
+          import subprocess
+          import time
+          import xml.etree.ElementTree as ET
+
+          dist = Path('dist')
+          package = 'com.mundox.lab.vmtest'
+          outcome = {'status': 'running', 'package': package, 'steps': []}
+          width, height = 1080, 1920
+
+          def adb(*args, timeout=30):
+              result = subprocess.run(['adb', *args], text=True, capture_output=True, timeout=timeout, check=True)
+              return result.stdout
+
+          def dump_ui():
+              adb('shell', 'uiautomator', 'dump', '/sdcard/basis-vm-window.xml')
+              xml = adb('exec-out', 'cat', '/sdcard/basis-vm-window.xml')
+              dist.joinpath('android-ui.xml').write_text(xml)
+              return ET.fromstring(xml)
+
+          def wait_node(description, contains=None, enabled=False, seconds=60):
+              deadline = time.monotonic() + seconds
+              last_problem = ''
+              missing = 0
+              while time.monotonic() < deadline:
+                  visible_target = False
+                  try:
+                      tree = dump_ui()
+                      for node in tree.iter('node'):
+                          if description is not None and node.get('content-desc') != description:
+                              continue
+                          if description is None and contains not in node.get('text', ''):
+                              continue
+                          bounds = list(map(int, re.findall(r'\d+', node.get('bounds', ''))))
+                          if len(bounds) != 4:
+                              continue
+                          x1, y1, x2, y2 = bounds
+                          if x2 <= x1 or y2 <= y1 or not (0 <= (x1 + x2) // 2 < width and 0 <= (y1 + y2) // 2 < height):
+                              continue
+                          visible_target = True
+                          if enabled and node.get('enabled') != 'true':
+                              continue
+                          if contains is not None and contains not in node.get('text', ''):
+                              continue
+                          return node
+                  except (subprocess.SubprocessError, ET.ParseError) as exc:
+                      last_problem = str(exc)
+                  if not visible_target:
+                      # Both screens are scrollable. Search downward, then
+                      # upward, without assuming editor/result card placement.
+                      upward = (missing // 5) % 2 == 1
+                      y_from, y_to = int(height * .78), int(height * .28)
+                      if upward:
+                          y_from, y_to = y_to, y_from
+                      adb('shell', 'input', 'swipe', str(width // 2), str(y_from),
+                          str(width // 2), str(y_to), '300')
+                      missing += 1
+                  time.sleep(1)
+              raise AssertionError(f'UI node not ready: {description}; required text={contains!r}; {last_problem}')
+
+          def tap(node):
+              coordinates = list(map(int, re.findall(r'\d+', node.get('bounds', ''))))
+              assert len(coordinates) == 4, node.attrib
+              x1, y1, x2, y2 = coordinates
+              assert x2 > x1 and y2 > y1, node.attrib
+              adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
+
+          def capture(name):
+              screenshot = subprocess.check_output(['adb', 'exec-out', 'screencap', '-p'], timeout=30)
+              dist.joinpath(name + '.png').write_bytes(screenshot)
+              tree = dump_ui()
+              dist.joinpath(name + '.xml').write_bytes(ET.tostring(tree, encoding='utf-8'))
+
+          try:
+              outcome['device'] = {
+                  'sdk': adb('shell', 'getprop', 'ro.build.version.sdk').strip(),
+                  'abi': adb('shell', 'getprop', 'ro.product.cpu.abi').strip(),
+                  'page_size': adb('shell', 'getconf', 'PAGE_SIZE').strip(),
+              }
+              adb('logcat', '-c')
+              outcome['install'] = adb('install', '-r', 'dist/Mundo-X-VM-debug.apk')
+              sizes = re.findall(r'(\d+)x(\d+)', adb('shell', 'wm', 'size'))
+              if sizes:
+                  width, height = map(int, sizes[-1])
+              adb('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
+              adb('shell', 'wm', 'dismiss-keyguard')
+              adb('shell', 'am', 'force-stop', package)
+              outcome['launch'] = adb('shell', 'am', 'start', '-W', '-n', package + '/com.mundox.lab.MainActivity')
+              tap(wait_node('Abrir máquina Mundo X', enabled=True))
+              outcome['steps'].append('Opened private VM activity through the app button')
+              tap(wait_node('Ejecutar programa', enabled=True))
+              outcome['steps'].append('Executed the default sum 1..10 program through Java/JNI')
+              node = wait_node('Resultado de la máquina', contains='PASS · Resultado verificado', seconds=120)
+              outcome['program'] = {'title': node.get('text')}
+              output = wait_node('Salida del programa').get('text', '').strip()
+              outcome['program']['output'] = output
+              assert output == '55', f'Expected sum 55, received {output!r}'
+              capture('android-sum')
+              tap(wait_node('Comprobar motor', enabled=True))
+              outcome['steps'].append('Executed the native VM self-tests through Java/JNI')
+              node = wait_node('Resultado de la máquina', contains='PASS · Pruebas completadas', seconds=120)
+              detail = wait_node(None, contains='23 de 23 pruebas correctas.').get('text', '')
+              outcome['self_tests'] = {'title': node.get('text'), 'detail': detail, 'passed': 23, 'total': 23}
+              capture('android-self-tests')
+              assert adb('shell', 'pidof', package).strip(), 'App process is not running'
+              outcome['status'] = 'passed'
+          except BaseException as exc:
+              outcome['status'] = 'failed'
+              outcome['error'] = str(exc)
+              raise
+          finally:
+              dist.joinpath('android-smoke.json').write_text(json.dumps(outcome, indent=2, ensure_ascii=False) + '\n')
+              try:
+                  dist.joinpath('android-logcat.txt').write_text(adb('logcat', '-d', '-v', 'threadtime'))
+                  screenshot = subprocess.check_output(['adb', 'exec-out', 'screencap', '-p'], timeout=30)
+                  dist.joinpath('android-smoke.png').write_bytes(screenshot)
+                  dump_ui()
+              except Exception as exc:
+                  dist.joinpath('android-capture-error.txt').write_text(str(exc))
+              print(json.dumps(outcome, ensure_ascii=False))
+          PY
+
+      - name: Install, launch and execute the VM on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          heap-size: 256M
+          disk-size: 2048M
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
+          script: python3 "$RUNNER_TEMP/basis_vm_smoke.py"
+
+      - name: Upload VM APK
+        if: always() && hashFiles('dist/Mundo-X-VM-debug.apk') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-VM-APK
+          path: |
+            dist/Mundo-X-VM-debug.apk
+            dist/SHA256SUMS.txt
+            dist/source-commit.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload validation and Android diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-VM-validation
+          path: |
+            dist/*.log
+            dist/*.txt
+            dist/*.json
+            dist/*.xml
+            dist/*.png
+          if-no-files-found: warn
+          retention-days: 30

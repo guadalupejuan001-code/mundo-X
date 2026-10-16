@@ -17,4 +17,7 @@ public final class NativeCore {
     public static native String cluster(int rows, int cols, boolean includeDense);
     public static native String practice(int qubits, String script);
     public static native float[] quantumVisualStep(int touchQubit, boolean reset);
+    public static native String basisVmRun(String source, int maxSteps);
+    public static native String basisVmSelfTest();
+    public static native String basisVmExample(int example);
 }

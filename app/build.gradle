@@ -2,20 +2,28 @@ plugins {
     id 'com.android.application'
 }
 
+// A separate, installable prototype alongside an existing Mundo X Lab install.
+def vmTestBuild = project.findProperty('vmTestBuild') == 'true'
+
 android {
     namespace 'com.mundox.lab'
     compileSdk 35
     ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId 'com.mundox.lab'
+        applicationId vmTestBuild ? 'com.mundox.lab.vmtest' : 'com.mundox.lab'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.1.0'
+        versionCode vmTestBuild ? 2 : 1
+        versionName vmTestBuild ? '0.2.0-vm-prototype' : '0.1.0'
+        manifestPlaceholders = [appLabel: vmTestBuild ? 'Mundo X VM' : 'Mundo X Lab']
 
         ndk {
-            abiFilters 'arm64-v8a'
+            if (vmTestBuild) {
+                abiFilters 'arm64-v8a', 'x86_64'
+            } else {
+                abiFilters 'arm64-v8a'
+            }
         }
 
         externalNativeBuild {
