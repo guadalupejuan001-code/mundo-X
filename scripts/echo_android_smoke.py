@@ -135,6 +135,9 @@ def main():
         OUTCOME["echo"] = {"title": result.get("text", "")}
         OUTCOME["echo"]["detail"] = wait_node("Detalle del resultado").get("text", "")
         OUTCOME["echo"]["signal_z"] = wait_node("Señal Z").get("text", "")
+        # Version-one defaults have an independently checked signal of -1/2.
+        signal = float(OUTCOME["echo"]["signal_z"])
+        assert abs(signal + 0.5) <= 1e-6, f"Unexpected default echo signal: {signal}"
         OUTCOME["steps"].append("Ran the default experiment through Java/JNI with dense verification")
         capture("android-echo-verified")
 
@@ -144,6 +147,7 @@ def main():
             "title": result.get("text", ""),
             "detail": wait_node("Detalle del resultado").get("text", ""),
         }
+        assert "13 de 13 pruebas correctas." in OUTCOME["self_tests"]["detail"], OUTCOME["self_tests"]
         OUTCOME["steps"].append("Ran native self-tests through Java/JNI")
         capture("android-self-tests")
 
