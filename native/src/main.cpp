@@ -255,9 +255,16 @@ static int run_program(const std::string& path) {
 
     std::cout << "XASM program=" << path << "\n";
     std::cout << "qubits=" << result.qubits
-              << " instructions=" << result.instructions
-              << " state_bytes=" << result.state_bytes
-              << " ms=" << std::fixed << std::setprecision(3) << ms << "\n";
+              << " instructions=" << result.instructions;
+    if (result.backend == "reduced") {
+      std::cout << " backend=reduced"
+                << " components=" << result.components
+                << " t_gates=" << result.t_gates
+                << " logical_payload_bytes=" << result.logical_payload_bytes;
+    } else {
+      std::cout << " state_bytes=" << result.state_bytes;
+    }
+    std::cout << " ms=" << std::fixed << std::setprecision(3) << ms << "\n";
     std::cout << result.output;
 
     return result.assertions_passed ? 0 : 1;

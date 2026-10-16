@@ -6,6 +6,7 @@ on:
     paths:
       - 'native/**'
       - 'examples/**'
+      - 'tests/native_tests.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-x64.yml'
   workflow_dispatch:
@@ -25,6 +26,12 @@ jobs:
       - name: Build
         shell: pwsh
         run: cmake --build build --config Release --parallel 2
+
+      - name: Native core and XASM tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Smoke tests
         shell: pwsh
