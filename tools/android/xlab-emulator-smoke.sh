@@ -35,7 +35,7 @@ timeout 240 "$ADB" shell am instrument -w \
 run_status=${PIPESTATUS[0]}
 set -e
 "$ADB" logcat -d > ui-evidence/logcat.txt
-"$ADB" pull /sdcard/Android/data/com.mundox.lab.xlab.test/files/. ui-evidence/ || true
+"$ADB" pull /sdcard/Android/data/com.mundox.lab.xlab/files/. ui-evidence/ || true
 [[ "$run_status" == 0 ]]
 rg -q 'INSTRUMENTATION_CODE: -1' ui-evidence/instrumentation.txt
 if rg -q 'INSTRUMENTATION_RESULT: tests_failed=[1-9]' ui-evidence/instrumentation.txt; then

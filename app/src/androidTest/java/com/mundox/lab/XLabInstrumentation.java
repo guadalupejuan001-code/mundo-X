@@ -398,7 +398,7 @@ public final class XLabInstrumentation extends Instrumentation {
         SystemClock.sleep(100L);
         Bitmap bitmap = getUiAutomation().takeScreenshot();
         if (bitmap == null) throw new AssertionError("Screenshot unavailable: " + name);
-        File directory = getContext().getExternalFilesDir(null);
+        File directory = getTargetContext().getExternalFilesDir(null);
         if (directory == null) throw new AssertionError("Screenshot directory unavailable");
         if (!directory.isDirectory() && !directory.mkdirs()) {
             throw new AssertionError("Cannot create screenshot directory");
