@@ -1,0 +1,15 @@
+INSTRUMENTATION_STATUS: stream=
+PASS objects_1048576_visible_and_actual_routes_match
+
+INSTRUMENTATION_STATUS: test=objects_1048576_visible_and_actual_routes_match
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: diagnostic_notes=Global UiAutomation screenshot intentionally skipped for 1,048,576 objects: avoid compositor load; actual GL visibility, framebuffer readback and transforms are mandatory.
+INSTRUMENTATION_RESULT: failures=
+INSTRUMENTATION_RESULT: screenshots=
+INSTRUMENTATION_RESULT: stream=
+XLab: 1 passed, 0 failed.
+
+
+INSTRUMENTATION_RESULT: tests_failed=0
+INSTRUMENTATION_RESULT: tests_passed=1
+INSTRUMENTATION_CODE: -1
