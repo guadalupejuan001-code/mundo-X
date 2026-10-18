@@ -775,8 +775,10 @@ public final class XLabInstrumentation extends Instrumentation {
             float maximumDistance, long deadline) {
         ObjectSceneRenderer.Stats value = null;
         while (SystemClock.uptimeMillis() < deadline) {
-            value = latestObjects();
-            if (value.count == count && value.spatialCulling == culling && value.frames >= minimumFrame
+            // Publishing a new scene clears the prior snapshot until its
+            // revision reaches the GL thread. That is a pending state.
+            value = main(() -> (ObjectSceneRenderer.Stats) privateField(activity, "latest"));
+            if (value != null && value.count == count && value.spatialCulling == culling && value.frames >= minimumFrame
                     && value.cameraDistance <= maximumDistance && !value.drawSuspended
                     && "visible".equals(value.visibility) && !value.benchmarking) return value;
             if ("error".equals(description("objects_status")))
@@ -800,16 +802,21 @@ public final class XLabInstrumentation extends Instrumentation {
     }
 
     private void awaitObjectEdits(int count, int edits, int selectedId, long deadline) {
+        ObjectSceneRenderer.Stats value = null;
         while (SystemClock.uptimeMillis() < deadline) {
-            ObjectSceneRenderer.Stats value = latestObjects();
-            if (value.count == count && value.edits == edits && value.selectedId == selectedId
+            // Each edit deliberately invalidates latest. Wait for a fresh
+            // matching revision instead of treating that transition as failure.
+            value = main(() -> (ObjectSceneRenderer.Stats) privateField(activity, "latest"));
+            if (value != null && value.count == count && value.edits == edits && value.selectedId == selectedId
                     && !value.drawSuspended && "visible".equals(value.visibility)) return;
             if ("error".equals(description("objects_status")))
                 throw new AssertionError("Edited scene failed: " + text("objects_result"));
             SystemClock.sleep(75L);
         }
         throw new AssertionError("Edited scene did not become visible with count=" + count
-                + ", edits=" + edits + ", selectedId=" + selectedId);
+                + ", edits=" + edits + ", selectedId=" + selectedId + "; last="
+                + (value == null ? "none" : value.count + "/" + value.edits + "/"
+                        + value.selectedId + "/" + value.visibility));
     }
 
     private static JSONObject drawStatsJson(ObjectSceneRenderer.Stats value) throws Exception {
