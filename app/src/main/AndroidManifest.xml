@@ -20,6 +20,7 @@
         <activity android:name=".QuantumInterfaceActivity" android:screenOrientation="portrait" />
         <activity android:name=".VisualExperimentActivity" android:screenOrientation="portrait" />
         <activity android:name=".GpuVisualActivity" android:screenOrientation="portrait" />
+        <activity android:name=".ObjectLabActivity" android:screenOrientation="unspecified" />
         <activity android:name=".ProceduralGameDemoActivity" android:screenOrientation="landscape" />
         <activity android:name=".PerformanceLauncherActivity" android:screenOrientation="portrait" />
         <activity android:name=".InternetSyncActivity" android:screenOrientation="portrait" />

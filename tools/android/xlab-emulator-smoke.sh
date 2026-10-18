@@ -36,10 +36,10 @@ done
 "$ADB" shell settings put global window_animation_scale 0
 "$ADB" shell settings put global transition_animation_scale 0
 "$ADB" shell settings put global animator_duration_scale 0
-"$ADB" install -r ui-apks/XLab-0.2.0-debug.apk
+"$ADB" install -r ui-apks/XLab-0.3.0-debug.apk
 "$ADB" install -r ui-apks/XLab-instrumentation.apk
 set +e
-timeout 240 "$ADB" shell am instrument -w -r \
+timeout 300 "$ADB" shell am instrument -w -r \
   com.mundox.lab.xlab.test/com.mundox.lab.XLabInstrumentation \
   | tee ui-evidence/instrumentation.txt
 run_status=${PIPESTATUS[0]}

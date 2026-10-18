@@ -112,6 +112,10 @@ public final class XLabActivity extends Activity {
         LinearLayout masthead = row();
         TextView brand = text("MUNDO X   /   LAB", 16, LIME, true);
         masthead.addView(brand, weighted());
+        Button objects = tagged(button("Objetos ↗", false), "open_objects");
+        objects.setTextSize(11);
+        objects.setOnClickListener(v -> startActivity(new Intent(this, ObjectLabActivity.class)));
+        masthead.addView(objects);
         Button legacy = button("Anterior ↗", false);
         legacy.setTextSize(11);
         legacy.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));

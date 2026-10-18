@@ -191,6 +191,94 @@ public final class XLabInstrumentation extends Instrumentation {
                 click("tab_mesa");
                 requireTag("run_circuit");
             });
+
+            check("object_model_independent_checks", () -> {
+                ObjectSceneModelChecks.Result result = ObjectSceneModelChecks.runAll();
+                require(result.passed >= 400, result.summary);
+            });
+
+            check("objects_open_edits_and_persistence", () -> {
+                ActivityMonitor monitor = addMonitor("com.mundox.lab.ObjectLabActivity", null, false);
+                try {
+                    click("open_objects");
+                    Activity opened = waitForMonitorWithTimeout(monitor, DEADLINE_MS);
+                    require(opened != null, "Objects entry did not open its activity");
+                    activity = opened;
+                } finally { removeMonitor(monitor); }
+                waitForIdleSync(); awaitState("objects_status", "ready");
+                select("objects_count", 0); setText("objects_seed", "-2147483648"); click("objects_new");
+                click("objects_clear"); setText("objects_id", "528"); click("objects_select"); click("objects_raise");
+                require(text("objects_selected").contains("1 cambios"), "Object edit was not recorded");
+                main(() -> { activity.finish(); return null; }); waitForIdleSync();
+                Intent relaunch = new Intent(Intent.ACTION_MAIN);
+                relaunch.setComponent(new ComponentName(getTargetContext(), "com.mundox.lab.ObjectLabActivity"));
+                relaunch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity = startActivitySync(relaunch); waitForIdleSync(); awaitState("objects_status", "ready");
+                require(text("objects_selected").contains("1 cambios"), "Edits did not survive activity replacement");
+                require("-2147483648".equals(text("objects_seed")), "Signed seed did not persist");
+                click("objects_scatter"); click("objects_scatter");
+                require(text("objects_selected").contains("513 cambios"), "Repeated +256 did not add new sparse changes");
+            });
+
+            check("objects_gpu_image_equivalence_and_edit_effect", () -> {
+                click("objects_clear"); click("objects_verify"); awaitReady("objects_status", "objects_result");
+                JSONObject baseline = requireNativeJson("objects_result");
+                require(baseline.getBoolean("passed") && baseline.getInt("covered_pixels") > 32,
+                        "Image A/B must render real object coverage");
+                click("objects_scatter"); click("objects_verify"); awaitReady("objects_status", "objects_result");
+                JSONObject edited = requireNativeJson("objects_result");
+                require(edited.getBoolean("passed"), "Edited procedural/explicit scene differs");
+                require(!baseline.getString("hash_fnv64").equals(edited.getString("hash_fnv64")),
+                        "Sparse edits did not change the rendered image");
+                screenshot("xlab-objetos.png");
+                // A second signed boundary exercises GLSL uint seed transfer.
+                setText("objects_seed", "2147483647"); click("objects_new"); click("objects_scatter");
+                click("objects_verify"); awaitReady("objects_status", "objects_result");
+                require(requireNativeJson("objects_result").getBoolean("passed"), "Positive signed-boundary GPU seed mismatch");
+            });
+
+            check("objects_benchmark_cancel_and_recovery", () -> {
+                click("objects_benchmark"); awaitDescriptionContains("objects_stats", "benchmarking=true");
+                click("objects_stop"); awaitState("objects_status", "cancelled");
+                click("objects_verify"); awaitReady("objects_status", "objects_result");
+                require(requireNativeJson("objects_result").getBoolean("passed"), "GPU check failed after benchmark cancellation");
+            });
+
+            check("objects_benchmark_both_routes", () -> {
+                click("objects_benchmark"); awaitReady("objects_status", "objects_result");
+                JSONObject measurement = requireNativeJson("objects_result");
+                require("completed".equals(measurement.getString("status")), "Benchmark did not complete");
+                for (String route : new String[]{"procedural", "explicit"}) {
+                    JSONObject sample = measurement.getJSONObject(route);
+                    require(sample.getInt("samples") >= 5, "Missing real frame samples for " + route);
+                    require(sample.getDouble("p50_ms") > 0 && sample.getDouble("p95_ms") >= sample.getDouble("p50_ms"),
+                            "Invalid frame distribution for " + route);
+                }
+                saveEvidence("xlab-objetos-benchmark.json", measurement.toString(2));
+            });
+
+            check("objects_extreme_cancel_restores_scene", () -> {
+                String priorSeed = text("objects_seed"), priorEdits = text("objects_selected");
+                click("objects_extreme"); awaitDescriptionContains("objects_stats", "benchmarking=true");
+                click("objects_stop"); awaitState("objects_status", "cancelled");
+                require(priorSeed.equals(text("objects_seed")), "Scale campaign changed the user's seed");
+                require(priorEdits.equals(text("objects_selected")), "Scale campaign did not restore the user's edits");
+                JSONObject scale = requireNativeJson("objects_result");
+                require("cancelled".equals(scale.getString("status")), "Scale cancellation was not exported");
+            });
+
+            check("objects_extreme_automatic_limits_and_restore", () -> {
+                String prior = text("objects_selected");
+                click("objects_extreme");
+                awaitStateUntil("objects_status", "ready", SystemClock.uptimeMillis() + 75_000L);
+                JSONObject scale = requireNativeJson("objects_result");
+                require("progressive_scale".equals(scale.getString("type")), "Missing scale report");
+                require(scale.getJSONArray("stages").length() > 0, "No actual scale stage was measured");
+                require(scale.getLong("elapsed_ms") < 70_000L, "Scale duration was not bounded");
+                require(prior.equals(text("objects_selected")), "Automatic scale did not restore edits");
+                saveEvidence("xlab-objetos-escala.json", scale.toString(2));
+                screenshot("xlab-objetos-escala.png");
+            });
         } catch (Throwable error) {
             recordFailure("launch_or_runner", error);
         } finally {
@@ -310,6 +398,24 @@ public final class XLabInstrumentation extends Instrumentation {
 
     private void awaitState(String statusTag, String expected) {
         awaitStateUntil(statusTag, expected, SystemClock.uptimeMillis() + DEADLINE_MS);
+    }
+
+    private void awaitDescriptionContains(String tag, String expected) {
+        long deadline = SystemClock.uptimeMillis() + DEADLINE_MS;
+        while (SystemClock.uptimeMillis() < deadline) {
+            String description = main(() -> String.valueOf(find(tag).getContentDescription()));
+            if (description.contains(expected)) return;
+            SystemClock.sleep(75L);
+        }
+        throw new AssertionError("Timed out waiting for " + tag + " to contain " + expected);
+    }
+
+    private void saveEvidence(String name, String content) throws Exception {
+        File directory = getTargetContext().getExternalFilesDir(null);
+        if (directory == null) throw new AssertionError("Evidence directory unavailable");
+        try (FileOutputStream stream = new FileOutputStream(new File(directory, name))) {
+            stream.write(content.getBytes("UTF-8"));
+        }
     }
 
     private void awaitStateUntil(String statusTag, String expected, long deadline) {
