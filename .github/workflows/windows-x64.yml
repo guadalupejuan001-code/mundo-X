@@ -30,7 +30,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force compiler-check | Out-Null
+          git fetch --depth=1 origin f6c5614e110e4e99b4e69466bb9d5e0abe4abdb8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git show f6c5614e110e4e99b4e69466bb9d5e0abe4abdb8:native/tests/reduced_optimization.cpp | Set-Content -Encoding utf8 compiler-check/original.cpp
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           @'
           cmake_minimum_required(VERSION 3.16)
           project(reduced_compiler_check LANGUAGES CXX)
