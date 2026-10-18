@@ -22,4 +22,9 @@ public final class NativeCore {
     public static native String labMemoryRun(int budgetMiB, int qubits, int family);
     public static native String labMemoryProgress();
     public static native void labMemoryCancel();
+    public static native long microCreate(long seed);
+    public static native void microDestroy(long handle);
+    public static native String microCommand(long handle, int op, int a, int b, float x, float y);
+    public static native int microFrame(long handle, int steps, java.nio.ByteBuffer vertices);
+    public static native String microSnapshot(long handle);
 }

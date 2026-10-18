@@ -134,6 +134,7 @@ void rejection_transaction() {
   bounded.hadamard(0);
   bounded.cnot(0, 1);
   bounded.hadamard(2);
+  bounded.phase_t(2);  // An X eigenstate would not require a merge for CX.
   const auto before = bounded.dense_state();
   const auto partition = bounded.block_partition();
   throws<std::length_error>([&] { bounded.cnot(1, 2); }, "block budget rejects");

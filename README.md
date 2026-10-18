@@ -70,6 +70,15 @@ casos examinados y conservó productos de diez millones de qubits con unos
 el informe registra también límites, falsos negativos de separación y costos.
 El controlador incluido en aquel registro y su comando fueron retirados.
 
+**Estructura y estabilidad del 18 de octubre:** [corrección de uniones innecesarias y escala de factores](results/factorized_structure_2026-10-18.md).
+FactorizedCore reconoce destinos independientes que no se entrelazan bajo CX/CZ
+y equilibra separaciones verificadas mediante potencias de dos reversibles.
+Un circuito producto de 20 qubits pasa de 16 MiB a 640 bytes de amplitudes;
+el mismo patrón completa 100.000 qubits. La regresión que fallaba en la pareja
+1.074 completa 8.191 separaciones, comprobadas también reteniendo el otro lado.
+Estos resultados corresponden a las familias documentadas y no eliminan el
+crecimiento exponencial de los bloques generales. No se añaden filtros ni poda.
+
 ## Índice
 
 - [Principio y arquitectura](#principio-y-arquitectura)
