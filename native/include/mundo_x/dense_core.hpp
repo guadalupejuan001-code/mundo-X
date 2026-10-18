@@ -4,18 +4,26 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 namespace mundo_x {
 
-class DenseCore {
+template <typename Real>
+class BasicDenseCore {
  public:
-  using Complex = std::complex<float>;
+  static_assert(std::is_floating_point<Real>::value, "floating point precision required");
+  using Complex = std::complex<Real>;
 
-  explicit DenseCore(std::size_t qubits) : n_(qubits) {
-    if (qubits == 0 || qubits >= 63) throw std::invalid_argument("invalid qubit count");
+  explicit BasicDenseCore(std::size_t qubits) : n_(qubits) {
+    if (qubits == 0 || qubits >= 63 ||
+        qubits >= std::numeric_limits<std::size_t>::digits)
+      throw std::invalid_argument("invalid qubit count");
     const std::size_t dim = std::size_t{1} << qubits;
+    if (dim > state_.max_size())
+      throw std::length_error("dense state dimension exceeds addressable capacity");
     state_.assign(dim, Complex{0.0f, 0.0f});
     state_[0] = Complex{1.0f, 0.0f};
   }
@@ -28,7 +36,7 @@ class DenseCore {
   void hadamard(std::size_t q) {
     check(q);
     const std::size_t bit = std::size_t{1} << q;
-    const float s = 1.0f / std::sqrt(2.0f);
+    const Real s = Real{1} / std::sqrt(Real{2});
     for (std::size_t base = 0; base < state_.size(); base += bit << 1) {
       for (std::size_t i = 0; i < bit; ++i) {
         const std::size_t a = base + i;
@@ -71,7 +79,7 @@ class DenseCore {
   void phase_t(std::size_t q) {
     check(q);
     const std::size_t bit = std::size_t{1} << q;
-    const float s = 1.0f / std::sqrt(2.0f);
+    const Real s = Real{1} / std::sqrt(Real{2});
     const Complex phase{s, s};
     for (std::size_t i = 0; i < state_.size(); ++i) {
       if (i & bit) state_[i] *= phase;
@@ -100,10 +108,10 @@ class DenseCore {
     }
   }
 
-  float cluster_generator_expectation(std::size_t vertex,
+  Real cluster_generator_expectation(std::size_t vertex,
                                       std::size_t rows,
                                       std::size_t cols) const {
-    if (rows == 0 || cols == 0 || rows * cols != n_)
+    if (!valid_cluster_dimensions(rows, cols))
       throw std::invalid_argument("invalid cluster dimensions");
     check(vertex);
 
@@ -119,7 +127,7 @@ class DenseCore {
 
     Complex sum{0.0f, 0.0f};
     for (std::size_t i = 0; i < state_.size(); ++i) {
-      float phase = 1.0f;
+      Real phase = Real{1};
       for (const auto q : neighbors) {
         if (i & (std::size_t{1} << q)) phase = -phase;
       }
@@ -132,8 +140,8 @@ class DenseCore {
   }
 
   bool cluster_is_valid(std::size_t rows, std::size_t cols,
-                        float tolerance = 1e-4f) const {
-    if (rows == 0 || cols == 0 || rows * cols != n_) return false;
+                        Real tolerance = Real(1e-4)) const {
+    if (!valid_cluster_dimensions(rows, cols)) return false;
     for (std::size_t v = 0; v < n_; ++v) {
       if (std::abs(cluster_generator_expectation(v, rows, cols) - 1.0f) >
           tolerance)
@@ -142,12 +150,17 @@ class DenseCore {
     return true;
   }
 
-  float probability(std::size_t index) const {
+  Real probability(std::size_t index) const {
     if (index >= state_.size()) throw std::out_of_range("index");
     return std::norm(state_[index]);
   }
 
  private:
+  bool valid_cluster_dimensions(std::size_t rows, std::size_t cols) const {
+    return rows > 0 && cols > 0 && rows <= n_ && cols <= n_ &&
+           n_ / cols == rows && n_ % cols == 0;
+  }
+
   void check(std::size_t q) const {
     if (q >= n_) throw std::out_of_range("qubit");
   }
@@ -155,5 +168,10 @@ class DenseCore {
   std::size_t n_;
   std::vector<Complex> state_;
 };
+
+// Preserve the original benchmark/storage contract while allowing long
+// validation runs to use a double-precision reference explicitly.
+using DenseCore = BasicDenseCore<float>;
+using DenseCore64 = BasicDenseCore<double>;
 
 }  // namespace mundo_x

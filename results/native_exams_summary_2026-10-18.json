@@ -1,0 +1,1477 @@
+{
+  "base_commit": "312588009a520cb96e9e73ba4b7a82d16de282b2",
+  "branch": "codex/native-exams-20261018",
+  "date": "2026-10-18",
+  "diversity": {
+    "cases": 6,
+    "cgroup_after": {
+      "memory.current": "171540480",
+      "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "memory.max": "17179869184"
+    },
+    "global_queries_checked": 12,
+    "limitations": [
+      "Independent product states; this exam does not test entangled-state scaling.",
+      "Distinct sampled gate traces do not establish distinct physical states.",
+      "1e-7 global tolerance was chosen before execution as a heuristic, not a proven bound.",
+      "Supported bitstrings select queries only; no amplitudes are removed or renormalized in production."
+    ],
+    "passed": true,
+    "source_unchanged_during_suite": true,
+    "total_local_probabilities_checked": 2202000
+  },
+  "diversity_cases": [
+    {
+      "all_local_probabilities_checked": 1000,
+      "depth": 32,
+      "distinct_sampled_gate_trace_hashes": 1000,
+      "evolution_ms": 0.445879,
+      "global_queries": [
+        {
+          "actual_log_magnitude": -177.27309982867794,
+          "actual_phase": -2.165396414496776,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 7.836925552950902e-13,
+          "name": "maximum_coefficient",
+          "pass": true,
+          "phase_circular_abs_error": 4.423111182871864e-15,
+          "reference_log_magnitude": -177.27309982867715,
+          "reference_phase": -2.1653964144967803
+        },
+        {
+          "actual_log_magnitude": -578.0727212327987,
+          "actual_phase": -2.579328032055237,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 7.635003740347202e-13,
+          "name": "supported_alternative",
+          "pass": true,
+          "phase_circular_abs_error": 3.1645693010506903e-15,
+          "reference_log_magnitude": -578.0727212327979,
+          "reference_phase": -2.57932803205524
+        }
+      ],
+      "global_queries_ms": 0.114444,
+      "initialization_ms": 0.042906,
+      "legacy_global_tolerance_pass": true,
+      "max_local_probability_abs_error": 3.332295377134198e-16,
+      "n": 1000,
+      "peak_rss_bytes_self_proc": 2064384,
+      "production_gates": 32000,
+      "reference_validation_and_query_selection_ms": 1.451302,
+      "seed": 5572446169236791108,
+      "signature_samples": 1000,
+      "status": "ok"
+    },
+    {
+      "all_local_probabilities_checked": 1000,
+      "depth": 64,
+      "distinct_sampled_gate_trace_hashes": 1000,
+      "evolution_ms": 0.843419,
+      "global_queries": [
+        {
+          "actual_log_magnitude": -159.50286365467713,
+          "actual_phase": 2.6314266448219517,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 1.5490803084716731e-12,
+          "name": "maximum_coefficient",
+          "pass": true,
+          "phase_circular_abs_error": 3.903127820947816e-18,
+          "reference_log_magnitude": -159.50286365467556,
+          "reference_phase": 2.6314266448219517
+        },
+        {
+          "actual_log_magnitude": -716.8746839090609,
+          "actual_phase": -1.609557342996304,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 1.572575403230303e-12,
+          "name": "supported_alternative",
+          "pass": true,
+          "phase_circular_abs_error": 1.7696347859308403e-14,
+          "reference_log_magnitude": -716.8746839090593,
+          "reference_phase": -1.6095573429962862
+        }
+      ],
+      "global_queries_ms": 0.116659,
+      "initialization_ms": 0.024405,
+      "legacy_global_tolerance_pass": true,
+      "max_local_probability_abs_error": 5.076776672663375e-16,
+      "n": 1000,
+      "peak_rss_bytes_self_proc": 2068480,
+      "production_gates": 64000,
+      "reference_validation_and_query_selection_ms": 2.08967,
+      "seed": 5572446169236791108,
+      "signature_samples": 1000,
+      "status": "ok"
+    },
+    {
+      "all_local_probabilities_checked": 100000,
+      "depth": 32,
+      "distinct_sampled_gate_trace_hashes": 4096,
+      "evolution_ms": 48.973146,
+      "global_queries": [
+        {
+          "actual_log_magnitude": -17870.11969093413,
+          "actual_phase": -1.261519995816137,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 7.917755340258736e-11,
+          "name": "maximum_coefficient",
+          "pass": true,
+          "phase_circular_abs_error": 8.807685483724903e-13,
+          "reference_log_magnitude": -17870.11969093405,
+          "reference_phase": -1.261519995815256
+        },
+        {
+          "actual_log_magnitude": -58993.67829076313,
+          "actual_phase": 1.1211784768231254,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 7.777600785630057e-11,
+          "name": "supported_alternative",
+          "pass": true,
+          "phase_circular_abs_error": 6.920692317835542e-13,
+          "reference_log_magnitude": -58993.67829076305,
+          "reference_phase": 1.1211784768238175
+        }
+      ],
+      "global_queries_ms": 9.604463,
+      "initialization_ms": 1.964172,
+      "legacy_global_tolerance_pass": true,
+      "max_local_probability_abs_error": 6.107852938697089e-16,
+      "n": 100000,
+      "peak_rss_bytes_self_proc": 7774208,
+      "production_gates": 3200000,
+      "reference_validation_and_query_selection_ms": 116.73899,
+      "seed": 5572446169236791108,
+      "signature_samples": 4096,
+      "status": "ok"
+    },
+    {
+      "all_local_probabilities_checked": 100000,
+      "depth": 64,
+      "distinct_sampled_gate_trace_hashes": 4096,
+      "evolution_ms": 86.638583,
+      "global_queries": [
+        {
+          "actual_log_magnitude": -16227.403080923614,
+          "actual_phase": 0.019817865127066625,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 1.567475038655175e-10,
+          "name": "maximum_coefficient",
+          "pass": true,
+          "phase_circular_abs_error": 1.2862974574368025e-15,
+          "reference_log_magnitude": -16227.403080923457,
+          "reference_phase": 0.019817865127067912
+        },
+        {
+          "actual_log_magnitude": -70654.7477049622,
+          "actual_phase": 2.6962463882664736,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 1.4880896515023778e-10,
+          "name": "supported_alternative",
+          "pass": true,
+          "phase_circular_abs_error": 1.3350605343465105e-13,
+          "reference_log_magnitude": -70654.74770496205,
+          "reference_phase": 2.6962463882666072
+        }
+      ],
+      "global_queries_ms": 9.342266,
+      "initialization_ms": 1.741665,
+      "legacy_global_tolerance_pass": true,
+      "max_local_probability_abs_error": 8.884223651889345e-16,
+      "n": 100000,
+      "peak_rss_bytes_self_proc": 7774208,
+      "production_gates": 6400000,
+      "reference_validation_and_query_selection_ms": 201.456944,
+      "seed": 5572446169236791108,
+      "signature_samples": 4096,
+      "status": "ok"
+    },
+    {
+      "all_local_probabilities_checked": 1000000,
+      "depth": 32,
+      "distinct_sampled_gate_trace_hashes": 4096,
+      "evolution_ms": 448.440193,
+      "global_queries": [
+        {
+          "actual_log_magnitude": -178428.64300126274,
+          "actual_phase": -0.5924641429792601,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 7.949552127684001e-10,
+          "name": "maximum_coefficient",
+          "pass": true,
+          "phase_circular_abs_error": 3.563792490279827e-12,
+          "reference_log_magnitude": -178428.64300126195,
+          "reference_phase": -0.5924641429828239
+        },
+        {
+          "actual_log_magnitude": -590797.3977797492,
+          "actual_phase": -2.8153515475351654,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 7.77220066083828e-10,
+          "name": "supported_alternative",
+          "pass": true,
+          "phase_circular_abs_error": 3.982352642095677e-12,
+          "reference_log_magnitude": -590797.3977797484,
+          "reference_phase": -2.8153515475391404
+        }
+      ],
+      "global_queries_ms": 94.088325,
+      "initialization_ms": 23.686273,
+      "legacy_global_tolerance_pass": true,
+      "max_local_probability_abs_error": 6.107852938697089e-16,
+      "n": 1000000,
+      "peak_rss_bytes_self_proc": 58400768,
+      "production_gates": 32000000,
+      "reference_validation_and_query_selection_ms": 1168.244868,
+      "seed": 5572446169236791108,
+      "signature_samples": 4096,
+      "status": "ok"
+    },
+    {
+      "all_local_probabilities_checked": 1000000,
+      "depth": 64,
+      "distinct_sampled_gate_trace_hashes": 4096,
+      "evolution_ms": 874.002119,
+      "global_queries": [
+        {
+          "actual_log_magnitude": -163012.91227566483,
+          "actual_phase": 2.651437161289401,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 1.5764953786856495e-09,
+          "name": "maximum_coefficient",
+          "pass": true,
+          "phase_circular_abs_error": 3.2798026447511397e-13,
+          "reference_log_magnitude": -163012.91227566326,
+          "reference_phase": 2.651437161289729
+        },
+        {
+          "actual_log_magnitude": -705578.1049632722,
+          "actual_phase": 1.207547257996488,
+          "actual_zero": false,
+          "legacy_1e8_pass": true,
+          "log_magnitude_abs_error": 1.5739374248369131e-09,
+          "name": "supported_alternative",
+          "pass": true,
+          "phase_circular_abs_error": 1.9960205363545036e-12,
+          "reference_log_magnitude": -705578.1049632706,
+          "reference_phase": 1.2075472579944921
+        }
+      ],
+      "global_queries_ms": 98.348605,
+      "initialization_ms": 20.029585,
+      "legacy_global_tolerance_pass": true,
+      "max_local_probability_abs_error": 8.884223651889345e-16,
+      "n": 1000000,
+      "peak_rss_bytes_self_proc": 58400768,
+      "production_gates": 64000000,
+      "reference_validation_and_query_selection_ms": 2031.374421,
+      "seed": 5572446169236791108,
+      "signature_samples": 4096,
+      "status": "ok"
+    }
+  ],
+  "evidence_root": "/workspace/scratch/mundox-native-exams-20261018",
+  "extended_products": {
+    "cases": [
+      {
+        "controller_stats": null,
+        "evolution_ms": 2849.223488,
+        "family": "product_ht",
+        "initialization_ms": 5454.34835,
+        "legacy_tolerance_pass": false,
+        "logical_amplitude_bytes": 4800000000,
+        "max_local_query_error": 1.1102230246251565e-16,
+        "max_log_magnitude_error": 3.693639882840216e-08,
+        "max_log_phase_error": 2.6130919650313444e-09,
+        "method": "factorized",
+        "process_peak_rss_bytes": 8439459840,
+        "process_wall_ms": 18781.76577699992,
+        "qubits": 150000000,
+        "query_ms": 6368.452526,
+        "scaled_log_tolerance": 1e-07,
+        "scaled_tolerance_pass": true,
+        "status": "ok",
+        "worker_total_ms": 18759.561111
+      },
+      {
+        "controller_stats": null,
+        "evolution_ms": 3723.847642,
+        "family": "product_ht",
+        "initialization_ms": 6470.53506,
+        "legacy_tolerance_pass": false,
+        "logical_amplitude_bytes": 6400000000,
+        "max_local_query_error": 1.1102230246251565e-16,
+        "max_log_magnitude_error": 5.4213160183280706e-08,
+        "max_log_phase_error": 1.3418230082606897e-08,
+        "method": "factorized",
+        "process_peak_rss_bytes": 11251965952,
+        "process_wall_ms": 24143.564722000065,
+        "qubits": 200000000,
+        "query_ms": 8497.904568,
+        "scaled_log_tolerance": 1e-07,
+        "scaled_tolerance_pass": true,
+        "status": "ok",
+        "worker_total_ms": 24126.908085
+      },
+      {
+        "controller_stats": {
+          "accepted_gates": 400000000,
+          "blocked_gates": 0,
+          "history_evictions": 0,
+          "pressure_entries": 0,
+          "pressure_exits": 0,
+          "recovered_payload_bytes": 0,
+          "recovery_attempts": 0,
+          "recovery_estimated_work": 0,
+          "recovery_nanoseconds": 0,
+          "recovery_passes": 0,
+          "recovery_successes": 0
+        },
+        "evolution_ms": 4541.4833,
+        "family": "product_ht",
+        "initialization_ms": 5944.630451,
+        "legacy_tolerance_pass": false,
+        "logical_amplitude_bytes": 6400000000,
+        "max_local_query_error": 1.1102230246251565e-16,
+        "max_log_magnitude_error": 5.4213160183280706e-08,
+        "max_log_phase_error": 1.3418230082606897e-08,
+        "method": "computasis",
+        "process_peak_rss_bytes": 11251961856,
+        "process_wall_ms": 24473.898139000084,
+        "qubits": 200000000,
+        "query_ms": 8498.920518,
+        "scaled_log_tolerance": 1e-07,
+        "scaled_tolerance_pass": true,
+        "status": "ok",
+        "worker_total_ms": 24447.502204
+      },
+      {
+        "controller_stats": null,
+        "evolution_ms": 3854.77079,
+        "family": "heterogeneous_product",
+        "initialization_ms": 6352.161165,
+        "legacy_tolerance_pass": false,
+        "logical_amplitude_bytes": 6400000000,
+        "max_local_query_error": 1.1102230246251565e-16,
+        "max_log_magnitude_error": 3.4418917493894696e-08,
+        "max_log_phase_error": 3.3543699692883955e-09,
+        "method": "factorized",
+        "process_peak_rss_bytes": 11251965952,
+        "process_wall_ms": 24689.229557999624,
+        "qubits": 200000000,
+        "query_ms": 7255.69642,
+        "scaled_log_tolerance": 1e-07,
+        "scaled_tolerance_pass": true,
+        "status": "ok",
+        "worker_total_ms": 24671.773251
+      },
+      {
+        "controller_stats": {
+          "accepted_gates": 525000000,
+          "blocked_gates": 0,
+          "history_evictions": 0,
+          "pressure_entries": 0,
+          "pressure_exits": 0,
+          "recovered_payload_bytes": 0,
+          "recovery_attempts": 0,
+          "recovery_estimated_work": 0,
+          "recovery_nanoseconds": 0,
+          "recovery_passes": 0,
+          "recovery_successes": 0
+        },
+        "evolution_ms": 5699.477665,
+        "family": "heterogeneous_product",
+        "initialization_ms": 6076.309898,
+        "legacy_tolerance_pass": false,
+        "logical_amplitude_bytes": 6400000000,
+        "max_local_query_error": 1.1102230246251565e-16,
+        "max_log_magnitude_error": 3.4418917493894696e-08,
+        "max_log_phase_error": 3.3543699692883955e-09,
+        "method": "computasis",
+        "process_peak_rss_bytes": 11251961856,
+        "process_wall_ms": 26301.69684700013,
+        "qubits": 200000000,
+        "query_ms": 7280.014968,
+        "scaled_log_tolerance": 1e-07,
+        "scaled_tolerance_pass": true,
+        "status": "ok",
+        "worker_total_ms": 26298.315045
+      }
+    ],
+    "scope": "FactorizedCore prototype introduced in6b2d90b; Computasis wraps it; independent products, not arbitrary entangled states.",
+    "summary": {
+      "case_count": 5,
+      "cgroup_after": {
+        "memory.current": "201748480",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "memory.max": "17179869184"
+      },
+      "legacy_tolerance_failures": [
+        {
+          "family": "product_ht",
+          "max_log_magnitude_error": 3.693639882840216e-08,
+          "max_log_phase_error": 2.6130919650313444e-09,
+          "method": "factorized",
+          "qubits": 150000000
+        },
+        {
+          "family": "product_ht",
+          "max_log_magnitude_error": 5.4213160183280706e-08,
+          "max_log_phase_error": 1.3418230082606897e-08,
+          "method": "factorized",
+          "qubits": 200000000
+        },
+        {
+          "family": "product_ht",
+          "max_log_magnitude_error": 5.4213160183280706e-08,
+          "max_log_phase_error": 1.3418230082606897e-08,
+          "method": "computasis",
+          "qubits": 200000000
+        },
+        {
+          "family": "heterogeneous_product",
+          "max_log_magnitude_error": 3.4418917493894696e-08,
+          "max_log_phase_error": 3.3543699692883955e-09,
+          "method": "factorized",
+          "qubits": 200000000
+        },
+        {
+          "family": "heterogeneous_product",
+          "max_log_magnitude_error": 3.4418917493894696e-08,
+          "max_log_phase_error": 3.3543699692883955e-09,
+          "method": "computasis",
+          "qubits": 200000000
+        }
+      ],
+      "outputs": {
+        "csv": "/workspace/scratch/mundox-native-exams-20261018/extended-products-01/results.csv",
+        "jsonl": "/workspace/scratch/mundox-native-exams-20261018/extended-products-01/results.jsonl"
+      },
+      "scaled_criterion_failures": [],
+      "source_sha256_at_end": {
+        "/workspace/mundo-X-native-exams/native/include/mundo_x/compact_core.hpp": "d3cef03ec03beba17fc60306cc1ce26e4b6c7a00ce542f2705d432bad9243384",
+        "/workspace/mundo-X-native-exams/native/include/mundo_x/computasis.hpp": "1cd71ab6a5489ad91277262f494baaa3cdbfe35af5f19ca00a8fad680de75e8b",
+        "/workspace/mundo-X-native-exams/native/include/mundo_x/dense_core.hpp": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc",
+        "/workspace/mundo-X-native-exams/native/include/mundo_x/exact_t_experiment.hpp": "04e36ebe2e4333044eb2eeab05fecf04fd5dd024964170906248e043fb9d21da",
+        "/workspace/mundo-X-native-exams/native/include/mundo_x/factorized_core.hpp": "7ed5c8e9075287f5517371843a363572e401c1fe3aadb5dedd6ba59b02cc35b9",
+        "/workspace/mundo-X-native-exams/native/include/mundo_x/teleport.hpp": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+        "/workspace/mundo-X-native-exams/native/include/mundo_x/xasm.hpp": "64da20be4b8a3469521a09ffd87cf215794b64bcb820496810e1a0cd3da3ea1d",
+        "/workspace/mundo-X-native-exams/native/tests/factorized_stream_benchmark.cpp": "479b662b12eb52c239ad212d7049e181309ace9140fb84cd4d8fde3cebdc8848"
+      },
+      "source_unchanged_during_suite": true,
+      "status_counts": {
+        "ok": 5
+      }
+    }
+  },
+  "external_simulators_or_new_dependencies_used": false,
+  "identity_map": "engine_map_2026-10-18.md",
+  "integration": {
+    "address_space_bytes": 2147483648,
+    "cpu": 0,
+    "cpu_count": 1,
+    "created_utc": "2026-10-18T03:21:22.935690+00:00",
+    "reserve_bytes": 2147483648,
+    "results": [
+      {
+        "cgroup_after": {
+          "memory.current": "173555712",
+          "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "memory.max": "17179869184"
+        },
+        "cgroup_before": {
+          "memory.current": "169795584",
+          "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "memory.max": "17179869184"
+        },
+        "command": [
+          "/workspace/scratch/mundox-limits-20261017/build-tools/bin/cmake",
+          "-S",
+          "/workspace/mundo-X-native-exams",
+          "-B",
+          "/workspace/scratch/mundox-native-exams-20261018/integration/build",
+          "-DBUILD_TESTING=ON",
+          "-DCMAKE_BUILD_TYPE=Release"
+        ],
+        "label": "configure",
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 0.3853686160000507
+      },
+      {
+        "cgroup_after": {
+          "memory.current": "187011072",
+          "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "memory.max": "17179869184"
+        },
+        "cgroup_before": {
+          "memory.current": "173555712",
+          "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "memory.max": "17179869184"
+        },
+        "command": [
+          "/workspace/scratch/mundox-limits-20261017/build-tools/bin/cmake",
+          "--build",
+          "/workspace/scratch/mundox-native-exams-20261018/integration/build",
+          "-j",
+          "1"
+        ],
+        "label": "build",
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 24.064619613000104
+      },
+      {
+        "cgroup_after": {
+          "memory.current": "186896384",
+          "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "memory.max": "17179869184"
+        },
+        "cgroup_before": {
+          "memory.current": "186630144",
+          "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+          "memory.max": "17179869184"
+        },
+        "command": [
+          "/workspace/scratch/mundox-limits-20261017/build-tools/bin/ctest",
+          "--test-dir",
+          "/workspace/scratch/mundox-native-exams-20261018/integration/build",
+          "--output-on-failure",
+          "-j",
+          "1"
+        ],
+        "label": "ctest",
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 0.6086784459998853
+      }
+    ]
+  },
+  "limitations": [
+    "Global1e-7 scale threshold is a preregistered heuristic, not a proven error bound; all5 extended cases fail legacy1e-8.",
+    "Large Reduced runs completed evolution without reconstructing or independently validating the full state.",
+    "Original large-run supervisor used AS2GiB and preflight512MiB reserve; later2GiB monitor/status fixes are tested separately and not retroactively attributed.",
+    "Original sampled VmHWM values are lower bounds and can severely miss peaks of quick workers.",
+    "Timing trials are local single runs except the controller1m case with3 repeats; no general superiority conclusion."
+  ],
+  "original_cores": {
+    "cases": [
+      {
+        "components": 1024,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 6.922453,
+        "family": "connected",
+        "initialization_ms": 0.000561,
+        "label": "sanity",
+        "logical_payload_bytes": 34498,
+        "n": 10,
+        "peak_components": 1024,
+        "peak_rss_lower_bound_bytes": 2113536,
+        "return_code": 0,
+        "sanity_summary": {
+          "core_cases": 45,
+          "event": "sanity_summary",
+          "failures": 0,
+          "rejected_dimension_cases": 3
+        },
+        "status": "pass",
+        "validation_scope": "DenseCore64_global_phase_aligned",
+        "wall_seconds": 0.05307628500008832
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 537.652163,
+        "family": "ghz",
+        "full_validation_ms": 127.220599,
+        "initialization_ms": 7.613587,
+        "label": "compact-ghz-n10000",
+        "logical_payload_bytes": 25130000,
+        "n": 10000,
+        "peak_rss_lower_bound_bytes": 27049984,
+        "return_code": 0,
+        "selected_validation_ms": 0.425055,
+        "status": "pass",
+        "validation_scope": "full_ghz_signature_and_selected_generators",
+        "wall_seconds": 0.6820303300000887
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 2397.645223,
+        "family": "ghz",
+        "full_validation_ms": 320.498005,
+        "initialization_ms": 22.629996,
+        "label": "compact-ghz-n16000",
+        "logical_payload_bytes": 64016000,
+        "n": 16000,
+        "peak_rss_lower_bound_bytes": 65957888,
+        "return_code": 0,
+        "selected_validation_ms": 0.61514,
+        "status": "pass",
+        "validation_scope": "full_ghz_signature_and_selected_generators",
+        "wall_seconds": 2.7498628700000154
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 2586.979681,
+        "family": "ghz",
+        "full_validation_ms": 346.447133,
+        "initialization_ms": 25.553456,
+        "label": "compact-ghz-n16384",
+        "logical_payload_bytes": 67125248,
+        "n": 16384,
+        "peak_rss_lower_bound_bytes": 69079040,
+        "return_code": 0,
+        "selected_validation_ms": 0.603413,
+        "status": "pass",
+        "validation_scope": "full_ghz_signature_and_selected_generators",
+        "wall_seconds": 2.9653836159998264
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 2552.01604,
+        "family": "ghz",
+        "full_validation_ms": 343.058107,
+        "initialization_ms": 24.985163,
+        "label": "compact-ghz-n16385",
+        "logical_payload_bytes": 67391505,
+        "n": 16385,
+        "peak_rss_lower_bound_bytes": 69337088,
+        "return_code": 0,
+        "selected_validation_ms": 0.643564,
+        "status": "pass",
+        "validation_scope": "full_ghz_signature_and_selected_generators",
+        "wall_seconds": 2.926371920999827
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 13486.621263,
+        "family": "ghz",
+        "full_validation_ms": 1313.630888,
+        "initialization_ms": 110.706445,
+        "label": "compact-ghz-n32000",
+        "logical_payload_bytes": 256032000,
+        "n": 32000,
+        "peak_rss_lower_bound_bytes": 258043904,
+        "return_code": 0,
+        "selected_validation_ms": 1.296929,
+        "status": "pass",
+        "validation_scope": "full_ghz_signature_and_selected_generators",
+        "wall_seconds": 14.926067281999849
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 21342.793084,
+        "family": "ghz",
+        "full_validation_ms": 1361.417988,
+        "initialization_ms": 106.407918,
+        "label": "compact-ghz-n32768",
+        "logical_payload_bytes": 268468224,
+        "n": 32768,
+        "peak_rss_lower_bound_bytes": 270487552,
+        "return_code": 0,
+        "selected_validation_ms": 1.139915,
+        "status": "pass",
+        "validation_scope": "full_ghz_signature_and_selected_generators",
+        "wall_seconds": 22.82627622000018
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 14300.550006,
+        "family": "ghz",
+        "full_validation_ms": 1333.879022,
+        "initialization_ms": 100.193759,
+        "label": "compact-ghz-n32769",
+        "logical_payload_bytes": 269000721,
+        "n": 32769,
+        "peak_rss_lower_bound_bytes": 271020032,
+        "return_code": 0,
+        "selected_validation_ms": 1.292812,
+        "status": "pass",
+        "validation_scope": "full_ghz_signature_and_selected_generators",
+        "wall_seconds": 15.74918609700012
+      },
+      {
+        "label": "compact-ghz-n65536",
+        "last_completed_event": {
+          "components": 0,
+          "elapsed_ms": 43090.855899,
+          "event": "progress",
+          "gates_completed": 24577,
+          "phase": "evolution"
+        },
+        "peak_rss_lower_bound_bytes": 1075675136,
+        "return_code": -9,
+        "status": "timeout",
+        "wall_seconds": 45.0213334099999
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 13.027963,
+        "family": "cluster_line",
+        "full_validation_ms": 3.187746,
+        "initialization_ms": 0.098644,
+        "label": "compact-cluster_line-n1024",
+        "logical_payload_bytes": 263168,
+        "n": 1024,
+        "peak_rss_lower_bound_bytes": 2146304,
+        "return_code": 0,
+        "selected_validation_ms": 0.060139,
+        "status": "pass",
+        "validation_scope": "full_cluster_signature_and_selected_generators",
+        "wall_seconds": 0.023328105000018695
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 818.475151,
+        "family": "cluster_line",
+        "full_validation_ms": 52.315872,
+        "initialization_ms": 1.236573,
+        "label": "compact-cluster_line-n4096",
+        "logical_payload_bytes": 4198400,
+        "n": 4096,
+        "peak_rss_lower_bound_bytes": 6103040,
+        "return_code": 0,
+        "selected_validation_ms": 0.192926,
+        "status": "pass",
+        "validation_scope": "full_cluster_signature_and_selected_generators",
+        "wall_seconds": 0.8768391440000869
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 1655.003492,
+        "family": "cluster_line",
+        "full_validation_ms": 305.744611,
+        "initialization_ms": 8.991691,
+        "label": "compact-cluster_line-n10000",
+        "logical_payload_bytes": 25130000,
+        "n": 10000,
+        "peak_rss_lower_bound_bytes": 27045888,
+        "return_code": 0,
+        "selected_validation_ms": 0.400084,
+        "status": "pass",
+        "validation_scope": "full_cluster_signature_and_selected_generators",
+        "wall_seconds": 1.9793245629998637
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 4.54095,
+        "family": "random_inverse",
+        "full_validation_ms": 0.109642,
+        "initialization_ms": 0.002265,
+        "label": "compact-random_inverse-n128",
+        "logical_payload_bytes": 4224,
+        "n": 128,
+        "peak_rss_lower_bound_bytes": 2052096,
+        "return_code": 0,
+        "selected_validation_ms": 0.019538,
+        "status": "pass",
+        "validation_scope": "all_identity_generators_after_inverse",
+        "wall_seconds": 0.012436546999879283
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 30.327946,
+        "family": "random_inverse",
+        "full_validation_ms": 6.143737,
+        "initialization_ms": 0.096184,
+        "label": "compact-random_inverse-n1024",
+        "logical_payload_bytes": 263168,
+        "n": 1024,
+        "peak_rss_lower_bound_bytes": 2338816,
+        "return_code": 0,
+        "selected_validation_ms": 0.057657,
+        "status": "pass",
+        "validation_scope": "all_identity_generators_after_inverse",
+        "wall_seconds": 0.042986596999980975
+      },
+      {
+        "core": "CompactCore",
+        "evolution_ms": 558.554342,
+        "family": "random_inverse",
+        "full_validation_ms": 98.234017,
+        "initialization_ms": 1.448425,
+        "label": "compact-random_inverse-n4096",
+        "logical_payload_bytes": 4198400,
+        "n": 4096,
+        "peak_rss_lower_bound_bytes": 6270976,
+        "return_code": 0,
+        "selected_validation_ms": 0.17404,
+        "status": "pass",
+        "validation_scope": "all_identity_generators_after_inverse",
+        "wall_seconds": 0.6653397439999935
+      },
+      {
+        "components": 4096,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 0.564255,
+        "family": "product_ht",
+        "initialization_ms": 0.003995,
+        "label": "reduced-product_ht-n12",
+        "logical_payload_bytes": 131492,
+        "n": 12,
+        "peak_components": 4096,
+        "peak_rss_lower_bound_bytes": 86016,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.006788125999946715
+      },
+      {
+        "components": 65536,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 6.795848,
+        "family": "product_ht",
+        "initialization_ms": 0.003804,
+        "label": "reduced-product_ht-n16",
+        "logical_payload_bytes": 2097712,
+        "n": 16,
+        "peak_components": 65536,
+        "peak_rss_lower_bound_bytes": 5718016,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.01225830099997438
+      },
+      {
+        "components": 1048576,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 156.319519,
+        "family": "product_ht",
+        "initialization_ms": 0.00375,
+        "label": "reduced-product_ht-n20",
+        "logical_payload_bytes": 33555132,
+        "n": 20,
+        "peak_components": 1048576,
+        "peak_rss_lower_bound_bytes": 115494912,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.18084380899995267
+      },
+      {
+        "components": 4194304,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 1129.828334,
+        "family": "product_ht",
+        "initialization_ms": 0.004246,
+        "label": "reduced-product_ht-n22",
+        "logical_payload_bytes": 134218498,
+        "n": 22,
+        "peak_components": 4194304,
+        "peak_rss_lower_bound_bytes": 456540160,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 1.344932037000035
+      },
+      {
+        "components": 4096,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 3.50673,
+        "family": "product_t8",
+        "initialization_ms": 0.004236,
+        "label": "reduced-product_t8-n12",
+        "logical_payload_bytes": 131996,
+        "n": 12,
+        "peak_components": 4096,
+        "peak_rss_lower_bound_bytes": 86016,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.007774360999974306
+      },
+      {
+        "components": 65536,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 53.917891,
+        "family": "product_t8",
+        "initialization_ms": 0.004456,
+        "label": "reduced-product_t8-n16",
+        "logical_payload_bytes": 2098384,
+        "n": 16,
+        "peak_components": 65536,
+        "peak_rss_lower_bound_bytes": 11354112,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.06395290499995099
+      },
+      {
+        "components": 1048576,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 1149.125043,
+        "family": "product_t8",
+        "initialization_ms": 0.004046,
+        "label": "reduced-product_t8-n20",
+        "logical_payload_bytes": 33555972,
+        "n": 20,
+        "peak_components": 1048576,
+        "peak_rss_lower_bound_bytes": 153006080,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 1.1753157279999868
+      },
+      {
+        "components": 4194304,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 12406.102572,
+        "family": "product_t8",
+        "initialization_ms": 0.004351,
+        "label": "reduced-product_t8-n22",
+        "logical_payload_bytes": 134219422,
+        "n": 22,
+        "peak_components": 4194304,
+        "peak_rss_lower_bound_bytes": 608456704,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 12.837798796000015
+      },
+      {
+        "components": 4096,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 33.606301,
+        "family": "connected",
+        "initialization_ms": 0.004451,
+        "label": "reduced-connected-n12",
+        "logical_payload_bytes": 133148,
+        "n": 12,
+        "peak_components": 4096,
+        "peak_rss_lower_bound_bytes": 2473984,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.03782659400008015
+      },
+      {
+        "components": 65536,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 961.366752,
+        "family": "connected",
+        "initialization_ms": 0.003783,
+        "label": "reduced-connected-n16",
+        "logical_payload_bytes": 2099920,
+        "n": 16,
+        "peak_components": 65536,
+        "peak_rss_lower_bound_bytes": 11350016,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.9657734919999257
+      },
+      {
+        "components": 1048576,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 30213.056342,
+        "family": "connected",
+        "initialization_ms": 0.003964,
+        "label": "reduced-connected-n20",
+        "logical_payload_bytes": 33557892,
+        "n": 20,
+        "peak_components": 1048576,
+        "peak_rss_lower_bound_bytes": 153014272,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 30.239693467999814
+      },
+      {
+        "label": "reduced-connected-n22",
+        "last_completed_event": {
+          "components": 4194304,
+          "elapsed_ms": 41153.280666,
+          "event": "progress",
+          "gates_completed": 128,
+          "phase": "evolution"
+        },
+        "peak_rss_lower_bound_bytes": 608464896,
+        "return_code": -9,
+        "status": "timeout",
+        "wall_seconds": 45.015633882999964
+      },
+      {
+        "components": 4,
+        "core": "ReducedExactTRepresentation",
+        "evolution_ms": 0.265321,
+        "family": "boundary",
+        "initialization_ms": 0.005234,
+        "label": "reduced-boundary-n63",
+        "logical_payload_bytes": 1247,
+        "n": 63,
+        "peak_components": 4,
+        "peak_rss_lower_bound_bytes": 86016,
+        "return_code": 0,
+        "status": "completed",
+        "validation_scope": "not_run_scale_case",
+        "wall_seconds": 0.00810728100009328
+      },
+      {
+        "label": "reduced-boundary-n64",
+        "peak_rss_lower_bound_bytes": 90112,
+        "return_code": 2,
+        "status": "expected_rejection",
+        "wall_seconds": 0.007238056000005599
+      },
+      {
+        "label": "reduced-n24-conservative-guard",
+        "status": "deliberate_skip"
+      }
+    ],
+    "final_supervisor_sanity": {
+      "cases": [
+        {
+          "label": "sanity",
+          "minimum_monitored_headroom_bytes": 17000361984,
+          "return_code": 0,
+          "sanity_summary": {
+            "core_cases": 45,
+            "event": "sanity_summary",
+            "failures": 0,
+            "rejected_dimension_cases": 3
+          },
+          "status": "pass",
+          "wall_seconds": 0.055925302999639825
+        }
+      ],
+      "status_counts": {
+        "pass": 1
+      }
+    },
+    "observations": 30,
+    "portability_verification": {
+      "core_cases": 45,
+      "default_compute_lock": "Path(tempfile.gettempdir())/mundox-native-diversity-exams/compute.lock",
+      "explicit_compute_lock_used": "/workspace/scratch/mundox-native-exams-20261018/compute.lock",
+      "final_script_sha256": "130de516f277f811b04aadccec772e015d586aa9d3d658f8f9fda25193800e7e",
+      "git_head": null,
+      "git_metadata_error": "git revision unavailable; source hashes identify the inputs",
+      "portable_source_has_git": false,
+      "rejected_dimension_cases": 3,
+      "scope": "Portable supervisor/source-only sanity. Scale not rerun; earlier evidence remains intact.",
+      "source_snapshot_matches_final_repo": true,
+      "status": "pass",
+      "verification_output": "/workspace/scratch/mundox-native-exams-20261018/original-cores-portable-final-02",
+      "wall_seconds": 0.056794212000113475
+    },
+    "provenance": {
+      "caveat": "This completed execution used the captured earlier supervisor. Later headroom/status fixes are not attributed to this run. Raw observations are unchanged.",
+      "observation_count": 30,
+      "preflight_actual_minimum_available_bytes": 16988844032,
+      "recorded_policy": {
+        "CPU_affinity": [
+          0
+        ],
+        "RLIMIT_AS_bytes": 2147483648,
+        "continuous_headroom_monitor": false,
+        "cpu_hard_seconds": 45,
+        "cpu_soft_seconds": 44,
+        "exclusive_compute_lock": "/workspace/scratch/mundox-native-exams-20261018/compute.lock",
+        "preflight_required_available_bytes": 2684354560,
+        "wall_seconds": 45
+      },
+      "source_snapshot": [
+        {
+          "matches_recorded_input": true,
+          "path": "native/include/mundo_x/compact_core.hpp",
+          "sha256": "d3cef03ec03beba17fc60306cc1ce26e4b6c7a00ce542f2705d432bad9243384"
+        },
+        {
+          "matches_recorded_input": true,
+          "path": "native/include/mundo_x/dense_core.hpp",
+          "sha256": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc"
+        },
+        {
+          "matches_recorded_input": true,
+          "path": "native/include/mundo_x/exact_t_experiment.hpp",
+          "sha256": "04e36ebe2e4333044eb2eeab05fecf04fd5dd024964170906248e043fb9d21da"
+        },
+        {
+          "matches_recorded_input": true,
+          "path": "native/tests/native_original_exams.cpp",
+          "sha256": "2414e29db137f79143713c9610c46034f3d33dd6b910ef0e41a3debbfb2d29cb"
+        },
+        {
+          "matches_recorded_input": true,
+          "path": "tools/examine_original_cores.py",
+          "sha256": "6f444a7771d0a4f6906746106679aaff33dd5d1675338a210dd4e7bdd03fb9d8"
+        }
+      ],
+      "status_returncode_inconsistencies": []
+    },
+    "status_counts": {
+      "completed": 12,
+      "deliberate_skip": 1,
+      "expected_rejection": 1,
+      "pass": 14,
+      "timeout": 2
+    },
+    "supervisor_controls": {
+      "all_checks_passed": true,
+      "headroom_reserve_bytes": 2147483648,
+      "purpose": "Real child-process checks of supervisor handling. Low-headroom cases inject simulated measurements without allocating memory.",
+      "resource_priority": {
+        "all_checks_passed": true,
+        "purpose": "Injected low-headroom measurement after a printed success summary must preserve resource cause, and stop only the owned child. No large allocation occurs.",
+        "record": {
+          "command": [
+            "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+            "-c",
+            "import json,time; print(json.dumps({\"event\":\"result\",\"status\":\"pass\"}),flush=True); print(json.dumps({\"event\":\"sanity_summary\",\"failures\":0}),flush=True); time.sleep(5)"
+          ],
+          "event": "result",
+          "events": [
+            {
+              "event": "result",
+              "status": "pass"
+            },
+            {
+              "event": "sanity_summary",
+              "failures": 0
+            }
+          ],
+          "headroom_before_bytes": 8589934592,
+          "headroom_reserve_bytes": 2147483648,
+          "label": "resource-after-summary",
+          "minimum_monitored_headroom_bytes": 1073741824,
+          "peak_rss_lower_bound_bytes": 7847936,
+          "return_code": -9,
+          "rss_measurement": "Linux /proc worker VmHWM sampled every5ms; lower bound",
+          "sanity_summary": {
+            "event": "sanity_summary",
+            "failures": 0
+          },
+          "status": "memory_headroom_abort",
+          "stderr_file": "/workspace/scratch/mundox-native-exams-20261018/original-supervisor-resource-priority/raw/resource-after-summary.stderr.txt",
+          "stdout_file": "/workspace/scratch/mundox-native-exams-20261018/original-supervisor-resource-priority/raw/resource-after-summary.stdout.jsonl",
+          "wall_seconds": 0.018674915000246983,
+          "worker_pid": 2085
+        }
+      }
+    }
+  },
+  "pressure_controller": {
+    "equal_query_fingerprints_by_size": {
+      "10000": true,
+      "100000": true,
+      "1000000": true
+    },
+    "interpretation": "Overhead exam: core lacks proactive resource control; no general superiority claim.",
+    "medians": [
+      {
+        "evolution_nanoseconds": 166139,
+        "init_nanoseconds": 229733,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.7284841053187847e-12,
+        "max_phase_error": 1.8474111129762605e-13,
+        "mode": "core",
+        "peak_rss_kib": 2316,
+        "qubits": 10000,
+        "query_nanoseconds": 577513,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 190617,
+        "init_nanoseconds": 225483,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.7284841053187847e-12,
+        "max_phase_error": 1.8474111129762605e-13,
+        "mode": "default",
+        "peak_rss_kib": 2316,
+        "qubits": 10000,
+        "query_nanoseconds": 574133,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 310161,
+        "init_nanoseconds": 202464,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.7284841053187847e-12,
+        "max_phase_error": 1.8474111129762605e-13,
+        "mode": "tight_auto",
+        "peak_rss_kib": 2312,
+        "qubits": 10000,
+        "query_nanoseconds": 846140,
+        "recorded_empty_recovery_nanoseconds": 47547,
+        "recovery_attempts": 0,
+        "recovery_passes": 2500,
+        "recovery_successes": 0,
+        "recovery_suppressed": 17500,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 196890,
+        "init_nanoseconds": 197216,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.7284841053187847e-12,
+        "max_phase_error": 1.8474111129762605e-13,
+        "mode": "tight_noauto",
+        "peak_rss_kib": 2312,
+        "qubits": 10000,
+        "query_nanoseconds": 616103,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 1844833,
+        "init_nanoseconds": 2182634,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-11,
+        "max_phase_error": 5.4285465012071654e-12,
+        "mode": "core",
+        "peak_rss_kib": 7244,
+        "qubits": 100000,
+        "query_nanoseconds": 6128117,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 2007208,
+        "init_nanoseconds": 1845380,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-11,
+        "max_phase_error": 5.4285465012071654e-12,
+        "mode": "default",
+        "peak_rss_kib": 7244,
+        "qubits": 100000,
+        "query_nanoseconds": 6051334,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 3125466,
+        "init_nanoseconds": 1700852,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-11,
+        "max_phase_error": 5.4285465012071654e-12,
+        "mode": "tight_auto",
+        "peak_rss_kib": 7248,
+        "qubits": 100000,
+        "query_nanoseconds": 6540762,
+        "recorded_empty_recovery_nanoseconds": 460977,
+        "recovery_attempts": 0,
+        "recovery_passes": 25000,
+        "recovery_successes": 0,
+        "recovery_suppressed": 175000,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 2092579,
+        "init_nanoseconds": 2055364,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-11,
+        "max_phase_error": 5.4285465012071654e-12,
+        "mode": "tight_noauto",
+        "peak_rss_kib": 7244,
+        "qubits": 100000,
+        "query_nanoseconds": 6160193,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 1
+      },
+      {
+        "evolution_nanoseconds": 17772290,
+        "init_nanoseconds": 17557804,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-10,
+        "max_phase_error": 2.518163455533795e-11,
+        "mode": "core",
+        "peak_rss_kib": 56576,
+        "qubits": 1000000,
+        "query_nanoseconds": 63347994,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 3
+      },
+      {
+        "evolution_nanoseconds": 20205688,
+        "init_nanoseconds": 17106664,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-10,
+        "max_phase_error": 2.518163455533795e-11,
+        "mode": "default",
+        "peak_rss_kib": 56580,
+        "qubits": 1000000,
+        "query_nanoseconds": 62650942,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 3
+      },
+      {
+        "evolution_nanoseconds": 33280494,
+        "init_nanoseconds": 17633979,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-10,
+        "max_phase_error": 2.518163455533795e-11,
+        "mode": "tight_auto",
+        "peak_rss_kib": 56580,
+        "qubits": 1000000,
+        "query_nanoseconds": 61767480,
+        "recorded_empty_recovery_nanoseconds": 5268910,
+        "recovery_attempts": 0,
+        "recovery_passes": 250000,
+        "recovery_successes": 0,
+        "recovery_suppressed": 1750000,
+        "repetitions": 3
+      },
+      {
+        "evolution_nanoseconds": 21326925,
+        "init_nanoseconds": 17385968,
+        "max_local_error": 5.551115123125783e-17,
+        "max_log_error": 2.9103830456733704e-10,
+        "max_phase_error": 2.518163455533795e-11,
+        "mode": "tight_noauto",
+        "peak_rss_kib": 56576,
+        "qubits": 1000000,
+        "query_nanoseconds": 62353093,
+        "recorded_empty_recovery_nanoseconds": 0,
+        "recovery_attempts": 0,
+        "recovery_passes": 0,
+        "recovery_successes": 0,
+        "recovery_suppressed": 0,
+        "repetitions": 3
+      }
+    ],
+    "overhead_ratios": [
+      {
+        "evolution_vs_core": 1.1473344609032197,
+        "mode": "default",
+        "qubits": 10000
+      },
+      {
+        "evolution_vs_core": 1.8668765310974544,
+        "mode": "tight_auto",
+        "qubits": 10000
+      },
+      {
+        "evolution_vs_core": 1.18509200127604,
+        "mode": "tight_noauto",
+        "qubits": 10000
+      },
+      {
+        "evolution_ratio": 1.575300929452994,
+        "mode": "tight_auto_vs_tight_noauto",
+        "qubits": 10000
+      },
+      {
+        "evolution_vs_core": 1.0880160968499588,
+        "mode": "default",
+        "qubits": 100000
+      },
+      {
+        "evolution_vs_core": 1.6941728600908592,
+        "mode": "tight_auto",
+        "qubits": 100000
+      },
+      {
+        "evolution_vs_core": 1.1342918302090217,
+        "mode": "tight_noauto",
+        "qubits": 100000
+      },
+      {
+        "evolution_ratio": 1.4935952238840207,
+        "mode": "tight_auto_vs_tight_noauto",
+        "qubits": 100000
+      },
+      {
+        "evolution_vs_core": 1.1369209032713286,
+        "mode": "default",
+        "qubits": 1000000
+      },
+      {
+        "evolution_vs_core": 1.8726058375144679,
+        "mode": "tight_auto",
+        "qubits": 1000000
+      },
+      {
+        "evolution_vs_core": 1.200009959324319,
+        "mode": "tight_noauto",
+        "qubits": 1000000
+      },
+      {
+        "evolution_ratio": 1.560491913391171,
+        "mode": "tight_auto_vs_tight_noauto",
+        "qubits": 1000000
+      }
+    ],
+    "records": 20,
+    "sources_unchanged_during_examination": true,
+    "status": "pass",
+    "total_worker_checks": 12440215
+  },
+  "production_files": {
+    "native/include/mundo_x/compact_core.hpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "d3cef03ec03beba17fc60306cc1ce26e4b6c7a00ce542f2705d432bad9243384"
+    },
+    "native/include/mundo_x/computasis.hpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "1cd71ab6a5489ad91277262f494baaa3cdbfe35af5f19ca00a8fad680de75e8b"
+    },
+    "native/include/mundo_x/dense_core.hpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc"
+    },
+    "native/include/mundo_x/exact_t_experiment.hpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "04e36ebe2e4333044eb2eeab05fecf04fd5dd024964170906248e043fb9d21da"
+    },
+    "native/include/mundo_x/factorized_core.hpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "7ed5c8e9075287f5517371843a363572e401c1fe3aadb5dedd6ba59b02cc35b9"
+    },
+    "native/include/mundo_x/teleport.hpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825"
+    },
+    "native/include/mundo_x/xasm.hpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "64da20be4b8a3469521a09ffd87cf215794b64bcb820496810e1a0cd3da3ea1d"
+    },
+    "native/src/main.cpp": {
+      "byte_identical_to_3125880": true,
+      "sha256": "ffae6d5c655db73966d1d4c203200545120fce30c3146cb0ec5bbb280d771a81"
+    }
+  }
+}

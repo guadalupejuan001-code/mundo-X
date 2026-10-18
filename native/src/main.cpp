@@ -1,11 +1,14 @@
 #include <chrono>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
@@ -15,6 +18,22 @@
 
 using mundo_x::CompactCore;
 using mundo_x::DenseCore;
+
+static std::size_t parse_count(const std::string& text) {
+  std::size_t value = 0;
+  const auto result =
+      std::from_chars(text.data(), text.data() + text.size(), value);
+  if (text.empty() || result.ec != std::errc{} ||
+      result.ptr != text.data() + text.size())
+    throw std::invalid_argument("expected a non-negative decimal integer: " + text);
+  return value;
+}
+
+static std::size_t read_qubit(std::istringstream& input) {
+  std::string token;
+  if (!(input >> token)) throw std::invalid_argument("missing qubit index");
+  return parse_count(token);
+}
 
 static double mib(std::size_t bytes) {
   return static_cast<double>(bytes) / (1024.0 * 1024.0);
@@ -96,6 +115,8 @@ static int bench(std::size_t n, bool run_dense) {
 
 static int cluster(std::size_t rows, std::size_t cols, bool run_dense) {
   if (rows == 0 || cols == 0) return 2;
+  if (rows > std::numeric_limits<std::size_t>::max() / cols)
+    throw std::invalid_argument("cluster dimensions overflow qubit count");
   const std::size_t n = rows * cols;
 
   std::cout << std::fixed << std::setprecision(3);
@@ -288,24 +309,20 @@ static int practice(std::size_t n) {
       if (op == "quit" || op == "exit") break;
 
       if (op == "h") {
-        std::size_t a;
-        in >> a;
+        const std::size_t a = read_qubit(in);
         q.hadamard(a);
       } else if (op == "x") {
-        std::size_t a;
-        in >> a;
+        const std::size_t a = read_qubit(in);
         q.pauli_x(a);
       } else if (op == "z") {
-        std::size_t a;
-        in >> a;
+        const std::size_t a = read_qubit(in);
         q.pauli_z(a);
       } else if (op == "s") {
-        std::size_t a;
-        in >> a;
+        const std::size_t a = read_qubit(in);
         q.phase_s(a);
       } else if (op == "cx") {
-        std::size_t c, t;
-        in >> c >> t;
+        const std::size_t c = read_qubit(in);
+        const std::size_t t = read_qubit(in);
         q.cnot(c, t);
       } else if (op == "show") {
         for (std::size_t r = 0; r < q.qubits(); ++r) {
@@ -327,7 +344,8 @@ static int practice(std::size_t n) {
   return 0;
 }
 
-int main(int argc, char** argv) {
+
+static int run_cli(int argc, char** argv) {
   if (argc < 2) {
     std::cerr
         << "usage: mundo_x hello | teleport | magic-witness | "
@@ -346,48 +364,39 @@ int main(int argc, char** argv) {
   if (cmd == "teleport") return teleport();
   if (cmd == "magic-witness") return magic_witness();
 
+
   if (cmd == "t-experiment") {
     if (argc < 4) return 2;
-    const std::size_t n =
-        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
-    const std::size_t t_gates =
-        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+    const std::size_t n = parse_count(argv[2]);
+    const std::size_t t_gates = parse_count(argv[3]);
     return t_experiment(n, t_gates);
   }
 
   if (cmd == "t-reduced-experiment") {
     if (argc < 4) return 2;
-    const std::size_t n =
-        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
-    const std::size_t t_gates =
-        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+    const std::size_t n = parse_count(argv[2]);
+    const std::size_t t_gates = parse_count(argv[3]);
     return t_reduced_experiment(n, t_gates);
   }
 
   if (cmd == "t-trace") {
     if (argc < 4) return 2;
-    const std::size_t n =
-        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
-    const std::size_t t_gates =
-        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+    const std::size_t n = parse_count(argv[2]);
+    const std::size_t t_gates = parse_count(argv[3]);
     return t_growth_trace(n, t_gates);
   }
 
   if (cmd == "t-trace-variant") {
     if (argc < 4) return 2;
-    const std::size_t n =
-        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
-    const std::size_t t_gates =
-        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+    const std::size_t n = parse_count(argv[2]);
+    const std::size_t t_gates = parse_count(argv[3]);
     return t_growth_trace_variant(n, t_gates);
   }
 
   if (cmd == "cluster") {
     if (argc < 4) return 2;
-    const std::size_t rows =
-        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
-    const std::size_t cols =
-        static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10));
+    const std::size_t rows = parse_count(argv[2]);
+    const std::size_t cols = parse_count(argv[3]);
 
     bool dense = false;
     for (int i = 4; i < argc; ++i) {
@@ -404,16 +413,14 @@ int main(int argc, char** argv) {
 
   if (cmd == "practice") {
     if (argc < 3) return 2;
-    const std::size_t n =
-        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
+    const std::size_t n = parse_count(argv[2]);
     return practice(n);
   }
 
   if (cmd == "bench") {
     if (argc < 3) return 2;
 
-    const std::size_t n =
-        static_cast<std::size_t>(std::strtoull(argv[2], nullptr, 10));
+    const std::size_t n = parse_count(argv[2]);
 
     bool dense = false;
     for (int i = 3; i < argc; ++i) {
@@ -424,4 +431,16 @@ int main(int argc, char** argv) {
   }
 
   return 2;
+}
+
+int main(int argc, char** argv) {
+  try {
+    return run_cli(argc, argv);
+  } catch (const std::invalid_argument& error) {
+    std::cerr << "INPUT ERROR: " << error.what() << '\n';
+    return 2;
+  } catch (const std::exception& error) {
+    std::cerr << "ERROR: " << error.what() << '\n';
+    return 1;
+  }
 }

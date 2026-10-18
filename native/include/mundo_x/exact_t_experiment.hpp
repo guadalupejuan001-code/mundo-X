@@ -461,9 +461,7 @@ class ReducedExactTRepresentation {
   };
 
   explicit ReducedExactTRepresentation(std::size_t qubits)
-      : n_(qubits), base_(qubits) {
-    if (qubits == 0 || qubits > 63)
-      throw std::invalid_argument("reduced representation supports 1..63 qubits");
+      : n_(validated_qubits(qubits)), base_(n_) {
     components_[PauliKey{}] = {1.0, 0.0};
   }
 
@@ -528,11 +526,17 @@ class ReducedExactTRepresentation {
         components_.size() * 2 + 1));
 
     const Pauli zq = pauli_z_op(q);
+    // Every stored label is already canonical for this base. Multiplying by
+    // Z_q changes the same pivot bits for every component, so the right-hand
+    // stabilizer correction can be computed once for the whole operation.
+    // Keep the multiplication order: the correction need not commute with p.
+    const Pauli correction = multiply(zq, canonicalize(zq, basis));
 
     for (const auto& entry : components_) {
       const Pauli p{entry.first.x, entry.first.z, 0};
-      accumulate(next, p, entry.second * alpha, basis);
-      accumulate(next, multiply(zq, p), entry.second * beta, basis);
+      accumulate_canonical(next, p, entry.second * alpha);
+      accumulate_canonical(next, multiply(multiply(zq, p), correction),
+                           entry.second * beta);
     }
 
     components_ = std::move(next);
@@ -542,7 +546,7 @@ class ReducedExactTRepresentation {
 
   std::vector<std::complex<double>> dense_reference() const {
     ensure_dense_safe();
-    DenseCore dense(n_);
+    DenseCore64 dense(n_);
     for (const auto& gate : circuit_) apply_dense_gate(dense, gate);
     return to_double_state(dense.state());
   }
@@ -550,7 +554,7 @@ class ReducedExactTRepresentation {
   std::vector<std::complex<double>> dense_from_reduced() const {
     ensure_dense_safe();
 
-    DenseCore dense_base(n_);
+    DenseCore64 dense_base(n_);
     for (const auto& gate : base_circuit_) apply_dense_gate(dense_base, gate);
     const auto base_state = to_double_state(dense_base.state());
 
@@ -679,10 +683,18 @@ class ReducedExactTRepresentation {
   struct StabilizerBasis {
     std::vector<Pauli> rows;
     std::vector<std::size_t> pivots;
+    std::uint64_t pivot_x = 0;
+    std::uint64_t pivot_z = 0;
   };
 
   using ComponentMap =
       std::unordered_map<PauliKey, std::complex<double>, PauliKeyHash>;
+
+  static std::size_t validated_qubits(std::size_t qubits) {
+    if (qubits == 0 || qubits > 63)
+      throw std::invalid_argument("reduced representation supports 1..63 qubits");
+    return qubits;
+  }
 
   static std::size_t complex_matrix_rank(
       std::vector<std::complex<double>> matrix,
@@ -774,16 +786,8 @@ class ReducedExactTRepresentation {
     return ((p.z >> (col - n)) & 1ULL) != 0;
   }
 
-  static Pauli pauli_x_op(std::size_t q) {
-    return {std::uint64_t{1} << q, 0, 0};
-  }
-
   static Pauli pauli_z_op(std::size_t q) {
     return {0, std::uint64_t{1} << q, 0};
-  }
-
-  static Pauli pauli_y_op(std::size_t q) {
-    return {std::uint64_t{1} << q, std::uint64_t{1} << q, 1};
   }
 
   Pauli parse_generator(const std::string& g) const {
@@ -840,6 +844,10 @@ class ReducedExactTRepresentation {
       }
 
       basis.pivots.push_back(col);
+      if (col < n_)
+        basis.pivot_x |= std::uint64_t{1} << col;
+      else
+        basis.pivot_z |= std::uint64_t{1} << (col - n_);
       ++rank;
     }
 
@@ -851,6 +859,7 @@ class ReducedExactTRepresentation {
   }
 
   Pauli canonicalize(Pauli p, const StabilizerBasis& basis) const {
+    if (!(p.x & basis.pivot_x) && !(p.z & basis.pivot_z)) return p;
     for (std::size_t r = 0; r < basis.pivots.size(); ++r) {
       if (bit_at(p, n_, basis.pivots[r]))
         p = multiply(p, basis.rows[r]);  // right multiply by +1 stabilizer
@@ -861,7 +870,11 @@ class ReducedExactTRepresentation {
   void accumulate(ComponentMap& map, Pauli p,
                   std::complex<double> coefficient,
                   const StabilizerBasis& basis) const {
-    p = canonicalize(p, basis);
+    accumulate_canonical(map, canonicalize(p, basis), coefficient);
+  }
+
+  static void accumulate_canonical(ComponentMap& map, Pauli p,
+                                   std::complex<double> coefficient) {
     coefficient *= phase_unit(p.phase);
     p.phase = 0;
 
@@ -873,71 +886,51 @@ class ReducedExactTRepresentation {
       it->second += coefficient;
   }
 
-  Pauli image_x(std::size_t q, const ExactExperimentGate& gate) const {
-    Pauli p = pauli_x_op(q);
-    switch (gate.op) {
-      case ExactExperimentOp::H:
-        if (q == gate.a) p = pauli_z_op(q);
-        break;
-      case ExactExperimentOp::S:
-        if (q == gate.a) p = pauli_y_op(q);
-        break;
-      case ExactExperimentOp::X:
-        break;
-      case ExactExperimentOp::Z:
-        if (q == gate.a) p.phase = 2;
-        break;
-      case ExactExperimentOp::CX:
-        if (q == gate.a) {
-          p = multiply(pauli_x_op(gate.a), pauli_x_op(gate.b));
-        }
-        break;
-      case ExactExperimentOp::CZ:
-        if (q == gate.a) {
-          p = multiply(pauli_x_op(gate.a), pauli_z_op(gate.b));
-        } else if (q == gate.b) {
-          p = multiply(pauli_z_op(gate.a), pauli_x_op(gate.b));
-        }
-        break;
-      case ExactExperimentOp::T:
-        throw std::logic_error("T is not Clifford");
-    }
-    return p;
-  }
-
-  Pauli image_z(std::size_t q, const ExactExperimentGate& gate) const {
-    Pauli p = pauli_z_op(q);
-    switch (gate.op) {
-      case ExactExperimentOp::H:
-        if (q == gate.a) p = pauli_x_op(q);
-        break;
-      case ExactExperimentOp::S:
-        break;
-      case ExactExperimentOp::X:
-        if (q == gate.a) p.phase = 2;
-        break;
-      case ExactExperimentOp::Z:
-        break;
-      case ExactExperimentOp::CX:
-        if (q == gate.b) {
-          p = multiply(pauli_z_op(gate.a), pauli_z_op(gate.b));
-        }
-        break;
-      case ExactExperimentOp::CZ:
-        break;
-      case ExactExperimentOp::T:
-        throw std::logic_error("T is not Clifford");
-    }
-    return p;
-  }
-
   Pauli conjugate(Pauli p, const ExactExperimentGate& gate) const {
-    Pauli out{0, 0, p.phase};
-    for (std::size_t q = 0; q < n_; ++q) {
-      if ((p.x >> q) & 1ULL) out = multiply(out, image_x(q, gate));
-      if ((p.z >> q) & 1ULL) out = multiply(out, image_z(q, gate));
+    // Direct symplectic updates for i^phase X^x Z^z. The raw XZ convention
+    // matters: S contributes i for every X, and CX needs no phase update.
+    const auto a = std::uint64_t{1} << gate.a;
+    const bool xa = (p.x & a) != 0;
+    const bool za = (p.z & a) != 0;
+    switch (gate.op) {
+      case ExactExperimentOp::H:
+        if (xa && za) p.phase += 2;
+        if (xa != za) {
+          p.x ^= a;
+          p.z ^= a;
+        }
+        break;
+      case ExactExperimentOp::S:
+        if (xa) {
+          ++p.phase;
+          p.z ^= a;
+        }
+        break;
+      case ExactExperimentOp::X:
+        if (za) p.phase += 2;
+        break;
+      case ExactExperimentOp::Z:
+        if (xa) p.phase += 2;
+        break;
+      case ExactExperimentOp::CX: {
+        const auto b = std::uint64_t{1} << gate.b;
+        if (xa) p.x ^= b;
+        if (p.z & b) p.z ^= a;
+        break;
+      }
+      case ExactExperimentOp::CZ: {
+        const auto b = std::uint64_t{1} << gate.b;
+        const bool xb = (p.x & b) != 0;
+        if (xa && xb) p.phase += 2;
+        if (xa) p.z ^= b;
+        if (xb) p.z ^= a;
+        break;
+      }
+      case ExactExperimentOp::T:
+        throw std::logic_error("T is not Clifford");
     }
-    return out;
+    p.phase &= 3U;
+    return p;
   }
 
   void update_base(const ExactExperimentGate& gate) {
@@ -971,8 +964,9 @@ class ReducedExactTRepresentation {
     components_ = std::move(next);
   }
 
-  static void apply_dense_gate(DenseCore& dense,
-                               const ExactExperimentGate& gate) {
+  template <typename Core>
+  static void apply_dense_gate(Core& dense,
+                                const ExactExperimentGate& gate) {
     switch (gate.op) {
       case ExactExperimentOp::H: dense.hadamard(gate.a); break;
       case ExactExperimentOp::S: dense.phase_s(gate.a); break;
@@ -984,8 +978,9 @@ class ReducedExactTRepresentation {
     }
   }
 
+  template <typename Scalar>
   static std::vector<std::complex<double>> to_double_state(
-      const std::vector<DenseCore::Complex>& input) {
+      const std::vector<std::complex<Scalar>>& input) {
     std::vector<std::complex<double>> out;
     out.reserve(input.size());
     for (const auto& a : input)
@@ -1322,7 +1317,7 @@ inline ExactTExperimentResult run_reduced_exact_t_experiment(
   const bool fidelity_ok = std::abs(fidelity - 1.0) < 3e-5;
   const bool norm_ok = std::abs(norm - 1.0) < 3e-5;
 
-  DenseCore dense(qubits);
+  DenseCore64 dense(qubits);
   const std::size_t dense_bytes = dense.state_bytes();
 
   std::ostringstream out;
@@ -1351,6 +1346,7 @@ inline ExactTExperimentResult run_reduced_exact_t_experiment(
   out << "base_tableau_bytes=" << q.base_tableau_bytes() << "\n";
   out << "logical_payload_bytes=" << q.logical_payload_bytes() << "\n";
   out << "dense_reference_bytes=" << dense_bytes << "\n";
+  out << "dense_reference_precision_bits=64\n";
   out << "fidelity=" << fidelity << "\n";
   out << "reduced_norm=" << norm << "\n";
   out << "result=" << ((fidelity_ok && norm_ok) ? "PASS" : "FAIL") << "\n";

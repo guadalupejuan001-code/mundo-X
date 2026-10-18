@@ -2,13 +2,51 @@
 
 **Plataforma de computación basada en representaciones compactas, simulación cuántica por software y reconstrucción de información mediante reglas.**
 
-**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 14 de octubre de 2026.
+**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
 
 > **Principio de diseño:** representar y transformar lo necesario; no materializar todos los estados, ramas u objetos cuando su comportamiento puede obtenerse a partir de estructuras, relaciones y reglas de evolución.
 
 Mundo X **no nació como una app Android**. La aplicación móvil, el runtime de Windows y los experimentos gráficos sirven para probar la arquitectura en contextos distintos. El núcleo del proyecto es investigar **cómo representar información y calcular su evolución** sin depender, siempre, de una enumeración explícita de cada elemento posible.
 
 El software **funciona en los casos documentados**, está en desarrollo y no se presenta aquí como producto terminado. La rama actual contiene simuladores, un runtime programable, pruebas de circuitos, aplicaciones de demostración y una línea neuronal independiente.
+
+**Qué significa «motor»:** [nombres, funciones y origen de los núcleos](results/engine_map_2026-10-18.md).
+Mundo X es el proyecto; `CompactCore` y `ReducedExactTRepresentation` son sus
+núcleos originales. `FactorizedCore` es un prototipo posterior. Cada examen
+identifica el componente ejecutado.
+
+**Corrección de interpretación:** el titular usó «computasis» como analogía de
+homeostasis. El controlador experimental añadido después no fue una
+especificación suya ni define la arquitectura original. **Su implementación,
+comando, pruebas específicas y
+supervisor han sido eliminados del código activo**. Los bancos de pruebas usan
+los núcleos conservados. Las mediciones anteriores permanecen como registro
+histórico y no describen un componente disponible.
+
+Verificación de la retirada: compilación limpia, siete pruebas CTest,
+18 comprobaciones del CLI y 52 casos en los supervisores, incluido un rechazo
+de presupuesto esperado. Los seis headers de los núcleos conservados no cambian
+durante esta retirada.
+
+**Exámenes ampliados:** [núcleos originales, productos de 200 millones y costo del controlador](results/native_exams_2026-10-18.md).
+Esta fase conserva el código de los núcleos; registra también los timeouts,
+los fallos del criterio numérico anterior y las pasadas de recuperación vacías.
+
+**Escala del 18 de octubre:** [almacenamiento plano y ejecución en flujo](results/scale_exams_2026-10-18.md).
+Esta rama reduce las asignaciones por qubit independiente, conserva los circuitos
+en flujo y añade exámenes hasta cien millones de qubits producto. El informe
+separa RAM, amplitudes, consultas, criterios numéricos y límites del núcleo propio.
+
+**Registro del 17 de octubre:** [exámenes de factorización](results/factorized_exams_2026-10-17.md).
+FactorizedCore es un prototipo escrito en este trabajo para explorar
+la idea y la arquitectura originales del titular de Mundo X. La implementación
+experimental por factores independientes y bloques conserva exámenes
+reproducibles; su ejecución nativa no depende de simuladores externos.
+Pasó el oráculo independiente en los
+casos examinados y conservó productos de diez millones de qubits con unos
+2,02 GiB de RAM total, sin expansión global;
+el informe registra también límites, falsos negativos de separación y costos.
+El controlador incluido en aquel registro y su comando fueron retirados.
 
 ## Índice
 
@@ -190,6 +228,15 @@ Las siguientes cifras proceden de ejecuciones registradas del proyecto y, donde 
 En la prueba `4 qubits / 12 T`, el registro reporta **737,562 bytes** para la representación ingenua explícita frente a **1,072 bytes de carga lógica** en la representación reducida. Son mediciones de estructuras diferentes dentro del programa; **la carga lógica no equivale a la RAM total del proceso**.
 
 En la investigación posterior, una factorización secuencial de bajo rango **no** comprimió los coeficientes del caso de 8 qubits: el vector de 256 coeficientes complejos dio una estimación de 680 escalares para esa factorización. Se conserva ese resultado negativo porque identifica una limitación técnica real.
+
+La [revisión del 17 de octubre](results/architecture_limits_2026-10-17.md) añade
+un banco aislado de escala, comprobaciones numéricas independientes y controles
+de entradas. La creación y evolución de Reduced Exact T mejoran aproximadamente 2–2,25× en
+los tres circuitos comparados; el crecimiento exponencial de sus componentes
+persiste. En esta revisión, su referencia y reconstrucción usan `DenseCore64`
+(double), y el reporte declara esa precisión y sus bytes. `DenseCore` conserva
+float32 para los benchmarks y resultados históricos. Los tiempos, presupuestos,
+fallos y límites de cada comparación quedan documentados en el informe.
 
 **Precisión sobre el renderizado:** los 608 bytes que aparece en las capturas `COMPACT → GPU` representan el **estado lógico explícito instrumentado**, no toda la memoria que emplea Android, los shaders o la GPU. La mejora de FPS registrada provino del traslado del renderizado Canvas a OpenGL ES, el procesamiento por lotes y la reconstrucción local; no se atribuye a una aceleración cuántica física.
 

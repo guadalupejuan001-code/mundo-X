@@ -1,0 +1,853 @@
+{
+  "baseline_commit": "f858053bf0a47e6c760428f3526ec74ff89e40c3",
+  "candidate_branch": "codex/architecture-limits-20261017",
+  "numerics_baseline": {
+    "cases": 77,
+    "statuses": {
+      "pass": 77
+    },
+    "commit": "f858053bf0a47e6c760428f3526ec74ff89e40c3",
+    "tolerance": 3e-05,
+    "process_memory_limit_bytes": 1073741824,
+    "process_wall_timeout_seconds": 20,
+    "process_cpu_timeout_seconds": 19,
+    "threads": 1,
+    "limitations": [
+      "Finite deterministic sample; not a universal correctness proof.",
+      "Performance cutoff is imposed by this test budget, not a mathematical limit.",
+      "DenseCore diagnostic is not the reference; oracle is independent NumPy complex128.",
+      "Measurement checks validate documented forced-branch semantics, not sampling quality."
+    ],
+    "header_sha256": {
+      "exact_t_experiment.hpp": "7a6ee9b3eee430eac196cde27634035e054251870010a21f89e5c31fce0c7112",
+      "compact_core.hpp": "3a4a8d6abb7c69c4a48504253d16cf5fe8819a7c3e0308c7e0c3b604e43b1c4c",
+      "dense_core.hpp": "c996448a8496feab2a5b11b198a6071c8e45cf44c3f13c1d628aeab2f0c29030"
+    },
+    "reduced_cases": 56,
+    "compact_measurement_cases": 21,
+    "max_completed_depth": 100010,
+    "max_norm_error": {
+      "value": 2.384275701317051e-07,
+      "case": "T8-product-n4-d100000"
+    },
+    "max_infidelity": {
+      "value": 2.1094237467877974e-15,
+      "case": "clifford-n8-d100000"
+    },
+    "max_max_amplitude_error": {
+      "value": 1.192093151969425e-07,
+      "case": "inverse-n10"
+    },
+    "max_l2_error": {
+      "value": 1.192137920451121e-07,
+      "case": "T8-product-n4-d100000"
+    }
+  },
+  "numerics_candidate": {
+    "cases": 212,
+    "statuses": {
+      "pass": 212
+    },
+    "commit": "f858053bf0a47e6c760428f3526ec74ff89e40c3",
+    "tolerance": 1e-09,
+    "process_memory_limit_bytes": 1073741824,
+    "process_wall_timeout_seconds": 20,
+    "process_cpu_timeout_seconds": 19,
+    "threads": 1,
+    "requested_suite": "representative",
+    "limitations": [
+      "Finite deterministic sample; not a universal correctness proof.",
+      "Performance cutoff is imposed by this test budget, not a mathematical limit.",
+      "DenseCore diagnostic is not the reference; oracle is independent NumPy complex128.",
+      "Measurement checks validate documented forced-branch semantics, not sampling quality."
+    ],
+    "header_sha256": {
+      "exact_t_experiment.hpp": "04e36ebe2e4333044eb2eeab05fecf04fd5dd024964170906248e043fb9d21da",
+      "compact_core.hpp": "d3cef03ec03beba17fc60306cc1ce26e4b6c7a00ce542f2705d432bad9243384",
+      "dense_core.hpp": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc"
+    },
+    "reduced_cases": 210,
+    "compact_measurement_cases": 2,
+    "max_completed_depth": 100002,
+    "max_norm_error": {
+      "value": 3.14022141623127e-11,
+      "case": "CZ-repeat-d100000"
+    },
+    "max_infidelity": {
+      "value": 4.218847493575595e-15,
+      "case": "sanity-random-n8-s738009"
+    },
+    "max_max_amplitude_error": {
+      "value": 7.850442518275713e-12,
+      "case": "CZ-repeat-d100000"
+    },
+    "max_l2_error": {
+      "value": 1.5700885036551426e-11,
+      "case": "CZ-repeat-d100000"
+    }
+  },
+  "scale": {
+    "adaptive_stops": [
+      {
+        "family": "product_ht",
+        "method": "reduced",
+        "reason": "stopped after n=24,repeat=1,status=allocation_failure",
+        "variant": "candidate"
+      },
+      {
+        "family": "product_ht",
+        "method": "dense",
+        "reason": "stopped after n=26,repeat=1,status=timeout",
+        "variant": "candidate"
+      },
+      {
+        "family": "product_t2",
+        "method": "reduced",
+        "reason": "stopped after n=24,repeat=1,status=timeout",
+        "variant": "candidate"
+      },
+      {
+        "family": "product_t2",
+        "method": "dense",
+        "reason": "stopped after n=26,repeat=1,status=timeout",
+        "variant": "candidate"
+      },
+      {
+        "family": "random",
+        "method": "reduced",
+        "reason": "stopped after n=20,repeat=1,status=timeout",
+        "variant": "candidate"
+      },
+      {
+        "family": "random",
+        "method": "dense",
+        "reason": "stopped after n=24,repeat=1,status=timeout",
+        "variant": "candidate"
+      },
+      {
+        "family": "cli",
+        "method": "reduced",
+        "reason": "stopped after n=20,repeat=1,status=timeout",
+        "variant": "candidate"
+      },
+      {
+        "family": "cli",
+        "method": "dense",
+        "reason": "stopped after n=24,repeat=1,status=timeout",
+        "variant": "candidate"
+      },
+      {
+        "family": "ghz",
+        "method": "compact",
+        "reason": "stopped after n=32000,repeat=1,status=timeout",
+        "variant": "candidate"
+      }
+    ],
+    "case_count": 138,
+    "outputs": {
+      "csv": "/workspace/scratch/mundox-limits-20261017/scale/full-candidate/results.csv",
+      "jsonl": "/workspace/scratch/mundox-limits-20261017/scale/full-candidate/results.jsonl"
+    },
+    "resource_limits": {
+      "address_space_bytes": 1610612736,
+      "worker_timeout_seconds": 15
+    },
+    "status_counts": {
+      "adaptive_skipped": 19,
+      "allocation_failure": 1,
+      "expected_rejection": 1,
+      "ok": 109,
+      "timeout": 8
+    }
+  },
+  "scale_medians": {
+    "product_ht/reduced/8": {
+      "initialization_ms": 0.004094,
+      "evolution_ms": 0.074872,
+      "process_peak_rss_bytes": 1929216,
+      "declared_payload_bytes": 8472,
+      "component_count": 256
+    },
+    "product_ht/reduced/12": {
+      "initialization_ms": 0.004061,
+      "evolution_ms": 0.513539,
+      "process_peak_rss_bytes": 2347008,
+      "declared_payload_bytes": 131492,
+      "component_count": 4096
+    },
+    "product_ht/reduced/16": {
+      "initialization_ms": 0.004083,
+      "evolution_ms": 8.384735,
+      "process_peak_rss_bytes": 8843264,
+      "declared_payload_bytes": 2097712,
+      "component_count": 65536
+    },
+    "product_ht/reduced/20": {
+      "initialization_ms": 0.002858,
+      "evolution_ms": 177.29838,
+      "process_peak_rss_bytes": 115372032,
+      "declared_payload_bytes": 33555132,
+      "component_count": 1048576
+    },
+    "product_ht/reduced/22": {
+      "initialization_ms": 0.004824,
+      "evolution_ms": 1464.116392,
+      "process_peak_rss_bytes": 456417280,
+      "declared_payload_bytes": 134218498,
+      "component_count": 4194304
+    },
+    "product_ht/dense/8": {
+      "initialization_ms": 0.003197,
+      "evolution_ms": 0.017453,
+      "process_peak_rss_bytes": 1908736,
+      "declared_payload_bytes": 4096,
+      "component_count": 0
+    },
+    "product_ht/dense/12": {
+      "initialization_ms": 0.028714,
+      "evolution_ms": 0.376995,
+      "process_peak_rss_bytes": 1961984,
+      "declared_payload_bytes": 65536,
+      "component_count": 0
+    },
+    "product_ht/dense/16": {
+      "initialization_ms": 0.34803,
+      "evolution_ms": 7.986463,
+      "process_peak_rss_bytes": 2793472,
+      "declared_payload_bytes": 1048576,
+      "component_count": 0
+    },
+    "product_ht/dense/20": {
+      "initialization_ms": 6.045374,
+      "evolution_ms": 169.150762,
+      "process_peak_rss_bytes": 18534400,
+      "declared_payload_bytes": 16777216,
+      "component_count": 0
+    },
+    "product_ht/dense/22": {
+      "initialization_ms": 25.831052,
+      "evolution_ms": 736.974984,
+      "process_peak_rss_bytes": 68857856,
+      "declared_payload_bytes": 67108864,
+      "component_count": 0
+    },
+    "product_ht/dense/24": {
+      "initialization_ms": 139.921437,
+      "evolution_ms": 3440.036608,
+      "process_peak_rss_bytes": 270184448,
+      "declared_payload_bytes": 268435456,
+      "component_count": 0
+    },
+    "product_t2/reduced/8": {
+      "initialization_ms": 0.006277,
+      "evolution_ms": 0.170142,
+      "process_peak_rss_bytes": 1941504,
+      "declared_payload_bytes": 8520,
+      "component_count": 256
+    },
+    "product_t2/reduced/12": {
+      "initialization_ms": 0.003133,
+      "evolution_ms": 1.373485,
+      "process_peak_rss_bytes": 2502656,
+      "declared_payload_bytes": 131564,
+      "component_count": 4096
+    },
+    "product_t2/reduced/16": {
+      "initialization_ms": 0.004251,
+      "evolution_ms": 16.513673,
+      "process_peak_rss_bytes": 11014144,
+      "declared_payload_bytes": 2097808,
+      "component_count": 65536
+    },
+    "product_t2/reduced/20": {
+      "initialization_ms": 0.004513,
+      "evolution_ms": 339.515714,
+      "process_peak_rss_bytes": 152866816,
+      "declared_payload_bytes": 33555252,
+      "component_count": 1048576
+    },
+    "product_t2/reduced/22": {
+      "initialization_ms": 0.004849,
+      "evolution_ms": 2725.892838,
+      "process_peak_rss_bytes": 608321536,
+      "declared_payload_bytes": 134218630,
+      "component_count": 4194304
+    },
+    "product_t2/dense/8": {
+      "initialization_ms": 0.003506,
+      "evolution_ms": 0.018004,
+      "process_peak_rss_bytes": 1908736,
+      "declared_payload_bytes": 4096,
+      "component_count": 0
+    },
+    "product_t2/dense/12": {
+      "initialization_ms": 0.026854,
+      "evolution_ms": 0.403736,
+      "process_peak_rss_bytes": 1970176,
+      "declared_payload_bytes": 65536,
+      "component_count": 0
+    },
+    "product_t2/dense/16": {
+      "initialization_ms": 0.323624,
+      "evolution_ms": 8.879295,
+      "process_peak_rss_bytes": 2801664,
+      "declared_payload_bytes": 1048576,
+      "component_count": 0
+    },
+    "product_t2/dense/20": {
+      "initialization_ms": 6.953577,
+      "evolution_ms": 180.272756,
+      "process_peak_rss_bytes": 18526208,
+      "declared_payload_bytes": 16777216,
+      "component_count": 0
+    },
+    "product_t2/dense/22": {
+      "initialization_ms": 28.315045,
+      "evolution_ms": 793.089579,
+      "process_peak_rss_bytes": 68857856,
+      "declared_payload_bytes": 67108864,
+      "component_count": 0
+    },
+    "product_t2/dense/24": {
+      "initialization_ms": 134.476059,
+      "evolution_ms": 3776.084463,
+      "process_peak_rss_bytes": 270188544,
+      "declared_payload_bytes": 268435456,
+      "component_count": 0
+    },
+    "product_t2/compact/8": {
+      "initialization_ms": 0.002314,
+      "evolution_ms": 0.000718,
+      "process_peak_rss_bytes": 1904640,
+      "declared_payload_bytes": 136,
+      "component_count": 1
+    },
+    "product_t2/compact/12": {
+      "initialization_ms": 0.000795,
+      "evolution_ms": 0.000855,
+      "process_peak_rss_bytes": 1908736,
+      "declared_payload_bytes": 204,
+      "component_count": 1
+    },
+    "product_t2/compact/16": {
+      "initialization_ms": 0.002035,
+      "evolution_ms": 0.001121,
+      "process_peak_rss_bytes": 1908736,
+      "declared_payload_bytes": 272,
+      "component_count": 1
+    },
+    "product_t2/compact/20": {
+      "initialization_ms": 0.002098,
+      "evolution_ms": 0.002266,
+      "process_peak_rss_bytes": 1908736,
+      "declared_payload_bytes": 340,
+      "component_count": 1
+    },
+    "product_t2/compact/22": {
+      "initialization_ms": 0.002204,
+      "evolution_ms": 0.001679,
+      "process_peak_rss_bytes": 1908736,
+      "declared_payload_bytes": 374,
+      "component_count": 1
+    },
+    "product_t2/compact/24": {
+      "initialization_ms": 0.002466,
+      "evolution_ms": 0.002155,
+      "process_peak_rss_bytes": 1912832,
+      "declared_payload_bytes": 408,
+      "component_count": 1
+    },
+    "product_t2/compact/26": {
+      "initialization_ms": 0.002805,
+      "evolution_ms": 0.002645,
+      "process_peak_rss_bytes": 1912832,
+      "declared_payload_bytes": 442,
+      "component_count": 1
+    },
+    "product_t2/compact/28": {
+      "initialization_ms": 0.002261,
+      "evolution_ms": 0.002606,
+      "process_peak_rss_bytes": 1908736,
+      "declared_payload_bytes": 476,
+      "component_count": 1
+    },
+    "random/reduced/8": {
+      "initialization_ms": 0.004562,
+      "evolution_ms": 1.875997,
+      "process_peak_rss_bytes": 1949696,
+      "declared_payload_bytes": 9768,
+      "component_count": 256
+    },
+    "random/reduced/12": {
+      "initialization_ms": 0.004306,
+      "evolution_ms": 28.8659,
+      "process_peak_rss_bytes": 2510848,
+      "declared_payload_bytes": 133436,
+      "component_count": 4096
+    },
+    "random/reduced/16": {
+      "initialization_ms": 0.004277,
+      "evolution_ms": 569.419958,
+      "process_peak_rss_bytes": 11235328,
+      "declared_payload_bytes": 2100304,
+      "component_count": 65536
+    },
+    "random/dense/8": {
+      "initialization_ms": 0.003428,
+      "evolution_ms": 0.093685,
+      "process_peak_rss_bytes": 1916928,
+      "declared_payload_bytes": 4096,
+      "component_count": 0
+    },
+    "random/dense/12": {
+      "initialization_ms": 0.024354,
+      "evolution_ms": 2.170866,
+      "process_peak_rss_bytes": 1978368,
+      "declared_payload_bytes": 65536,
+      "component_count": 0
+    },
+    "random/dense/16": {
+      "initialization_ms": 0.399864,
+      "evolution_ms": 45.423709,
+      "process_peak_rss_bytes": 2818048,
+      "declared_payload_bytes": 1048576,
+      "component_count": 0
+    },
+    "random/dense/20": {
+      "initialization_ms": 6.603792,
+      "evolution_ms": 937.831937,
+      "process_peak_rss_bytes": 18550784,
+      "declared_payload_bytes": 16777216,
+      "component_count": 0
+    },
+    "random/dense/22": {
+      "initialization_ms": 26.764819,
+      "evolution_ms": 4196.908392,
+      "process_peak_rss_bytes": 68882432,
+      "declared_payload_bytes": 67108864,
+      "component_count": 0
+    },
+    "cli/reduced/8": {
+      "initialization_ms": 0.004252,
+      "evolution_ms": 1.780962,
+      "process_peak_rss_bytes": 1949696,
+      "declared_payload_bytes": 9612,
+      "component_count": 256
+    },
+    "cli/reduced/12": {
+      "initialization_ms": 0.004225,
+      "evolution_ms": 33.245853,
+      "process_peak_rss_bytes": 2514944,
+      "declared_payload_bytes": 133208,
+      "component_count": 4096
+    },
+    "cli/reduced/16": {
+      "initialization_ms": 0.004313,
+      "evolution_ms": 872.922448,
+      "process_peak_rss_bytes": 11227136,
+      "declared_payload_bytes": 2100004,
+      "component_count": 65536
+    },
+    "cli/dense/8": {
+      "initialization_ms": 0.003133,
+      "evolution_ms": 0.078475,
+      "process_peak_rss_bytes": 1912832,
+      "declared_payload_bytes": 4096,
+      "component_count": 0
+    },
+    "cli/dense/12": {
+      "initialization_ms": 0.022913,
+      "evolution_ms": 1.915388,
+      "process_peak_rss_bytes": 1974272,
+      "declared_payload_bytes": 65536,
+      "component_count": 0
+    },
+    "cli/dense/16": {
+      "initialization_ms": 0.364487,
+      "evolution_ms": 38.428357,
+      "process_peak_rss_bytes": 2805760,
+      "declared_payload_bytes": 1048576,
+      "component_count": 0
+    },
+    "cli/dense/20": {
+      "initialization_ms": 6.718694,
+      "evolution_ms": 800.772313,
+      "process_peak_rss_bytes": 18546688,
+      "declared_payload_bytes": 16777216,
+      "component_count": 0
+    },
+    "cli/dense/22": {
+      "initialization_ms": 27.741715,
+      "evolution_ms": 3585.79875,
+      "process_peak_rss_bytes": 68878336,
+      "declared_payload_bytes": 67108864,
+      "component_count": 0
+    },
+    "ghz/compact/1024": {
+      "initialization_ms": 0.108441,
+      "evolution_ms": 3.689287,
+      "process_peak_rss_bytes": 1970176,
+      "declared_payload_bytes": 263168,
+      "component_count": 1
+    },
+    "ghz/compact/10000": {
+      "initialization_ms": 13.111117,
+      "evolution_ms": 682.354637,
+      "process_peak_rss_bytes": 27238400,
+      "declared_payload_bytes": 25130000,
+      "component_count": 1
+    }
+  },
+  "boundaries": {
+    "baseline_cpp_checks": 25,
+    "baseline_cpp_failures": 3,
+    "candidate_cpp_checks": 25,
+    "candidate_cpp_failures": 0,
+    "candidate_ubsan_passed": true,
+    "candidate_cli_assertions": [
+      {
+        "case": "candidate-cli-trailing",
+        "expected": 2,
+        "actual": 2,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-overflow-numeric",
+        "expected": 2,
+        "actual": 2,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-valid-ghz",
+        "expected": 0,
+        "actual": 0,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-hello",
+        "expected": 0,
+        "actual": 0,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-valid-cluster",
+        "expected": 0,
+        "actual": 0,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-trace-bad-t",
+        "expected": 2,
+        "actual": 2,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-size-max",
+        "expected": 1,
+        "actual": 1,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-negative",
+        "expected": 2,
+        "actual": 2,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-alphabetic",
+        "expected": 2,
+        "actual": 2,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-zero",
+        "expected": 2,
+        "actual": 2,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-valid-zero-t",
+        "expected": 0,
+        "actual": 0,
+        "passed": true
+      },
+      {
+        "case": "candidate-cli-cluster-product-overflow",
+        "expected": 2,
+        "actual": 2,
+        "passed": true
+      }
+    ],
+    "candidate_practice_missing_arg_preserves_state": true,
+    "candidate_practice_recovers_after_errors": true,
+    "resource_policy": {
+      "RLIMIT_AS_bytes": 1073741824,
+      "timeout_seconds_per_child": 15,
+      "lock": "/workspace/scratch/mundox-limits-20261017/compute.lock",
+      "core_dumps": false
+    }
+  },
+  "stride": {
+    "4096": {
+      "median_evolution_ms": 219.477359,
+      "median_peak_rss_bytes": 6144000,
+      "statuses": [
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    "4097": {
+      "median_evolution_ms": 50.784014,
+      "median_peak_rss_bytes": 6246400,
+      "statuses": [
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    "8192": {
+      "median_evolution_ms": 630.595349,
+      "median_peak_rss_bytes": 18862080,
+      "statuses": [
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    "8193": {
+      "median_evolution_ms": 366.080396,
+      "median_peak_rss_bytes": 18989056,
+      "statuses": [
+        "ok",
+        "ok",
+        "ok"
+      ]
+    }
+  },
+  "ghz_timeout_phase": {
+    "adaptive_stops": [
+      {
+        "family": "ghz",
+        "method": "compact",
+        "reason": "stopped after n=32000,repeat=1,status=timeout",
+        "variant": "candidate"
+      }
+    ],
+    "case_count": 1,
+    "outputs": {
+      "csv": "/workspace/scratch/mundox-limits-20261017/scale/ghz-phase-probe/results.csv",
+      "jsonl": "/workspace/scratch/mundox-limits-20261017/scale/ghz-phase-probe/results.jsonl"
+    },
+    "resource_limits": {
+      "address_space_bytes": 1610612736,
+      "worker_timeout_seconds": 15
+    },
+    "status_counts": {
+      "timeout": 1
+    }
+  },
+  "optimization": {
+    "schema_version": 1,
+    "purpose": "Preservation of existing evolution-only benchmark outputs; no new benchmarks were run to produce this artifact.",
+    "measurement_date": "2026-10-17",
+    "baseline_commit": "f858053bf0a47e6c760428f3526ec74ff89e40c3",
+    "baseline_exact_header_git_blob": "61b3fd12e7cffbbfdea3c752cf1c4eb6e5e9bd63",
+    "compiler_observed": "g++ (Debian 14.2.0-19) 14.2.0",
+    "build_working_directory": "/workspace/mundo-X-limits",
+    "execution_working_directory": "/workspace/scratch/mundox-limits-20261017",
+    "baseline_build_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock timeout 60s g++ -std=c++17 -O3 -DNDEBUG -I native/include native/tests/reduced_optimization.cpp -o /workspace/scratch/mundox-limits-20261017/reduced-baseline",
+    "optimized_build_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock timeout 60s g++ -std=c++17 -O3 -DNDEBUG -Wall -Wextra -pedantic -I native/include native/tests/reduced_optimization.cpp -o /workspace/scratch/mundox-limits-20261017/reduced-optimized",
+    "benchmark_flags": [
+      "-std=c++17",
+      "-O3",
+      "-DNDEBUG"
+    ],
+    "resource_controls": {
+      "exclusive_lock": "/workspace/scratch/mundox-limits-20261017/compute.lock",
+      "virtual_memory_limit_kib": 1048576,
+      "timeout_seconds_per_case": 20,
+      "repetitions_per_case": 3
+    },
+    "measurement_scope": "steady_clock around construction and prescribed circuit evolution only; no dense reconstruction, fidelity, or coefficient rank profile is executed in benchmark mode.",
+    "circuit": "H(0); for i=1..n-1: CX(i-1,i), S(i) if i even. For k=0..T-1: T(k%n), H(k%n), CX(k%n,(k+1)%n) when n>1, S((k+1)%n) if k odd.",
+    "binaries": [
+      {
+        "name": "reduced-baseline",
+        "sha256": "38a7f4f167709e6171cecd61e53a76f89af78930f930af03fada25d0ad09c705"
+      },
+      {
+        "name": "reduced-optimized",
+        "sha256": "7fa97c1381fe4ca9c666249e58445a7739a1ea42f9e02ac0f2f4084e126373b8"
+      },
+      {
+        "name": "reduced-baseline-profile",
+        "sha256": "7c1a3f3264bbd3c96e3abba34d70c220213da44710b32b4cca3988dbf82d4092"
+      }
+    ],
+    "current_final_sources": [
+      {
+        "path": "/workspace/mundo-X-limits/native/include/mundo_x/exact_t_experiment.hpp",
+        "sha256": "04e36ebe2e4333044eb2eeab05fecf04fd5dd024964170906248e043fb9d21da"
+      },
+      {
+        "path": "/workspace/mundo-X-limits/native/tests/reduced_optimization.cpp",
+        "sha256": "4f1c342b853a411e523f33db765424deeb93aa84ca87fd429d56de0c268d8a11"
+      }
+    ],
+    "source_at_measurement_sha256": null,
+    "warnings": [
+      "Outputs were originally retained in tool transcripts. benchmark_results.json, CSV and raw log transcribe those existing outputs, not new measurements.",
+      "An exact snapshot/hash of the intermediate optimized header and test source at benchmark compilation was not saved. Binary hashes identify the measured executables.",
+      "The current final source subsequently removed dead helpers, upgraded Reduced dense validation to double precision, and added a long precision regression test. Those validation paths are excluded from benchmark mode, but the recorded times should not be presented as measurements of a newly rebuilt final executable.",
+      "Three repetitions of one deterministic circuit family support a local performance observation, not a general speedup guarantee.",
+      "logical_bytes is the program's existing logical payload metric, not peak process RSS or allocation totals.",
+      "The gprof executable is separately instrumented with -pg; its timing must not be mixed with the non-instrumented three-repetition comparisons.",
+      "gprof is a sampling profile with inlined code attributed to enclosing symbols; its percentages are coarse, and it does not isolate every inner helper.",
+      "A pre-existing -Wparentheses warning in CompactCore::visual_metrics was printed during the optimized build; compilation exited successfully."
+    ],
+    "cases": [
+      {
+        "variant": "baseline",
+        "qubits": 12,
+        "t_gates": 128,
+        "components": 4096,
+        "logical_bytes": 136088,
+        "evolution_ms": [
+          219.656,
+          220.518,
+          237.43
+        ],
+        "repetitions": 3,
+        "execution_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock bash -c 'ulimit -v 1048576; timeout 20s ./reduced-baseline bench 12 128 3'",
+        "median_ms": 220.518,
+        "exit_code": 0
+      },
+      {
+        "variant": "optimized",
+        "qubits": 12,
+        "t_gates": 128,
+        "components": 4096,
+        "logical_bytes": 136088,
+        "evolution_ms": [
+          116.723,
+          108.317,
+          110.168
+        ],
+        "repetitions": 3,
+        "execution_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock bash -c 'ulimit -v 1048576; timeout 20s ./reduced-optimized bench 12 128 3'",
+        "median_ms": 110.168,
+        "exit_code": 0
+      },
+      {
+        "variant": "baseline",
+        "qubits": 14,
+        "t_gates": 128,
+        "components": 16384,
+        "logical_bytes": 529374,
+        "evolution_ms": [
+          914.684,
+          931.689,
+          927.673
+        ],
+        "repetitions": 3,
+        "execution_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock bash -c 'ulimit -v 1048576; timeout 20s ./reduced-baseline bench 14 128 3'",
+        "median_ms": 927.673,
+        "exit_code": 0
+      },
+      {
+        "variant": "optimized",
+        "qubits": 14,
+        "t_gates": 128,
+        "components": 16384,
+        "logical_bytes": 529374,
+        "evolution_ms": [
+          408.156,
+          414.195,
+          411.403
+        ],
+        "repetitions": 3,
+        "execution_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock bash -c 'ulimit -v 1048576; timeout 20s ./reduced-optimized bench 14 128 3'",
+        "median_ms": 411.403,
+        "exit_code": 0
+      },
+      {
+        "variant": "baseline",
+        "qubits": 16,
+        "t_gates": 128,
+        "components": 65536,
+        "logical_bytes": 2102308,
+        "evolution_ms": [
+          4267.58,
+          4447.14,
+          4406.49
+        ],
+        "repetitions": 3,
+        "execution_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock bash -c 'ulimit -v 1048576; timeout 20s ./reduced-baseline bench 16 128 3'",
+        "median_ms": 4406.49,
+        "exit_code": 0
+      },
+      {
+        "variant": "optimized",
+        "qubits": 16,
+        "t_gates": 128,
+        "components": 65536,
+        "logical_bytes": 2102308,
+        "evolution_ms": [
+          2138.22,
+          2162.61,
+          2112.77
+        ],
+        "repetitions": 3,
+        "execution_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock bash -c 'ulimit -v 1048576; timeout 20s ./reduced-optimized bench 16 128 3'",
+        "median_ms": 2138.22,
+        "exit_code": 0
+      }
+    ],
+    "comparisons": [
+      {
+        "qubits": 12,
+        "t_gates": 128,
+        "baseline_median_ms": 220.518,
+        "optimized_median_ms": 110.168,
+        "median_ratio": 2.001652022365841
+      },
+      {
+        "qubits": 14,
+        "t_gates": 128,
+        "baseline_median_ms": 927.673,
+        "optimized_median_ms": 411.403,
+        "median_ratio": 2.2549009122441985
+      },
+      {
+        "qubits": 16,
+        "t_gates": 128,
+        "baseline_median_ms": 4406.49,
+        "optimized_median_ms": 2138.22,
+        "median_ratio": 2.0608216179813117
+      }
+    ],
+    "profile": {
+      "build_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock timeout 60s g++ -std=c++17 -O3 -DNDEBUG -pg -I native/include native/tests/reduced_optimization.cpp -o /workspace/scratch/mundox-limits-20261017/reduced-baseline-profile",
+      "execution_command": "flock /workspace/scratch/mundox-limits-20261017/compute.lock bash -c 'ulimit -v 1048576; timeout 20s ./reduced-baseline-profile bench 14 128 1'",
+      "raw_stdout": "qubits=14 T=128 components=16384 logical_bytes=529374 evolution_ms=1028.08\n",
+      "gmon_sha256": "b66dfee916bb49c87f7d592c84d5d938ae0387320b81ec0254f4df322bcf7ae9",
+      "report_file": "baseline_gprof.txt",
+      "report_command": "gprof ./reduced-baseline-profile gmon.out",
+      "sampled_seconds": 0.73,
+      "top_self_percent": {
+        "apply_clifford": 76.73,
+        "phase_t": 8.22,
+        "stabilizer_basis": 0
+      },
+      "exit_code": 0
+    }
+  },
+  "candidate_headers": {
+    "dense_core.hpp": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc",
+    "compact_core.hpp": "d3cef03ec03beba17fc60306cc1ce26e4b6c7a00ce542f2705d432bad9243384",
+    "exact_t_experiment.hpp": "04e36ebe2e4333044eb2eeab05fecf04fd5dd024964170906248e043fb9d21da",
+    "xasm.hpp": "64da20be4b8a3469521a09ffd87cf215794b64bcb820496810e1a0cd3da3ea1d",
+    "teleport.hpp": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825"
+  }
+}

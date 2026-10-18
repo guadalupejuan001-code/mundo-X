@@ -29,6 +29,8 @@ jobs:
       - name: Smoke tests
         shell: pwsh
         run: |
+          ctest --test-dir build -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\build\Release\mundo_x.exe hello
           .\build\Release\mundo_x.exe run examples\bell.x
           .\build\Release\mundo_x.exe cluster 4 4 --dense

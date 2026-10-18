@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -16,9 +17,8 @@ namespace mundo_x {
 class CompactCore {
  public:
   explicit CompactCore(std::size_t qubits)
-      : n_(qubits), words_((qubits + 63) / 64),
-        x_(qubits * words_, 0), z_(qubits * words_, 0), phase_(qubits, 0) {
-    if (qubits == 0) throw std::invalid_argument("invalid qubit count");
+      : n_(checked_qubit_count(qubits)), words_(n_ / 64 + (n_ % 64 != 0)),
+        x_(n_ * words_, 0), z_(n_ * words_, 0), phase_(n_, 0) {
     // |0...0> is stabilized by Z_i.
     for (std::size_t i = 0; i < n_; ++i) set(z_, i, i, true);
   }
@@ -95,7 +95,8 @@ class CompactCore {
   }
 
   bool is_cluster_signature(std::size_t rows, std::size_t cols) const {
-    if (rows == 0 || cols == 0 || rows * cols != n_) return false;
+    if (rows == 0 || cols == 0 || n_ % cols != 0 || rows != n_ / cols)
+      return false;
 
     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
       const std::size_t ar = a / cols;
@@ -285,6 +286,21 @@ class CompactCore {
   }
 
  private:
+  static std::size_t checked_qubit_count(std::size_t qubits) {
+    if (qubits == 0) throw std::invalid_argument("invalid qubit count");
+    const std::size_t words = qubits / 64 + (qubits % 64 != 0);
+    const std::size_t maximum = std::numeric_limits<std::size_t>::max();
+    // Check both the vector length and the total byte count before any
+    // multiplication or allocation. This is a representability check, not a
+    // memory budget: allocations can still fail normally with std::bad_alloc.
+    const std::size_t maximum_entries =
+        (maximum - qubits) / (2 * sizeof(std::uint64_t));
+    if (qubits > maximum_entries / words ||
+        qubits > std::vector<std::uint64_t>().max_size() / words)
+      throw std::length_error("tableau dimensions exceed addressable storage");
+    return qubits;
+  }
+
   static int local_product_phase(int a, int b) {
     // Canonical Pauli codes: I=0, X=1, Z=2, Y=3.
     // Return exponent k in i^k for P(a)P(b).
