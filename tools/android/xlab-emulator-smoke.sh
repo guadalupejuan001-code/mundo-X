@@ -39,7 +39,13 @@ done
 "$ADB" install -r ui-apks/XLab-0.3.1-debug.apk
 "$ADB" install -r ui-apks/XLab-instrumentation.apk
 set +e
-timeout 420 "$ADB" shell am instrument -w -r \
+instrument_args=()
+instrument_timeout=420
+if [[ "${XLAB_LARGE_SCENE_ONLY:-false}" == true ]]; then
+  instrument_args=(-e large_scene_only true)
+  instrument_timeout=720
+fi
+timeout "$instrument_timeout" "$ADB" shell am instrument -w -r "${instrument_args[@]}" \
   com.mundox.xlab.test/com.mundox.lab.XLabInstrumentation \
   | tee ui-evidence/instrumentation.txt
 run_status=${PIPESTATUS[0]}

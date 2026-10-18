@@ -21,6 +21,11 @@ on:
         required: false
         default: ''
         type: string
+      large_scene_only:
+        description: 'Run the dedicated 1,048,576-object regression instead of the regular suite'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-apk:
@@ -173,6 +178,8 @@ jobs:
 
       - name: Run interactive laboratory on Android 15
         shell: bash
+        env:
+          XLAB_LARGE_SCENE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.large_scene_only && 'true' || 'false' }}
         run: bash tools/android/xlab-emulator-smoke.sh
 
       - name: Upload UI evidence

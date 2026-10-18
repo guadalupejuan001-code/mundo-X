@@ -1,0 +1,68 @@
+name: Upload verified XLab ZIP
+
+on:
+  workflow_dispatch:
+    inputs:
+      delivery_ref:
+        description: 'Full commit SHA containing the ZIP delivery files'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upload-zip:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Require a pinned delivery commit
+        env:
+          DELIVERY_REF: ${{ inputs.delivery_ref }}
+        run: '[[ "$DELIVERY_REF" =~ ^[0-9a-fA-F]{40}$ ]]'
+
+      - name: Read delivery data
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.delivery_ref }}
+          path: delivery-input
+          persist-credentials: false
+
+      - name: Verify ZIP and enclosed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, zipfile
+          from pathlib import Path
+          directory = Path('delivery-input/dist')
+          name = 'XLab-Objetos-0.3.1.zip'
+          expected_zip = '93f9a9277abc71dd68da375bded1a12dd8db6bcd45961d5fb54f6e4381f522c6'
+          expected_apk = '914b5a05418de89605f50c0049e1a6225ed81cef773e19c3c1fb49cdc6f50eb6'
+          path = directory / name
+          assert path.is_file() and not path.is_symlink()
+          assert hashlib.sha256(path.read_bytes()).hexdigest() == expected_zip
+          with zipfile.ZipFile(path) as archive:
+              assert archive.testzip() is None
+              assert sorted(archive.namelist()) == sorted([
+                  'XLab-Objetos-0.3.1.apk', 'XLab-Objetos-0.3.1-SHA256.txt', 'LEEME.txt'])
+              assert hashlib.sha256(archive.read('XLab-Objetos-0.3.1.apk')).hexdigest() == expected_apk
+          checksum = directory / 'XLab-Objetos-0.3.1-ZIP-SHA256.txt'
+          assert checksum.is_file() and not checksum.is_symlink()
+          assert checksum.read_text().split() == [expected_zip, name]
+          print('ZIP integrity and identity of the enclosed signed APK verified.')
+          PY
+
+      - name: Add verified ZIP to existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.3.1 --repo "$GITHUB_REPOSITORY" >/dev/null
+          gh release upload v0.3.1 \
+            delivery-input/dist/XLab-Objetos-0.3.1.zip \
+            delivery-input/dist/XLab-Objetos-0.3.1-ZIP-SHA256.txt \
+            --repo "$GITHUB_REPOSITORY"

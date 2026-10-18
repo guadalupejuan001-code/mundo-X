@@ -1,6 +1,7 @@
 package com.mundox.lab;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.Instrumentation;
 import android.content.ComponentName;
 import android.content.ClipData;
@@ -36,6 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class XLabInstrumentation extends Instrumentation {
     private static final long DEADLINE_MS = 20_000L;
     private Activity activity;
+    private boolean largeSceneOnly;
     private int passed;
     private int failed;
     private final List<String> failures = new ArrayList<>();
@@ -44,6 +46,8 @@ public final class XLabInstrumentation extends Instrumentation {
     @Override
     public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        largeSceneOnly = arguments != null
+                && Boolean.parseBoolean(arguments.getString("large_scene_only", "false"));
         start();
     }
 
@@ -56,10 +60,14 @@ public final class XLabInstrumentation extends Instrumentation {
         try {
             Intent intent = new Intent(Intent.ACTION_MAIN);
             intent.setComponent(new ComponentName(getTargetContext(),
-                    "com.mundox.lab.XLabActivity"));
+                    largeSceneOnly ? "com.mundox.lab.ObjectLabActivity" : "com.mundox.lab.XLabActivity"));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             activity = startActivitySync(intent);
             waitForIdleSync();
+            if (largeSceneOnly) {
+                checkMillionObjects();
+                return; // The shared finally block still publishes normal instrumentation results.
+            }
 
             check("mesa_native_default", () -> {
                 requireTag("run_circuit");
@@ -403,6 +411,51 @@ public final class XLabInstrumentation extends Instrumentation {
             }
             finish(failed == 0 ? Activity.RESULT_OK : Activity.RESULT_CANCELED, results);
         }
+    }
+
+    private void checkMillionObjects() {
+        check("objects_1048576_visible_and_actual_routes_match", () -> {
+            try {
+                if (text("objects_animate").contains("activo")) click("objects_animate");
+                loadObjects(0, "2026", SystemClock.uptimeMillis() + DEADLINE_MS);
+                ActivityManager.MemoryInfo memory = new ActivityManager.MemoryInfo();
+                ((ActivityManager) getTargetContext().getSystemService(Activity.ACTIVITY_SERVICE)).getMemoryInfo(memory);
+                JSONObject preflight = new JSONObject();
+                preflight.put("count", 1048576); preflight.put("seed", 2026);
+                preflight.put("total_memory_bytes", memory.totalMem);
+                preflight.put("available_memory_bytes", memory.availMem);
+                preflight.put("low_memory", memory.lowMemory);
+                preflight.put("production_estimate_bytes", 64L * 1048576 + 8L * 1024 * 1024);
+                saveEvidence("xlab-1048576-preflight.json", preflight.toString(2));
+
+                select("objects_count", 5); setText("objects_seed", "2026"); click("objects_new");
+                long visibleDeadline = SystemClock.uptimeMillis() + 180_000L;
+                // Use status text for a useful failure if the normal memory or
+                // thermal guard rejects the scene. This test never bypasses it.
+                awaitReadyUntil("objects_status", "objects_status", visibleDeadline);
+                ObjectSceneRenderer.Stats live = awaitObjectStats(1048576, 0, visibleDeadline);
+                require(live.count == 1048576 && "visible".equals(live.visibility) && !live.drawSuspended,
+                        "The million-object test never rendered a visible live scene");
+                screenshot("xlab-1048576.png");
+                click("objects_verify");
+                awaitReadyUntil("objects_status", "objects_result", SystemClock.uptimeMillis() + 240_000L);
+                JSONObject image = requireNativeJson("objects_result");
+                requireObjectCoverage(image, 1048576, 2026);
+                require(image.getDouble("projection_near") >= image.getDouble("camera_distance") * .0099,
+                        "Million-object projection lost its distance-scaled near plane");
+                image.put("device_preflight", preflight);
+                image.put("live_visibility_confirmed_before_verification", true);
+                image.put("context_frames_before_verification", live.frames);
+                saveEvidence("xlab-1048576.json", image.toString(2));
+            } finally {
+                // On both success and assertion failure, release the large
+                // reference allocation by loading and visibly drawing 1,024.
+                loadObjects(0, "2026", SystemClock.uptimeMillis() + 180_000L);
+                ObjectSceneRenderer.Stats small = latestObjects();
+                require(small.count == 1024 && "visible".equals(small.visibility) && !small.drawSuspended,
+                        "The million-object regression did not return to the small visible scene");
+            }
+        });
     }
 
     private void check(String name, CheckedAction action) {
