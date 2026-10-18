@@ -11,6 +11,7 @@
 #include <string>
 
 #include "mundo_x/compact_core.hpp"
+#include "mundo_x/visual_scene.hpp"
 
 namespace mundo_x {
 
@@ -18,8 +19,13 @@ struct XasmRunResult {
   std::size_t qubits = 0;
   std::size_t state_bytes = 0;
   std::size_t instructions = 0;
+  std::size_t visual_instructions = 0;
+  std::size_t scene_objects = 0;
+  std::size_t scene_rule_bytes = 0;
   bool assertions_passed = true;
   std::string output;
+  // Final scene only. Commands never write files or emit a partial export.
+  std::string scene_text;
 };
 
 inline std::string trim(const std::string& s) {
@@ -48,11 +54,22 @@ inline void require_end(std::istringstream& input, std::size_t line) {
   if (input >> extra)
     throw std::runtime_error("line " + std::to_string(line) + ": unexpected argument '" + extra + "'");
 }
+
+inline std::int32_t read_scene_seed(std::istringstream& input, std::size_t line) {
+  std::string token;
+  std::int32_t value = 0;
+  if (input >> token) {
+    const auto parsed = std::from_chars(token.data(), token.data() + token.size(), value);
+    if (parsed.ec == std::errc{} && parsed.ptr == token.data() + token.size()) return value;
+  }
+  throw std::runtime_error("line " + std::to_string(line) + ": expected scene <count> <int32 seed>");
+}
 }  // namespace xasm_detail
 
 inline XasmRunResult run_xasm(std::istream& input) {
   XasmRunResult result;
   std::unique_ptr<CompactCore> core;
+  std::unique_ptr<VisualScene> scene;
   std::ostringstream out;
   // Reproducible pseudorandom sampling, not a source of physical randomness.
   std::mt19937_64 random(0);
@@ -71,6 +88,52 @@ inline XasmRunResult run_xasm(std::istream& input) {
     std::istringstream in(line);
     std::string op;
     in >> op;
+
+    if (op == "scene") {
+      if (scene) throw std::runtime_error("line " + std::to_string(line_number) + ": scene already declared");
+      const auto count = xasm_detail::read_unsigned<std::uint32_t>(in, line_number, "scene <count> <int32 seed>");
+      const auto seed = xasm_detail::read_scene_seed(in, line_number);
+      xasm_detail::require_end(in, line_number);
+      scene = std::make_unique<VisualScene>(count, seed);
+      continue;
+    }
+
+    if (op == "scene_edit" || op == "scene_clear" || op == "scene_info" || op == "scene_probz") {
+      if (!scene) throw std::runtime_error("line " + std::to_string(line_number) + ": declare scene first");
+      if (op == "scene_edit") {
+        const auto id = xasm_detail::read_unsigned<std::uint32_t>(in, line_number, "scene_edit <id> <state 0..7>");
+        const auto state = xasm_detail::read_unsigned<std::uint32_t>(in, line_number, "scene_edit <id> <state 0..7>");
+        xasm_detail::require_end(in, line_number);
+        scene->edit(id, state);
+        ++result.visual_instructions;
+      } else if (op == "scene_clear") {
+        xasm_detail::require_end(in, line_number);
+        scene->clear_edits();
+        ++result.visual_instructions;
+      } else if (op == "scene_info") {
+        xasm_detail::require_end(in, line_number);
+        out << "SCENE objects=" << scene->count() << " edits=" << scene->edit_count()
+            << " logical_rule_bytes=" << scene->logical_rule_bytes()
+            << " version=" << scene->version() << "\n";
+      } else {
+        const auto id = xasm_detail::read_unsigned<std::uint32_t>(in, line_number, "scene_probz <id> <q>");
+        const auto q = xasm_detail::read_unsigned<std::size_t>(in, line_number, "scene_probz <id> <q>");
+        xasm_detail::require_end(in, line_number);
+        if (!core) throw std::runtime_error("line " + std::to_string(line_number) + ": scene_probz requires qubits");
+        scene->edit_state(id);  // Validate the destination before the query.
+        const double p1 = core->probability_one_z(q);
+        // A snapshot of this marginal only: no measurement, RNG consumption,
+        // continuous binding, or claim that heights encode the full state.
+        std::uint32_t state;
+        if (p1 == 0.0) state = 0;
+        else if (p1 == 0.5) state = 3;
+        else if (p1 == 1.0) state = 6;
+        else throw std::runtime_error("unsupported stabilizer probability for scene_probz");
+        scene->edit(id, state);
+        ++result.visual_instructions;
+      }
+      continue;
+    }
 
     if (op == "qubits") {
       if (core) throw std::runtime_error("line " + std::to_string(line_number) + ": qubits already declared");
@@ -148,9 +211,16 @@ inline XasmRunResult run_xasm(std::istream& input) {
     }
   }
 
-  if (!core) throw std::runtime_error("program did not declare qubits");
+  if (input.bad() || (input.fail() && !input.eof()))
+    throw std::runtime_error("failed to read XASM program");
+  if (!core && !scene) throw std::runtime_error("program did not declare qubits or scene");
 
-  result.state_bytes = core->state_bytes();
+  if (core) result.state_bytes = core->state_bytes();
+  if (scene) {
+    result.scene_objects = scene->count();
+    result.scene_rule_bytes = scene->logical_rule_bytes();
+    result.scene_text = scene->export_text();
+  }
   result.output = out.str();
   return result;
 }

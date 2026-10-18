@@ -2,6 +2,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -10,6 +11,11 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
@@ -266,7 +272,7 @@ static int teleport() {
   return result.all_passed ? 0 : 1;
 }
 
-static int run_program(const std::string& path) {
+static int run_program(const std::string& path, bool scene_stdout = false) {
   try {
     const auto start = std::chrono::steady_clock::now();
     const auto result = mundo_x::run_xasm_file(path);
@@ -275,12 +281,32 @@ static int run_program(const std::string& path) {
     const double ms =
         std::chrono::duration<double, std::milli>(end - start).count();
 
+    if (scene_stdout) {
+      if (!result.assertions_passed) throw std::runtime_error("scene export requires passing assertions");
+      if (result.scene_text.empty()) throw std::runtime_error("program did not create a scene");
+#ifdef _WIN32
+      // The portable scene format uses LF. CRT text mode would silently emit
+      // CRLF bytes, which are outside ObjectSceneModel's canonical format.
+      if (_setmode(_fileno(stdout), _O_BINARY) == -1)
+        throw std::runtime_error("cannot configure scene stdout for binary output");
+#endif
+      std::cout << result.scene_text;
+      std::cout.flush();
+      if (!std::cout) throw std::runtime_error("failed to write scene to stdout");
+      return 0;
+    }
+
     std::cout << "XASM program=" << path << "\n";
     std::cout << "qubits=" << result.qubits
               << " instructions=" << result.instructions
               << " state_bytes=" << result.state_bytes
               << " ms=" << std::fixed << std::setprecision(3) << ms << "\n";
     std::cout << result.output;
+    if (result.scene_objects) {
+      std::cout << "visual_instructions=" << result.visual_instructions
+                << " scene_objects=" << result.scene_objects
+                << " scene_logical_rule_bytes=" << result.scene_rule_bytes << "\n";
+    }
 
     return result.assertions_passed ? 0 : 1;
   } catch (const std::exception& e) {
@@ -371,7 +397,7 @@ static int run_cli(int argc, char** argv) {
            "t-trace <qubits> <t_gates> | "
            "t-trace-variant <qubits> <t_gates> | "
            "bench <qubits> [--dense] | "
-           "cluster <rows> <cols> [--dense] | practice <qubits> | run <program.x>\n";
+           "cluster <rows> <cols> [--dense] | practice <qubits> | run <program.x> [--scene-stdout]\n";
     return 2;
   }
 
@@ -424,8 +450,11 @@ static int run_cli(int argc, char** argv) {
   }
 
   if (cmd == "run") {
-    if (argc < 3) return 2;
-    return run_program(argv[2]);
+    if (argc != 3 && argc != 4) throw std::invalid_argument("run <program.x> [--scene-stdout]");
+    const bool scene_stdout = argc == 4;
+    if (scene_stdout && std::string(argv[3]) != "--scene-stdout")
+      throw std::invalid_argument("unknown run option: " + std::string(argv[3]));
+    return run_program(argv[2], scene_stdout);
   }
 
   if (cmd == "practice") {

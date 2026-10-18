@@ -4,6 +4,12 @@
 
 **Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
 
+**Nueva línea: Motor X visual.** [Programar cálculo y escenas dentro del mismo
+runtime](docs/motor_x_visual.md), conservando reglas, IDs y cambios. Esta rama
+añade exportación compatible con XLab y una primera conexión explícita entre
+resultados del cálculo y estados visuales. La transferencia a Android se hace
+mediante **Restaurar escena**; no es una nueva versión publicada del APK.
+
 **XLab 0.3.2 para Android:** [descargar ZIP con APK firmado](https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.2/XLab-Objetos-0.3.2.zip).
 Descomprime el ZIP y abre el APK incluido. [Descarga alternativa](https://raw.githubusercontent.com/guadalupejuan001-code/mundo-X/6b206566022afa8b7b20b9e6dd3153ce8dad9182/dist/XLab-Objetos-0.3.2.zip).
 [Objetos 3D persistentes, comparación de imágenes GPU
