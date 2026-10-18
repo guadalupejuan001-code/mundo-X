@@ -18,7 +18,7 @@ endif()
 
 include(CTest)
 if (BUILD_TESTING)
-  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage compact_measurement xasm_measurement lab_circuit lab_memory lab_protocols)
+  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage factorized_structure compact_measurement xasm_measurement lab_circuit lab_memory lab_protocols)
   foreach(test_name IN LISTS native_tests)
     add_executable(test_${test_name} native/tests/${test_name}.cpp)
     target_include_directories(test_${test_name} PRIVATE native/include)

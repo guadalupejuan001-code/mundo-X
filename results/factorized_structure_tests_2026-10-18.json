@@ -1,0 +1,91 @@
+{
+  "method": "direct g++ compilation of Linux CMake test sources; no CMake installed",
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+  "flags": [
+    "-std=c++17",
+    "-O3",
+    "-DNDEBUG",
+    "-Wall",
+    "-Wextra",
+    "-Wpedantic",
+    "-pthread"
+  ],
+  "factorized_header_sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+  "tests": [
+    {
+      "name": "boundaries",
+      "exit_code": 0,
+      "summary": "checks=34 failures=0"
+    },
+    {
+      "name": "compact_measurement",
+      "exit_code": 0,
+      "summary": "PASS compact_measurement checks=8317 measurements=502 random=124"
+    },
+    {
+      "name": "dense_precision",
+      "exit_code": 0,
+      "summary": "PASS gates=100000 double_norm_error=1.14279e-11 legacy_float_norm_error=0.00211993"
+    },
+    {
+      "name": "factorized_core",
+      "exit_code": 0,
+      "summary": "factorized_core PASS checks=44814"
+    },
+    {
+      "name": "factorized_diversity",
+      "exit_code": 0,
+      "summary": {
+        "status": "ok",
+        "local_failures": 0,
+        "all_local_probabilities_checked": 128,
+        "legacy_global_tolerance_pass": true
+      }
+    },
+    {
+      "name": "factorized_storage",
+      "exit_code": 0,
+      "summary": "factorized_storage PASS checks=2592 injected_allocation_failures=51"
+    },
+    {
+      "name": "factorized_structure",
+      "exit_code": 0,
+      "summary": "factorized_structure PASS checks=94726"
+    },
+    {
+      "name": "lab_circuit",
+      "exit_code": 0,
+      "summary": "PASS lab_circuit checks=468"
+    },
+    {
+      "name": "lab_memory",
+      "exit_code": 0,
+      "summary": "PASS lab_memory checks=76"
+    },
+    {
+      "name": "lab_protocols",
+      "exit_code": 0,
+      "summary": "PASS 768 lab protocol checks"
+    },
+    {
+      "name": "native_original_exams",
+      "exit_code": 0,
+      "summary": {
+        "event": "sanity_summary",
+        "core_cases": 45,
+        "rejected_dimension_cases": 3,
+        "failures": 0
+      }
+    },
+    {
+      "name": "reduced_optimization",
+      "exit_code": 0,
+      "summary": "PASS checked_states=7081 high_bit=62"
+    },
+    {
+      "name": "xasm_measurement",
+      "exit_code": 0,
+      "summary": "checks=16 failures=0"
+    }
+  ]
+}
