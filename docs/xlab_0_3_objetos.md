@@ -57,9 +57,16 @@ El resultado sólo comprueba la cámara, semilla y cambios ensayados; no es una
 demostración universal de equivalencia. La instrumentación también contrasta
 la imagen antes/después de editar para impedir que se ignoren las excepciones.
 
+También se capturan las transformaciones producidas por el mismo shader para
+hasta 1.024 objetos y se comparan con la CPU. La mezcla entera del shader usa
+productos por bytes y acarreos para conservar el resultado módulo 2³² en
+traductores GLES antiguos. El algoritmo y las semillas de la CPU se conservan.
+
 ## Medición y escala extrema
 
-**Medir A/B** congela escena, cámara y tiempo. Cada ruta recibe 700 ms de
+**Medir A/B** exige primero una comprobación de imagen y transformaciones
+correcta; si falla, rechaza la comparación. Congela escena, cámara y tiempo.
+Cada ruta recibe 700 ms de
 calentamiento y 2.500 ms de muestra. Informa número de muestras, P50/P95 de
 los intervalos entre fotogramas y tiempo de CPU enviando el dibujo.
 
@@ -108,7 +115,8 @@ no se presenta la descripción lógica como toda la RAM o memoria GPU utilizada.
 ## Instalación y validación
 
 Android 8+, OpenGL ES 3, ARM64 y x86-64. Es una compilación debug del paquete
-`com.mundox.lab.xlab`. Las claves debug de CI pueden cambiar entre ejecuciones,
+`com.mundox.lab.xlab.objects`, etiquetado **XLab · Objetos**, que se instala
+junto a XLab 0.2 sin borrarlo. Las claves debug de CI pueden cambiar entre ejecuciones,
 por lo que una instalación sobre otra compilación puede rechazar la firma.
 Los datos del usuario no se borran automáticamente para resolver ese rechazo.
 

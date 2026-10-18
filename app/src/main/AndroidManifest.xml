@@ -12,7 +12,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="XLab · Mundo X"
+        android:label="XLab · Objetos"
         android:icon="@drawable/ic_xlab"
         android:roundIcon="@drawable/ic_xlab"
         android:supportsRtl="true"
