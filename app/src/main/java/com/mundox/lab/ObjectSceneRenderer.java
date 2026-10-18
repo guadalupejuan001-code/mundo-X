@@ -33,12 +33,13 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     }
 
     public static final class Stats {
-        public final String renderer, vendor, route;
-        public final int count, edits, selectedId;
-        public final long frames, explicitBytes, sparseBytes, meshBytes;
+        public final String renderer, vendor, route, visibility;
+        public final int count, edits, selectedId, depthBits, viewWidth, viewHeight;
+        public final float projectionNear, projectionFar, cameraDistance;
+        public final long frames, explicitBytes, sparseBytes, meshBytes, sceneRevision;
         public final long allocatedExplicitBytes, allocatedSparseBytes, uploadedBytes;
         public final double frameP50Ms, frameP95Ms, cpuSubmitMs;
-        public final boolean benchmarking;
+        public final boolean benchmarking, drawSuspended;
 
         private Stats(ObjectSceneRenderer r) {
             renderer = r.rendererName;
@@ -48,6 +49,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             edits = r.scene == null ? 0 : r.scene.editCount();
             selectedId = r.selectedId;
             frames = r.frames;
+            sceneRevision = r.sceneRevision;
             explicitBytes = (long) count * 16L;
             sparseBytes = r.sparsePayloadBytes();
             meshBytes = MESH_BYTES;
@@ -58,6 +60,12 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             frameP95Ms = percentile(r.frameTimes, r.windowCount, .95);
             cpuSubmitMs = mean(r.submitTimes, r.windowCount);
             benchmarking = r.benchmarkState != null || r.pendingBenchmark;
+            depthBits = r.depthBits;
+            viewWidth = r.width; viewHeight = r.height;
+            projectionNear = r.projectionNear; projectionFar = r.projectionFar;
+            cameraDistance = r.distance;
+            visibility = r.visibility;
+            drawSuspended = r.drawSuspended;
         }
     }
 
@@ -69,10 +77,16 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     private static final long SAMPLE_NS = 2_500_000_000L;
     private final Listener listener;
     private ObjectSceneModel.Snapshot scene;
+    private long sceneRevision;
     private int width = 1, height = 1, program, vao, meshVbo, explicitVbo, editsTexture;
     private int uVp, uSide, uSeed, uTime, uRoute, uEditCount, uEdits, uSelected, uEye, uFog;
     private String rendererName = "not initialized", vendorName = "not initialized", glVersion = "";
-    private int maxTextureSize, maxVertexAttributes, maxVertexTextureUnits;
+    private int maxTextureSize, maxVertexAttributes, maxVertexTextureUnits, depthBits;
+    private boolean drawSuspended;
+    private int visibilityQuery;
+    private boolean visibilityRequested = true, visibilityPending, visibilityQueryActive;
+    private String visibility = "pending";
+    private float projectionNear = .1f, projectionFar = 100f;
     private boolean ready, failed, dirty = true, explicitRoute, explicitDirty = true;
     private boolean animation = true, pendingVerify, pendingBenchmark;
     private float yaw = .65f, pitch = .80f, distance = 40f, defaultDistance = 40f;
@@ -92,11 +106,14 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         this.listener = listener;
     }
 
-    public void setScene(ObjectSceneModel.Snapshot snapshot) {
+    public void setScene(ObjectSceneModel.Snapshot snapshot, long revision) {
         if (snapshot == null) throw new IllegalArgumentException("Scene required");
         if (busy()) { listener.onFailure("Cancela la comparación antes de cambiar la escena."); return; }
         boolean resize = scene == null || scene.count != snapshot.count;
         scene = snapshot;
+        sceneRevision = revision;
+        resumeDrawing();
+        invalidateVisibility();
         dirty = explicitDirty = true;
         if (resize) {
             defaultDistance = Math.max(12f, snapshot.side * 3.1f);
@@ -109,6 +126,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     public void setExplicit(boolean value) {
         if (busy()) return;
         explicitRoute = value;
+        resumeDrawing();
+        invalidateVisibility();
         resetWindow();
     }
 
@@ -117,12 +136,26 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         if (busy()) return;
         yaw += dx * 3f;
         pitch = clamp(pitch + dy * 3f, .18f, 1.45f);
+        invalidateVisibility();
     }
 
     /** A value greater than one moves the camera farther away. */
     public void zoom(float factor) {
         if (busy() || !Float.isFinite(factor) || factor <= 0) return;
         distance = clamp(distance * factor, defaultDistance * .22f, defaultDistance * 4f);
+        invalidateVisibility();
+    }
+
+    /** Returns to the framing chosen for this scene, and retries a suspended draw. */
+    public void recenter() {
+        if (busy()) return;
+        yaw = .65f;
+        pitch = .80f;
+        distance = defaultDistance;
+        resumeDrawing();
+        invalidateVisibility();
+        lastFrameNs = lastAnimationNs = 0;
+        resetWindow();
     }
 
     public void select(int id) {
@@ -139,6 +172,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
 
     public void verify(long requestId) {
         if (failed) { listener.onFailure("La GPU no está disponible; vuelve a abrir el laboratorio."); return; }
+        if (drawSuspended) { listener.onFailure("El dibujo está detenido; pulsa Recentrar o carga otra escena para reintentarlo."); return; }
         if (busy()) { listener.onFailure("Ya hay una comparación en curso."); return; }
         if (scene == null) { listener.onFailure("Primero carga una escena."); return; }
         verificationRequestId = requestId;
@@ -149,6 +183,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
 
     public void benchmark(long requestId) {
         if (failed) { listener.onFailure("La GPU no está disponible; vuelve a abrir el laboratorio."); return; }
+        if (drawSuspended) { listener.onFailure("El dibujo está detenido; pulsa Recentrar o carga otra escena para reintentarlo."); return; }
         if (busy()) { listener.onFailure("Ya hay una comparación en curso."); return; }
         if (scene == null) { listener.onFailure("Primero carga una escena."); return; }
         benchmarkRequestId = requestId;
@@ -178,6 +213,12 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     @Override public void onSurfaceCreated(GL10 unused, EGLConfig config) {
         ready = false;
         failed = false;
+        drawSuspended = false;
+        // A recreated EGL context has already disposed the old query names.
+        visibilityQuery = 0;
+        visibilityPending = visibilityQueryActive = false;
+        visibilityRequested = true;
+        visibility = "pending";
         program = vao = meshVbo = explicitVbo = editsTexture = 0;
         explicitAllocatedBytes = sparseAllocatedBytes = uploadedBytes = frames = 0;
         dirty = explicitDirty = true;
@@ -189,6 +230,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             vendorName = safe(GLES30.glGetString(GLES30.GL_VENDOR));
             glVersion = safe(GLES30.glGetString(GLES30.GL_VERSION));
             int[] capability = new int[1];
+            GLES30.glGetIntegerv(GLES30.GL_DEPTH_BITS, capability, 0); depthBits = capability[0];
             GLES30.glGetIntegerv(GLES30.GL_MAX_TEXTURE_SIZE, capability, 0); maxTextureSize = capability[0];
             GLES30.glGetIntegerv(GLES30.GL_MAX_VERTEX_ATTRIBS, capability, 0); maxVertexAttributes = capability[0];
             GLES30.glGetIntegerv(GLES30.GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, capability, 0); maxVertexTextureUnits = capability[0];
@@ -230,6 +272,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         width = Math.max(1, newWidth);
         height = Math.max(1, newHeight);
         GLES30.glViewport(0, 0, width, height);
+        invalidateVisibility();
         if (benchmarkState != null) cancelBenchmark();
     }
 
@@ -238,7 +281,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         if (lastAnimationNs != 0 && animation && benchmarkState == null && !pendingBenchmark)
             animationSeconds += Math.min(.1, (now - lastAnimationNs) / 1_000_000_000.0);
         lastAnimationNs = now;
-        if (!ready || failed || scene == null) {
+        if (!ready || failed || drawSuspended || scene == null) {
             GLES30.glClearColor(.067f, .086f, .075f, 1f);
             GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
             return;
@@ -246,12 +289,14 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         try {
             if (dirty) uploadSparse();
             if (pendingVerify) {
+                invalidateVisibility();
                 pendingVerify = false;
                 performVerification(true);
                 now = System.nanoTime();
                 lastFrameNs = 0;
             }
             if (pendingBenchmark) {
+                invalidateVisibility();
                 pendingBenchmark = false;
                 JSONObject imageCheck = performVerification(false);
                 if (!imageCheck.optBoolean("passed")) {
@@ -269,9 +314,16 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             }
             updateCamera(width, height);
             double drawTime = benchmarkState == null ? animationSeconds : benchmarkState.time;
+            // A visibility query observes this normal draw. Never add it to a
+            // measured comparison, and never block waiting for its result.
+            if (benchmarkState == null) {
+                pollVisibility();
+                if (visibilityRequested && !visibilityPending) beginVisibility();
+            }
             long submitStart = System.nanoTime();
             render(drawingExplicit(), (float) drawTime);
             long afterSubmit = System.nanoTime();
+            if (visibilityQueryActive) endVisibility();
             double submitMs = (afterSubmit - submitStart) / 1_000_000.0;
             double frameMs = lastFrameNs == 0 ? 0 : (now - lastFrameNs) / 1_000_000.0;
             lastFrameNs = now;
@@ -284,9 +336,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 listener.onStats(new Stats(this));
             }
         } catch (RuntimeException error) {
-            benchmarkState = null;
-            pendingBenchmark = pendingVerify = false;
-            fail("OpenGL: " + error.getMessage());
+            suspendDrawing(error);
         }
     }
 
@@ -360,9 +410,69 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         eye[1] = (float) Math.sin(pitch) * distance + .5f;
         eye[2] = (float) Math.cos(yaw) * cp * distance;
         Matrix.setLookAtM(view, 0, eye[0], eye[1], eye[2], 0, .5f, 0, 0, 1, 0);
+        updateProjectionPlanes();
+        // A fixed 0.1 near plane loses almost all useful depth precision as
+        // the camera retreats over a large grid, notably with 16-bit depth.
         Matrix.perspectiveM(projection, 0, 50f, (float) renderWidth / renderHeight,
-                .1f, Math.max(100f, distance + scene.side * 4f + 20f));
+                projectionNear, projectionFar);
         Matrix.multiplyMM(vp, 0, projection, 0, view, 0);
+    }
+
+    private void updateProjectionPlanes() {
+        projectionNear = Math.max(.1f, distance * .01f);
+        projectionFar = Math.max(100f, distance + (scene == null ? 0f : scene.side * 4f) + 20f);
+    }
+
+    private void invalidateVisibility() {
+        // Commands are on the GL thread. A pending, ended query can be deleted
+        // without waiting for the driver to return its result.
+        discardVisibilityQuery();
+        visibilityRequested = true;
+        visibility = drawSuspended || failed ? "error" : "pending";
+    }
+
+    private void discardVisibilityQuery() {
+        if (visibilityQueryActive) {
+            GLES30.glEndQuery(GLES30.GL_ANY_SAMPLES_PASSED);
+            visibilityQueryActive = false;
+        }
+        if (visibilityQuery != 0) {
+            GLES30.glDeleteQueries(1, new int[]{visibilityQuery}, 0);
+            visibilityQuery = 0;
+        }
+        visibilityPending = false;
+    }
+
+    private void beginVisibility() {
+        if (visibilityQuery == 0) {
+            int[] query = new int[1];
+            GLES30.glGenQueries(1, query, 0);
+            visibilityQuery = query[0];
+        }
+        GLES30.glBeginQuery(GLES30.GL_ANY_SAMPLES_PASSED, visibilityQuery);
+        visibilityQueryActive = true;
+        checkGl("iniciar comprobación de visibilidad");
+    }
+
+    private void endVisibility() {
+        GLES30.glEndQuery(GLES30.GL_ANY_SAMPLES_PASSED);
+        visibilityQueryActive = false;
+        checkGl("enviar comprobación de visibilidad");
+        visibilityPending = true;
+        visibilityRequested = false;
+        visibility = "pending";
+    }
+
+    private void pollVisibility() {
+        if (!visibilityPending) return;
+        int[] result = new int[1];
+        GLES30.glGetQueryObjectuiv(visibilityQuery, GLES30.GL_QUERY_RESULT_AVAILABLE, result, 0);
+        checkGl("consultar disponibilidad de visibilidad");
+        if (result[0] == 0) return;
+        GLES30.glGetQueryObjectuiv(visibilityQuery, GLES30.GL_QUERY_RESULT, result, 0);
+        checkGl("leer visibilidad");
+        visibility = result[0] != 0 ? "visible" : "empty";
+        visibilityPending = false;
     }
 
     private void render(boolean explicit, float seconds) {
@@ -743,6 +853,11 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         put(json, "max_texture_size", maxTextureSize);
         put(json, "max_vertex_attributes", maxVertexAttributes);
         put(json, "max_vertex_texture_units", maxVertexTextureUnits);
+        updateProjectionPlanes();
+        put(json, "depth_bits", depthBits);
+        put(json, "projection_near", projectionNear); put(json, "projection_far", projectionFar);
+        put(json, "camera_distance", distance);
+        put(json, "visibility", visibility); put(json, "draw_suspended", drawSuspended);
         if (scene != null) {
             put(json, "count", scene.count); put(json, "seed", scene.seed);
             put(json, "edits", scene.editCount()); put(json, "version", scene.version);
@@ -773,7 +888,37 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
 
     private void fail(String message) {
         failed = true;
+        visibility = "error";
         listener.onFailure(message);
+    }
+
+    private void suspendDrawing(RuntimeException error) {
+        boolean wasExplicit = drawingExplicit();
+        benchmarkState = null;
+        pendingBenchmark = pendingVerify = false;
+        drawSuspended = true;
+        discardVisibilityQuery();
+        visibilityRequested = false;
+        visibility = "error";
+        lastFrameNs = lastAnimationNs = 0;
+        resetWindow();
+        listener.onStats(new Stats(this));
+        listener.onFailure("Dibujo detenido con " + (scene == null ? 0 : scene.count)
+                + " objetos (" + (wasExplicit ? "explicit" : "procedural") + ", "
+                + rendererName + "): " + safe(error.getMessage())
+                + ". Pulsa Recentrar o carga otra escena para reintentarlo.");
+    }
+
+    private void resumeDrawing() {
+        if (!ready || failed) return;
+        if (drawSuspended) {
+            dirty = explicitDirty = true;
+            // The failed operation was reported. Clear any remaining error
+            // flags before retrying; a new driver error will suspend again.
+            for (int i = 0; i < 16; i++) if (GLES30.glGetError() == GLES30.GL_NO_ERROR) break;
+        }
+        drawSuspended = false;
+        lastFrameNs = lastAnimationNs = 0;
     }
 
     private void resetWindow() {

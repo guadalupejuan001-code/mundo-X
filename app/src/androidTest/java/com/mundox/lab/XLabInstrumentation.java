@@ -3,8 +3,12 @@ package com.mundox.lab;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.ComponentName;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.opengl.GLES30;
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.View;
@@ -21,8 +25,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Device-level smoke tests. Runs with the platform runner, without test libraries. */
@@ -287,6 +294,100 @@ public final class XLabInstrumentation extends Instrumentation {
                 saveEvidence("xlab-objetos-escala.json", scale.toString(2));
                 screenshot("xlab-objetos-escala.png");
             });
+
+            check("objects_real_gl_error_recovers_without_losing_selection", () -> {
+                loadObjects(0, "2026", SystemClock.uptimeMillis() + DEADLINE_MS);
+                setText("objects_id", "528"); click("objects_select"); click("objects_raise");
+                String before = text("objects_selected");
+                // Deliberately generate a real GL_INVALID_ENUM on the rendering
+                // context. Do not read glGetError here: the live renderer must
+                // detect, report and suspend the failing draw itself.
+                runGl(() -> GLES30.glEnable(-1), DEADLINE_MS);
+                awaitState("objects_status", "error");
+                require(text("objects_result").contains("0x500"), "Real GL_INVALID_ENUM was not reported");
+                require("error".equals(description("objects_view_state")), "GPU failure left no visible warning");
+                require(latestObjects().drawSuspended, "Draw failure did not suspend the renderer");
+                click("objects_recenter");
+                awaitState("objects_status", "ready");
+                awaitObjectStats(1024, 0, SystemClock.uptimeMillis() + DEADLINE_MS);
+                require("528".equals(text("objects_id")) && before.equals(text("objects_selected")),
+                        "Recentering lost the selection or persistent edit");
+                runGl(() -> GLES30.glEnable(-1), DEADLINE_MS);
+                awaitState("objects_status", "error");
+                require(text("objects_result").contains("0x500"), "Second GL error was not reported");
+                loadObjects(0, "2027", SystemClock.uptimeMillis() + DEADLINE_MS);
+                require(!latestObjects().drawSuspended, "New scene did not recover a suspended draw");
+                require("528".equals(text("objects_id")), "Loading the smaller profile lost a valid selection");
+            });
+
+            check("objects_65536_visible_and_max_zoom_uses_real_framebuffer", () -> {
+                try {
+                    loadObjects(3, "2026", SystemClock.uptimeMillis() + 90_000L);
+                    click("objects_verify");
+                    awaitReadyUntil("objects_status", "objects_result", SystemClock.uptimeMillis() + 90_000L);
+                    JSONObject normal = requireNativeJson("objects_result");
+                    requireObjectCoverage(normal, 65536, 2026);
+                    saveEvidence("xlab-65536.json", normal.toString(2));
+                    ObjectSceneRenderer.Stats centered = awaitObjectStats(65536, 0,
+                            SystemClock.uptimeMillis() + 90_000L);
+                    screenshot("xlab-65536.png");
+                    ObjectSceneRenderer objectRenderer = objectRenderer();
+                    runGl(() -> objectRenderer.zoom(4f), 90_000L);
+                    awaitObjectStats(65536, centered.cameraDistance * 3.99f,
+                            SystemClock.uptimeMillis() + 90_000L);
+                    click("objects_verify");
+                    awaitReadyUntil("objects_status", "objects_result", SystemClock.uptimeMillis() + 90_000L);
+                    JSONObject far = requireNativeJson("objects_result");
+                    requireObjectCoverage(far, 65536, 2026);
+                    double distance = far.getDouble("camera_distance");
+                    require(distance >= centered.cameraDistance * 3.99,
+                            "The regression did not actually exercise maximum zoom distance");
+                    require(far.getDouble("projection_near") >= distance * .0099,
+                            "Large-distance projection reverted to an imprecise fixed near plane");
+                    require(far.getDouble("projection_far") > distance, "Far plane clips the centered scene");
+                    saveEvidence("xlab-65536-maxzoom.json", far.toString(2));
+                    awaitObjectStats(65536, centered.cameraDistance * 3.99f,
+                            SystemClock.uptimeMillis() + 90_000L);
+                    screenshot("xlab-65536-maxzoom.png");
+                } finally {
+                    // Never leave this larger workload running after an assertion.
+                    loadObjects(0, "2026", SystemClock.uptimeMillis() + 90_000L);
+                }
+            });
+
+            check("objects_clipboard_scene_migration_and_invalid_text_is_atomic", () -> {
+                loadObjects(1, "-12345", SystemClock.uptimeMillis() + DEADLINE_MS);
+                setText("objects_id", "777"); click("objects_select"); click("objects_raise");
+                setText("objects_id", "778"); click("objects_select"); click("objects_hide");
+                click("objects_copy");
+                String backup = clipboardText();
+                JSONObject original = new JSONObject(backup);
+                require(original.getInt("count") == 4096 && original.getInt("seed") == -12345
+                                && original.getInt("edits") == 2,
+                        "Migration report lacks the original seed, profile or edits");
+                String originalScene = original.getString("scene");
+                loadObjects(0, "9", SystemClock.uptimeMillis() + DEADLINE_MS);
+                require(!"-12345".equals(text("objects_seed")), "Migration setup did not reset the scene");
+                setClipboardText(backup); click("objects_restore");
+                awaitState("objects_status", "ready");
+                awaitObjectStats(4096, 0, SystemClock.uptimeMillis() + DEADLINE_MS);
+                require("-12345".equals(text("objects_seed")), "Restoring a report lost the signed seed");
+                require("2".equals(description("objects_selected")), "Restoring a report lost its sparse edits");
+                click("objects_copy");
+                JSONObject restored = new JSONObject(clipboardText());
+                require(originalScene.equals(restored.getString("scene")),
+                        "Migration changed the exact exported scene and edits");
+                String selected = text("objects_selected");
+                setClipboardText("esto no contiene una escena Mundo X"); click("objects_restore");
+                awaitState("objects_status", "error");
+                require("-12345".equals(text("objects_seed")) && selected.equals(text("objects_selected")),
+                        "Invalid clipboard input changed the current scene");
+                click("objects_copy");
+                JSONObject unchanged = new JSONObject(clipboardText());
+                require(originalScene.equals(unchanged.getString("scene")),
+                        "Rejected migration partially changed the model");
+                saveEvidence("xlab-objetos-migration.json", unchanged.toString(2));
+            });
         } catch (Throwable error) {
             recordFailure("launch_or_runner", error);
         } finally {
@@ -388,7 +489,10 @@ public final class XLabInstrumentation extends Instrumentation {
     }
 
     private void awaitReady(String statusTag, String resultTag) {
-        long deadline = SystemClock.uptimeMillis() + DEADLINE_MS;
+        awaitReadyUntil(statusTag, resultTag, SystemClock.uptimeMillis() + DEADLINE_MS);
+    }
+
+    private void awaitReadyUntil(String statusTag, String resultTag, long deadline) {
         String state = "";
         while (SystemClock.uptimeMillis() < deadline) {
             state = main(() -> {
@@ -420,6 +524,99 @@ public final class XLabInstrumentation extends Instrumentation {
             SystemClock.sleep(75L);
         }
         throw new AssertionError("Timed out waiting for " + tag + " to contain " + expected);
+    }
+
+    private String description(String tag) {
+        return main(() -> String.valueOf(find(tag).getContentDescription()));
+    }
+
+    private static Object privateField(Object target, String name) {
+        try {
+            Field field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            return field.get(target);
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError("Cannot inspect " + name + " for the device regression", error);
+        }
+    }
+
+    private ObjectSceneRenderer objectRenderer() {
+        return main(() -> (ObjectSceneRenderer) privateField(activity, "renderer"));
+    }
+
+    private ObjectSceneRenderer.Stats latestObjects() {
+        ObjectSceneRenderer.Stats value = main(() -> (ObjectSceneRenderer.Stats) privateField(activity, "latest"));
+        if (value == null) throw new AssertionError("Renderer has not delivered statistics");
+        return value;
+    }
+
+    private ObjectSceneRenderer.Stats awaitObjectStats(int expectedCount, float minimumDistance, long deadline) {
+        ObjectSceneRenderer.Stats latest = null;
+        while (SystemClock.uptimeMillis() < deadline) {
+            latest = main(() -> (ObjectSceneRenderer.Stats) privateField(activity, "latest"));
+            if (latest != null && latest.count == expectedCount && !latest.drawSuspended
+                    && "visible".equals(latest.visibility) && latest.cameraDistance >= minimumDistance) return latest;
+            if ("error".equals(description("objects_status")))
+                throw new AssertionError("GPU scene failed before becoming visible: " + text("objects_result"));
+            SystemClock.sleep(75L);
+        }
+        throw new AssertionError("No visible GPU result for " + expectedCount + " objects; last="
+                + (latest == null ? "none" : latest.count + "/" + latest.visibility + "/" + latest.cameraDistance));
+    }
+
+    private void loadObjects(int profile, String seed, long deadline) {
+        select("objects_count", profile); setText("objects_seed", seed); click("objects_new");
+        awaitStateUntil("objects_status", "ready", deadline);
+        int[] counts = {1024, 4096, 16384, 65536, 262144, 1048576};
+        awaitObjectStats(counts[profile], 0, deadline);
+    }
+
+    private void runGl(CheckedAction action, long timeoutMs) throws Exception {
+        CountDownLatch complete = new CountDownLatch(1);
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        main(() -> {
+            ((GLSurfaceView) find("objects_surface")).queueEvent(() -> {
+                try { action.run(); }
+                catch (Throwable failure) { error.set(failure); }
+                finally { complete.countDown(); }
+            });
+            return null;
+        });
+        long deadline = SystemClock.uptimeMillis() + timeoutMs;
+        while (!complete.await(250L, TimeUnit.MILLISECONDS)) {
+            if (SystemClock.uptimeMillis() >= deadline) throw new AssertionError("GL thread command timed out");
+        }
+        if (error.get() != null) throw new AssertionError("GL thread regression command failed", error.get());
+    }
+
+    private static void requireObjectCoverage(JSONObject result, int count, int seed) throws Exception {
+        require(result.getBoolean("passed"), "Actual render routes failed the image comparison");
+        require(result.getInt("count") == count && result.getInt("seed") == seed,
+                "Framebuffer result belongs to a different scene");
+        require(result.getInt("covered_pixels") > 16 && result.getInt("reference_covered_pixels") > 16,
+                "Image equivalence passed without visible object coverage in both routes");
+        require(result.getBoolean("sampled_transforms_match_cpu"), "GPU transforms diverged at the larger profile");
+        require(result.getInt("depth_bits") > 0 && result.getInt("viewport_width") > 0
+                        && result.getInt("viewport_height") > 0,
+                "Image regression omitted the actual depth or viewport diagnostics");
+    }
+
+    private String clipboardText() {
+        return main(() -> {
+            ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Activity.CLIPBOARD_SERVICE);
+            require(clipboard.hasPrimaryClip() && clipboard.getPrimaryClip() != null
+                    && clipboard.getPrimaryClip().getItemCount() > 0, "Missing copied scene report");
+            return clipboard.getPrimaryClip().getItemAt(0).coerceToText(activity).toString();
+        });
+    }
+
+    private void setClipboardText(String text) {
+        main(() -> {
+            ((ClipboardManager) activity.getSystemService(Activity.CLIPBOARD_SERVICE))
+                    .setPrimaryClip(ClipData.newPlainText("XLab regression scene", text));
+            return null;
+        });
+        waitForIdleSync();
     }
 
     private void saveEvidence(String name, String content) throws Exception {

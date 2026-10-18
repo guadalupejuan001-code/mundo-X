@@ -53,7 +53,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     private SharedPreferences prefs;
     private Spinner count;
     private EditText seed, selection;
-    private TextView stats, detail, status, result, selectedInfo;
+    private TextView stats, detail, status, result, selectedInfo, viewState;
     private Button animated, ruleRoute, explicitRoute;
     private int selected;
     private boolean animation = true, busy, destroyed;
@@ -65,6 +65,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     private String campaignOriginal;
     private JSONArray campaignRuns;
     private String verification = "{}", benchmark = "{}";
+    private String lastGraphicsError = "";
     private ObjectSceneRenderer.Stats latest;
 
     @Override public void onCreate(Bundle state) {
@@ -93,6 +94,11 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         surface.setEGLContextClientVersion(3); surface.setPreserveEGLContextOnPause(true);
         renderer = new ObjectSceneRenderer(this); surface.setRenderer(renderer);
         viewport.addView(surface, new FrameLayout.LayoutParams(-1, -1));
+        viewState = tag(label("Preparando escena…", 11, LIME, true), "objects_view_state");
+        viewState.setContentDescription("pending");
+        viewState.setPadding(dp(8), dp(6), dp(8), dp(6)); viewState.setBackgroundColor(0xc9131715);
+        viewState.setMaxLines(4);
+        viewport.addView(viewState, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
         TextView gesture = label("ARRASTRA: ÓRBITA    PELLIZCA: ZOOM    TOCA: CELDA", 9, BONE, true);
         gesture.setPadding(dp(8), dp(6), dp(8), dp(6)); gesture.setBackgroundColor(0xb3131715);
         FrameLayout.LayoutParams hint = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
@@ -110,6 +116,15 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         explicitRoute = control(button("Explícita", false)); explicitRoute.setTag("objects_explicit");
         ruleRoute.setOnClickListener(v -> route(false)); explicitRoute.setOnClickListener(v -> route(true));
         routes.addView(ruleRoute, weight()); routes.addView(explicitRoute, weight()); panel.addView(routes);
+        LinearLayout recovery = row();
+        Button recenter = taggedControl("Recentrar / recuperar", "objects_recenter", recovery);
+        recenter.setOnClickListener(v -> {
+            viewState.setText("Recuperando vista…"); viewState.setTextColor(LIME);
+            viewState.setContentDescription("pending"); state("preparing", "Reintentando dibujo con cámara centrada.");
+            surface.queueEvent(renderer::recenter);
+        });
+        Button restore = taggedControl("Restaurar escena", "objects_restore", recovery);
+        restore.setOnClickListener(v -> restoreScene()); panel.addView(recovery);
         detail = tag(label("", 10, MUTED, true), "objects_memory"); panel.addView(detail);
         LinearLayout setup = row();
         count = tag(new Spinner(this), "objects_count");
@@ -129,7 +144,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                 if (limit != null) { state("error", limit); return; }
                 model = new ObjectSceneModel(n, value);
                 selected = Math.min(selected, model.count() - 1); publishScene();
-                state("ready", "Nueva escena · semilla " + value);
+                state("preparing", "Enviando nueva escena · semilla " + value);
             } catch (IllegalArgumentException error) { state("error", "La semilla debe ser un entero de 32 bits."); }
         });
         panel.addView(setup);
@@ -153,14 +168,14 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         taggedControl("Elevar", "objects_raise", edits).setOnClickListener(v -> editSelected(false));
         taggedControl("Ocultar", "objects_hide", edits).setOnClickListener(v -> editSelected(true));
         taggedControl("Revertir", "objects_revert", edits).setOnClickListener(v -> {
-            model.edit(selected, 0); publishScene(); state("ready", "Objeto restaurado desde su regla.");
+            model.edit(selected, 0); publishScene(); state("preparing", "Objeto restaurado; comprobando dibujo.");
         });
         panel.addView(edits);
         LinearLayout density = row();
         taggedControl("+256 cambios", "objects_scatter", density).setOnClickListener(v -> scatter(false));
         taggedControl("Cambiar todos¹", "objects_all", density).setOnClickListener(v -> scatter(true));
         taggedControl("Limpiar", "objects_clear", density).setOnClickListener(v -> {
-            model.clearEdits(); publishScene(); state("ready", "Sin excepciones; sólo reglas.");
+            model.clearEdits(); publishScene(); state("preparing", "Sin excepciones; comprobando dibujo.");
         });
         panel.addView(density);
         panel.addView(label("¹ Hasta 4.096 cambios. Prueba cómo crece el coste al perder regularidad.", 10, MUTED, false));
@@ -189,7 +204,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         Button copy = button("Copiar informe", false); copy.setTag("objects_copy");
         copy.setOnClickListener(v -> {
             ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Mundo X · objetos", report()));
-            if (!busy) state("ready", "Informe copiado con semilla, escena y mediciones.");
+            android.widget.Toast.makeText(this, "Informe copiado con escena y mediciones.", android.widget.Toast.LENGTH_SHORT).show();
         }); output.addView(copy, weight());
         Button share = button("Compartir", false);
         share.setOnClickListener(v -> {
@@ -201,6 +216,8 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     }
 
     private void route(boolean value) {
+        viewState.setText("Comprobando ruta…"); viewState.setTextColor(LIME);
+        viewState.setContentDescription("pending"); state("preparing", "Comprobando dibujo en la ruta seleccionada.");
         surface.queueEvent(() -> renderer.setExplicit(value));
         ruleRoute.setTextColor(value ? MUTED : LIME); explicitRoute.setTextColor(value ? LIME : MUTED);
     }
@@ -225,7 +242,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                 int current = model.editState(selected);
                 model.edit(selected, current >= 1 && current < 6 ? current + 1 : 1);
             }
-            publishScene(); state("ready", "Cambio guardado · ID " + selected);
+            publishScene(); state("preparing", "Cambio guardado · ID " + selected + "; comprobando dibujo.");
         } catch (IllegalArgumentException | IllegalStateException error) { state("error", error.getMessage()); }
     }
 
@@ -272,7 +289,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                 int id = ids[i];
                 model.edit(id, 1 + Math.floorMod(ObjectSceneModel.hash(id, model.seed()), 6));
             }
-            publishScene(); state("ready", (all ? "Cambios distribuidos" : n + " cambios añadidos")
+            publishScene(); state("preparing", (all ? "Cambios distribuidos" : n + " cambios añadidos")
                     + " · " + model.editCount() + " excepciones.");
         } catch (IllegalArgumentException | IllegalStateException error) {
             model = ObjectSceneModel.importText(prior.exportText());
@@ -283,9 +300,39 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     private void publishScene() {
         ObjectSceneModel.Snapshot snapshot = model.snapshot();
         sceneRevision++; verification = "{}"; benchmark = "{}";
+        latest = null;
+        final long revision = sceneRevision;
+        final int selectedId = selected;
         if (result != null) result.setText("");
-        surface.queueEvent(() -> { renderer.setScene(snapshot); renderer.select(selected); });
+        viewState.setText("Preparando " + model.count() + " objetos…");
+        viewState.setTextColor(LIME); viewState.setContentDescription("pending");
+        surface.queueEvent(() -> { renderer.setScene(snapshot, revision); renderer.select(selectedId); });
         selection.setText(Integer.toString(selected)); selectedInfo(); persist();
+    }
+
+    private void restoreScene() {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (!clipboard.hasPrimaryClip() || clipboard.getPrimaryClip() == null
+                || clipboard.getPrimaryClip().getItemCount() == 0) {
+            state("error", "Copia primero el informe de tu escena anterior."); return;
+        }
+        CharSequence content = clipboard.getPrimaryClip().getItemAt(0).coerceToText(this);
+        if (content == null || content.length() > 524288) {
+            state("error", "El portapapeles no contiene un informe de tamaño válido."); return;
+        }
+        try {
+            String text = content.toString().trim();
+            String scene = text.startsWith("{") ? new JSONObject(text).getString("scene") : text;
+            ObjectSceneModel restored = ObjectSceneModel.importText(scene);
+            int profile = -1;
+            for (int i = 0; i < COUNTS.length; i++) if (COUNTS[i] == restored.count()) profile = i;
+            if (profile < 0) throw new IllegalArgumentException("Unsupported UI profile");
+            String limit = resourceLimit(restored.count());
+            if (limit != null) { state("error", limit + " La escena actual se conserva."); return; }
+            model = restored; selected = Math.min(selected, model.count() - 1);
+            count.setSelection(profile); seed.setText(Integer.toString(model.seed())); publishScene();
+            state("preparing", "Escena restaurada; comprobando dibujo.");
+        } catch (Exception error) { state("error", "El informe no contiene una escena compatible. La escena actual se conserva."); }
     }
 
     private void persist() {
@@ -339,10 +386,11 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         if (limit != null) { finishCampaign("resource_limit", limit); return; }
         model = new ObjectSceneModel(n, model.seed()); selected = Math.min(selected, n - 1);
         count.setSelection(campaignStage); ObjectSceneModel.Snapshot snapshot = model.snapshot();
+        final long revision = ++sceneRevision;
         long id = ++requestId;
         state("benchmarking", "Etapa " + (campaignStage + 1) + "/" + COUNTS.length + " · " + n + " objetos · misma escena para A/B.");
         result.setText("Etapas terminadas: " + campaignRuns.length()); selectedInfo();
-        surface.queueEvent(() -> { renderer.setScene(snapshot); renderer.benchmark(id); });
+        surface.queueEvent(() -> { renderer.setScene(snapshot, revision); renderer.benchmark(id); });
     }
 
     private void campaignResult(String json) {
@@ -382,7 +430,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
 
     @Override public void onStats(ObjectSceneRenderer.Stats value) {
         ui.post(() -> {
-            if (destroyed) return; latest = value;
+            if (destroyed || value.sceneRevision != sceneRevision) return; latest = value;
             stats.setText(String.format(Locale.US, "%s · %,d objetos · P50 %.2f / P95 %.2f ms\n%s",
                     value.route, value.count, value.frameP50Ms, value.frameP95Ms, value.renderer));
             stats.setContentDescription("frames=" + value.frames + ";benchmarking=" + value.benchmarking);
@@ -390,7 +438,19 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                     "Regla + cambios (formato): %,d B · transformaciones: %,d B\nGPU reservada: VBO %,d B + textura %,d B · malla %,d B\nPSS proceso: %.1f MiB · CPU envío: %.3f ms",
                     model.logicalRuleBytes(), value.explicitBytes, value.allocatedExplicitBytes, value.allocatedSparseBytes,
                     value.meshBytes, Debug.getPss() / 1024.0, value.cpuSubmitMs));
-            if ("starting".contentEquals(status.getContentDescription())) state("ready", "Escena lista. Selecciona, cambia y contrasta.");
+            if (value.count == model.count()) {
+                viewState.setContentDescription(value.drawSuspended ? "error" : value.visibility);
+                viewState.setTextColor(value.drawSuspended || "empty".equals(value.visibility) ? CORAL : LIME);
+                if (value.drawSuspended) viewState.setText("Dibujo detenido. Pulsa Recentrar / recuperar o elige un perfil menor. El detalle está en el informe.");
+                else if ("empty".equals(value.visibility)) viewState.setText("La GPU no detectó objetos visibles. Pulsa Recentrar / recuperar o acerca la cámara.");
+                else if ("visible".equals(value.visibility)) viewState.setText(String.format(Locale.US,
+                        "%,d objetos · dibujo visible · profundidad %d bits", value.count, value.depthBits));
+                else viewState.setText("Comprobando visibilidad de " + value.count + " objetos…");
+                if (("starting".contentEquals(status.getContentDescription()) || "preparing".contentEquals(status.getContentDescription()))
+                        && "visible".equals(value.visibility) && !value.drawSuspended) {
+                    state("ready", "Escena lista. Selecciona, cambia y contrasta.");
+                }
+            }
         });
     }
 
@@ -425,20 +485,30 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
 
     @Override public void onFailure(String message) {
         ui.post(() -> { if (!destroyed) {
+            lastGraphicsError = message;
             if (campaign) { finishCampaign("error", message); return; }
             requestId++; busy(false); state("error", message); result.setText(message);
+            viewState.setText("No se pudo dibujar. Pulsa Recentrar / recuperar o prueba un perfil menor.\n" + message);
+            viewState.setTextColor(CORAL); viewState.setContentDescription("error");
         } });
     }
 
     private String report() {
         try {
-            JSONObject out = new JSONObject(); out.put("experiment", "Mundo X / objetos"); out.put("version", "0.3.0");
+            JSONObject out = new JSONObject(); out.put("experiment", "Mundo X / objetos"); out.put("version", "0.3.1");
+            out.put("app_id", getPackageName()); out.put("selected", selected); out.put("last_graphics_error", lastGraphicsError);
             out.put("scene", model.exportText()); out.put("count", model.count()); out.put("seed", model.seed());
             out.put("edits", model.editCount()); out.put("scene_revision", sceneRevision);
             out.put("logical_rule_bytes", model.snapshot().logicalRuleBytes()); out.put("explicit_transform_bytes", 16L * model.count());
             out.put("process_pss_kib", Debug.getPss()); out.put("image_ab", new JSONObject(verification));
             out.put("benchmark", new JSONObject(benchmark)); out.put("timing", "wall frame intervals and CPU submit; not isolated GPU time");
-            if (latest != null) { out.put("renderer", latest.renderer); out.put("vendor", latest.vendor); }
+            if (latest != null) {
+                out.put("renderer", latest.renderer); out.put("vendor", latest.vendor);
+                out.put("depth_bits", latest.depthBits); out.put("projection_near", latest.projectionNear);
+                out.put("projection_far", latest.projectionFar); out.put("camera_distance", latest.cameraDistance);
+                out.put("visibility", latest.visibility); out.put("draw_suspended", latest.drawSuspended);
+                out.put("viewport_width", latest.viewWidth); out.put("viewport_height", latest.viewHeight);
+            }
             return out.toString(2);
         } catch (Exception error) { return "Error creando informe: " + error.getMessage(); }
     }

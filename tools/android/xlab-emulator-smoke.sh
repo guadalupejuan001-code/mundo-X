@@ -36,16 +36,16 @@ done
 "$ADB" shell settings put global window_animation_scale 0
 "$ADB" shell settings put global transition_animation_scale 0
 "$ADB" shell settings put global animator_duration_scale 0
-"$ADB" install -r ui-apks/XLab-0.3.0-debug.apk
+"$ADB" install -r ui-apks/XLab-0.3.1-debug.apk
 "$ADB" install -r ui-apks/XLab-instrumentation.apk
 set +e
-timeout 300 "$ADB" shell am instrument -w -r \
-  com.mundox.lab.xlab.objects.test/com.mundox.lab.XLabInstrumentation \
+timeout 420 "$ADB" shell am instrument -w -r \
+  com.mundox.xlab.test/com.mundox.lab.XLabInstrumentation \
   | tee ui-evidence/instrumentation.txt
 run_status=${PIPESTATUS[0]}
 set -e
 "$ADB" logcat -d > ui-evidence/logcat.txt
-"$ADB" pull /sdcard/Android/data/com.mundox.lab.xlab.objects/files/. ui-evidence/ || true
+"$ADB" pull /sdcard/Android/data/com.mundox.xlab/files/. ui-evidence/ || true
 [[ "$run_status" == 0 ]]
 grep -q 'INSTRUMENTATION_CODE: -1' ui-evidence/instrumentation.txt
 if grep -Eq 'INSTRUMENTATION_RESULT: tests_failed=[1-9]' ui-evidence/instrumentation.txt; then

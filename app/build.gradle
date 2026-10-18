@@ -2,17 +2,28 @@ plugins {
     id 'com.android.application'
 }
 
+def mundoxSigningStorePath = System.getenv('MUNDOX_SIGNING_STORE')
+def mundoxSigningPasswordFilePath = System.getenv('MUNDOX_SIGNING_PASSWORD_FILE')
+def mundoxSigningConfigured = mundoxSigningStorePath && mundoxSigningPasswordFilePath
+if ((mundoxSigningStorePath || mundoxSigningPasswordFilePath) && !mundoxSigningConfigured) {
+    throw new GradleException('Mundo X signing requires both the keystore and password-file paths.')
+}
+if (mundoxSigningConfigured && (!file(mundoxSigningStorePath).isFile()
+        || !file(mundoxSigningPasswordFilePath).isFile())) {
+    throw new GradleException('A configured Mundo X signing file is missing.')
+}
+
 android {
     namespace 'com.mundox.lab'
     compileSdk 35
     ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId 'com.mundox.lab.xlab.objects'
+        applicationId 'com.mundox.xlab'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.3.0'
+        versionCode 4
+        versionName '0.3.1'
         testInstrumentationRunner 'com.mundox.lab.XLabInstrumentation'
 
         ndk {
@@ -26,9 +37,26 @@ android {
         }
     }
 
+    signingConfigs {
+        if (mundoxSigningConfigured) {
+            mundoxStable {
+                storeFile file(mundoxSigningStorePath)
+                storeType 'PKCS12'
+                storePassword file(mundoxSigningPasswordFilePath).getText('UTF-8').trim()
+                keyAlias 'mundox'
+                keyPassword storePassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             minifyEnabled false
+            // Local builds without explicit signing paths retain Android's local debug key.
+            // Official deliveries use the persistent project key when configured.
+            if (mundoxSigningConfigured) {
+                signingConfig signingConfigs.mundoxStable
+            }
         }
         release {
             minifyEnabled false

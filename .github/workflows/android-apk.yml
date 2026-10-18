@@ -92,22 +92,45 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
 
-      - name: Build debug APK and UI instrumentation
-        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Prepare persistent project signing
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+        shell: bash
+        env:
+          MUNDOX_ANDROID_KEYSTORE_B64: ${{ secrets.MUNDOX_ANDROID_KEYSTORE_B64 }}
+          MUNDOX_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.MUNDOX_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$MUNDOX_ANDROID_KEYSTORE_B64" || -z "$MUNDOX_ANDROID_KEYSTORE_PASSWORD" ]]; then
+            echo 'CI preview uses a temporary debug key. Official delivery is signed separately.'
+            exit 0
+          fi
+          printf '%s' "$MUNDOX_ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/mundox-signing.p12"
+          printf '%s' "$MUNDOX_ANDROID_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/mundox-signing-password.txt"
+          echo "MUNDOX_SIGNING_STORE=$RUNNER_TEMP/mundox-signing.p12" >> "$GITHUB_ENV"
+          echo "MUNDOX_SIGNING_PASSWORD_FILE=$RUNNER_TEMP/mundox-signing-password.txt" >> "$GITHUB_ENV"
+
+      - name: Build signed debug APK and UI instrumentation
+        run: gradle --no-daemon --no-configuration-cache :app:assembleDebug :app:assembleDebugAndroidTest
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/mundox-signing.p12" "$RUNNER_TEMP/mundox-signing-password.txt"
 
       - name: Stage APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/XLab-0.3.0-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/XLab-0.3.1-debug.apk
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk dist/XLab-instrumentation.apk
-          sha256sum dist/XLab-0.3.0-debug.apk > dist/XLab-SHA256SUMS.txt
+          sha256sum dist/XLab-0.3.1-debug.apk > dist/XLab-SHA256SUMS.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Mundo-X-Lab-APK
           path: |
-            dist/XLab-0.3.0-debug.apk
+            dist/XLab-0.3.1-debug.apk
             dist/XLab-SHA256SUMS.txt
           if-no-files-found: error
 
