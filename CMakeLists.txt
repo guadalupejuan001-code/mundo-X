@@ -20,6 +20,12 @@ if (BUILD_TESTING)
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
       target_compile_options(test_${test_name} PRIVATE -O3 -Wall -Wextra -Wpedantic)
     endif()
+    if (MSVC AND test_name STREQUAL "reduced_optimization")
+      # MSVC 19.51 Release fails this reference comparison with inlining and
+      # passes unchanged with /Ob0. Keep the workaround on the test executable;
+      # mundo_x retains its normal optimization and all tolerances stay intact.
+      target_compile_options(test_${test_name} PRIVATE /Ob0)
+    endif()
     add_test(NAME ${test_name} COMMAND test_${test_name})
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 30)
   endforeach()

@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -83,13 +85,27 @@ void require(bool condition, const std::string& message) {
 
 void compare(const mundo_x::ReducedExactTRepresentation& q,
              const Reference& ref, std::size_t step,
-             double tolerance = 5e-6) {
+             double tolerance = 5e-6, const std::string& context = "") {
   const auto actual = q.dense_from_reduced();
   double error = 0.0;
   for (std::size_t i = 0; i < actual.size(); ++i)
     error += std::norm(actual[i] - ref.state[i]);
-  require(std::sqrt(error) < tolerance,
-          "independent reference mismatch at step " + std::to_string(step));
+  if (!(std::sqrt(error) < tolerance)) {
+    const auto dense = q.dense_reference();
+    double dense_error = 0.0;
+    std::ostringstream diagnostic;
+    diagnostic << std::setprecision(17)
+               << "independent reference mismatch at step " << step
+               << " n=" << q.qubits() << " context=" << context
+               << " l2=" << std::sqrt(error) << " tolerance=" << tolerance;
+    for (std::size_t i = 0; i < actual.size(); ++i) {
+      dense_error += std::norm(dense[i] - ref.state[i]);
+      if (i < 8) diagnostic << " [" << i << ":actual=" << actual[i]
+                           << ",ref=" << ref.state[i] << ",dense=" << dense[i] << ']';
+    }
+    diagnostic << " dense_reference_l2=" << std::sqrt(dense_error);
+    throw std::runtime_error(diagnostic.str());
+  }
   require(q.component_count() <= actual.size(), "quotient dimension exceeded");
 }
 
@@ -118,7 +134,11 @@ void correctness() {
         ref.apply(op, a, b);
         if (op == Op::T) ++t_count;
         require(q.t_count() == t_count, "T count changed");
-        compare(q, ref, step);
+        compare(q, ref, step, 5e-6,
+                "random trial=" + std::to_string(trial) +
+                " op=" + std::to_string(static_cast<unsigned>(op)) +
+                " a=" + std::to_string(a) + " b=" + std::to_string(b) +
+                " seed=" + std::to_string(seed));
         ++checked;
       }
     }
@@ -135,7 +155,7 @@ void correctness() {
       for (std::size_t k = 0; k < 8; ++k) {
         apply(q, Op::T, a);
         ref.apply(Op::T, a);
-        compare(q, ref, k);
+        compare(q, ref, k, 5e-6, "diagonal a=" + std::to_string(a));
         ++checked;
       }
     }
@@ -151,7 +171,7 @@ void correctness() {
       long_ref.apply(op, 0);
     }
   }
-  compare(long_run, long_ref, 10000, 1e-10);
+  compare(long_run, long_ref, 10000, 1e-10, "long_run");
   const auto long_oracle = long_run.dense_reference();
   double oracle_error = 0.0;
   for (std::size_t i = 0; i < long_oracle.size(); ++i)
