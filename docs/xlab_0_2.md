@@ -69,6 +69,9 @@ identificador era `com.mundox.lab`. El botón «Anterior» abre las herramientas
 anteriores incluidas en este paquete.
 
 Se compila una versión debug. El workflow Android construye el APK, ejecuta las
-pruebas nativas y arranca un emulador Android 15 x86-64 con 2048 MiB para las
-pruebas de interfaz y las capturas. Esa configuración no sustituye una medición
-de rendimiento en un teléfono físico.
+pruebas nativas y solicita un emulador Android 15 x86-64 con 2048 MiB para las
+pruebas de interfaz y las capturas. La imagen utilizada incrementó esa reserva
+automáticamente a 2560 MB; Android informó unos 2473 MiB totales. Las pruebas
+no constituyen una medición en un teléfono físico de 2 GB.
+
+[Informe de compilación, pruebas y artefacto](../results/xlab_0_2_2026-10-18.md).

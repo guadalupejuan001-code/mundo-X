@@ -8,6 +8,7 @@
 de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con
 gráficos de resultados nativos y perfiles de 64 a 2048 MiB sujetos a la RAM
 disponible. Se instala junto al laboratorio anterior.
+[APK y validación: 12 pruebas nativas y 8 recorridos Android](results/xlab_0_2_2026-10-18.md).
 
 > **Principio de diseño:** representar y transformar lo necesario; no materializar todos los estados, ramas u objetos cuando su comportamiento puede obtenerse a partir de estructuras, relaciones y reglas de evolución.
 
