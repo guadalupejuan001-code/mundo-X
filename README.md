@@ -8,12 +8,13 @@
 y escala progresiva de rendimiento](docs/xlab_0_3_objetos.md). Acceso directo
 desde **Objetos ↗**, hasta 1.048.576 instancias como límite de ensayo, con parada
 por cadencia, memoria, temperatura o tiempo y restauración de la escena.
+[APK y validación: 15 recorridos Android, 12 pruebas nativas y resultados GPU](results/xlab_objetos_2026-10-18.md).
 
 También conserva la [mesa de circuitos, pruebas interactivas, protocolos
 de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con
 gráficos de resultados nativos y perfiles de 64 a 2048 MiB sujetos a la RAM
 disponible. Se instala junto al laboratorio anterior.
-[APK y validación: 12 pruebas nativas y 8 recorridos Android](results/xlab_0_2_2026-10-18.md).
+[Validación anterior de XLab 0.2](results/xlab_0_2_2026-10-18.md).
 
 > **Principio de diseño:** representar y transformar lo necesario; no materializar todos los estados, ramas u objetos cuando su comportamiento puede obtenerse a partir de estructuras, relaciones y reglas de evolución.
 
