@@ -6,6 +6,8 @@ on:
     paths:
       - 'app/**'
       - 'native/**'
+      - 'CMakeLists.txt'
+      - 'tools/android/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
@@ -83,17 +85,65 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
 
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+      - name: Build debug APK and UI instrumentation
+        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 
       - name: Stage APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/Mundo-X-Lab-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/XLab-0.2.0-debug.apk
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk dist/XLab-instrumentation.apk
+          sha256sum dist/XLab-0.2.0-debug.apk > dist/XLab-SHA256SUMS.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Mundo-X-Lab-APK
-          path: dist/Mundo-X-Lab-debug.apk
+          path: |
+            dist/XLab-0.2.0-debug.apk
+            dist/XLab-SHA256SUMS.txt
           if-no-files-found: error
+
+      - name: Upload UI instrumentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: XLab-Instrumentation
+          path: dist/XLab-instrumentation.apk
+          if-no-files-found: error
+
+  ui-smoke:
+    needs: build-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download app
+        uses: actions/download-artifact@v4
+        with:
+          name: Mundo-X-Lab-APK
+          path: ui-apks
+
+      - name: Download instrumentation
+        uses: actions/download-artifact@v4
+        with:
+          name: XLab-Instrumentation
+          path: ui-apks
+
+      - name: Enable emulator acceleration
+        run: |
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
+
+      - name: Run interactive laboratory on Android 15
+        shell: bash
+        run: bash tools/android/xlab-emulator-smoke.sh
+
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: XLab-UI-Evidence
+          path: ui-evidence/**
+          if-no-files-found: warn

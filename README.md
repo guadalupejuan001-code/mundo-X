@@ -4,6 +4,11 @@
 
 **Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
 
+**XLab 0.2 para Android:** [mesa de circuitos, pruebas interactivas, protocolos
+de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con
+gráficos de resultados nativos y perfiles de 64 a 2048 MiB sujetos a la RAM
+disponible. Se instala junto al laboratorio anterior.
+
 > **Principio de diseño:** representar y transformar lo necesario; no materializar todos los estados, ramas u objetos cuando su comportamiento puede obtenerse a partir de estructuras, relaciones y reglas de evolución.
 
 Mundo X **no nació como una app Android**. La aplicación móvil, el runtime de Windows y los experimentos gráficos sirven para probar la arquitectura en contextos distintos. El núcleo del proyecto es investigar **cómo representar información y calcular su evolución** sin depender, siempre, de una enumeración explícita de cada elemento posible.
