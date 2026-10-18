@@ -1,0 +1,115 @@
+name: Upload verified XLab APK to draft release
+
+on:
+  workflow_dispatch:
+    inputs:
+      delivery_ref:
+        description: 'Full 40-character commit SHA containing the signed delivery files'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upload-draft:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      EXPECTED_APK_SHA256: 914b5a05418de89605f50c0049e1a6225ed81cef773e19c3c1fb49cdc6f50eb6
+      EXPECTED_CERT_SHA256: a0f5da449784dac25e79d80399541b383541104318b45e68abada821a4066a3c
+
+    steps:
+      - name: Require a pinned delivery commit
+        shell: bash
+        env:
+          DELIVERY_REF: ${{ inputs.delivery_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$DELIVERY_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
+            echo 'delivery_ref must be a full 40-character commit SHA.' >&2
+            exit 1
+          }
+
+      - name: Read delivery files without running delivery code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.delivery_ref }}
+          path: delivery-input
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify pinned APK hash and public delivery metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          directory = Path('delivery-input/dist')
+          names = ('XLab-Objetos-0.3.1.apk', 'XLab-Objetos-0.3.1-SHA256.txt',
+                   'XLab-Objetos-0.3.1-firma.json')
+          for name in names:
+              path = directory / name
+              if path.is_symlink() or not path.is_file():
+                  raise SystemExit('Delivery assets must be regular files: ' + name)
+          expected_apk = os.environ['EXPECTED_APK_SHA256']
+          expected_cert = os.environ['EXPECTED_CERT_SHA256']
+          apk_hash = hashlib.sha256((directory / names[0]).read_bytes()).hexdigest()
+          if apk_hash != expected_apk:
+              raise SystemExit('APK does not match the approved SHA-256.')
+          checksum = (directory / names[1]).read_text().split()
+          if checksum != [expected_apk, names[0]]:
+              raise SystemExit('Checksum file must contain only the approved hash and APK filename.')
+          report = json.loads((directory / names[2]).read_text())
+          if (report.get('verified') is not True
+                  or report.get('project_certificate_matches') is not True
+                  or report.get('payload_comparison_performed') is not True
+                  or report.get('payload_unchanged_except_signatures') is not True
+                  or str(report.get('apk_sha256', '')).lower() != expected_apk
+                  or str(report.get('certificate_sha256', '')).replace(':', '').lower() != expected_cert):
+              raise SystemExit('Signing report does not match the approved APK and certificate.')
+          print('Approved APK hash and public signing metadata match.')
+          PY
+          (cd delivery-input/dist && sha256sum -c XLab-Objetos-0.3.1-SHA256.txt)
+
+      - name: Install Android signature verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+
+      - name: Independently verify APK signature and project certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            delivery-input/dist/XLab-Objetos-0.3.1.apk | tee "$RUNNER_TEMP/xlab-signature-verification.txt"
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          text = (Path(os.environ['RUNNER_TEMP']) / 'xlab-signature-verification.txt').read_text()
+          certificates = re.findall(r'^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})$', text, re.MULTILINE)
+          if [item.lower() for item in certificates] != [os.environ['EXPECTED_CERT_SHA256']]:
+              raise SystemExit('APK must have exactly the approved project signing certificate.')
+          print('Android independently verified the approved project signature.')
+          PY
+
+      - name: Upload three verified assets to existing draft only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$(gh release view v0.3.1 --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" == true ]] || {
+            echo 'An existing draft release v0.3.1 is required; no release will be created or published.' >&2
+            exit 1
+          }
+          gh release upload v0.3.1 \
+            delivery-input/dist/XLab-Objetos-0.3.1.apk \
+            delivery-input/dist/XLab-Objetos-0.3.1-SHA256.txt \
+            delivery-input/dist/XLab-Objetos-0.3.1-firma.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
