@@ -4,7 +4,12 @@
 
 **Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
 
-**XLab 0.2 para Android:** [mesa de circuitos, pruebas interactivas, protocolos
+**XLab 0.3 para Android:** [objetos 3D persistentes, comparación de imágenes GPU
+y escala progresiva de rendimiento](docs/xlab_0_3_objetos.md). Acceso directo
+desde **Objetos ↗**, hasta 1.048.576 instancias como límite de ensayo, con parada
+por cadencia, memoria, temperatura o tiempo y restauración de la escena.
+
+También conserva la [mesa de circuitos, pruebas interactivas, protocolos
 de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con
 gráficos de resultados nativos y perfiles de 64 a 2048 MiB sujetos a la RAM
 disponible. Se instala junto al laboratorio anterior.

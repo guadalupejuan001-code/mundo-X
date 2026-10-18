@@ -307,6 +307,14 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         // A new snapshot invalidates the reference VBO. Delete the previous
         // payload now; it is rebuilt only if reference rendering is requested.
         if (explicitVbo != 0) {
+            // The VAO would otherwise keep the deleted buffer alive through
+            // attribute 2. Redirect the disabled attribute to the shared mesh
+            // before deleting the old per-instance storage.
+            GLES30.glBindVertexArray(vao);
+            GLES30.glDisableVertexAttribArray(2);
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, meshVbo);
+            GLES30.glVertexAttribPointer(2, 4, GLES30.GL_FLOAT, false, 16, 0);
+            GLES30.glBindVertexArray(0);
             GLES30.glDeleteBuffers(1, new int[]{explicitVbo}, 0);
             explicitVbo = 0;
             explicitAllocatedBytes = 0;
