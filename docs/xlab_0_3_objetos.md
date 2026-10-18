@@ -1,4 +1,4 @@
-# XLab 0.3 — objetos persistentes y escala de renderizado
+# XLab 0.3.1 — objetos persistentes y recuperación de la vista
 
 El botón **Objetos ↗**, en la cabecera de XLab, abre un ensayo nuevo del
 principio de Mundo X: reconstruir una escena desde reglas y conservar las
@@ -42,8 +42,46 @@ en escenas de hasta 4.096 objetos. El límite no expulsa cambios previos.
 
 **Copiar informe** y **Compartir** exportan la semilla, el texto canónico de la
 escena, los resultados de comprobación y las mediciones. No hay envío automático.
-El formato canónico tiene importación/exportación comprobada en el modelo; esta
-versión no añade un selector de archivos de importación a la interfaz.
+
+### Restaurar una escena copiada
+
+**Restaurar escena** lee el portapapeles. Acepta el informe JSON completo de
+**Copiar informe**, del que extrae el campo `scene`, o directamente el texto
+canónico exportado por el modelo. Importa semilla, cantidad y excepciones; no
+incorpora las mediciones ni el historial del informe.
+
+La cantidad debe corresponder a uno de los perfiles del selector y superar las
+comprobaciones de recursos del dispositivo. El texto se valida antes de cambiar
+el modelo: si está mal formado, el perfil no es compatible o faltan recursos,
+la escena actual se conserva. La importación se hace desde el portapapeles;
+no hay un selector de archivos.
+
+## Recuperar la vista y reconocer un dibujo vacío
+
+Un error durante el dibujo lo suspende y muestra un aviso. **Recentrar /
+recuperar** restaura el encuadre inicial y reintenta el dibujo; cambiar entre
+**Reglas + cambios** y **Explícita** también permite reintentarlo. Ambas acciones
+conservan la escena y sus excepciones. **Nueva escena** vuelve a intentar el
+dibujo con la escena regenerada y reinicia sus cambios, como se indica arriba.
+Si OpenGL no pudo iniciarse, hay que volver a abrir el laboratorio.
+
+El plano cercano de la cámara se ajusta a su distancia:
+`near = max(0.1, distancia × 0.01)`. Así se evita mantener un plano cercano
+demasiado pequeño al alejarse sobre cuadrículas grandes, que reduce la precisión
+de profundidad, especialmente con buffers de 16 bits.
+
+La banda sobre la vista informa **comprobando**, **dibujo visible**, **sin objetos
+visibles** o **dibujo detenido**. Refleja la última consulta de visibilidad GPU
+disponible; los cambios de cámara, escena o ruta solicitan otra consulta. Detectar
+muestras visibles no demuestra que todos los objetos estén en pantalla ni que
+el renderizado sea rápido. Esta consulta se hace fuera de las muestras de la
+comparación A/B y no sustituye a **Imagen A/B**.
+
+El informe conserva `last_graphics_error`, incluso después de recuperar el
+dibujo. Cuando hay estadísticas disponibles, añade `depth_bits`,
+`projection_near`, `projection_far`, `camera_distance`, `viewport_width`,
+`viewport_height`, `visibility` y `draw_suspended`. Estos campos permiten
+relacionar el error con la profundidad, el encuadre y la ruta ensayada.
 
 ## Comprobación de imagen
 
@@ -114,11 +152,23 @@ no se presenta la descripción lógica como toda la RAM o memoria GPU utilizada.
 
 ## Instalación y validación
 
-Android 8+, OpenGL ES 3, ARM64 y x86-64. Es una compilación debug del paquete
-`com.mundox.lab.xlab.objects`, etiquetado **XLab · Objetos**, que se instala
-junto a XLab 0.2 sin borrarlo. Las claves debug de CI pueden cambiar entre ejecuciones,
-por lo que una instalación sobre otra compilación puede rechazar la firma.
-Los datos del usuario no se borran automáticamente para resolver ese rechazo.
+Android 8+, OpenGL ES 3, ARM64 y x86-64. La versión 0.3.1 utiliza el paquete
+`com.mundox.xlab` y la etiqueta **XLab · Objetos+**. Es una compilación debug
+de laboratorio. Se instala en paralelo a
+0.3, cuyo paquete es `com.mundox.lab.xlab.objects`, para conservar sus datos y
+evitar exigir una actualización sobre sus firmas debug anteriores, que podían
+cambiar entre compilaciones. No borra ni migra automáticamente los datos de
+la instalación anterior.
+
+Para trasladar una escena: abre 0.3, pulsa **Copiar informe**, abre **XLab ·
+Objetos+** y pulsa **Restaurar escena**. Conserva la instalación anterior hasta
+comprobar la escena restaurada.
+
+La entrega oficial usa la firma persistente del proyecto:
+[XLab-Objetos-0.3.1.apk](https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.1/XLab-Objetos-0.3.1.apk).
+[Validación: 18 recorridos Android y recuperación del dibujo](../results/xlab_0_3_1_2026-10-18.md).
+La vista previa debug de CI puede usar una firma temporal; la entrega oficial
+conserva el mismo código y payload de aplicación, con la firma persistente.
 
 Las comprobaciones puras Java cubren vectores de hash independientes,
 reversibilidad, edición aislada, snapshots inmutables, importación atómica,

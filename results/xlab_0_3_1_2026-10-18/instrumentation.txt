@@ -1,0 +1,105 @@
+INSTRUMENTATION_STATUS: stream=
+PASS mesa_native_default
+
+INSTRUMENTATION_STATUS: test=mesa_native_default
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS bell_and_step
+
+INSTRUMENTATION_STATUS: test=bell_and_step
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS interference
+
+INSTRUMENTATION_STATUS: test=interference
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS invalid_circuit_is_error_and_recovers
+
+INSTRUMENTATION_STATUS: test=invalid_circuit_is_error_and_recovers
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS interactive_tests_tab
+
+INSTRUMENTATION_STATUS: test=interactive_tests_tab
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS memory_cancel_is_real
+
+INSTRUMENTATION_STATUS: test=memory_cancel_is_real
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS memory_preflight_and_small_native_run
+
+INSTRUMENTATION_STATUS: test=memory_preflight_and_small_native_run
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS run_is_in_logbook
+
+INSTRUMENTATION_STATUS: test=run_is_in_logbook
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS object_model_independent_checks
+
+INSTRUMENTATION_STATUS: test=object_model_independent_checks
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_open_edits_and_persistence
+
+INSTRUMENTATION_STATUS: test=objects_open_edits_and_persistence
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_gpu_image_equivalence_and_edit_effect
+
+INSTRUMENTATION_STATUS: test=objects_gpu_image_equivalence_and_edit_effect
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_benchmark_cancel_and_recovery
+
+INSTRUMENTATION_STATUS: test=objects_benchmark_cancel_and_recovery
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_benchmark_both_routes
+
+INSTRUMENTATION_STATUS: test=objects_benchmark_both_routes
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_extreme_cancel_restores_scene
+
+INSTRUMENTATION_STATUS: test=objects_extreme_cancel_restores_scene
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_extreme_automatic_limits_and_restore
+
+INSTRUMENTATION_STATUS: test=objects_extreme_automatic_limits_and_restore
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_real_gl_error_recovers_without_losing_selection
+
+INSTRUMENTATION_STATUS: test=objects_real_gl_error_recovers_without_losing_selection
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_65536_visible_and_max_zoom_uses_real_framebuffer
+
+INSTRUMENTATION_STATUS: test=objects_65536_visible_and_max_zoom_uses_real_framebuffer
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: stream=
+PASS objects_clipboard_scene_migration_and_invalid_text_is_atomic
+
+INSTRUMENTATION_STATUS: test=objects_clipboard_scene_migration_and_invalid_text_is_atomic
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: failures=
+INSTRUMENTATION_RESULT: screenshots=/storage/emulated/0/Android/data/com.mundox.xlab/files/xlab-mesa.png
+/storage/emulated/0/Android/data/com.mundox.xlab/files/xlab-pruebas.png
+/storage/emulated/0/Android/data/com.mundox.xlab/files/xlab-carga.png
+/storage/emulated/0/Android/data/com.mundox.xlab/files/xlab-objetos.png
+/storage/emulated/0/Android/data/com.mundox.xlab/files/xlab-objetos-escala.png
+/storage/emulated/0/Android/data/com.mundox.xlab/files/xlab-65536.png
+/storage/emulated/0/Android/data/com.mundox.xlab/files/xlab-65536-maxzoom.png
+INSTRUMENTATION_RESULT: stream=
+XLab: 18 passed, 0 failed.
+
+
+INSTRUMENTATION_RESULT: tests_failed=0
+INSTRUMENTATION_RESULT: tests_passed=18
+INSTRUMENTATION_CODE: -1

@@ -4,11 +4,12 @@
 
 **Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
 
-**XLab 0.3 para Android:** [objetos 3D persistentes, comparación de imágenes GPU
+**XLab 0.3.1 para Android:** [descargar APK firmado](https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.1/XLab-Objetos-0.3.1.apk).
+[Objetos 3D persistentes, comparación de imágenes GPU
 y escala progresiva de rendimiento](docs/xlab_0_3_objetos.md). Acceso directo
 desde **Objetos ↗**, hasta 1.048.576 instancias como límite de ensayo, con parada
 por cadencia, memoria, temperatura o tiempo y restauración de la escena.
-[APK y validación: 15 recorridos Android, 12 pruebas nativas y resultados GPU](results/xlab_objetos_2026-10-18.md).
+[Validación: 18 recorridos Android, 12 pruebas nativas, recuperación y dibujo de 65.536 objetos](results/xlab_0_3_1_2026-10-18.md).
 
 También conserva la [mesa de circuitos, pruebas interactivas, protocolos
 de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con

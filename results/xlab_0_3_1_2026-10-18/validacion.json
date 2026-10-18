@@ -1,0 +1,52 @@
+{
+  "version": "0.3.1",
+  "source_commit": "52c9dc98c4676ff9bd5b8cbd23594a020477a7fb",
+  "package": "com.mundox.xlab",
+  "label": "XLab · Objetos+",
+  "android_min_api": 26,
+  "abis": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "debug_build": true,
+  "apk_sha256": "914b5a05418de89605f50c0049e1a6225ed81cef773e19c3c1fb49cdc6f50eb6",
+  "apk_size_bytes": 2417216,
+  "signature_verified": true,
+  "project_certificate_sha256": "a0f5da449784dac25e79d80399541b383541104318b45e68abada821a4066a3c",
+  "payload_matches_tested_apk": true,
+  "native_libraries_aligned_16k": true,
+  "android_tests_passed": 18,
+  "android_tests_failed": 0,
+  "native_tests_passed": 12,
+  "java_model_checks": 448,
+  "test_renderer": "Google SwiftShader (software), Android 15 x86-64",
+  "hardware_phone_tested": false,
+  "image_checks": [
+    {
+      "file": "xlab-65536.json",
+      "count": 65536,
+      "seed": 2026,
+      "passed": true,
+      "covered_pixels": 3217,
+      "differing_pixels": 0,
+      "max_channel_delta": 0,
+      "camera_distance": 793.6,
+      "projection_near": 7.9359994,
+      "depth_bits": 24
+    },
+    {
+      "file": "xlab-65536-maxzoom.json",
+      "count": 65536,
+      "seed": 2026,
+      "passed": true,
+      "covered_pixels": 201,
+      "differing_pixels": 0,
+      "max_channel_delta": 0,
+      "camera_distance": 3174.4,
+      "projection_near": 31.743998,
+      "depth_bits": 24
+    }
+  ],
+  "download_url": "https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.1/XLab-Objetos-0.3.1.apk",
+  "test_run": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39150875963"
+}
