@@ -39,6 +39,20 @@ También se probaron las poblaciones 65.535, 65.536 y 65.537, semillas extremas,
 objetos elevados y ocultos, y una cámara sin objetos: esta última produce cero
 envíos y fondo idéntico, sin contar como demostración de rendimiento visible.
 
+## Comprobaciones de la aplicación Android
+
+La [ejecución Android de `c42c70b`](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39156970917)
+terminó con **21 pruebas aprobadas y cero fallos** en AOSP Android 15 y
+SwiftShader. Incluye la escena de 65.536 objetos, zoom, equivalencia de imágenes,
+descarte activado y desactivado, conservación de IDs y ediciones, recuperación
+tras un error GL y estabilidad del viewport en modo quieto.
+
+En la cámara cercana de esa prueba se enviaron 47.104 de 65.536 instancias;
+al desactivar el descarte se enviaron las 65.536 en cuatro llamadas. Durante la
+observación quieta de 600 ms el viewport mantuvo sus 996 × 745 píxeles y el
+contador de cuadros permaneció sin cambios. Estas son medidas del emulador,
+no del teléfono Mali.
+
 ## Alcance de las medidas
 
 Los tiempos del JSON son dibujos individuales de validación con `glFinish`.

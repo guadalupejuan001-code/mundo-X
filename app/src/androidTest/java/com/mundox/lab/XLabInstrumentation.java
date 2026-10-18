@@ -589,7 +589,10 @@ public final class XLabInstrumentation extends Instrumentation {
                         "The million-object test never rendered a visible live scene");
                 Log.i("XLabChecks", "million: visible, frames=" + live.frames + ", viewport="
                         + live.viewWidth + "x" + live.viewHeight);
-                JSONObject quietViewport = requireQuietViewportStable(600L);
+                // Software GLES may still be completing the last million-object
+                // draw after the visibility callback. Bound this diagnostic
+                // wait separately from the normal suite's 20-second budget.
+                JSONObject quietViewport = requireQuietViewportStable(600L, 90_000L);
                 saveEvidence("xlab-1048576-quiet-viewport.json", quietViewport.toString(2));
                 Log.i("XLabChecks", "million: quiet viewport settled " + quietViewport);
                 click("objects_verify");
@@ -876,11 +879,13 @@ public final class XLabInstrumentation extends Instrumentation {
         throw new AssertionError("Animation did not submit at least " + minimum + " live frames");
     }
 
-    private JSONObject quietViewportSnapshot() throws Exception {
+    private JSONObject quietViewportSnapshot(long glTimeoutMs) throws Exception {
         JSONObject state = new JSONObject();
-        state.put("frames", rendererFrames());
         ObjectSceneRenderer renderer = objectRenderer();
         runGl(() -> {
+            // One GL event makes the frame count and viewport/query state one
+            // coherent snapshot, without submitting another frame.
+            state.put("frames", (Long) privateField(renderer, "frames"));
             state.put("gl_width", (Integer) privateField(renderer, "width"));
             state.put("gl_height", (Integer) privateField(renderer, "height"));
             state.put("visibility", (String) privateField(renderer, "visibility"));
@@ -888,7 +893,7 @@ public final class XLabInstrumentation extends Instrumentation {
             state.put("visibility_requested", (Boolean) privateField(renderer, "visibilityRequested"));
             state.put("animation_enabled", (Boolean) privateField(renderer, "animation"));
             state.put("draw_suspended", (Boolean) privateField(renderer, "drawSuspended"));
-        }, DEADLINE_MS);
+        }, glTimeoutMs);
         int[] surface = main(() -> {
             View view = find("objects_surface");
             return new int[]{view.getWidth(), view.getHeight()};
@@ -905,11 +910,15 @@ public final class XLabInstrumentation extends Instrumentation {
     }
 
     private JSONObject requireQuietViewportStable(long observationMs) throws Exception {
+        return requireQuietViewportStable(observationMs, DEADLINE_MS);
+    }
+
+    private JSONObject requireQuietViewportStable(long observationMs, long glTimeoutMs) throws Exception {
         waitForIdleSync();
-        JSONObject before = quietViewportSnapshot();
+        JSONObject before = quietViewportSnapshot(glTimeoutMs);
         SystemClock.sleep(observationMs);
         waitForIdleSync();
-        JSONObject after = quietViewportSnapshot();
+        JSONObject after = quietViewportSnapshot(glTimeoutMs);
         require(before.getLong("frames") == after.getLong("frames"),
                 "Quiet field submitted additional frames after visibility settled: " + before + " -> " + after);
         for (String dimension : new String[]{"gl_width", "gl_height", "surface_width", "surface_height"}) {
@@ -918,6 +927,7 @@ public final class XLabInstrumentation extends Instrumentation {
         }
         JSONObject result = new JSONObject();
         result.put("observation_ms", observationMs); result.put("before", before); result.put("after", after);
+        result.put("gl_snapshot_timeout_ms", glTimeoutMs);
         result.put("viewport_stable", true); result.put("no_extra_frames", true);
         return result;
     }
