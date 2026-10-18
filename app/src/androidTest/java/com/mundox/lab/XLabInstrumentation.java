@@ -403,6 +403,49 @@ public final class XLabInstrumentation extends Instrumentation {
                         "Rejected migration partially changed the model");
                 saveEvidence("xlab-objetos-migration.json", unchanged.toString(2));
             });
+
+            check("objects_quiet_requests_draws_and_animation_resumes", () -> {
+                loadObjects(0, "2026", SystemClock.uptimeMillis() + DEADLINE_MS);
+                if (text("objects_animate").contains("activo")) click("objects_animate");
+                awaitObjectAnimation(false, SystemClock.uptimeMillis() + DEADLINE_MS);
+                require(main(() -> ((GLSurfaceView) find("objects_surface")).getRenderMode())
+                                == GLSurfaceView.RENDERMODE_WHEN_DIRTY,
+                        "Quiet field did not select demand rendering");
+                long quietBefore = rendererFrames();
+                SystemClock.sleep(600L);
+                long quietAfter = rendererFrames();
+                require(quietAfter == quietBefore, "Quiet field kept submitting identical frames");
+                setText("objects_id", "528"); click("objects_select"); click("objects_raise");
+                awaitObjectStats(1024, 0, SystemClock.uptimeMillis() + DEADLINE_MS);
+                long edited = rendererFrames();
+                require(edited > quietAfter, "Editing a quiet field did not request an actual draw");
+                click("objects_verify"); awaitReady("objects_status", "objects_result");
+                JSONObject image = requireNativeJson("objects_result");
+                requireObjectCoverage(image, 1024, 2026);
+                click("objects_benchmark"); awaitReady("objects_status", "objects_result");
+                JSONObject measured = requireNativeJson("objects_result");
+                require(measured.getBoolean("passed") && "completed".equals(measured.getString("status")),
+                        "Benchmark did not keep requesting measured frames while the field was quiet");
+                awaitObjectAnimation(false, SystemClock.uptimeMillis() + DEADLINE_MS);
+                click("objects_animate");
+                awaitObjectAnimation(true, SystemClock.uptimeMillis() + DEADLINE_MS);
+                long activeStart = rendererFrames();
+                long activeAfter = awaitRendererFrames(activeStart + 2, SystemClock.uptimeMillis() + DEADLINE_MS);
+                click("objects_animate");
+                awaitObjectAnimation(false, SystemClock.uptimeMillis() + DEADLINE_MS);
+                long quietFinal = rendererFrames();
+                SystemClock.sleep(600L);
+                long quietFinalAfter = rendererFrames();
+                require(quietFinalAfter == quietFinal, "Stopping animation did not settle back to demand rendering");
+                JSONObject demand = new JSONObject();
+                demand.put("count", 1024); demand.put("seed", 2026);
+                demand.put("quiet_frames_before", quietBefore); demand.put("quiet_frames_after_600ms", quietAfter);
+                demand.put("frames_after_edit", edited); demand.put("image_ab", image);
+                demand.put("benchmark_when_quiet", measured);
+                demand.put("active_frames_start", activeStart); demand.put("active_frames_after", activeAfter);
+                demand.put("quiet_final_frames", quietFinal); demand.put("quiet_final_frames_after_600ms", quietFinalAfter);
+                saveEvidence("xlab-objetos-demand.json", demand.toString(2));
+            });
         } catch (Throwable error) {
             recordFailure("launch_or_runner", error);
         } finally {
@@ -453,13 +496,11 @@ public final class XLabInstrumentation extends Instrumentation {
                 image.put("device_preflight", preflight);
                 image.put("live_visibility_confirmed_before_verification", true);
                 image.put("context_frames_before_verification", live.frames);
-                saveEvidence("xlab-1048576.json", image.toString(2));
-                // Window capture is auxiliary evidence. The actual GPU query,
-                // framebuffer readback, coverage and transforms are verified
-                // and saved before trying the compositor screenshot.
-                JSONObject capture = auxiliaryScreenshot("xlab-1048576.png");
-                image.put("screenshot_captured", capture.getBoolean("captured"));
-                image.put("screenshot_diagnostic", capture);
+                String note = "Global UiAutomation screenshot intentionally skipped for 1,048,576 objects: "
+                        + "avoid compositor load; actual GL visibility, framebuffer readback and transforms are mandatory.";
+                diagnosticNotes.add(note);
+                image.put("screenshot_captured", false); image.put("screenshot_skipped", true);
+                image.put("screenshot_skip_reason", note);
                 saveEvidence("xlab-1048576.json", image.toString(2));
             } finally {
                 // On both success and assertion failure, release the large
@@ -629,6 +670,34 @@ public final class XLabInstrumentation extends Instrumentation {
         }
         throw new AssertionError("No visible GPU result for " + expectedCount + " objects; last="
                 + (latest == null ? "none" : latest.count + "/" + latest.visibility + "/" + latest.cameraDistance));
+    }
+
+    private void awaitObjectAnimation(boolean enabled, long deadline) {
+        while (SystemClock.uptimeMillis() < deadline) {
+            ObjectSceneRenderer.Stats value = main(() -> (ObjectSceneRenderer.Stats) privateField(activity, "latest"));
+            if (value != null && value.animationEnabled == enabled && !value.drawSuspended
+                    && "visible".equals(value.visibility) && !value.benchmarking) return;
+            SystemClock.sleep(75L);
+        }
+        throw new AssertionError("Rendering policy did not settle with animation=" + enabled);
+    }
+
+    private long rendererFrames() throws Exception {
+        ObjectSceneRenderer renderer = objectRenderer();
+        AtomicReference<Long> count = new AtomicReference<>();
+        // Inspect the live GL counter after prior rendering commands complete.
+        // queueEvent intentionally does not request a draw in WHEN_DIRTY mode.
+        runGl(() -> count.set((Long) privateField(renderer, "frames")), DEADLINE_MS);
+        return count.get();
+    }
+
+    private long awaitRendererFrames(long minimum, long deadline) throws Exception {
+        while (SystemClock.uptimeMillis() < deadline) {
+            long count = rendererFrames();
+            if (count >= minimum) return count;
+            SystemClock.sleep(75L);
+        }
+        throw new AssertionError("Animation did not submit at least " + minimum + " live frames");
     }
 
     private void loadObjects(int profile, String seed, long deadline) {

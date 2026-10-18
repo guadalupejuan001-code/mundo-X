@@ -39,7 +39,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         public final long frames, explicitBytes, sparseBytes, meshBytes, sceneRevision;
         public final long allocatedExplicitBytes, allocatedSparseBytes, uploadedBytes;
         public final double frameP50Ms, frameP95Ms, cpuSubmitMs;
-        public final boolean benchmarking, drawSuspended;
+        public final boolean benchmarking, drawSuspended, animationEnabled;
 
         private Stats(ObjectSceneRenderer r) {
             renderer = r.rendererName;
@@ -66,6 +66,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             cameraDistance = r.distance;
             visibility = r.visibility;
             drawSuspended = r.drawSuspended;
+            animationEnabled = r.animation;
         }
     }
 
@@ -76,6 +77,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     private static final long WARMUP_NS = 700_000_000L;
     private static final long SAMPLE_NS = 2_500_000_000L;
     private final Listener listener;
+    private final Runnable requestFrame;
+    private boolean statsDirty = true;
     private ObjectSceneModel.Snapshot scene;
     private long sceneRevision;
     private int width = 1, height = 1, program, vao, meshVbo, explicitVbo, editsTexture;
@@ -101,9 +104,10 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     private int windowCount, windowPosition;
     private BenchmarkState benchmarkState;
 
-    public ObjectSceneRenderer(Listener listener) {
-        if (listener == null) throw new IllegalArgumentException("Listener required");
+    public ObjectSceneRenderer(Listener listener, Runnable requestFrame) {
+        if (listener == null || requestFrame == null) throw new IllegalArgumentException("Listener and frame callback required");
         this.listener = listener;
+        this.requestFrame = requestFrame;
     }
 
     public void setScene(ObjectSceneModel.Snapshot snapshot, long revision) {
@@ -161,11 +165,15 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     public void select(int id) {
         if (busy()) return;
         selectedId = scene != null && id >= 0 && id < scene.count ? id : -1;
+        drawChanged();
     }
 
     public void setAnimation(boolean enabled) {
         if (busy()) return;
         animation = enabled;
+        lastAnimationNs = lastFrameNs = 0;
+        resetWindow();
+        invalidateVisibility();
     }
 
     public void verify() { verify(0); }
@@ -177,6 +185,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         if (scene == null) { listener.onFailure("Primero carga una escena."); return; }
         verificationRequestId = requestId;
         pendingVerify = true;
+        drawChanged();
     }
 
     public void benchmark() { benchmark(0); }
@@ -188,6 +197,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         if (scene == null) { listener.onFailure("Primero carga una escena."); return; }
         benchmarkRequestId = requestId;
         pendingBenchmark = true;
+        drawChanged();
     }
 
     public void cancelBenchmark() {
@@ -198,6 +208,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         benchmarkState = null;
         lastFrameNs = lastAnimationNs = 0;
         resetWindow();
+        invalidateVisibility();
         if (active) {
             JSONObject result = contextJson();
             put(result, "status", "cancelled");
@@ -213,6 +224,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     @Override public void onSurfaceCreated(GL10 unused, EGLConfig config) {
         ready = false;
         failed = false;
+        statsDirty = true;
         drawSuspended = false;
         // A recreated EGL context has already disposed the old query names.
         visibilityQuery = 0;
@@ -287,6 +299,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             return;
         }
         try {
+            String previousVisibility = visibility;
+            boolean wasBenchmarking = benchmarkState != null || pendingBenchmark;
             if (dirty) uploadSparse();
             if (pendingVerify) {
                 invalidateVisibility();
@@ -325,16 +339,30 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             long afterSubmit = System.nanoTime();
             if (visibilityQueryActive) endVisibility();
             double submitMs = (afterSubmit - submitStart) / 1_000_000.0;
-            double frameMs = lastFrameNs == 0 ? 0 : (now - lastFrameNs) / 1_000_000.0;
-            lastFrameNs = now;
+            boolean timedFrames = animation || benchmarkState != null;
+            double frameMs = !timedFrames || lastFrameNs == 0 ? 0 : (now - lastFrameNs) / 1_000_000.0;
+            lastFrameNs = timedFrames ? now : 0;
             frames++;
-            if (frameMs > 0 && frameMs < 10_000) recordWindow(frameMs, submitMs);
+            if (timedFrames) {
+                if (frameMs > 0 && frameMs < 10_000) recordWindow(frameMs, submitMs);
+            } else {
+                // Human idle time between requested draws is not a frame-time
+                // measurement. Retain this draw's CPU submission cost only.
+                resetWindow();
+                recordWindow(0, submitMs);
+            }
             if (benchmarkState != null) advanceBenchmark(now, afterSubmit, frameMs, submitMs);
-            if (afterSubmit - lastStatsNs >= 500_000_000L) {
+            boolean isBenchmarking = benchmarkState != null || pendingBenchmark;
+            if (statsDirty || !previousVisibility.equals(visibility) || wasBenchmarking != isBenchmarking
+                    || afterSubmit - lastStatsNs >= 500_000_000L) {
                 lastStatsNs = afterSubmit;
                 checkGl("dibujar escena");
+                statsDirty = false;
                 listener.onStats(new Stats(this));
             }
+            // WHEN_DIRTY needs another actual frame for an asynchronous query
+            // result or for each measured benchmark frame. Stop once settled.
+            if (!animation && (visibilityPending || visibilityRequested || busy())) requestFrame.run();
         } catch (RuntimeException error) {
             suspendDrawing(error);
         }
@@ -429,6 +457,14 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         discardVisibilityQuery();
         visibilityRequested = true;
         visibility = drawSuspended || failed ? "error" : "pending";
+        drawChanged();
+    }
+
+    private void drawChanged() {
+        statsDirty = true;
+        lastFrameNs = 0;
+        if (!animation && benchmarkState == null) resetWindow();
+        requestFrame.run();
     }
 
     private void discardVisibilityQuery() {
@@ -544,6 +580,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             if (t >= 0 && t < nearest) { nearest = t; hit = id; }
         }
         selectedId = hit;
+        drawChanged();
         listener.onPick(hit);
     }
 
@@ -858,6 +895,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         put(json, "projection_near", projectionNear); put(json, "projection_far", projectionFar);
         put(json, "camera_distance", distance);
         put(json, "visibility", visibility); put(json, "draw_suspended", drawSuspended);
+        put(json, "animation_enabled", animation);
+        put(json, "render_policy", animation ? "continuous" : "when_dirty");
         if (scene != null) {
             put(json, "count", scene.count); put(json, "seed", scene.seed);
             put(json, "edits", scene.editCount()); put(json, "version", scene.version);

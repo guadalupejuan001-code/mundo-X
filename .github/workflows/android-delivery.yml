@@ -1,0 +1,150 @@
+name: Upload verified XLab delivery to draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      delivery_ref:
+        description: 'Full commit SHA containing dist delivery files'
+        required: true
+        type: string
+      version:
+        description: 'Delivery version, 0.3.N'
+        required: true
+        type: string
+      apk_sha256:
+        description: 'Approved signed APK SHA-256'
+        required: true
+        type: string
+      zip_sha256:
+        description: 'Approved delivery ZIP SHA-256'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upload-draft:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      DELIVERY_REF: ${{ inputs.delivery_ref }}
+      DELIVERY_VERSION: ${{ inputs.version }}
+      EXPECTED_APK_SHA256: ${{ inputs.apk_sha256 }}
+      EXPECTED_ZIP_SHA256: ${{ inputs.zip_sha256 }}
+      EXPECTED_CERT_SHA256: a0f5da449784dac25e79d80399541b383541104318b45e68abada821a4066a3c
+
+    steps:
+      - name: Validate delivery inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DELIVERY_REF" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$DELIVERY_VERSION" =~ ^0\.3\.[0-9]+$ ]]
+          [[ "$EXPECTED_APK_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]
+          [[ "$EXPECTED_ZIP_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]
+
+      - name: Read pinned delivery files without executing delivery code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.delivery_ref }}
+          path: delivery-input
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate APK, ZIP, checksums and signing report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, stat, zipfile
+          from pathlib import Path
+          directory = Path('delivery-input/dist')
+          if directory.is_symlink():
+              raise SystemExit('Delivery directory cannot be a symbolic link.')
+          base = 'XLab-Objetos-' + os.environ['DELIVERY_VERSION']
+          apk, archive = base + '.apk', base + '.zip'
+          apk_sum, zip_sum, report_name = base + '-SHA256.txt', base + '-ZIP-SHA256.txt', base + '-firma.json'
+          names = (apk, archive, apk_sum, zip_sum, report_name)
+          for name in names:
+              path = directory / name
+              if path.is_symlink() or not path.is_file():
+                  raise SystemExit('Delivery assets must be regular files: ' + name)
+          expected_apk = os.environ['EXPECTED_APK_SHA256'].lower()
+          expected_zip = os.environ['EXPECTED_ZIP_SHA256'].lower()
+          expected_cert = os.environ['EXPECTED_CERT_SHA256']
+          apk_bytes = (directory / apk).read_bytes()
+          for name, expected in ((apk, expected_apk), (archive, expected_zip)):
+              if hashlib.sha256((directory / name).read_bytes()).hexdigest() != expected:
+                  raise SystemExit('Approved SHA-256 does not match: ' + name)
+          for name, expected, filename in ((apk_sum, expected_apk, apk), (zip_sum, expected_zip, archive)):
+              if (directory / name).read_text().split() != [expected, filename]:
+                  raise SystemExit('Checksum must contain only the approved hash and basename: ' + name)
+          report_bytes = (directory / report_name).read_bytes()
+          report = json.loads(report_bytes)
+          required = ('verified', 'v2', 'v3', 'project_certificate_matches',
+                      'payload_comparison_performed', 'payload_unchanged_except_signatures')
+          if (any(report.get(field) is not True for field in required)
+                  or str(report.get('apk_sha256', '')).lower() != expected_apk
+                  or str(report.get('certificate_sha256', '')).replace(':', '').lower() != expected_cert
+                  or report.get('apk_size_bytes') != len(apk_bytes)):
+              raise SystemExit('Signing report does not match the approved project APK.')
+          with zipfile.ZipFile(directory / archive) as delivery:
+              entries = delivery.infolist()
+              found = {entry.filename for entry in entries}
+              required_names = {apk, apk_sum, 'LEEME.txt'}
+              if len(found) != len(entries) or found not in (required_names, required_names | {report_name}):
+                  raise SystemExit('ZIP must contain exactly APK, APK checksum, LEEME.txt and optional signing report.')
+              for entry in entries:
+                  if (entry.is_dir() or Path(entry.filename).name != entry.filename
+                          or stat.S_ISLNK(entry.external_attr >> 16) or entry.flag_bits & 1):
+                      raise SystemExit('ZIP contains an unsafe entry.')
+                  limit = 65536 if entry.filename == 'LEEME.txt' else (directory / entry.filename).stat().st_size
+                  if entry.file_size > limit:
+                      raise SystemExit('ZIP entry exceeds its expected size.')
+              if delivery.testzip() is not None:
+                  raise SystemExit('ZIP integrity check failed.')
+              if delivery.read(apk) != apk_bytes or delivery.read(apk_sum) != (directory / apk_sum).read_bytes():
+                  raise SystemExit('ZIP APK/checksum must exactly match the standalone assets.')
+              if report_name in found and delivery.read(report_name) != report_bytes:
+                  raise SystemExit('ZIP signing report differs from the standalone report.')
+              delivery.read('LEEME.txt').decode('utf-8')
+          print('Approved APK, ZIP, checksums, payload and project signing metadata match.')
+          PY
+          (cd delivery-input/dist && sha256sum -c "XLab-Objetos-$DELIVERY_VERSION-SHA256.txt" \
+            && sha256sum -c "XLab-Objetos-$DELIVERY_VERSION-ZIP-SHA256.txt")
+
+      - name: Independently verify Android signature and fixed project certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            "delivery-input/dist/XLab-Objetos-$DELIVERY_VERSION.apk" | tee "$RUNNER_TEMP/xlab-signature-verification.txt"
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          text = (Path(os.environ['RUNNER_TEMP']) / 'xlab-signature-verification.txt').read_text()
+          certificates = re.findall(r'^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})$', text, re.MULTILINE)
+          if [item.lower() for item in certificates] != [os.environ['EXPECTED_CERT_SHA256']]:
+              raise SystemExit('APK must have exactly the fixed project signing certificate.')
+          print('Android independently verified the approved project signature.')
+          PY
+
+      - name: Upload five verified assets to existing draft only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v$DELIVERY_VERSION"
+          [[ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" == true ]] || {
+            echo 'An existing draft release is required; no release will be created or published.' >&2
+            exit 1
+          }
+          base="delivery-input/dist/XLab-Objetos-$DELIVERY_VERSION"
+          gh release upload "$tag" "$base.apk" "$base.zip" "$base-SHA256.txt" \
+            "$base-ZIP-SHA256.txt" "$base-firma.json" --repo "$GITHUB_REPOSITORY" --clobber

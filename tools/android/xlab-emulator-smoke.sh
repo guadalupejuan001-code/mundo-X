@@ -36,12 +36,15 @@ done
 "$ADB" shell settings put global window_animation_scale 0
 "$ADB" shell settings put global transition_animation_scale 0
 "$ADB" shell settings put global animator_duration_scale 0
-"$ADB" install -r ui-apks/XLab-0.3.1-debug.apk
+"$ADB" install -r ui-apks/XLab-0.3.2-debug.apk
 "$ADB" install -r ui-apks/XLab-instrumentation.apk
 set +e
 instrument_args=()
 instrument_timeout=420
 if [[ "${XLAB_LARGE_SCENE_ONLY:-false}" == true ]]; then
+  # First-boot services on the Google APIs image compete for CPU and disk.
+  # Let them settle before the dedicated large-scene workload.
+  sleep 45
   instrument_args=(-e large_scene_only true)
   instrument_timeout=720
 fi

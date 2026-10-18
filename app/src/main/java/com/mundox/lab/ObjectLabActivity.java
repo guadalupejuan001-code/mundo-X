@@ -56,7 +56,8 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     private TextView stats, detail, status, result, selectedInfo, viewState;
     private Button animated, ruleRoute, explicitRoute;
     private int selected;
-    private boolean animation = true, busy, destroyed;
+    private boolean animation = true, busy;
+    private volatile boolean destroyed, renderingPaused;
     private long sceneRevision;
     private long requestId;
     private boolean campaign;
@@ -75,6 +76,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         try { model = ObjectSceneModel.importText(prefs.getString("scene", "")); }
         catch (IllegalArgumentException error) { model = new ObjectSceneModel(4096, 2026); }
         selected = Math.min(model.count() - 1, Math.max(0, prefs.getInt("selected", 0)));
+        if (model.count() >= 262144) animation = false;
         LinearLayout root = column(); root.setBackgroundColor(INK);
         root.setPadding(dp(16), dp(8), dp(16), 0);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -92,7 +94,8 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         FrameLayout viewport = new FrameLayout(this);
         surface = new GLSurfaceView(this); surface.setTag("objects_surface");
         surface.setEGLContextClientVersion(3); surface.setPreserveEGLContextOnPause(true);
-        renderer = new ObjectSceneRenderer(this); surface.setRenderer(renderer);
+        renderer = new ObjectSceneRenderer(this, this::requestSceneFrame); surface.setRenderer(renderer);
+        surface.setRenderMode(animation ? GLSurfaceView.RENDERMODE_CONTINUOUSLY : GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         viewport.addView(surface, new FrameLayout.LayoutParams(-1, -1));
         viewState = tag(label("Preparando escena…", 11, LIME, true), "objects_view_state");
         viewState.setContentDescription("pending");
@@ -121,7 +124,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         recenter.setOnClickListener(v -> {
             viewState.setText("Recuperando vista…"); viewState.setTextColor(LIME);
             viewState.setContentDescription("pending"); state("preparing", "Reintentando dibujo con cámara centrada.");
-            surface.queueEvent(renderer::recenter);
+            queueDraw(renderer::recenter);
         });
         Button restore = taggedControl("Restaurar escena", "objects_restore", recovery);
         restore.setOnClickListener(v -> restoreScene()); panel.addView(recovery);
@@ -157,10 +160,13 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
             try { choose(Integer.parseInt(selection.getText().toString().trim())); }
             catch (IllegalArgumentException error) { state("error", "ID válido: 0 a " + (model.count() - 1)); }
         });
-        animated = taggedControl("Campo: activo", "objects_animate", selectRow);
+        animated = taggedControl(animation ? "Campo: activo" : "Campo: quieto", "objects_animate", selectRow);
         animated.setOnClickListener(v -> {
-            animation = !animation; surface.queueEvent(() -> renderer.setAnimation(animation));
-            animated.setText(animation ? "Campo: activo" : "Campo: quieto");
+            animation = !animation;
+            final boolean enabled = animation;
+            surface.setRenderMode(enabled ? GLSurfaceView.RENDERMODE_CONTINUOUSLY : GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+            queueDraw(() -> renderer.setAnimation(enabled));
+            animated.setText(enabled ? "Campo: activo" : "Campo: quieto");
         });
         panel.addView(selectRow);
         selectedInfo = tag(label("", 10, BONE, true), "objects_selected"); panel.addView(selectedInfo);
@@ -182,16 +188,16 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         LinearLayout tests = row();
         taggedControl("Imagen A/B", "objects_verify", tests).setOnClickListener(v -> {
             busy(true); verification = "{}"; state("checking", "Misma cámara y tiempo · comparando píxeles…");
-            final long id = ++requestId; surface.queueEvent(() -> renderer.verify(id));
+            final long id = ++requestId; queueDraw(() -> renderer.verify(id));
         });
         taggedControl("Medir A/B", "objects_benchmark", tests).setOnClickListener(v -> {
             busy(true); benchmark = "{}"; state("benchmarking", "Calentamiento y muestra en ambas rutas. Escena fija.");
-            final long id = ++requestId; surface.queueEvent(() -> renderer.benchmark(id));
+            final long id = ++requestId; queueDraw(() -> renderer.benchmark(id));
         });
         Button stop = button("Parar", false); stop.setTag("objects_stop");
         stop.setOnClickListener(v -> {
             if (campaign) { finishCampaign("cancelled", "Detenida por el usuario."); return; }
-            requestId++; surface.queueEvent(renderer::cancelBenchmark); busy(false);
+            requestId++; queueDraw(renderer::cancelBenchmark); busy(false);
             state("cancelled", "Medición detenida. Puedes volver a ejecutarla.");
         }); tests.addView(stop, weight()); panel.addView(tests);
         Button extreme = control(button("Escala extrema · 1.024 → 1.048.576", true));
@@ -215,17 +221,31 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         setContentView(root); root.requestApplyInsets(); publishScene();
     }
 
+    private void requestSceneFrame() {
+        if (!destroyed && !renderingPaused && surface != null) surface.requestRender();
+    }
+
+    /** queueEvent alone does not draw a GLSurfaceView in WHEN_DIRTY mode. */
+    private void queueDraw(Runnable command) {
+        if (destroyed || surface == null) return;
+        surface.queueEvent(() -> {
+            if (destroyed) return;
+            command.run();
+            requestSceneFrame();
+        });
+    }
+
     private void route(boolean value) {
         viewState.setText("Comprobando ruta…"); viewState.setTextColor(LIME);
         viewState.setContentDescription("pending"); state("preparing", "Comprobando dibujo en la ruta seleccionada.");
-        surface.queueEvent(() -> renderer.setExplicit(value));
+        queueDraw(() -> renderer.setExplicit(value));
         ruleRoute.setTextColor(value ? MUTED : LIME); explicitRoute.setTextColor(value ? LIME : MUTED);
     }
 
     private void choose(int id) {
         if (id < 0 || id >= model.count()) throw new IllegalArgumentException("Invalid ID");
         selected = id; selection.setText(Integer.toString(id));
-        surface.queueEvent(() -> renderer.select(id)); selectedInfo();
+        queueDraw(() -> renderer.select(id)); selectedInfo();
     }
 
     private void selectedInfo() {
@@ -298,6 +318,14 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     }
 
     private void publishScene() {
+        // Large profiles open as a complete static view. The user can still
+        // explicitly enable animation after loading or changing the scene.
+        if (model.count() >= 262144) {
+            animation = false;
+            animated.setText("Campo: quieto");
+            surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+        }
+        final boolean enabled = animation;
         ObjectSceneModel.Snapshot snapshot = model.snapshot();
         sceneRevision++; verification = "{}"; benchmark = "{}";
         latest = null;
@@ -306,7 +334,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         if (result != null) result.setText("");
         viewState.setText("Preparando " + model.count() + " objetos…");
         viewState.setTextColor(LIME); viewState.setContentDescription("pending");
-        surface.queueEvent(() -> { renderer.setScene(snapshot, revision); renderer.select(selectedId); });
+        queueDraw(() -> { renderer.setAnimation(enabled); renderer.setScene(snapshot, revision); renderer.select(selectedId); });
         selection.setText(Integer.toString(selected)); selectedInfo(); persist();
     }
 
@@ -390,7 +418,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         long id = ++requestId;
         state("benchmarking", "Etapa " + (campaignStage + 1) + "/" + COUNTS.length + " · " + n + " objetos · misma escena para A/B.");
         result.setText("Etapas terminadas: " + campaignRuns.length()); selectedInfo();
-        surface.queueEvent(() -> { renderer.setScene(snapshot, revision); renderer.benchmark(id); });
+        queueDraw(() -> { renderer.setScene(snapshot, revision); renderer.benchmark(id); });
     }
 
     private void campaignResult(String json) {
@@ -410,7 +438,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     private void finishCampaign(String reason, String explanation) {
         if (!campaign) return;
         campaign = false; requestId++; ui.removeCallbacks(campaignWatch);
-        surface.queueEvent(renderer::cancelBenchmark);
+        queueDraw(renderer::cancelBenchmark);
         String finalReport;
         try {
             JSONObject out = new JSONObject(); out.put("type", "progressive_scale"); out.put("status", reason);
@@ -431,9 +459,15 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     @Override public void onStats(ObjectSceneRenderer.Stats value) {
         ui.post(() -> {
             if (destroyed || value.sceneRevision != sceneRevision) return; latest = value;
-            stats.setText(String.format(Locale.US, "%s · %,d objetos · P50 %.2f / P95 %.2f ms\n%s",
-                    value.route, value.count, value.frameP50Ms, value.frameP95Ms, value.renderer));
-            stats.setContentDescription("frames=" + value.frames + ";benchmarking=" + value.benchmarking);
+            if (!value.animationEnabled && !value.benchmarking) {
+                stats.setText(String.format(Locale.US, "%s · %,d objetos · Campo quieto · dibujo al cambiar\n%s",
+                        value.route, value.count, value.renderer));
+            } else {
+                stats.setText(String.format(Locale.US, "%s · %,d objetos · P50 %.2f / P95 %.2f ms\n%s",
+                        value.route, value.count, value.frameP50Ms, value.frameP95Ms, value.renderer));
+            }
+            stats.setContentDescription("frames=" + value.frames + ";benchmarking=" + value.benchmarking
+                    + ";animation=" + value.animationEnabled + ";visibility=" + value.visibility);
             detail.setText(String.format(Locale.US,
                     "Regla + cambios (formato): %,d B · transformaciones: %,d B\nGPU reservada: VBO %,d B + textura %,d B · malla %,d B\nPSS proceso: %.1f MiB · CPU envío: %.3f ms",
                     model.logicalRuleBytes(), value.explicitBytes, value.allocatedExplicitBytes, value.allocatedSparseBytes,
@@ -495,7 +529,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
 
     private String report() {
         try {
-            JSONObject out = new JSONObject(); out.put("experiment", "Mundo X / objetos"); out.put("version", "0.3.1");
+            JSONObject out = new JSONObject(); out.put("experiment", "Mundo X / objetos"); out.put("version", "0.3.2");
             out.put("app_id", getPackageName()); out.put("selected", selected); out.put("last_graphics_error", lastGraphicsError);
             out.put("scene", model.exportText()); out.put("count", model.count()); out.put("seed", model.seed());
             out.put("edits", model.editCount()); out.put("scene_revision", sceneRevision);
@@ -507,6 +541,8 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                 out.put("depth_bits", latest.depthBits); out.put("projection_near", latest.projectionNear);
                 out.put("projection_far", latest.projectionFar); out.put("camera_distance", latest.cameraDistance);
                 out.put("visibility", latest.visibility); out.put("draw_suspended", latest.drawSuspended);
+                out.put("animation_enabled", latest.animationEnabled);
+                out.put("render_policy", latest.animationEnabled ? "continuous" : "when_dirty");
                 out.put("viewport_width", latest.viewWidth); out.put("viewport_height", latest.viewHeight);
             }
             return out.toString(2);
@@ -516,7 +552,7 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     private void bindGestures() {
         ScaleGestureDetector pinch = new ScaleGestureDetector(this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override public boolean onScale(ScaleGestureDetector detector) {
-                if (!busy) { float scale = 1f / detector.getScaleFactor(); surface.queueEvent(() -> renderer.zoom(scale)); }
+                if (!busy) { float scale = 1f / detector.getScaleFactor(); queueDraw(() -> renderer.zoom(scale)); }
                 return true;
             }
         });
@@ -531,11 +567,11 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                 else if (action == MotionEvent.ACTION_MOVE && !pinch.isInProgress() && event.getPointerCount() == 1) {
                     float dx = (event.getX() - lastX) / Math.max(1, view.getWidth());
                     float dy = (event.getY() - lastY) / Math.max(1, view.getHeight());
-                    surface.queueEvent(() -> renderer.orbit(dx, dy)); lastX = event.getX(); lastY = event.getY();
+                    queueDraw(() -> renderer.orbit(dx, dy)); lastX = event.getX(); lastY = event.getY();
                 } else if (action == MotionEvent.ACTION_UP && !scaled
                         && Math.hypot(event.getX() - startX, event.getY() - startY) < dp(8)) {
                     float x = event.getX() / Math.max(1, view.getWidth()), y = event.getY() / Math.max(1, view.getHeight());
-                    surface.queueEvent(() -> renderer.pick(x, y)); view.performClick();
+                    queueDraw(() -> renderer.pick(x, y)); view.performClick();
                 }
                 return true;
             }
@@ -543,14 +579,22 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     }
 
     @Override protected void onPause() {
+        renderingPaused = true;
         if (campaign) finishCampaign("cancelled", "Aplicación en segundo plano.");
         requestId++;
-        if (surface != null) { surface.queueEvent(renderer::cancelBenchmark); surface.onPause(); }
+        if (surface != null) { queueDraw(renderer::cancelBenchmark); surface.onPause(); }
         if (prefs != null && model != null) persist();
         if (busy && status != null) { busy(false); state("cancelled", "Medición detenida al salir de la pantalla."); }
         super.onPause();
     }
-    @Override protected void onResume() { super.onResume(); if (surface != null) surface.onResume(); }
+    @Override protected void onResume() {
+        super.onResume(); renderingPaused = false;
+        if (surface != null) {
+            surface.onResume();
+            surface.setRenderMode(animation ? GLSurfaceView.RENDERMODE_CONTINUOUSLY : GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+            requestSceneFrame();
+        }
+    }
     @Override protected void onDestroy() { destroyed = true; ui.removeCallbacksAndMessages(null); super.onDestroy(); }
 
     private int dp(float n) { return Math.round(n * getResources().getDisplayMetrics().density); }
