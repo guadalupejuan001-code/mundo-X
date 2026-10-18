@@ -174,7 +174,9 @@ jobs:
       - name: Enable emulator acceleration
         run: |
           sudo chmod 666 /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
+          # The app has no Google Play dependency. AOSP avoids first-boot
+          # Messaging/Settings ANR dialogs stealing focus from clipboard tests.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
 
       - name: Run interactive laboratory on Android 15
         shell: bash

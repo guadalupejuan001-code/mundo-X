@@ -12,6 +12,7 @@ import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -382,6 +383,7 @@ public final class XLabInstrumentation extends Instrumentation {
                     if (text("objects_animate").contains("activo")) click("objects_animate");
                     awaitObjectAnimation(false, SystemClock.uptimeMillis() + 90_000L);
                     setObjectCulling(true, SystemClock.uptimeMillis() + 90_000L);
+                    JSONObject centeredViewport = requireQuietViewportStable(600L);
                     // Exercise global IDs on both sides of a draw boundary,
                     // plus the final ID. These edits must survive plan changes.
                     setText("objects_id", "16383"); click("objects_select"); click("objects_raise");
@@ -452,6 +454,7 @@ public final class XLabInstrumentation extends Instrumentation {
                             "Recovery changed the serialized sparse edits");
                     JSONObject evidence = new JSONObject();
                     evidence.put("count", 65536); evidence.put("seed", 2026);
+                    evidence.put("centered_quiet_viewport", centeredViewport);
                     evidence.put("close_camera_live_submission", drawStatsJson(clipped));
                     evidence.put("full_live_submission", drawStatsJson(full));
                     evidence.put("clipped_image", clippedImage); evidence.put("full_image", fullImage);
@@ -508,10 +511,9 @@ public final class XLabInstrumentation extends Instrumentation {
                 require(main(() -> ((GLSurfaceView) find("objects_surface")).getRenderMode())
                                 == GLSurfaceView.RENDERMODE_WHEN_DIRTY,
                         "Quiet field did not select demand rendering");
-                long quietBefore = rendererFrames();
-                SystemClock.sleep(600L);
-                long quietAfter = rendererFrames();
-                require(quietAfter == quietBefore, "Quiet field kept submitting identical frames");
+                JSONObject quietViewport = requireQuietViewportStable(600L);
+                long quietBefore = quietViewport.getJSONObject("before").getLong("frames");
+                long quietAfter = quietViewport.getJSONObject("after").getLong("frames");
                 setText("objects_id", "528"); click("objects_select"); click("objects_raise");
                 awaitObjectStats(1024, 0, SystemClock.uptimeMillis() + DEADLINE_MS);
                 long edited = rendererFrames();
@@ -530,10 +532,9 @@ public final class XLabInstrumentation extends Instrumentation {
                 long activeAfter = awaitRendererFrames(activeStart + 2, SystemClock.uptimeMillis() + DEADLINE_MS);
                 click("objects_animate");
                 awaitObjectAnimation(false, SystemClock.uptimeMillis() + DEADLINE_MS);
-                long quietFinal = rendererFrames();
-                SystemClock.sleep(600L);
-                long quietFinalAfter = rendererFrames();
-                require(quietFinalAfter == quietFinal, "Stopping animation did not settle back to demand rendering");
+                JSONObject finalViewport = requireQuietViewportStable(600L);
+                long quietFinal = finalViewport.getJSONObject("before").getLong("frames");
+                long quietFinalAfter = finalViewport.getJSONObject("after").getLong("frames");
                 JSONObject demand = new JSONObject();
                 demand.put("count", 1024); demand.put("seed", 2026);
                 demand.put("quiet_frames_before", quietBefore); demand.put("quiet_frames_after_600ms", quietAfter);
@@ -541,6 +542,7 @@ public final class XLabInstrumentation extends Instrumentation {
                 demand.put("benchmark_when_quiet", measured);
                 demand.put("active_frames_start", activeStart); demand.put("active_frames_after", activeAfter);
                 demand.put("quiet_final_frames", quietFinal); demand.put("quiet_final_frames_after_600ms", quietFinalAfter);
+                demand.put("quiet_viewport", quietViewport); demand.put("quiet_final_viewport", finalViewport);
                 saveEvidence("xlab-objetos-demand.json", demand.toString(2));
             });
         } catch (Throwable error) {
@@ -576,6 +578,7 @@ public final class XLabInstrumentation extends Instrumentation {
                 preflight.put("production_estimate_bytes", 64L * 1048576 + 8L * 1024 * 1024);
                 saveEvidence("xlab-1048576-preflight.json", preflight.toString(2));
 
+                Log.i("XLabChecks", "million: loading 1048576 objects");
                 select("objects_count", 5); setText("objects_seed", "2026"); click("objects_new");
                 long visibleDeadline = SystemClock.uptimeMillis() + 180_000L;
                 // Use status text for a useful failure if the normal memory or
@@ -584,16 +587,24 @@ public final class XLabInstrumentation extends Instrumentation {
                 ObjectSceneRenderer.Stats live = awaitObjectStats(1048576, 0, visibleDeadline);
                 require(live.count == 1048576 && "visible".equals(live.visibility) && !live.drawSuspended,
                         "The million-object test never rendered a visible live scene");
+                Log.i("XLabChecks", "million: visible, frames=" + live.frames + ", viewport="
+                        + live.viewWidth + "x" + live.viewHeight);
+                JSONObject quietViewport = requireQuietViewportStable(600L);
+                saveEvidence("xlab-1048576-quiet-viewport.json", quietViewport.toString(2));
+                Log.i("XLabChecks", "million: quiet viewport settled " + quietViewport);
                 click("objects_verify");
                 awaitReadyUntil("objects_status", "objects_result", SystemClock.uptimeMillis() + 240_000L);
                 JSONObject image = requireNativeJson("objects_result");
                 requireObjectCoverage(image, 1048576, 2026);
+                Log.i("XLabChecks", "million: framebuffer verification complete, covered_pixels="
+                        + image.getInt("covered_pixels"));
                 require(image.getDouble("projection_near") >= image.getDouble("camera_distance") * .0099,
                         "Million-object projection lost its distance-scaled near plane");
                 image.put("device_preflight", preflight);
                 image.put("live_visibility_confirmed_before_verification", true);
                 image.put("context_frames_before_verification", live.frames);
                 image.put("live_graphics_submission_before_verification", drawStatsJson(live));
+                image.put("quiet_viewport_before_verification", quietViewport);
                 requireOptimizedReference(image, 1048576);
                 String note = "Global UiAutomation screenshot intentionally skipped for 1,048,576 objects: "
                         + "avoid compositor load; actual GL visibility, framebuffer readback and transforms are mandatory.";
@@ -608,6 +619,8 @@ public final class XLabInstrumentation extends Instrumentation {
                 ObjectSceneRenderer.Stats small = latestObjects();
                 require(small.count == 1024 && "visible".equals(small.visibility) && !small.drawSuspended,
                         "The million-object regression did not return to the small visible scene");
+                Log.i("XLabChecks", "million: recovered visible 1024 objects, frames=" + small.frames
+                        + ", viewport=" + small.viewWidth + "x" + small.viewHeight);
             }
         });
     }
@@ -863,6 +876,52 @@ public final class XLabInstrumentation extends Instrumentation {
         throw new AssertionError("Animation did not submit at least " + minimum + " live frames");
     }
 
+    private JSONObject quietViewportSnapshot() throws Exception {
+        JSONObject state = new JSONObject();
+        state.put("frames", rendererFrames());
+        ObjectSceneRenderer renderer = objectRenderer();
+        runGl(() -> {
+            state.put("gl_width", (Integer) privateField(renderer, "width"));
+            state.put("gl_height", (Integer) privateField(renderer, "height"));
+            state.put("visibility", (String) privateField(renderer, "visibility"));
+            state.put("visibility_pending", (Boolean) privateField(renderer, "visibilityPending"));
+            state.put("visibility_requested", (Boolean) privateField(renderer, "visibilityRequested"));
+            state.put("animation_enabled", (Boolean) privateField(renderer, "animation"));
+            state.put("draw_suspended", (Boolean) privateField(renderer, "drawSuspended"));
+        }, DEADLINE_MS);
+        int[] surface = main(() -> {
+            View view = find("objects_surface");
+            return new int[]{view.getWidth(), view.getHeight()};
+        });
+        state.put("surface_width", surface[0]); state.put("surface_height", surface[1]);
+        require("visible".equals(state.getString("visibility"))
+                        && !state.getBoolean("visibility_pending") && !state.getBoolean("visibility_requested")
+                        && !state.getBoolean("animation_enabled") && !state.getBoolean("draw_suspended"),
+                "Quiet renderer did not settle after visibility confirmation: " + state);
+        require(surface[0] > 0 && surface[1] > 0 && surface[0] == state.getInt("gl_width")
+                        && surface[1] == state.getInt("gl_height"),
+                "Quiet Android surface and actual GL viewport disagree: " + state);
+        return state;
+    }
+
+    private JSONObject requireQuietViewportStable(long observationMs) throws Exception {
+        waitForIdleSync();
+        JSONObject before = quietViewportSnapshot();
+        SystemClock.sleep(observationMs);
+        waitForIdleSync();
+        JSONObject after = quietViewportSnapshot();
+        require(before.getLong("frames") == after.getLong("frames"),
+                "Quiet field submitted additional frames after visibility settled: " + before + " -> " + after);
+        for (String dimension : new String[]{"gl_width", "gl_height", "surface_width", "surface_height"}) {
+            require(before.getInt(dimension) == after.getInt(dimension),
+                    "Quiet visibility/status updates resized " + dimension + ": " + before + " -> " + after);
+        }
+        JSONObject result = new JSONObject();
+        result.put("observation_ms", observationMs); result.put("before", before); result.put("after", after);
+        result.put("viewport_stable", true); result.put("no_extra_frames", true);
+        return result;
+    }
+
     private void loadObjects(int profile, String seed, long deadline) {
         select("objects_count", profile); setText("objects_seed", seed); click("objects_new");
         awaitStateUntil("objects_status", "ready", deadline);
@@ -952,6 +1011,8 @@ public final class XLabInstrumentation extends Instrumentation {
 
     private String clipboardText() {
         return main(() -> {
+            require(activity.hasWindowFocus(),
+                    "Cannot verify the real clipboard: XLab lost window focus to another Android window");
             ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Activity.CLIPBOARD_SERVICE);
             require(clipboard.hasPrimaryClip() && clipboard.getPrimaryClip() != null
                     && clipboard.getPrimaryClip().getItemCount() > 0, "Missing copied scene report");

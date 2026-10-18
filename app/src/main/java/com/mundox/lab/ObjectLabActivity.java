@@ -109,6 +109,11 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         root.addView(viewport, new LinearLayout.LayoutParams(-1, 0, 1.1f));
         bindGestures();
         stats = tag(label("Preparando contexto OpenGL ES…", 10, LIME, true), "objects_stats");
+        // Pending/visible messages wrap differently. A changing label height
+        // would resize the GL viewport, invalidate visibility, then change the
+        // label again, repeatedly redrawing even a quiet million-object scene.
+        stats.setLines(3);
+        stats.setEllipsize(android.text.TextUtils.TruncateAt.END);
         root.addView(stats);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(false);
         LinearLayout panel = column(); panel.setPadding(0, dp(6), 0, dp(18)); scroll.addView(panel);
