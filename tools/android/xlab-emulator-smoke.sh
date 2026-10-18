@@ -12,7 +12,7 @@ echo no | "$AVDMANAGER" create avd --force --name xlab-test \
   --package 'system-images;android-35;google_apis;x86_64' --device pixel_2 \
   --path "$ANDROID_AVD_HOME/xlab-test.avd"
 "$EMULATOR" -list-avds | tee ui-evidence/avds.txt
-rg -q '^xlab-test$' ui-evidence/avds.txt
+grep -q '^xlab-test$' ui-evidence/avds.txt
 "$EMULATOR" -avd xlab-test -no-window -no-audio -no-boot-anim \
   -gpu swiftshader -no-snapshot -memory 2048 \
   > ui-evidence/emulator.log 2>&1 &
@@ -47,7 +47,7 @@ set -e
 "$ADB" logcat -d > ui-evidence/logcat.txt
 "$ADB" pull /sdcard/Android/data/com.mundox.lab.xlab/files/. ui-evidence/ || true
 [[ "$run_status" == 0 ]]
-rg -q 'INSTRUMENTATION_CODE: -1' ui-evidence/instrumentation.txt
-if rg -q 'INSTRUMENTATION_RESULT: tests_failed=[1-9]' ui-evidence/instrumentation.txt; then
+grep -q 'INSTRUMENTATION_CODE: -1' ui-evidence/instrumentation.txt
+if grep -Eq 'INSTRUMENTATION_RESULT: tests_failed=[1-9]' ui-evidence/instrumentation.txt; then
   exit 1
 fi

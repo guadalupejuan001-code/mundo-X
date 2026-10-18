@@ -15,9 +15,16 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      artifact_run:
+        description: 'Optional successful APK build run to reuse for UI checks'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   build-apk:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.artifact_run == '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -113,6 +120,7 @@ jobs:
 
   ui-smoke:
     needs: build-apk
+    if: ${{ always() && (needs['build-apk'].result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.artifact_run != '')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -124,12 +132,16 @@ jobs:
         with:
           name: Mundo-X-Lab-APK
           path: ui-apks
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run || github.run_id }}
 
       - name: Download instrumentation
         uses: actions/download-artifact@v4
         with:
           name: XLab-Instrumentation
           path: ui-apks
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run || github.run_id }}
 
       - name: Enable emulator acceleration
         run: |
