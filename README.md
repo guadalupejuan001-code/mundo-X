@@ -12,6 +12,11 @@ desde **Objetos ↗**, hasta 1.048.576 instancias como límite de ensayo, con pa
 por cadencia, memoria, temperatura o tiempo y restauración de la escena.
 [Validación: 19 recorridos Android, ensayo de 1.048.576 objetos y dibujo bajo demanda](results/xlab_millon_2026-10-18.md).
 
+**Desarrollo gráfico en esta rama:** [planificación por regiones, malla indexada y
+lotes con IDs estables](docs/graphics_spatial.md). Este código añade una comparación
+contra el dibujo completo y contadores de trabajo enviado. Los enlaces de APK
+anteriores corresponden a la versión publicada 0.3.2.
+
 También conserva la [mesa de circuitos, pruebas interactivas, protocolos
 de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con
 gráficos de resultados nativos y perfiles de 64 a 2048 MiB sujetos a la RAM

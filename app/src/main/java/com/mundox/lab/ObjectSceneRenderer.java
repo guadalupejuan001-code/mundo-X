@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.ShortBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -35,11 +36,14 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     public static final class Stats {
         public final String renderer, vendor, route, visibility;
         public final int count, edits, selectedId, depthBits, viewWidth, viewHeight;
+        public final int submittedInstances, culledInstances, drawCalls, boundsTested;
+        public final int meshUniqueVertices, meshTriangles;
+        public final long plannerStorageBytes, submittedUniqueVertexCandidates, submittedTriangles;
         public final float projectionNear, projectionFar, cameraDistance;
         public final long frames, explicitBytes, sparseBytes, meshBytes, sceneRevision;
         public final long allocatedExplicitBytes, allocatedSparseBytes, uploadedBytes;
         public final double frameP50Ms, frameP95Ms, cpuSubmitMs;
-        public final boolean benchmarking, drawSuspended, animationEnabled;
+        public final boolean benchmarking, drawSuspended, animationEnabled, spatialCulling;
 
         private Stats(ObjectSceneRenderer r) {
             renderer = r.rendererName;
@@ -53,6 +57,16 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             explicitBytes = (long) count * 16L;
             sparseBytes = r.sparsePayloadBytes();
             meshBytes = MESH_BYTES;
+            submittedInstances = r.drawPlan.submittedInstances();
+            culledInstances = r.drawPlan.culledInstances();
+            drawCalls = r.drawPlan.batchCount();
+            boundsTested = r.drawPlan.boundsTested();
+            meshUniqueVertices = MESH_VERTICES;
+            meshTriangles = MESH_INDICES / 3;
+            plannerStorageBytes = r.drawPlan.storageBytes();
+            submittedUniqueVertexCandidates = (long) submittedInstances * MESH_VERTICES;
+            submittedTriangles = (long) submittedInstances * (MESH_INDICES / 3);
+            spatialCulling = r.spatialCulling;
             allocatedExplicitBytes = r.explicitAllocatedBytes;
             allocatedSparseBytes = r.sparseAllocatedBytes;
             uploadedBytes = r.uploadedBytes;
@@ -71,8 +85,11 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     }
 
     private static final int WINDOW = 240;
-    private static final int MESH_VERTICES = 36;
-    private static final int MESH_BYTES = MESH_VERTICES * 6 * 4;
+    private static final int MESH_VERTICES = 24;
+    private static final int MESH_INDICES = 36;
+    private static final int MESH_VERTEX_BYTES = MESH_VERTICES * 6 * 4;
+    private static final int MESH_INDEX_BYTES = MESH_INDICES * 2;
+    private static final int MESH_BYTES = MESH_VERTEX_BYTES + MESH_INDEX_BYTES;
     private static final int VERIFY_SIZE = 128;
     private static final long WARMUP_NS = 700_000_000L;
     private static final long SAMPLE_NS = 2_500_000_000L;
@@ -81,8 +98,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     private boolean statsDirty = true;
     private ObjectSceneModel.Snapshot scene;
     private long sceneRevision;
-    private int width = 1, height = 1, program, vao, meshVbo, explicitVbo, editsTexture;
-    private int uVp, uSide, uSeed, uTime, uRoute, uEditCount, uEdits, uSelected, uEye, uFog;
+    private int width = 1, height = 1, program, vao, meshVbo, meshEbo, explicitVbo, editsTexture;
+    private int uVp, uSide, uBaseId, uSeed, uTime, uRoute, uEditCount, uEdits, uSelected, uEye, uFog;
     private String rendererName = "not initialized", vendorName = "not initialized", glVersion = "";
     private int maxTextureSize, maxVertexAttributes, maxVertexTextureUnits, depthBits;
     private boolean drawSuspended;
@@ -92,6 +109,12 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     private float projectionNear = .1f, projectionFar = 100f;
     private boolean ready, failed, dirty = true, explicitRoute, explicitDirty = true;
     private boolean animation = true, pendingVerify, pendingBenchmark;
+    private boolean spatialCulling = true;
+    private final ObjectDrawPlan drawPlan = new ObjectDrawPlan();
+    private int cameraWidth = 1, cameraHeight = 1;
+    private int submittedViewportWidth = 1, submittedViewportHeight = 1;
+    private boolean submittedCulling;
+    private float submittedTime;
     private float yaw = .65f, pitch = .80f, distance = 40f, defaultDistance = 40f;
     private int selectedId = -1;
     private double animationSeconds;
@@ -133,6 +156,15 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         resumeDrawing();
         invalidateVisibility();
         resetWindow();
+    }
+
+    /** Conservative clipping changes submitted ranges, never persistent object IDs. */
+    public void setSpatialCulling(boolean enabled) {
+        if (busy()) return;
+        spatialCulling = enabled;
+        resumeDrawing();
+        resetWindow();
+        invalidateVisibility();
     }
 
     /** Deltas are fractions of the viewport, not pixels. */
@@ -231,7 +263,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         visibilityPending = visibilityQueryActive = false;
         visibilityRequested = true;
         visibility = "pending";
-        program = vao = meshVbo = explicitVbo = editsTexture = 0;
+        program = vao = meshVbo = meshEbo = explicitVbo = editsTexture = 0;
         explicitAllocatedBytes = sparseAllocatedBytes = uploadedBytes = frames = 0;
         dirty = explicitDirty = true;
         lastFrameNs = lastAnimationNs = lastStatsNs = 0;
@@ -249,6 +281,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             program = createProgram(vertexSource(), FRAGMENT_SOURCE);
             uVp = GLES30.glGetUniformLocation(program, "uVp");
             uSide = GLES30.glGetUniformLocation(program, "uSide");
+            uBaseId = GLES30.glGetUniformLocation(program, "uBaseId");
             uSeed = GLES30.glGetUniformLocation(program, "uSeedBytes");
             uTime = GLES30.glGetUniformLocation(program, "uTime");
             uRoute = GLES30.glGetUniformLocation(program, "uProcedural");
@@ -262,7 +295,10 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             GLES30.glBindVertexArray(vao);
             GLES30.glGenBuffers(1, id, 0); meshVbo = id[0];
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, meshVbo);
-            GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, MESH_BYTES, floats(cubeMesh()), GLES30.GL_STATIC_DRAW);
+            GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, MESH_VERTEX_BYTES, floats(cubeMesh()), GLES30.GL_STATIC_DRAW);
+            GLES30.glGenBuffers(1, id, 0); meshEbo = id[0];
+            GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, meshEbo);
+            GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, MESH_INDEX_BYTES, shorts(cubeIndices()), GLES30.GL_STATIC_DRAW);
             uploadedBytes += MESH_BYTES;
             GLES30.glEnableVertexAttribArray(0);
             GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 24, 0);
@@ -433,6 +469,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     }
 
     private void updateCamera(int renderWidth, int renderHeight) {
+        cameraWidth = renderWidth; cameraHeight = renderHeight;
         float cp = (float) Math.cos(pitch);
         eye[0] = (float) Math.sin(yaw) * cp * distance;
         eye[1] = (float) Math.sin(pitch) * distance + .5f;
@@ -512,6 +549,10 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     }
 
     private void render(boolean explicit, float seconds) {
+        render(explicit, seconds, spatialCulling);
+    }
+
+    private void render(boolean explicit, float seconds, boolean cull) {
         GLES30.glEnable(GLES30.GL_DEPTH_TEST);
         GLES30.glDepthFunc(GLES30.GL_LESS);
         GLES30.glEnable(GLES30.GL_CULL_FACE);
@@ -523,7 +564,16 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glClearColor(.067f, .086f, .075f, 1f);
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
         bindDrawState(explicit, seconds);
-        GLES30.glDrawArraysInstanced(GLES30.GL_TRIANGLES, 0, MESH_VERTICES, scene.count);
+        // Rebuild with this exact camera and analytic time. The same plan is
+        // used by the procedural and explicit routes, preserving ID order.
+        drawPlan.update(scene.count, scene.side, vp, seconds, cull);
+        submittedViewportWidth = cameraWidth; submittedViewportHeight = cameraHeight;
+        submittedTime = seconds; submittedCulling = cull;
+        for (int batch = 0; batch < drawPlan.batchCount(); batch++) {
+            bindBatch(explicit, drawPlan.firstId(batch));
+            GLES30.glDrawElementsInstanced(GLES30.GL_TRIANGLES, MESH_INDICES,
+                    GLES30.GL_UNSIGNED_SHORT, 0, drawPlan.instanceCount(batch));
+        }
         GLES30.glBindVertexArray(0);
     }
 
@@ -546,6 +596,17 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glBindVertexArray(vao);
         if (explicit) GLES30.glEnableVertexAttribArray(2);
         else GLES30.glDisableVertexAttribArray(2);
+        // Every use, including TF diagnostics, starts with the complete buffer.
+        bindBatch(explicit, 0);
+    }
+
+    private void bindBatch(boolean explicit, int firstId) {
+        GLES30.glUniform1i(uBaseId, firstId);
+        if (explicit) {
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, explicitVbo);
+            GLES30.glVertexAttribPointer(2, 4, GLES30.GL_FLOAT, false, 16, firstId * 16);
+            GLES30.glVertexAttribDivisor(2, 1);
+        }
     }
 
     /** A CPU ray/cube intersection uses exactly the shader's analytic animation. */
@@ -624,6 +685,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                     && explicitTransforms.optInt("id_different_count", -1) == 0;
             ByteBuffer procedural = ByteBuffer.allocateDirect(VERIFY_SIZE * VERIFY_SIZE * 4);
             ByteBuffer reference = ByteBuffer.allocateDirect(VERIFY_SIZE * VERIFY_SIZE * 4);
+            ByteBuffer fullReference = ByteBuffer.allocateDirect(VERIFY_SIZE * VERIFY_SIZE * 4);
             // Fixed analytic time, including when the live scene is animating.
             render(false, 0f);
             GLES30.glReadPixels(0, 0, VERIFY_SIZE, VERIFY_SIZE,
@@ -631,7 +693,22 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             render(true, 0f);
             GLES30.glReadPixels(0, 0, VERIFY_SIZE, VERIFY_SIZE,
                     GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, reference);
-            checkGl("leer ambos framebuffers");
+            JSONObject optimizedSubmission = submissionJson();
+            // Full-population explicit rendering uses the same camera and time,
+            // but bypasses spatial clipping. This catches a shared planner bug
+            // that a procedural/explicit comparison alone could conceal.
+            render(true, 0f, false);
+            GLES30.glReadPixels(0, 0, VERIFY_SIZE, VERIFY_SIZE,
+                    GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, fullReference);
+            checkGl("leer los tres framebuffers");
+            JSONObject cullingCheck = compareImages(reference, fullReference, 0);
+            JSONObject fullReferenceCheck = compareImages(procedural, fullReference, 2);
+            put(result, "verification_submission", optimizedSubmission);
+            put(result, "full_reference_submission", submissionJson());
+            put(result, "culling_equivalence", cullingCheck);
+            put(result, "optimized_vs_full_reference", fullReferenceCheck);
+            put(result, "full_reference_hash_fnv64", pixelHash(fullReference));
+            put(result, "full_reference_covered_pixels", fullReferenceCheck.optInt("reference_covered_pixels"));
             int different = 0, overTolerance = 0, maxDelta = 0, visible = 0, referenceVisible = 0;
             int backgroundR = 17, backgroundG = 22, backgroundB = 19;
             for (int p = 0; p < VERIFY_SIZE * VERIFY_SIZE; p++) {
@@ -652,9 +729,11 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                         || Math.abs((reference.get(p * 4 + 2) & 255) - backgroundB) > 2) referenceVisible++;
             }
             put(result, "status", "complete");
-            put(result, "passed", overTolerance == 0 && visible >= 16 && transformsMatch);
+            put(result, "passed", overTolerance == 0 && visible >= 16 && referenceVisible >= 16
+                    && transformsMatch && cullingCheck.optBoolean("passed")
+                    && fullReferenceCheck.optBoolean("passed"));
             put(result, "sampled_transforms_match_cpu", transformsMatch);
-            put(result, "proof", "RGBA8 offscreen framebuffer readback of both actual render routes");
+            put(result, "proof", "RGBA8 readback of procedural and explicit routes, plus full-population explicit rendering with clipping disabled");
             put(result, "width", VERIFY_SIZE); put(result, "height", VERIFY_SIZE);
             put(result, "fixedTimeSeconds", 0);
             put(result, "toleranceLevels", 2);
@@ -671,7 +750,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             put(result, "hash_fnv64", pixelHash(procedural));
             put(result, "reference_hash_fnv64", pixelHash(reference));
             put(result, "temporaryFramebufferAttachmentPayloadBytes", (long) VERIFY_SIZE * VERIFY_SIZE * 6L);
-            put(result, "temporaryCpuReadbackBytes", (long) VERIFY_SIZE * VERIFY_SIZE * 8L);
+            put(result, "temporaryCpuReadbackBytes", (long) VERIFY_SIZE * VERIFY_SIZE * 12L);
             put(result, "scope", "This camera, seed and edit snapshot; not a proof for every possible scene");
             putMemory(result);
             if (notify) listener.onVerification(verificationRequestId, result.toString());
@@ -700,9 +779,34 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
      */
     private JSONObject captureTransformDiagnostics() {
         JSONObject result = new JSONObject();
-        int samples = Math.min(scene.count, 1024);
+        ArrayList<int[]> ranges = new ArrayList<>();
+        int firstCount = Math.min(scene.count, 1024);
+        ranges.add(new int[]{0, firstCount});
+        int samples = firstCount;
+        int lastCovered = firstCount - 1;
+        for (int boundary = ObjectDrawPlan.MAX_BATCH_INSTANCES; boundary < scene.count;
+                boundary += ObjectDrawPlan.MAX_BATCH_INSTANCES) {
+            ranges.add(new int[]{boundary - 1, 2});
+            samples += 2;
+            lastCovered = boundary;
+        }
+        if (lastCovered < scene.count - 1) {
+            ranges.add(new int[]{scene.count - 1, 1});
+            samples++;
+        }
+        int[] sampleIds = new int[samples];
+        int sampleCursor = 0;
+        JSONArray sampleRanges = new JSONArray();
+        for (int[] range : ranges) {
+            JSONObject description = new JSONObject();
+            put(description, "first_id", range[0]); put(description, "count", range[1]);
+            sampleRanges.put(description);
+            for (int i = 0; i < range[1]; i++) sampleIds[sampleCursor++] = range[0] + i;
+        }
         int bytes = samples * 20;
         put(result, "samples", samples);
+        put(result, "sample_id_ranges", sampleRanges);
+        put(result, "scope", "first 1024 IDs, both sides of each 16384-instance boundary, and final ID");
         put(result, "temporary_feedback_buffer_bytes", bytes);
         put(result, "method", "same linked vertex shader, one GL_POINTS vertex per instance, transform feedback");
         int[] oldFeedback = new int[1], oldBuffer = new int[1], generated = new int[1];
@@ -734,8 +838,12 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 for (int seedByte : seedBytes) actualSeed.put(seedByte);
                 put(comparison, "uniform_seed_bytes", actualSeed);
                 GLES30.glBeginTransformFeedback(GLES30.GL_POINTS);
-                GLES30.glDrawArraysInstanced(GLES30.GL_POINTS, 0, 1, samples);
+                for (int[] range : ranges) {
+                    bindBatch(explicit, range[0]);
+                    GLES30.glDrawArraysInstanced(GLES30.GL_POINTS, 0, 1, range[1]);
+                }
                 GLES30.glEndTransformFeedback();
+                bindBatch(explicit, 0);
                 checkGl("capturar transformaciones " + route);
                 java.nio.Buffer mappedBuffer = GLES30.glMapBufferRange(
                         GLES30.GL_TRANSFORM_FEEDBACK_BUFFER, 0, bytes, GLES30.GL_MAP_READ_BIT);
@@ -743,7 +851,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                     throw new IllegalStateException("No se pudo leer el buffer de transformaciones");
                 ByteBuffer mapped = ((ByteBuffer) mappedBuffer).order(ByteOrder.nativeOrder());
                 boolean unmapped;
-                try { compareTransforms(mapped, samples, comparison); }
+                try { compareTransforms(mapped, sampleIds, comparison); }
                 finally { unmapped = GLES30.glUnmapBuffer(GLES30.GL_TRANSFORM_FEEDBACK_BUFFER); }
                 if (!unmapped) throw new IllegalStateException("Buffer de transformaciones invalidado");
                 put(result, explicit ? "cpu_vs_explicit" : "cpu_vs_procedural", comparison);
@@ -779,19 +887,20 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         return result;
     }
 
-    private void compareTransforms(ByteBuffer actual, int samples, JSONObject result) {
+    private void compareTransforms(ByteBuffer actual, int[] sampleIds, JSONObject result) {
         int different = 0, exactDifferent = 0, idDifferent = 0;
         double maxAbs = 0;
         JSONArray examples = new JSONArray();
         float[] expected = new float[4];
-        for (int id = 0; id < samples; id++) {
+        for (int sample = 0; sample < sampleIds.length; sample++) {
+            int id = sampleIds[sample];
             scene.transform(id, expected, 0);
-            int actualId = actual.getInt(id * 20 + 16);
+            int actualId = actual.getInt(sample * 20 + 16);
             if (actualId != id) idDifferent++;
             boolean mismatch = actualId != id, exactMismatch = actualId != id;
             JSONArray cpuValues = new JSONArray(), gpuValues = new JSONArray();
             for (int component = 0; component < 4; component++) {
-                float value = actual.getFloat(id * 20 + component * 4);
+                float value = actual.getFloat(sample * 20 + component * 4);
                 double delta = Float.isFinite(value) ? Math.abs((double) value - expected[component]) : Double.MAX_VALUE;
                 maxAbs = Math.max(maxAbs, delta);
                 mismatch |= delta > .00001;
@@ -866,7 +975,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         put(result, "passed", enoughSamples);
         put(result, "image_check", b.imageCheck);
         put(result, "measurement", "wall intervals between onDrawFrame calls; includes swap pacing and scheduling");
-        put(result, "cpuMeasurement", "CPU time submitting one draw; asynchronous and not elapsed GPU execution");
+        put(result, "cpuMeasurement", "CPU time planning and submitting the frame batches; asynchronous and not elapsed GPU execution");
         put(result, "warmupMsPerRoute", WARMUP_NS / 1_000_000);
         put(result, "sampleMsPerRoute", SAMPLE_NS / 1_000_000);
         put(result, "frozenTimeSeconds", b.time);
@@ -897,6 +1006,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         put(json, "visibility", visibility); put(json, "draw_suspended", drawSuspended);
         put(json, "animation_enabled", animation);
         put(json, "render_policy", animation ? "continuous" : "when_dirty");
+        put(json, "graphics_submission", submissionJson());
         if (scene != null) {
             put(json, "count", scene.count); put(json, "seed", scene.seed);
             put(json, "edits", scene.editCount()); put(json, "version", scene.version);
@@ -916,11 +1026,39 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         put(memory, "allocatedExplicitVboPayloadBytes", explicitAllocatedBytes);
         put(memory, "allocatedSparseTexturePayloadBytes", sparseAllocatedBytes);
         put(memory, "sharedMeshPayloadBytes", MESH_BYTES);
+        put(memory, "sharedMeshVertexPayloadBytes", MESH_VERTEX_BYTES);
+        put(memory, "sharedMeshIndexPayloadBytes", MESH_INDEX_BYTES);
+        put(memory, "cpuDrawPlannerPrimitiveArrayBytes", drawPlan.storageBytes());
         put(memory, "uploadedPayloadBytesThisContext", uploadedBytes);
         put(memory, "bothRepresentationsCanRemainAllocated", true);
         put(memory, "driverOverheadBytes", JSONObject.NULL);
         put(memory, "totalRamMeasured", false);
         put(json, "memory", memory);
+    }
+
+    /** Submission counts are candidates, not measured shader invocations or visible objects. */
+    private JSONObject submissionJson() {
+        JSONObject json = new JSONObject();
+        put(json, "mode", "indexed mesh, bounded ID ranges, conservative frustum clipping");
+        put(json, "spatial_culling_enabled", spatialCulling);
+        put(json, "last_draw_used_culling", submittedCulling);
+        put(json, "submitted_instances", drawPlan.submittedInstances());
+        put(json, "culled_instances", drawPlan.culledInstances());
+        put(json, "draw_calls", drawPlan.batchCount());
+        put(json, "bounds_tested", drawPlan.boundsTested());
+        put(json, "maximum_instances_per_draw", ObjectDrawPlan.MAX_BATCH_INSTANCES);
+        put(json, "unique_mesh_vertices", MESH_VERTICES);
+        put(json, "mesh_indices", MESH_INDICES);
+        put(json, "mesh_triangles", MESH_INDICES / 3);
+        put(json, "submitted_unique_vertex_candidates", (long) drawPlan.submittedInstances() * MESH_VERTICES);
+        put(json, "submitted_triangle_candidates", (long) drawPlan.submittedInstances() * (MESH_INDICES / 3));
+        put(json, "gpu_vertex_invocations_measured", false);
+        put(json, "visible_object_count_measured", false);
+        put(json, "last_draw_viewport_width", submittedViewportWidth);
+        put(json, "last_draw_viewport_height", submittedViewportHeight);
+        put(json, "last_draw_time_seconds", submittedTime);
+        put(json, "planner_primitive_array_bytes", drawPlan.storageBytes());
+        return json;
     }
 
     private long sparsePayloadBytes() { return scene == null ? 0 : 8L * Math.max(1, scene.editCount()); }
@@ -997,6 +1135,38 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         return Long.toHexString(hash);
     }
 
+    private static JSONObject compareImages(ByteBuffer actual, ByteBuffer reference, int tolerance) {
+        int different = 0, overTolerance = 0, maxDelta = 0, covered = 0, referenceCovered = 0;
+        for (int pixel = 0; pixel < actual.capacity() / 4; pixel++) {
+            int offset = pixel * 4, delta = 0;
+            for (int channel = 0; channel < 4; channel++)
+                delta = Math.max(delta, Math.abs((actual.get(offset + channel) & 255)
+                        - (reference.get(offset + channel) & 255)));
+            if (delta > 0) different++;
+            if (delta > tolerance) overTolerance++;
+            maxDelta = Math.max(maxDelta, delta);
+            if (isObjectPixel(actual, offset)) covered++;
+            if (isObjectPixel(reference, offset)) referenceCovered++;
+        }
+        JSONObject result = new JSONObject();
+        put(result, "passed", overTolerance == 0 && covered >= 16 && referenceCovered >= 16);
+        put(result, "differing_pixels", different);
+        put(result, "pixels_over_tolerance", overTolerance);
+        put(result, "max_channel_delta", maxDelta);
+        put(result, "tolerance_levels", tolerance);
+        put(result, "covered_pixels", covered);
+        put(result, "reference_covered_pixels", referenceCovered);
+        put(result, "minimum_covered_pixels", 16);
+        put(result, "reference_scope", "all scene IDs, indexed batches, spatial clipping disabled");
+        return result;
+    }
+
+    private static boolean isObjectPixel(ByteBuffer pixels, int offset) {
+        return Math.abs((pixels.get(offset) & 255) - 17) > 2
+                || Math.abs((pixels.get(offset + 1) & 255) - 22) > 2
+                || Math.abs((pixels.get(offset + 2) & 255) - 19) > 2;
+    }
+
     private static String pixelHash(ByteBuffer pixels) {
         long hash = 0xcbf29ce484222325L;
         for (int i = 0; i < pixels.capacity(); i++) {
@@ -1051,6 +1221,13 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         return data;
     }
 
+    private static ShortBuffer shorts(short[] values) {
+        ShortBuffer data = ByteBuffer.allocateDirect(values.length * 2)
+                .order(ByteOrder.nativeOrder()).asShortBuffer();
+        data.put(values).position(0);
+        return data;
+    }
+
     private static void checkGl(String operation) {
         int error = GLES30.glGetError();
         if (error != GLES30.GL_NO_ERROR) {
@@ -1096,7 +1273,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 + "precision highp float; precision highp int;\n"
                 + "layout(location=0) in vec3 aPosition; layout(location=1) in vec3 aNormal;\n"
                 + "layout(location=2) in vec4 aTransform;\n"
-                + "uniform mat4 uVp; uniform int uSide,uProcedural,uEditCount,uSelected;\n"
+                + "uniform mat4 uVp; uniform int uSide,uProcedural,uEditCount,uSelected; uniform highp int uBaseId;\n"
                 + "uniform highp uvec4 uSeedBytes; uniform float uTime; uniform highp isampler2D uEdits;\n"
                 + "out vec3 vNormal; out vec3 vWorld; out float vTone; flat out int vSelected;\n"
                 + "out vec4 tfTransform; flat out int tfId;\n"
@@ -1105,7 +1282,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 + " for(int step=0;step<13;step++){ if(lo>hi)break; int mid=(lo+hi)/2;\n"
                 + " ivec2 item=texelFetch(uEdits,ivec2(mid%width,mid/width),0).rg;\n"
                 + " if(item.x==id)return item.y; if(item.x<id)lo=mid+1;else hi=mid-1;}return 0;}\n"
-                + "void main(){ int id=gl_InstanceID; vec4 transform=aTransform;\n"
+                + "void main(){ highp int id=uBaseId+gl_InstanceID; vec4 transform=aTransform;\n"
                 + " if(uProcedural==1){highp uvec4 h=mxHashBytes(id,uSeedBytes); float center=float(uSide-1)*.5;\n"
                 + " transform=vec4((float(id%uSide)-center)*2.2,(float(id/uSide)-center)*2.2,\n"
                 + " .7+float(h.x)/128.0,float(h.y)/255.0);\n"
@@ -1143,15 +1320,24 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 {-.5f,.5f,.5f, .5f,.5f,.5f, .5f,.5f,-.5f, -.5f,.5f,-.5f, 0,1,0},
                 {-.5f,-.5f,-.5f, .5f,-.5f,-.5f, .5f,-.5f,.5f, -.5f,-.5f,.5f, 0,-1,0}
         };
-        int[] indices = {0,1,2,0,2,3};
         float[] result = new float[MESH_VERTICES * 6];
         int cursor = 0;
-        for (float[] face : faces) for (int index : indices) {
+        for (float[] face : faces) for (int index = 0; index < 4; index++) {
             result[cursor++] = face[index * 3];
             result[cursor++] = face[index * 3 + 1];
             result[cursor++] = face[index * 3 + 2];
             result[cursor++] = face[12]; result[cursor++] = face[13]; result[cursor++] = face[14];
         }
+        return result;
+    }
+
+    /** Same triangle order and face normals as the original expanded mesh. */
+    private static short[] cubeIndices() {
+        int[] triangle = {0, 1, 2, 0, 2, 3};
+        short[] result = new short[MESH_INDICES];
+        int cursor = 0;
+        for (int face = 0; face < 6; face++)
+            for (int vertex : triangle) result[cursor++] = (short) (face * 4 + vertex);
         return result;
     }
 }

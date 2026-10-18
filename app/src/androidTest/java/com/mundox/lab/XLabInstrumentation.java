@@ -213,6 +213,12 @@ public final class XLabInstrumentation extends Instrumentation {
                 require(result.passed >= 400, result.summary);
             });
 
+            check("object_draw_plan_independent_checks", () -> {
+                ObjectDrawPlanChecks.Result result = ObjectDrawPlanChecks.runAll();
+                require(result.passed > 0, result.summary);
+                saveEvidence("xlab-objetos-draw-plan.txt", result.summary);
+            });
+
             check("objects_open_edits_and_persistence", () -> {
                 ActivityMonitor monitor = addMonitor("com.mundox.lab.ObjectLabActivity", null, false);
                 try {
@@ -370,6 +376,97 @@ public final class XLabInstrumentation extends Instrumentation {
                 }
             });
 
+            check("objects_spatial_culling_preserves_pixels_ids_and_edits", () -> {
+                try {
+                    loadObjects(3, "2026", SystemClock.uptimeMillis() + 90_000L);
+                    if (text("objects_animate").contains("activo")) click("objects_animate");
+                    awaitObjectAnimation(false, SystemClock.uptimeMillis() + 90_000L);
+                    setObjectCulling(true, SystemClock.uptimeMillis() + 90_000L);
+                    // Exercise global IDs on both sides of a draw boundary,
+                    // plus the final ID. These edits must survive plan changes.
+                    setText("objects_id", "16383"); click("objects_select"); click("objects_raise");
+                    setText("objects_id", "16384"); click("objects_select"); click("objects_hide");
+                    setText("objects_id", "65535"); click("objects_select"); click("objects_raise");
+                    awaitObjectEdits(65536, 3, 65535, SystemClock.uptimeMillis() + 90_000L);
+                    click("objects_copy");
+                    String originalScene = new JSONObject(clipboardText()).getString("scene");
+                    String selected = text("objects_selected");
+                    long sceneRevision = latestObjects().sceneRevision;
+                    float centeredDistance = latestObjects().cameraDistance;
+                    long beforeZoom = rendererFrames();
+                    ObjectSceneRenderer renderer = objectRenderer();
+                    runGl(() -> renderer.zoom(.22f), DEADLINE_MS);
+                    ObjectSceneRenderer.Stats clipped = awaitObjectDraw(65536, true, beforeZoom + 1,
+                            centeredDistance * .221f, SystemClock.uptimeMillis() + 90_000L);
+                    require(clipped.submittedInstances > 0 && clipped.submittedInstances < clipped.count,
+                            "Close camera did not reduce the submitted instance population");
+                    require(clipped.culledInstances == clipped.count - clipped.submittedInstances,
+                            "Submitted and culled populations do not partition the scene");
+                    require(clipped.meshUniqueVertices == 24 && clipped.meshTriangles == 12,
+                            "Indexed cube mesh was not used by the actual live draw");
+                    click("objects_verify");
+                    awaitReadyUntil("objects_status", "objects_result", SystemClock.uptimeMillis() + 90_000L);
+                    JSONObject clippedImage = requireNativeJson("objects_result");
+                    requireObjectCoverage(clippedImage, 65536, 2026);
+                    requireOptimizedReference(clippedImage, 65536);
+
+                    setObjectCulling(false, SystemClock.uptimeMillis() + 90_000L);
+                    ObjectSceneRenderer.Stats full = latestObjects();
+                    require(full.submittedInstances == 65536 && full.culledInstances == 0,
+                            "Disabling clipping did not submit every persistent object ID");
+                    require(full.drawCalls == 4,
+                            "Full 65,536-object draw was not split into four bounded ID ranges");
+                    require(full.sceneRevision == sceneRevision && selected.equals(text("objects_selected")),
+                            "Changing the draw plan altered the scene revision or selection");
+                    click("objects_verify");
+                    awaitReadyUntil("objects_status", "objects_result", SystemClock.uptimeMillis() + 90_000L);
+                    JSONObject fullImage = requireNativeJson("objects_result");
+                    requireObjectCoverage(fullImage, 65536, 2026);
+                    requireOptimizedReference(fullImage, 65536);
+                    require(clippedImage.getString("hash_fnv64").equals(fullImage.getString("hash_fnv64")),
+                            "Clipping changed actual framebuffer pixels for the same camera and edited scene");
+                    click("objects_copy");
+                    require(originalScene.equals(new JSONObject(clipboardText()).getString("scene")),
+                            "Changing submission policy mutated the persistent scene or sparse edits");
+
+                    setObjectCulling(true, SystemClock.uptimeMillis() + 90_000L);
+                    // Recovery must retain the new policy and global selection,
+                    // not replace the scene with an easier workload.
+                    runGl(() -> {
+                        GLES30.glEnable(-1);
+                        // Mark an ordinary visual command dirty so the quiet
+                        // renderer checks this real error on its next frame.
+                        renderer.select(65535);
+                    }, DEADLINE_MS);
+                    awaitStateUntil("objects_status", "error", SystemClock.uptimeMillis() + 90_000L);
+                    require(latestObjects().drawSuspended, "The injected GL error did not suspend drawing");
+                    click("objects_recenter");
+                    awaitStateUntil("objects_status", "ready", SystemClock.uptimeMillis() + 90_000L);
+                    ObjectSceneRenderer.Stats recovered = awaitObjectStats(65536, centeredDistance * .999f,
+                            SystemClock.uptimeMillis() + 90_000L);
+                    require(recovered.spatialCulling && recovered.sceneRevision == sceneRevision
+                                    && "65535".equals(text("objects_id")) && selected.equals(text("objects_selected")),
+                            "Recovery lost the spatial policy, persistent scene revision, edit or final global ID");
+                    click("objects_copy");
+                    require(originalScene.equals(new JSONObject(clipboardText()).getString("scene")),
+                            "Recovery changed the serialized sparse edits");
+                    JSONObject evidence = new JSONObject();
+                    evidence.put("count", 65536); evidence.put("seed", 2026);
+                    evidence.put("close_camera_live_submission", drawStatsJson(clipped));
+                    evidence.put("full_live_submission", drawStatsJson(full));
+                    evidence.put("clipped_image", clippedImage); evidence.put("full_image", fullImage);
+                    evidence.put("scene_revision_preserved", true);
+                    evidence.put("scene_and_sparse_edits_preserved", true);
+                    evidence.put("selected_global_id_after_recovery", 65535);
+                    evidence.put("recovered_live_submission", drawStatsJson(recovered));
+                    saveEvidence("xlab-objetos-culling.json", evidence.toString(2));
+                } finally {
+                    // The normal suite never leaves the larger scene running.
+                    loadObjects(0, "2026", SystemClock.uptimeMillis() + 90_000L);
+                    setObjectCulling(true, SystemClock.uptimeMillis() + 90_000L);
+                }
+            });
+
             check("objects_clipboard_scene_migration_and_invalid_text_is_atomic", () -> {
                 loadObjects(1, "-12345", SystemClock.uptimeMillis() + DEADLINE_MS);
                 setText("objects_id", "777"); click("objects_select"); click("objects_raise");
@@ -496,6 +593,8 @@ public final class XLabInstrumentation extends Instrumentation {
                 image.put("device_preflight", preflight);
                 image.put("live_visibility_confirmed_before_verification", true);
                 image.put("context_frames_before_verification", live.frames);
+                image.put("live_graphics_submission_before_verification", drawStatsJson(live));
+                requireOptimizedReference(image, 1048576);
                 String note = "Global UiAutomation screenshot intentionally skipped for 1,048,576 objects: "
                         + "avoid compositor load; actual GL visibility, framebuffer readback and transforms are mandatory.";
                 diagnosticNotes.add(note);
@@ -672,6 +771,63 @@ public final class XLabInstrumentation extends Instrumentation {
                 + (latest == null ? "none" : latest.count + "/" + latest.visibility + "/" + latest.cameraDistance));
     }
 
+    private ObjectSceneRenderer.Stats awaitObjectDraw(int count, boolean culling, long minimumFrame,
+            float maximumDistance, long deadline) {
+        ObjectSceneRenderer.Stats value = null;
+        while (SystemClock.uptimeMillis() < deadline) {
+            value = latestObjects();
+            if (value.count == count && value.spatialCulling == culling && value.frames >= minimumFrame
+                    && value.cameraDistance <= maximumDistance && !value.drawSuspended
+                    && "visible".equals(value.visibility) && !value.benchmarking) return value;
+            if ("error".equals(description("objects_status")))
+                throw new AssertionError("Draw policy failed: " + text("objects_result"));
+            SystemClock.sleep(75L);
+        }
+        throw new AssertionError("No fresh visible draw for count=" + count + ", culling=" + culling
+                + ", minimumFrame=" + minimumFrame + "; last="
+                + (value == null ? "none" : value.count + "/" + value.spatialCulling + "/"
+                        + value.frames + "/" + value.cameraDistance + "/" + value.visibility));
+    }
+
+    private void setObjectCulling(boolean enabled, long deadline) throws Exception {
+        ObjectSceneRenderer.Stats value = latestObjects();
+        long minimumFrame = value.frames;
+        if (value.spatialCulling != enabled) {
+            minimumFrame = rendererFrames() + 1;
+            click("objects_culling");
+        }
+        awaitObjectDraw(value.count, enabled, minimumFrame, Float.MAX_VALUE, deadline);
+    }
+
+    private void awaitObjectEdits(int count, int edits, int selectedId, long deadline) {
+        while (SystemClock.uptimeMillis() < deadline) {
+            ObjectSceneRenderer.Stats value = latestObjects();
+            if (value.count == count && value.edits == edits && value.selectedId == selectedId
+                    && !value.drawSuspended && "visible".equals(value.visibility)) return;
+            if ("error".equals(description("objects_status")))
+                throw new AssertionError("Edited scene failed: " + text("objects_result"));
+            SystemClock.sleep(75L);
+        }
+        throw new AssertionError("Edited scene did not become visible with count=" + count
+                + ", edits=" + edits + ", selectedId=" + selectedId);
+    }
+
+    private static JSONObject drawStatsJson(ObjectSceneRenderer.Stats value) throws Exception {
+        JSONObject result = new JSONObject();
+        result.put("count", value.count); result.put("scene_revision", value.sceneRevision);
+        result.put("context_frame", value.frames); result.put("spatial_culling_enabled", value.spatialCulling);
+        result.put("submitted_instances", value.submittedInstances);
+        result.put("culled_instances", value.culledInstances); result.put("draw_calls", value.drawCalls);
+        result.put("bounds_tested", value.boundsTested); result.put("unique_mesh_vertices", value.meshUniqueVertices);
+        result.put("mesh_triangles", value.meshTriangles);
+        result.put("submitted_unique_vertex_candidates", value.submittedUniqueVertexCandidates);
+        result.put("submitted_triangle_candidates", value.submittedTriangles);
+        result.put("planner_primitive_array_bytes", value.plannerStorageBytes);
+        result.put("camera_distance", value.cameraDistance);
+        result.put("gpu_vertex_invocations_measured", false);
+        return result;
+    }
+
     private void awaitObjectAnimation(boolean enabled, long deadline) {
         while (SystemClock.uptimeMillis() < deadline) {
             ObjectSceneRenderer.Stats value = main(() -> (ObjectSceneRenderer.Stats) privateField(activity, "latest"));
@@ -735,6 +891,56 @@ public final class XLabInstrumentation extends Instrumentation {
         require(result.getInt("depth_bits") > 0 && result.getInt("viewport_width") > 0
                         && result.getInt("viewport_height") > 0,
                 "Image regression omitted the actual depth or viewport diagnostics");
+    }
+
+    private static void requireOptimizedReference(JSONObject result, int count) throws Exception {
+        JSONObject optimized = result.getJSONObject("verification_submission");
+        JSONObject full = result.getJSONObject("full_reference_submission");
+        int submitted = optimized.getInt("submitted_instances");
+        require(submitted > 0 && submitted <= count
+                        && optimized.getInt("culled_instances") == count - submitted,
+                "Verification omitted the actual optimized submission population");
+        require(optimized.getInt("unique_mesh_vertices") == 24 && optimized.getInt("mesh_indices") == 36
+                        && optimized.getInt("mesh_triangles") == 12
+                        && optimized.getLong("submitted_unique_vertex_candidates") == 24L * submitted,
+                "Verification did not use the indexed cube representation");
+        require(full.getInt("submitted_instances") == count && full.getInt("culled_instances") == 0
+                        && !full.getBoolean("last_draw_used_culling")
+                        && full.getInt("maximum_instances_per_draw") == 16384
+                        && full.getInt("draw_calls") == (count + 16383) / 16384,
+                "Independent full reference did not draw every ID in bounded ranges");
+        JSONObject clipped = result.getJSONObject("culling_equivalence");
+        require(clipped.getBoolean("passed") && clipped.getInt("differing_pixels") == 0
+                        && clipped.getInt("max_channel_delta") == 0
+                        && clipped.getInt("covered_pixels") > 16
+                        && clipped.getInt("reference_covered_pixels") > 16,
+                "Clipping changed pixels or matched an empty full reference");
+        JSONObject cross = result.getJSONObject("optimized_vs_full_reference");
+        require(cross.getBoolean("passed") && cross.getInt("covered_pixels") > 16
+                        && cross.getInt("reference_covered_pixels") > 16,
+                "Optimized procedural rendering diverged from full explicit rendering");
+        JSONObject transforms = result.getJSONObject("transform_diagnostics");
+        for (String route : new String[]{"cpu_vs_procedural", "cpu_vs_explicit"}) {
+            JSONObject comparison = transforms.getJSONObject(route);
+            require(comparison.getInt("different_count") == 0 && comparison.getInt("id_different_count") == 0,
+                    "Global IDs or transforms changed across indexed draw batches in " + route);
+        }
+        JSONArray ranges = transforms.getJSONArray("sample_id_ranges");
+        requireTransformSample(ranges, 0);
+        requireTransformSample(ranges, count - 1);
+        for (int boundary = 16384; boundary < count; boundary += 16384) {
+            requireTransformSample(ranges, boundary - 1);
+            requireTransformSample(ranges, boundary);
+        }
+    }
+
+    private static void requireTransformSample(JSONArray ranges, int requiredId) throws Exception {
+        for (int i = 0; i < ranges.length(); i++) {
+            JSONObject range = ranges.getJSONObject(i);
+            int first = range.getInt("first_id"), count = range.getInt("count");
+            if (requiredId >= first && requiredId < first + count) return;
+        }
+        throw new AssertionError("Transform feedback did not capture global ID " + requiredId);
     }
 
     private String clipboardText() {

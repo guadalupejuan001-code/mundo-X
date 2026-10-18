@@ -1,0 +1,823 @@
+{
+  "scope": "Host EGL/GLES3; actual Java shader/mesh/model/planner methods; 128x128 RGBA8 + depth24; exact pixel and transform comparisons",
+  "timing_scope": "Single validation draw: host wall time through glFinish including Python draw submissions; excludes uploads/readback; not phone FPS or isolated GPU time",
+  "baseline_commit": "ebd53fca714e7afaeeaa0044981df3565061022d",
+  "renderer": "llvmpipe (LLVM 19.1.7, 256 bits)",
+  "gl_version": "OpenGL ES 3.2 Mesa 25.0.7-2+deb13u1",
+  "mesh": {
+    "legacy_vertices": 36,
+    "indexed_vertices": 24,
+    "indices": 36,
+    "triangle_stream_byte_identical": true
+  },
+  "source_sha256": {
+    "ObjectSceneModel.java": "b9ccf5ef9ab1eb6b9df219c3cf8e8bd9194507b934a4871709ebe4fc607fd961",
+    "ObjectDrawPlan.java": "2b7e2a1994e13478764fae43321d832c72b18b5ae2e2e6251ceb64053abb7e12",
+    "ObjectSceneRenderer.java": "0cc9f37f02f6ee48e08841ac8e114241d358659ee6fa9701829484ba103a872c"
+  },
+  "cases": [
+    {
+      "name": "1024_center",
+      "count": 1024,
+      "seed": 2026,
+      "seconds": 0,
+      "selected": 528,
+      "edits": [
+        [
+          527,
+          7
+        ],
+        [
+          528,
+          6
+        ]
+      ],
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 1024,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 3302,
+          "sha256": "825f7571b71335effaca4522c66a17129d1500b1cdfbd0d05daedab855a2d9e5",
+          "host_glfinish_wall_ms": 3.649,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 1024,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 3302,
+          "sha256": "825f7571b71335effaca4522c66a17129d1500b1cdfbd0d05daedab855a2d9e5",
+          "host_glfinish_wall_ms": 2.397,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 1024,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 3302,
+          "sha256": "825f7571b71335effaca4522c66a17129d1500b1cdfbd0d05daedab855a2d9e5",
+          "host_glfinish_wall_ms": 2.701,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 1024,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 3302,
+          "sha256": "825f7571b71335effaca4522c66a17129d1500b1cdfbd0d05daedab855a2d9e5",
+          "host_glfinish_wall_ms": 1.174,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [
+        {
+          "route": "procedural",
+          "checked_ids": 1024,
+          "last_id": 1023,
+          "batch_count": 1,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        },
+        {
+          "route": "explicit_offset",
+          "checked_ids": 1024,
+          "last_id": 1023,
+          "batch_count": 1,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        }
+      ],
+      "planner": {
+        "unculled": {
+          "submitted": 1024,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 1024,
+          "culled": 0,
+          "bounds_tested": 32,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "1024_outside",
+      "count": 1024,
+      "seed": 2026,
+      "seconds": 7.5,
+      "selected": 528,
+      "edits": [
+        [
+          527,
+          7
+        ],
+        [
+          528,
+          6
+        ]
+      ],
+      "outside": true,
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 1024,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 0,
+          "sha256": "ea165b5e6f92ee87345cf776c5832d2a2552e93e9457d38a83147a641a824c94",
+          "host_glfinish_wall_ms": 2.004,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 1024,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 0,
+          "sha256": "ea165b5e6f92ee87345cf776c5832d2a2552e93e9457d38a83147a641a824c94",
+          "host_glfinish_wall_ms": 1.313,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 0,
+          "culled_instances": 1024,
+          "draw_calls": 0,
+          "object_pixels": 0,
+          "sha256": "ea165b5e6f92ee87345cf776c5832d2a2552e93e9457d38a83147a641a824c94",
+          "host_glfinish_wall_ms": 0.004,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 0,
+          "culled_instances": 1024,
+          "draw_calls": 0,
+          "object_pixels": 0,
+          "sha256": "ea165b5e6f92ee87345cf776c5832d2a2552e93e9457d38a83147a641a824c94",
+          "host_glfinish_wall_ms": 0.003,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [
+        {
+          "route": "procedural",
+          "checked_ids": 1024,
+          "last_id": 1023,
+          "batch_count": 1,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        },
+        {
+          "route": "explicit_offset",
+          "checked_ids": 1024,
+          "last_id": 1023,
+          "batch_count": 1,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        }
+      ],
+      "planner": {
+        "unculled": {
+          "submitted": 1024,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 0,
+          "culled": 1024,
+          "bounds_tested": 32,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "65535_negative",
+      "count": 65535,
+      "seed": -1,
+      "seconds": 2.75,
+      "selected": 16384,
+      "edits": [
+        [
+          16383,
+          7
+        ],
+        [
+          16384,
+          6
+        ],
+        [
+          65534,
+          4
+        ]
+      ],
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 65535,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 2974,
+          "sha256": "7cdbf2642b9e4e48306192a1a07f10e4ba9069ff384e0e97078929121c45b40b",
+          "host_glfinish_wall_ms": 278.578,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 65535,
+          "culled_instances": 0,
+          "draw_calls": 4,
+          "object_pixels": 2974,
+          "sha256": "7cdbf2642b9e4e48306192a1a07f10e4ba9069ff384e0e97078929121c45b40b",
+          "host_glfinish_wall_ms": 133.737,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 65535,
+          "culled_instances": 0,
+          "draw_calls": 4,
+          "object_pixels": 2974,
+          "sha256": "7cdbf2642b9e4e48306192a1a07f10e4ba9069ff384e0e97078929121c45b40b",
+          "host_glfinish_wall_ms": 126.006,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 65535,
+          "culled_instances": 0,
+          "draw_calls": 4,
+          "object_pixels": 2974,
+          "sha256": "7cdbf2642b9e4e48306192a1a07f10e4ba9069ff384e0e97078929121c45b40b",
+          "host_glfinish_wall_ms": 61.841,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [
+        {
+          "route": "procedural",
+          "checked_ids": 65535,
+          "last_id": 65534,
+          "batch_count": 4,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        },
+        {
+          "route": "explicit_offset",
+          "checked_ids": 65535,
+          "last_id": 65534,
+          "batch_count": 4,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        }
+      ],
+      "planner": {
+        "unculled": {
+          "submitted": 65535,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 65535,
+          "culled": 0,
+          "bounds_tested": 256,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "65536_boundary",
+      "count": 65536,
+      "seed": 2026,
+      "seconds": 0,
+      "selected": 32768,
+      "edits": [
+        [
+          32767,
+          7
+        ],
+        [
+          32768,
+          6
+        ]
+      ],
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 65536,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 3188,
+          "sha256": "804f758388d2bc58fced729afba5a9315dcb9fea36d46a8211c9498787edcdca",
+          "host_glfinish_wall_ms": 161.569,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 65536,
+          "culled_instances": 0,
+          "draw_calls": 4,
+          "object_pixels": 3188,
+          "sha256": "804f758388d2bc58fced729afba5a9315dcb9fea36d46a8211c9498787edcdca",
+          "host_glfinish_wall_ms": 120.358,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 65536,
+          "culled_instances": 0,
+          "draw_calls": 4,
+          "object_pixels": 3188,
+          "sha256": "804f758388d2bc58fced729afba5a9315dcb9fea36d46a8211c9498787edcdca",
+          "host_glfinish_wall_ms": 121.056,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 65536,
+          "culled_instances": 0,
+          "draw_calls": 4,
+          "object_pixels": 3188,
+          "sha256": "804f758388d2bc58fced729afba5a9315dcb9fea36d46a8211c9498787edcdca",
+          "host_glfinish_wall_ms": 57.419,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [
+        {
+          "route": "procedural",
+          "checked_ids": 65536,
+          "last_id": 65535,
+          "batch_count": 4,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        },
+        {
+          "route": "explicit_offset",
+          "checked_ids": 65536,
+          "last_id": 65535,
+          "batch_count": 4,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        }
+      ],
+      "planner": {
+        "unculled": {
+          "submitted": 65536,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 65536,
+          "culled": 0,
+          "bounds_tested": 256,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "65537_tail",
+      "count": 65537,
+      "seed": 2147483647,
+      "seconds": 19.5,
+      "selected": 65536,
+      "edits": [
+        [
+          65535,
+          7
+        ],
+        [
+          65536,
+          6
+        ]
+      ],
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 65537,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 2951,
+          "sha256": "f92794451d367c81d1c3bfd5e31297c8e49bc39dcf364e91a1f2929685f5d27a",
+          "host_glfinish_wall_ms": 154.931,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 65537,
+          "culled_instances": 0,
+          "draw_calls": 5,
+          "object_pixels": 2951,
+          "sha256": "f92794451d367c81d1c3bfd5e31297c8e49bc39dcf364e91a1f2929685f5d27a",
+          "host_glfinish_wall_ms": 112.514,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 65535,
+          "culled_instances": 2,
+          "draw_calls": 4,
+          "object_pixels": 2951,
+          "sha256": "f92794451d367c81d1c3bfd5e31297c8e49bc39dcf364e91a1f2929685f5d27a",
+          "host_glfinish_wall_ms": 112.957,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 65535,
+          "culled_instances": 2,
+          "draw_calls": 4,
+          "object_pixels": 2951,
+          "sha256": "f92794451d367c81d1c3bfd5e31297c8e49bc39dcf364e91a1f2929685f5d27a",
+          "host_glfinish_wall_ms": 58.343,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [
+        {
+          "route": "procedural",
+          "checked_ids": 65537,
+          "last_id": 65536,
+          "batch_count": 5,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        },
+        {
+          "route": "explicit_offset",
+          "checked_ids": 65537,
+          "last_id": 65536,
+          "batch_count": 5,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        }
+      ],
+      "planner": {
+        "unculled": {
+          "submitted": 65537,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 65535,
+          "culled": 2,
+          "bounds_tested": 511,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "100003_rotated_close",
+      "count": 100003,
+      "seed": -2147483648,
+      "seconds": 9.25,
+      "selected": 49152,
+      "edits": [
+        [
+          49151,
+          7
+        ],
+        [
+          49152,
+          6
+        ],
+        [
+          50243,
+          7
+        ],
+        [
+          50244,
+          6
+        ]
+      ],
+      "close": true,
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 100003,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 7562,
+          "sha256": "335d160455ca2a3f585fc05b5b50f1c00d1b7798f1df0ff088122e0706da4309",
+          "host_glfinish_wall_ms": 224.145,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 100003,
+          "culled_instances": 0,
+          "draw_calls": 7,
+          "object_pixels": 7562,
+          "sha256": "335d160455ca2a3f585fc05b5b50f1c00d1b7798f1df0ff088122e0706da4309",
+          "host_glfinish_wall_ms": 150.778,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 56576,
+          "culled_instances": 43427,
+          "draw_calls": 221,
+          "object_pixels": 7562,
+          "sha256": "335d160455ca2a3f585fc05b5b50f1c00d1b7798f1df0ff088122e0706da4309",
+          "host_glfinish_wall_ms": 86.036,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 56576,
+          "culled_instances": 43427,
+          "draw_calls": 221,
+          "object_pixels": 7562,
+          "sha256": "335d160455ca2a3f585fc05b5b50f1c00d1b7798f1df0ff088122e0706da4309",
+          "host_glfinish_wall_ms": 27.898,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [
+        {
+          "route": "procedural",
+          "checked_ids": 100003,
+          "last_id": 100002,
+          "batch_count": 7,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        },
+        {
+          "route": "explicit_offset",
+          "checked_ids": 100003,
+          "last_id": 100002,
+          "batch_count": 7,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        }
+      ],
+      "planner": {
+        "unculled": {
+          "submitted": 100003,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 56576,
+          "culled": 43427,
+          "bounds_tested": 631,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "1048576_center",
+      "count": 1048576,
+      "seed": 2026,
+      "seconds": 0,
+      "selected": 524288,
+      "edits": [
+        [
+          524287,
+          7
+        ],
+        [
+          524288,
+          6
+        ],
+        [
+          524799,
+          7
+        ],
+        [
+          524800,
+          6
+        ],
+        [
+          1048575,
+          6
+        ]
+      ],
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 1048576,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 3275,
+          "sha256": "6bec0e0528776127e8784eeb2f985d7f8daed2420ec7e306d7e3a2bcdbee82a8",
+          "host_glfinish_wall_ms": 2898.092,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 1048576,
+          "culled_instances": 0,
+          "draw_calls": 64,
+          "object_pixels": 3275,
+          "sha256": "6bec0e0528776127e8784eeb2f985d7f8daed2420ec7e306d7e3a2bcdbee82a8",
+          "host_glfinish_wall_ms": 1865.508,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 1048576,
+          "culled_instances": 0,
+          "draw_calls": 64,
+          "object_pixels": 3275,
+          "sha256": "6bec0e0528776127e8784eeb2f985d7f8daed2420ec7e306d7e3a2bcdbee82a8",
+          "host_glfinish_wall_ms": 1931.856,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 1048576,
+          "culled_instances": 0,
+          "draw_calls": 64,
+          "object_pixels": 3275,
+          "sha256": "6bec0e0528776127e8784eeb2f985d7f8daed2420ec7e306d7e3a2bcdbee82a8",
+          "host_glfinish_wall_ms": 770.838,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [
+        {
+          "route": "procedural",
+          "checked_ids": 1048576,
+          "last_id": 1048575,
+          "batch_count": 64,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        },
+        {
+          "route": "explicit_offset",
+          "checked_ids": 1048576,
+          "last_id": 1048575,
+          "batch_count": 64,
+          "transform_byte_mismatches": 0,
+          "id_mismatches": 0,
+          "first_errors": []
+        }
+      ],
+      "planner": {
+        "unculled": {
+          "submitted": 1048576,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 1048576,
+          "culled": 0,
+          "bounds_tested": 4096,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "1048576_rotated_close",
+      "count": 1048576,
+      "seed": -1,
+      "seconds": 13.5,
+      "selected": 524288,
+      "edits": [
+        [
+          524287,
+          7
+        ],
+        [
+          524288,
+          6
+        ],
+        [
+          524799,
+          7
+        ],
+        [
+          524800,
+          6
+        ]
+      ],
+      "close": true,
+      "feedback": false,
+      "routes": [
+        {
+          "route": "legacy",
+          "submitted_instances": 1048576,
+          "culled_instances": 0,
+          "draw_calls": 1,
+          "object_pixels": 7962,
+          "sha256": "32b9bf778f8888c4e3bb7242080e1c16a97f28066e4f0d434d7e22e15eb7b4c5",
+          "host_glfinish_wall_ms": 2392.482,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "indexed_batched",
+          "submitted_instances": 1048576,
+          "culled_instances": 0,
+          "draw_calls": 64,
+          "object_pixels": 7962,
+          "sha256": "32b9bf778f8888c4e3bb7242080e1c16a97f28066e4f0d434d7e22e15eb7b4c5",
+          "host_glfinish_wall_ms": 1572.308,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "procedural_culled",
+          "submitted_instances": 170752,
+          "culled_instances": 877824,
+          "draw_calls": 473,
+          "object_pixels": 7962,
+          "sha256": "32b9bf778f8888c4e3bb7242080e1c16a97f28066e4f0d434d7e22e15eb7b4c5",
+          "host_glfinish_wall_ms": 270.805,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "route": "explicit_culled",
+          "submitted_instances": 170752,
+          "culled_instances": 877824,
+          "draw_calls": 473,
+          "object_pixels": 7962,
+          "sha256": "32b9bf778f8888c4e3bb7242080e1c16a97f28066e4f0d434d7e22e15eb7b4c5",
+          "host_glfinish_wall_ms": 101.728,
+          "different_pixels": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "transform_feedback": [],
+      "planner": {
+        "unculled": {
+          "submitted": 1048576,
+          "culled": 0,
+          "bounds_tested": 0,
+          "storage_bytes": 41152
+        },
+        "culled": {
+          "submitted": 170752,
+          "culled": 877824,
+          "bounds_tested": 4096,
+          "storage_bytes": 41152
+        }
+      },
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "full_suite": true
+}
