@@ -6,6 +6,7 @@ import android.opengl.Matrix;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -357,7 +358,6 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
     }
 
     private void render(boolean explicit, float seconds) {
-        if (explicit) ensureExplicit();
         GLES30.glEnable(GLES30.GL_DEPTH_TEST);
         GLES30.glDepthFunc(GLES30.GL_LESS);
         GLES30.glEnable(GLES30.GL_CULL_FACE);
@@ -368,6 +368,13 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glDepthMask(true);
         GLES30.glClearColor(.067f, .086f, .075f, 1f);
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
+        bindDrawState(explicit, seconds);
+        GLES30.glDrawArraysInstanced(GLES30.GL_TRIANGLES, 0, MESH_VERTICES, scene.count);
+        GLES30.glBindVertexArray(0);
+    }
+
+    private void bindDrawState(boolean explicit, float seconds) {
+        if (explicit) ensureExplicit();
         GLES30.glUseProgram(program);
         GLES30.glUniformMatrix4fv(uVp, 1, false, vp, 0);
         GLES30.glUniform1i(uSide, scene.side);
@@ -384,8 +391,6 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glBindVertexArray(vao);
         if (explicit) GLES30.glEnableVertexAttribArray(2);
         else GLES30.glDisableVertexAttribArray(2);
-        GLES30.glDrawArraysInstanced(GLES30.GL_TRIANGLES, 0, MESH_VERTICES, scene.count);
-        GLES30.glBindVertexArray(0);
     }
 
     /** A CPU ray/cube intersection uses exactly the shader's analytic animation. */
@@ -452,6 +457,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 throw new IllegalStateException("Framebuffer de verificación incompleto");
             GLES30.glViewport(0, 0, VERIFY_SIZE, VERIFY_SIZE);
             updateCamera(VERIFY_SIZE, VERIFY_SIZE);
+            put(result, "transform_diagnostics", captureTransformDiagnostics());
             ByteBuffer procedural = ByteBuffer.allocateDirect(VERIFY_SIZE * VERIFY_SIZE * 4);
             ByteBuffer reference = ByteBuffer.allocateDirect(VERIFY_SIZE * VERIFY_SIZE * 4);
             // Fixed analytic time, including when the live scene is animating.
@@ -462,7 +468,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             GLES30.glReadPixels(0, 0, VERIFY_SIZE, VERIFY_SIZE,
                     GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, reference);
             checkGl("leer ambos framebuffers");
-            int different = 0, overTolerance = 0, maxDelta = 0, visible = 0;
+            int different = 0, overTolerance = 0, maxDelta = 0, visible = 0, referenceVisible = 0;
             int backgroundR = 17, backgroundG = 22, backgroundB = 19;
             for (int p = 0; p < VERIFY_SIZE * VERIFY_SIZE; p++) {
                 int pixelDelta = 0;
@@ -477,6 +483,9 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 if (Math.abs((procedural.get(p * 4) & 255) - backgroundR) > 2
                         || Math.abs((procedural.get(p * 4 + 1) & 255) - backgroundG) > 2
                         || Math.abs((procedural.get(p * 4 + 2) & 255) - backgroundB) > 2) visible++;
+                if (Math.abs((reference.get(p * 4) & 255) - backgroundR) > 2
+                        || Math.abs((reference.get(p * 4 + 1) & 255) - backgroundG) > 2
+                        || Math.abs((reference.get(p * 4 + 2) & 255) - backgroundB) > 2) referenceVisible++;
             }
             put(result, "status", "complete");
             put(result, "passed", overTolerance == 0 && visible >= 16);
@@ -488,6 +497,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             put(result, "pixelsOverTolerance", overTolerance);
             put(result, "maxChannelDelta", maxDelta);
             put(result, "nonBackgroundPixels", visible);
+            put(result, "nonBackgroundReferencePixels", referenceVisible);
+            put(result, "reference_covered_pixels", referenceVisible);
             put(result, "covered_pixels", visible);
             put(result, "minimum_covered_pixels", 16);
             put(result, "differing_pixels", different);
@@ -513,6 +524,125 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             GLES30.glBindVertexArray(0);
             updateCamera(width, height);
         }
+    }
+
+    /**
+     * Captures the very vertex program used for rendering, before projection.
+     * One vertex per instance gives an ordered (x,z,height,tone,id) record.
+     * This diagnostic runs only during an explicit verification, never in a
+     * benchmark or live frame. It does not replace the framebuffer comparison.
+     */
+    private JSONObject captureTransformDiagnostics() {
+        JSONObject result = new JSONObject();
+        int samples = Math.min(scene.count, 1024);
+        int bytes = samples * 20;
+        put(result, "samples", samples);
+        put(result, "temporary_feedback_buffer_bytes", bytes);
+        put(result, "method", "same linked vertex shader, one GL_POINTS vertex per instance, transform feedback");
+        int[] oldFeedback = new int[1], oldBuffer = new int[1], generated = new int[1];
+        GLES30.glGetIntegerv(GLES30.GL_TRANSFORM_FEEDBACK_BINDING, oldFeedback, 0);
+        GLES30.glGetIntegerv(GLES30.GL_TRANSFORM_FEEDBACK_BUFFER_BINDING, oldBuffer, 0);
+        boolean oldDiscard = GLES30.glIsEnabled(GLES30.GL_RASTERIZER_DISCARD);
+        int feedback = 0, buffer = 0;
+        try {
+            GLES30.glGenTransformFeedbacks(1, generated, 0); feedback = generated[0];
+            GLES30.glBindTransformFeedback(GLES30.GL_TRANSFORM_FEEDBACK, feedback);
+            GLES30.glGenBuffers(1, generated, 0); buffer = generated[0];
+            GLES30.glBindBuffer(GLES30.GL_TRANSFORM_FEEDBACK_BUFFER, buffer);
+            GLES30.glBufferData(GLES30.GL_TRANSFORM_FEEDBACK_BUFFER, bytes, null, GLES30.GL_STREAM_READ);
+            GLES30.glBindBufferBase(GLES30.GL_TRANSFORM_FEEDBACK_BUFFER, 0, buffer);
+            GLES30.glEnable(GLES30.GL_RASTERIZER_DISCARD);
+            for (int route = 0; route < 2; route++) {
+                boolean explicit = route == 1;
+                bindDrawState(explicit, 0f);
+                JSONObject comparison = new JSONObject();
+                put(comparison, "attrib2", attribute2State());
+                int[] uniform = new int[1];
+                GLES30.glGetUniformiv(program, uSide, uniform, 0);
+                put(comparison, "uniform_side", uniform[0]);
+                GLES30.glGetUniformiv(program, uRoute, uniform, 0);
+                put(comparison, "uniform_procedural", uniform[0]);
+                GLES30.glGetUniformuiv(program, uSeed, uniform, 0);
+                put(comparison, "uniform_seed_bits", uniform[0]);
+                GLES30.glBeginTransformFeedback(GLES30.GL_POINTS);
+                GLES30.glDrawArraysInstanced(GLES30.GL_POINTS, 0, 1, samples);
+                GLES30.glEndTransformFeedback();
+                checkGl("capturar transformaciones " + route);
+                java.nio.Buffer mappedBuffer = GLES30.glMapBufferRange(
+                        GLES30.GL_TRANSFORM_FEEDBACK_BUFFER, 0, bytes, GLES30.GL_MAP_READ_BIT);
+                if (!(mappedBuffer instanceof ByteBuffer))
+                    throw new IllegalStateException("No se pudo leer el buffer de transformaciones");
+                ByteBuffer mapped = ((ByteBuffer) mappedBuffer).order(ByteOrder.nativeOrder());
+                boolean unmapped;
+                try { compareTransforms(mapped, samples, comparison); }
+                finally { unmapped = GLES30.glUnmapBuffer(GLES30.GL_TRANSFORM_FEEDBACK_BUFFER); }
+                if (!unmapped) throw new IllegalStateException("Buffer de transformaciones invalidado");
+                put(result, explicit ? "cpu_vs_explicit" : "cpu_vs_procedural", comparison);
+            }
+            checkGl("diagnóstico de transformaciones");
+            put(result, "status", "complete");
+        } finally {
+            if (!oldDiscard) GLES30.glDisable(GLES30.GL_RASTERIZER_DISCARD);
+            GLES30.glBindVertexArray(0);
+            GLES30.glBindTransformFeedback(GLES30.GL_TRANSFORM_FEEDBACK, oldFeedback[0]);
+            GLES30.glBindBuffer(GLES30.GL_TRANSFORM_FEEDBACK_BUFFER, oldBuffer[0]);
+            if (feedback != 0) GLES30.glDeleteTransformFeedbacks(1, new int[]{feedback}, 0);
+            if (buffer != 0) GLES30.glDeleteBuffers(1, new int[]{buffer}, 0);
+        }
+        return result;
+    }
+
+    private JSONObject attribute2State() {
+        JSONObject result = new JSONObject();
+        int[] value = new int[1];
+        GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_ENABLED, value, 0);
+        put(result, "enabled", value[0]);
+        GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, value, 0);
+        put(result, "buffer", value[0]);
+        GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_STRIDE, value, 0);
+        put(result, "stride", value[0]);
+        GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_DIVISOR, value, 0);
+        put(result, "divisor", value[0]);
+        GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_SIZE, value, 0);
+        put(result, "components", value[0]);
+        return result;
+    }
+
+    private void compareTransforms(ByteBuffer actual, int samples, JSONObject result) {
+        int different = 0, exactDifferent = 0, idDifferent = 0;
+        double maxAbs = 0;
+        JSONArray examples = new JSONArray();
+        float[] expected = new float[4];
+        for (int id = 0; id < samples; id++) {
+            scene.transform(id, expected, 0);
+            int actualId = actual.getInt(id * 20 + 16);
+            if (actualId != id) idDifferent++;
+            boolean mismatch = actualId != id, exactMismatch = actualId != id;
+            JSONArray cpuValues = new JSONArray(), gpuValues = new JSONArray();
+            for (int component = 0; component < 4; component++) {
+                float value = actual.getFloat(id * 20 + component * 4);
+                double delta = Float.isFinite(value) ? Math.abs((double) value - expected[component]) : Double.MAX_VALUE;
+                maxAbs = Math.max(maxAbs, delta);
+                mismatch |= delta > .00001;
+                exactMismatch |= Float.floatToIntBits(value) != Float.floatToIntBits(expected[component]);
+                cpuValues.put((Object) Double.valueOf(expected[component]));
+                gpuValues.put(Float.isFinite(value) ? (Object) Double.valueOf(value) : (Object) Float.toString(value));
+            }
+            if (mismatch) different++;
+            if (exactMismatch) exactDifferent++;
+            if (mismatch && examples.length() < 8) {
+                JSONObject example = new JSONObject();
+                put(example, "id", id); put(example, "gpu_id", actualId);
+                put(example, "cpu", cpuValues); put(example, "gpu", gpuValues);
+                examples.put(example);
+            }
+        }
+        put(result, "different_count", different);
+        put(result, "exact_different_count", exactDifferent);
+        put(result, "id_different_count", idDifferent);
+        put(result, "max_abs", maxAbs);
+        put(result, "absolute_tolerance", .00001);
+        put(result, "examples", examples);
     }
 
     private static final class BenchmarkState {
@@ -737,6 +867,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         catch (RuntimeException error) { GLES30.glDeleteShader(vs); throw error; }
         int program = GLES30.glCreateProgram();
         GLES30.glAttachShader(program, vs); GLES30.glAttachShader(program, fs);
+        GLES30.glTransformFeedbackVaryings(program, new String[]{"tfTransform", "tfId"}, GLES30.GL_INTERLEAVED_ATTRIBS);
         GLES30.glLinkProgram(program);
         GLES30.glDeleteShader(vs); GLES30.glDeleteShader(fs);
         int[] ok = new int[1]; GLES30.glGetProgramiv(program, GLES30.GL_LINK_STATUS, ok, 0);
@@ -756,6 +887,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 + "uniform mat4 uVp; uniform int uSide,uProcedural,uEditCount,uSelected;\n"
                 + "uniform uint uSeed; uniform float uTime; uniform highp isampler2D uEdits;\n"
                 + "out vec3 vNormal; out vec3 vWorld; out float vTone; flat out int vSelected;\n"
+                + "out vec4 tfTransform; flat out int tfId;\n"
                 + ObjectSceneModel.hashGLSL() + "\n"
                 + "int editState(int id){ int lo=0,hi=uEditCount-1; int width=textureSize(uEdits,0).x;\n"
                 + " for(int step=0;step<13;step++){ if(lo>hi)break; int mid=(lo+hi)/2;\n"
@@ -767,6 +899,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 + " .7+float(h&255u)/128.0,float((h>>8u)&255u)/255.0);\n"
                 + " int state=uEditCount>0?editState(id):0; if(state==7)transform.z=0.0;\n"
                 + " else if(state>0)transform.z+=float(state)*.35;}\n"
+                + " tfTransform=transform;tfId=id;\n"
                 + " if(transform.z<=0.0){gl_Position=vec4(2.0,2.0,2.0,1.0);"
                 + "vNormal=vec3(0,1,0);vWorld=vec3(0);vTone=0.0;vSelected=0;return;}\n"
                 + " float h=transform.z*(1.0+.08*sin(uTime*.8+transform.x*.07+transform.y*.06));\n"

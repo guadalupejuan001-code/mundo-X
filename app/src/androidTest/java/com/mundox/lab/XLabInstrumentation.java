@@ -389,6 +389,10 @@ public final class XLabInstrumentation extends Instrumentation {
             });
             if ("ready".equals(state)) return;
             if ("error".equals(state) || "cancelled".equals(state)) {
+                if ("objects_result".equals(resultTag)) {
+                    try { saveEvidence("xlab-objetos-failed-" + SystemClock.uptimeMillis() + ".json", text(resultTag)); }
+                    catch (Exception ignored) { }
+                }
                 throw new AssertionError(statusTag + "=" + state + ": " + text(resultTag));
             }
             SystemClock.sleep(75L);
