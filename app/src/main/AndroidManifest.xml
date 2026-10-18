@@ -11,7 +11,7 @@
     </queries>
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:label="XLab · Mundo X"
         android:icon="@drawable/ic_xlab"
         android:roundIcon="@drawable/ic_xlab"

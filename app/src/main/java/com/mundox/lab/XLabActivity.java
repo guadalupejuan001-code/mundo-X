@@ -166,7 +166,7 @@ public final class XLabActivity extends Activity {
     }
 
     private View mesa() {
-        LinearLayout body = page("01 / MESA", "Haz visible\nlo que cambia.",
+        LinearLayout body = page("01 / MESA", "Mesa de circuitos.",
                 "Escribe puertas. Observa probabilidades, interferencia y colapso. El cálculo se realiza en la CPU de tu teléfono.");
         LinearLayout presets = row();
         String[] names = {"Bell", "GHZ · 4", "Interferencia", "Cluster · 4"};
@@ -261,6 +261,12 @@ public final class XLabActivity extends Activity {
             if (other.getSelectedItemPosition() >= currentQubits()) other.setSelection(Math.min(1, currentQubits() - 1));
             updateTimeline(); debouncePreview();
         }));
+        // Keep the circuit and its transport visible before the editor.
+        int instrumentIndex = body.indexOfChild(presets) + 1;
+        for (View instrument : new View[]{wireScroll, transport, stepLabel, steps, circuitStatus}) {
+            body.removeView(instrument);
+            body.addView(instrument, instrumentIndex++);
+        }
         return scroll(body);
     }
 

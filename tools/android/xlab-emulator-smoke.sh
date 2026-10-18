@@ -5,17 +5,27 @@ mkdir -p ui-evidence
 ADB="$ANDROID_HOME/platform-tools/adb"
 AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
+export ANDROID_USER_HOME="${RUNNER_TEMP:-/tmp}/xlab-android-user"
+export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 echo no | "$AVDMANAGER" create avd --force --name xlab-test \
-  --package 'system-images;android-35;google_apis;x86_64' --device pixel_2
+  --package 'system-images;android-35;google_apis;x86_64' --device pixel_2 \
+  --path "$ANDROID_AVD_HOME/xlab-test.avd"
+"$EMULATOR" -list-avds | tee ui-evidence/avds.txt
+rg -q '^xlab-test$' ui-evidence/avds.txt
 "$EMULATOR" -avd xlab-test -no-window -no-audio -no-boot-anim \
-  -gpu swiftshader_indirect -no-snapshot -memory 2048 \
+  -gpu swiftshader -no-snapshot -memory 2048 \
   > ui-evidence/emulator.log 2>&1 &
 EMULATOR_PID=$!
 trap '"$ADB" emu kill >/dev/null 2>&1 || kill "$EMULATOR_PID" 2>/dev/null || true' EXIT
-timeout 180 "$ADB" wait-for-device
+"$ADB" start-server
 booted=false
 for _ in $(seq 1 120); do
-  if [[ $("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') == 1 ]]; then
+  if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+    tail -80 ui-evidence/emulator.log
+    exit 1
+  fi
+  if [[ $(timeout 5 "$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') == 1 ]]; then
     booted=true
     break
   fi
