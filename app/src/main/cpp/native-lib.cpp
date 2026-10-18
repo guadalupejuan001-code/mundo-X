@@ -1,6 +1,7 @@
 #include <jni.h>
 
 #include <chrono>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <iomanip>
@@ -217,30 +218,55 @@ Java_com_mundox_lab_NativeCore_practice(JNIEnv* env, jclass, jint qubits,
     std::istringstream lines(source);
     std::ostringstream out;
     std::string line;
+    std::size_t line_number = 0;
 
     while (std::getline(lines, line)) {
+      ++line_number;
       std::istringstream in(line);
       std::string cmd;
       in >> cmd;
       if (cmd.empty()) continue;
       out << "> " << line << "\n";
 
-      if (cmd == "h") {
-        std::size_t a; in >> a; q.hadamard(a);
-      } else if (cmd == "x") {
-        std::size_t a; in >> a; q.pauli_x(a);
-      } else if (cmd == "z") {
-        std::size_t a; in >> a; q.pauli_z(a);
-      } else if (cmd == "s") {
-        std::size_t a; in >> a; q.phase_s(a);
+      auto read_index = [&]() {
+        std::string token;
+        std::size_t value = 0;
+        if (in >> token) {
+          const auto parsed = std::from_chars(token.data(), token.data() + token.size(), value);
+          if (parsed.ec == std::errc{} && parsed.ptr == token.data() + token.size())
+            return value;
+        }
+        throw std::invalid_argument("line " + std::to_string(line_number) +
+                                    ": expected unsigned qubit index for " + cmd);
+      };
+      auto require_end = [&]() {
+        std::string extra;
+        if (in >> extra)
+          throw std::invalid_argument("line " + std::to_string(line_number) +
+                                      ": unexpected argument '" + extra + "'");
+      };
+
+      if (cmd == "h" || cmd == "x" || cmd == "z" || cmd == "s") {
+        const auto a = read_index();
+        require_end();
+        if (cmd == "h") q.hadamard(a);
+        else if (cmd == "x") q.pauli_x(a);
+        else if (cmd == "z") q.pauli_z(a);
+        else q.phase_s(a);
       } else if (cmd == "cx") {
-        std::size_t a, b; in >> a >> b; q.cnot(a, b);
+        const auto a = read_index();
+        const auto b = read_index();
+        require_end();
+        q.cnot(a, b);
       } else if (cmd == "show") {
+        require_end();
         for (std::size_t r = 0; r < n; ++r)
           out << q.generator_string(r) << "\n";
       } else if (cmd == "bytes") {
+        require_end();
         out << "state_bytes=" << q.state_bytes() << "\n";
       } else if (cmd == "reset") {
+        require_end();
         q = CompactCore(n);
         out << "reset |0...0>\n";
       } else {

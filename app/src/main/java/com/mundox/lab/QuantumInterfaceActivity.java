@@ -247,9 +247,11 @@ public class QuantumInterfaceActivity extends Activity {
     }
 
     private String buildSummary(String title, String result) {
-        String status = result.contains("result=PASS") ||
-                result.contains("result=PASS") ||
-                result.contains("PASS") ? "PASS" : "CHECK";
+        String status;
+        if (result.contains("ERROR")) status = "ERROR";
+        else if (result.contains("FAIL")) status = "FAIL";
+        else if (result.contains("PASS")) status = "PASS";
+        else status = "CHECK";
 
         StringBuilder s = new StringBuilder();
         s.append("STATE: ").append(status).append("\n");

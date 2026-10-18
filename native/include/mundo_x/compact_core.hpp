@@ -4,9 +4,11 @@
 #include <cstdint>
 #include <array>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mundo_x {
@@ -16,6 +18,12 @@ namespace mundo_x {
 // Memory is O(n^2) bits instead of O(2^n) complex amplitudes.
 class CompactCore {
  public:
+  struct ZMeasurement {
+    bool outcome_one;
+    double probability;  // Probability of the returned outcome before projection.
+    bool random;
+  };
+
   explicit CompactCore(std::size_t qubits)
       : n_(checked_qubit_count(qubits)), words_(n_ / 64 + (n_ % 64 != 0)),
         x_(n_ * words_, 0), z_(n_ * words_, 0), phase_(n_, 0) {
@@ -221,6 +229,30 @@ class CompactCore {
   }
 
 
+  // Born probability for a pure stabilizer state: exactly 0, 1/2, or 1.
+  // This query never changes the tableau. A general deterministic query uses
+  // polynomial GF(2) elimination, not a dense statevector: O(n^3) scalar work
+  // and O(n^2) bits of scratch in the worst case. Explicit single-qubit
+  // generators avoid that elimination; random queries only scan n generators.
+  double probability_one_z(std::size_t q) const {
+    check(q);
+    for (std::size_t r = 0; r < n_; ++r)
+      if (get(x_, r, q)) return 0.5;
+    return deterministic_z_outcome_one(q) ? 1.0 : 0.0;
+  }
+
+  // Sample and project using the existing packed tableau. Deterministic
+  // outcomes neither consume RNG output nor modify the represented state.
+  // The low bit of mt19937_64 gives a reproducible unbiased random branch.
+  ZMeasurement measure_z(std::size_t q, std::mt19937_64& rng) {
+    const double probability_one = probability_one_z(q);
+    if (probability_one != 0.5)
+      return ZMeasurement{probability_one == 1.0, 1.0, false};
+    const bool outcome_one = (rng() & 1U) != 0;
+    measure_z_forced(q, outcome_one);
+    return ZMeasurement{outcome_one, 0.5, true};
+  }
+
   // Projective Z measurement for a branch whose result is chosen explicitly.
   // Returns false only when Z_q is already deterministic in the current state.
   // This is useful for reproducible Clifford experiments such as teleportation,
@@ -286,6 +318,76 @@ class CompactCore {
   }
 
  private:
+  // Called only when every generator commutes with Z_q. For a pure full-rank
+  // stabilizer tableau, either +Z_q or -Z_q belongs to its stabilizer group.
+  bool deterministic_z_outcome_one(std::size_t q) const {
+    const std::size_t q_word = q / 64;
+    const std::uint64_t q_mask = std::uint64_t{1} << (q % 64);
+    for (std::size_t r = 0; r < n_; ++r) {
+      if (!get(z_, r, q)) continue;
+      bool single_z = true;
+      for (std::size_t w = 0; w < words_; ++w) {
+        if (x_[r * words_ + w] != 0 ||
+            z_[r * words_ + w] != (w == q_word ? q_mask : 0)) {
+          single_z = false;
+          break;
+        }
+      }
+      if (single_z) return phase_[r] != 0;
+    }
+
+    CompactCore basis(*this);
+    std::vector<std::uint64_t> target_x(words_, 0), target_z(words_, 0);
+    target_z[q_word] = q_mask;
+    bool target_negative = false;
+    std::size_t rank = 0;
+    for (std::size_t column = 0; column < 2 * n_ && rank < n_; ++column) {
+      const bool x_column = column < n_;
+      const std::size_t bit = x_column ? column : column - n_;
+      const auto& labels = x_column ? basis.x_ : basis.z_;
+      std::size_t pivot = rank;
+      while (pivot < n_ && !basis.get(labels, pivot, bit)) ++pivot;
+      if (pivot == n_) continue;
+      if (pivot != rank) {
+        for (std::size_t w = 0; w < words_; ++w) {
+          std::swap(basis.x_[rank * words_ + w], basis.x_[pivot * words_ + w]);
+          std::swap(basis.z_[rank * words_ + w], basis.z_[pivot * words_ + w]);
+        }
+        std::swap(basis.phase_[rank], basis.phase_[pivot]);
+      }
+      for (std::size_t r = rank + 1; r < n_; ++r)
+        if (basis.get(labels, r, bit)) basis.multiply_rows(r, rank);
+
+      const auto& target_labels = x_column ? target_x : target_z;
+      if ((target_labels[bit / 64] >> (bit % 64)) & 1U) {
+        int phase_exp = 2 * static_cast<int>(target_negative) +
+                        2 * static_cast<int>(basis.phase_[rank]);
+        for (std::size_t k = 0; k < n_; ++k) {
+          const bool tx = (target_x[k / 64] >> (k % 64)) & 1U;
+          const bool tz = (target_z[k / 64] >> (k % 64)) & 1U;
+          const int a = (tx ? 1 : 0) | (tz ? 2 : 0);
+          const int b = (basis.get(basis.x_, rank, k) ? 1 : 0) |
+                        (basis.get(basis.z_, rank, k) ? 2 : 0);
+          phase_exp = (phase_exp + local_product_phase(a, b)) & 3;
+        }
+        for (std::size_t w = 0; w < words_; ++w) {
+          target_x[w] ^= basis.x_[rank * words_ + w];
+          target_z[w] ^= basis.z_[rank * words_ + w];
+        }
+        phase_exp &= 3;
+        if (phase_exp & 1)
+          throw std::logic_error("deterministic Z reduction lost commutation");
+        target_negative = phase_exp == 2;
+        bool identity = true;
+        for (std::size_t w = 0; w < words_; ++w)
+          if (target_x[w] != 0 || target_z[w] != 0) { identity = false; break; }
+        if (identity) return target_negative;
+      }
+      ++rank;
+    }
+    throw std::logic_error("deterministic Z is missing from stabilizer group");
+  }
+
   static std::size_t checked_qubit_count(std::size_t qubits) {
     if (qubits == 0) throw std::invalid_argument("invalid qubit count");
     const std::size_t words = qubits / 64 + (qubits % 64 != 0);

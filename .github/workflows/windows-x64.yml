@@ -7,6 +7,7 @@ on:
       - 'native/**'
       - 'examples/**'
       - 'CMakeLists.txt'
+      - 'tools/windows/**'
       - '.github/workflows/windows-x64.yml'
   workflow_dispatch:
 
@@ -33,6 +34,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\build\Release\mundo_x.exe hello
           .\build\Release\mundo_x.exe run examples\bell.x
+          .\build\Release\mundo_x.exe run examples\measurement_bell.x
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\build\Release\mundo_x.exe run examples\measurement_interference.x
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\build\Release\mundo_x.exe cluster 4 4 --dense
           .\build\Release\mundo_x.exe cluster 32 32
           .\build\Release\mundo_x.exe t-experiment 4 4
@@ -50,18 +55,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist\examples | Out-Null
           Copy-Item build\Release\mundo_x.exe dist\mundo_x.exe
           Copy-Item examples\*.x dist\examples\
-          @"
-          MUNDO X - Windows 10 x64
-
-          Quick start:
-            mundo_x.exe hello
-            mundo_x.exe bench 1000
-            mundo_x.exe cluster 32 32
-            mundo_x.exe run examples\bell.x
-            mundo_x.exe practice 2
-
-          This build targets Windows x64 and uses the native Compact Core runtime.
-          "@ | Out-File -Encoding utf8 dist\WINDOWS-README.txt
+          Copy-Item tools\windows\INICIAR.cmd dist\INICIAR.cmd
+          Copy-Item tools\windows\LEEME.txt dist\LEEME.txt
+          $exeHash = (Get-FileHash dist\mundo_x.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$exeHash  mundo_x.exe" | Out-File -Encoding ascii dist\SHA256SUMS.txt
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4

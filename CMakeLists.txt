@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+cmake_policy(SET CMP0091 NEW)
 project(mundo_x_native LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -6,6 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(mundo_x native/src/main.cpp)
 target_include_directories(mundo_x PRIVATE native/include)
+if (MSVC)
+  # Keep the downloadable Windows CLI independent of a separate VC runtime install.
+  set_property(TARGET mundo_x PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(mundo_x PRIVATE -O3 -Wall -Wextra -Wpedantic)
@@ -13,7 +18,7 @@ endif()
 
 include(CTest)
 if (BUILD_TESTING)
-  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage)
+  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage compact_measurement xasm_measurement)
   foreach(test_name IN LISTS native_tests)
     add_executable(test_${test_name} native/tests/${test_name}.cpp)
     target_include_directories(test_${test_name} PRIVATE native/include)

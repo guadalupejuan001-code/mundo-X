@@ -1,5 +1,10 @@
 # Quantum Core
 
+> Registro histórico de la referencia v0.1. Compact Core y Reduced Exact T ya
+> están implementados; la «próxima etapa» al final describe el plan de entonces.
+> Para el estado actual y el recorrido programable, consulta el
+> [README](../README.md) y el [origen y recorrido cuántico](origen_y_recorrido_cuantico.md).
+
 ## Propósito
 
 Quantum Core es la referencia cuántica de Mundo X.

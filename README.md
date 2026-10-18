@@ -8,6 +8,14 @@
 
 Mundo X **no nació como una app Android**. La aplicación móvil, el runtime de Windows y los experimentos gráficos sirven para probar la arquitectura en contextos distintos. El núcleo del proyecto es investigar **cómo representar información y calcular su evolución** sin depender, siempre, de una enumeración explícita de cada elemento posible.
 
+[Origen declarado y recorrido cuántico](docs/origen_y_recorrido_cuantico.md):
+el titular partió de cuestionar la representación de símbolos y cómo organizar
+señales como lenguaje utilizable. El registro distingue ese propósito de cada
+implementación, recoge el historial temprano y documenta una limitación
+concreta del puente de bytes a modos.
+La [revisión y validación de esta etapa](results/revision_origen_y_medicion_2026-10-18.md)
+recoge los hallazgos y las pruebas de medición programable.
+
 El software **funciona en los casos documentados**, está en desarrollo y no se presenta aquí como producto terminado. La rama actual contiene simuladores, un runtime programable, pruebas de circuitos, aplicaciones de demostración y una línea neuronal independiente.
 
 **Qué significa «motor»:** [nombres, funciones y origen de los núcleos](results/engine_map_2026-10-18.md).
@@ -123,6 +131,7 @@ Operaciones implementadas:
 - Hadamard (`H`), fase (`S`), Pauli (`X`/`Z`).
 - CNOT (`CX`) y CZ.
 - Medición proyectiva `Z` y operaciones de validación de estados.
+- Consulta de probabilidades Z y medición con muestreo Born seudoaleatorio reproducible.
 - Construcción y comprobación de GHZ, estados cluster 2D y firmas de estabilizadores.
 
 El almacenamiento del tableau escala aproximadamente con **`O(n²)` bits**, en vez de `O(2^n)` amplitudes complejas. Este resultado se refiere a **estados compatibles con estabilizadores**, no a todos los posibles estados cuánticos.
@@ -176,7 +185,15 @@ No transporta materia ni transmite un qubit físico: es una simulación matemát
 
 **Archivo:** [`native/include/mundo_x/xasm.hpp`](native/include/mundo_x/xasm.hpp).
 
-Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Actualmente incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes` y comprobaciones `assert`. **La puerta T reducida se ejecuta desde el runtime nativo o el laboratorio Android, no desde XASM v0.1.**
+Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes`, comprobaciones `assert` y ahora `probz`, `measure` y `seed`. **La puerta T reducida se ejecuta desde el runtime nativo o el laboratorio Android, no desde XASM.**
+
+`probz q` consulta las probabilidades de medición Z; `measure q` obtiene un
+resultado y proyecta el estado. `seed n` controla el muestreo seudoaleatorio
+(semilla inicial 0). Los ejemplos [interferencia](examples/measurement_interference.x)
+y [Bell](examples/measurement_bell.x) muestran fases y correlaciones.
+Estas instrucciones también están en `practice`; aún no hay controles Android
+para programarlas. Las consultas deterministas generales pueden requerir
+eliminación del tableau: [costos y alcance](docs/origen_y_recorrido_cuantico.md#recorrido-programable-añadido).
 
 ~~~text
 qubits 2
@@ -303,9 +320,12 @@ git clone https://github.com/guadalupejuan001-code/mundo-X.git
 cd mundo-X
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
+ctest --test-dir build --output-on-failure
 
 ./build/mundo_x hello
 ./build/mundo_x run examples/bell.x
+./build/mundo_x run examples/measurement_interference.x
+./build/mundo_x run examples/measurement_bell.x
 ./build/mundo_x bench 24 --dense
 ./build/mundo_x cluster 4 4 --dense
 ./build/mundo_x cluster 32 32
@@ -325,12 +345,17 @@ Con MSVC, CMake y un entorno de compilación configurado:
 ~~~powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 .\build\Release\mundo_x.exe hello
 .\build\Release\mundo_x.exe teleport
 .\build\Release\mundo_x.exe t-reduced-experiment 8 64
 ~~~
 
 También puede recuperarse el ejecutable como **artefacto de una ejecución exitosa** del workflow [Build Mundo X Windows 10 x64](.github/workflows/windows-x64.yml).
+El ZIP incluye `INICIAR.cmd`, instrucciones y ejemplos; extrae todo y abre ese
+archivo para ver las demostraciones y entrar en práctica. El ejecutable x64
+enlaza estáticamente el runtime C++ de MSVC. No requiere reinstalar Windows ni
+instalar Python.
 
 ### Android
 

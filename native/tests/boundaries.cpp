@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <string>
 
@@ -47,6 +48,15 @@ int main() {
     const std::size_t words = n / 64 + (n % 64 != 0);
     expect(state.state_bytes() == 2 * n * words * sizeof(std::uint64_t) + n,
            ("tableau byte count n=" + std::to_string(n)).c_str());
+    CompactCore measured(state);
+    std::mt19937_64 rng(2026);
+    const auto outcome = measured.measure_z(n - 1, rng);
+    expect(outcome.random && outcome.probability == 0.5,
+           "GHZ measurement at packed-word boundary is random");
+    expect(measured.probability_one_z(0) == (outcome.outcome_one ? 1.0 : 0.0),
+           "boundary measurement fixes distant GHZ qubit");
+    expect(measured.probability_one_z(n - 1) == (outcome.outcome_one ? 1.0 : 0.0),
+           "measured highest qubit is deterministic");
     expect_exception<std::out_of_range>([&] { state.hadamard(n); },
                                         "out-of-range gate rejected");
     expect(state.is_ghz_signature(), "rejected gate leaves state unchanged");

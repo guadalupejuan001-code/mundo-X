@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -290,9 +291,10 @@ static int run_program(const std::string& path) {
 
 static int practice(std::size_t n) {
   CompactCore q(n);
+  std::mt19937_64 random(0);
 
   std::cout << "MUNDO X PRACTICE\n";
-  std::cout << "commands: h q | x q | z q | s q | cx c t | show | bytes | reset | quit\n";
+  std::cout << "commands: h q | x q | z q | s q | cx c t | probz q | measure q | seed n | show | bytes | reset | quit\n";
 
   std::string line;
 
@@ -324,6 +326,21 @@ static int practice(std::size_t n) {
         const std::size_t c = read_qubit(in);
         const std::size_t t = read_qubit(in);
         q.cnot(c, t);
+      } else if (op == "probz") {
+        const auto a = read_qubit(in);
+        mundo_x::xasm_detail::require_end(in, 1);
+        const auto p1 = q.probability_one_z(a);
+        std::cout << "PROB_Z q=" << a << " p0=" << (1.0 - p1) << " p1=" << p1 << "\n";
+      } else if (op == "measure") {
+        const auto a = read_qubit(in);
+        mundo_x::xasm_detail::require_end(in, 1);
+        const auto measured = q.measure_z(a, random);
+        std::cout << "MEASURE_Z q=" << a << " outcome=" << measured.outcome_one
+                  << " probability=" << measured.probability << " random=" << measured.random << "\n";
+      } else if (op == "seed") {
+        const auto seed = mundo_x::xasm_detail::read_unsigned<std::uint64_t>(in, 1, "seed <uint64>");
+        mundo_x::xasm_detail::require_end(in, 1);
+        random.seed(seed);
       } else if (op == "show") {
         for (std::size_t r = 0; r < q.qubits(); ++r) {
           std::cout << q.generator_string(r) << "\n";

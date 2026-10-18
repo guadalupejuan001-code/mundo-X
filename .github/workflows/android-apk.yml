@@ -39,6 +39,8 @@ jobs:
           cmake -S . -B native-build -DCMAKE_BUILD_TYPE=Release
           cmake --build native-build -j2
           ctest --test-dir native-build --output-on-failure
+          ./native-build/mundo_x run examples/measurement_bell.x
+          ./native-build/mundo_x run examples/measurement_interference.x
           echo "=== 4x4 cluster: Compact vs Dense ==="
           ./native-build/mundo_x cluster 4 4 --dense
           echo "=== 32x32 cluster: Compact ==="

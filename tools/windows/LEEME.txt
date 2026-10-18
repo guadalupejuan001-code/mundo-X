@@ -1,0 +1,36 @@
+MUNDO X - Windows 10 / 11 x64
+
+Extrae todo el ZIP en una carpeta y abre INICIAR.cmd.
+No requiere reinstalar Windows ni instalar Python.
+
+En PowerShell, dentro de esa carpeta:
+  .\mundo_x.exe run examples\measurement_interference.x
+  .\mundo_x.exe run examples\measurement_bell.x
+  .\mundo_x.exe practice 2
+
+En practica, escribe una instruccion por linea:
+  h 0
+  cx 0 1
+  probz 0
+  measure 0
+  probz 1
+  measure 1
+  quit
+
+probz consulta las probabilidades Z sin cambiar el estado.
+measure obtiene un resultado y proyecta el estado. El otro qubit de Bell
+queda correlacionado. seed 2026 fija un muestreo seudoaleatorio reproducible;
+la semilla inicial es 0. reset reinicia los qubits, conserva el generador.
+
+Otros experimentos:
+  .\mundo_x.exe hello
+  .\mundo_x.exe teleport
+  .\mundo_x.exe t-reduced-experiment 8 24
+
+Esta version ejecuta simulacion cuantica en una CPU convencional.
+No genera qubits fisicos ni acredita ventaja cuantica. El lenguaje XASM
+programa CompactCore (Clifford); T sigue en los experimentos del runtime.
+
+El .exe incluye el runtime C++ de MSVC mediante enlace estatico.
+La compilacion no tiene firma digital. SHA256SUMS.txt permite verificar bytes;
+un hash, por si solo, no autentica al autor.

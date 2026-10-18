@@ -1,8 +1,11 @@
 #pragma once
 
+#include <charconv>
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -26,10 +29,33 @@ inline std::string trim(const std::string& s) {
   return s.substr(first, last - first + 1);
 }
 
+namespace xasm_detail {
+template <typename UInt>
+inline UInt read_unsigned(std::istringstream& input, std::size_t line,
+                          const std::string& syntax) {
+  std::string token;
+  UInt value = 0;
+  if (input >> token) {
+    const auto parsed = std::from_chars(token.data(), token.data() + token.size(), value);
+    if (parsed.ec == std::errc{} && parsed.ptr == token.data() + token.size())
+      return value;
+  }
+  throw std::runtime_error("line " + std::to_string(line) + ": expected " + syntax);
+}
+
+inline void require_end(std::istringstream& input, std::size_t line) {
+  std::string extra;
+  if (input >> extra)
+    throw std::runtime_error("line " + std::to_string(line) + ": unexpected argument '" + extra + "'");
+}
+}  // namespace xasm_detail
+
 inline XasmRunResult run_xasm(std::istream& input) {
   XasmRunResult result;
   std::unique_ptr<CompactCore> core;
   std::ostringstream out;
+  // Reproducible pseudorandom sampling, not a source of physical randomness.
+  std::mt19937_64 random(0);
 
   std::string line;
   std::size_t line_number = 0;
@@ -48,8 +74,9 @@ inline XasmRunResult run_xasm(std::istream& input) {
 
     if (op == "qubits") {
       if (core) throw std::runtime_error("line " + std::to_string(line_number) + ": qubits already declared");
-      std::size_t n = 0;
-      if (!(in >> n) || n == 0) {
+      const auto n = xasm_detail::read_unsigned<std::size_t>(in, line_number, "qubits <n>");
+      xasm_detail::require_end(in, line_number);
+      if (n == 0) {
         throw std::runtime_error("line " + std::to_string(line_number) + ": expected qubits <n>");
       }
       core = std::make_unique<CompactCore>(n);
@@ -61,41 +88,49 @@ inline XasmRunResult run_xasm(std::istream& input) {
       throw std::runtime_error("line " + std::to_string(line_number) + ": declare qubits first");
     }
 
-    if (op == "h") {
-      std::size_t q;
-      if (!(in >> q)) throw std::runtime_error("line " + std::to_string(line_number) + ": expected h <q>");
-      core->hadamard(q);
-      ++result.instructions;
-    } else if (op == "x") {
-      std::size_t q;
-      if (!(in >> q)) throw std::runtime_error("line " + std::to_string(line_number) + ": expected x <q>");
-      core->pauli_x(q);
-      ++result.instructions;
-    } else if (op == "z") {
-      std::size_t q;
-      if (!(in >> q)) throw std::runtime_error("line " + std::to_string(line_number) + ": expected z <q>");
-      core->pauli_z(q);
-      ++result.instructions;
-    } else if (op == "s") {
-      std::size_t q;
-      if (!(in >> q)) throw std::runtime_error("line " + std::to_string(line_number) + ": expected s <q>");
-      core->phase_s(q);
+    if (op == "h" || op == "x" || op == "z" || op == "s") {
+      const auto q = xasm_detail::read_unsigned<std::size_t>(in, line_number, op + " <q>");
+      xasm_detail::require_end(in, line_number);
+      if (op == "h") core->hadamard(q);
+      else if (op == "x") core->pauli_x(q);
+      else if (op == "z") core->pauli_z(q);
+      else core->phase_s(q);
       ++result.instructions;
     } else if (op == "cx") {
-      std::size_t c, t;
-      if (!(in >> c >> t)) throw std::runtime_error("line " + std::to_string(line_number) + ": expected cx <control> <target>");
+      const auto c = xasm_detail::read_unsigned<std::size_t>(in, line_number, "cx <control> <target>");
+      const auto t = xasm_detail::read_unsigned<std::size_t>(in, line_number, "cx <control> <target>");
+      xasm_detail::require_end(in, line_number);
       core->cnot(c, t);
       ++result.instructions;
+    } else if (op == "seed") {
+      const auto seed = xasm_detail::read_unsigned<std::uint64_t>(in, line_number, "seed <uint64>");
+      xasm_detail::require_end(in, line_number);
+      random.seed(seed);
+    } else if (op == "probz") {
+      const auto q = xasm_detail::read_unsigned<std::size_t>(in, line_number, "probz <q>");
+      xasm_detail::require_end(in, line_number);
+      const auto p1 = core->probability_one_z(q);
+      out << "PROB_Z q=" << q << " p0=" << (1.0 - p1) << " p1=" << p1 << "\n";
+    } else if (op == "measure") {
+      const auto q = xasm_detail::read_unsigned<std::size_t>(in, line_number, "measure <q>");
+      xasm_detail::require_end(in, line_number);
+      const auto measured = core->measure_z(q, random);
+      out << "MEASURE_Z q=" << q << " outcome=" << measured.outcome_one
+          << " probability=" << measured.probability << " random=" << measured.random << "\n";
+      ++result.instructions;
     } else if (op == "show") {
+      xasm_detail::require_end(in, line_number);
       out << "STATE\n";
       for (std::size_t r = 0; r < core->qubits(); ++r) {
         out << core->generator_string(r) << "\n";
       }
     } else if (op == "bytes") {
+      xasm_detail::require_end(in, line_number);
       out << "STATE_BYTES " << core->state_bytes() << "\n";
     } else if (op == "assert") {
       std::string what;
       in >> what;
+      xasm_detail::require_end(in, line_number);
 
       bool ok = false;
       if (what == "ghz") {
