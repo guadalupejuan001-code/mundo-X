@@ -26,6 +26,42 @@ jobs:
         shell: pwsh
         run: cmake --build build --config Release --parallel 2
 
+      - name: Compare original and diagnostic reference tests
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force compiler-check | Out-Null
+          git show f6c5614e110e4e99b4e69466bb9d5e0abe4abdb8:native/tests/reduced_optimization.cpp | Set-Content -Encoding utf8 compiler-check/original.cpp
+          @'
+          cmake_minimum_required(VERSION 3.16)
+          project(reduced_compiler_check LANGUAGES CXX)
+          set(CMAKE_CXX_STANDARD 17)
+          foreach(mode IN ITEMS original original_noinline original_unoptimized diagnostic)
+            if(mode STREQUAL "diagnostic")
+              add_executable(${mode} ../native/tests/reduced_optimization.cpp)
+            else()
+              add_executable(${mode} original.cpp)
+            endif()
+            target_include_directories(${mode} PRIVATE ../native/include)
+            if(mode STREQUAL "original_noinline")
+              target_compile_options(${mode} PRIVATE /Ob0)
+            elseif(mode STREQUAL "original_unoptimized")
+              target_compile_options(${mode} PRIVATE /Od)
+            endif()
+          endforeach()
+          '@ | Set-Content -Encoding utf8 compiler-check/CMakeLists.txt
+          cmake -S compiler-check -B compiler-check/build -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build compiler-check/build --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($mode in @("original", "original_noinline", "original_unoptimized", "diagnostic")) {
+            foreach ($repeat in 1..3) {
+              Write-Output "COMPARE mode=$mode repeat=$repeat"
+              & ".\compiler-check\build\Release\$mode.exe"
+              Write-Output "COMPARE_RESULT mode=$mode repeat=$repeat exit=$LASTEXITCODE"
+            }
+          }
+          exit 0
+
       - name: Smoke tests
         shell: pwsh
         run: |
