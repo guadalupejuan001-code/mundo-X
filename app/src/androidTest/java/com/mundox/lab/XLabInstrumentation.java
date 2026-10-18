@@ -225,16 +225,24 @@ public final class XLabInstrumentation extends Instrumentation {
                 JSONObject baseline = requireNativeJson("objects_result");
                 require(baseline.getBoolean("passed") && baseline.getInt("covered_pixels") > 32,
                         "Image A/B must render real object coverage");
+                require(baseline.getBoolean("sampled_transforms_match_cpu"), "GPU transforms do not match CPU");
                 click("objects_scatter"); click("objects_verify"); awaitReady("objects_status", "objects_result");
                 JSONObject edited = requireNativeJson("objects_result");
                 require(edited.getBoolean("passed"), "Edited procedural/explicit scene differs");
                 require(!baseline.getString("hash_fnv64").equals(edited.getString("hash_fnv64")),
                         "Sparse edits did not change the rendered image");
                 screenshot("xlab-objetos.png");
-                // A second signed boundary exercises GLSL uint seed transfer.
-                setText("objects_seed", "2147483647"); click("objects_new"); click("objects_scatter");
-                click("objects_verify"); awaitReady("objects_status", "objects_result");
-                require(requireNativeJson("objects_result").getBoolean("passed"), "Positive signed-boundary GPU seed mismatch");
+                // Signed boundaries, zero, sparse edits and a hidden object all
+                // pass through the actual vertex program and framebuffer.
+                for (String seed : new String[]{"2147483647", "0", "-1"}) {
+                    setText("objects_seed", seed); click("objects_new"); click("objects_scatter");
+                    setText("objects_id", "528"); click("objects_select"); click("objects_hide");
+                    click("objects_verify"); awaitReady("objects_status", "objects_result");
+                    JSONObject actual = requireNativeJson("objects_result");
+                    require(actual.getBoolean("passed") && actual.getBoolean("sampled_transforms_match_cpu"),
+                            "GPU seed, edit or hidden-object mismatch for seed " + seed);
+                    saveEvidence("xlab-objetos-imagen-" + seed + ".json", actual.toString(2));
+                }
             });
 
             check("objects_benchmark_cancel_and_recovery", () -> {

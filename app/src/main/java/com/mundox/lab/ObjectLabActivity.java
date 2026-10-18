@@ -413,7 +413,12 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
             if (destroyed || id != requestId || !busy || !"benchmarking".contentEquals(status.getContentDescription())) return;
             if (campaign) { campaignResult(json); return; }
             benchmark = json; busy(false); result.setText(json);
-            state("ready", "Medición A/B terminada. El informe conserva ambas rutas.");
+            try {
+                JSONObject parsed = new JSONObject(json);
+                state(parsed.optBoolean("passed") ? "ready" : "error", parsed.optBoolean("passed")
+                        ? "Medición A/B terminada con imagen comprobada en ambas rutas."
+                        : "Medición detenida: " + parsed.optString("status", "sin muestras válidas"));
+            } catch (Exception error) { state("error", "No se pudo leer el resultado de la medición."); }
             persist();
         });
     }

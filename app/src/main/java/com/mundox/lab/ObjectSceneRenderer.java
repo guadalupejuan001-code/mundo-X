@@ -247,15 +247,22 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             if (dirty) uploadSparse();
             if (pendingVerify) {
                 pendingVerify = false;
-                performVerification();
+                performVerification(true);
                 now = System.nanoTime();
                 lastFrameNs = 0;
             }
             if (pendingBenchmark) {
                 pendingBenchmark = false;
-                ensureExplicit();
-                GLES30.glFinish();
-                benchmarkState = new BenchmarkState(System.nanoTime(), animationSeconds);
+                JSONObject imageCheck = performVerification(false);
+                if (!imageCheck.optBoolean("passed")) {
+                    JSONObject rejected = contextJson();
+                    put(rejected, "status", "equivalence_failed"); put(rejected, "passed", false);
+                    put(rejected, "image_check", imageCheck);
+                    listener.onBenchmark(benchmarkRequestId, rejected.toString());
+                } else {
+                    ensureExplicit(); GLES30.glFinish();
+                    benchmarkState = new BenchmarkState(System.nanoTime(), 0.0, imageCheck);
+                }
                 resetWindow();
                 lastFrameNs = 0;
             }
@@ -428,7 +435,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         listener.onPick(hit);
     }
 
-    private void performVerification() {
+    private JSONObject performVerification(boolean notify) {
         int[] oldFramebuffer = new int[1], oldViewport = new int[4];
         GLES30.glGetIntegerv(GLES30.GL_FRAMEBUFFER_BINDING, oldFramebuffer, 0);
         GLES30.glGetIntegerv(GLES30.GL_VIEWPORT, oldViewport, 0);
@@ -457,7 +464,15 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 throw new IllegalStateException("Framebuffer de verificación incompleto");
             GLES30.glViewport(0, 0, VERIFY_SIZE, VERIFY_SIZE);
             updateCamera(VERIFY_SIZE, VERIFY_SIZE);
-            put(result, "transform_diagnostics", captureTransformDiagnostics());
+            JSONObject transforms = captureTransformDiagnostics();
+            put(result, "transform_diagnostics", transforms);
+            JSONObject proceduralTransforms = transforms.optJSONObject("cpu_vs_procedural");
+            JSONObject explicitTransforms = transforms.optJSONObject("cpu_vs_explicit");
+            boolean transformsMatch = proceduralTransforms != null && explicitTransforms != null
+                    && proceduralTransforms.optInt("different_count", -1) == 0
+                    && explicitTransforms.optInt("different_count", -1) == 0
+                    && proceduralTransforms.optInt("id_different_count", -1) == 0
+                    && explicitTransforms.optInt("id_different_count", -1) == 0;
             ByteBuffer procedural = ByteBuffer.allocateDirect(VERIFY_SIZE * VERIFY_SIZE * 4);
             ByteBuffer reference = ByteBuffer.allocateDirect(VERIFY_SIZE * VERIFY_SIZE * 4);
             // Fixed analytic time, including when the live scene is animating.
@@ -488,7 +503,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                         || Math.abs((reference.get(p * 4 + 2) & 255) - backgroundB) > 2) referenceVisible++;
             }
             put(result, "status", "complete");
-            put(result, "passed", overTolerance == 0 && visible >= 16);
+            put(result, "passed", overTolerance == 0 && visible >= 16 && transformsMatch);
+            put(result, "sampled_transforms_match_cpu", transformsMatch);
             put(result, "proof", "RGBA8 offscreen framebuffer readback of both actual render routes");
             put(result, "width", VERIFY_SIZE); put(result, "height", VERIFY_SIZE);
             put(result, "fixedTimeSeconds", 0);
@@ -509,11 +525,11 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             put(result, "temporaryCpuReadbackBytes", (long) VERIFY_SIZE * VERIFY_SIZE * 8L);
             put(result, "scope", "This camera, seed and edit snapshot; not a proof for every possible scene");
             putMemory(result);
-            listener.onVerification(verificationRequestId, result.toString());
+            if (notify) listener.onVerification(verificationRequestId, result.toString());
         } catch (RuntimeException error) {
             put(result, "status", "error"); put(result, "passed", false);
             put(result, "error", safe(error.getMessage()));
-            listener.onVerification(verificationRequestId, result.toString());
+            if (notify) listener.onVerification(verificationRequestId, result.toString());
         } finally {
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, oldFramebuffer[0]);
             GLES30.glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
@@ -524,6 +540,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             GLES30.glBindVertexArray(0);
             updateCamera(width, height);
         }
+        return result;
     }
 
     /**
@@ -601,8 +618,10 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         put(result, "buffer", value[0]);
         GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_STRIDE, value, 0);
         put(result, "stride", value[0]);
-        GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_DIVISOR, value, 0);
-        put(result, "divisor", value[0]);
+        // Some legacy Android translators do not populate the inherited
+        // glGetVertexAttribiv array overload for the ES3 divisor enum.
+        // Report our configured value; instance IDs and values are checked by TF.
+        put(result, "configured_divisor", 1);
         GLES30.glGetVertexAttribiv(2, GLES30.GL_VERTEX_ATTRIB_ARRAY_SIZE, value, 0);
         put(result, "components", value[0]);
         return result;
@@ -647,6 +666,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
 
     private static final class BenchmarkState {
         final double time;
+        final JSONObject imageCheck;
         final ArrayList<Double> proceduralFrames = new ArrayList<>();
         final ArrayList<Double> explicitFrames = new ArrayList<>();
         final ArrayList<Double> proceduralSubmit = new ArrayList<>();
@@ -654,7 +674,9 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         int phase;
         long phaseStart;
         boolean firstFrame = true;
-        BenchmarkState(long now, double time) { phaseStart = now; this.time = time; }
+        BenchmarkState(long now, double time, JSONObject imageCheck) {
+            phaseStart = now; this.time = time; this.imageCheck = imageCheck;
+        }
     }
 
     private void advanceBenchmark(long frameStart, long afterSubmit, double frameMs, double submitMs) {
@@ -690,6 +712,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         boolean enoughSamples = b.proceduralFrames.size() >= 3 && b.explicitFrames.size() >= 3;
         put(result, "status", enoughSamples ? "completed" : "insufficient_samples");
         put(result, "passed", enoughSamples);
+        put(result, "image_check", b.imageCheck);
         put(result, "measurement", "wall intervals between onDrawFrame calls; includes swap pacing and scheduling");
         put(result, "cpuMeasurement", "CPU time submitting one draw; asynchronous and not elapsed GPU execution");
         put(result, "warmupMsPerRoute", WARMUP_NS / 1_000_000);

@@ -169,10 +169,20 @@ public final class ObjectSceneModel {
     }
 
     public static String hashGLSL() {
-        return "uint mxHash(uint id, uint seed) {\n"
-                + "  uint x = id ^ seed ^ 0x9e3779b9u;\n"
-                + "  x ^= x >> 16u; x *= 0x7feb352du;\n"
-                + "  x ^= x >> 15u; x *= 0x846ca68bu;\n"
+        // Byte products and carries preserve multiplication modulo 2^32
+        // without overflowing intermediate products in older GLES translators.
+        return "highp uint mxMul32(highp uint a, highp uvec4 b) {\n"
+                + "  highp uvec4 v=uvec4(a,a>>8u,a>>16u,a>>24u)&uvec4(255u);\n"
+                + "  highp uint p0=v.x*b.x;\n"
+                + "  highp uint p1=v.y*b.x+v.x*b.y+(p0>>8u);\n"
+                + "  highp uint p2=v.z*b.x+v.y*b.y+v.x*b.z+(p1>>8u);\n"
+                + "  highp uint p3=v.w*b.x+v.z*b.y+v.y*b.z+v.x*b.w+(p2>>8u);\n"
+                + "  return (p0&255u)|((p1&255u)<<8u)|((p2&255u)<<16u)|((p3&255u)<<24u);\n"
+                + "}\n"
+                + "highp uint mxHash(highp uint id, highp uint seed) {\n"
+                + "  highp uint x = id ^ seed ^ 0x9e3779b9u;\n"
+                + "  x ^= x >> 16u; x=mxMul32(x,uvec4(45u,53u,235u,127u));\n"
+                + "  x ^= x >> 15u; x=mxMul32(x,uvec4(139u,166u,108u,132u));\n"
                 + "  x ^= x >> 16u; return x;\n"
                 + "}\n";
     }
