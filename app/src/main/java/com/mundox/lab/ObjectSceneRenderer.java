@@ -195,7 +195,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
             program = createProgram(vertexSource(), FRAGMENT_SOURCE);
             uVp = GLES30.glGetUniformLocation(program, "uVp");
             uSide = GLES30.glGetUniformLocation(program, "uSide");
-            uSeed = GLES30.glGetUniformLocation(program, "uSeed");
+            uSeed = GLES30.glGetUniformLocation(program, "uSeedBytes");
             uTime = GLES30.glGetUniformLocation(program, "uTime");
             uRoute = GLES30.glGetUniformLocation(program, "uProcedural");
             uEditCount = GLES30.glGetUniformLocation(program, "uEditCount");
@@ -263,6 +263,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                     ensureExplicit(); GLES30.glFinish();
                     benchmarkState = new BenchmarkState(System.nanoTime(), 0.0, imageCheck);
                 }
+                now = System.nanoTime();
                 resetWindow();
                 lastFrameNs = 0;
             }
@@ -385,7 +386,8 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
         GLES30.glUseProgram(program);
         GLES30.glUniformMatrix4fv(uVp, 1, false, vp, 0);
         GLES30.glUniform1i(uSide, scene.side);
-        GLES30.glUniform1ui(uSeed, scene.seed);
+        GLES30.glUniform4ui(uSeed, scene.seed & 255, (scene.seed >>> 8) & 255,
+                (scene.seed >>> 16) & 255, (scene.seed >>> 24) & 255);
         GLES30.glUniform1f(uTime, seconds);
         GLES30.glUniform1i(uRoute, explicit ? 0 : 1);
         GLES30.glUniform1i(uEditCount, scene.editCount());
@@ -579,8 +581,11 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 put(comparison, "uniform_side", uniform[0]);
                 GLES30.glGetUniformiv(program, uRoute, uniform, 0);
                 put(comparison, "uniform_procedural", uniform[0]);
-                GLES30.glGetUniformuiv(program, uSeed, uniform, 0);
-                put(comparison, "uniform_seed_bits", uniform[0]);
+                int[] seedBytes = new int[4];
+                GLES30.glGetUniformuiv(program, uSeed, seedBytes, 0);
+                JSONArray actualSeed = new JSONArray();
+                for (int seedByte : seedBytes) actualSeed.put(seedByte);
+                put(comparison, "uniform_seed_bytes", actualSeed);
                 GLES30.glBeginTransformFeedback(GLES30.GL_POINTS);
                 GLES30.glDrawArraysInstanced(GLES30.GL_POINTS, 0, 1, samples);
                 GLES30.glEndTransformFeedback();
@@ -908,7 +913,7 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 + "layout(location=0) in vec3 aPosition; layout(location=1) in vec3 aNormal;\n"
                 + "layout(location=2) in vec4 aTransform;\n"
                 + "uniform mat4 uVp; uniform int uSide,uProcedural,uEditCount,uSelected;\n"
-                + "uniform uint uSeed; uniform float uTime; uniform highp isampler2D uEdits;\n"
+                + "uniform highp uvec4 uSeedBytes; uniform float uTime; uniform highp isampler2D uEdits;\n"
                 + "out vec3 vNormal; out vec3 vWorld; out float vTone; flat out int vSelected;\n"
                 + "out vec4 tfTransform; flat out int tfId;\n"
                 + ObjectSceneModel.hashGLSL() + "\n"
@@ -917,9 +922,9 @@ public final class ObjectSceneRenderer implements GLSurfaceView.Renderer {
                 + " ivec2 item=texelFetch(uEdits,ivec2(mid%width,mid/width),0).rg;\n"
                 + " if(item.x==id)return item.y; if(item.x<id)lo=mid+1;else hi=mid-1;}return 0;}\n"
                 + "void main(){ int id=gl_InstanceID; vec4 transform=aTransform;\n"
-                + " if(uProcedural==1){uint h=mxHash(uint(id),uSeed); float center=float(uSide-1)*.5;\n"
+                + " if(uProcedural==1){highp uvec4 h=mxHashBytes(id,uSeedBytes); float center=float(uSide-1)*.5;\n"
                 + " transform=vec4((float(id%uSide)-center)*2.2,(float(id/uSide)-center)*2.2,\n"
-                + " .7+float(h&255u)/128.0,float((h>>8u)&255u)/255.0);\n"
+                + " .7+float(h.x)/128.0,float(h.y)/255.0);\n"
                 + " int state=uEditCount>0?editState(id):0; if(state==7)transform.z=0.0;\n"
                 + " else if(state>0)transform.z+=float(state)*.35;}\n"
                 + " tfTransform=transform;tfId=id;\n"

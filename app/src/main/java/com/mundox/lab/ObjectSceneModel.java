@@ -169,21 +169,23 @@ public final class ObjectSceneModel {
     }
 
     public static String hashGLSL() {
-        // Byte products and carries preserve multiplication modulo 2^32
-        // without overflowing intermediate products in older GLES translators.
-        return "highp uint mxMul32(highp uint a, highp uvec4 b) {\n"
-                + "  highp uvec4 v=uvec4(a,a>>8u,a>>16u,a>>24u)&uvec4(255u);\n"
-                + "  highp uint p0=v.x*b.x;\n"
-                + "  highp uint p1=v.y*b.x+v.x*b.y+(p0>>8u);\n"
-                + "  highp uint p2=v.z*b.x+v.y*b.y+v.x*b.z+(p1>>8u);\n"
-                + "  highp uint p3=v.w*b.x+v.z*b.y+v.y*b.z+v.x*b.w+(p2>>8u);\n"
-                + "  return (p0&255u)|((p1&255u)<<8u)|((p2&255u)<<16u)|((p3&255u)<<24u);\n"
+        // Keep the complete mix as four little-endian bytes. Each multiply-
+        // accumulate is at most 65535; no large unsigned scalar is required.
+        return "highp uvec4 mxMulBytes(highp uvec4 a, highp uvec4 b) {\n"
+                + "  highp uvec4 r=uvec4(0u);\n"
+                + "  for(int i=0;i<4;i++){highp uint carry=0u;\n"
+                + "    for(int j=0;j<4;j++){if(i+j>=4)break;\n"
+                + "      highp uint t=r[i+j]+a[i]*b[j]+carry;\n"
+                + "      r[i+j]=t&255u;carry=t>>8u;}}return r;\n"
                 + "}\n"
-                + "highp uint mxHash(highp uint id, highp uint seed) {\n"
-                + "  highp uint x = id ^ seed ^ 0x9e3779b9u;\n"
-                + "  x ^= x >> 16u; x=mxMul32(x,uvec4(45u,53u,235u,127u));\n"
-                + "  x ^= x >> 15u; x=mxMul32(x,uvec4(139u,166u,108u,132u));\n"
-                + "  x ^= x >> 16u; return x;\n"
+                + "highp uvec4 mxHashBytes(highp int id, highp uvec4 seed) {\n"
+                + "  highp uvec4 x=uvec4(id%256,(id/256)%256,(id/65536)%256,(id/16777216)%256);\n"
+                + "  x=x^seed^uvec4(185u,121u,55u,158u);\n"
+                + "  x=x^uvec4(x.z,x.w,0u,0u);\n"
+                + "  x=mxMulBytes(x,uvec4(45u,53u,235u,127u));\n"
+                + "  x=x^uvec4(((x.y>>7u)|(x.z<<1u))&255u,((x.z>>7u)|(x.w<<1u))&255u,x.w>>7u,0u);\n"
+                + "  x=mxMulBytes(x,uvec4(139u,166u,108u,132u));\n"
+                + "  return x^uvec4(x.z,x.w,0u,0u);\n"
                 + "}\n";
     }
 
