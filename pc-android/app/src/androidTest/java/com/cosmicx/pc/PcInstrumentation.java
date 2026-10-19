@@ -53,6 +53,7 @@ public final class PcInstrumentation extends Instrumentation {
         return s;
     }
     private byte[] raw(byte[] code){byte[] b=new byte[512];System.arraycopy(code,0,b,0,code.length);b[510]=0x55;b[511]=(byte)0xaa;return b;}
+    private void put16(byte[] b,int p,int v){b[p]=(byte)v;b[p+1]=(byte)(v>>>8);}
     private void put32(byte[] b,int p,int v){for(int i=0;i<4;i++)b[p+i]=(byte)(v>>>(8*i));}
     private byte[] iso(){
         byte[] b=new byte[32*2048];int p=16*2048;b[p]=1;byte[] id="CD001".getBytes(StandardCharsets.US_ASCII);System.arraycopy(id,0,b,p+1,5);b[p+6]=1;
@@ -62,11 +63,71 @@ public final class PcInstrumentation extends Instrumentation {
         b[p+32]=(byte)0x88;b[p+38]=1;put32(b,p+40,24);
         byte[] code={(byte)0xb8,'I',0x0e,(byte)0xcd,0x10,(byte)0xf4};System.arraycopy(code,0,b,24*2048,code.length);return b;
     }
+    private int emit(byte[] bytes,int position,int... code){for(int value:code)bytes[position++]=(byte)value;return position;}
+    private byte[] enterIso(){
+        byte[] bytes=iso();int entry=20*2048+32,boot=24*2048;
+        put16(bytes,entry+2,0x2000);put16(bytes,entry+6,4); // Load one 2048-byte CD sector at 2000:0000.
+        int p=emit(bytes,boot,
+                0x31,0xc0,                  // XOR AX,AX
+                0x8e,0xd0,0x8e,0xd8,        // SS=DS=0
+                0xbc,0x00,0x90,             // SP=9000
+                0xbd,0x00,0x91,             // BP=9100
+                0xc7,0x46,0xfe,0x5a,0xa5,  // Ancestor frame [SS:BP-2]=A55A.
+                0xb8,0x34,0x12,0xbb,0x78,0x56);
+        p=emit(bytes,p,0xe9,0,0);put16(bytes,p-2,0x056c-(p-boot));
+        p=emit(bytes,boot+0x056c,
+                0xc8,0x10,0x00,0x02,        // ENTER 0010,02 at the reported 2000:056c.
+                0x8b,0x46,0x00,             // AX=[BP] (saved BP=9100)
+                0x8b,0x5e,0xfe,             // BX=[BP-2] (ancestor=A55A)
+                0x8b,0x4e,0xfc,             // CX=[BP-4] (frame pointer=8FFE)
+                0x89,0xe2,                  // DX=SP (8FEA, including 16 local bytes)
+                0xc7,0x46,0xf0,0xfe,0xca,  // Write a local word.
+                0x8b,0x76,0xf0,             // SI=[BP-16] (CAFE)
+                0xc9);                     // LEAVE must restore BP=9100, SP=9000.
+        int[] registers={0,3,1,2,6,5,4};
+        int[] expected={0x9100,0xa55a,0x8ffe,0x8fea,0xcafe,0x9100,0x9000};
+        int[] failures=new int[registers.length];
+        for(int i=0;i<registers.length;i++){
+            p=emit(bytes,p,0x81,0xf8|registers[i],expected[i]&255,expected[i]>>>8,0x75,0);
+            failures[i]=p-1;
+        }
+        // The guest prints success only after comparing its actual stack and locals.
+        // Save AX around BIOS teletype so the final registers retain the evidence.
+        p=emit(bytes,p,0x50,0xb4,0x0e);
+        for(byte c:"ENTER/LEAVE: OK".getBytes(StandardCharsets.US_ASCII))p=emit(bytes,p,0xb0,c,0xcd,0x10);
+        p=emit(bytes,p,0x58,0xbf,0xef,0xbe,0xf4); // Success marker DI=BEEF; HLT.
+        int failure=p;emit(bytes,p,0xbf,0xad,0xde,0xf4); // Failed comparison: DI=DEAD; no success text.
+        for(int branch:failures){int displacement=failure-branch-1;require(displacement>=0&&displacement<=127,"ENTER fixture branch exceeds rel8");bytes[branch]=(byte)displacement;}
+        return bytes;
+    }
     private JSONObject mountBytes(long h,byte[] bytes,String name)throws Exception{
         File f=new File(getTargetContext().getFilesDir(),name);try(FileOutputStream out=new FileOutputStream(f)){out.write(bytes);}
         JSONObject s;try(ParcelFileDescriptor fd=ParcelFileDescriptor.open(f,ParcelFileDescriptor.MODE_READ_ONLY)){s=state(NativeMachine.mount(h,fd.getFd(),bytes.length,"auto"));}
         // FD has closed: native engine must retain its own descriptor.
         return s;
+    }
+    private long register16(JSONObject snapshot,int index)throws Exception{return snapshot.getJSONArray("regs").getLong(index)&65535L;}
+    private void testIsoEnter(long h)throws Exception{
+        JSONObject report=new JSONObject();report.put("fixture","synthetic_el_torito_enter_leave");report.put("status","started");
+        report.put("enter_address","2000:056c");report.put("enter_bytes","C8 10 00 02");
+        try{
+            JSONObject mounted=mountBytes(h,enterIso(),"pc-enter.iso");report.put("mounted",mounted);
+            require(mounted.getString("boot_kind").equals("iso")&&mounted.getString("status").equals("ready")&&mounted.getInt("cs")==0x2000&&mounted.getInt("ip")==0,"ENTER fixture must mount through El Torito at 2000:0000");
+            JSONObject before=state(NativeMachine.run(h,9));report.put("before_enter",before);
+            require(before.getString("status").equals("running")&&before.getString("cpu_mode").equals("real16")&&before.getInt("cs")==0x2000&&before.getInt("ip")==0x056c,"Fixture must reach the reported ENTER address: "+before);
+            require(register16(before,4)==0x9000&&register16(before,5)==0x9100&&register16(before,0)==0x1234&&register16(before,3)==0x5678,"ENTER initial stack/registers");
+            JSONObject after=state(NativeMachine.run(h,1));report.put("after_enter",after);
+            require(after.getString("status").equals("running")&&after.getInt("cs")==0x2000&&after.getInt("ip")==0x0570,"C8 ENTER must execute its four bytes: "+after);
+            require(register16(after,4)==0x8fea&&register16(after,5)==0x8ffe,"ENTER must allocate locals and construct its level-2 frame");
+            require(register16(after,0)==0x1234&&register16(after,3)==0x5678&&after.getLong("flags")==before.getLong("flags"),"ENTER must preserve unrelated registers and flags");
+            JSONObject finished=drain(h);report.put("state",finished);String guestText=NativeMachine.screen(h).trim();report.put("guest_text",guestText);
+            require(finished.getString("status").equals("halted")&&finished.getString("cpu_mode").equals("real16")&&finished.getInt("cs")==0x2000,"ENTER/LEAVE guest must reach HLT: "+finished);
+            int[] registers={0,3,1,2,6,5,4,7};int[] expected={0x9100,0xa55a,0x8ffe,0x8fea,0xcafe,0x9100,0x9000,0xbeef};
+            for(int i=0;i<registers.length;i++)require(register16(finished,registers[i])==expected[i],"ENTER/LEAVE stack evidence in register "+registers[i]+": "+finished);
+            require(guestText.equals("ENTER/LEAVE: OK"),"Guest must validate and display its actual ENTER/LEAVE result");
+            require(!finished.getBoolean("windows_ready"),"Synthetic ISO must not claim the user's Windows booted");
+            report.put("status","passed");pass("El Torito ISO executes C8 ENTER at 2000:056c, validates frame chain and LEAVE");
+        }finally{writeJson("pc-enter-state.json",report);}
     }
     private View find(View v,String text){if(v instanceof TextView&&text.contentEquals(((TextView)v).getText()))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View r=find(g.getChildAt(i),text);if(r!=null)return r;}}return null;}
     private boolean contains(View v,String part){if(v instanceof TextView&&((TextView)v).getText().toString().contains(part))return true;if("pc-screen".contentEquals(v.getContentDescription()==null?"":v.getContentDescription())){AccessibilityNodeInfo node=v.createAccessibilityNodeInfo();boolean match=node.getText()!=null&&node.getText().toString().contains(part);node.recycle();if(match)return true;}if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)if(contains(g.getChildAt(i),part))return true;}return false;}
@@ -308,6 +369,7 @@ public final class PcInstrumentation extends Instrumentation {
         s=mountBytes(h,iso(),"pc-test.iso");require(s.getString("boot_kind").equals("iso"),s.toString());s=drain(h);require(s.getString("status").equals("halted"),s.toString());require(NativeMachine.screen(h).charAt(0)=='I',"ISO code executed");pass("El Torito guest");
         byte[] shiftIso=iso();byte[] shiftCode=raw(new byte[]{(byte)0xb8,0x34,0x12,(byte)0xba,0x78,0x56,(byte)0xb1,0x04,0x0f,(byte)0xad,(byte)0xd0,(byte)0xf4});System.arraycopy(shiftCode,0,shiftIso,24*2048,512);
         s=mountBytes(h,shiftIso,"pc-shrd.iso");require(s.getString("boot_kind").equals("iso"),"SHRD fixture must boot through El Torito");s=drain(h);require(s.getString("status").equals("halted")&&(s.getJSONArray("regs").getLong(0)&65535L)==0x8123,"ISO SHRD AX,DX,CL (0F AD) must execute, AX=8123: "+s);videoReport.put("iso_shrd",s);pass("El Torito ISO executes reported 0F AD SHRD instruction");
+        testIsoEnter(h);
         s=mountBytes(h,raw(new byte[]{0x0f,0x0b}),"pc-invalid-op.img");s=drain(h);require(s.getString("status").equals("fault"),"invalid opcode stops");require(s.getInt("ip")==0x7c00,"fault location");pass("unsupported instruction diagnostic");
         s=mountBytes(h,new byte[512],"pc-invalid.img");require(s.getString("status").equals("fault"),"bad signature rejected");pass("invalid image rejected");
         NativeMachine.destroy(h);h=0;
@@ -407,11 +469,11 @@ public final class PcInstrumentation extends Instrumentation {
         runOnMainSync(()->a.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));waitOrientation(a,Configuration.ORIENTATION_PORTRAIT);waitForIdleSync();
         pass("rotation retains PC and InfiniteCore state");
         File evidence=getTargetContext().getFilesDir();Bitmap shot=getUiAutomation().takeScreenshot();if(shot!=null){try(FileOutputStream out=new FileOutputStream(new File(evidence,"pc-screen.png"))){shot.compress(Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
-        testActivityVideo(a);require(passed==29,"Expected exactly 29 tests: 12 existing, 8 ISO/video and 9 InfiniteCore");
+        testActivityVideo(a);require(passed==30,"Expected exactly 30 tests: 12 existing, 8 ISO/video, 9 InfiniteCore and 1 ENTER/LEAVE");
         runOnMainSync(()->current(a).finish());waitForIdleSync();
         String summary="COSMIC_PC_TESTS_PASSED tests="+passed+" failures=0\n";result.putString("stream",summary);result.putInt("passed",passed);
         JSONObject report=new JSONObject();report.put("tests",passed);report.put("failures",0);report.put("windows_booted",false);report.put("x64_guest_verified",true);report.put("native_test_process_pss_bytes",processPssBytes);report.put("activity_process_pss_bytes",activityPssBytes);report.put("logical_ram_bytes",2147483648L);report.put("guest_payload_cap_bytes",1073741824L);report.put("infinite_guest_verified",true);report.put("shared_session_graphics_verified",true);report.put("coupled_changed_pixels",coupledChanged);report.put("uncoupled_changed_pixels",uncoupledBefore.changed(uncoupledAfter));
-        report.put("iso_shrd_verified",true);report.put("guest_8k_verified",true);report.put("output_8k_verified",true);report.put("video_tests",8);
+        report.put("iso_shrd_verified",true);report.put("iso_enter_verified",true);report.put("guest_8k_verified",true);report.put("output_8k_verified",true);report.put("video_tests",8);
         try(FileOutputStream out=new FileOutputStream(new File(evidence,"pc-tests.json"))){out.write(report.toString(2).getBytes(StandardCharsets.UTF_8));}finish(Activity.RESULT_OK,result);
     }catch(Throwable e){if(h!=0)try{NativeMachine.destroy(h);}catch(Throwable ignored){}try{videoReport.put("status","failed");videoReport.put("passed_before_failure",passed);videoReport.put("failure",android.util.Log.getStackTraceString(e));writeJson("pc-video-state.json",videoReport);}catch(Throwable ignored){}result.putString("stream","COSMIC_PC_TESTS_FAILED passed="+passed+" "+android.util.Log.getStackTraceString(e));finish(Activity.RESULT_CANCELED,result);}}
 }

@@ -22,7 +22,7 @@ pc_emulator_pid=$!
 pc_evidence_collected=false
 collect_evidence() {
   timeout 20 "$adb_bin" logcat -d > "$evidence_dir/logcat.txt" 2>/dev/null || true
-  for pc_file in pc-screen.png pc-tests.json pc-x64-state.json pc-video-state.json pc-video-screen.png; do
+  for pc_file in pc-screen.png pc-tests.json pc-x64-state.json pc-enter-state.json pc-video-state.json pc-video-screen.png; do
     if timeout 20 "$adb_bin" exec-out run-as com.cosmicx.pc cat "files/$pc_file" > "$evidence_dir/$pc_file.tmp" 2>/dev/null; then
       mv "$evidence_dir/$pc_file.tmp" "$evidence_dir/$pc_file"
     else
@@ -56,17 +56,33 @@ collect_evidence
 python3 - <<'PY'
 import json
 from pathlib import Path
-assert 'COSMIC_PC_TESTS_PASSED tests=29 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
+assert 'COSMIC_PC_TESTS_PASSED tests=30 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
 v=json.loads(Path('pc-evidence/pc-tests.json').read_text())
-assert v['tests']==29 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
+assert v['tests']==30 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
 assert v['infinite_guest_verified'] and v['shared_session_graphics_verified']
 assert v['coupled_changed_pixels']>10 and v['uncoupled_changed_pixels']==0
-assert v['iso_shrd_verified'] and v['guest_8k_verified'] and v['output_8k_verified'] and v['video_tests']==8
+assert v['iso_shrd_verified'] and v['iso_enter_verified'] and v['guest_8k_verified'] and v['output_8k_verified'] and v['video_tests']==8
 assert v['logical_ram_bytes']==2**31 and v['guest_payload_cap_bytes']==2**30
 assert 0<v['native_test_process_pss_bytes']<2**31
 assert 0<v['activity_process_pss_bytes']<2**31
 x=json.loads(Path('pc-evidence/pc-x64-state.json').read_text())
 assert x['cpu_mode']=='long64' and x['status']=='halted' and x['regs_hex'][0]=='2345678922222223'
+enter=json.loads(Path('pc-evidence/pc-enter-state.json').read_text())
+assert enter['status']=='passed' and enter['fixture']=='synthetic_el_torito_enter_leave'
+assert enter['enter_address']=='2000:056c' and enter['enter_bytes']=='C8 10 00 02'
+mounted,before,after,finished=(enter[key] for key in ['mounted','before_enter','after_enter','state'])
+assert mounted['boot_kind']=='iso' and mounted['status']=='ready' and mounted['cs']==0x2000 and mounted['ip']==0
+assert before['status']==after['status']=='running' and before['cpu_mode']==after['cpu_mode']=='real16'
+assert before['cs']==after['cs']==finished['cs']==0x2000 and before['ip']==0x056c and after['ip']==0x0570
+assert before['regs'][4]&65535==0x9000 and before['regs'][5]&65535==0x9100
+assert after['regs'][4]&65535==0x8fea and after['regs'][5]&65535==0x8ffe
+assert before['regs'][0]&65535==after['regs'][0]&65535==0x1234
+assert before['regs'][3]&65535==after['regs'][3]&65535==0x5678
+assert before['flags']==after['flags'] and after['instructions']==before['instructions']+1
+assert finished['boot_kind']=='iso' and finished['status']=='halted' and finished['cpu_mode']=='real16' and not finished['windows_ready']
+for register,expected in [(0,0x9100),(3,0xa55a),(1,0x8ffe),(2,0x8fea),(6,0xcafe),(5,0x9100),(4,0x9000),(7,0xbeef)]:
+    assert finished['regs'][register]&65535==expected,(register,finished['regs'])
+assert enter['guest_text']=='ENTER/LEAVE: OK' and finished['instructions']>after['instructions']
 video=json.loads(Path('pc-evidence/pc-video-state.json').read_text())
 assert video['status']=='passed' and video['windows_booted'] is False and video['virtual_3d_gpu'] is False
 iso=video['iso_shrd']

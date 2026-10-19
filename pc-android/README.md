@@ -1,6 +1,6 @@
 # COSMIC X PC — motor x86/x64 propio para Android
 
-Este módulo desarrolla un emulador de PC propio dentro del proyecto COSMIC X. Interpreta instrucciones x86/x64 y conecta su CPU con RAM, vídeo de texto y framebuffer gráfico, teclado BIOS y lectura de disco. La versión 0.3.0 incorporó SHRD/SHLD, un dispositivo VBE lineal hasta 8K y un presentador GLES 3 propio; la versión **0.4.0** conserva la memoria por demanda y el arranque de prueba real → protegido → largo de 64 bits. **Esta versión todavía no ejecuta ni instala Windows completo ni juegos de PC.**
+Este módulo desarrolla un emulador de PC propio dentro del proyecto COSMIC X. Interpreta instrucciones x86/x64 y conecta su CPU con RAM, vídeo de texto y framebuffer gráfico, teclado BIOS y lectura de disco. La versión 0.3.0 incorporó SHRD/SHLD, un dispositivo VBE lineal hasta 8K y un presentador GLES 3 propio; la versión **0.4.1** añade ENTER (`C8`) y conserva la memoria por demanda, InfiniteCore y el arranque de prueba real → protegido → largo de 64 bits. **Esta versión todavía no ejecuta ni instala Windows completo ni juegos de PC.**
 
 La versión **0.4.0** conecta **InfiniteCore como dispositivo del PC y el motor gráfico GLES canónico**. El huésped x86/x64, los comandos de la app y el observador cuántico acceden a una misma sesión. La pantalla de texto/framebuffer que escribe el huésped y el mundo del observador cuántico tienen sus propias vistas. Se conservan el intérprete, la RAM, los medios de arranque y el presentador VBE/GLES incorporado en 0.3.0.
 
@@ -156,6 +156,16 @@ La regresión mínima sitúa `0F AD D8` en `07c0:039c`: con `AX=1234h`, `BX=5678
 
 Esta corrección permite ejecutar esa familia de instrucciones. La ISO concreta del usuario no forma parte del repositorio ni se declara arrancada por esta regresión: un cargador puede alcanzar después otra instrucción o dispositivo todavía no implementado.
 
+### Corrección de `C8` (ENTER) al abrir una ISO
+
+La captura posterior mostró `2000:056c opcode=c8 bytes=c8 (opcode is not implemented)`, después de 2.767 pasos en modo real de 16 bits. **0.4.1 implementa ENTER**, que crea el marco de pila de una función: guarda BP/EBP/RBP, copia los punteros de los niveles anteriores cuando corresponde y reserva el espacio local indicado por el operando inmediato.
+
+La implementación distingue el ancho de los datos (16, 32 o 64 bits) del ancho de la dirección de pila. Aplica `imm8 & 31` al nivel de anidación, conserva las banderas y utiliza SS para los accesos implícitos. Los prefijos `66` y `67`, las fronteras de segmento y los fallos de paginación tienen pruebas propias; un fallo restaura registros y escrituras de la instrucción. La comprobación del extremo final de la reserva valida permisos de escritura sin rellenar la zona local ni reservar RAM para todo el marco.
+
+Las pruebas nativas comprueban ENTER junto con **LEAVE (`C9`)**, y un oráculo Linux x86_64 contrasta las formas de modo largo con instrucciones del procesador anfitrión. La regresión Android monta una ISO El Torito de control, carga su huésped en el segmento `2000h`, ejecuta ENTER exactamente en `056ch`, verifica los punteros y la restauración de la pila, y produce `ENTER/LEAVE: OK` desde código x86. La evidencia `pc-enter-state.json` conserva los estados antes de ENTER, después de ENTER y al terminar.
+
+Solo se conocen la dirección y el opcode de la captura; sus operandos, registros completos y la ISO original no fueron adjuntados. Por eso la ISO de control utiliza operandos documentados en el test y no se presenta como el medio original ni como un arranque completo de Windows. La fuente de vídeo de la captura era texto 80 × 25, con salida adaptativa: seleccionar salida 8K no sustituye la ejecución de las instrucciones pendientes del huésped.
+
 ## Componentes
 
 | Archivo | Función |
@@ -205,7 +215,7 @@ Desde este directorio, con un compilador C++17:
 bash tools/test-native.sh
 ```
 
-El script compila **diez suites**: RAM, CPU, transición de modos, oráculo nativo, medios, PC, ISO, memoria, vídeo y dispositivo InfiniteCore. `pc_video_test` ejecuta programas huéspedes 720p y 8K y comprueba VBE, píxeles, copias y presupuestos. `pc_quantum_test` verifica sesión, puertos, atomicidad y huéspedes del núcleo. Después ejecuta los arranques de consola x86/x64 y los dos del dispositivo; guarda sus imágenes en `build/native/`.
+El script compila **once suites**: RAM, CPU, transición de modos, oráculo ALU/SHLD/SHRD, oráculo ENTER/LEAVE, medios, PC, ISO, memoria, vídeo y dispositivo InfiniteCore. `pc_video_test` ejecuta programas huéspedes 720p y 8K y comprueba VBE, píxeles, copias y presupuestos. `pc_quantum_test` verifica sesión, puertos, atomicidad y huéspedes del núcleo. Después ejecuta los arranques de consola x86/x64 y los dos del dispositivo; guarda sus imágenes en `build/native/`.
 
 También admite CMake:
 
@@ -234,9 +244,9 @@ Herramientas declaradas: JDK 17, Gradle 8.9, Android Gradle Plugin 8.7.3, SDK 35
 gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-El workflow [.github/workflows/own-pc-android.yml](../.github/workflows/own-pc-android.yml) compila las dos ABI, verifica firma, identidad 0.4.0, bibliotecas y clases de ambos puentes gráficos, y está configurado para ejecutar **29 pruebas instrumentales** con ese APK: 12 heredadas, ocho de ISO/vídeo y nueve de InfiniteCore. Se ejecuta con Android 15 y un AVD de 2048 MiB; ese tamaño pertenece al dispositivo virtual de pruebas. La app mantiene el perfil de huésped 2048/1024 MiB y comprueba su propia muestra de PSS. `libcosmic_pc.so` enlaza con una única `libmx_graphics.so`, que contiene los puentes canónicos; ambas usan `libc++_shared.so`.
+El workflow [.github/workflows/own-pc-android.yml](../.github/workflows/own-pc-android.yml) compila las dos ABI, verifica firma, identidad **0.4.1 (versionCode 5)**, bibliotecas y clases de ambos puentes gráficos, y está configurado para ejecutar **30 pruebas instrumentales** con ese APK: 12 heredadas, ocho de ISO/vídeo, nueve de InfiniteCore y una ISO de regresión ENTER/LEAVE. Se ejecuta con Android 15 y un AVD de 2048 MiB; ese tamaño pertenece al dispositivo virtual de pruebas. La app mantiene el perfil de huésped 2048/1024 MiB y comprueba su propia muestra de PSS. `libcosmic_pc.so` enlaza con una única `libmx_graphics.so`, que contiene los puentes canónicos; ambas usan `libc++_shared.so`.
 
-El artefacto de CI conserva APK, SHA-256, commit, hashes del puente y de `RenderResolution.java`, logs, `pc-tests.json`, `pc-x64-state.json`, `pc-video-state.json` y las capturas `pc-screen.png`/`pc-video-screen.png`. La firma es de desarrollo. La configuración y el inventario de tests no declaran por sí mismos un resultado aprobado: el resultado válido es el de [Actions](https://github.com/guadalupejuan001-code/mundo-X/actions/workflows/own-pc-android.yml) para el commit correspondiente.
+El artefacto de CI conserva APK, SHA-256, commit, hashes del puente y de `RenderResolution.java`, logs, `pc-tests.json`, `pc-x64-state.json`, `pc-video-state.json`, `pc-enter-state.json` y las capturas `pc-screen.png`/`pc-video-screen.png`. La firma es de desarrollo. Una compilación con otro certificado requiere desinstalar la anterior antes de instalarla, conforme al [modelo de firma y actualización de Android](https://developer.android.com/studio/publish/app-signing). La configuración y el inventario de tests no declaran por sí mismos un resultado aprobado: el resultado válido es el de [Actions](https://github.com/guadalupejuan001-code/mundo-X/actions/workflows/own-pc-android.yml) para el commit correspondiente.
 
 ## Qué prueban los tests
 
@@ -259,6 +269,7 @@ El número de comprobaciones no representa compatibilidad con Windows. Los logs 
 ## Referencias de arquitectura
 
 - [Intel Software Developer's Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html): formatos y semántica de instrucciones x86.
+- [AMD64 Architecture Programmer's Manual, volumen 3, revisión 3.26](https://www.sra.uni-hannover.de/Lehre/SS24/V_BSB/doc/amd64_manual_vol3.pdf): ENTER, páginas 168–169; distingue el ancho de pila del operando y especifica la comprobación final sin escritura.
 - [El Torito Bootable CD-ROM Format Specification](https://pdos.csail.mit.edu/6.828/2005/readings/boot-cdrom.pdf): estructuras del arranque desde CD.
 - [Microsoft Oscdimg](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/oscdimg-command-line-options): distinción entre entradas de arranque BIOS y UEFI.
 

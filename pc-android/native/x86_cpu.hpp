@@ -511,6 +511,31 @@ class Cpu {
     put_reg(ESP, n, sp + bytes);
     return value;
   }
+  void enter_frame(std::uint16_t allocation, unsigned nesting, unsigned bytes) {
+    // Operand size selects the saved frame-pointer slots. SS.B (or long mode)
+    // independently selects the stack address width; 67 and segment overrides
+    // never redirect these implicit SS accesses. The lexical level is imm8%32,
+    // bounding this instruction to at most 32 pushes.
+    const auto n = stack_address_width();
+    auto previous = get_reg(EBP, n);
+    push(get_reg(EBP, bytes), bytes);
+    const auto frame = get_reg(ESP, bytes);
+    for (unsigned level = 1; level < nesting; ++level) {
+      previous = (previous - bytes) & mask(n);
+      push(read_segment(SS, previous, bytes), bytes);
+    }
+    if (nesting != 0) push(frame, bytes);
+
+    const auto sp = (get_reg(ESP, n) - allocation) & mask(n);
+    // ENTER validates a write at the final stack pointer even though reserving
+    // locals does not write their contents. Keep the probe on the CPU's normal
+    // segment/page path, without allocating or modifying the reserved RAM.
+    const auto address = segment_linear(SS, sp, bytes, Access::Write);
+    for (unsigned i = 0; i < bytes; ++i)
+      (void)physical_index(translate(address + i, Access::Write));
+    put_reg(EBP, bytes, frame);
+    put_reg(ESP, n, sp);
+  }
   std::uint64_t index(unsigned r) const { return get_reg(r, address_width()); }
   void put_index(unsigned r, std::uint64_t value) { put_reg(r, address_width(), value); }
   void advance_index(unsigned r, unsigned bytes) {
@@ -1229,6 +1254,11 @@ inline void Cpu::execute(std::uint8_t op) {
       const auto m = modrm();
       if (m.group != 0) fail("reserved MOV immediate encoding", FaultCode::InvalidInstruction);
       const unsigned w = (op & 1U) ? bytes : 1; put(m.rm, w, arithmetic_immediate(w)); return;
+    }
+    case 0xc8: {
+      const auto allocation = std::uint16_t(immediate(2));
+      const auto nesting = unsigned(immediate(1)) & 31U;
+      enter_frame(allocation, nesting, stack_bytes); return;
     }
     case 0xc9:
       put_reg(ESP, stack_address_width(), get_reg(EBP, stack_address_width()));

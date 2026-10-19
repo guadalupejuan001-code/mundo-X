@@ -23,7 +23,7 @@ en `.cosmic` v2, y el perfil finito de 1.000 qubits conserva `.cosmic` v1.
 | Graphics Android 4K/8K | Escena procedural, selección y edición por ID, renderizado UHD, modo 8K sujeto a capacidades y exportación PNG por mosaicos. | [Graphics](graphics-android/README.md), [4K](graphics-android/docs/4k.md), [8K](graphics-android/docs/8k.md) |
 | Motor gráfico de escritorio | Compila el mismo puente nativo, observa la misma representación y abre/guarda archivos `.cosmic` compatibles con Android. | [Escritorio](graphics-desktop/README.md), [formato](graphics-desktop/PROJECT_FORMAT.md) |
 | COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y captura UHD. Su demostración conserva un circuito de ocho qubits. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
-| COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3; dispositivo InfiniteCore y viewport sobre la sesión cuántica compartida. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
+| COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD y ENTER/LEAVE, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3; dispositivo InfiniteCore y viewport sobre la sesión cuántica compartida. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
 | Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
 | Bridge X y Transformer X | Codificación de bytes en modos y modelo PyTorch entrenable. Se conserva como línea independiente; todavía no alimenta CompactCore. | [Bridge X](src/bridge_x.py), [Transformer X](src/transformer_x.py), [entrenamiento](experiments/train_file_v0_1.py) |
@@ -65,7 +65,7 @@ ctest --test-dir build --output-on-failure
 ./build/pc-android/cosmic_pc_cli --demo64 --ram-mib 2048 --resident-mib 1024
 ```
 
-La compilación raíz incluye los contratos del núcleo, la VM y las diez suites de PC, incluidas `pc_video` y `pc_quantum`. `BUILD_TESTING=OFF` permite construir los ejecutables sin los tests. Las instrucciones de PC ejecutan los arranques propios de demostración; no arrancan Windows.
+La compilación raíz incluye los contratos del núcleo, la VM y las once suites de PC, incluidas `pc_video`, `pc_quantum` y el oráculo nativo de ENTER/LEAVE. `BUILD_TESTING=OFF` permite construir los ejecutables sin los tests. Las instrucciones de PC ejecutan los arranques propios de demostración; no arrancan Windows.
 
 ### Crear o ampliar un proyecto de escritorio
 
@@ -91,7 +91,7 @@ Requisitos de construcción declarados: **Java 17, Gradle 8.9, AGP 8.7.3, SDK 35
 | Graphics 8K | `com.mundox.graphics.ultra` · 0.4.0 | `gradle -p graphics-android -Pcosmic8kStandalone=true :app:assembleDebug` |
 | Solar | `com.cosmicx.solar` · 1.1.0 | `gradle -p solar-android :app:assembleDebug` |
 | Solar 4K | `com.cosmicx.solar.uhd` · 1.1.0 | `gradle -p solar-android -Psolar4kStandalone=true :app:assembleDebug` |
-| PC propia | `com.cosmicx.pc` · 0.4.0 | `gradle -p pc-android :app:assembleDebug` |
+| PC propia | `com.cosmicx.pc` · 0.4.1 | `gradle -p pc-android :app:assembleDebug` |
 | XLab original | Proyecto Android de la raíz | `gradle :app:assembleDebug` |
 
 Los indicadores de Graphics 4K y 8K son mutuamente excluyentes. Se puede añadir `:app:assembleDebugAndroidTest` para construir las pruebas instrumentales. GitHub Actions conserva APK, firma, SHA-256, revisión del código y evidencia; los artefactos corresponden a la ejecución seleccionada.
@@ -106,7 +106,7 @@ Los paneles Motor y Núcleo de COSMIC comparten `NativeCore`. Observar, seleccio
 
 Solar reutiliza el núcleo y la geometría de resolución compartidos, pero sus órbitas, escalas, tiempo y ambientes tienen modelos propios. Incluye **23 cuerpos**, descenso a 22 planetas/lunas, mapa interactivo, texturas incorporadas y representaciones magnéticas. Sus aproximaciones orbitales y visuales están delimitadas en [ciencia solar](solar-android/docs/solar-science.md) y [atmósferas y mapa](solar-android/docs/atmosphere-science.md); no constituyen una simulación climática completa.
 
-COSMIC X PC **0.4.0** ejecuta un intérprete C++ propio. Su prueba x64 realiza la transición real → protegido → largo y verifica datos de 64 bits en registros y RAM. La CPU incorpora SHRD (`0F AC/AD`) y SHLD (`0F A4/A5`) en 16/32/64 bits, incluida la instrucción que antes detenía un cargador ISO con `two-byte opcode is not implemented`. La regresión reproduce el opcode; la compatibilidad de la ISO completa necesita su propio arranque comprobado.
+COSMIC X PC **0.4.1** ejecuta un intérprete C++ propio. Su prueba x64 realiza la transición real → protegido → largo y verifica datos de 64 bits en registros y RAM. La CPU incorpora SHRD (`0F AC/AD`) y SHLD (`0F A4/A5`) en 16/32/64 bits. Esta revisión añade **ENTER (`C8`)**, que detenía otro cargador en `2000:056c`, y comprueba su marco de pila junto con LEAVE (`C9`). Una ISO de control reproduce esa dirección, verifica la pila y llega a imprimir `ENTER/LEAVE: OK`. Las regresiones comprueban las instrucciones; la ISO concreta del usuario necesita su propio arranque completo para acreditar compatibilidad. [Corrección y pruebas de C8](pc-android/README.md#corrección-de-c8-enter-al-abrir-una-iso).
 
 PC incorpora ahora un dispositivo de vídeo lineal con una interfaz VBE limitada. **Prueba gráfica** permite generar píxeles desde instrucciones del huésped a **1280 × 720, 3840 × 2160 y 7680 × 4320**. Un presentador GLES 3 propio consume ese framebuffer mediante JNI y utiliza la misma clase [RenderResolution](graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java) que Graphics. La interfaz distingue **fuente huésped**, **salida de renderizado** y **superficie visible de Android**: seleccionar salida 8K no convierte una fuente de texto o de menor resolución en un huésped 8K ni cambia la resolución física del teléfono. La asignación 8K comprueba las capacidades GL y conserva la última salida válida si el dispositivo la rechaza.
 
