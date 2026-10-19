@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">COSMIC X PC</string>
+    <string name="local_engine">LOCAL · MOTOR PROPIO</string>
+    <string name="scope_notice">Arranque x86. Windows completo todavía no implementado.</string>
+    <string name="boot_section">ORIGEN DEL ARRANQUE</string>
+    <string name="no_image">Carga una prueba o abre una imagen local.</string>
+    <string name="boot_demo">Arranque de prueba</string>
+    <string name="open_image">Abrir ISO/disco</string>
+    <string name="reopen_image">Reabrir última imagen</string>
+    <string name="demo_selected">Arranque de prueba propio · pulsa Ejecutar</string>
+    <string name="initializing">INICIANDO MOTOR</string>
+    <string name="video_section">SALIDA DE VÍDEO · 80 × 25</string>
+    <string name="video_hint">Desliza horizontalmente para ver las 80 columnas.</string>
+    <string name="start_hint">Carga el arranque de prueba o una imagen y pulsa Ejecutar. Paso avanza un paso CPU.</string>
+    <string name="run">Ejecutar</string>
+    <string name="pause">Pausa</string>
+    <string name="step">Paso</string>
+    <string name="reset">Reiniciar</string>
+    <string name="keyboard_section">TECLADO DEL SISTEMA</string>
+    <string name="keyboard_hint">Escribe aquí…</string>
+    <string name="send">Enviar ↵</string>
+    <string name="backspace">Retroceso</string>
+    <string name="escape">Esc</string>
+    <string name="keyboard_detail">Entrada ASCII. Enviar añade Enter al final.</string>
+    <string name="copy_diagnostic">Copiar diagnóstico</string>
+    <string name="file_picker_unavailable">No se pudo abrir el selector de archivos de Android.</string>
+    <string name="opening_image">Abriendo imagen…</string>
+    <string name="read_only_image">Imagen abierta en solo lectura.</string>
+    <string name="seekable_file_required">El archivo debe estar disponible localmente y permitir acceso directo. Descárgalo desde su proveedor y vuelve a abrirlo.</string>
+    <string name="image_permission_lost">Android ya no permite abrir esa imagen. Selecciónala de nuevo con Abrir ISO/disco.</string>
+    <string name="image_open_failed">No se pudo abrir la imagen. Comprueba que el archivo esté disponible localmente.</string>
+    <string name="image_not_opened">No se abrió la imagen seleccionada.</string>
+    <string name="local_image">Imagen local</string>
+    <string name="ascii_only">Por ahora el teclado acepta caracteres ASCII, sin tildes ni emojis.</string>
+    <string name="working">PREPARANDO MOTOR</string>
+    <string name="incomplete_instruction">EJECUCIÓN DETENIDA</string>
+    <string name="running">EJECUTANDO</string>
+    <string name="waiting_key">ESPERANDO TECLADO</string>
+    <string name="halted">DETENIDO · HLT</string>
+    <string name="paused">EN PAUSA</string>
+    <string name="ready">LISTO</string>
+    <string name="select_boot">Selecciona un arranque</string>
+    <string name="diagnostic_copied">Diagnóstico copiado.</string>
+    <string name="empty_video">La memoria de vídeo todavía no contiene texto.</string>
+</resources>
