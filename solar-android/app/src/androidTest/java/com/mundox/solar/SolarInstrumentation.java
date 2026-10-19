@@ -50,7 +50,7 @@ public final class SolarInstrumentation extends Instrumentation {
     private final JSONObject metrics = new JSONObject();
     private final JSONArray images = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
-    private boolean uhdSuite;
+    private boolean uhdSuite,uhd8kSuite;
     private volatile boolean onDemandFrames;
     private int expectedTests = LEGACY_TESTS;
 
@@ -67,7 +67,9 @@ public final class SolarInstrumentation extends Instrumentation {
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         uhdSuite = arguments != null && "true".equals(arguments.getString("uhd4k"));
+        uhd8kSuite = arguments != null && "true".equals(arguments.getString("uhd8k"));
         if (uhdSuite) expectedTests += 6;
+        if (uhd8kSuite) expectedTests += 1;
         start();
     }
 
@@ -83,6 +85,7 @@ public final class SolarInstrumentation extends Instrumentation {
             metrics.put("performanceScope", "Software GLES emulator; not Samsung A16 performance measurements");
             metrics.put("physicalScope", "JPL analytical orbits; illustrative moon phases and magnetic geometries");
             metrics.put("uhd4kSuite", uhdSuite);
+            metrics.put("uhd8kSuite", uhd8kSuite);
             metrics.put("applicationId", getTargetContext().getPackageName());
             Intent launch = new Intent(getTargetContext(), SolarActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -115,6 +118,7 @@ public final class SolarInstrumentation extends Instrumentation {
                     runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
                     runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
                     runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                    if (uhd8kSuite) runCase("ultra_8k_framebuffer_and_infinite_core", this::ultra8k);
                 } finally {
                     runOnMainSync(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY));
                     onDemandFrames = false;
@@ -125,7 +129,9 @@ public final class SolarInstrumentation extends Instrumentation {
                 try {
                     metrics.put("glRenderer", GLES30.glGetString(GLES30.GL_RENDERER));
                     metrics.put("glVersion", GLES30.glGetString(GLES30.GL_VERSION));
-                    metrics.put("nativeQubits", QuantumSolarBridge.QUBITS);
+                    metrics.put("nativePresetAddresses", QuantumSolarBridge.PRESET_ADDRESSES);
+                    metrics.put("nativeInfinite", activity.bridge().isInfinite());
+                    metrics.put("nativeActiveQubits", activity.bridge().activeQubits());
                     metrics.put("nativeStateBytes", activity.bridge().stateBytes());
                     metrics.put("framesRendered", activity.renderer().frameCount);
                 } catch (Exception error) { throw new RuntimeException(error); }
@@ -154,7 +160,8 @@ public final class SolarInstrumentation extends Instrumentation {
         waitUntil(() -> activity.hasWindowFocus(), 15_000,
                 "Solar Activity is obscured by another window at launch");
         metrics.put("initialWindowFocused", true);
-        expect(activity.bridge().stateBytes() > 0, "CompactCore native state is absent");
+        expect(activity.bridge().isInfinite(), "Solar did not attach the rules-based InfiniteCore");
+        expect(activity.bridge().activeQubits() >= 0, "InfiniteCore active support is invalid");
         prepare(3, false, false);
         awaitStableViewport();
         prepare(3, false, false);
@@ -505,6 +512,28 @@ public final class SolarInstrumentation extends Instrumentation {
                 "UHD allocation changed the native preparation or astronomical time");
         metrics.put("uhdPixels", 8_294_400).put("uhdReturnChangedPixels", 0)
                 .put("uhdNativeOwnerPreserved", true);
+    }
+
+    private void ultra8k() throws Exception {
+        prepare(3, false, false);
+        long revision=activity.bridge().nativeRevision();
+        float[] coefficients=activity.bridge().verifyReadOnly();
+        long frames=activity.renderer().frameCount;
+        main(() -> activity.set8kQuality(true));
+        activity.surface().requestRender();
+        waitUntil(() -> activity.renderer().isUhd8k() && activity.renderer().frameCount > frames,
+                120_000, "Solar did not complete an actual 8K frame");
+        int w=activity.renderer().renderedWidth(),h=activity.renderer().renderedHeight();
+        expect((w==7680&&h==4320)||(w==4320&&h==7680), "Solar 8K framebuffer dimensions are wrong");
+        expect((long)w*h==33_177_600L, "Solar 8K pixel count is wrong");
+        expect(activity.bridge().isInfinite() && revision==activity.bridge().nativeRevision()
+                && Arrays.equals(coefficients,activity.bridge().verifyReadOnly()),
+                "8K rendering mutated the InfiniteCore");
+        metrics.put("ultra8kPixels",(long)w*h).put("ultra8kWidth",w).put("ultra8kHeight",h)
+                .put("ultra8kInfiniteCorePreserved",true);
+        main(() -> activity.set8kQuality(false));
+        activity.surface().requestRender();
+        waitUntil(() -> !activity.renderer().isUhd8k(),30_000,"Solar did not leave 8K mode");
     }
 
     private void uhdPicking() throws Exception {
