@@ -11,6 +11,7 @@ graphics_serial=emulator-5554
 graphics_apks="${GRAPHICS_APK_DIR:-graphics-apks}"
 graphics_evidence="${GRAPHICS_EVIDENCE_DIR:-graphics-evidence}"
 graphics_uhd="${GRAPHICS_UHD4K:-false}"
+graphics_ultra="${GRAPHICS_ULTRA8K:-false}"
 graphics_package=com.mundox.graphics
 graphics_apk=COSMIC-X-Engine.apk
 graphics_tests=COSMIC-X-Engine-tests.apk
@@ -23,6 +24,14 @@ if [[ "$graphics_uhd" == true ]]; then
   graphics_instrument_args=(-e uhd4k true)
   graphics_verify_args=(--uhd4k)
 fi
+if [[ "$graphics_ultra" == true ]]; then
+  graphics_uhd=true
+  graphics_package=com.mundox.graphics.ultra
+  graphics_apk=COSMIC-X-Engine-8K.apk
+  graphics_tests=COSMIC-X-Engine-8K-tests.apk
+  graphics_instrument_args=(-e uhd4k true -e ultra8k true)
+  graphics_verify_args=(--ultra8k)
+fi
 mkdir -p "$graphics_evidence"
 graphics_evidence="$(realpath "$graphics_evidence")"
 
@@ -34,7 +43,7 @@ printf 'no\n' | "$graphics_avdmanager" create avd --force --name mundox-graphics
   --package 'system-images;android-35;google_apis;x86_64' --device pixel_2 \
   --path "$ANDROID_AVD_HOME/mundox-graphics.avd"
 
-python3 - "$graphics_apks" "$graphics_uhd" <<'PY'
+python3 - "$graphics_apks" "$graphics_uhd" "$graphics_ultra" <<'PY'
 import hashlib
 import sys
 from pathlib import Path
@@ -43,6 +52,8 @@ rows = (directory / 'SHA256SUMS.txt').read_text().splitlines()
 expected_names = {'COSMIC-X-Engine.apk', 'COSMIC-X-Engine-tests.apk'}
 if sys.argv[2] == 'true':
     expected_names = {'COSMIC-X-Engine-4K.apk', 'COSMIC-X-Engine-4K-tests.apk', 'COSMIC-X-Engine-coexist.apk'}
+if sys.argv[3] == 'true':
+    expected_names = {'COSMIC-X-Engine-8K.apk', 'COSMIC-X-Engine-8K-tests.apk', 'COSMIC-X-Engine-coexist.apk'}
 found = set()
 for row in rows:
     expected, name = row.split()
@@ -118,7 +129,7 @@ fi
 "$graphics_adb" -s "$graphics_serial" logcat -c
 
 set +e
-timeout 1000 "$graphics_adb" -s "$graphics_serial" shell am instrument -w -r "${graphics_instrument_args[@]}" \
+timeout "${GRAPHICS_TEST_TIMEOUT:-1000}" "$graphics_adb" -s "$graphics_serial" shell am instrument -w -r "${graphics_instrument_args[@]}" \
   "$graphics_package.test/com.mundox.graphics.GraphicsInstrumentation" \
   | tee "$graphics_evidence/instrumentation.txt"
 graphics_status=${PIPESTATUS[0]}
@@ -126,3 +137,6 @@ set -e
 graphics_collect
 [[ "$graphics_status" == 0 ]] || { echo "Instrumentation process failed: $graphics_status" >&2; exit 1; }
 python3 tools/graphics-verify-evidence.py "$graphics_evidence" "${graphics_verify_args[@]}"
+if [[ "$graphics_ultra" == true ]]; then
+  python3 tools/graphics-verify-ultra.py "$graphics_evidence"
+fi

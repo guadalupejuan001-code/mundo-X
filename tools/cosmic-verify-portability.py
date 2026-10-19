@@ -38,6 +38,12 @@ UHD_DEVICE_TESTS = {
     "uhd_real_framebuffer_and_legacy_return", "uhd_id_selection_and_letterbox",
     "uhd_orientation_roundtrip", "uhd_lifecycle_snapshot_native_preserved",
 }
+ULTRA_DEVICE_TESTS = {
+    "ultra8k_real_framebuffer_and_budget_limits",
+    "ultra8k_tiles_match_monolithic_color_and_ids",
+    "ultra8k_streamed_png_dimensions_and_rows",
+    "ultra8k_failure_preserves_scene_and_native_state",
+}
 
 
 def require(condition, message):
@@ -187,8 +193,9 @@ def verify_directory(directory):
     directory = Path(directory)
     report = evidence_json(directory / "report.json")
     uhd = report.get("metrics", {}).get("uhd4kSuite", False)
-    require(type(uhd) is bool, "Unknown Android test profile")
-    expected = LEGACY_DEVICE_TESTS | (UHD_DEVICE_TESTS if uhd else set())
+    ultra = report.get("metrics", {}).get("ultra8kSuite", False)
+    require(type(uhd) is bool and type(ultra) is bool and (not ultra or uhd), "Unknown Android test profile")
+    expected = LEGACY_DEVICE_TESTS | (UHD_DEVICE_TESTS if uhd else set()) | (ULTRA_DEVICE_TESTS if ultra else set())
     tests = report["tests"]
     require(report["testsRun"] == len(expected) and report["testsFailed"] == 0,
             "Portable device tests did not all pass")

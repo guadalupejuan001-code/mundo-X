@@ -17,7 +17,8 @@ def require(condition, message):
 
 def main():
     directory = Path(sys.argv[1] if len(sys.argv) > 1 else "graphics-evidence")
-    uhd = len(sys.argv) > 2 and sys.argv[2] == "--uhd4k"
+    ultra = len(sys.argv) > 2 and sys.argv[2] == "--ultra8k"
+    uhd = ultra or (len(sys.argv) > 2 and sys.argv[2] == "--uhd4k")
     require(len(sys.argv) <= 3 and (len(sys.argv) < 3 or uhd), "Unexpected verification arguments")
     output = (directory / "instrumentation.txt").read_text()
     require("MUNDOX_GRAPHICS_TESTS_PASSED" in output, "Instrumentation success marker missing")
@@ -34,6 +35,11 @@ def main():
     if uhd:
         expected.update({"uhd_real_framebuffer_and_legacy_return", "uhd_id_selection_and_letterbox",
                          "uhd_orientation_roundtrip", "uhd_lifecycle_snapshot_native_preserved"})
+    if ultra:
+        expected.update({"ultra8k_real_framebuffer_and_budget_limits",
+                         "ultra8k_tiles_match_monolithic_color_and_ids",
+                         "ultra8k_streamed_png_dimensions_and_rows",
+                         "ultra8k_failure_preserves_scene_and_native_state"})
     report = json.loads((directory / "report.json").read_text())
     tests = report["tests"]
     require(report["schemaVersion"] == 1, "Unsupported report schema")
@@ -46,6 +52,7 @@ def main():
             "JUnit report disagrees with JSON results")
     metrics = report["metrics"]
     require(metrics.get("uhd4kSuite", False) is uhd, "Wrong UHD/legacy test profile")
+    require(metrics.get("ultra8kSuite", False) is ultra, "Wrong 8K test profile")
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"], "Wrong emulator API or ABI")
     require("swiftshader" in metrics["glRenderer"].lower(), "GLES driver is not SwiftShader")
     require(metrics["qubits"] == 20 and metrics["nativeStateBytes"] > 0, "Missing live native state")
@@ -83,6 +90,8 @@ def main():
     expected_apks = {"COSMIC-X-Engine.apk", "COSMIC-X-Engine-tests.apk"}
     if uhd:
         expected_apks = {"COSMIC-X-Engine-4K.apk", "COSMIC-X-Engine-4K-tests.apk", "COSMIC-X-Engine-coexist.apk"}
+    if ultra:
+        expected_apks = {"COSMIC-X-Engine-8K.apk", "COSMIC-X-Engine-8K-tests.apk", "COSMIC-X-Engine-coexist.apk"}
     checksums = {}
     for line in (directory / "apk-SHA256SUMS.txt").read_text().splitlines():
         parts = line.split()
@@ -120,7 +129,8 @@ def main():
         manifest[name] = {"width": width, "height": height, "sha256": hashlib.sha256(data).hexdigest()}
     (directory / "verified-images.json").write_text(json.dumps(manifest, indent=2) + "\n")
     if uhd:
-        require(metrics["applicationId"] == "com.mundox.graphics.uhd", "UHD APK used the legacy application identity")
+        expected_package = "com.mundox.graphics.ultra" if ultra else "com.mundox.graphics.uhd"
+        require(metrics["applicationId"] == expected_package, "UHD APK used the wrong application identity")
         require(metrics["uhdMillionObjectCount"] == 1_000_000 and metrics["uhdPixels"] == 8_294_400,
                 "The UHD test did not retain the original million-object scene")
         require(metrics["uhdRejectedInsufficientLimits"] == 4, "A GPU limit was ignored")
@@ -152,13 +162,22 @@ def main():
         provenance = json.loads((directory / "build-provenance.json").read_text())
         commit = (directory / "build-commit.txt").read_text().strip()
         require(provenance["passed"] is True and provenance["commit"] == commit
-                and re.fullmatch(r"[0-9a-f]{40}", commit)
-                and provenance["originalSourcesUnchanged"] is True,
+                and re.fullmatch(r"[0-9a-f]{40}", commit),
                 "UHD build lacks exact source/native provenance")
+        if ultra:
+            require(provenance.get("applicationId") == expected_package
+                    and provenance.get("baselineCommit") == "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac"
+                    and provenance.get("originalCoreInterfacesPreserved") is True
+                    and set(provenance.get("optimizedCoreFiles", {})) == {
+                        "native/include/mundo_x/compact_core.hpp", "native/include/mundo_x/pauli_observer.hpp"},
+                    "8K build lacks the explicit core optimization/source inventory")
+        else:
+            require(provenance.get("originalSourcesUnchanged") is True,
+                    "4K build changed its original core sources")
         require({name: item["sha256"] for name, item in provenance["apks"].items()} == checksums,
                 "Android evidence APK hashes differ from staged build provenance")
         coexist = set((directory / "coinstallation.txt").read_text().splitlines())
-        require({"package:com.mundox.graphics.uhd", "package:com.mundox.graphics"} <= coexist,
+        require({"package:" + expected_package, "package:com.mundox.graphics"} <= coexist,
                 "The normal app and UHD app were not installed together")
         print("Verified actual 3840×2160 / 2160×3840 rendering, FIT picking and 250 exported PNG pixel samples.")
     exports = report["projectExports"]

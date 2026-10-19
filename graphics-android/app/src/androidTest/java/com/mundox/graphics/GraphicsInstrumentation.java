@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Debug;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.View;
@@ -16,13 +17,18 @@ import android.widget.TextView;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,6 +56,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private final JSONArray projectExports = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
     private boolean testUhd;
+    private boolean testUltra;
     private int expectedTests = LEGACY_TESTS;
     private String portableName;
 
@@ -89,7 +96,9 @@ public final class GraphicsInstrumentation extends Instrumentation {
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         testUhd = arguments != null && "true".equals(arguments.getString("uhd4k"));
+        testUltra = arguments != null && "true".equals(arguments.getString("ultra8k"));
         if (testUhd) expectedTests += 4;
+        if (testUltra) expectedTests += 4;
         start();
     }
 
@@ -102,6 +111,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             metrics.put("abis", new JSONArray(Arrays.asList(Build.SUPPORTED_ABIS)));
             metrics.put("performanceScope", "Software GLES emulator; not phone performance measurements");
             metrics.put("uhd4kSuite", testUhd);
+            metrics.put("ultra8kSuite", testUltra);
             metrics.put("applicationId", getTargetContext().getPackageName());
 
             Intent launch = new Intent(getTargetContext(), MainActivity.class);
@@ -132,6 +142,13 @@ public final class GraphicsInstrumentation extends Instrumentation {
                 runCase("uhd_id_selection_and_letterbox", this::uhdPicking);
                 runCase("uhd_orientation_roundtrip", this::uhdOrientation);
                 runCase("uhd_lifecycle_snapshot_native_preserved", this::uhdLifecycle);
+            }
+
+            if (testUltra) {
+                runCase("ultra8k_real_framebuffer_and_budget_limits", this::ultraFramebuffer);
+                runCase("ultra8k_tiles_match_monolithic_color_and_ids", this::ultraDifferential);
+                runCase("ultra8k_streamed_png_dimensions_and_rows", this::ultraStreamed);
+                runCase("ultra8k_failure_preserves_scene_and_native_state", this::ultraFailure);
             }
 
             runCase("portable_codec_strict_validation", this::portableCodec);
@@ -612,6 +629,394 @@ public final class GraphicsInstrumentation extends Instrumentation {
         return sha256(image.rgba);
     }
 
+    private void ultraFramebuffer() throws Exception {
+        RenderResolution.Size landscape = RenderResolution.uhd8k(1280, 720);
+        RenderResolution.Size portrait = RenderResolution.uhd8k(720, 1280);
+        expect(landscape.width == 7680 && landscape.height == 4320
+                && portrait.width == 4320 && portrait.height == 7680,
+                "8K preset is not exact in both orientations");
+        RenderResolution.Limits enough = new RenderResolution.Limits(8192, 8192, 8192, 8192);
+        enough.require(landscape);
+        enough.require(portrait);
+        RenderResolution.Limits[] insufficient = {
+            new RenderResolution.Limits(4096, 8192, 8192, 8192),
+            new RenderResolution.Limits(8192, 4096, 8192, 8192),
+            new RenderResolution.Limits(8192, 8192, 4096, 8192),
+            new RenderResolution.Limits(8192, 8192, 8192, 4096),
+        };
+        int rejected = 0;
+        for (RenderResolution.Limits limits : insufficient) {
+            try { limits.require(landscape); }
+            catch (IllegalArgumentException expected) { rejected++; }
+        }
+        expect(rejected == 4, "An independent GPU limit was ignored for 8K");
+        RenderResolution.Size boundary = new RenderResolution.Size(8192, 4096);
+        RenderResolution.requireAllocation(boundary, boundary); // Exactly 512 MiB, including old attachments.
+        try {
+            RenderResolution.requireAllocation(new RenderResolution.Size(8192, 4097), boundary);
+            throw new AssertionError("Transactional allocation ignored the old framebuffer's live memory");
+        } catch (IllegalArgumentException expected) { rejected++; }
+        try {
+            RenderResolution.requireAllocation(new RenderResolution.Size(Integer.MAX_VALUE, Integer.MAX_VALUE), null);
+            throw new AssertionError("Framebuffer byte multiplication overflow was accepted");
+        } catch (ArithmeticException | IllegalArgumentException expected) { rejected++; }
+        TilePlan planned = new TilePlan(landscape, new RenderResolution.Limits(2048, 2048, 2048, 2048), 1024, 64);
+        expect(planned.tileCount > 100 && planned.workingBytes < 16L * 1024 * 1024,
+                "8K export planning materialized a full image or ignored small GPU limits");
+        metrics.put("ultra8kRejectedLimits", rejected);
+        metrics.put("ultra8kPlannedWorkingBytes", planned.workingBytes);
+
+        orient(true);
+        scene(1);
+        gl(() -> activity.renderer.coupling(true));
+        QuantumRenderer.Capture before = frame(false);
+        QuantumRenderer.Snapshot logical = visualSnapshot();
+        NativeCore owner = activity.core;
+        NativeCore.Snapshot coreBefore = owner.snapshot();
+        AtomicReference<QuantumRenderer.FrameStats> actual = new AtomicReference<>();
+        int[] pss = {0};
+        gl(() -> {
+            activity.renderer.setSynchronousTiming(true);
+            try {
+                activity.renderer.uhd8k();
+                // Shipping drawing path, with GPU completion; no 132 MB Java capture.
+                activity.renderer.onDrawFrame(null);
+                actual.set(activity.renderer.frameStats());
+                Debug.MemoryInfo memory = new Debug.MemoryInfo();
+                Debug.getMemoryInfo(memory);
+                pss[0] = memory.getTotalPss();
+                expect(activity.renderer.isUhd8k(), "Actual 8K target was rejected: " + activity.renderer.resolutionNotice());
+            } finally {
+                activity.renderer.resolution(logical.resolutionLimit);
+                activity.renderer.setSynchronousTiming(false);
+            }
+        });
+        QuantumRenderer.FrameStats rendered = actual.get();
+        expect(rendered != null && rendered.width == 7680 && rendered.height == 4320
+                && rendered.gpuSynchronized && rendered.objectCount == 1 && rendered.drawMs > 0,
+                "Native draw did not complete on a full 8K framebuffer");
+        QuantumRenderer.Capture returned = frame(false);
+        expect(before.changed(returned) == 0, "Returning from 8K did not preserve the original pixels");
+        sameGraphics(logical, visualSnapshot(), "8K allocation changed the logical scene");
+        sameCore(coreBefore, owner.snapshot(), "8K allocation or rendering changed native history");
+        expect(activity.core == owner, "8K allocation replaced the native owner");
+        metrics.put("ultra8kNativeWidth", rendered.width);
+        metrics.put("ultra8kNativeHeight", rendered.height);
+        metrics.put("ultra8kNativeDrawMs", rendered.drawMs);
+        metrics.put("ultra8kNativePssKiB", pss[0]);
+        metrics.put("ultra8kLegacyReturnChangedPixels", before.changed(returned));
+        metrics.put("ultra8kPerformanceScope", "One-object scene on recorded GLES device; synchronized wall time, not FPS or phone results");
+    }
+
+    private void ultraDifferential() throws Exception {
+        scene(64);
+        gl(() -> {
+            activity.renderer.coupling(true);
+            activity.renderer.gate(NativeCore.Z, 0, 0);
+            activity.renderer.setTime(1.125f);
+            activity.renderer.resolution(512);
+        });
+        frame(false);
+        QuantumRenderer.FrameStats surface = activity.renderer.frameStats();
+        int previousPresentation = activity.renderer.presentation();
+        NativeCore.Snapshot coreBefore = activity.core.snapshot();
+        JSONArray comparisons = new JSONArray();
+        try {
+            for (int[] shape : new int[][]{{321, 181}, {181, 321}}) {
+                int width = shape[0], height = shape[1];
+                gl(() -> {
+                    activity.renderer.onSurfaceChanged(null, width, height);
+                    // Portrait exercises the COSMIC ground's fwidth derivative quads across tiles.
+                    activity.renderer.setPresentation(height > width
+                            ? QuantumRenderer.PRESENTATION_COSMIC : QuantumRenderer.PRESENTATION_LEGACY);
+                });
+                QuantumRenderer.Capture ids = frame(true);
+                expect(ids.width == width && ids.height == height, "Monolithic reference did not get the odd extent");
+                select(choose(ids), ids);
+                gl(() -> activity.renderer.editSelected(2));
+                QuantumRenderer.Snapshot logical = visualSnapshot();
+                for (boolean idPass : new boolean[]{false, true}) {
+                    String stem = "ultra-" + width + "x" + height + (idPass ? "-ids" : "-color");
+                    QuantumRenderer.Capture reference = frame(idPass);
+                    save(stem + "-reference.png", reference);
+                    QuantumRenderer.ExportResult result = stream(stem + "-tiled.png",
+                            new RenderResolution.Size(width, height), idPass ? 1 : 0,
+                            new QuantumRenderer.ExportControl(64, 32, null));
+                    expect(result.tileWidth < width && result.tileRows < height && result.tiles > 4,
+                            "Differential fixture did not actually cross both tile axes");
+                    int[] differences = comparePng(new File(evidence, stem + "-tiled.png"), reference,
+                            result.tileWidth, result.tileRows);
+                    expect(differences[0] == 0 && differences[1] == 0,
+                            "Tiled output differs from monolithic GLES: " + stem + " pixels=" + differences[0]
+                                    + " seamPixels=" + differences[1]);
+                    comparisons.put(new JSONObject().put("file", stem + "-tiled.png")
+                            .put("reference", stem + "-reference.png").put("width", width).put("height", height)
+                            .put("ids", idPass).put("tileWidth", result.tileWidth).put("tileRows", result.tileRows)
+                            .put("presentation", activity.renderer.presentation())
+                            .put("tiles", result.tiles).put("differentPixels", differences[0])
+                            .put("seamDifferentPixels", differences[1]).put("comparedPixels", width * height));
+                    sameGraphics(logical, visualSnapshot(), "Tile export changed selection, edits, camera or time");
+                    sameCore(coreBefore, activity.core.snapshot(), "Tile export mutated the native core");
+                    expect(reference.changed(frame(idPass)) == 0, "Tile export failed to restore the current framebuffer");
+                }
+            }
+        } finally {
+            gl(() -> {
+                activity.renderer.setPresentation(previousPresentation);
+                activity.renderer.onSurfaceChanged(null, surface.viewWidth, surface.viewHeight);
+            });
+        }
+        metrics.put("ultra8kDifferential", comparisons);
+    }
+
+    private void ultraStreamed() throws Exception {
+        scene(1);
+        gl(() -> {
+            activity.renderer.coupling(true);
+            activity.renderer.gate(NativeCore.Z, 0, 0);
+            activity.renderer.setTime(.875f);
+        });
+        QuantumRenderer.Capture baseline = frame(false);
+        QuantumRenderer.Snapshot logical = visualSnapshot();
+        NativeCore.Snapshot nativeBefore = activity.core.snapshot();
+        int[] previousRows = {-1}, progressCalls = {0};
+        QuantumRenderer.ExportControl control = new QuantumRenderer.ExportControl(1024, 64, (rows, total) -> {
+            expect(total == 4320 && rows > previousRows[0] && rows <= total, "Export progress lost or repeated rows");
+            previousRows[0] = rows;
+            progressCalls[0]++;
+        });
+        String name = "ultra-8k-streamed.png";
+        QuantumRenderer.ExportResult result = stream(name, new RenderResolution.Size(7680, 4320), 0, control);
+        expect(result.width == 7680 && result.height == 4320 && result.tiles > 100
+                && result.workingBytes < 16L * 1024 * 1024 && result.elapsedMs > 0,
+                "Streamed 8K export did not use the bounded real-pixel path");
+        expect(previousRows[0] == 4320 && progressCalls[0] > 10, "Export did not report all completed rows");
+        expect(result.coreRevision == nativeBefore.version, "Export used another native state revision");
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        File file = new File(evidence, name);
+        BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
+        expect(bounds.outWidth == 7680 && bounds.outHeight == 4320, "Android PNG decoder did not see an exact 8K image");
+        BitmapFactory.Options sample = new BitmapFactory.Options();
+        sample.inSampleSize = 8;
+        Bitmap preview = BitmapFactory.decodeFile(file.getAbsolutePath(), sample);
+        expect(preview != null && preview.getWidth() == 960 && preview.getHeight() == 540,
+                "Bounded Android decoding of the 8K PNG failed");
+        try {
+            int different = 0, first = preview.getPixel(0, 0);
+            for (int y = 0; y < preview.getHeight(); y += 7) for (int x = 0; x < preview.getWidth(); x += 7)
+                if (preview.getPixel(x, y) != first) different++;
+            expect(different > 100, "8K PNG contains no substantive rendered geometry");
+        } finally { preview.recycle(); }
+        sameGraphics(logical, visualSnapshot(), "8K export changed the active scene");
+        sameCore(nativeBefore, activity.core.snapshot(), "8K export changed native state");
+        expect(baseline.changed(frame(false)) == 0, "8K export changed the previous resolution's image");
+        metrics.put("ultra8kStreamed", new JSONObject().put("file", name).put("width", result.width)
+                .put("height", result.height).put("tileWidth", result.tileWidth).put("tileRows", result.tileRows)
+                .put("tiles", result.tiles).put("workingBytes", result.workingBytes)
+                .put("elapsedMs", result.elapsedMs).put("coreRevision", result.coreRevision)
+                .put("sha256", sha256(file)).put("progressCalls", progressCalls[0])
+                .put("androidBoundsVerified", true).put("androidSampleDecodeVerified", true));
+    }
+
+    private void ultraFailure() throws Exception {
+        scene(64);
+        QuantumRenderer.Capture ids = frame(true);
+        select(choose(ids), ids);
+        gl(() -> {
+            activity.renderer.editSelected(2);
+            activity.renderer.coupling(true);
+            activity.renderer.setTime(1.375f);
+        });
+        QuantumRenderer.Capture baseline = frame(false);
+        QuantumRenderer.Snapshot logical = visualSnapshot();
+        NativeCore owner = activity.core;
+        NativeCore.Snapshot nativeBefore = owner.snapshot();
+        String[] generators = owner.generators();
+        float[] observations = owner.query(logical.observables);
+        int[] invalid = {0};
+        boolean[] cancelled = {false, false}, ioFailure = {false};
+        gl(() -> {
+            ByteArrayOutputStream untouched = new ByteArrayOutputStream();
+            for (int[] shape : new int[][]{{0, 181}, {16385, 181}, {Integer.MAX_VALUE, Integer.MAX_VALUE}}) {
+                try {
+                    activity.renderer.exportPng(untouched, new RenderResolution.Size(shape[0], shape[1]), 0,
+                            new QuantumRenderer.ExportControl());
+                } catch (IllegalArgumentException | ArithmeticException expected) { invalid[0]++; }
+                catch (IOException wrong) { throw new AssertionError("Invalid extent reached the writer", wrong); }
+            }
+            expect(invalid[0] == 3 && untouched.size() == 0, "Invalid output extent allocated/wrote before validation");
+            QuantumRenderer.ExportControl alreadyCancelled = new QuantumRenderer.ExportControl();
+            alreadyCancelled.cancel();
+            try {
+                activity.renderer.exportPng(untouched, new RenderResolution.Size(321, 181), 0, alreadyCancelled);
+            } catch (IOException expected) { cancelled[0] = true; }
+            expect(cancelled[0] && untouched.size() == 0, "Pre-cancelled export wrote output");
+            QuantumRenderer.ExportControl[] during = new QuantumRenderer.ExportControl[1];
+            during[0] = new QuantumRenderer.ExportControl(64, 32, (rows, total) -> {
+                if (rows > 0) during[0].cancel();
+            });
+            try {
+                activity.renderer.exportPng(new ByteArrayOutputStream(), new RenderResolution.Size(321, 181), 0, during[0]);
+            } catch (IOException expected) { cancelled[1] = true; }
+            expect(cancelled[1], "Export ignored cancellation after completed work");
+            OutputStream broken = new OutputStream() {
+                int count;
+                @Override public void write(int value) throws IOException {
+                    if (++count > 128) throw new IOException("Injected destination failure after PNG header");
+                }
+                @Override public void write(byte[] value, int offset, int length) throws IOException {
+                    for (int i = 0; i < length; i++) write(value[offset + i]);
+                }
+            };
+            try {
+                activity.renderer.exportPng(broken, new RenderResolution.Size(321, 181), 0,
+                        new QuantumRenderer.ExportControl(64, 32, null));
+            } catch (IOException expected) { ioFailure[0] = true; }
+            expect(ioFailure[0], "Destination failure was swallowed");
+        });
+        gl(() -> {
+            android.opengl.GLES30.glDepthMask(false);
+            try {
+                activity.renderer.exportPng(new ByteArrayOutputStream(), new RenderResolution.Size(65, 33), 0,
+                        new QuantumRenderer.ExportControl(32, 16, null));
+                int[] mask = {1};
+                android.opengl.GLES30.glGetIntegerv(android.opengl.GLES30.GL_DEPTH_WRITEMASK, mask, 0);
+                expect(mask[0] == 0, "Successful export changed the caller's depth write mask");
+                QuantumRenderer.ExportControl[] cancelledMask = new QuantumRenderer.ExportControl[1];
+                cancelledMask[0] = new QuantumRenderer.ExportControl(32, 16, (rows, total) -> cancelledMask[0].cancel());
+                try {
+                    activity.renderer.exportPng(new ByteArrayOutputStream(), new RenderResolution.Size(65, 33), 0,
+                            cancelledMask[0]);
+                    throw new AssertionError("Depth-mask fixture did not cancel");
+                } catch (IOException expected) { }
+                android.opengl.GLES30.glGetIntegerv(android.opengl.GLES30.GL_DEPTH_WRITEMASK, mask, 0);
+                expect(mask[0] == 0, "Cancelled export changed the caller's depth write mask");
+            } catch (IOException error) {
+                throw new AssertionError("Depth-mask restoration fixture failed", error);
+            } finally { android.opengl.GLES30.glDepthMask(true); }
+        });
+        expect(baseline.changed(frame(false)) == 0, "Failed/cancelled export left stale GL state");
+        boolean preservedFile = cancelShippingImageOnPause();
+        expect(activity.core == owner && owner.version() == nativeBefore.version, "Cancelled UI export replaced native ownership");
+        sameCore(nativeBefore, owner.snapshot(), "Failed export changed native history");
+        expect(Arrays.equals(generators, owner.generators())
+                && Arrays.equals(observations, owner.query(logical.observables)), "Failed export changed native observations");
+        sameGraphics(logical, visualSnapshot(), "Failed export changed selection, edits or the camera");
+        QuantumRenderer.Capture recovered = frame(false);
+        expect(baseline.changed(recovered) == 0 && activity.renderer.failure == null,
+                "Renderer did not recover exact pixels after cancellation and I/O failure");
+        // A successful export after every failure proves resources remain reusable.
+        stream("ultra-after-failure.png", new RenderResolution.Size(321, 181), 0,
+                new QuantumRenderer.ExportControl(64, 32, null));
+        metrics.put("ultra8kFailure", new JSONObject().put("invalidRejected", invalid[0])
+                .put("cancelledBeforeWrite", cancelled[0]).put("cancelledDuringExport", cancelled[1])
+                .put("ioFailurePropagated", ioFailure[0]).put("stateUnchanged", true)
+                .put("selectionUnchanged", activity.renderer.selectedId() == logical.selectedId)
+                .put("recoveredChangedPixels", baseline.changed(recovered)).put("partialFileRemoved", preservedFile)
+                .put("previousCompleteFilePreserved", preservedFile).put("shippingPauseCancellation", true));
+    }
+
+    /** Exercise MainActivity's actual AtomicFile/cancel-onPause path, not a test-only cleanup. */
+    private boolean cancelShippingImageOnPause() throws Exception {
+        File complete = new File(activity.getCacheDir(), "cosmic-image-pending.png");
+        File partial = new File(complete.getPath() + ".new");
+        ByteArrayOutputStream previousPng = new ByteArrayOutputStream();
+        FramePng.write(new QuantumRenderer.Capture(1, 1, new byte[]{17, 22, 19, (byte)255}), previousPng);
+        byte[] prior = previousPng.toByteArray();
+        try (FileOutputStream output = new FileOutputStream(complete)) { output.write(prior); }
+        Method export = MainActivity.class.getDeclaredMethod("exportImage", int.class);
+        export.setAccessible(true);
+        Field active = MainActivity.class.getDeclaredField("activeImageExport");
+        active.setAccessible(true);
+        Field ownerField = MainActivity.class.getDeclaredField("IMAGE_EXPORT_OWNER");
+        ownerField.setAccessible(true);
+        AtomicReference<?> owner = (AtomicReference<?>) ownerField.get(null);
+        AtomicReference<Throwable> invoked = new AtomicReference<>();
+        runOnMainSync(() -> {
+            try { export.invoke(activity, QuantumRenderer.RESOLUTION_UHD_8K); }
+            catch (Throwable error) { invoked.set(error); }
+        });
+        expect(invoked.get() == null, "Shipping PNG 8K button path could not be invoked");
+        try {
+            waitUntil(() -> partial.length() > 33, 30_000, "Shipping exporter never wrote an actual partial PNG");
+            expect(active.get(activity) != null && owner.get() != null, "Shipping export finished before cancellation fixture");
+            AtomicReference<Boolean> moved = new AtomicReference<>(false);
+            runOnMainSync(() -> moved.set(activity.moveTaskToBack(true)));
+            expect(Boolean.TRUE.equals(moved.get()), "Could not pause the real UI export");
+            waitUntil(() -> !activity.resumed, 15_000, "Shipping export activity never paused");
+            waitUntil(() -> owner.get() == null, 30_000, "Cancelled image retained the global export owner");
+            expect(active.get(activity) == null, "Cancelled image retained its active controller");
+            expect(!partial.exists(), "AtomicFile left a partial PNG after shipping cancellation");
+            expect(Arrays.equals(prior, fileBytes(complete)), "Cancellation replaced the previous complete staged image");
+        } finally {
+            Object stillActive = active.get(activity);
+            if (stillActive instanceof QuantumRenderer.ExportControl)
+                ((QuantumRenderer.ExportControl) stillActive).cancel();
+            Intent resume = new Intent(getTargetContext(), MainActivity.class);
+            resume.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            getTargetContext().startActivity(resume);
+        }
+        waitUntil(() -> activity.resumed, 15_000, "Activity did not resume after cancelling PNG preparation");
+        waitForIdleSync();
+        return true;
+    }
+
+    private QuantumRenderer.ExportResult stream(String name, RenderResolution.Size size, int debug,
+                                                QuantumRenderer.ExportControl control) throws Exception {
+        AtomicReference<QuantumRenderer.ExportResult> result = new AtomicReference<>();
+        gl(() -> {
+            try (FileOutputStream output = new FileOutputStream(new File(evidence, name))) {
+                result.set(activity.renderer.exportPng(output, size, debug, control));
+            } catch (IOException error) { throw new AssertionError("Cannot export " + name, error); }
+        });
+        expect(result.get() != null, "Streaming exporter returned no metadata");
+        images.put(name);
+        return result.get();
+    }
+
+    private static int[] comparePng(File file, QuantumRenderer.Capture reference, int tileWidth, int stripRows) {
+        Bitmap decoded = BitmapFactory.decodeFile(file.getAbsolutePath());
+        expect(decoded != null, "Android could not decode tiled PNG");
+        int changed = 0, seams = 0;
+        try {
+            expect(decoded.getWidth() == reference.width && decoded.getHeight() == reference.height,
+                    "Tiled PNG dimensions differ from monolithic capture");
+            for (int y = 0; y < reference.height; y++) for (int x = 0; x < reference.width; x++) {
+                int p = ((reference.height - 1 - y) * reference.width + x) * 4;
+                int rgba = ((reference.rgba[p + 3] & 255) << 24) | ((reference.rgba[p] & 255) << 16)
+                        | ((reference.rgba[p + 1] & 255) << 8) | (reference.rgba[p + 2] & 255);
+                if (decoded.getPixel(x, y) != rgba) {
+                    changed++;
+                    int glY = reference.height - 1 - y;
+                    if (x % tileWidth <= 1 || x % tileWidth == tileWidth - 1
+                            || glY % stripRows <= 1 || glY % stripRows == stripRows - 1) seams++;
+                }
+            }
+        } finally { decoded.recycle(); }
+        return new int[]{changed, seams};
+    }
+
+    private static byte[] fileBytes(File file) throws Exception {
+        try (FileInputStream input = new FileInputStream(file); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            byte[] part = new byte[8192]; int count;
+            while ((count = input.read(part)) != -1) bytes.write(part, 0, count);
+            return bytes.toByteArray();
+        }
+    }
+
+    private static String sha256(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (FileInputStream input = new FileInputStream(file)) {
+            byte[] bytes = new byte[65536]; int count;
+            while ((count = input.read(bytes)) != -1) digest.update(bytes, 0, count);
+        }
+        StringBuilder output = new StringBuilder(64);
+        for (byte value : digest.digest()) output.append(String.format(Locale.ROOT, "%02x", value & 255));
+        return output.toString();
+    }
+
     private void orient(boolean landscape) {
         runOnMainSync(() -> activity.setRequestedOrientation(landscape
                 ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
@@ -984,7 +1389,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private void await(CountDownLatch done, AtomicReference<Throwable> error, String operation) throws Exception {
-        long deadline = SystemClock.elapsedRealtime() + (testUhd ? 120_000 : FRAME_TIMEOUT_MS);
+        long deadline = SystemClock.elapsedRealtime() + (testUltra ? 180_000 : testUhd ? 120_000 : FRAME_TIMEOUT_MS);
         while (!done.await(50, TimeUnit.MILLISECONDS)) {
             expect(activity.renderer.failure == null, "Renderer failed: " + activity.renderer.failure);
             expect(SystemClock.elapsedRealtime() < deadline, operation + " timed out");
@@ -1020,10 +1425,9 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private void select(Pick pick, QuantumRenderer.Capture ids) throws Exception {
-        int[] dimensions = new int[2];
-        runOnMainSync(() -> { dimensions[0] = activity.surface.getWidth(); dimensions[1] = activity.surface.getHeight(); });
-        int x = (int) ((pick.x + .5f) * dimensions[0] / ids.width);
-        int y = (int) ((pick.y + .5f) * dimensions[1] / ids.height);
+        QuantumRenderer.FrameStats view = activity.renderer.frameStats();
+        int x = view.displayLeft + (int) ((pick.x + .5f) * view.displayWidth / ids.width);
+        int y = view.displayTop + (int) ((pick.y + .5f) * view.displayHeight / ids.height);
         gl(() -> activity.renderer.pick(x, y));
         frame(false); // Picking resolves in onDrawFrame, after its queued request.
         expect(activity.renderer.selectedId() == pick.id, "ID picking selected a different object");

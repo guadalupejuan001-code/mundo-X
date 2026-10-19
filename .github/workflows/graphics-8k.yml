@@ -1,0 +1,201 @@
+name: COSMIC X Engine 8K and optimized core validation
+
+on:
+  push:
+    branches: [codex/cosmic-engine-8k-20261019]
+    paths:
+      - 'graphics-android/**'
+      - 'native/**'
+      - 'CMakeLists.txt'
+      - 'tools/core-performance.py'
+      - 'tools/cosmic-*'
+      - 'tools/graphics/**'
+      - 'tools/graphics-*'
+      - '.github/workflows/graphics-8k.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cosmic-engine-8k-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compile and verify every native contract
+        run: |
+          set -euo pipefail
+          mkdir -p graphics-8k-native
+          git rev-parse HEAD > graphics-8k-native/source-commit.txt
+          cmake -S . -B graphics-8k-native/build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+          cmake --build graphics-8k-native/build --parallel 2 > graphics-8k-native/build.log 2>&1
+          ctest --test-dir graphics-8k-native/build --output-on-failure --output-junit "$GITHUB_WORKSPACE/graphics-8k-native/ctest.xml" | tee graphics-8k-native/ctest.log
+      - name: Check undefined behavior at packed-word boundaries
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O1 -g -fsanitize=undefined -fno-sanitize-recover=all -I native/include native/tests/core_performance.cpp -o graphics-8k-native/core-ubsan
+          graphics-8k-native/core-ubsan | tee graphics-8k-native/core-ubsan.log
+      - name: Compare identical workloads against the frozen 4K core
+        run: |
+          set -euo pipefail
+          baseline_dir="$RUNNER_TEMP/cosmic-core-baseline"
+          mkdir -p "$baseline_dir"
+          git archive 403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac native/include | tar -x -C "$baseline_dir"
+          python3 tools/core-performance.py --baseline-include "$baseline_dir/native/include" --baseline-id 403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac --output graphics-8k-native/core-performance.json | tee graphics-8k-native/core-performance.log
+      - name: Upload native comparisons and correctness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Engine-8K-Native-Evidence
+          path: |
+            graphics-8k-native/*.json
+            graphics-8k-native/*.xml
+            graphics-8k-native/*.txt
+            graphics-8k-native/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the exact source and original core reference
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install pinned Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1'
+
+      - name: Verify tile geometry and PNG writer without Android or a GPU
+        run: |
+          set -euo pipefail
+          mkdir -p graphics-8k-host
+          javac -d graphics-8k-host graphics-android/app/src/main/java/com/mundox/graphics/{RenderResolution,TilePlan,StreamPng}.java tools/graphics/UltraHostChecks.java
+          java -cp graphics-8k-host com.mundox.graphics.UltraHostChecks graphics-8k-host
+
+      - name: Compile the existing unified consumer against shared graphics sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p cosmic-android --no-daemon --stacktrace \
+            :app:compileDebugJavaWithJavac :app:compileDebugAndroidTestJavaWithJavac \
+            2>&1 | tee graphics-8k-consumer-build.log
+
+      - name: Build the normal graphics app for coinstallation validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p graphics-android --no-daemon --stacktrace :app:assembleDebug \
+            2>&1 | tee graphics-8k-companion-build.log
+          mkdir -p graphics-8k-dist
+          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk \
+            graphics-8k-dist/COSMIC-X-Engine-coexist.apk
+
+      - name: Build the independently installable 8K app and instrumented tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p graphics-android --no-daemon --stacktrace -Pcosmic8kStandalone=true \
+            :app:assembleDebug :app:assembleDebugAndroidTest 2>&1 | tee graphics-8k-build.log
+          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk \
+            graphics-8k-dist/COSMIC-X-Engine-8K.apk
+          cp graphics-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            graphics-8k-dist/COSMIC-X-Engine-8K-tests.apk
+
+      - name: Verify packaged identity, SDK, signatures, ABIs and declared native optimizations
+        run: python3 tools/graphics-stage-4k.py graphics-8k-dist
+
+      - name: Upload exact standalone APKs and build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Engine-8K-APK
+          path: graphics-8k-dist/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Engine-8K-Build-Logs
+          path: |
+            graphics-8k-*.log
+            graphics-8k-dist/*.txt
+            graphics-8k-dist/*.json
+            graphics-android/app/build/reports/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  android-validation:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout the exact validation code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download this build's exact APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: COSMIC-X-Engine-8K-APK
+          path: graphics-8k-apks
+
+      - name: Enable Android 15 emulator with 2 GB RAM
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+
+      - name: Verify 19 existing cases and 4 native/tiled 8K cases on JNI and SwiftShader
+        shell: bash
+        env:
+          GRAPHICS_ULTRA8K: 'true'
+          GRAPHICS_TEST_TIMEOUT: '1700'
+          GRAPHICS_APK_DIR: graphics-8k-apks
+          GRAPHICS_EVIDENCE_DIR: graphics-8k-evidence
+        run: bash tools/graphics-emulator-test.sh
+
+      - name: Replay exported projects independently with the desktop codec
+        run: python3 tools/cosmic-verify-portability.py graphics-8k-evidence
+
+      - name: Upload actual UHD/8K frames, pixel comparisons and Android logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Engine-8K-Android-Evidence
+          path: graphics-8k-evidence/**
+          if-no-files-found: warn
+          retention-days: 14

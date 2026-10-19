@@ -4,6 +4,8 @@ precision highp int;
 // @COMMON@
 uniform mat4 uInvVp;
 uniform vec2 uResolution;
+// Global native pixel origin for streamed image tiles. Zero for a full framebuffer.
+uniform vec2 uPixelOrigin;
 uniform vec3 uCameraForward,uCameraRight,uCameraUp;
 uniform float uTanHalfFov,uAspect,uNear,uFar;
 out vec4 outColor;
@@ -55,7 +57,7 @@ vec4 cosmicBackdrop(vec3 direction,vec3 ro,vec3 rd,float maximum){
 void main(){
   outColor=uDebug==1?vec4(0,0,0,1):vec4(.067,.086,.075,1);
   gl_FragDepth=1.0;
-  vec2 ndc=2.0*gl_FragCoord.xy/uResolution-1.0;
+  vec2 ndc=2.0*(gl_FragCoord.xy+uPixelOrigin)/uResolution-1.0;
   // Direct camera rays avoid cancellation in a far-plane matrix unprojection.
   vec3 direction=normalize(uCameraForward+ndc.x*uAspect*uTanHalfFov*uCameraRight+ndc.y*uTanHalfFov*uCameraUp);
   float viewCosine=dot(direction,uCameraForward);

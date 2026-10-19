@@ -1,4 +1,13 @@
-# COSMIC X Engine 0.3.0 · Android y UHD 4K
+# COSMIC X Engine 0.4.0 · Android, UHD 8K y núcleo optimizado
+
+La revisión 0.4 incorpora salida nativa **7680 × 4320 / 4320 × 7680**,
+exportación PNG por regiones con memoria acotada y optimizaciones exactas del
+núcleo compacto. La variante independiente se compila con
+`-Pcosmic8kStandalone=true` y se instala como `com.mundox.graphics.ultra`.
+**Calidad → 8K UHD** utiliza el framebuffer completo cuando el dispositivo lo
+admite; **PNG 8K** genera esa resolución desde cualquier calidad de vista.
+
+[Uso de 8K, memoria, mediciones y alcance](docs/8k.md).
 
 **COSMIC X Engine es el título. Dentro está la computación cuántica de Mundo X,
 con su núcleo cuántico y su motor gráfico cuántico integrado.**

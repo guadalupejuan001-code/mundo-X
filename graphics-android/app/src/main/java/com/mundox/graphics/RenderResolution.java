@@ -2,8 +2,13 @@ package com.mundox.graphics;
 
 /** Pixel geometry shared by framebuffer allocation, FIT presentation and touch picking. */
 public final class RenderResolution {
-    public static final int ADAPTIVE=0,UHD_4K=1;
+    public static final int ADAPTIVE=0,UHD_4K=1,UHD_8K=2;
     public static final int UHD_LONG=3840,UHD_SHORT=2160;
+    public static final int UHD_8K_LONG=7680,UHD_8K_SHORT=4320;
+    /** RGBA8 plus conservatively four bytes for D24; not a process RAM estimate. */
+    public static final long ATTACHMENT_BYTES_PER_PIXEL=8;
+    /** Both old and replacement attachments coexist during a transactional switch. */
+    public static final long MAX_FRAMEBUFFER_PEAK_BYTES=512L*1024*1024;
 
     private RenderResolution(){}
 
@@ -16,6 +21,10 @@ public final class RenderResolution {
         public boolean isUhd4k(){
             return width==UHD_LONG&&height==UHD_SHORT||width==UHD_SHORT&&height==UHD_LONG;
         }
+        public boolean isUhd8k(){
+            return width==UHD_8K_LONG&&height==UHD_8K_SHORT||width==UHD_8K_SHORT&&height==UHD_8K_LONG;
+        }
+        public long attachmentBytes(){return Math.multiplyExact(pixels(),ATTACHMENT_BYTES_PER_PIXEL);}
     }
 
     /** The limits are per context. Viewport limits may differ between the two axes. */
@@ -40,6 +49,25 @@ public final class RenderResolution {
     public static Size uhd(int viewWidth,int viewHeight){
         positive(viewWidth,viewHeight);
         return viewWidth>=viewHeight?new Size(UHD_LONG,UHD_SHORT):new Size(UHD_SHORT,UHD_LONG);
+    }
+
+    public static Size uhd8k(int viewWidth,int viewHeight){
+        positive(viewWidth,viewHeight);
+        return viewWidth>=viewHeight?new Size(UHD_8K_LONG,UHD_8K_SHORT):new Size(UHD_8K_SHORT,UHD_8K_LONG);
+    }
+
+    public static boolean validMode(int mode){return mode==ADAPTIVE||mode==UHD_4K||mode==UHD_8K;}
+
+    public static Size fixed(int mode,int viewWidth,int viewHeight){
+        if(mode==UHD_4K)return uhd(viewWidth,viewHeight);
+        if(mode==UHD_8K)return uhd8k(viewWidth,viewHeight);
+        throw new IllegalArgumentException("El modo no tiene resolución fija");
+    }
+
+    public static void requireAllocation(Size next,Size existing){
+        long peak=Math.addExact(next.attachmentBytes(),existing==null?0:existing.attachmentBytes());
+        if(peak>MAX_FRAMEBUFFER_PEAK_BYTES)
+            throw new IllegalArgumentException("La reserva simultánea de color y profundidad supera el presupuesto de 512 MiB; usa PNG 8K por regiones");
     }
 
     /** Original screen-relative mode, now respecting the independent viewport limits too. */

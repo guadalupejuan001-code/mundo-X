@@ -1,0 +1,722 @@
+{
+  "schema": 1,
+  "timestamp_utc": "2026-10-19T08:35:00.612899+00:00",
+  "baseline_id": "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac",
+  "host": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "architecture": "x86_64",
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+  "compile_flags": [
+    "-std=c++17",
+    "-O3",
+    "-DNDEBUG",
+    "-pthread"
+  ],
+  "samples_per_version": 7,
+  "comparison_order": "alternating baseline/candidate then candidate/baseline",
+  "scope": "Host CPU core components; not phone, GPU, FPS or rendering resolution",
+  "seed_hex": "434f52455f504552",
+  "header_sha256": {
+    "mundo_x/compact_core.hpp": {
+      "baseline": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c",
+      "candidate": "3596321e48428f006de86a8467356f178ce9662430be69876dbf35c3d3f5a027"
+    },
+    "mundo_x/pauli_observer.hpp": {
+      "baseline": "82365223e25e59dd235e89ed841b136b7ca0ce2fdd10c2aebf669b759c121c6c",
+      "candidate": "a4e0cea872cf7f267f1990a29b9e2e1b3f77ececf70851afbbd83692d329e183"
+    },
+    "mundo_x/engine_session.hpp": {
+      "baseline": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+      "candidate": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3"
+    }
+  },
+  "benchmark_sha256": "dbe0f8b603c98ad064c5188d92630525e3330cdf16a45410e49ed3f6defe3527",
+  "cases": [
+    {
+      "case": "observer_build",
+      "qubits": 20,
+      "iterations": 3276,
+      "checksum": "2ef75bca5e20bfd6",
+      "core_payload_bytes": 340,
+      "observer_payload_bytes": 560,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          20.170320512820513,
+          28.995140109890112,
+          25.31774816849817,
+          25.328217643467642,
+          26.289056776556777,
+          23.430903846153846,
+          36.761306166056166
+        ],
+        "candidate": [
+          8.809327838827839,
+          5.473942612942613,
+          8.23597435897436,
+          5.8578751526251525,
+          8.334192307692309,
+          3.1472036019536023,
+          5.306818681318681
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 25.328217643467642,
+        "candidate": 5.8578751526251525
+      },
+      "speedup_ratio": 4.323789255241644
+    },
+    {
+      "case": "observer_build",
+      "qubits": 64,
+      "iterations": 1024,
+      "checksum": "4165b5bb12e60394",
+      "core_payload_bytes": 1088,
+      "observer_payload_bytes": 1792,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          111.365515625,
+          106.8277158203125,
+          120.3378193359375,
+          125.17440234375,
+          99.4182998046875,
+          197.51030078125,
+          138.5841875
+        ],
+        "candidate": [
+          18.3963515625,
+          15.434845703125,
+          19.149,
+          23.146041015625,
+          26.93553515625,
+          22.698923828125,
+          16.4327587890625
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 120.3378193359375,
+        "candidate": 19.149
+      },
+      "speedup_ratio": 6.284287395474307
+    },
+    {
+      "case": "observer_build",
+      "qubits": 128,
+      "iterations": 512,
+      "checksum": "4e91f318ab08c6ff",
+      "core_payload_bytes": 4224,
+      "observer_payload_bytes": 5632,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          778.13587109375,
+          651.561611328125,
+          1917.704990234375,
+          1038.061349609375,
+          1027.8154140625,
+          1109.35958203125,
+          965.499365234375
+        ],
+        "candidate": [
+          93.586654296875,
+          93.95206640625,
+          95.902306640625,
+          46.49093359375,
+          101.84919921875,
+          105.572296875,
+          125.66430078125
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 1027.8154140625,
+        "candidate": 95.902306640625
+      },
+      "speedup_ratio": 10.717316924545264
+    },
+    {
+      "case": "observer_build",
+      "qubits": 256,
+      "iterations": 256,
+      "checksum": "91aee63301766429",
+      "core_payload_bytes": 16640,
+      "observer_payload_bytes": 19456,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          2967.29697265625,
+          2528.72158203125,
+          2463.244765625,
+          2334.99392578125,
+          2042.65797265625,
+          3095.46043359375,
+          2272.5701015625
+        ],
+        "candidate": [
+          241.6806796875,
+          254.55383984375,
+          165.47217578125,
+          165.047421875,
+          287.83283984375,
+          246.39661328125,
+          139.1381953125
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 2463.244765625,
+        "candidate": 241.6806796875
+      },
+      "speedup_ratio": 10.19214597050143
+    },
+    {
+      "case": "cz_gate",
+      "qubits": 20,
+      "iterations": 65536,
+      "checksum": "8205108ec018e74c",
+      "core_payload_bytes": 340,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          1.0952449798583985,
+          1.6614659576416015,
+          1.2221090240478516,
+          1.5840097045898438,
+          0.887973876953125,
+          0.8483725128173828,
+          0.7680636901855469
+        ],
+        "candidate": [
+          0.9862271270751953,
+          0.37022732543945314,
+          0.41625050354003906,
+          0.62987255859375,
+          0.5197278442382812,
+          0.3447682647705078,
+          0.5281580505371094
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 1.0952449798583985,
+        "candidate": 0.5197278442382812
+      },
+      "speedup_ratio": 2.1073432797575076
+    },
+    {
+      "case": "cz_gate",
+      "qubits": 64,
+      "iterations": 65536,
+      "checksum": "2e48cdf2717c7d40",
+      "core_payload_bytes": 1088,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          3.0074947052001955,
+          3.3249501342773438,
+          2.5851437683105467,
+          2.4605949401855467,
+          2.8248942108154296,
+          2.5745040588378907,
+          2.7530519409179686
+        ],
+        "candidate": [
+          1.4336470031738282,
+          1.5585561065673827,
+          1.7613988037109376,
+          1.358521255493164,
+          1.4319423828125,
+          1.5431974182128907,
+          1.573835205078125
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 2.7530519409179686,
+        "candidate": 1.5431974182128907
+      },
+      "speedup_ratio": 1.7839920598792587
+    },
+    {
+      "case": "cz_gate",
+      "qubits": 128,
+      "iterations": 65536,
+      "checksum": "c40a8184247bd1d9",
+      "core_payload_bytes": 4224,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          5.67060107421875,
+          5.121180084228516,
+          5.30564077758789,
+          4.810533737182618,
+          5.638320114135742,
+          5.960918411254883,
+          5.990266159057617
+        ],
+        "candidate": [
+          3.0029376373291017,
+          2.614811218261719,
+          2.8511766662597657,
+          2.3577507476806643,
+          2.5158624725341796,
+          3.4954933013916016,
+          3.481485275268555
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 5.638320114135742,
+        "candidate": 2.8511766662597657
+      },
+      "speedup_ratio": 1.9775414764221575
+    },
+    {
+      "case": "cz_gate",
+      "qubits": 256,
+      "iterations": 65536,
+      "checksum": "d55a83e1760a9f72",
+      "core_payload_bytes": 16640,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          10.21210824584961,
+          9.194939865112305,
+          13.113956161499024,
+          9.951035430908203,
+          10.824624526977539,
+          9.166642013549804,
+          9.110602401733399
+        ],
+        "candidate": [
+          5.501580169677735,
+          5.400536437988281,
+          6.237003829956055,
+          7.4857790069580075,
+          6.512440704345703,
+          6.154413162231445,
+          5.271555404663086
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 9.951035430908203,
+        "candidate": 6.154413162231445
+      },
+      "speedup_ratio": 1.6168942787227811
+    },
+    {
+      "case": "measurement_round",
+      "qubits": 20,
+      "iterations": 640,
+      "checksum": "3fca3a34b6fbd393",
+      "core_payload_bytes": 340,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          32.97775625,
+          30.4987859375,
+          37.35695,
+          45.0290640625,
+          33.418803125,
+          40.1345421875,
+          35.8694921875
+        ],
+        "candidate": [
+          15.0614375,
+          20.7952453125,
+          22.45659375,
+          13.484234375,
+          12.6505,
+          17.7264328125,
+          15.109475
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 35.8694921875,
+        "candidate": 15.109475
+      },
+      "speedup_ratio": 2.373973429751861
+    },
+    {
+      "case": "measurement_round",
+      "qubits": 64,
+      "iterations": 62,
+      "checksum": "6e13260cc01c1366",
+      "core_payload_bytes": 1088,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          1093.109870967742,
+          1082.0660161290323,
+          1096.7140483870967,
+          941.3239032258065,
+          1110.1701451612905,
+          1478.8971612903226,
+          1349.072677419355
+        ],
+        "candidate": [
+          268.17167741935486,
+          284.01112903225805,
+          136.97240322580646,
+          95.26345161290322,
+          104.0406935483871,
+          174.45685483870966,
+          150.7250483870968
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 1096.7140483870967,
+        "candidate": 150.7250483870968
+      },
+      "speedup_ratio": 7.27625607105782
+    },
+    {
+      "case": "measurement_round",
+      "qubits": 128,
+      "iterations": 15,
+      "checksum": "3506c80d3a6c7d12",
+      "core_payload_bytes": 4224,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          11563.195666666667,
+          13266.6864,
+          11946.3472,
+          12917.740733333332,
+          14306.461466666668,
+          10564.221666666666,
+          9938.307666666666
+        ],
+        "candidate": [
+          2157.4588,
+          1271.0722666666666,
+          1510.7660666666666,
+          1802.9458666666667,
+          2063.4236666666666,
+          1747.5979333333335,
+          1287.3983999999998
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 11946.3472,
+        "candidate": 1747.5979333333335
+      },
+      "speedup_ratio": 6.835867090557709
+    },
+    {
+      "case": "measurement_round",
+      "qubits": 256,
+      "iterations": 4,
+      "checksum": "f1af5c1956eb4e80",
+      "core_payload_bytes": 16640,
+      "observer_payload_bytes": 0,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          147810.9575,
+          153437.187,
+          117395.022,
+          115890.42575,
+          133615.45525,
+          156803.096,
+          144226.63775
+        ],
+        "candidate": [
+          12312.457,
+          11982.572,
+          12066.17425,
+          13557.645,
+          14543.53225,
+          9240.0315,
+          19293.19225
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 144226.63775,
+        "candidate": 12312.457
+      },
+      "speedup_ratio": 11.713879508371074
+    },
+    {
+      "case": "graphics_revision",
+      "qubits": 20,
+      "iterations": 3276,
+      "checksum": "e26814d382d2756d",
+      "core_payload_bytes": 340,
+      "observer_payload_bytes": 560,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          62.966894688644686,
+          54.08481532356532,
+          73.7000405982906,
+          32.793570512820516,
+          41.545522283272284,
+          42.128115689865695,
+          41.038061355311356
+        ],
+        "candidate": [
+          29.20302503052503,
+          26.05354242979243,
+          23.100041514041514,
+          18.561472527472528,
+          17.951947802197804,
+          14.12442857142857,
+          22.442285714285713
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 42.128115689865695,
+        "candidate": 22.442285714285713
+      },
+      "speedup_ratio": 1.8771758022423224
+    },
+    {
+      "case": "graphics_revision",
+      "qubits": 64,
+      "iterations": 1024,
+      "checksum": "47df438b685c76e1",
+      "core_payload_bytes": 1088,
+      "observer_payload_bytes": 1792,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          293.394568359375,
+          347.6438134765625,
+          305.3674130859375,
+          305.6686552734375,
+          271.31873046875,
+          269.7171611328125,
+          276.5204736328125
+        ],
+        "candidate": [
+          62.324919921875,
+          62.4112333984375,
+          52.450546875,
+          47.446125,
+          61.0710458984375,
+          54.876185546875,
+          68.9275146484375
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 293.394568359375,
+        "candidate": 61.0710458984375
+      },
+      "speedup_ratio": 4.804151689939888
+    },
+    {
+      "case": "graphics_revision",
+      "qubits": 128,
+      "iterations": 512,
+      "checksum": "376bd37d5fbfb5d5",
+      "core_payload_bytes": 4224,
+      "observer_payload_bytes": 5632,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          741.97931640625,
+          846.359115234375,
+          869.65515234375,
+          702.653404296875,
+          768.741986328125,
+          791.323572265625,
+          894.6509765625
+        ],
+        "candidate": [
+          147.876376953125,
+          142.70747265625,
+          141.584234375,
+          125.63129296875,
+          118.460298828125,
+          132.135513671875,
+          117.433759765625
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 791.323572265625,
+        "candidate": 132.135513671875
+      },
+      "speedup_ratio": 5.988727407763186
+    },
+    {
+      "case": "graphics_revision",
+      "qubits": 256,
+      "iterations": 256,
+      "checksum": "d05baa43109df9c6",
+      "core_payload_bytes": 16640,
+      "observer_payload_bytes": 19456,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          2315.7032109375,
+          3302.180703125,
+          2208.69709765625,
+          2412.4845546875,
+          1967.05452734375,
+          2504.56164453125,
+          2458.70678125
+        ],
+        "candidate": [
+          283.3045078125,
+          404.80369140625,
+          275.62124609375,
+          258.082328125,
+          309.7180078125,
+          394.69723046875,
+          230.55793359375
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 2412.4845546875,
+        "candidate": 283.3045078125
+      },
+      "speedup_ratio": 8.515517713838001
+    },
+    {
+      "case": "cached_query",
+      "qubits": 20,
+      "iterations": 2048,
+      "checksum": "59f749f1b2a41a5e",
+      "core_payload_bytes": 340,
+      "observer_payload_bytes": 560,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          14.5427021484375,
+          11.50643310546875,
+          8.6950595703125,
+          11.374982421875,
+          11.574953125,
+          14.17679052734375,
+          16.156021484375
+        ],
+        "candidate": [
+          9.90406689453125,
+          10.76440185546875,
+          12.06773876953125,
+          12.84422900390625,
+          10.5776494140625,
+          11.96898681640625,
+          12.9184609375
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 11.574953125,
+        "candidate": 11.96898681640625
+      },
+      "speedup_ratio": 0.9670787763868086
+    },
+    {
+      "case": "cached_query",
+      "qubits": 64,
+      "iterations": 2048,
+      "checksum": "16290ba6ee824de2",
+      "core_payload_bytes": 1088,
+      "observer_payload_bytes": 1792,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          21.58205517578125,
+          18.944189453125,
+          14.76333544921875,
+          17.70162646484375,
+          19.8099638671875,
+          19.6086328125,
+          18.66924072265625
+        ],
+        "candidate": [
+          17.22519482421875,
+          14.27309765625,
+          14.6035185546875,
+          18.0309892578125,
+          27.74551611328125,
+          25.95077783203125,
+          16.85366552734375
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 18.944189453125,
+        "candidate": 17.22519482421875
+      },
+      "speedup_ratio": 1.0997953664064994
+    },
+    {
+      "case": "cached_query",
+      "qubits": 128,
+      "iterations": 2048,
+      "checksum": "6d375a2a8b2d2b42",
+      "core_payload_bytes": 4224,
+      "observer_payload_bytes": 5632,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          29.7665478515625,
+          38.85438818359375,
+          47.2859189453125,
+          42.05860302734375,
+          54.11106982421875,
+          39.124767578125,
+          35.51171826171875
+        ],
+        "candidate": [
+          38.13235791015625,
+          35.63756982421875,
+          42.55621533203125,
+          43.31132568359375,
+          47.14570556640625,
+          48.44215087890625,
+          39.0463642578125
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 39.124767578125,
+        "candidate": 42.55621533203125
+      },
+      "speedup_ratio": 0.9193667076093709
+    },
+    {
+      "case": "cached_query",
+      "qubits": 256,
+      "iterations": 2048,
+      "checksum": "c223a944d0cbf726",
+      "core_payload_bytes": 16640,
+      "observer_payload_bytes": 19456,
+      "unit": "microseconds per operation; a measurement round measures every qubit",
+      "samples_us_per_operation": {
+        "baseline": [
+          55.3173701171875,
+          67.03043408203125,
+          63.40700537109375,
+          117.29251513671875,
+          134.7114130859375,
+          103.17806640625,
+          146.8237734375
+        ],
+        "candidate": [
+          53.39354443359375,
+          71.50588134765626,
+          57.28450439453125,
+          76.55348583984374,
+          88.8304697265625,
+          103.68171240234375,
+          154.95835107421874
+        ]
+      },
+      "median_us_per_operation": {
+        "baseline": 103.17806640625,
+        "candidate": 76.55348583984374
+      },
+      "speedup_ratio": 1.3477905711845322
+    }
+  ],
+  "pinned_cpu": 0,
+  "same_circuit_validation": {
+    "checksum": "594604927b53e79b",
+    "gates": 8292,
+    "queries": 10398,
+    "measurements": 289
+  }
+}
