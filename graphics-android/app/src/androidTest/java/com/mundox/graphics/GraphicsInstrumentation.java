@@ -895,25 +895,42 @@ public final class GraphicsInstrumentation extends Instrumentation {
 
         orient(true);
         scene(1);
-        gl(() -> activity.renderer.coupling(true));
+        gl(() -> { activity.renderer.coupling(true); activity.renderer.setSpatialCulling(false); });
         QuantumRenderer.Capture before = frame(false);
+        gl(() -> activity.renderer.setSpatialCulling(true));
+        QuantumRenderer.Capture culledReference = frame(false);
+        expect(before.changed(culledReference) == 0,
+                "Exact spatial culling changed legacy scene pixels");
+        metrics.put("ultra8kCullExactChangedPixels", 0);
         QuantumRenderer.Snapshot logical = visualSnapshot();
         NativeCore owner = activity.core;
         NativeCore.Snapshot coreBefore = owner.snapshot();
         AtomicReference<QuantumRenderer.FrameStats> actual = new AtomicReference<>();
+        double[] baselineMs = new double[3], optimizedMs = new double[3];
         int[] pss = {0};
         gl(() -> {
             activity.renderer.setSynchronousTiming(true);
             try {
                 activity.renderer.uhd8k();
-                // Shipping drawing path, with GPU completion; no 132 MB Java capture.
-                activity.renderer.onDrawFrame(null);
+                activity.renderer.setSpatialCulling(false);
+                activity.renderer.onDrawFrame(null); // allocation + timing warm-up
+                for(int sample=0;sample<baselineMs.length;sample++){
+                    activity.renderer.onDrawFrame(null);
+                    baselineMs[sample]=activity.renderer.frameStats().drawMs;
+                }
+                activity.renderer.setSpatialCulling(true);
+                activity.renderer.onDrawFrame(null); // culling warm-up
+                for(int sample=0;sample<optimizedMs.length;sample++){
+                    activity.renderer.onDrawFrame(null);
+                    optimizedMs[sample]=activity.renderer.frameStats().drawMs;
+                }
                 actual.set(activity.renderer.frameStats());
                 Debug.MemoryInfo memory = new Debug.MemoryInfo();
                 Debug.getMemoryInfo(memory);
                 pss[0] = memory.getTotalPss();
                 expect(activity.renderer.isUhd8k(), "Actual 8K target was rejected: " + activity.renderer.resolutionNotice());
             } finally {
+                activity.renderer.setSpatialCulling(true);
                 activity.renderer.resolution(logical.resolutionLimit);
                 activity.renderer.setSynchronousTiming(false);
                 // resolution() schedules allocation. Complete it on this GL thread before
@@ -921,10 +938,15 @@ public final class GraphicsInstrumentation extends Instrumentation {
                 activity.renderer.onDrawFrame(null);
             }
         });
+        Arrays.sort(baselineMs);Arrays.sort(optimizedMs);
+        double baselineMedian=baselineMs[baselineMs.length/2],optimizedMedian=optimizedMs[optimizedMs.length/2];
         QuantumRenderer.FrameStats rendered = actual.get();
         expect(rendered != null && rendered.width == 7680 && rendered.height == 4320
-                && rendered.gpuSynchronized && rendered.objectCount == 1 && rendered.drawMs > 0,
-                "Native draw did not complete on a full 8K framebuffer");
+                && rendered.gpuSynchronized && rendered.objectCount == 1 && rendered.drawMs > 0
+                && rendered.spatialCulling && rendered.shadedPixels < rendered.fullPixels,
+                "Native optimized draw did not complete on a culled full 8K framebuffer");
+        expect(optimizedMedian < baselineMedian,
+                "Exact 8K culling did not improve synchronized completion time");
         QuantumRenderer.FrameStats adaptive = activity.renderer.frameStats();
         expect(adaptive != null && adaptive.resolutionMode == QuantumRenderer.RESOLUTION_ADAPTIVE
                 && adaptive.width == before.width && adaptive.height == before.height
@@ -937,7 +959,15 @@ public final class GraphicsInstrumentation extends Instrumentation {
         expect(activity.core == owner, "8K allocation replaced the native owner");
         metrics.put("ultra8kNativeWidth", rendered.width);
         metrics.put("ultra8kNativeHeight", rendered.height);
-        metrics.put("ultra8kNativeDrawMs", rendered.drawMs);
+        metrics.put("ultra8kNativeDrawMs", optimizedMedian);
+        metrics.put("ultra8kBaselineDrawMs", baselineMedian);
+        metrics.put("ultra8kOptimizedDrawMs", optimizedMedian);
+        metrics.put("ultra8kSpeedup", baselineMedian/optimizedMedian);
+        metrics.put("ultra8kEquivalentCompletedFpsBefore", 1000.0/baselineMedian);
+        metrics.put("ultra8kEquivalentCompletedFpsAfter", 1000.0/optimizedMedian);
+        metrics.put("ultra8kFullPixels", rendered.fullPixels);
+        metrics.put("ultra8kShadedPixels", rendered.shadedPixels);
+        metrics.put("ultra8kFragmentCoverage", (double)rendered.shadedPixels/rendered.fullPixels);
         metrics.put("ultra8kNativePssKiB", pss[0]);
         metrics.put("ultra8kLegacyReturnChangedPixels", before.changed(returned));
         metrics.put("ultra8kPerformanceScope", "One-object scene on recorded GLES device; synchronized wall time, not FPS or phone results");
