@@ -501,7 +501,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     @Override public void onDrawFrame(GL10 unused){
         if(failed||program==0)return;
         try{
-            if(framebufferDirty)sizeFramebuffer();sync();camera();
+            if(framebufferDirty){sizeFramebuffer();renderedVisualKey=Long.MIN_VALUE;}sync();camera();
             boolean forceColorRedraw=pickPending;
             if(pickPending){
                 if(display.contains(pickX,pickY)){
@@ -520,6 +520,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             double elapsed=reuse?0.0:draw(debug);
             if(reuse)reusedFrames++;
             else if(debug==0)renderedVisualKey=visualKey;
+            else renderedVisualKey=Long.MIN_VALUE;
             Capture pixels=requested==null?null:read();
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
             glBindFramebuffer(GL_READ_FRAMEBUFFER,fbo);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
