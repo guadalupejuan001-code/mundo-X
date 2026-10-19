@@ -5,13 +5,20 @@ mkdir -p "$evidence_dir"
 adb_bin="$ANDROID_HOME/platform-tools/adb"
 avd_bin="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
 emulator_bin="$ANDROID_HOME/emulator/emulator"
-printf 'no\n' | "$avd_bin" create avd --force -n cosmic-pc-test -k 'system-images;android-35;default;x86_64'
+pc_avd_root="$(mktemp -d "${RUNNER_TEMP:-/tmp}/cosmic-pc-avd.XXXXXX")"
+# Give avdmanager and emulator one explicit registry and data directory. Some
+# CI images set Android user paths differently for the two SDK executables.
+export ANDROID_AVD_HOME="$pc_avd_root"
+printf 'no\n' | "$avd_bin" create avd --force -n cosmic-pc-test -p "$pc_avd_root/cosmic-pc-test.avd" -k 'system-images;android-35;default;x86_64' > "$evidence_dir/avd-create.log" 2>&1
+"$emulator_bin" -list-avds > "$evidence_dir/avd-list.txt"
+rg -qx 'cosmic-pc-test' "$evidence_dir/avd-list.txt"
+"$adb_bin" start-server
 "$emulator_bin" -avd cosmic-pc-test -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048 > "$evidence_dir/emulator.log" 2>&1 &
 pc_emulator_pid=$!
 trap 'kill "$pc_emulator_pid" 2>/dev/null || true' EXIT
-timeout 120 "$adb_bin" wait-for-device
 ready=false
-for i in $(seq 1 90); do
+for i in $(seq 1 120); do
+  if ! kill -0 "$pc_emulator_pid" 2>/dev/null; then cat "$evidence_dir/emulator.log"; exit 1; fi
   if [[ $("$adb_bin" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') == 1 ]]; then ready=true; break; fi
   sleep 2
 done
