@@ -78,9 +78,10 @@ inline std::int32_t read_scene_seed(std::istringstream& input, std::size_t line)
 inline double read_expected_value(std::istringstream& input) {
   std::string token;
   double value = 0.0;
-  if (input >> token) {
-    // Use a complete, locale-independent token. Reject NaN/Inf, overflow,
-    // partially parsed numbers and suffixes rather than silently accepting them.
+  if ((input >> token) && token.find_first_not_of("+-0123456789.eE") == std::string::npos) {
+    // Some standard libraries accept hexadecimal floats in stream extraction.
+    // Restrict the token to decimal characters, then require a complete,
+    // locale-independent conversion with valid syntax and a finite result.
     std::istringstream number(token);
     number.imbue(std::locale::classic());
     number >> std::noskipws >> value;
