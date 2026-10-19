@@ -7,6 +7,7 @@ on:
       - 'native/include/mundo_x/**'
       - 'native/src/infinite_*.cpp'
       - 'native/tests/infinite_*.cpp'
+      - 'native/tests/rule_physics.cpp'
       - 'examples/infinite_*.xi'
       - 'tools/validate_infinite_cli.py'
       - 'tools/cosmic_source_provenance.py'
@@ -20,6 +21,7 @@ on:
       - 'native/include/mundo_x/**'
       - 'native/src/infinite_*.cpp'
       - 'native/tests/infinite_*.cpp'
+      - 'native/tests/rule_physics.cpp'
       - 'examples/infinite_*.xi'
       - 'tools/validate_infinite_cli.py'
       - 'tools/cosmic_source_provenance.py'
@@ -69,12 +71,12 @@ jobs:
             mundo_x_infinite test_infinite_address test_infinite_core \
             test_infinite_tensor test_infinite_session test_infinite_bridge infinite_scale \
             test_compact_measurement mundo_x_native_tests \
-            test_core_1000 test_engine_session \
+            test_core_1000 test_engine_session test_rule_physics \
             2>&1 | tee infinite-evidence/build.log
       - name: Check exact operations, CLI and original CompactCore compatibility
         run: |
           ctest --test-dir infinite-build -C Release --output-on-failure \
-            -R '^(infinite_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
+            -R '^(infinite_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$|rule_physics$)' \
             --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \
             | tee infinite-evidence/ctest.log
       - name: Record measured scope and make the CLI available
