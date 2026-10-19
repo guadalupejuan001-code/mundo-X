@@ -697,20 +697,19 @@ public final class SolarInstrumentation extends Instrumentation {
 
     private void tapMapBody(int body) throws Exception {
         main(() -> activity.openMap());
-        AtomicReference<float[]> target = new AtomicReference<>();
-        waitUntil(() -> {
-            main(() -> {
-                SolarMapView map = activity.mapView();
-                if (map == null || !map.isShown() || map.getWidth() <= 0) return;
-                float[] point = map.bodyScreenPosition(body);
-                if (point == null) return;
-                int[] location = new int[2]; map.getLocationOnScreen(location);
-                target.set(new float[]{point[0] + location[0], point[1] + location[1]});
-            });
-            return target.get() != null;
-        }, 10_000, "Map has no visible touch target for body " + body);
+        awaitMapTarget(body);
         saveScreen("map-ui-body-" + body + ".png");
-        float[] point = target.get();
+        // Showing the dialog and expanding its window are separate layouts.
+        // Screenshot capture may span that transition. Resolve the focused,
+        // settled position again immediately before the one real input event.
+        float[] point = awaitMapTarget(body);
+        JSONObject touch = new JSONObject().put("body", body).put("x", point[0]).put("y", point[1])
+                .put("mapWidth", point[2]).put("mapHeight", point[3])
+                .put("mapLeft", point[4]).put("mapTop", point[5])
+                .put("beforeUiBody", activity.selectedDestination());
+        JSONArray touches = metrics.optJSONArray("mapUiTouches");
+        if (touches == null) { touches = new JSONArray(); metrics.put("mapUiTouches", touches); }
+        touches.put(touch);
         long when = SystemClock.uptimeMillis();
         MotionEvent down = MotionEvent.obtain(when, when, MotionEvent.ACTION_DOWN, point[0], point[1], 0);
         MotionEvent up = MotionEvent.obtain(when, when + 50, MotionEvent.ACTION_UP, point[0], point[1], 0);
@@ -718,8 +717,42 @@ public final class SolarInstrumentation extends Instrumentation {
         try { sendPointerSync(down); sendPointerSync(up); }
         finally { down.recycle(); up.recycle(); }
         waitUntil(() -> activity.selectedDestination() == body && activity.renderer().selectedBody() == body,
-                10_000, "The actual map touch did not select the requested body " + body);
+                10_000, "The actual map touch at " + point[0] + "," + point[1]
+                        + " did not select the requested body " + body);
+        touch.put("afterUiBody", activity.selectedDestination())
+                .put("afterRendererBody", activity.renderer().selectedBody());
         frame();
+    }
+
+    private float[] awaitMapTarget(int body) throws Exception {
+        long deadline = SystemClock.elapsedRealtime() + 10_000, stableSince = 0;
+        float[] previous = null;
+        int samples = 0;
+        while (SystemClock.elapsedRealtime() < deadline) {
+            AtomicReference<float[]> current = new AtomicReference<>();
+            main(() -> {
+                SolarMapView map = activity.mapView();
+                if (map == null || !map.isShown() || !map.hasWindowFocus()
+                        || !map.isLaidOut() || map.isLayoutRequested()) return;
+                float[] point = map.bodyScreenPosition(body);
+                if (point == null) return;
+                int[] location = new int[2]; map.getLocationOnScreen(location);
+                float x = point[0] + location[0], y = point[1] + location[1];
+                android.graphics.Rect visible = new android.graphics.Rect();
+                map.getWindowVisibleDisplayFrame(visible);
+                if (point[0] < 0 || point[0] >= map.getWidth() || point[1] < 0
+                        || point[1] >= map.getHeight() || !visible.contains((int)x, (int)y)) return;
+                current.set(new float[]{x, y, map.getWidth(), map.getHeight(), location[0], location[1]});
+            });
+            float[] value = current.get();
+            long now = SystemClock.elapsedRealtime();
+            if (value != null && Arrays.equals(previous, value)) samples++;
+            else { samples = value == null ? 0 : 1; stableSince = now; }
+            previous = value;
+            if (samples >= 3 && now - stableSince >= 400) return value;
+            SystemClock.sleep(80);
+        }
+        throw new AssertionError("Map has no focused, stable visible target for body " + body);
     }
 
     private String saveUhd(String name, boolean landscape) throws Exception {
