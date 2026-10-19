@@ -1,8 +1,25 @@
 #pragma once
-#include "vendor/mundo_x/compact_core.hpp"
+
+// Shared form of the user's existing Graphics Pauli observer. The signed Pauli
+// convention and GF(2) reduction are unchanged; the canonical core header is
+// now used by both platforms instead of separate vendored copies.
+#include "mundo_x/compact_core.hpp"
 #include <algorithm>
 
 namespace mundo_x_bridge {
+
+inline unsigned parity64(std::uint64_t value) {
+#if defined(__GNUG__) || defined(__clang__)
+  return static_cast<unsigned>(__builtin_parityll(value));
+#else
+  unsigned parity = 0;
+  while (value) {
+    parity ^= 1U;
+    value &= value - 1;
+  }
+  return parity;
+#endif
+}
 
 // P = i^phase X^x Z^z, in qubit order q0, q1, ... .
 // Keeping the exponent modulo four handles Y and multiplication signs exactly.
@@ -13,9 +30,10 @@ struct Pauli {
   static Pauli parse(const std::string& s, std::size_t n) {
     std::size_t start = 0;
     Pauli p;
-    p.x.assign((n + 63) / 64, 0);
-    p.z.assign((n + 63) / 64, 0);
-    if (s.size() == n + 1 && (s[0] == '+' || s[0] == '-')) {
+    p.x.assign(n / 64 + (n % 64 != 0), 0);
+    p.z.assign(n / 64 + (n % 64 != 0), 0);
+    if (s.size() > n && s.size() - n == 1 &&
+        (s[0] == '+' || s[0] == '-')) {
       start = 1;
       if (s[0] == '-') p.phase = 2;
     }
@@ -41,7 +59,7 @@ struct Pauli {
   void multiply_right(const Pauli& b) {
     unsigned parity = 0;
     for (std::size_t w = 0; w < x.size(); ++w)
-      parity ^= __builtin_parityll(z[w] & b.x[w]);
+      parity ^= parity64(z[w] & b.x[w]);
     phase = (phase + b.phase + 2 * parity) & 3;
     for (std::size_t w = 0; w < x.size(); ++w) {
       x[w] ^= b.x[w];
@@ -61,6 +79,8 @@ struct Pauli {
 class PauliObserver {
  public:
   explicit PauliObserver(const mundo_x::CompactCore& core) : n_(core.qubits()) {
+    rows_.reserve(n_);
+    pivots_.reserve(n_);
     for (std::size_t r = 0; r < n_; ++r)
       rows_.push_back(Pauli::parse(core.generator_string(r), n_));
     std::size_t rank = 0;
@@ -97,4 +117,5 @@ class PauliObserver {
   std::vector<Pauli> rows_;
   std::vector<std::size_t> pivots_;
 };
+
 } // namespace mundo_x_bridge

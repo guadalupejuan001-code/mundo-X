@@ -43,21 +43,40 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public static final class Snapshot implements Serializable {
         private static final long serialVersionUID=1L;
         public final int objectCount,selectedId,resolutionLimit;
+        public final int projectVersion;
+        public final long seed;
         public final boolean overview,coupling;
         public final float yaw,pitch,zoom,time,quantumStrength;
+        // Optional session metadata: old serialized sessions default this to 0.
+        public final float enabledQuantumStrength;
+        public final float cameraNear,cameraFar,cameraFov;
         public final float[] overrideEye,overrideTarget;
         public final String[] observables;
         public final int[] editIds,editValues;
         private Snapshot(QuantumRenderer r){
             objectCount=r.count;selectedId=r.selected;resolutionLimit=r.limit;
+            projectVersion=1;seed=r.seed;
             overview=r.overview;coupling=r.strength!=0;
             yaw=r.yaw;pitch=r.pitch;zoom=r.zoom;time=r.timeValue;quantumStrength=r.strength;
+            enabledQuantumStrength=r.enabledStrength;
+            cameraNear=r.overrideNear;cameraFar=r.overrideFar;cameraFov=r.cameraFov;
             overrideEye=r.overrideEye==null?null:r.overrideEye.clone();
             overrideTarget=r.overrideTarget==null?null:r.overrideTarget.clone();
             observables=r.observables.clone();editIds=new int[r.edits.size()];editValues=new int[editIds.length];
             int index=0;for(Map.Entry<Integer,Integer> e:r.edits.entrySet()){
                 editIds[index]=e.getKey();editValues[index++]=e.getValue();
             }
+        }
+        Snapshot(int count,int selected,int resolution,long seed,boolean overview,float yaw,float pitch,
+                 float zoom,float time,float strength,float[] eye,float[] target,float near,float far,float fov,
+                 String[] observables,int[] ids,int[] values){
+            this.objectCount=count;this.selectedId=selected;this.resolutionLimit=resolution;
+            this.projectVersion=1;this.seed=seed;this.overview=overview;this.coupling=strength!=0;
+            this.yaw=yaw;this.pitch=pitch;this.zoom=zoom;this.time=time;this.quantumStrength=strength;
+            this.enabledQuantumStrength=strength!=0?strength:.25f;
+            this.overrideEye=eye==null?null:eye.clone();this.overrideTarget=target==null?null:target.clone();
+            this.cameraNear=near;this.cameraFar=far;this.cameraFov=fov;
+            this.observables=observables.clone();this.editIds=ids.clone();this.editValues=values.clone();
         }
     }
     private final NativeCore core;
@@ -66,14 +85,17 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private String[] observables;
     private float[] coefficients;
     private long uploadedCore=-1;
+    private long uploadedEpoch=-1;
     private final TreeMap<Integer,Integer> edits=new TreeMap<>();
     private final HashMap<String,Integer> locations=new HashMap<>();
     private int program,vao,editTexture,quantumTexture,colorTexture,depth,fbo;
     private int viewWidth=1,viewHeight=1,width=1,height=1,limit=640;
     private int count=1_000_000,selected=-1;
+    private long seed=2026;
     private boolean framebufferDirty=true,editsDirty=true,failed=false;
     private boolean overview=true;
     private float yaw=.67f,pitch=.65f,zoom=1f,timeValue=0f,strength=.25f;
+    private float enabledStrength=.25f,overrideNear=.1f,overrideFar=10000,cameraFov=48;
     private float[] overrideEye,overrideTarget;
     private float[] eye=new float[3],forward=new float[3],right=new float[3],up=new float[3],vp=new float[16];
     private float near,far,aspect;
@@ -98,7 +120,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     }
     private static boolean finite(float n){return !Float.isNaN(n)&&!Float.isInfinite(n);}
     private static void vector(float[] a){
-        if(a==null||a.length!=3||!finite(a[0])||!finite(a[1])||!finite(a[2]))
+        if(a==null||a.length!=3||!finite(a[0])||!finite(a[1])||!finite(a[2])
+            ||Math.abs(a[0])>1_000_000||Math.abs(a[1])>1_000_000||Math.abs(a[2])>1_000_000)
             throw new IllegalArgumentException("Vector de cámara inválido");
     }
     private static void cameraPair(float[] position,float[] target){
@@ -110,10 +133,15 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         if(state.objectCount<1||state.objectCount>MAX_OBJECTS||state.selectedId < -1||state.selectedId>=state.objectCount
             ||state.resolutionLimit<64||state.resolutionLimit>4096||!finite(state.yaw)||!finite(state.pitch)
             ||state.pitch<.04f||state.pitch>1.52f||!finite(state.zoom)||state.zoom<.12f||state.zoom>6f
-            ||!finite(state.time)||(state.quantumStrength!=0f&&state.quantumStrength!=.25f)
-            ||state.coupling!=(state.quantumStrength!=0f)||state.observables==null||state.observables.length!=core.qubits*3
+            ||!finite(state.time)||Math.abs(state.time)>1_000_000||!finite(state.quantumStrength)||Math.abs(state.quantumStrength)>.25f
+            ||!finite(state.enabledQuantumStrength)||Math.abs(state.enabledQuantumStrength)>.25f
+            ||state.coupling!=(state.quantumStrength!=0f)||state.observables==null||state.observables.length<1||state.observables.length>4096
             ||state.editIds==null||state.editValues==null||state.editIds.length!=state.editValues.length
-            ||state.editIds.length>MAX_OBJECTS)
+            ||state.editIds.length>100_000||Math.abs(state.yaw)>1_000_000
+            ||(state.projectVersion!=0&&(state.projectVersion!=1||state.seed<0||state.seed>0xffffffffL
+               ||!finite(state.cameraNear)||!finite(state.cameraFar)||!finite(state.cameraFov)
+               ||state.cameraNear<.001f||state.cameraNear>=state.cameraFar||state.cameraFar>1_000_000
+               ||state.cameraFov<1||state.cameraFov>170)))
             throw new IllegalArgumentException("Estado visual guardado inválido");
         for(String pauli:state.observables){
             if(pauli==null)throw new IllegalArgumentException("Observable guardado nulo");
@@ -134,6 +162,9 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         }
         count=state.objectCount;selected=state.selectedId;limit=state.resolutionLimit;overview=state.overview;
         yaw=state.yaw;pitch=state.pitch;zoom=state.zoom;timeValue=state.time;strength=state.quantumStrength;
+        if(strength!=0)enabledStrength=strength;
+        else if(state.enabledQuantumStrength!=0)enabledStrength=state.enabledQuantumStrength;
+        if(state.projectVersion!=0){seed=state.seed;overrideNear=state.cameraNear;overrideFar=state.cameraFar;cameraFov=state.cameraFov;}
         observables=state.observables.clone();
     }
     private static String asset(Context c,String path){
@@ -166,7 +197,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             editTexture=texture();quantumTexture=texture();colorTexture=texture();
             glGenFramebuffers(1,id,0);fbo=id[0];glGenRenderbuffers(1,id,0);depth=id[0];
             glDisable(GL_DITHER);glDisable(GL_BLEND);glDisable(GL_CULL_FACE);
-            framebufferDirty=true;editsDirty=true;uploadedCore=-1;failed=false;
+            framebufferDirty=true;editsDirty=true;uploadedCore=-1;uploadedEpoch=-1;failed=false;
             device=glGetString(GL_RENDERER);check("Inicio");
         }catch(Throwable e){if(program!=0){glDeleteProgram(program);program=0;}error(e);}
         finally{if(vert!=0)glDeleteShader(vert);if(frag!=0)glDeleteShader(frag);}
@@ -201,17 +232,17 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);
             glTexImage2D(GL_TEXTURE_2D,0,GL_RG32I,w,h,0,GL_RG_INTEGER,GL_INT,bytes);sampling();check("Ediciones");editsDirty=false;
         }
-        long version;
+        long version,epoch;
         synchronized(core){
-            version=core.version();
-            if(version!=uploadedCore)coefficients=core.query(observables);
+            version=core.version();epoch=core.epoch();
+            if(version!=uploadedCore||epoch!=uploadedEpoch)coefficients=core.query(observables);
         }
-        if(version!=uploadedCore){
+        if(version!=uploadedCore||epoch!=uploadedEpoch){
             int max=maxTexture(),w=Math.min(Math.min(4096,max),coefficients.length),h=(coefficients.length+w-1)/w;
             if(h>max)throw new IllegalStateException("Los observables exceden la textura de este dispositivo");
             ByteBuffer bytes=direct(w*h*4);bytes.asFloatBuffer().put(coefficients);
             glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,quantumTexture);
-            glTexImage2D(GL_TEXTURE_2D,0,GL_R32F,w,h,0,GL_RED,GL_FLOAT,bytes);sampling();check("Observables");uploadedCore=version;
+            glTexImage2D(GL_TEXTURE_2D,0,GL_R32F,w,h,0,GL_RED,GL_FLOAT,bytes);sampling();check("Observables");uploadedCore=version;uploadedEpoch=epoch;
         }
         glActiveTexture(GL_TEXTURE0);check("Estado");
     }
@@ -227,20 +258,20 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         float distance=(overview?extent*Math.max(1.65f,1.4f/aspect):25f)*zoom;
         eye=new float[]{distance*(float)(Math.cos(pitch)*Math.sin(yaw)),target[1]+distance*(float)Math.sin(pitch),distance*(float)(Math.cos(pitch)*Math.cos(yaw))};
         near=overview?Math.max(.05f,extent*.01f):.1f;far=overview?Math.max(10000,distance+extent*4):5000;
-        if(overrideEye!=null){eye=overrideEye;target=overrideTarget;near=.1f;far=10000;}
+        if(overrideEye!=null){eye=overrideEye;target=overrideTarget;near=overrideNear;far=overrideFar;}
         forward=normalize(new float[]{target[0]-eye[0],target[1]-eye[1],target[2]-eye[2]});
         right=normalize(cross(forward,Math.abs(forward[1])>.999f?new float[]{0,0,1}:new float[]{0,1,0}));up=cross(right,forward);
         float[] view=new float[16],projection=new float[16];
         Matrix.setLookAtM(view,0,eye[0],eye[1],eye[2],target[0],target[1],target[2],up[0],up[1],up[2]);
-        Matrix.perspectiveM(projection,0,48,aspect,near,far);Matrix.multiplyMM(vp,0,projection,0,view,0);
+        Matrix.perspectiveM(projection,0,cameraFov,aspect,near,far);Matrix.multiplyMM(vp,0,projection,0,view,0);
     }
     private double draw(int debug){
         glBindFramebuffer(GL_FRAMEBUFFER,fbo);glViewport(0,0,width,height);glUseProgram(program);glBindVertexArray(vao);
         int side=(int)Math.ceil(Math.sqrt(count));
         i("uCount",count);i("uSide",side);i("uEditCount",edits.size());i("uSelected",selected);i("uDebug",debug);i("uEdits",0);i("uQuantum",1);i("uQuantumCount",coefficients.length);
-        int seed=2026;glUniform4ui(loc("uSeedBytes"),seed&255,(seed>>>8)&255,(seed>>>16)&255,(seed>>>24)&255);
+        int seedBits=(int)seed;glUniform4ui(loc("uSeedBytes"),seedBits&255,(seedBits>>>8)&255,(seedBits>>>16)&255,(seedBits>>>24)&255);
         f("uTime",timeValue);f("uFogDistance",Math.max(50,side*2.2f));f("uQuantumStrength",strength);
-        f("uNear",near);f("uFar",far);f("uAspect",aspect);f("uTanHalfFov",(float)Math.tan(Math.toRadians(24)));
+        f("uNear",near);f("uFar",far);f("uAspect",aspect);f("uTanHalfFov",(float)Math.tan(Math.toRadians(cameraFov*.5)));
         v("uEye",eye);v("uCameraForward",forward);v("uCameraRight",right);v("uCameraUp",up);
         glUniform2f(loc("uResolution"),width,height);glUniformMatrix4fv(loc("uVp"),1,false,vp,0);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,quantumTexture);
@@ -279,17 +310,23 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     }
     private void error(Throwable e){failed=true;failure=e.toString();listener.status("No se pudo dibujar: "+failure);}
     public void gate(int op,int a,int b){core.apply(op,a,b);}
-    public void reset(){core.resetGraph();observables=core.visualProgram();uploadedCore=-1;edits.clear();editsDirty=true;selected=-1;timeValue=0;}
-    public void setTime(float seconds){if(!finite(seconds))throw new IllegalArgumentException("Tiempo inválido");timeValue=seconds;}
-    public void toggleView(){overview=!overview;pitch=overview?.65f:.3f;zoom=1;overrideEye=null;overrideTarget=null;}
-    public void streetView(){overview=false;pitch=.3f;zoom=1;overrideEye=null;overrideTarget=null;}
+    public void reset(){
+        synchronized(core){core.resetGraph();observables=core.visualProgram();}
+        uploadedCore=-1;uploadedEpoch=-1;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;timeValue=0;
+    }
+    public void setTime(float seconds){
+        if(!finite(seconds)||Math.abs(seconds)>1_000_000)throw new IllegalArgumentException("Tiempo fuera del rango del proyecto");
+        timeValue=seconds;
+    }
+    public void toggleView(){overview=!overview;pitch=overview?.65f:.3f;zoom=1;overrideEye=null;overrideTarget=null;cameraFov=48;}
+    public void streetView(){overview=false;pitch=.3f;zoom=1;overrideEye=null;overrideTarget=null;cameraFov=48;}
     public void orbit(float dx,float dy){
         if(!finite(dx)||!finite(dy))throw new IllegalArgumentException("Movimiento de cámara inválido");
-        yaw=(yaw+dx*.006f)%(float)(Math.PI*2);pitch=Math.max(.04f,Math.min(1.52f,pitch+dy*.005f));overrideEye=null;overrideTarget=null;
+        yaw=(yaw+dx*.006f)%(float)(Math.PI*2);pitch=Math.max(.04f,Math.min(1.52f,pitch+dy*.005f));overrideEye=null;overrideTarget=null;cameraFov=48;
     }
     public void zoom(float factor){
         if(!finite(factor)||factor<=0)throw new IllegalArgumentException("Zoom inválido");
-        zoom=Math.max(.12f,Math.min(6,zoom/factor));overrideEye=null;overrideTarget=null;
+        zoom=Math.max(.12f,Math.min(6,zoom/factor));overrideEye=null;overrideTarget=null;cameraFov=48;
     }
     public void resolution(int pixels){
         if(pixels<64||pixels>4096)throw new IllegalArgumentException("Resolución fuera de rango");
@@ -300,13 +337,19 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         count=n;if(selected>=n)selected=-1;
         // Off-range IDs retain their edits and reappear intact when count grows.
     }
-    public void coupling(boolean enabled){strength=enabled?.25f:0;}
+    public void worldSeed(long value){
+        if(value<0||value>0xffffffffL)throw new IllegalArgumentException("Semilla fuera de rango");
+        seed=value;
+    }
+    public void coupling(boolean enabled){strength=enabled?enabledStrength:0;}
     public void pick(int x,int y){selected=-1;pickX=Math.max(0,x);pickY=Math.max(0,y);}
     public void editSelected(int action){
         if(action==-1)action=7;
         if(action<0||action>7)throw new IllegalArgumentException("Edición inválida");
         if(selected<0||selected>=count)return;
         int value=action==1?Math.min(6,edits.getOrDefault(selected,0)+1):action;
+        if(value!=0&&!edits.containsKey(selected)&&edits.size()>=100_000)
+            throw new IllegalStateException("El proyecto alcanzó 100.000 ediciones");
         if(value==0)edits.remove(selected);else edits.put(selected,value);editsDirty=true;
     }
     public void requestCapture(boolean ids,CaptureListener listener){
@@ -315,7 +358,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         capture=listener;captureDebug=ids?1:0;
     }
     public void testCamera(float[] position,float[] target){
-        cameraPair(position,target);overrideEye=position.clone();overrideTarget=target.clone();
+        cameraPair(position,target);overrideEye=position.clone();overrideTarget=target.clone();overrideNear=.1f;overrideFar=10000;cameraFov=48;
     }
     /** Call on the GL thread, after preceding queued world changes. */
     public Snapshot snapshot(){return new Snapshot(this);}

@@ -1,6 +1,7 @@
 {
   "repository": "https://github.com/guadalupejuan001-code/mundo-X",
-  "commit": "ebd53fca714e7afaeeaa0044981df3565061022d",
+  "commit": "844681fb8d04c55690e4e6494278391a5b70b313",
+  "scope": "Canonical headers from the integrated Mundo X repository, compiled directly by Android and desktop. No vendor copies.",
   "files": [
     {
       "path": "native/include/mundo_x/compact_core.hpp",
@@ -9,8 +10,28 @@
     },
     {
       "path": "native/include/mundo_x/dense_core.hpp",
-      "git_blob_sha1": "14db1153b2a9a5eaf54f3070f2597496ba1bb899",
-      "sha256": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc"
+      "git_blob_sha1": "551150407bd498e28fabb938300b7024ffe2687c",
+      "sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f"
     }
+  ],
+  "historical_graphics_baseline": {
+    "commit": "ebd53fca714e7afaeeaa0044981df3565061022d",
+    "files": [
+      {
+        "path": "native/include/mundo_x/compact_core.hpp",
+        "git_blob_sha1": "f40c1477bce9bdd882afed7c54379d883c2ab33a",
+        "sha256": "aa9c89923b4ae839612532770ac7c7a461d5baeac3c8ac264bb8df2bd570027c"
+      },
+      {
+        "path": "native/include/mundo_x/dense_core.hpp",
+        "git_blob_sha1": "14db1153b2a9a5eaf54f3070f2597496ba1bb899",
+        "sha256": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc"
+      }
+    ]
+  },
+  "integration_notes": [
+    "CompactCore remains byte-identical to the historical Graphics baseline.",
+    "DenseCore includes the author repository phase branch and preserves current Real/FP64 precision.",
+    "The shared observer and state/session bridge live under native/include/mundo_x and native/src. They are adapters over these original cores."
   ]
 }

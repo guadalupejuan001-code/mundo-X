@@ -1,0 +1,70 @@
+{
+  "format": "cosmic-x-engine-project",
+  "version": 1,
+  "name": "Mundo X · observador Bell",
+  "core": {
+    "backend": "compact-clifford",
+    "initialState": "zero",
+    "qubits": 2,
+    "revision": 1,
+    "gates": [
+      [
+        "H",
+        0
+      ],
+      [
+        "CX",
+        0,
+        1
+      ]
+    ]
+  },
+  "graphics": {
+    "program": "opaque-grid-v1",
+    "objects": 1024,
+    "seed": 2026,
+    "coupling": 0.25,
+    "observables": [
+      "+XX",
+      "-YY",
+      "+ZZ",
+      "XI",
+      "IX",
+      "ZI",
+      "IZ"
+    ],
+    "edits": [
+      [
+        0,
+        2
+      ],
+      [
+        62,
+        6
+      ],
+      [
+        1000,
+        7
+      ]
+    ],
+    "camera": {
+      "mode": "lookAt",
+      "eye": [
+        14,
+        8,
+        18
+      ],
+      "target": [
+        0,
+        1,
+        0
+      ],
+      "near": 0.1,
+      "far": 5000,
+      "fov": 48
+    },
+    "time": 0,
+    "selectedId": 62,
+    "resolutionLimit": 640
+  }
+}

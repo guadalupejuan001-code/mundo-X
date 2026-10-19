@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 directory = Path(sys.argv[1])
 rows = (directory / 'SHA256SUMS.txt').read_text().splitlines()
-expected_names = {'Mundo-X-Graphics.apk', 'Mundo-X-Graphics-tests.apk'}
+expected_names = {'COSMIC-X-Engine.apk', 'COSMIC-X-Engine-tests.apk'}
 found = set()
 for row in rows:
     expected, name = row.split()
@@ -86,8 +86,8 @@ done
 "$graphics_adb" -s "$graphics_serial" shell settings put global window_animation_scale 0
 "$graphics_adb" -s "$graphics_serial" shell settings put global transition_animation_scale 0
 "$graphics_adb" -s "$graphics_serial" shell settings put global animator_duration_scale 0
-"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/Mundo-X-Graphics.apk"
-"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/Mundo-X-Graphics-tests.apk"
+"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/COSMIC-X-Engine.apk"
+"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/COSMIC-X-Engine-tests.apk"
 "$graphics_adb" -s "$graphics_serial" logcat -c
 
 set +e

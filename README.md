@@ -1,10 +1,12 @@
-# Mundo X
+# COSMIC X Engine
 
-**Plataforma de computación basada en representaciones compactas, simulación cuántica por software y reconstrucción de información mediante reglas.**
+**Computación cuántica de Mundo X: núcleo cuántico y motor gráfico cuántico integrado.**
 
-**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
+**COSMIC X Engine es el título del conjunto.** Dentro se conserva la computación cuántica de Mundo X, con sus núcleos propios y el motor gráfico que observa el estado compartido. El nombre no sustituye los componentes ni cambia su autoría. La evolución cuántica se ejecuta por software y la imagen se dibuja mediante OpenGL ES.
 
-**Mundo X Graphics 0.1.1 para Android:** [aplicación, controles y compilación](graphics-android/README.md). Integra el observador de Graphics con un CompactCore compartido, puertas sobre 20 qubits, selección y edición por ID, sesión persistente y hasta 1.048.576 cajas procedurales. El workflow propio entrega la APK y las comprobaciones en emulador.
+**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 19 de octubre de 2026.
+
+**COSMIC X Engine 0.2.0 para Android:** [aplicación, controles y compilación](graphics-android/README.md). El núcleo cuántico y el motor gráfico comparten la sesión nativa. Permite crear, abrir y guardar proyectos `.cosmic`, operar sobre 1 a 256 qubits del perfil compacto, conservar los observables originales y editar hasta 1.048.576 cajas por ID. Incluye proyectos Bell y GHZ. El [visor de escritorio](graphics-desktop/README.md) compila el mismo puente y abre el mismo [formato de proyecto](graphics-desktop/PROJECT_FORMAT.md). [Integración y procedencia](docs/cosmic_x_engine.md).
 
 **Nueva línea: Motor X visual.** [Programar cálculo y escenas dentro del mismo
 runtime](docs/motor_x_visual.md), conservando reglas, IDs y cambios. Esta rama
@@ -123,26 +125,19 @@ Esto **no significa que la CPU deje de usar bits o ejecutar instrucciones conven
 
 ### Vista general
 
-~~~text
-                           MUNDO X
-             Representación y evolución de estados
-                              |
-          +-------------------+-------------------+
-          |                   |                   |
-   Cálculo cuántico       Aprendizaje        Aplicaciones
-     por software        de estados          y validación
-          |                   |                   |
-    Dense / Quantum       Bridge X           Android Lab
-    Core (referencia)        |                Windows x64
-          |             Transformer X        Render GPU/3D
-    Compact Core           (separado)         Red / relay
-          |
-    Clifford / tableau
-          |
-    Exact T / Reduced Exact T
-          |
-     Teleport / XASM / pruebas de equivalencia
-~~~
+```mermaid
+flowchart TD
+    A["COSMIC X Engine · título"] --> B["Computación cuántica de Mundo X"]
+    B --> C["Núcleo cuántico"]
+    B --> D["Motor gráfico cuántico integrado"]
+    C -->|"Observables del estado compartido"| D
+```
+
+El núcleo conserva sus representaciones Compact, Reduced Exact T, Factorized y
+Adaptive Phase, con sus límites y herramientas respectivos. La sesión gráfica
+portable de esta versión conecta CompactCore con el observador de Graphics.
+Los módulos de aprendizaje, las aplicaciones de laboratorio y las utilidades
+conservan sus rutas e identidades dentro del repositorio.
 
 **Aclaración de integración:** Compact Core y Reduced Exact T pertenecen al motor nativo C++. Transformer X es un módulo PyTorch separado: **no está conectado actualmente al simulador compacto**. Las escenas GPU son gráficos clásicos que pueden recibir parámetros del estado simulado; no emplean una GPU cuántica.
 

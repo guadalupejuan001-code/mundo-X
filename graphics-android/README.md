@@ -1,101 +1,107 @@
-# Mundo X Graphics 0.1.1 · Android
+# COSMIC X Engine 0.2.0 · Android
 
-Aplicación Android del observador gráfico de Mundo X Graphics 0.1. Recibe el
-`CompactCore` que prepara la aplicación, consulta su estado y reconstruye una
-escena de cajas con identidad estable en OpenGL ES 3.0.
+**COSMIC X Engine es el título. Dentro está la computación cuántica de Mundo X,
+con su núcleo cuántico y su motor gráfico cuántico integrado.**
 
-La idea y dirección de Mundo X corresponden a X. Esta entrega continúa el
-paquete Graphics del 18 de octubre de 2026 y su integración Android pausada.
+La aplicación continúa el código propio de Mundo X Graphics. El núcleo mantiene
+el estado; el motor gráfico toma prestada esa misma sesión, consulta sus
+observables y reconstruye las cajas por reglas e IDs en OpenGL ES 3.0. La idea,
+creación y dirección corresponden a X, con asistencia de IA en el desarrollo.
+[Procedencia e integración](../docs/cosmic_x_engine.md).
 
-## Usar la aplicación
+## Proyectos `.cosmic`
 
-- **Arrastra** para girar la cámara; **pellizca** para acercarte; **toca** una
-  caja para seleccionarla. El panel muestra su ID.
-- **Vista** alterna entre panorama y calle. **Animar** activa la evolución
-  visual; al abrir, la escena espera entradas para evitar trabajo continuo.
-- **Objetos** selecciona entre 1.024 y 1.048.576 cajas. El inicio usa
-  1.000.000. Reducir temporalmente esta cantidad conserva las ediciones de los
-  IDs que quedan fuera del rango; reaparecen al ampliarlo.
-- **Calidad** cambia el lado mayor de la imagen interna: 480, 640 o 960
-  píxeles. Mantiene la relación de aspecto y el número elegido de objetos.
-- **Qubit** elige el control. H, S, X, Y y Z actúan sobre él; CX y CZ conectan
-  el control con el siguiente qubit, circularmente.
-- **Acoplamiento** conecta o desconecta el efecto de los observables en la
-  imagen. El núcleo conserva y sigue recibiendo sus operaciones en ambos casos.
+- **Nuevo** permite elegir nombre, 1 a 256 qubits, 1 a 1.048.576 objetos y una
+  semilla de 32 bits sin signo. Prepara el estado de grafo del núcleo propio.
+- **Abrir .cosmic** importa un proyecto mediante el selector de Android.
+- **Guardar** exporta estado e historial, observables originales, mundo,
+  cámara, tiempo, selección y ediciones a un archivo que elijas.
+- **Ejemplos** incluye Observador Bell y Ciudad GHZ, los mismos archivos que
+  usa el [visor de escritorio](../graphics-desktop/README.md).
+
+El [formato](../graphics-desktop/PROJECT_FORMAT.md) está versionado. La
+importación valida el documento completo y prepara una sesión candidata antes
+de reemplazar el proyecto activo. Un archivo inválido conserva el proyecto
+actual. El formato v1 admite el perfil `compact-clifford` y la escena
+`opaque-grid-v1`; rechaza perfiles y operaciones desconocidos.
+
+## Controles
+
+- **Arrastra** para girar; **pellizca** para acercarte; **toca** una caja para
+  seleccionarla y consultar su ID.
+- **Vista** alterna panorama y calle. **Animar** activa la evolución visual.
+  La escena permanece quieta hasta recibir entradas al abrir.
+- **Objetos** cambia la población hasta 1.048.576 cajas. Las ediciones de IDs
+  temporalmente fuera del rango reaparecen al ampliarlo.
+- **Calidad** controla la resolución interna: 480, 640 o 960 píxeles en el
+  lado mayor. Conserva la relación de aspecto y la cantidad de objetos.
+- **Qubit** elige el control; H, S, X, Y y Z actúan sobre él. CX y CZ conectan
+  el control con el siguiente qubit, circularmente; requieren al menos dos.
+- **Acoplamiento** conecta o desconecta el efecto del núcleo en la imagen.
+  Conserva el estado y sigue aceptando puertas. Los proyectos admiten una
+  intensidad propia entre −0,25 y 0,25.
 - **Subir objeto**, **Ocultar** y **Restaurar ID** editan la caja seleccionada.
-- **Restablecer** solicita confirmación y vuelve al estado inicial del núcleo
-  y de las ediciones. La cámara, las puertas y las ediciones se guardan para
-  retomar la sesión.
+- **Restablecer** prepara el estado de grafo con la cantidad actual de qubits
+  y borra las ediciones de objetos, después de confirmarlo.
+
+La sesión privada se guarda de forma atómica para retomarla. El historial
+nativo es la fuente de verdad; el guardado Java conserva ese historial junto
+con los controles visuales. Se mantiene la lectura de las sesiones de Graphics
+0.1.1. Los archivos `.cosmic` transportan el proyecto entre plataformas.
+
+## Núcleo y observación
+
+Android y escritorio compilan directamente
+[`native/src/graphics_core_bridge.cpp`](../native/src/graphics_core_bridge.cpp)
+con los encabezados canónicos de `native/include/mundo_x`, sin copias separadas
+del núcleo. La [procedencia](app/src/main/cpp/PROVENANCE.json) registra los
+hashes actuales y el punto de partida de Graphics.
+
+`MainActivity` posee el `NativeCore`. `QuantumRenderer` observa ese mismo
+objeto: la cámara y el dibujo conservan el estado y el historial. La caché se
+invalida al operar o restaurar, incluso si el proyecto restaurado tiene el
+mismo número de revisión.
+
+El mundo inicial usa 20 qubits, 1.000.000 de objetos y 60 observables:
+los generadores iniciales y las consultas locales X/Z. Los proyectos
+importados conservan su propio conjunto de observables, incluso cuando
+hay menos objetos que canales. El observador obtiene valores esperados
+de Pauli sin medición proyectiva.
 
 ## Construir
 
 Requiere Java 17, Gradle 8.9, Android SDK 35, NDK `27.2.12479018` y CMake
-`3.22.1`. Las versiones del proyecto están fijadas en Gradle y el workflow.
+`3.22.1`. Las versiones están fijadas en Gradle y el workflow.
 
 ```bash
-cd graphics-android
-gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+gradle -p graphics-android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-La salida principal es `app/build/outputs/apk/debug/app-debug.apk`. El
-workflow `Mundo X Graphics Android` entrega la APK, sus pruebas y los resultados
-del emulador. La firma es de depuración; el identificador de aplicación es
-`com.mundox.graphics`, independiente de XLab y MicroLab.
+Salida: `graphics-android/app/build/outputs/apk/debug/app-debug.apk`.
+El workflow **COSMIC X Engine APK and Android validation** entrega
+`COSMIC-X-Engine.apk`, su firma, hashes y evidencias del emulador.
 
-La APK incluye bibliotecas nativas ARM64 y x86-64. Requiere Android 8.0 o
-posterior y OpenGL ES 3.0. No necesita conexión, cuentas ni permisos de red o
-almacenamiento compartido.
+La APK es de depuración, contiene ARM64 y x86-64 y conserva el identificador
+`com.mundox.graphics`. Requiere Android 8.0 o posterior y OpenGL ES 3.0.
+Los selectores de documentos usan el acceso que Android concede al archivo
+elegido; la aplicación no necesita permisos de red ni acceso general al
+almacenamiento. Instalar una actualización sobre otra APK requiere la misma
+firma. Los builds de depuración de distintos entornos pueden usar claves distintas.
 
-## Núcleo, observación y conservación
+## Verificación y alcance
 
-`MainActivity` es dueña del núcleo. `QuantumRenderer` toma prestado el mismo
-objeto `NativeCore`: su constructor y la cámara no preparan, reinician ni
-miden proyectivamente el registro. Una revisión del núcleo invalida la textura
-de observables; las entradas de cámara reutilizan los coeficientes anteriores.
+`app/src/androidTest/` prueba JNI, observación sin mutación, renderizado real,
+causalidad de puertas, control con acoplamiento cero, IDs, ediciones,
+reanudación, proyectos portables y recreación de la actividad. El workflow
+conserva resultados, imágenes, proyectos exportados y registros. Un comprobador
+de escritorio reproduce los estados exportados por Android con el núcleo
+compartido y con la referencia densa.
 
-La preparación inicial explícita usa 20 qubits en un estado de grafo. El
-programa visual mantiene 60 consultas de Pauli: los 20 generadores iniciales
-y 40 consultas locales X/Z. Los objetos distribuyen esas consultas mediante
-su ID. Se conservan los operadores iniciales incluso después de cerrar y
-reabrir la aplicación, para mantener la relación entre núcleo e imagen.
+El perfil gráfico portable usa operaciones Clifford de CompactCore y cajas
+opacas. Reduced, Factorized y las fases generales siguen integradas en el
+repositorio y en sus herramientas; esta interfaz gráfica todavía no ofrece
+esos perfiles. El cómputo cuántico es por software y la imagen usa una GPU convencional.
 
-El archivo de sesión conserva la historia de puertas, el programa de
-observación, cámara, tiempo, acoplamiento, selección y ediciones. La escritura
-es atómica. Un archivo que no pueda restaurarse queda conservado y se informa
-del problema antes de sustituirlo mediante Restablecer.
-
-Las cabeceras originales están fijadas al commit
-`ebd53fca714e7afaeeaa0044981df3565061022d` y se comprueban por hash en
-`app/src/main/cpp/PROVENANCE.json`. Los adaptadores Java/JNI y de observación
-amplían la integración sin cambiar esas cabeceras.
-
-## Alcance de esta versión
-
-El mundo es una cuadrícula finita de cajas opacas procedurales con IDs; el
-observador recorre celdas e intersecta las cajas para resolver lo visible.
-La representación compacta permite reconstruir geometría sin almacenar una
-matriz de transformación por cada caja. Las excepciones por ID se conservan
-por separado y también tienen un coste de memoria y consulta.
-
-Las operaciones cuánticas pertenecen al conjunto Clifford del `CompactCore`.
-La geometría combina sus observables con reglas de altura, tiempo y color.
-Esta integración no incorpora mallas arbitrarias ni la puerta T de otros
-componentes del repositorio.
-
-La cifra de milisegundos corresponde al dibujo de un fotograma sincronizado
-con `glFinish`; no incluye toda la interacción, el guardado ni la presentación
-de Android. Las comprobaciones del emulador establecen funcionamiento en ese
-entorno. El rendimiento en un Samsung A16 requiere medir la APK en ese teléfono.
-
-## Verificación
-
-Las pruebas viven en `app/src/androidTest/`. Comprueban consultas JNI,
-conservación del núcleo prestado, renderizado real, causalidad de una puerta,
-control de acoplamiento cero, IDs, ediciones y reanudación. El workflow conserva
-el controlador utilizado, resultados estructurados, capturas y registros.
-
-Los resultados anteriores de Graphics 0.1 en Linux se mantienen como referencia
-histórica; no se presentan como rendimiento de Android.
-
-Referencias de plataforma: [ciclo de vida GLSurfaceView](https://developer.android.com/reference/android/opengl/GLSurfaceView)
-y [márgenes de sistema en Android 15](https://developer.android.com/develop/ui/views/layout/edge-to-edge).
+El tiempo mostrado mide el dibujo de un fotograma sincronizado con `glFinish`.
+Las pruebas identifican el controlador utilizado. El rendimiento en un Samsung
+A16 se determina ejecutando la APK en ese dispositivo.

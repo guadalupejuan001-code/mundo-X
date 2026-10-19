@@ -1,15 +1,21 @@
-name: Mundo X Graphics APK and Android validation
+name: COSMIC X Engine APK and Android validation
 
 on:
   push:
     branches: [main]
     paths:
       - 'graphics-android/**'
+      - 'graphics-desktop/**'
+      - 'native/**'
+      - 'tools/cosmic-*'
       - 'tools/graphics-*'
       - '.github/workflows/graphics-android.yml'
   pull_request:
     paths:
       - 'graphics-android/**'
+      - 'graphics-desktop/**'
+      - 'native/**'
+      - 'tools/cosmic-*'
       - 'tools/graphics-*'
       - '.github/workflows/graphics-android.yml'
   workflow_dispatch:
@@ -63,27 +69,27 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p graphics-dist
-          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk graphics-dist/Mundo-X-Graphics.apk
+          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk graphics-dist/COSMIC-X-Engine.apk
           cp graphics-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
-            graphics-dist/Mundo-X-Graphics-tests.apk
+            graphics-dist/COSMIC-X-Engine-tests.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
-            graphics-dist/Mundo-X-Graphics.apk > graphics-dist/apk-signature.txt
+            graphics-dist/COSMIC-X-Engine.apk > graphics-dist/apk-signature.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
-            graphics-dist/Mundo-X-Graphics.apk > graphics-dist/apk-manifest.txt
+            graphics-dist/COSMIC-X-Engine.apk > graphics-dist/apk-manifest.txt
           python3 - <<'PY'
           import hashlib
           import subprocess
           import zipfile
           from pathlib import Path
           directory = Path('graphics-dist')
-          with zipfile.ZipFile(directory / 'Mundo-X-Graphics.apk') as apk:
+          with zipfile.ZipFile(directory / 'COSMIC-X-Engine.apk') as apk:
               expected = {'lib/arm64-v8a/libmx_graphics.so', 'lib/x86_64/libmx_graphics.so'}
               found = {name for name in apk.namelist() if name.endswith('/libmx_graphics.so')}
               if found != expected:
                   raise SystemExit(f'Native APK ABIs differ: {found}')
               if apk.testzip() is not None:
                   raise SystemExit('APK ZIP integrity failure')
-          names = ('Mundo-X-Graphics.apk', 'Mundo-X-Graphics-tests.apk')
+          names = ('COSMIC-X-Engine.apk', 'COSMIC-X-Engine-tests.apk')
           checksums = ''.join(hashlib.sha256((directory / name).read_bytes()).hexdigest()
                               + '  ' + name + '\n' for name in names)
           (directory / 'SHA256SUMS.txt').write_text(checksums)
@@ -94,7 +100,7 @@ jobs:
       - name: Upload APK and instrumentation
         uses: actions/upload-artifact@v4
         with:
-          name: Mundo-X-Graphics-APK
+          name: COSMIC-X-Engine-APK
           path: graphics-dist/**
           if-no-files-found: error
           retention-days: 14
@@ -103,7 +109,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Mundo-X-Graphics-Build-Logs
+          name: COSMIC-X-Engine-Build-Logs
           path: |
             graphics-build.log
             graphics-android/app/build/reports/**
@@ -124,7 +130,7 @@ jobs:
       - name: Download the exact APKs from this build
         uses: actions/download-artifact@v4
         with:
-          name: Mundo-X-Graphics-APK
+          name: COSMIC-X-Engine-APK
           path: graphics-apks
 
       - name: Enable emulator and install Android 15 image
@@ -139,11 +145,14 @@ jobs:
         shell: bash
         run: bash tools/graphics-emulator-test.sh
 
+      - name: Check Android exports with the desktop project codec
+        run: python3 tools/cosmic-verify-portability.py graphics-evidence
+
       - name: Upload framebuffer comparisons, tests and Android logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Mundo-X-Graphics-Android-Evidence
+          name: COSMIC-X-Engine-Android-Evidence
           path: graphics-evidence/**
           if-no-files-found: warn
           retention-days: 14

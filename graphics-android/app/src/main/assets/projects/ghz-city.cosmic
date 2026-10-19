@@ -1,0 +1,74 @@
+{
+  "format": "cosmic-x-engine-project",
+  "version": 1,
+  "name": "Mundo X · ciudad GHZ",
+  "core": {
+    "backend": "compact-clifford",
+    "initialState": "zero",
+    "qubits": 3,
+    "revision": 4,
+    "gates": [
+      [
+        "H",
+        0
+      ],
+      [
+        "CX",
+        0,
+        1
+      ],
+      [
+        "CX",
+        1,
+        2
+      ],
+      [
+        "S",
+        1
+      ]
+    ]
+  },
+  "graphics": {
+    "program": "opaque-grid-v1",
+    "objects": 1000000,
+    "seed": 4000000001,
+    "coupling": -0.125,
+    "observables": [
+      "XXX",
+      "YXY",
+      "+ZIZ",
+      "ZZI",
+      "IZZ",
+      "XII",
+      "IXI",
+      "IIX",
+      "ZII",
+      "IZI",
+      "IIZ"
+    ],
+    "edits": [
+      [
+        0,
+        2
+      ],
+      [
+        1023,
+        7
+      ],
+      [
+        999999,
+        6
+      ]
+    ],
+    "camera": {
+      "mode": "orbit",
+      "overview": true,
+      "yaw": 0.67,
+      "pitch": 0.65,
+      "zoom": 1.0
+    },
+    "time": 0.7,
+    "selectedId": -1,
+    "resolutionLimit": 640
+  }
+}
