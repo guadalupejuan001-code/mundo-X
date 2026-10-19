@@ -901,6 +901,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
         NativeCore owner = activity.core;
         NativeCore.Snapshot coreBefore = owner.snapshot();
         AtomicReference<QuantumRenderer.FrameStats> actual = new AtomicReference<>();
+        AtomicReference<QuantumRenderer.FrameStats> reused8k = new AtomicReference<>();
         int[] pss = {0};
         gl(() -> {
             activity.renderer.setSynchronousTiming(true);
@@ -913,6 +914,11 @@ public final class GraphicsInstrumentation extends Instrumentation {
                 Debug.getMemoryInfo(memory);
                 pss[0] = memory.getTotalPss();
                 expect(activity.renderer.isUhd8k(), "Actual 8K target was rejected: " + activity.renderer.resolutionNotice());
+                // The exact same logical frame must reuse the completed 8K
+                // framebuffer instead of launching another 33.2M-pixel traversal.
+                activity.renderer.setSynchronousTiming(false);
+                activity.renderer.onDrawFrame(null);
+                reused8k.set(activity.renderer.frameStats());
             } finally {
                 activity.renderer.resolution(logical.resolutionLimit);
                 activity.renderer.setSynchronousTiming(false);
@@ -925,6 +931,11 @@ public final class GraphicsInstrumentation extends Instrumentation {
         expect(rendered != null && rendered.width == 7680 && rendered.height == 4320
                 && rendered.gpuSynchronized && rendered.objectCount == 1 && rendered.drawMs > 0,
                 "Native draw did not complete on a full 8K framebuffer");
+        QuantumRenderer.FrameStats reused = reused8k.get();
+        expect(reused != null && reused.width == 7680 && reused.height == 4320
+                && !reused.gpuSynchronized && reused.drawMs == 0
+                && reused.frameNumber > rendered.frameNumber,
+                "Unchanged 8K frame was rendered again instead of reusing the exact framebuffer");
         QuantumRenderer.FrameStats adaptive = activity.renderer.frameStats();
         expect(adaptive != null && adaptive.resolutionMode == QuantumRenderer.RESOLUTION_ADAPTIVE
                 && adaptive.width == before.width && adaptive.height == before.height
@@ -938,6 +949,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
         metrics.put("ultra8kNativeWidth", rendered.width);
         metrics.put("ultra8kNativeHeight", rendered.height);
         metrics.put("ultra8kNativeDrawMs", rendered.drawMs);
+        metrics.put("ultra8kExactReuseDrawMs", reused.drawMs);
+        metrics.put("ultra8kExactReuse", true);
         metrics.put("ultra8kNativePssKiB", pss[0]);
         metrics.put("ultra8kLegacyReturnChangedPixels", before.changed(returned));
         metrics.put("ultra8kPerformanceScope", "One-object scene on recorded GLES device; synchronized wall time, not FPS or phone results");
