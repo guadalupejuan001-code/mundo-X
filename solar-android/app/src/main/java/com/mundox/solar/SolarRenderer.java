@@ -270,7 +270,23 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         uploadedRevision=revision;
     }
     private double defaultDistance(){
-        if(isOverview)return (realScale?3800:150)*Math.max(1.1,1.05/aspect);
+        if(isOverview){
+            // Fit a sphere enclosing all eight orbital paths into the narrower
+            // camera cone. Account for perspective, FOV and portrait/landscape
+            // aspect; a fixed distance/aspect multiplier cropped outer planets.
+            double extent=radii[0];double[] mapped=new double[3];
+            for(SolarData.Body b:SolarData.BODIES){
+                double bound=radii[b.id]*Math.max(1.0,b.ringOuter);
+                extent=Math.max(extent,length(positions[b.id])+bound);
+                if(b.id<1||b.id>8)continue;
+                for(int sample=0;sample<64;sample++){
+                    mapPrimary(SolarData.orbitPosition(b.id,sample/64.0,jd),mapped);
+                    extent=Math.max(extent,length(mapped)+bound);
+                }
+            }
+            double tangent=TAN_HALF_FOV*Math.min(1.0,aspect);
+            return extent*1.10*Math.sqrt(1.0+tangent*tangent)/tangent;
+        }
         double r=radii[selected];double ring=SolarData.BODIES[selected].ringOuter;
         double framing=Math.max(4.8,3.25/aspect);
         if(ring>0)framing*=Math.min(2.0,ring*.8);

@@ -117,6 +117,9 @@ public final class SolarInstrumentation extends Instrumentation {
     private void launchAndTextures() throws Exception {
         expect(activity.bridge() != null && activity.surface() != null && activity.renderer() != null,
                 "The real solar Activity did not attach the core and GLSurfaceView");
+        waitUntil(() -> activity.hasWindowFocus(), 15_000,
+                "Solar Activity is obscured by another window at launch");
+        metrics.put("initialWindowFocused", true);
         expect(activity.bridge().stateBytes() > 0, "CompactCore native state is absent");
         prepare(3, false, false);
         SolarRenderer.Capture earth = frame();
@@ -155,7 +158,8 @@ public final class SolarInstrumentation extends Instrumentation {
             if (i > 0 && i <= 8) expect(body.parent == 0, "A planet does not orbit the Sun");
             if (i > 8) expect(body.parent > 0 && body.parent < 9, "A moon has no planetary parent");
         }
-        expect(Arrays.equals(SolarData.position(0, TEST_JD), new double[]{0, 0, 0}), "Sun is not heliocentric origin");
+        double[] sun = SolarData.position(0, TEST_JD);
+        expect(sun[0] == 0 && sun[1] == 0 && sun[2] == 0, "Sun is not heliocentric origin");
         double earthAU = length(SolarData.position(3, SolarData.J2000));
         expect(earthAU > .98 && earthAU < 1.02, "Earth is not approximately one AU from the Sun");
         double moonKm = distance(SolarData.position(3, TEST_JD), SolarData.position(9, TEST_JD)) * SolarData.AU_KM;
@@ -543,6 +547,9 @@ public final class SolarInstrumentation extends Instrumentation {
         try { saveBitmap(name, bitmap); } finally { bitmap.recycle(); }
     }
     private void saveScreen(String name) throws Exception {
+        if (name.startsWith("activity-"))
+            waitUntil(() -> activity.hasWindowFocus(), 15_000,
+                    "Cannot capture an Activity obscured by another window");
         Bitmap bitmap = getUiAutomation().takeScreenshot();
         expect(bitmap != null, "Cannot capture actual Activity screenshot");
         try { saveBitmap(name, bitmap); } finally { bitmap.recycle(); }

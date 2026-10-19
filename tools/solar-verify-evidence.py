@@ -20,6 +20,8 @@ def main():
     output = (directory / "instrumentation.txt").read_text()
     require("COSMIC_SOLAR_TESTS_PASSED" in output, "Solar instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Solar instrumentation did not finish successfully")
+    require((directory / "immersive-tutorial-setting.txt").read_text().strip() == "confirmed",
+            "The isolated emulator full-screen tutorial was not acknowledged")
     report = json.loads((directory / "report.json").read_text())
     require(report.get("schemaVersion") == 1, "Unsupported solar evidence schema")
     tests = report["tests"]
@@ -47,6 +49,7 @@ def main():
     require(metrics["nativeQubits"] == 8 and metrics["nativeStateBytes"] > 0,
             "The actual COSMIC native core was not observed on Android")
     require(metrics["framesRendered"] > 0, "No actual GLES frames were rendered")
+    require(metrics["initialWindowFocused"] is True, "The launched Activity did not receive input focus")
     require(metrics["bodyCount"] == 23 and metrics["planetCount"] == 8 and metrics["moonCount"] == 14,
             "Astronomical body inventory is incomplete")
     require(.98 < metrics["earthJ2000DistanceAU"] < 1.02 and 350_000 < metrics["earthMoonDistanceKm"] < 410_000,

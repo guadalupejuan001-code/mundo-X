@@ -92,6 +92,13 @@ done
 "$solar_adb" -s "$solar_serial" shell settings put global window_animation_scale 0
 "$solar_adb" -s "$solar_serial" shell settings put global transition_animation_scale 0
 "$solar_adb" -s "$solar_serial" shell settings put global animator_duration_scale 0
+# A fresh Android user otherwise shows a focus-stealing full-screen tutorial.
+# This is the same isolated test-fixture setting used by AOSP window-manager tests.
+"$solar_adb" -s "$solar_serial" shell settings put secure immersive_mode_confirmations confirmed
+"$solar_adb" -s "$solar_serial" shell settings get secure immersive_mode_confirmations \
+  | tr -d '\r' > "$solar_evidence/immersive-tutorial-setting.txt"
+[[ $(cat "$solar_evidence/immersive-tutorial-setting.txt") == confirmed ]] \
+  || { echo 'Could not acknowledge the emulator full-screen tutorial.' >&2; exit 1; }
 "$solar_adb" -s "$solar_serial" install -r "$solar_apks/COSMIC-X-Solar.apk"
 "$solar_adb" -s "$solar_serial" install -r "$solar_apks/COSMIC-X-Solar-tests.apk"
 "$solar_adb" -s "$solar_serial" shell svc wifi disable
