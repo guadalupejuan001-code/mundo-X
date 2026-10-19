@@ -310,7 +310,10 @@ public final class CosmicInstrumentation extends Instrumentation {
                 List<AccessibilityNodeInfo> nodes=root.findAccessibilityNodeInfosByText(label);
                 boolean clicked=false;
                 for(AccessibilityNodeInfo node:nodes){
-                    try{if(!clicked&&label.contentEquals(node.getText()==null?"":node.getText()))
+                    // AlertDialog exposes its positive button as OBSERVAR on
+                    // Android 15, while the custom shortcut keeps mixed case.
+                    try{if(!clicked&&node.isVisibleToUser()&&node.isEnabled()&&node.isClickable()
+                            &&label.equalsIgnoreCase(node.getText()==null?"":node.getText().toString()))
                         clicked=node.performAction(AccessibilityNodeInfo.ACTION_CLICK);}
                     finally{node.recycle();}
                 }
