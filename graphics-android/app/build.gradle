@@ -1,0 +1,19 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.mundox.graphics'
+    compileSdk 35
+    ndkVersion '27.2.12479018'
+    defaultConfig {
+        applicationId 'com.mundox.graphics'
+        minSdk 26
+        targetSdk 35
+        versionCode 2
+        versionName '0.1.1'
+        testInstrumentationRunner 'com.mundox.graphics.GraphicsInstrumentation'
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+        externalNativeBuild { cmake { cppFlags '-std=c++17 -O3' } }
+    }
+    buildTypes { debug { minifyEnabled false }; release { minifyEnabled false } }
+    externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
