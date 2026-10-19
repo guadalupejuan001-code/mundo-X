@@ -202,6 +202,19 @@ def main():
             "Real native GLES framebuffer was not 8K")
     require(metrics["ultra8kLegacyReturnChangedPixels"] == 0,
             "8K mode changed the previous view on return")
+    require(metrics["ultra8kCullExactChangedPixels"] == 0,
+            "Exact spatial work culling changed the reference pixels")
+    baseline = metrics["ultra8kBaselineDrawMs"]
+    optimized = metrics["ultra8kOptimizedDrawMs"]
+    require(baseline > optimized > 0 and metrics["ultra8kSpeedup"] > 1.0,
+            "8K optimization did not improve synchronized completion time")
+    require(metrics["ultra8kFullPixels"] == 7680 * 4320
+            and 0 < metrics["ultra8kShadedPixels"] < metrics["ultra8kFullPixels"]
+            and 0 < metrics["ultra8kFragmentCoverage"] < 1,
+            "8K spatial work accounting is invalid")
+    require(abs(metrics["ultra8kEquivalentCompletedFpsBefore"] - 1000.0 / baseline) < 1e-9
+            and abs(metrics["ultra8kEquivalentCompletedFpsAfter"] - 1000.0 / optimized) < 1e-9,
+            "8K equivalent completed-frame rate does not match synchronized timing")
 
     comparisons = metrics["ultra8kDifferential"]
     require(len(comparisons) == 4 and {(item["width"], item["height"], item["ids"]) for item in comparisons}
@@ -237,6 +250,8 @@ def main():
             and failures["recoveredChangedPixels"] == 0 and failures["partialFileRemoved"] is True,
             "Failed or cancelled export did not preserve its active scene")
     result = {"passed": True, "scope": "Actual recorded GLES device; no physical-phone performance claim",
+              "baselineDrawMs": baseline, "optimizedDrawMs": optimized,
+              "speedup": metrics["ultra8kSpeedup"], "fragmentCoverage": metrics["ultra8kFragmentCoverage"],
               "images": verified}
     (directory / "ultra-verified.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"passed": True, "pngs": len(verified), "real8kPixels": 7680 * 4320,
