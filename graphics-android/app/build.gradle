@@ -1,14 +1,18 @@
 plugins { id 'com.android.application' }
+def cosmic4kStandalone = providers.gradleProperty('cosmic4kStandalone').map { it.toBoolean() }.getOrElse(false)
+def cosmic8kStandalone = providers.gradleProperty('cosmic8kStandalone').map { it.toBoolean() }.getOrElse(false)
+if (cosmic4kStandalone && cosmic8kStandalone) throw new GradleException('Choose one standalone application identity')
 android {
     namespace 'com.mundox.graphics'
     compileSdk 35
     ndkVersion '27.2.12479018'
     defaultConfig {
-        applicationId 'com.mundox.graphics'
+        applicationId cosmic8kStandalone ? 'com.mundox.graphics.ultra' : cosmic4kStandalone ? 'com.mundox.graphics.uhd' : 'com.mundox.graphics'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.2.0'
+        versionCode 5
+        versionName '0.4.0'
+        manifestPlaceholders = [cosmicAppLabel: cosmic8kStandalone ? 'COSMIC X Engine 8K' : cosmic4kStandalone ? 'COSMIC X Engine 4K' : 'COSMIC X Engine']
         testInstrumentationRunner 'com.mundox.graphics.GraphicsInstrumentation'
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
         externalNativeBuild { cmake { cppFlags '-std=c++17 -O3' } }

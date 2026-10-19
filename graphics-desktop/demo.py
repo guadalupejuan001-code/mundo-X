@@ -6,6 +6,7 @@ from pathlib import Path
 import time
 
 from project import ProjectSession
+from core_profile import DEFAULT_QUBITS, MAX_PROJECT_QUBITS
 
 
 def gate(text):
@@ -32,7 +33,9 @@ def main():
     parser.add_argument("--export-project", type=Path, help="Save the complete resulting .cosmic project atomically")
     parser.add_argument("--name", help="Project title")
     parser.add_argument("--objects", type=int, help="Population 1..1048576 (new project default: 1000000)")
-    parser.add_argument("--qubits", type=int, help="New project qubits (default: 20)")
+    parser.add_argument("--qubits", type=int, help=f"New project qubits (default: {DEFAULT_QUBITS})")
+    parser.add_argument("--expand-qubits", type=int,
+                        help="Expand an imported project, adding |0> qubits while preserving its state and world")
     parser.add_argument("--seed", type=int, help="Unsigned 32-bit procedural seed (new project default: 2026)")
     parser.add_argument("--coupling", type=float, help="Graphic coupling -.25...25 (new project default: .25)")
     parser.add_argument("--view", choices=("overview", "street"), help="Select an orbit camera")
@@ -46,17 +49,26 @@ def main():
     args = parser.parse_args()
     if args.project and args.qubits is not None:
         parser.error("--qubits is for new projects; an imported state keeps its qubit count")
+    if args.expand_qubits is not None and not args.project:
+        parser.error("--expand-qubits requires --project; use --qubits for a new project")
+    if args.expand_qubits is not None and not 1 <= args.expand_qubits <= MAX_PROJECT_QUBITS:
+        parser.error(f"--expand-qubits must be 1..{MAX_PROJECT_QUBITS} and greater than the imported register")
     if not 1 <= args.width <= 4096 or not 1 <= args.height <= 4096:
         parser.error("--width and --height must be 1..4096")
-    if args.qubits is not None and not 1 <= args.qubits <= 256:
-        parser.error("Portable projects support 1..256 qubits")
+    if args.qubits is not None and not 1 <= args.qubits <= MAX_PROJECT_QUBITS:
+        parser.error(f"Portable projects support 1..{MAX_PROJECT_QUBITS} qubits")
     started = time.perf_counter_ns()
     try:
         if args.project:
-            session = ProjectSession.open(args.project)
+            if args.expand_qubits is not None:
+                with ProjectSession.open(args.project) as original:
+                    session = original.expanded(args.expand_qubits)
+            else:
+                session = ProjectSession.open(args.project)
         else:
             session = ProjectSession.create(name=args.name or "Mundo X", objects=args.objects if args.objects is not None else 1_000_000,
-                                            qubits=args.qubits or 20, seed=args.seed if args.seed is not None else 2026,
+                                            qubits=args.qubits if args.qubits is not None else DEFAULT_QUBITS,
+                                            seed=args.seed if args.seed is not None else 2026,
                                             coupling=args.coupling if args.coupling is not None else .25)
         with session:
             if args.name is not None:

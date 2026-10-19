@@ -5,7 +5,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <iomanip>
 #include <limits>
+#include <locale>
 #include <memory>
 #include <random>
 #include <sstream>
@@ -14,6 +16,7 @@
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/exact_t_experiment.hpp"
+#include "mundo_x/pauli_observer.hpp"
 #include "mundo_x/visual_scene.hpp"
 
 namespace mundo_x {
@@ -71,6 +74,28 @@ inline std::int32_t read_scene_seed(std::istringstream& input, std::size_t line)
   }
   throw std::runtime_error("line " + std::to_string(line) + ": expected scene <count> <int32 seed>");
 }
+
+inline double read_expected_value(std::istringstream& input) {
+  std::string token;
+  double value = 0.0;
+  if ((input >> token) && token.find_first_not_of("+-0123456789.eE") == std::string::npos) {
+    // Some standard libraries accept hexadecimal floats in stream extraction.
+    // Restrict the token to decimal characters, then require a complete,
+    // locale-independent conversion with valid syntax and a finite result.
+    std::istringstream number(token);
+    number.imbue(std::locale::classic());
+    number >> std::noskipws >> value;
+    if (number && number.eof() && std::isfinite(value)) return value;
+  }
+  throw std::runtime_error("expected assert expectation <Pauli> <finite value>");
+}
+
+inline std::string precise_value(double value) {
+  std::ostringstream text;
+  text.imbue(std::locale::classic());
+  text << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
+  return text.str();
+}
 }  // namespace xasm_detail
 
 inline XasmRunResult run_xasm(std::istream& input) {
@@ -78,10 +103,32 @@ inline XasmRunResult run_xasm(std::istream& input) {
   std::unique_ptr<CompactCore> core;
   std::unique_ptr<VisualScene> scene;
   std::unique_ptr<ReducedExactTRepresentation> reduced;
+  std::unique_ptr<mundo_x_bridge::PauliObserver> observer;
   bool backend_declared = false;
   std::ostringstream out;
   // Reproducible pseudorandom sampling, not a source of physical randomness.
   std::mt19937_64 random(0);
+
+  const auto expectation = [&](const std::string& text) {
+    auto pauli = mundo_x_bridge::Pauli::parse(text, result.qubits);
+    if (core) {
+      // A read-only index is shared until the next state operation. In
+      // particular, a long multiword Pauli never becomes a dense statevector.
+      if (!observer) observer = std::make_unique<mundo_x_bridge::PauliObserver>(*core);
+      return observer->expectation(std::move(pauli));
+    }
+    // Reduced supports at most 63 qubits, so its Pauli masks fit one word.
+    // Its raw expectation is unnormalized; expose a physical expectation here.
+    const double norm = reduced->sparse_norm();
+    if (!(norm > 0.0) || !std::isfinite(norm))
+      throw std::runtime_error("non-finite or zero reduced norm");
+    const auto value = reduced->pauli_expectation(pauli.x[0], pauli.z[0],
+                                                 static_cast<std::uint8_t>(pauli.phase)) / norm;
+    if (!std::isfinite(value.real()) || !std::isfinite(value.imag()) ||
+        std::abs(value.imag()) > 1e-10)
+      throw std::runtime_error("invalid Hermitian Pauli expectation");
+    return value.real();
+  };
 
   std::string line;
   std::size_t line_number = 0;
@@ -184,9 +231,11 @@ inline XasmRunResult run_xasm(std::istream& input) {
         const auto n = read_size("qubits <n>");
         require_end();
         if (result.backend == "reduced") {
-          if (n == 0 || n > 12)
-            throw std::runtime_error("reduced XASM supports 1..12 qubits");
-          reduced = std::make_unique<ReducedExactTRepresentation>(n);
+          if (n == 0 || n > 63)
+            throw std::runtime_error("reduced XASM supports 1..63 qubits");
+          // Width is independent of non-Clifford component growth. Stop at
+          // this explicit budget; never truncate components or fall back dense.
+          reduced = std::make_unique<ReducedExactTRepresentation>(n, 65536);
         } else {
           if (n == 0) throw std::runtime_error("expected qubits <n> with n > 0");
           core = std::make_unique<CompactCore>(n);
@@ -208,6 +257,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
         };
         if (reduced) apply(*reduced);
         else apply(*core);
+        observer.reset();
         ++result.instructions;
       } else if (op == "cx" || op == "cz") {
         const auto control = read_size(op + " <control> <target>");
@@ -219,6 +269,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
         };
         if (reduced) apply(*reduced);
         else apply(*core);
+        observer.reset();
         ++result.instructions;
       } else if (op == "t") {
         const auto q = read_size("t <q>");
@@ -250,7 +301,14 @@ inline XasmRunResult run_xasm(std::istream& input) {
         const auto measured = core->measure_z(q, random);
         out << "MEASURE_Z q=" << q << " outcome=" << measured.outcome_one
             << " probability=" << measured.probability << " random=" << measured.random << "\n";
+        observer.reset();
         ++result.instructions;
+      } else if (op == "expect") {
+        std::string pauli;
+        if (!(in >> pauli)) throw std::runtime_error("expected expect <Pauli>");
+        require_end();
+        const double value = expectation(pauli);
+        out << "EXPECT pauli=" << pauli << " value=" << xasm_detail::precise_value(value) << "\n";
       } else if (op == "show") {
         require_end();
         out << "STATE\n";
@@ -269,24 +327,38 @@ inline XasmRunResult run_xasm(std::istream& input) {
         else out << "STATE_BYTES " << core->state_bytes() << "\n";
       } else if (op == "assert") {
         std::string what;
-        if (!(in >> what)) throw std::runtime_error("expected assert <ghz|one|fidelity|norm>");
-        require_end();
+        if (!(in >> what)) throw std::runtime_error("expected assert <ghz|one|fidelity|norm|expectation>");
 
         bool ok = false;
-        if (what == "ghz" || what == "one") {
-          if (!core) throw std::runtime_error("assert " + what + " requires backend compact");
-          ok = what == "ghz" ? core->is_ghz_signature() : core->hello_is_one();
-        } else if (what == "fidelity" || what == "norm") {
-          if (!reduced) throw std::runtime_error("assert " + what + " requires backend reduced");
-          const double value = what == "fidelity" ? reduced->fidelity() : reduced->reduced_norm();
-          // Keep the established XASM v0.2 acceptance tolerance. FP64 accuracy
-          // is covered independently by the native precision regressions.
-          ok = std::isfinite(value) && std::abs(value - 1.0) <= 3e-5;
+        std::string details;
+        if (what == "expectation") {
+          std::string pauli;
+          if (!(in >> pauli)) throw std::runtime_error("expected assert expectation <Pauli> <finite value>");
+          const double expected = xasm_detail::read_expected_value(in);
+          require_end();
+          const double value = expectation(pauli);
+          ok = std::abs(value - expected) <= 1e-10;
+          details = " pauli=" + pauli + " value=" + xasm_detail::precise_value(value) +
+                    " expected=" + xasm_detail::precise_value(expected) + " tolerance=1e-10";
         } else {
-          throw std::runtime_error("unknown assertion '" + what + "'");
+          require_end();
+          if (what == "ghz" || what == "one") {
+            if (!core) throw std::runtime_error("assert " + what + " requires backend compact");
+            ok = what == "ghz" ? core->is_ghz_signature() : core->hello_is_one();
+          } else if (what == "fidelity" || what == "norm") {
+            if (!reduced) throw std::runtime_error("assert " + what + " requires backend reduced");
+            if (what == "fidelity" && result.qubits > 12)
+              throw std::runtime_error("assert fidelity uses a dense reference limited to 12 qubits; use assert norm and assert expectation for larger registers");
+            const double value = what == "fidelity" ? reduced->fidelity() : reduced->sparse_norm();
+            // Keep the established XASM v0.2 acceptance tolerance. FP64 accuracy
+            // is covered independently by the native precision regressions.
+            ok = std::isfinite(value) && std::abs(value - 1.0) <= 3e-5;
+          } else {
+            throw std::runtime_error("unknown assertion '" + what + "'");
+          }
         }
 
-        out << "ASSERT " << what << " " << (ok ? "PASS" : "FAIL") << "\n";
+        out << "ASSERT " << what << " " << (ok ? "PASS" : "FAIL") << details << "\n";
         result.assertions_passed = result.assertions_passed && ok;
       } else {
         throw std::runtime_error("unknown instruction '" + op + "'");

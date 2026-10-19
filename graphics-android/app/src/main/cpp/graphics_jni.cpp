@@ -25,7 +25,7 @@ struct UtfChars {
 }
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_mundox_graphics_NativeCore_nCreate(JNIEnv* e,jclass,jint n){
-    if(n<1||n>256){fail(e,"El proyecto admite de 1 a 256 qubits");return 0;}
+    if(n<1||n>1000){fail(e,"El proyecto admite de 1 a 1000 qubits");return 0;}
     void* p=mx_create(0,static_cast<std::size_t>(n));
     if(!p)fail(e,mx_last_error());
     return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(p));

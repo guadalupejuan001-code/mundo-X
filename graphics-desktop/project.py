@@ -12,11 +12,12 @@ from pathlib import Path
 import struct
 import tempfile
 from threading import RLock
+from core_profile import DEFAULT_QUBITS, MAX_PROJECT_QUBITS
 
 FORMAT = "cosmic-x-engine-project"
 VERSION = 1
 MAX_FILE_BYTES = 16 * 1024 * 1024
-MAX_QUBITS = 256
+MAX_QUBITS = MAX_PROJECT_QUBITS
 MAX_GATES = 100_000
 MAX_OBSERVABLES = 4096
 MAX_EDITS = 100_000
@@ -255,7 +256,7 @@ class ProjectSession:
         return instance
 
     @classmethod
-    def create(cls, *, name="Mundo X", objects=1_000_000, qubits=20, seed=2026, coupling=.25):
+    def create(cls, *, name="Mundo X", objects=1_000_000, qubits=DEFAULT_QUBITS, seed=2026, coupling=.25):
         _integer(objects, 1, MAX_OBJECTS, "graphics.objects")
         _integer(qubits, 1, MAX_QUBITS, "core.qubits")
         _integer(seed, 0, 4_294_967_295, "graphics.seed")
@@ -345,6 +346,24 @@ class ProjectSession:
 
     def save(self, path):
         return write_project(path, self.to_dict())
+
+    def expanded(self, qubits=DEFAULT_QUBITS):
+        """Return an owning copy with extra qubits initialized to |0>.
+
+        Replay preserves the old register's gates and revision. Appending I to
+        every original observable preserves its expectation and graphic role.
+        The source session and saved files remain usable if allocation or
+        validation fails; callers adopt the returned session explicitly.
+        """
+        document = self.to_dict()
+        previous = document["core"]["qubits"]
+        _integer(qubits, previous + 1, MAX_QUBITS, "expanded core.qubits")
+        document["core"]["qubits"] = qubits
+        padding = "I" * (qubits - previous)
+        document["graphics"]["observables"] = [
+            pauli + padding for pauli in document["graphics"]["observables"]
+        ]
+        return type(self)(document)
 
     def camera_for(self, width, height):
         _integer(width, 1, 4096, "camera width")

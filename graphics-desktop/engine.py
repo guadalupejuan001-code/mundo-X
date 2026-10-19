@@ -9,6 +9,7 @@ from pathlib import Path
 import math,os,subprocess,tempfile,time
 import numpy as np
 from core_runtime import Core
+from core_profile import DEFAULT_QUBITS
 from renderer import Renderer,camera,overview,street
 
 ROOT=Path(__file__).resolve().parent
@@ -105,7 +106,7 @@ class QuantumScene:
         if type(qubits) is not int or qubits<1:
             raise ValueError('Positive integer qubit count required')
 
-    def __init__(self,count=1_000_000,qubits=20,seed=2026,coupling=.25):
+    def __init__(self,count=1_000_000,qubits=DEFAULT_QUBITS,seed=2026,coupling=.25):
         self._validate_settings(count,qubits,coupling)
         core=Core(qubits)
         try:

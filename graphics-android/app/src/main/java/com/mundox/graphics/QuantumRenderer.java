@@ -4,7 +4,10 @@ import android.content.Context;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -20,19 +23,60 @@ import static android.opengl.GLES30.*;
 public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public static final int MAX_OBJECTS=1_048_576;
     public static final int PRESENTATION_LEGACY=0,PRESENTATION_COSMIC=1;
+    public static final int RESOLUTION_ADAPTIVE=RenderResolution.ADAPTIVE,RESOLUTION_UHD_4K=RenderResolution.UHD_4K,
+            RESOLUTION_UHD_8K=RenderResolution.UHD_8K;
+    public static final int UHD_LONG=RenderResolution.UHD_LONG,UHD_SHORT=RenderResolution.UHD_SHORT;
+    public static final int UHD_8K_LONG=RenderResolution.UHD_8K_LONG,UHD_8K_SHORT=RenderResolution.UHD_8K_SHORT;
     public interface Listener { void status(String text); }
     public interface CaptureListener { void captured(Capture image); }
     /** Last completed frame. Reading this value never queries or measures the core. */
     public static final class FrameStats {
         public final int objectCount,width,height,qubits,observables,selectedId;
+        /** Actual framebuffer mode and its FIT destination, in Android top-left coordinates. */
+        public final int resolutionMode,viewWidth,viewHeight,displayLeft,displayTop,displayWidth,displayHeight;
         public final long coreRevision,frameNumber;
-        /** Synchronous draw and driver completion wall time; this is not an FPS estimate. */
+        /** CPU submission wall time by default; includes driver completion only when gpuSynchronized. */
         public final double drawMs;
+        public final boolean gpuSynchronized;
         public final String device;
         private FrameStats(QuantumRenderer r,double elapsed){
             objectCount=r.count;width=r.width;height=r.height;qubits=r.core.qubits;
             observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;
-            frameNumber=r.drawNumber;drawMs=elapsed;device=r.device;
+            frameNumber=r.drawNumber;drawMs=elapsed;device=r.device;gpuSynchronized=r.synchronousTiming;
+            resolutionMode=r.resolutionMode;viewWidth=r.viewWidth;viewHeight=r.viewHeight;
+            displayLeft=r.display.left;displayTop=r.display.top;
+            displayWidth=r.display.width;displayHeight=r.display.height;
+        }
+    }
+    /** Called on the GL thread; callers can post lightweight progress updates to the UI. */
+    public interface ExportProgress { void progress(int completedRows,int totalRows); }
+    public static final class ExportControl {
+        final int tileWidth,stripRows;
+        final ExportProgress progress;
+        private volatile boolean cancelled;
+        public ExportControl(){this(1024,64,null);}
+        public ExportControl(int tileWidth,int stripRows,ExportProgress progress){
+            if(tileWidth<2||tileWidth>TilePlan.MAX_TILE_WIDTH||(tileWidth&1)!=0
+                    ||stripRows<2||stripRows>TilePlan.MAX_STRIP_ROWS||(stripRows&1)!=0)
+                throw new IllegalArgumentException("Dimensiones pares de región fuera de rango");
+            this.tileWidth=tileWidth;this.stripRows=stripRows;this.progress=progress;
+        }
+        public void cancel(){cancelled=true;}
+        public boolean isCancelled(){return cancelled;}
+        void checkCancelled() throws InterruptedIOException {
+            if(cancelled||Thread.currentThread().isInterrupted())throw new InterruptedIOException("Exportación PNG cancelada");
+        }
+    }
+    public static final class ExportResult {
+        public final int width,height,tileWidth,tileRows,tiles;
+        public final long coreRevision,coreEpoch;
+        /** Explicit export buffers and estimated tile attachments; excludes driver/Deflater overhead and the existing scene. */
+        public final long workingBytes;
+        public final double elapsedMs;
+        private ExportResult(TilePlan plan,long revision,long epoch,long started){
+            width=plan.image.width;height=plan.image.height;tileWidth=plan.tileWidth;tileRows=plan.stripRows;
+            tiles=plan.tileCount;workingBytes=plan.workingBytes;coreRevision=revision;coreEpoch=epoch;
+            elapsedMs=(System.nanoTime()-started)/1e6;
         }
     }
     public static final class Capture {
@@ -57,6 +101,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public static final class Snapshot implements Serializable {
         private static final long serialVersionUID=1L;
         public final int objectCount,selectedId,resolutionLimit;
+        // Optional device preference, omitted from .cosmic v1. Old sessions default to 0.
+        public final int resolutionMode;
         public final int projectVersion;
         public final long seed;
         public final boolean overview,coupling;
@@ -68,7 +114,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         public final String[] observables;
         public final int[] editIds,editValues;
         private Snapshot(QuantumRenderer r){
-            objectCount=r.count;selectedId=r.selected;resolutionLimit=r.limit;
+            objectCount=r.count;selectedId=r.selected;resolutionLimit=r.requestedLimit;
+            resolutionMode=r.requestedResolutionMode;
             projectVersion=1;seed=r.seed;
             overview=r.overview;coupling=r.strength!=0;
             yaw=r.yaw;pitch=r.pitch;zoom=r.zoom;time=r.timeValue;quantumStrength=r.strength;
@@ -85,12 +132,25 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                  float zoom,float time,float strength,float[] eye,float[] target,float near,float far,float fov,
                  String[] observables,int[] ids,int[] values){
             this.objectCount=count;this.selectedId=selected;this.resolutionLimit=resolution;
+            this.resolutionMode=RESOLUTION_ADAPTIVE;
             this.projectVersion=1;this.seed=seed;this.overview=overview;this.coupling=strength!=0;
             this.yaw=yaw;this.pitch=pitch;this.zoom=zoom;this.time=time;this.quantumStrength=strength;
             this.enabledQuantumStrength=strength!=0?strength:.25f;
             this.overrideEye=eye==null?null:eye.clone();this.overrideTarget=target==null?null:target.clone();
             this.cameraNear=near;this.cameraFar=far;this.cameraFov=fov;
             this.observables=observables.clone();this.editIds=ids.clone();this.editValues=values.clone();
+        }
+        /** Copy a live session while extending its operators; retain hidden session preferences. */
+        Snapshot(Snapshot source,String[] observables){
+            objectCount=source.objectCount;selectedId=source.selectedId;resolutionLimit=source.resolutionLimit;
+            resolutionMode=source.resolutionMode;
+            projectVersion=source.projectVersion;seed=source.seed;overview=source.overview;coupling=source.coupling;
+            yaw=source.yaw;pitch=source.pitch;zoom=source.zoom;time=source.time;quantumStrength=source.quantumStrength;
+            enabledQuantumStrength=source.enabledQuantumStrength;
+            cameraNear=source.cameraNear;cameraFar=source.cameraFar;cameraFov=source.cameraFov;
+            overrideEye=source.overrideEye==null?null:source.overrideEye.clone();
+            overrideTarget=source.overrideTarget==null?null:source.overrideTarget.clone();
+            this.observables=observables.clone();editIds=source.editIds.clone();editValues=source.editValues.clone();
         }
     }
     private final NativeCore core;
@@ -104,11 +164,16 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private final HashMap<String,Integer> locations=new HashMap<>();
     private int program,vao,editTexture,quantumTexture,colorTexture,depth,fbo;
     private int viewWidth=1,viewHeight=1,width=1,height=1,limit=640;
+    private int requestedLimit=640,requestedResolutionMode=RESOLUTION_ADAPTIVE;
+    private volatile int resolutionMode=RESOLUTION_ADAPTIVE;
+    private volatile String resolutionMessage;
+    private RenderResolution.Fit display=RenderResolution.fit(1,1,new RenderResolution.Size(1,1));
     private int count=1_000_000,selected=-1;
     // App presentation preference, intentionally outside the portable logical world.
     private int presentation=PRESENTATION_LEGACY;
     private long seed=2026;
     private boolean framebufferDirty=true,editsDirty=true,failed=false;
+    private boolean synchronousTiming=false,exporting=false;
     private boolean overview=true;
     private float yaw=.67f,pitch=.65f,zoom=1f,timeValue=0f,strength=.25f;
     private float enabledStrength=.25f,overrideNear=.1f,overrideFar=10000,cameraFov=48;
@@ -118,6 +183,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private CaptureListener capture;
     private int captureDebug;
     private int pickX=-1,pickY=-1;
+    private boolean pickPending;
     private long drawNumber;
     private volatile FrameStats latestFrame;
     public volatile boolean hasFrame;
@@ -149,6 +215,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private void restore(Snapshot state){
         if(state.objectCount<1||state.objectCount>MAX_OBJECTS||state.selectedId < -1||state.selectedId>=state.objectCount
             ||state.resolutionLimit<64||state.resolutionLimit>4096||!finite(state.yaw)||!finite(state.pitch)
+            ||!RenderResolution.validMode(state.resolutionMode)
             ||state.pitch<.04f||state.pitch>1.52f||!finite(state.zoom)||state.zoom<.12f||state.zoom>6f
             ||!finite(state.time)||Math.abs(state.time)>1_000_000||!finite(state.quantumStrength)||Math.abs(state.quantumStrength)>.25f
             ||!finite(state.enabledQuantumStrength)||Math.abs(state.enabledQuantumStrength)>.25f
@@ -178,6 +245,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             overrideEye=state.overrideEye.clone();overrideTarget=state.overrideTarget.clone();
         }
         count=state.objectCount;selected=state.selectedId;limit=state.resolutionLimit;overview=state.overview;
+        requestedLimit=limit;requestedResolutionMode=state.resolutionMode;
         yaw=state.yaw;pitch=state.pitch;zoom=state.zoom;timeValue=state.time;strength=state.quantumStrength;
         if(strength!=0)enabledStrength=strength;
         else if(state.enabledQuantumStrength!=0)enabledStrength=state.enabledQuantumStrength;
@@ -203,6 +271,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     @Override public void onSurfaceCreated(GL10 unused,EGLConfig config){
         // EGL context recreation invalidates every old GL name, never the world.
         program=vao=editTexture=quantumTexture=colorTexture=depth=fbo=0;
+        resolutionMode=RESOLUTION_ADAPTIVE;
         hasFrame=false;failure=null;failed=false;latestFrame=null;locations.clear();
         int vert=0,frag=0;
         try{
@@ -211,33 +280,114 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             int[] ok=new int[1];glGetProgramiv(program,GL_LINK_STATUS,ok,0);
             if(ok[0]==0)throw new IllegalStateException("Programa: "+glGetProgramInfoLog(program));
             int[] id=new int[1];glGenVertexArrays(1,id,0);vao=id[0];glBindVertexArray(vao);
-            editTexture=texture();quantumTexture=texture();colorTexture=texture();
-            glGenFramebuffers(1,id,0);fbo=id[0];glGenRenderbuffers(1,id,0);depth=id[0];
+            editTexture=texture();quantumTexture=texture();
             glDisable(GL_DITHER);glDisable(GL_BLEND);glDisable(GL_CULL_FACE);
             framebufferDirty=true;editsDirty=true;uploadedCore=-1;uploadedEpoch=-1;failed=false;
             device=glGetString(GL_RENDERER);check("Inicio");
         }catch(Throwable e){if(program!=0){glDeleteProgram(program);program=0;}error(e);}
         finally{if(vert!=0)glDeleteShader(vert);if(frag!=0)glDeleteShader(frag);}
     }
-    @Override public void onSurfaceChanged(GL10 unused,int w,int h){viewWidth=Math.max(1,w);viewHeight=Math.max(1,h);framebufferDirty=true;}
+    @Override public void onSurfaceChanged(GL10 unused,int w,int h){
+        viewWidth=Math.max(1,w);viewHeight=Math.max(1,h);framebufferDirty=true;
+    }
     private static void sampling(){
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     }
+    private static final class Framebuffer {
+        final int color,depth,name;
+        Framebuffer(int color,int depth,int name){this.color=color;this.depth=depth;this.name=name;}
+    }
+    private RenderResolution.Limits resolutionLimits(){
+        int[] values=new int[4];glGetIntegerv(GL_MAX_TEXTURE_SIZE,values,0);
+        glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE,values,1);glGetIntegerv(GL_MAX_VIEWPORT_DIMS,values,2);
+        check("Límites de resolución");return new RenderResolution.Limits(values[0],values[1],values[2],values[3]);
+    }
+    private static void allocationCheck(String stage){
+        int error=glGetError();if(error==GL_NO_ERROR)return;
+        // A failed allocation must not leave an error queued for the preserved framebuffer.
+        for(int j=0;j<16&&glGetError()!=GL_NO_ERROR;j++){}
+        String reason=error==GL_OUT_OF_MEMORY?"memoria gráfica insuficiente":"error GLES 0x"+Integer.toHexString(error);
+        throw new IllegalStateException(stage+": "+reason);
+    }
+    private static void deleteFramebuffer(int color,int depth,int name){
+        int[] id=new int[1];
+        if(name!=0){id[0]=name;glDeleteFramebuffers(1,id,0);}
+        if(depth!=0){id[0]=depth;glDeleteRenderbuffers(1,id,0);}
+        if(color!=0){id[0]=color;glDeleteTextures(1,id,0);}
+    }
+    /** Allocate new attachments separately: the current render target remains intact on failure. */
+    private Framebuffer allocateFramebuffer(RenderResolution.Size size){
+        int color=0,buffer=0,name=0;boolean accepted=false;
+        try{
+            color=texture();int[] id=new int[1];glGenRenderbuffers(1,id,0);buffer=id[0];
+            glGenFramebuffers(1,id,0);name=id[0];allocationCheck("Crear framebuffer");
+            if(color==0||buffer==0||name==0)throw new IllegalStateException("No se pudo reservar el framebuffer");
+            glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,color);
+            glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,size.width,size.height,0,GL_RGBA,GL_UNSIGNED_BYTE,null);sampling();
+            allocationCheck("Reservar color");
+            glBindRenderbuffer(GL_RENDERBUFFER,buffer);
+            glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH_COMPONENT24,size.width,size.height);allocationCheck("Reservar profundidad");
+            int[] actual=new int[2];glGetRenderbufferParameteriv(GL_RENDERBUFFER,GL_RENDERBUFFER_WIDTH,actual,0);
+            glGetRenderbufferParameteriv(GL_RENDERBUFFER,GL_RENDERBUFFER_HEIGHT,actual,1);allocationCheck("Dimensiones asignadas");
+            if(actual[0]!=size.width||actual[1]!=size.height)throw new IllegalStateException("El controlador no asignó la resolución solicitada");
+            glBindFramebuffer(GL_FRAMEBUFFER,name);
+            glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,color,0);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_RENDERBUFFER,buffer);
+            int status=glCheckFramebufferStatus(GL_FRAMEBUFFER);allocationCheck("Comprobar framebuffer");
+            if(status!=GL_FRAMEBUFFER_COMPLETE)throw new IllegalStateException("Framebuffer incompleto (0x"+Integer.toHexString(status)+")");
+            Framebuffer result=new Framebuffer(color,buffer,name);accepted=true;return result;
+        }finally{
+            if(!accepted)deleteFramebuffer(color,buffer,name);
+            glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);
+            glBindRenderbuffer(GL_RENDERBUFFER,depth);glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        }
+    }
+    private void installFramebuffer(RenderResolution.Size size,int mode,int newLimit){
+        RenderResolution.Fit fitted=RenderResolution.fit(viewWidth,viewHeight,size);
+        if(fbo==0||width!=size.width||height!=size.height){
+            RenderResolution.requireAllocation(size,fbo==0?null:new RenderResolution.Size(width,height));
+            Framebuffer next=allocateFramebuffer(size);
+            int oldColor=colorTexture,oldDepth=depth,oldFbo=fbo;
+            colorTexture=next.color;depth=next.depth;fbo=next.name;width=size.width;height=size.height;
+            glBindFramebuffer(GL_FRAMEBUFFER,fbo);deleteFramebuffer(oldColor,oldDepth,oldFbo);
+        }
+        display=fitted;limit=newLimit;requestedLimit=newLimit;requestedResolutionMode=mode;
+        resolutionMode=mode;framebufferDirty=false;
+    }
     private void sizeFramebuffer(){
-        int[] renderbufferMax=new int[1];glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE,renderbufferMax,0);
-        int supportedLimit=Math.min(limit,Math.min(maxTexture(),renderbufferMax[0]));
-        if(supportedLimit<1)throw new IllegalStateException("No hay resolución GLES disponible");
-        float scale=Math.min(1f,(float)supportedLimit/Math.max(viewWidth,viewHeight));
-        width=Math.max(1,Math.round(viewWidth*scale));height=Math.max(1,Math.round(viewHeight*scale));
-        glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,colorTexture);
-        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,null);sampling();
-        glBindRenderbuffer(GL_RENDERBUFFER,depth);glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH_COMPONENT24,width,height);
-        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,colorTexture,0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_RENDERBUFFER,depth);
-        if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)throw new IllegalStateException("Framebuffer incompleto");
-        framebufferDirty=false;check("Resolución");
+        int wantedMode=requestedResolutionMode,wantedLimit=requestedLimit;
+        RenderResolution.Size fixed=wantedMode==RESOLUTION_ADAPTIVE?null:RenderResolution.fixed(wantedMode,viewWidth,viewHeight);
+        String requested=fixed==null?wantedLimit+" px":"UHD "+(wantedMode==RESOLUTION_UHD_8K?"8K ":"4K ")+fixed.width+"×"+fixed.height;
+        RenderResolution.Limits supported=null;
+        try{
+            supported=resolutionLimits();
+            RenderResolution.Size size=fixed!=null?fixed:RenderResolution.adaptive(viewWidth,viewHeight,wantedLimit,supported);
+            supported.require(size);installFramebuffer(size,wantedMode,wantedLimit);resolutionMessage=null;
+        }catch(RuntimeException|OutOfMemoryError rejected){
+            String reason=rejected.getMessage();if(reason==null)reason=rejected.getClass().getSimpleName();
+            if(fbo!=0){
+                requestedResolutionMode=resolutionMode;requestedLimit=limit;framebufferDirty=false;
+                display=RenderResolution.fit(viewWidth,viewHeight,new RenderResolution.Size(width,height));
+                resolutionMessage="No se pudo activar "+requested+": "+reason+". Se conserva "+width+"×"+height+".";
+                return;
+            }
+            // A restored UHD preference has no surviving GL target after context loss.
+            // Recover an explicitly adaptive framebuffer; never relabel it as UHD.
+            if(supported==null)throw rejected;
+            int fallback=wantedLimit;
+            while(true){
+                try{
+                    RenderResolution.Size size=RenderResolution.adaptive(viewWidth,viewHeight,fallback,supported);
+                    installFramebuffer(size,RESOLUTION_ADAPTIVE,fallback);
+                    resolutionMessage="No se pudo activar "+requested+": "+reason+". Se usa modo adaptado "+width+"×"+height+".";
+                    return;
+                }catch(RuntimeException|OutOfMemoryError unavailable){
+                    if(fallback<=64)throw new IllegalStateException("No hay memoria o resolución GLES para un framebuffer mínimo",unavailable);
+                    fallback=Math.max(64,Math.min(640,fallback/2));
+                }
+            }
+        }
     }
     private int maxTexture(){int[] n=new int[1];glGetIntegerv(GL_MAX_TEXTURE_SIZE,n,0);return n[0];}
     private void sync(){
@@ -269,8 +419,9 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         if(!Double.isFinite(n)||n<1e-10)throw new IllegalArgumentException("Dirección de cámara inválida");
         return new float[]{(float)(a[0]/n),(float)(a[1]/n),(float)(a[2]/n)};
     }
-    private void camera(){
-        aspect=(float)width/height;float side=(float)Math.ceil(Math.sqrt(count)),extent=side*2.2f;
+    private void camera(){camera(width,height);}
+    private void camera(int fullWidth,int fullHeight){
+        aspect=(float)fullWidth/fullHeight;float side=(float)Math.ceil(Math.sqrt(count)),extent=side*2.2f;
         float[] target=overview?new float[]{0,0,0}:new float[]{0,1,0};
         float distance=(overview?extent*Math.max(1.65f,1.4f/aspect):25f)*zoom;
         eye=new float[]{distance*(float)(Math.cos(pitch)*Math.sin(yaw)),target[1]+distance*(float)Math.sin(pitch),distance*(float)(Math.cos(pitch)*Math.cos(yaw))};
@@ -282,48 +433,70 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         Matrix.setLookAtM(view,0,eye[0],eye[1],eye[2],target[0],target[1],target[2],up[0],up[1],up[2]);
         Matrix.perspectiveM(projection,0,cameraFov,aspect,near,far);Matrix.multiplyMM(vp,0,projection,0,view,0);
     }
-    private double draw(int debug){
-        glBindFramebuffer(GL_FRAMEBUFFER,fbo);glViewport(0,0,width,height);glUseProgram(program);glBindVertexArray(vao);
+    private void drawState(int debug,int fullWidth,int fullHeight){
+        glUseProgram(program);glBindVertexArray(vao);
         int side=(int)Math.ceil(Math.sqrt(count));
         i("uCount",count);i("uSide",side);i("uEditCount",edits.size());i("uSelected",selected);i("uDebug",debug);i("uEdits",0);i("uQuantum",1);i("uQuantumCount",coefficients.length);i("uPresentation",presentation);
         int seedBits=(int)seed;glUniform4ui(loc("uSeedBytes"),seedBits&255,(seedBits>>>8)&255,(seedBits>>>16)&255,(seedBits>>>24)&255);
         f("uTime",timeValue);f("uFogDistance",Math.max(50,side*2.2f));f("uQuantumStrength",strength);
         f("uNear",near);f("uFar",far);f("uAspect",aspect);f("uTanHalfFov",(float)Math.tan(Math.toRadians(cameraFov*.5)));
-        f("uPixelAngle",2f*(float)Math.tan(Math.toRadians(cameraFov*.5))/height);
+        f("uPixelAngle",2f*(float)Math.tan(Math.toRadians(cameraFov*.5))/fullHeight);
         v("uEye",eye);v("uCameraForward",forward);v("uCameraRight",right);v("uCameraUp",up);
-        glUniform2f(loc("uResolution"),width,height);glUniformMatrix4fv(loc("uVp"),1,false,vp,0);
+        glUniform2f(loc("uResolution"),fullWidth,fullHeight);glUniformMatrix4fv(loc("uVp"),1,false,vp,0);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,quantumTexture);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LESS);glDepthMask(true);
+        glDisable(GL_SCISSOR_TEST);
         if(debug==1)glClearColor(0,0,0,1);else glClearColor(.067f,.086f,.075f,1);
-        glFinish();long started=System.nanoTime();glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);glFinish();
+    }
+    private double drawTarget(int target,int tileWidth,int tileHeight,int originX,int originY,boolean wait){
+        glBindFramebuffer(GL_FRAMEBUFFER,target);glViewport(0,0,tileWidth,tileHeight);
+        glUniform2f(loc("uPixelOrigin"),originX,originY);
+        if(wait)glFinish();
+        long started=System.nanoTime();glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
+        if(wait)glFinish();
         double elapsed=(System.nanoTime()-started)/1e6;check("Observación");return elapsed;
     }
+    private double draw(int debug){
+        drawState(debug,width,height);return drawTarget(fbo,width,height,0,0,synchronousTiming);
+    }
     private Capture read(){
-        ByteBuffer bytes=direct(width*height*4);glReadPixels(0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,bytes);byte[] data=new byte[bytes.capacity()];bytes.rewind();bytes.get(data);
+        // Keep the public RGBA capture, but avoid a second full UHD allocation for readback.
+        int rowBytes=width*4,blockRows=Math.min(height,128);byte[] data=new byte[rowBytes*height];
+        ByteBuffer bytes=direct(rowBytes*blockRows);
+        for(int row=0;row<height;row+=blockRows){
+            int rows=Math.min(blockRows,height-row);bytes.clear();
+            glReadPixels(0,row,width,rows,GL_RGBA,GL_UNSIGNED_BYTE,bytes);check("Lectura");
+            bytes.rewind();bytes.get(data,row*rowBytes,rows*rowBytes);
+        }
         for(int j=0;j<data.length;j+=4)if((data[j]&255)==255&&(data[j+1]&255)==0&&(data[j+2]&255)==255)throw new IllegalStateException("Se agotó el recorrido de celdas");
-        check("Lectura");return new Capture(width,height,data);
+        return new Capture(width,height,data);
     }
     @Override public void onDrawFrame(GL10 unused){
         if(failed||program==0)return;
         try{
             if(framebufferDirty)sizeFramebuffer();sync();camera();
-            if(pickX>=0){
-                draw(1);int x=(int)Math.min(width-1,Math.max(0,(long)pickX*width/viewWidth));
-                int y=(int)Math.min(height-1,Math.max(0,height-1-(long)pickY*height/viewHeight));
-                ByteBuffer bytes=direct(4);glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bytes);
-                selected=(bytes.get(0)&255)+((bytes.get(1)&255)<<8)+((bytes.get(2)&255)<<16)-1;pickX=-1;pickY=-1;
-                check("Selección");
-                if(selected>=count)throw new IllegalStateException("El recorrido devolvió un ID inválido");
+            if(pickPending){
+                if(display.contains(pickX,pickY)){
+                    draw(1);int x=display.framebufferX(pickX),y=height-1-display.framebufferY(pickY);
+                    ByteBuffer bytes=direct(4);glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bytes);
+                    selected=(bytes.get(0)&255)+((bytes.get(1)&255)<<8)+((bytes.get(2)&255)<<16)-1;
+                    check("Selección");
+                    if(selected>=count)throw new IllegalStateException("El recorrido devolvió un ID inválido");
+                }
+                pickPending=false;pickX=-1;pickY=-1;
             }
             CaptureListener requested=capture;int debug=requested==null?0:captureDebug;
             double elapsed=draw(debug);Capture pixels=requested==null?null:read();
+            glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
             glBindFramebuffer(GL_READ_FRAMEBUFFER,fbo);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
-            glBlitFramebuffer(0,0,width,height,0,0,viewWidth,viewHeight,GL_COLOR_BUFFER_BIT,GL_LINEAR);glBindFramebuffer(GL_FRAMEBUFFER,0);
+            int bottom=viewHeight-display.top-display.height;
+            glBlitFramebuffer(0,0,width,height,display.left,bottom,display.left+display.width,bottom+display.height,GL_COLOR_BUFFER_BIT,GL_LINEAR);
+            glBindFramebuffer(GL_FRAMEBUFFER,0);
             check("Pantalla");
             hasFrame=true;drawNumber++;
             latestFrame=new FrameStats(this,elapsed);
             if(requested!=null)capture=null;
-            listener.status(String.format(Locale.US,"%,d objetos · %dx%d · %.1f ms\n%d qubits · %d observables · estado %d%s\n%s",count,width,height,elapsed,core.qubits,coefficients.length,uploadedCore,selected>=0?" · ID "+selected:"",device));
+            listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %.1f ms %s\n%d qubits · %d observables · estado %d%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",elapsed,synchronousTiming?"GPU completada":"CPU envío",core.qubits,coefficients.length,uploadedCore,selected>=0?" · ID "+selected:"",device,resolutionMessage==null?"":"\n"+resolutionMessage));
             if(requested!=null)requested.captured(pixels);
         }catch(Throwable e){error(e);}
     }
@@ -331,7 +504,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public void gate(int op,int a,int b){core.apply(op,a,b);}
     public void reset(){
         synchronized(core){core.resetGraph();observables=core.visualProgram();}
-        uploadedCore=-1;uploadedEpoch=-1;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;timeValue=0;
+        uploadedCore=-1;uploadedEpoch=-1;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;pickPending=false;timeValue=0;
     }
     public void setTime(float seconds){
         if(!finite(seconds)||Math.abs(seconds)>1_000_000)throw new IllegalArgumentException("Tiempo fuera del rango del proyecto");
@@ -350,6 +523,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public int presentation(){return presentation;}
     /** Null until the first successful frame after creating the current EGL context. */
     public FrameStats frameStats(){return latestFrame;}
+    /** Explicit opt-in for a completion-time benchmark; normal frames never force glFinish. */
+    public void setSynchronousTiming(boolean enabled){synchronousTiming=enabled;}
     public void orbit(float dx,float dy){
         if(!finite(dx)||!finite(dy))throw new IllegalArgumentException("Movimiento de cámara inválido");
         yaw=(yaw+dx*.006f)%(float)(Math.PI*2);pitch=Math.max(.04f,Math.min(1.52f,pitch+dy*.005f));overrideEye=null;overrideTarget=null;cameraFov=48;
@@ -360,8 +535,22 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     }
     public void resolution(int pixels){
         if(pixels<64||pixels>4096)throw new IllegalArgumentException("Resolución fuera de rango");
-        limit=pixels;framebufferDirty=true;
+        requestedLimit=pixels;requestedResolutionMode=RESOLUTION_ADAPTIVE;framebufferDirty=true;resolutionMessage=null;
     }
+    /** Requests an exact UHD target on the next frame, independent of the display size. */
+    public void uhd4k(){requestedResolutionMode=RESOLUTION_UHD_4K;framebufferDirty=true;resolutionMessage=null;}
+    public void uhd8k(){requestedResolutionMode=RESOLUTION_UHD_8K;framebufferDirty=true;resolutionMessage=null;}
+    /** True only for a successfully allocated exact UHD target in the current EGL context. */
+    public boolean isUhd4k(){
+        return resolutionMode==RESOLUTION_UHD_4K&&fbo!=0
+            &&(width==UHD_LONG&&height==UHD_SHORT||width==UHD_SHORT&&height==UHD_LONG);
+    }
+    public boolean isUhd8k(){
+        return resolutionMode==RESOLUTION_UHD_8K&&fbo!=0
+            &&(width==UHD_8K_LONG&&height==UHD_8K_SHORT||width==UHD_8K_SHORT&&height==UHD_8K_LONG);
+    }
+    /** Recoverable resolution rejection; does not set failure or stop the existing scene. */
+    public String resolutionNotice(){return resolutionMessage;}
     public void objectCount(int n){
         if(n<1||n>MAX_OBJECTS)throw new IllegalArgumentException("Número de objetos");
         count=n;if(selected>=n)selected=-1;
@@ -372,7 +561,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         seed=value;
     }
     public void coupling(boolean enabled){strength=enabled?enabledStrength:0;}
-    public void pick(int x,int y){selected=-1;pickX=Math.max(0,x);pickY=Math.max(0,y);}
+    public void pick(int x,int y){pickX=x;pickY=y;pickPending=true;}
     public void editSelected(int action){
         if(action==-1)action=7;
         if(action<0||action>7)throw new IllegalArgumentException("Edición inválida");
@@ -385,7 +574,125 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public void requestCapture(boolean ids,CaptureListener listener){
         if(listener==null)throw new IllegalArgumentException("Falta el receptor de captura");
         if(capture!=null)throw new IllegalStateException("Ya hay una captura pendiente");
+        if((long)width*height>RenderResolution.UHD_LONG*(long)RenderResolution.UHD_SHORT
+                ||requestedResolutionMode==RESOLUTION_UHD_8K)
+            throw new IllegalStateException("Para 8K usa la exportación PNG por regiones; la captura RGBA completa excede su presupuesto");
         capture=listener;captureDebug=ids?1:0;
+    }
+
+    /**
+     * Run on the GL thread. ADAPTIVE exports the actual current framebuffer extent;
+     * fixed modes render new native-resolution pixels without allocating that full image.
+     * The caller owns output and must discard a partial file after any exception.
+     */
+    public ExportResult exportPng(OutputStream output,int mode,ExportControl control) throws IOException {
+        if(!RenderResolution.validMode(mode))throw new IllegalArgumentException("Modo de exportación desconocido");
+        if(fbo==0&&!failed&&program!=0)sizeFramebuffer();
+        RenderResolution.Size image=mode==RESOLUTION_ADAPTIVE?new RenderResolution.Size(width,height)
+                :RenderResolution.fixed(mode,viewWidth,viewHeight);
+        return exportPng(output,image,0,control);
+    }
+
+    /** Testable exact-pixel path. Debug 1 exports object IDs; debug 0 exports the scene. */
+    public ExportResult exportPng(OutputStream output,RenderResolution.Size image,int debug,ExportControl control) throws IOException {
+        if(output==null||image==null)throw new IllegalArgumentException("Falta la imagen o el destino PNG");
+        if(debug!=0&&debug!=1)throw new IllegalArgumentException("Modo de observación PNG desconocido");
+        if(failed||program==0)throw new IOException("El renderer no está preparado para exportar");
+        if(exporting)throw new IOException("Ya hay una exportación en curso");
+        ExportControl request=control==null?new ExportControl():control;
+        request.checkCancelled();
+        TilePlan plan=new TilePlan(image,resolutionLimits(),request.tileWidth,request.stripRows);
+        RenderResolution.Size region=new RenderResolution.Size(plan.tileWidth,plan.stripRows);
+        RenderResolution.requireAllocation(region,fbo==0?null:new RenderResolution.Size(width,height));
+        long started=System.nanoTime();
+        Framebuffer tileFramebuffer=null;
+        ExportGlState saved=null;
+        float[] oldEye=eye,oldForward=forward,oldRight=right,oldUp=up,oldVp=vp;
+        float oldNear=near,oldFar=far,oldAspect=aspect;
+        exporting=true;
+        try{
+            // One observation and upload freezes all core coefficients for the whole image.
+            // UI world changes are queued behind this GL-thread operation. Native core
+            // changes elsewhere cannot alter the texture snapshot used by later tiles.
+            sync();saved=new ExportGlState();
+            long revision=uploadedCore,epoch=uploadedEpoch;
+            tileFramebuffer=allocateFramebuffer(region);
+            byte[] band=new byte[image.width*plan.stripRows*4];
+            ByteBuffer readback=direct(plan.tileWidth*plan.stripRows*4);
+            vp=new float[16];camera(image.width,image.height);
+            drawState(debug,image.width,image.height);
+            glPixelStorei(GL_PACK_ALIGNMENT,4);
+            try(StreamPng png=new StreamPng(output,image.width,image.height)){
+                for(int bandIndex=0;bandIndex<plan.bands;bandIndex++){
+                    TilePlan.Tile first=plan.tile(bandIndex*plan.columns);
+                    for(int column=0;column<plan.columns;column++){
+                        request.checkCancelled();
+                        TilePlan.Tile tile=plan.tile(bandIndex*plan.columns+column);
+                        drawTarget(tileFramebuffer.name,tile.width,tile.height,tile.x,tile.y,false);
+                        readback.clear();
+                        glReadPixels(0,0,tile.width,tile.height,GL_RGBA,GL_UNSIGNED_BYTE,readback);
+                        check("Lectura de región PNG");
+                        for(int row=0;row<tile.height;row++){
+                            readback.position((tile.height-1-row)*tile.width*4);
+                            readback.get(band,(row*image.width+tile.x)*4,tile.width*4);
+                        }
+                    }
+                    for(int row=0;row<first.height;row++){
+                        request.checkCancelled();
+                        int offset=row*image.width*4;
+                        for(int p=offset;p<offset+image.width*4;p+=4){
+                            if((band[p]&255)==255&&(band[p+1]&255)==0&&(band[p+2]&255)==255)
+                                throw new IOException("Se agotó el recorrido de celdas durante la exportación");
+                        }
+                        png.writeRow(band,offset);
+                    }
+                    if(request.progress!=null)request.progress.progress(first.topRow+first.height,image.height);
+                }
+                request.checkCancelled();png.finish();
+            }
+            return new ExportResult(plan,revision,epoch,started);
+        }catch(RuntimeException|OutOfMemoryError rejected){
+            throw new IOException("No se pudo exportar el PNG: "+rejected.getMessage(),rejected);
+        }finally{
+            eye=oldEye;forward=oldForward;right=oldRight;up=oldUp;vp=oldVp;
+            near=oldNear;far=oldFar;aspect=oldAspect;
+            if(tileFramebuffer!=null)deleteFramebuffer(tileFramebuffer.color,tileFramebuffer.depth,tileFramebuffer.name);
+            if(saved!=null){
+                glUseProgram(program);glUniform2f(loc("uPixelOrigin"),0,0);
+                glUniform2f(loc("uResolution"),width,height);glUniformMatrix4fv(loc("uVp"),1,false,vp,0);
+                saved.restore();
+            }
+            exporting=false;
+        }
+    }
+
+    /** State changed by the export's GL work; the regular framebuffer and pixels survive. */
+    private static final class ExportGlState {
+        final int[] values=new int[15];
+        final float[] clear=new float[4];
+        final boolean depthTest,scissor;
+        ExportGlState(){
+            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,values,0);glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,values,1);
+            glGetIntegerv(GL_RENDERBUFFER_BINDING,values,2);glGetIntegerv(GL_CURRENT_PROGRAM,values,3);
+            glGetIntegerv(GL_VERTEX_ARRAY_BINDING,values,4);glGetIntegerv(GL_ACTIVE_TEXTURE,values,5);
+            glGetIntegerv(GL_PACK_ALIGNMENT,values,6);glGetIntegerv(GL_VIEWPORT,values,7);
+            glActiveTexture(GL_TEXTURE0);glGetIntegerv(GL_TEXTURE_BINDING_2D,values,11);
+            glActiveTexture(GL_TEXTURE1);glGetIntegerv(GL_TEXTURE_BINDING_2D,values,12);
+            glActiveTexture(values[5]);glGetIntegerv(GL_DEPTH_FUNC,values,13);
+            glGetIntegerv(GL_DEPTH_WRITEMASK,values,14);
+            glGetFloatv(GL_COLOR_CLEAR_VALUE,clear,0);depthTest=glIsEnabled(GL_DEPTH_TEST);scissor=glIsEnabled(GL_SCISSOR_TEST);
+            check("Guardar estado de exportación");
+        }
+        void restore(){
+            glBindFramebuffer(GL_READ_FRAMEBUFFER,values[0]);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,values[1]);
+            glBindRenderbuffer(GL_RENDERBUFFER,values[2]);glUseProgram(values[3]);glBindVertexArray(values[4]);
+            glPixelStorei(GL_PACK_ALIGNMENT,values[6]);glViewport(values[7],values[8],values[9],values[10]);
+            glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,values[11]);
+            glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,values[12]);glActiveTexture(values[5]);
+            glDepthFunc(values[13]);glDepthMask(values[14]!=0);glClearColor(clear[0],clear[1],clear[2],clear[3]);
+            if(depthTest)glEnable(GL_DEPTH_TEST);else glDisable(GL_DEPTH_TEST);
+            if(scissor)glEnable(GL_SCISSOR_TEST);else glDisable(GL_SCISSOR_TEST);
+        }
     }
     public void testCamera(float[] position,float[] target){
         cameraPair(position,target);overrideEye=position.clone();overrideTarget=target.clone();overrideNear=.1f;overrideFar=10000;cameraFov=48;
@@ -395,5 +702,5 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public int selectedId(){return selected;}
     public int objectCount(){return count;}
     public boolean overview(){return overview;}
-    public int resolution(){return limit;}
+    public int resolution(){return requestedLimit;}
 }

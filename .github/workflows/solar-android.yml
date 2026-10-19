@@ -1,0 +1,155 @@
+name: COSMIC X Solar APK and Android validation
+
+on:
+  push:
+    branches: [main, 'codex/cosmic-solar-*', '!codex/cosmic-solar-4k-atmospheres-20261019']
+    paths:
+      - 'solar-android/**'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
+      - 'graphics-android/app/src/main/cpp/graphics_jni.cpp'
+      - 'native/**'
+      - 'tools/solar-*'
+      - 'tools/cosmic_source_provenance.py'
+      - '.github/workflows/solar-android.yml'
+  pull_request:
+    paths:
+      - 'solar-android/**'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
+      - 'graphics-android/app/src/main/cpp/graphics_jni.cpp'
+      - 'native/**'
+      - 'tools/solar-*'
+      - 'tools/cosmic_source_provenance.py'
+      - '.github/workflows/solar-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cosmic-solar-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout solar source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Verify analytical orbits, moon geometry and magnetic reference data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p solar-science-classes
+          javac -encoding UTF-8 -d solar-science-classes \
+            solar-android/app/src/main/java/com/mundox/solar/SolarData.java \
+            solar-android/tests/SolarDataChecks.java
+          java -cp solar-science-classes com.mundox.solar.SolarDataChecks | tee solar-science.log
+
+      - name: Install pinned Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1'
+
+      - name: Build APK with original COSMIC native core and instrumentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p solar-android --no-daemon --stacktrace \
+            :app:assembleDebug :app:assembleDebugAndroidTest 2>&1 | tee solar-build.log
+
+      - name: Stage APKs and verify signatures, native ABIs and source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p solar-dist
+          cp solar-android/app/build/outputs/apk/debug/app-debug.apk solar-dist/COSMIC-X-Solar.apk
+          cp solar-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            solar-dist/COSMIC-X-Solar-tests.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            solar-dist/COSMIC-X-Solar.apk > solar-dist/apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            solar-dist/COSMIC-X-Solar-tests.apk > solar-dist/test-apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+            solar-dist/COSMIC-X-Solar.apk > solar-dist/apk-manifest.txt
+          python3 tools/solar-stage-apk.py solar-dist
+
+      - name: Upload installable signed APK and test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Solar-APK
+          path: solar-dist/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Solar-Build-Logs
+          path: |
+            solar-build.log
+            solar-science.log
+            solar-dist/*.txt
+            solar-dist/*.json
+            solar-android/app/build/reports/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  android-validation:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact validation source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Download the exact APKs from this build
+        uses: actions/download-artifact@v4
+        with:
+          name: COSMIC-X-Solar-APK
+          path: solar-apks
+
+      - name: Prepare Android 15 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+
+      - name: Verify native core, navigation, solar rendering and magnetic layers
+        shell: bash
+        run: bash tools/solar-emulator-test.sh
+
+      - name: Upload real framebuffers and Android evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Solar-Android-Evidence
+          path: solar-evidence/**
+          if-no-files-found: warn
+          retention-days: 14

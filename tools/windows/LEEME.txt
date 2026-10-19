@@ -23,6 +23,8 @@ queda correlacionado. seed 2026 fija un muestreo seudoaleatorio reproducible;
 la semilla inicial es 0. reset reinicia los qubits, conserva el generador.
 
 Otros experimentos:
+  .\mundo_x.exe run examples\ghz1000.x
+  .\mundo_x.exe run examples\t60.x
   .\mundo_x.exe hello
   .\mundo_x.exe teleport
   .\mundo_x.exe t-reduced-experiment 8 24
@@ -33,14 +35,28 @@ Otros experimentos:
 
 Esta version ejecuta simulacion cuantica en una CPU convencional.
 No genera qubits fisicos ni acredita ventaja cuantica. XASM usa CompactCore
-por defecto; backend reduced permite programar Clifford+T (1..12 qubits,
-128 puertas T). El frontend .mx compila circuitos reutilizables a XASM.
+por defecto, incluido el registro de 1000 qubits. backend reduced permite
+programar Clifford+T (1..63 qubits, 128 puertas T, 65536 componentes).
+assert fidelity conserva una referencia densa limitada a 12 qubits.
+El frontend .mx compila circuitos reutilizables a XASM.
 Las instrucciones scene crean escenas exportables para XLab.
 
 mundo_x_phase ejecuta el nucleo de fases generales sobre archivos .qx.
 La ruta adaptive mantiene estados producto y transfiere al motor reducido
 cuando aparece entrelazamiento, con los presupuestos documentados.
 Los ejecutables y formatos conservan sus nombres para compatibilidad.
+
+La VM didactica original tambien esta disponible desde terminal:
+  .\mundo_x_vm.exe --self-test
+  .\mundo_x_vm.exe programa.mxvm
+Conserva cuatro registros de 8 bits y 16 bytes de RAM en CompactCore.
+
+La PC propia tiene otro ejecutable, con el mismo interprete x86/x64 que Android:
+  .\cosmic_pc_cli.exe --demo
+  .\cosmic_pc_cli.exe --demo64 --ram-mib 2048 --resident-mib 1024
+Estas ordenes ejecutan arranques propios de prueba. La PC todavia no instala
+ni ejecuta Windows completo ni juegos. Se incluye en el paquete de consola;
+su APK continua separada de la aplicacion principal COSMIC.
 
 Los .exe incluyen el runtime C++ de MSVC mediante enlace estatico.
 La compilacion no tiene firma digital. SHA256SUMS.txt permite verificar bytes;

@@ -24,6 +24,13 @@ class CompactCore {
     bool random;
   };
 
+  // Independent read-only export, P = i^phase X^x Z^z. Owning the copied
+  // words keeps observers valid after subsequent mutations of the core.
+  struct PackedGenerator {
+    std::vector<std::uint64_t> x, z;
+    unsigned phase;
+  };
+
   explicit CompactCore(std::size_t qubits)
       : n_(checked_qubit_count(qubits)), words_(n_ / 64 + (n_ % 64 != 0)),
         x_(n_ * words_, 0), z_(n_ * words_, 0), phase_(n_, 0) {
@@ -76,9 +83,16 @@ class CompactCore {
     check(a);
     check(b);
     if (a == b) throw std::invalid_argument("a == b");
-    hadamard(b);
-    cnot(a, b);
-    hadamard(b);
+    basis_canonical_ = false;
+    // CZ conjugation in one tableau pass. The sign is required when the
+    // two X components have different Z components (for example XY).
+    for (std::size_t r = 0; r < n_; ++r) {
+      const bool xa = get(x_, r, a), za = get(z_, r, a);
+      const bool xb = get(x_, r, b), zb = get(z_, r, b);
+      phase_[r] ^= static_cast<std::uint8_t>(xa && xb && (za ^ zb));
+      set(z_, r, a, za ^ xb);
+      set(z_, r, b, zb ^ xa);
+    }
   }
 
   void cnot(std::size_t control, std::size_t target) {
@@ -167,6 +181,16 @@ class CompactCore {
       out << p;
     }
     return out.str();
+  }
+
+  PackedGenerator generator_packed(std::size_t row) const {
+    if (row >= n_) throw std::out_of_range("row");
+    const auto offset = row * words_;
+    unsigned exponent = 2U * phase_[row];
+    for (std::size_t w = 0; w < words_; ++w)
+      exponent = (exponent + popcount64(x_[offset + w] & z_[offset + w])) & 3U;
+    return {{x_.begin() + offset, x_.begin() + offset + words_},
+            {z_.begin() + offset, z_.begin() + offset + words_}, exponent};
   }
 
   // Compact, deterministic observables used by the Android visual experiment.
@@ -404,23 +428,19 @@ class CompactCore {
 
       const auto& target_labels = x_column ? target_x : target_z;
       if ((target_labels[bit / 64] >> (bit % 64)) & 1U) {
-        int phase_exp = 2 * static_cast<int>(target_negative) +
-                        2 * static_cast<int>(basis.phase_[rank]);
-        for (std::size_t k = 0; k < n_; ++k) {
-          const bool tx = (target_x[k / 64] >> (k % 64)) & 1U;
-          const bool tz = (target_z[k / 64] >> (k % 64)) & 1U;
-          const int a = (tx ? 1 : 0) | (tz ? 2 : 0);
-          const int b = (basis.get(basis.x_, rank, k) ? 1 : 0) |
-                        (basis.get(basis.z_, rank, k) ? 2 : 0);
-          phase_exp = (phase_exp + local_product_phase(a, b)) & 3;
-        }
+        const auto offset = rank * words_;
+        const unsigned phase_exp =
+            (2U * static_cast<unsigned>(target_negative) +
+             2U * basis.phase_[rank] +
+             packed_product_phase(target_x.data(), target_z.data(),
+                                  basis.x_.data() + offset,
+                                  basis.z_.data() + offset, words_)) & 3U;
+        if (phase_exp & 1U)
+          throw std::logic_error("deterministic Z reduction lost commutation");
         for (std::size_t w = 0; w < words_; ++w) {
           target_x[w] ^= basis.x_[rank * words_ + w];
           target_z[w] ^= basis.z_[rank * words_ + w];
         }
-        phase_exp &= 3;
-        if (phase_exp & 1)
-          throw std::logic_error("deterministic Z reduction lost commutation");
         target_negative = phase_exp == 2;
         bool identity = true;
         for (std::size_t w = 0; w < words_; ++w)
@@ -447,15 +467,35 @@ class CompactCore {
     return qubits;
   }
 
-  static int local_product_phase(int a, int b) {
-    // Canonical Pauli codes: I=0, X=1, Z=2, Y=3.
-    // Return exponent k in i^k for P(a)P(b).
-    if (a == 0 || b == 0 || a == b) return 0;
-    if ((a == 1 && b == 3) ||
-        (a == 3 && b == 2) ||
-        (a == 2 && b == 1))
-      return 1;
-    return 3;
+  static unsigned popcount64(std::uint64_t value) {
+#if defined(__GNUG__) || defined(__clang__)
+    return static_cast<unsigned>(__builtin_popcountll(value));
+#else
+    // Portable fixed-cost fallback; no target-specific instruction required.
+    value -= (value >> 1U) & 0x5555555555555555ULL;
+    value = (value & 0x3333333333333333ULL) +
+            ((value >> 2U) & 0x3333333333333333ULL);
+    value = (value + (value >> 4U)) & 0x0f0f0f0f0f0f0f0fULL;
+    return static_cast<unsigned>((value * 0x0101010101010101ULL) >> 56U);
+#endif
+  }
+
+  static unsigned packed_product_phase(const std::uint64_t* ax,
+                                       const std::uint64_t* az,
+                                       const std::uint64_t* bx,
+                                       const std::uint64_t* bz,
+                                       std::size_t words) {
+    // Canonical Hermitian Pauli = i^popcount(x&z) X^x Z^z. Multiplication
+    // adds the two Y counts, the Z_a/X_b reordering sign, then removes
+    // the output Y count. Unsigned arithmetic modulo four is exact here.
+    unsigned exponent = 0;
+    for (std::size_t w = 0; w < words; ++w) {
+      exponent += popcount64(ax[w] & az[w]) + popcount64(bx[w] & bz[w]) +
+                  2U * popcount64(az[w] & bx[w]);
+      exponent -= popcount64((ax[w] ^ bx[w]) & (az[w] ^ bz[w]));
+      exponent &= 3U;
+    }
+    return exponent;
   }
 
   void clear_row(std::size_t row) {
@@ -467,26 +507,17 @@ class CompactCore {
   }
 
   void multiply_rows(std::size_t target, std::size_t source) {
-    int phase_exp =
-        2 * static_cast<int>(phase_[target]) +
-        2 * static_cast<int>(phase_[source]);
-
-    for (std::size_t q = 0; q < n_; ++q) {
-      const int a = (get(x_, target, q) ? 1 : 0) |
-                    (get(z_, target, q) ? 2 : 0);
-      const int b = (get(x_, source, q) ? 1 : 0) |
-                    (get(z_, source, q) ? 2 : 0);
-      phase_exp += local_product_phase(a, b);
-    }
-
-    for (std::size_t q = 0; q < n_; ++q) {
-      set(x_, target, q, get(x_, target, q) ^ get(x_, source, q));
-      set(z_, target, q, get(z_, target, q) ^ get(z_, source, q));
-    }
-
-    phase_exp &= 3;
-    if (phase_exp & 1)
+    const auto a = target * words_, b = source * words_;
+    const unsigned phase_exp =
+        (2U * phase_[target] + 2U * phase_[source] +
+         packed_product_phase(x_.data() + a, z_.data() + a,
+                              x_.data() + b, z_.data() + b, words_)) & 3U;
+    if (phase_exp & 1U)
       throw std::logic_error("attempted to multiply non-commuting stabilizers");
+    for (std::size_t w = 0; w < words_; ++w) {
+      x_[a + w] ^= x_[b + w];
+      z_[a + w] ^= z_[b + w];
+    }
     phase_[target] = static_cast<std::uint8_t>(phase_exp == 2 ? 1 : 0);
   }
 

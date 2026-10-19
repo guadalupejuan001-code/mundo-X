@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Verify the integrated core against the exact, reviewed source revisions.
+
+The 4K, 8K and Solar builds now consume the 1,000-qubit core. They must not
+claim that the older 4K core is unchanged. This manifest verifies every file
+in the shared native source inventory and records the actual baseline delta.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from pathlib import Path
+
+ORIGINAL_REFERENCE = "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac"
+CORE_REFERENCE = "ef4636240af73351a18710e988346791fbdc3b58"
+RESOLUTION_REFERENCE = "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6"
+SOURCE_SCOPES = (
+    "native",
+    "graphics-android/app/src/main/cpp",
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java",
+)
+ADDITIONAL_SOURCES = {
+    "native/tests/core_performance_benchmark.cpp": RESOLUTION_REFERENCE,
+    "native/src/basis_vm_main.cpp": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
+}
+RESOLUTION_SOURCE = "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java"
+
+
+def _git(root, *arguments):
+    try:
+        return subprocess.check_output(["git", *arguments], cwd=root, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as error:
+        raise ValueError("Source provenance requires the complete Git history: "
+                         + error.stderr.decode("utf-8", "replace").strip()) from error
+
+
+def _inventory(root, reference):
+    return set(_git(root, "ls-tree", "-r", "--name-only", "-z", reference,
+                    "--", *SOURCE_SCOPES).decode().rstrip("\0").split("\0")) - {""}
+
+
+def _sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def verify_integrated_core(root):
+    """Return verified source hashes, origins and changes; reject any extra delta."""
+    root = Path(root).resolve()
+    expected = {name: CORE_REFERENCE for name in _inventory(root, CORE_REFERENCE)}
+    if len(expected) < len(SOURCE_SCOPES):
+        raise ValueError("The 1,000-qubit reference source inventory is missing")
+    for name, reference in ADDITIONAL_SOURCES.items():
+        if name in expected:
+            raise ValueError("Additional source unexpectedly belongs to the core baseline: " + name)
+        expected[name] = reference
+    actual = set(_git(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z",
+                      "--", *SOURCE_SCOPES).decode().rstrip("\0").split("\0")) - {""}
+    if actual != set(expected):
+        raise ValueError("Undeclared integrated core inventory: missing="
+                         + repr(sorted(set(expected) - actual)) + "; extra="
+                         + repr(sorted(actual - set(expected))))
+    hashes = {}
+    for name, reference in sorted(expected.items()):
+        path = root / name
+        if not path.is_file() or path.is_symlink():
+            raise ValueError("Missing or non-regular shared core source: " + name)
+        current = path.read_bytes()
+        original = _git(root, "show", reference + ":" + name)
+        if current != original:
+            raise ValueError("Unreviewed shared core change relative to " + reference + ": " + name)
+        hashes[name] = _sha(current)
+
+    baseline = _inventory(root, ORIGINAL_REFERENCE)
+    changes = {}
+    for name in sorted(baseline | set(expected)):
+        old_hash = _sha(_git(root, "show", ORIGINAL_REFERENCE + ":" + name)) if name in baseline else None
+        new_hash = hashes.get(name)
+        if old_hash != new_hash:
+            changes[name] = {"baselineSha256": old_hash, "sha256": new_hash,
+                             "status": "added" if old_hash is None else "removed" if new_hash is None else "modified"}
+
+    resolution = (root / RESOLUTION_SOURCE).read_bytes()
+    if resolution != _git(root, "show", RESOLUTION_REFERENCE + ":" + RESOLUTION_SOURCE):
+        raise ValueError("Unreviewed shared resolution geometry change: " + RESOLUTION_SOURCE)
+    return {
+        "originalReferenceCommit": ORIGINAL_REFERENCE,
+        "originalSourcesUnchanged": not changes,
+        "coreReferenceCommit": CORE_REFERENCE,
+        "coreSourcesVerified": True,
+        "coreSourceHashes": hashes,
+        "coreSourceReferenceCommits": dict(sorted(expected.items())),
+        "sourceChangesFromOriginal": changes,
+        "sharedResolutionReferenceCommit": RESOLUTION_REFERENCE,
+        "sharedResolutionGeometrySha256": _sha(resolution),
+    }
+
+
+if __name__ == "__main__":
+    print(json.dumps(verify_integrated_core(Path(__file__).resolve().parents[1]), indent=2))

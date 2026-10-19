@@ -1,0 +1,418 @@
+{
+  "schema": "cosmic-core-scale-benchmark-v1",
+  "timestamp_utc": "2026-10-19T09:32:32Z",
+  "execution_scope": "Native host CPU; no Android-device, GPU or frame-rate measurement",
+  "representation": "repository CompactCore packed Clifford tableau",
+  "dense_full_register_allocated": false,
+  "t_gate_support_measured": false,
+  "compiler": "gcc 13.3.0",
+  "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+  "hardware_threads_reported": 9,
+  "size_t_bytes": 8,
+  "protocol": {
+    "warmup_per_case": 3,
+    "measured_repetitions": 7,
+    "cached_query_batches_per_sample": 4,
+    "rng": "none: fixed GHZ and graph_program gate sequences"
+  },
+  "memory_scope": "Logical used payload only; state, observer, gate history, query strings and result values are separate. Excludes containers, spare capacity, allocator, temporary work and process/GPU RAM.",
+  "timing_scope": "EngineSession operations include locks, input parsing and allocations inside the timed call. Cached queries reuse the observer index but evaluate every requested Pauli again. No performance thresholds.",
+  "cases": [
+    {
+      "qubits": 20,
+      "family": "ghz",
+      "gate_count": 20,
+      "circuit_fnv1a64": "51438346cf731026",
+      "all_qubits_connected": true,
+      "observables_per_batch": 60,
+      "observable_definition": "n signed stabilizer generators, n local X, n local Z",
+      "initial_state_payload_bytes": 340,
+      "observer_index_payload_bytes": 560,
+      "initial_gate_history_payload_bytes": 480,
+      "observable_utf8_payload_bytes": 1220,
+      "one_query_result_double_payload_bytes": 480,
+      "prepare_observable_strings_ms": 0.010773,
+      "verification": "PASS: initial expectations, exact history replay, full query equality, and signed response to Z on highest index",
+      "milliseconds": {
+        "initialization": {
+          "min": 7.7e-05,
+          "median": 7.8e-05,
+          "p95_nearest_rank": 8e-05,
+          "max": 8e-05
+        },
+        "apply_initial_circuit": {
+          "min": 0.001627,
+          "median": 0.001708,
+          "p95_nearest_rank": 0.001738,
+          "max": 0.001738
+        },
+        "first_observer_and_query": {
+          "min": 0.010971,
+          "median": 0.01104,
+          "p95_nearest_rank": 0.011451,
+          "max": 0.011451
+        },
+        "cached_full_query_batch": {
+          "min": 0.00806925,
+          "median": 0.0083615,
+          "p95_nearest_rank": 0.03713675,
+          "max": 0.03713675
+        },
+        "snapshot_history_copy": {
+          "min": 3.7e-05,
+          "median": 3.9e-05,
+          "p95_nearest_rank": 7.4e-05,
+          "max": 7.4e-05
+        },
+        "restore_replay": {
+          "min": 0.001706,
+          "median": 0.00176,
+          "p95_nearest_rank": 0.001893,
+          "max": 0.001893
+        },
+        "Z_on_highest_index": {
+          "min": 0.000419,
+          "median": 0.000479,
+          "p95_nearest_rank": 0.000511,
+          "max": 0.000511
+        },
+        "observer_refresh_and_full_query": {
+          "min": 0.010596,
+          "median": 0.010861,
+          "p95_nearest_rank": 0.011042,
+          "max": 0.011042
+        }
+      }
+    },
+    {
+      "qubits": 20,
+      "family": "graphics_graph",
+      "gate_count": 55,
+      "circuit_fnv1a64": "80deeba783e19c96",
+      "all_qubits_connected": true,
+      "observables_per_batch": 60,
+      "observable_definition": "n signed stabilizer generators, n local X, n local Z",
+      "initial_state_payload_bytes": 340,
+      "observer_index_payload_bytes": 560,
+      "initial_gate_history_payload_bytes": 1320,
+      "observable_utf8_payload_bytes": 1220,
+      "one_query_result_double_payload_bytes": 480,
+      "prepare_observable_strings_ms": 0.009462,
+      "verification": "PASS: initial expectations, exact history replay, full query equality, and signed response to Z on highest index",
+      "milliseconds": {
+        "initialization": {
+          "min": 7e-05,
+          "median": 9e-05,
+          "p95_nearest_rank": 0.000123,
+          "max": 0.000123
+        },
+        "apply_initial_circuit": {
+          "min": 0.00572,
+          "median": 0.005774,
+          "p95_nearest_rank": 0.005894,
+          "max": 0.005894
+        },
+        "first_observer_and_query": {
+          "min": 0.007754,
+          "median": 0.007972,
+          "p95_nearest_rank": 0.008171,
+          "max": 0.008171
+        },
+        "cached_full_query_batch": {
+          "min": 0.0076695,
+          "median": 0.00790475,
+          "p95_nearest_rank": 0.03561175,
+          "max": 0.03561175
+        },
+        "snapshot_history_copy": {
+          "min": 0.001316,
+          "median": 0.001358,
+          "p95_nearest_rank": 0.001678,
+          "max": 0.001678
+        },
+        "restore_replay": {
+          "min": 0.003852,
+          "median": 0.003926,
+          "p95_nearest_rank": 0.060626,
+          "max": 0.060626
+        },
+        "Z_on_highest_index": {
+          "min": 0.000444,
+          "median": 0.000476,
+          "p95_nearest_rank": 0.000577,
+          "max": 0.000577
+        },
+        "observer_refresh_and_full_query": {
+          "min": 0.008225,
+          "median": 0.008449,
+          "p95_nearest_rank": 0.00873,
+          "max": 0.00873
+        }
+      }
+    },
+    {
+      "qubits": 60,
+      "family": "ghz",
+      "gate_count": 60,
+      "circuit_fnv1a64": "9392af1dfe19c826",
+      "all_qubits_connected": true,
+      "observables_per_batch": 180,
+      "observable_definition": "n signed stabilizer generators, n local X, n local Z",
+      "initial_state_payload_bytes": 1020,
+      "observer_index_payload_bytes": 1680,
+      "initial_gate_history_payload_bytes": 1440,
+      "observable_utf8_payload_bytes": 10860,
+      "one_query_result_double_payload_bytes": 1440,
+      "prepare_observable_strings_ms": 0.053666,
+      "verification": "PASS: initial expectations, exact history replay, full query equality, and signed response to Z on highest index",
+      "milliseconds": {
+        "initialization": {
+          "min": 0.000114,
+          "median": 0.000146,
+          "p95_nearest_rank": 0.000344,
+          "max": 0.000344
+        },
+        "apply_initial_circuit": {
+          "min": 0.019082,
+          "median": 0.019296,
+          "p95_nearest_rank": 0.019552,
+          "max": 0.019552
+        },
+        "first_observer_and_query": {
+          "min": 0.048282,
+          "median": 0.049078,
+          "p95_nearest_rank": 0.095583,
+          "max": 0.095583
+        },
+        "cached_full_query_batch": {
+          "min": 0.04701225,
+          "median": 0.0726695,
+          "p95_nearest_rank": 0.19265725,
+          "max": 0.19265725
+        },
+        "snapshot_history_copy": {
+          "min": 0.000139,
+          "median": 0.00017,
+          "p95_nearest_rank": 0.00031,
+          "max": 0.00031
+        },
+        "restore_replay": {
+          "min": 0.013966,
+          "median": 0.014192,
+          "p95_nearest_rank": 0.114854,
+          "max": 0.114854
+        },
+        "Z_on_highest_index": {
+          "min": 0.001191,
+          "median": 0.00132,
+          "p95_nearest_rank": 0.001466,
+          "max": 0.001466
+        },
+        "observer_refresh_and_full_query": {
+          "min": 0.049754,
+          "median": 0.050883,
+          "p95_nearest_rank": 0.205755,
+          "max": 0.205755
+        }
+      }
+    },
+    {
+      "qubits": 60,
+      "family": "graphics_graph",
+      "gate_count": 168,
+      "circuit_fnv1a64": "cf3d9ad7c01c9db1",
+      "all_qubits_connected": true,
+      "observables_per_batch": 180,
+      "observable_definition": "n signed stabilizer generators, n local X, n local Z",
+      "initial_state_payload_bytes": 1020,
+      "observer_index_payload_bytes": 1680,
+      "initial_gate_history_payload_bytes": 4032,
+      "observable_utf8_payload_bytes": 10860,
+      "one_query_result_double_payload_bytes": 1440,
+      "prepare_observable_strings_ms": 0.043162,
+      "verification": "PASS: initial expectations, exact history replay, full query equality, and signed response to Z on highest index",
+      "milliseconds": {
+        "initialization": {
+          "min": 0.000199,
+          "median": 0.000234,
+          "p95_nearest_rank": 0.000418,
+          "max": 0.000418
+        },
+        "apply_initial_circuit": {
+          "min": 0.03556,
+          "median": 0.038706,
+          "p95_nearest_rank": 0.316573,
+          "max": 0.316573
+        },
+        "first_observer_and_query": {
+          "min": 0.043828,
+          "median": 0.16067,
+          "p95_nearest_rank": 0.340869,
+          "max": 0.340869
+        },
+        "cached_full_query_batch": {
+          "min": 0.04351725,
+          "median": 0.0543315,
+          "p95_nearest_rank": 0.50124025,
+          "max": 0.50124025
+        },
+        "snapshot_history_copy": {
+          "min": 0.000265,
+          "median": 0.000392,
+          "p95_nearest_rank": 0.000601,
+          "max": 0.000601
+        },
+        "restore_replay": {
+          "min": 0.033354,
+          "median": 0.088931,
+          "p95_nearest_rank": 1.33233,
+          "max": 1.33233
+        },
+        "Z_on_highest_index": {
+          "min": 0.001305,
+          "median": 0.001483,
+          "p95_nearest_rank": 0.003097,
+          "max": 0.003097
+        },
+        "observer_refresh_and_full_query": {
+          "min": 0.046341,
+          "median": 0.111819,
+          "p95_nearest_rank": 2.208259,
+          "max": 2.208259
+        }
+      }
+    },
+    {
+      "qubits": 1000,
+      "family": "ghz",
+      "gate_count": 1000,
+      "circuit_fnv1a64": "ba35677ec3c9deee",
+      "all_qubits_connected": true,
+      "observables_per_batch": 3000,
+      "observable_definition": "n signed stabilizer generators, n local X, n local Z",
+      "initial_state_payload_bytes": 257000,
+      "observer_index_payload_bytes": 268000,
+      "initial_gate_history_payload_bytes": 24000,
+      "observable_utf8_payload_bytes": 3001000,
+      "one_query_result_double_payload_bytes": 24000,
+      "prepare_observable_strings_ms": 17.428277,
+      "verification": "PASS: initial expectations, exact history replay, full query equality, and signed response to Z on highest index",
+      "milliseconds": {
+        "initialization": {
+          "min": 0.027981,
+          "median": 0.029014,
+          "p95_nearest_rank": 0.032635,
+          "max": 0.032635
+        },
+        "apply_initial_circuit": {
+          "min": 5.933502,
+          "median": 7.016617,
+          "p95_nearest_rank": 19.674452,
+          "max": 19.674452
+        },
+        "first_observer_and_query": {
+          "min": 33.154215,
+          "median": 49.725609,
+          "p95_nearest_rank": 66.552323,
+          "max": 66.552323
+        },
+        "cached_full_query_batch": {
+          "min": 32.41382725,
+          "median": 39.45069,
+          "p95_nearest_rank": 56.5964935,
+          "max": 56.5964935
+        },
+        "snapshot_history_copy": {
+          "min": 0.006808,
+          "median": 0.007943,
+          "p95_nearest_rank": 0.0083,
+          "max": 0.0083
+        },
+        "restore_replay": {
+          "min": 6.82445,
+          "median": 8.619078,
+          "p95_nearest_rank": 13.526058,
+          "max": 13.526058
+        },
+        "Z_on_highest_index": {
+          "min": 0.068598,
+          "median": 0.071428,
+          "p95_nearest_rank": 0.131795,
+          "max": 0.131795
+        },
+        "observer_refresh_and_full_query": {
+          "min": 35.737928,
+          "median": 38.181711,
+          "p95_nearest_rank": 63.786509,
+          "max": 63.786509
+        }
+      }
+    },
+    {
+      "qubits": 1000,
+      "family": "graphics_graph",
+      "gate_count": 2831,
+      "circuit_fnv1a64": "61995d8220e15c23",
+      "all_qubits_connected": true,
+      "observables_per_batch": 3000,
+      "observable_definition": "n signed stabilizer generators, n local X, n local Z",
+      "initial_state_payload_bytes": 257000,
+      "observer_index_payload_bytes": 268000,
+      "initial_gate_history_payload_bytes": 67944,
+      "observable_utf8_payload_bytes": 3001000,
+      "one_query_result_double_payload_bytes": 24000,
+      "prepare_observable_strings_ms": 16.759732,
+      "verification": "PASS: initial expectations, exact history replay, full query equality, and signed response to Z on highest index",
+      "milliseconds": {
+        "initialization": {
+          "min": 0.025898,
+          "median": 0.02891,
+          "p95_nearest_rank": 0.321889,
+          "max": 0.321889
+        },
+        "apply_initial_circuit": {
+          "min": 16.640631,
+          "median": 60.499442,
+          "p95_nearest_rank": 84.346781,
+          "max": 84.346781
+        },
+        "first_observer_and_query": {
+          "min": 11.608383,
+          "median": 49.301209,
+          "p95_nearest_rank": 64.000027,
+          "max": 64.000027
+        },
+        "cached_full_query_batch": {
+          "min": 11.516663,
+          "median": 32.2742455,
+          "p95_nearest_rank": 52.926326,
+          "max": 52.926326
+        },
+        "snapshot_history_copy": {
+          "min": 0.011403,
+          "median": 0.012546,
+          "p95_nearest_rank": 0.016559,
+          "max": 0.016559
+        },
+        "restore_replay": {
+          "min": 15.576584,
+          "median": 20.273171,
+          "p95_nearest_rank": 85.333732,
+          "max": 85.333732
+        },
+        "Z_on_highest_index": {
+          "min": 0.075438,
+          "median": 0.12211,
+          "p95_nearest_rank": 0.342729,
+          "max": 0.342729
+        },
+        "observer_refresh_and_full_query": {
+          "min": 12.354246,
+          "median": 31.544547,
+          "p95_nearest_rank": 72.746721,
+          "max": 72.746721
+        }
+      }
+    }
+  ]
+}

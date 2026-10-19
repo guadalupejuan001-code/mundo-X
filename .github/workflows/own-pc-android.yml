@@ -1,0 +1,76 @@
+name: COSMIC X PC own x86 engine
+on:
+  push:
+    branches: ['main', 'codex/own-pc-x86-20261019']
+    paths: ['pc-android/**', 'CMakeLists.txt', '.github/workflows/own-pc-android.yml']
+  pull_request:
+    branches: ['main']
+    paths: ['pc-android/**', 'CMakeLists.txt', '.github/workflows/own-pc-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: own-pc-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify native own engine
+        run: bash pc-android/tools/test-native.sh > pc-native-tests.log 2>&1
+      - name: Measure sparse memory against an eager baseline
+        run: |
+          bash pc-android/tools/benchmark-memory.sh
+          mkdir -p pc-evidence
+          cp pc-android/build/native/memory-benchmark.json pc-evidence/memory-benchmark.json
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Prepare Android SDK
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1' 'platform-tools' 'emulator' 'system-images;android-35;default;x86_64'
+      - name: Build Android binaries
+        run: gradle -p pc-android --no-daemon --stacktrace :app:assembleDebug :app:assembleDebugAndroidTest > pc-build.log 2>&1
+      - name: Verify APK provenance and signature
+        run: |
+          set -euo pipefail
+          mkdir -p pc-dist
+          cp pc-android/app/build/outputs/apk/debug/app-debug.apk pc-dist/COSMIC-X-PC.apk
+          cp pc-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk pc-dist/COSMIC-X-PC-tests.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs pc-dist/COSMIC-X-PC.apk > pc-dist/signature.txt
+          python3 - <<'PY'
+          import hashlib, json, subprocess, zipfile
+          from pathlib import Path
+          apk=Path('pc-dist/COSMIC-X-PC.apk')
+          with zipfile.ZipFile(apk) as z:
+              names={n for n in z.namelist() if n.startswith('lib/')}
+              expected={'lib/'+abi+'/'+lib for abi in ('arm64-v8a','x86_64') for lib in ('libcosmic_pc.so','libc++_shared.so')}
+              assert names==expected,(names,expected)
+              assert z.testzip() is None
+          data={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'bytes':apk.stat().st_size,'version':'0.2.0','engine':'own C++ x86/x64 interpreter','external_emulation_engines':[],'logical_ram_bytes':2**31,'guest_payload_cap_bytes':2**30,'windows_booted':False}
+          Path('pc-dist/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
+          print(json.dumps(data))
+          PY
+      - name: Run on Android 15 emulator
+        run: |
+          sudo chmod a+rw /dev/kvm
+          bash pc-android/tools/android-test.sh
+      - name: Preserve exact build and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-PC-build
+          path: |
+            pc-dist/**
+            pc-evidence/**
+            pc-native-tests.log
+            pc-build.log
+          if-no-files-found: error
+          retention-days: 14

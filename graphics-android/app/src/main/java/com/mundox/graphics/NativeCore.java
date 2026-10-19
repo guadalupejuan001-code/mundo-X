@@ -6,6 +6,8 @@ import java.util.Arrays;
 
 /** Owner of one native CompactCore; the renderer only borrows this object. */
 public final class NativeCore implements AutoCloseable {
+    /** New worlds use this profile; imported and saved projects retain their size. */
+    public static final int DEFAULT_QUBITS=1000, MAX_QUBITS=1000;
     public static final int H=0, S=1, X=2, Z=3, CX=4, CZ=5, Y=6;
     private static final long MAX_PROJECT_REVISION=9_007_199_254_740_991L;
     static { System.loadLibrary("mx_graphics"); }
@@ -20,7 +22,7 @@ public final class NativeCore implements AutoCloseable {
             this.qubits=qubits;this.version=version;this.gateHistory=gates;
         }
         static Snapshot of(int qubits,long version,long[] gates){
-            if(qubits<1||qubits>256||version<0||version>MAX_PROJECT_REVISION||gates==null||gates.length%3!=0||gates.length>300_000)
+            if(qubits<1||qubits>MAX_QUBITS||version<0||version>MAX_PROJECT_REVISION||gates==null||gates.length%3!=0||gates.length>300_000)
                 throw new IllegalArgumentException("Estado del proyecto inválido");
             return new Snapshot(qubits,version,gates.clone());
         }
@@ -30,7 +32,7 @@ public final class NativeCore implements AutoCloseable {
     private long handle;
 
     public NativeCore(int qubits) {
-        if(qubits<1||qubits>256)throw new IllegalArgumentException("El proyecto admite de 1 a 256 qubits");
+        if(qubits<1||qubits>MAX_QUBITS)throw new IllegalArgumentException("El proyecto admite de 1 a "+MAX_QUBITS+" qubits");
         this.qubits=qubits;handle=nCreate(qubits);
         if(handle==0)throw new IllegalStateException("No se pudo crear el núcleo");
     }

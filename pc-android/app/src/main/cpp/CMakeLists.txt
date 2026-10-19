@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(cosmic_pc LANGUAGES CXX)
+add_library(cosmic_pc SHARED pc_jni.cpp)
+target_compile_features(cosmic_pc PRIVATE cxx_std_17)
+target_include_directories(cosmic_pc PRIVATE ../../../../native)
+target_compile_options(cosmic_pc PRIVATE -Wall -Wextra -Wpedantic)
+target_link_options(cosmic_pc PRIVATE -Wl,-z,max-page-size=16384)
