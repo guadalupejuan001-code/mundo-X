@@ -22,6 +22,10 @@ class InfiniteSession {
     std::vector<double> values;
     Stats stats;
     std::uint64_t revision = 0, epoch = 0;
+    // Exact structural telemetry for this batch: one observer is built for
+    // each materialized component actually queried, regardless of how many
+    // observables in the batch touch that component.
+    std::size_t observer_builds = 0;
   };
   struct Metadata { Stats stats; Background background; std::uint64_t epoch; };
 
@@ -65,6 +69,7 @@ class InfiniteSession {
     for (const auto& observable : observables)
       result.values.push_back(
           core_.expectation_cached(observable.terms, observable.sign, observers));
+    result.observer_builds = observers.size();
     result.stats = core_.stats();
     result.revision = result.stats.revision;
     result.epoch = epoch_;
