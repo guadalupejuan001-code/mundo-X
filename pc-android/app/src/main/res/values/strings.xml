@@ -2,17 +2,25 @@
 <resources>
     <string name="app_name">COSMIC X PC</string>
     <string name="local_engine">LOCAL · MOTOR PROPIO</string>
-    <string name="scope_notice">Arranque x86. Windows completo todavía no implementado.</string>
+    <string name="scope_notice">Pruebas x86 y x64. Windows y juegos todavía pendientes.</string>
     <string name="boot_section">ORIGEN DEL ARRANQUE</string>
     <string name="no_image">Carga una prueba o abre una imagen local.</string>
     <string name="boot_demo">Arranque de prueba</string>
+    <string name="boot_x64_demo">Prueba x64</string>
     <string name="open_image">Abrir ISO/disco</string>
     <string name="reopen_image">Reabrir última imagen</string>
     <string name="demo_selected">Arranque de prueba propio · pulsa Ejecutar</string>
+    <string name="x64_demo_selected">Prueba x64 propia · pulsa Ejecutar</string>
+    <string name="ram_virtual">RAM virtual: %1$s</string>
+    <string name="ram_guest">RAM usada por invitado: %1$s / límite %2$s</string>
+    <string name="app_pss">PSS de la app: %1$s</string>
+    <string name="ram_budget_hint">El límite controla las páginas de RAM del invitado. El uso total de la app se mide aparte.</string>
+    <string name="memory_paused">EN PAUSA · MEMORIA</string>
+    <string name="memory_pressure_paused">Android avisó de presión de memoria. Ejecución en pausa; la RAM del invitado se conserva.</string>
     <string name="initializing">INICIANDO MOTOR</string>
     <string name="video_section">SALIDA DE VÍDEO · 80 × 25</string>
     <string name="video_hint">Desliza horizontalmente para ver las 80 columnas.</string>
-    <string name="start_hint">Carga el arranque de prueba o una imagen y pulsa Ejecutar. Paso avanza un paso CPU.</string>
+    <string name="start_hint">Carga una prueba o una imagen y pulsa Ejecutar. Paso avanza un paso CPU.</string>
     <string name="run">Ejecutar</string>
     <string name="pause">Pausa</string>
     <string name="step">Paso</string>

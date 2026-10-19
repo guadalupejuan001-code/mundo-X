@@ -1,0 +1,203 @@
+#include "../x86_cpu.hpp"
+#include "../long_mode_guest.hpp"
+
+#include <cstdlib>
+#include <initializer_list>
+#include <iostream>
+#include <set>
+#include <string>
+
+using cosmic_pc::Cpu;
+using cosmic_pc::FaultCode;
+using cosmic_pc::StepResult;
+
+namespace {
+unsigned checks = 0;
+void check(bool value, const std::string& reason) {
+  ++checks; if (!value) throw std::runtime_error(reason);
+}
+void one(Cpu& cpu) {
+  if (cpu.step() == StepResult::Faulted) throw std::runtime_error(cpu.fault->describe());
+}
+void run(Cpu& cpu, unsigned budget = 10000) {
+  for (unsigned i = 0; i < budget; ++i) {
+    one(cpu); if (cpu.halted) return;
+  }
+  throw std::runtime_error("guest exceeded execution budget");
+}
+void program(Cpu& cpu, std::initializer_list<std::uint8_t> code, std::uint64_t address = 0xa000) {
+  cpu.eip = address; cpu.halted = false; cpu.fault.reset();
+  for (const auto b : code) cpu.memory[address++] = b;
+}
+std::set<std::string> boot(Cpu& cpu) {
+  const auto disk = cosmic_pc::long_mode_boot_disk();
+  check(disk.size() == 512 && disk[510] == 0x55 && disk[511] == 0xaa, "real boot-sector signature");
+  cpu.memory.reset_zero(); cpu.reset();
+  cpu.memory.write_block(0x7c00, disk.data(), disk.size());
+  cpu.interrupt_hook = [](Cpu& c, std::uint8_t vector) {
+    if (vector != 0x15 || c.reg16(Cpu::EAX) != 0x2401) c.fail("unexpected BIOS service in x64 guest test");
+    c.a20_enabled = true; c.set_reg8(4, 0); c.set_flag(Cpu::CF, false); return true;
+  };
+  std::set<std::string> modes{cpu.mode_name()};
+  for (unsigned i = 0; i < 10000; ++i) {
+    one(cpu); modes.insert(cpu.mode_name());
+    if (cpu.halted) return modes;
+  }
+  throw std::runtime_error("real-to-long guest did not halt");
+}
+void expect_fault(Cpu& cpu, FaultCode code, const std::string& reason) {
+  const auto ip = cpu.eip;
+  check(cpu.step() == StepResult::Faulted && cpu.fault && cpu.fault->code == code,
+        reason + (cpu.fault ? ": " + cpu.fault->describe() : ": no fault"));
+  check(cpu.eip == ip && cpu.fault->eip == ip, "fault preserves instruction start IP");
+}
+
+void boot_and_register_tests() {
+  Cpu cpu(std::size_t{2} << 30, std::size_t{1} << 30);
+  const auto modes = boot(cpu);
+  for (const auto* name : {"real16", "protected16", "protected32", "compat32", "long64"})
+    check(modes.count(name) != 0, std::string("guest traversed ") + name);
+  check(cpu.is_long_mode() && cpu.halted, "long-mode HLT");
+  check(cpu.regs[Cpu::EAX] == cosmic_pc::kLongModeResult && cpu.regs[Cpu::R9] == cosmic_pc::kLongModeResult, "64-bit result in RAX and R9");
+  check(cpu.read64(cosmic_pc::kLongModeResultAddress) == cosmic_pc::kLongModeResult, "64-bit result in guest RAM");
+  check((cpu.cr0 & 0x80010001U) == 0x80010001U && (cpu.cr4 & 0x20) && cpu.cr3 == 0x1000 && (cpu.efer & 0x500) == 0x500,
+        "guest control registers activate PAE/LME/LMA/PG/WP");
+  check(cpu.read64(0x1000) == 0x2023 && cpu.read64(0x2000) == 0x3023 && cpu.read64(0x3000) == 0xe3,
+        "page walker updates accessed and dirty bits");
+  std::string screen;
+  for (unsigned i = 0; i < 17; ++i) screen += char(cpu.read8(0xb8000 + i * 2));
+  check(screen == "COSMIC PC x64: OK", "VGA success is written by guest instructions");
+  check(cpu.memory.size() == (std::uint64_t{2} << 30) && cpu.memory.allocated_bytes() < 1024 * 1024,
+        "2-GiB logical RAM does not commit 2 GiB for this guest");
+
+  program(cpu, {0x41,0xb8,0x78,0x56,0x34,0x12, 0x66,0x41,0xb8,0xcd,0xab, 0xf4});
+  cpu.regs[Cpu::R8] = UINT64_MAX; run(cpu);
+  check(cpu.regs[Cpu::R8] == 0x1234abcd, "R8D clears high32; R8W preserves all other bits");
+  program(cpu, {0x40,0xb4,0x22, 0xb4,0x33, 0x41,0xb4,0x44, 0xf4});
+  cpu.regs[Cpu::EAX] = 0x123456789abcdef0ULL; cpu.regs[Cpu::ESP] = 0x7000; run(cpu);
+  check(cpu.regs[Cpu::ESP] == 0x7022 && cpu.regs[Cpu::EAX] == 0x123456789abc33f0ULL && cpu.regs[Cpu::R12] == 0x44,
+        "REX byte-register mapping distinguishes SPL/AH/R12B");
+  program(cpu, {0x48,0x66,0xb8,0x34,0x12, 0xf4}); cpu.regs[Cpu::EAX] = 0xabcdef0000000000ULL; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0xabcdef0000001234ULL, "legacy prefix after REX discards REX");
+  program(cpu, {0x66,0x48,0xb8,0x88,0x77,0x66,0x55,0x44,0x33,0x22,0x11, 0xf4}); run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x1122334455667788ULL, "REX.W after 66 selects64");
+  program(cpu, {0x90,0xf3,0x90,0xf4}); run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x1122334455667788ULL, "NOP/PAUSE preserve high RAX");
+  program(cpu, {0x49,0x90,0xf4}); cpu.regs[Cpu::R8] = 0xdeadbeef87654321ULL; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0xdeadbeef87654321ULL && cpu.regs[Cpu::R8] == 0x1122334455667788ULL, "REX.B opcode90 exchanges RAX and R8");
+  program(cpu, {0x0f,0x01,0xe0,0xf4}); cpu.regs[Cpu::EAX] = UINT64_MAX; run(cpu);
+  check(cpu.regs[Cpu::EAX] == cpu.cr0, "SMSW r32 in long mode copies all32 CR0 bits and clears high32");
+  program(cpu, {0x48,0x0f,0x01,0xe0,0xf4}); cpu.regs[Cpu::EAX] = UINT64_MAX; run(cpu);
+  check(cpu.regs[Cpu::EAX] == cpu.cr0, "SMSW r64 in long mode preserves PG in the returned value");
+}
+
+void addressing_stack_and_alu_tests() {
+  Cpu cpu; boot(cpu);
+  // C7: effective RIP must follow displacement AND immediate, not ModRM alone.
+  program(cpu, {0x48,0xc7,0x05,0x05,0,0,0,0xff,0xff,0xff,0xff,0xf4});
+  run(cpu); check(cpu.read64(0xa010) == UINT64_MAX, "RIP-relative sign-extended imm32 store");
+  program(cpu, {0x48,0x83,0x05,0x08,0,0,0,0x01,0xf4});
+  cpu.write64(0xa010, 0xffffffffULL); run(cpu);
+  check(cpu.read64(0xa010) == 0x100000000ULL, "RIP-relative ALU imm8 includes immediate in RIP base");
+  program(cpu, {0x48,0xf7,0x05,0x05,0,0,0,0xff,0xff,0xff,0xff,0xf4}); run(cpu);
+  check(!cpu.flag(Cpu::ZF), "RIP-relative TEST imm32 sign extends and uses final RIP");
+  program(cpu, {0x4b,0x8b,0x44,0xa5,0x08,0xf4});
+  cpu.regs[Cpu::R13] = 0xb000; cpu.regs[Cpu::R12] = 3; cpu.write64(0xb014, 0x8765432101234567ULL); run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x8765432101234567ULL, "REX.X/B SIB R13+R12*4+disp8");
+  program(cpu, {0x67,0x48,0x8b,0x03,0xf4});
+  cpu.regs[Cpu::EBX] = 0xffffffff0000b014ULL; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x8765432101234567ULL, "address-size32 truncates base without truncating operand64");
+  program(cpu, {0x48,0x8d,0x05,0x04,0,0,0,0xf4}); run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0xa00b, "LEA RIP-relative uses next RIP");
+
+  program(cpu, {0x41,0x50,0x41,0x59,0x6a,0xff,0x58,0xf4});
+  cpu.regs[Cpu::ESP] = 0x7000; cpu.regs[Cpu::R8] = 0xabcdef0198765432ULL; run(cpu);
+  check(cpu.regs[Cpu::R9] == 0xabcdef0198765432ULL && cpu.regs[Cpu::EAX] == UINT64_MAX && cpu.regs[Cpu::ESP] == 0x7000,
+        "default64 extended PUSH/POP and sign-extended PUSH imm8");
+  program(cpu, {0x66,0x48,0x50,0x66,0x48,0x59,0xf4});
+  cpu.regs[Cpu::EAX] = 0x1122334455667788ULL; one(cpu);
+  check(cpu.regs[Cpu::ESP] == 0x6ff8 && cpu.read64(0x6ff8) == 0x1122334455667788ULL, "66 REX.W PUSH uses64-bit operand, confirmed against native x86-64");
+  run(cpu); check(cpu.regs[Cpu::ECX] == 0x1122334455667788ULL && cpu.regs[Cpu::ESP] == 0x7000, "66 REX.W POP restores64 bits");
+  program(cpu, {0x48,0x66,0x50,0x48,0x66,0x59,0xf4}); one(cpu);
+  check(cpu.regs[Cpu::ESP] == 0x6ffe && cpu.read16(0x6ffe) == 0x7788, "legacy66 afterREX cancelsREX and PUSH uses16 bits");
+  run(cpu); check(cpu.regs[Cpu::ESP] == 0x7000, "16-bit PUSH/POP balance in long mode");
+  program(cpu, {0xe8,0x01,0,0,0,0xf4,0x48,0xff,0xc0,0xc3}); cpu.regs[Cpu::EAX] = 0xffffffffULL; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x100000000ULL && cpu.regs[Cpu::ESP] == 0x7000, "CALL rel32 / RET use 64-bit return slots");
+  program(cpu, {0x48,0x83,0xc0,0xff,0xf4}); cpu.regs[Cpu::EAX] = 0x8000000000000000ULL; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x7fffffffffffffffULL && cpu.flag(Cpu::CF) && cpu.flag(Cpu::OF), "ADD64 sign-extended imm8 CF/OF");
+  program(cpu, {0x48,0xc1,0xe0,0x20,0xf4}); cpu.regs[Cpu::EAX] = 1; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x100000000ULL, "64-bit shift count is masked to6 bits");
+  for (const std::uint8_t modrm : {0xe8,0xd0}) {
+    program(cpu, {0xc1,modrm,0x00,0xf4}); cpu.regs[Cpu::EAX] = 0x1122334455667788ULL; cpu.eflags = 0xad7;
+    run(cpu);
+    check(cpu.regs[Cpu::EAX] == 0x55667788 && cpu.eflags == 0xad7,
+          "SHR/RCL EAX count0 zeroextends destination and preserves flags, confirmed against native x86-64");
+  }
+  program(cpu, {0x48,0x6b,0xc0,0xfd,0xf4}); cpu.regs[Cpu::EAX] = 0x100000000ULL; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0xfffffffd00000000ULL && !cpu.flag(Cpu::OF), "two-operand64 IMUL signed immediate");
+  program(cpu, {0x48,0x6b,0xc0,0x02,0xf4}); cpu.regs[Cpu::EAX] = 0x4000000000000000ULL; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x8000000000000000ULL && cpu.flag(Cpu::OF) && cpu.flag(Cpu::CF), "IMUL64 overflow uses defined host arithmetic");
+}
+
+void paging_and_fault_tests() {
+  Cpu cpu; boot(cpu);
+  // Replace the large identity page by a genuine 4-KiB page table. Data virtual
+  // B000 maps to physical D000, so a physical-memory bypass would fail this test.
+  for (unsigned i = 0; i < 512; ++i) cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
+  cpu.write64(0x3000, 0x4003); cpu.write64(0x4000 + 11 * 8, 0xd003);
+  cpu.write64(0xb000, 0x1111111111111111ULL); cpu.write64(0xd000, 0x876543219abcdef0ULL);
+  program(cpu, {0x48,0x8b,0x03,0xf4}); cpu.regs[Cpu::EBX] = 0xb000; run(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x876543219abcdef0ULL, "four-level4KiB translation reads remapped data");
+  program(cpu, {0x48,0x89,0x03,0xf4}); cpu.regs[Cpu::EAX] = 0xfedcba9876543210ULL; run(cpu);
+  check(cpu.read64(0xd000) == 0xfedcba9876543210ULL && cpu.read64(0xb000) == 0x1111111111111111ULL,
+        "four-level4KiB translation writes the remapped physical frame");
+  check((cpu.read64(0x4000 + 11 * 8) & 0x60) == 0x60, "PTE A/D bits");
+
+  cpu.write64(0x4000 + 11 * 8, 0);
+  program(cpu, {0x48,0x8b,0x03}); const auto saved = cpu.regs;
+  expect_fault(cpu, FaultCode::PageFault, "not-present data page");
+  check(cpu.regs == saved && cpu.cr2 == 0xb000 && cpu.fault->linear_address == 0xb000 && cpu.fault->error_code == 0,
+        "read page-fault diagnostics and register rollback");
+  cpu.write64(0x4000 + 11 * 8, 0xd001);
+  program(cpu, {0x48,0x89,0x03});
+  expect_fault(cpu, FaultCode::PageFault, "CR0.WP denies supervisor write");
+  check(cpu.fault->error_code == 3 && cpu.read64(0xd000) == 0xfedcba9876543210ULL, "write page fault reports P/W and preserves memory");
+  // A write spanning present / absent pages must not partially overwrite RAM.
+  cpu.write64(0x4000 + 11 * 8, 0xd003); cpu.write64(0x4000 + 12 * 8, 0);
+  cpu.write32(0xdffc, 0x11223344); cpu.regs[Cpu::EBX] = 0xbffc;
+  program(cpu, {0x48,0x89,0x03}); expect_fault(cpu, FaultCode::PageFault, "cross-page write validates both pages");
+  check(cpu.read32(0xdffc) == 0x11223344 && cpu.cr2 == 0xc000, "cross-page write rollback preserves first page");
+
+  // Enable NXE with guest WRMSR, then deny execution on the code PTE.
+  program(cpu, {0x0f,0x30,0xf4}); cpu.regs[Cpu::ECX] = 0xc0000080U; cpu.regs[Cpu::EDX] = 0; cpu.regs[Cpu::EAX] = 0xd00; run(cpu);
+  cpu.write64(0x4000 + 10 * 8, 0x800000000000a003ULL);
+  program(cpu, {0xf4}); expect_fault(cpu, FaultCode::PageFault, "NX instruction fetch");
+  check(cpu.fault->error_code == 17 && cpu.cr2 == 0xa000 && cpu.fault->bytes.empty(), "NX fetch fault contains CR2 and instruction-fetch error bit");
+  cpu.write64(0x4000 + 10 * 8, 0xa003);
+  program(cpu, {0x48,0x8b,0x03}); cpu.regs[Cpu::EBX] = 0x0000800000000000ULL;
+  expect_fault(cpu, FaultCode::ProtectionFault, "non-canonical address");
+
+  program(cpu, {0xcd,0x10}); bool called = false;
+  cpu.interrupt_hook = [&](Cpu&,std::uint8_t) { called = true; return true; };
+  expect_fault(cpu, FaultCode::UnsupportedState, "long-mode INT stops before BIOS hook");
+  check(!called, "BIOS is never substituted for a long-mode IDT");
+  program(cpu, {0x0f,0xa2}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "CPUID not fabricated");
+  program(cpu, {0x48,0xf7,0xe3}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "unimplemented MUL64 stops explicitly");
+  program(cpu, {0x0f,0x22,0xe0}); cpu.regs[Cpu::EAX] = 0;
+  expect_fault(cpu, FaultCode::ProtectionFault, "PAE cannot be cleared while LMA");
+  check(cpu.cr4 == 0x20, "failed control-register write preserves CR4");
+  program(cpu, {0x0f,0x30}); cpu.regs[Cpu::ECX] = 0xc0000080U; cpu.regs[Cpu::EAX] = 0xc00;
+  expect_fault(cpu, FaultCode::ProtectionFault, "LME cannot change while paging");
+  check(cpu.efer == 0xd00, "failed WRMSR preserves EFER");
+}
+}
+
+int main() {
+  try {
+    boot_and_register_tests(); addressing_stack_and_alu_tests(); paging_and_fault_tests();
+    std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
+    return EXIT_SUCCESS;
+  } catch (const std::exception& e) {
+    std::cerr << "FAIL after " << checks << " assertions: " << e.what() << '\n'; return EXIT_FAILURE;
+  }
+}

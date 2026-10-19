@@ -18,6 +18,11 @@ jobs:
         with: {persist-credentials: false}
       - name: Verify native own engine
         run: bash pc-android/tools/test-native.sh > pc-native-tests.log 2>&1
+      - name: Measure sparse memory against an eager baseline
+        run: |
+          bash pc-android/tools/benchmark-memory.sh
+          mkdir -p pc-evidence
+          cp pc-android/build/native/memory-benchmark.json pc-evidence/memory-benchmark.json
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
       - uses: gradle/actions/setup-gradle@v4
@@ -44,7 +49,7 @@ jobs:
               expected={'lib/'+abi+'/'+lib for abi in ('arm64-v8a','x86_64') for lib in ('libcosmic_pc.so','libc++_shared.so')}
               assert names==expected,(names,expected)
               assert z.testzip() is None
-          data={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'bytes':apk.stat().st_size,'engine':'own C++ x86 interpreter','external_emulation_engines':[],'windows_booted':False}
+          data={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'bytes':apk.stat().st_size,'version':'0.2.0','engine':'own C++ x86/x64 interpreter','external_emulation_engines':[],'logical_ram_bytes':2**31,'guest_payload_cap_bytes':2**30,'windows_booted':False}
           Path('pc-dist/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
           print(json.dumps(data))
           PY

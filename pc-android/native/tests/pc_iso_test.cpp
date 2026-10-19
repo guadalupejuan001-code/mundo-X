@@ -268,6 +268,12 @@ void completed(const PcMachine& pc, char output) {
     need(pc.screen().front() == output, "Wrong character emitted by guest through INT 10h");
 }
 
+Bytes ram_bytes(const PcMachine& pc, std::uint64_t offset, std::size_t count) {
+    Bytes bytes(count);
+    pc.cpu.memory.read_block(offset, bytes.data(), bytes.size());
+    return bytes;
+}
+
 } // namespace
 
 int main() {
@@ -286,9 +292,9 @@ int main() {
              need(fixture.reads->front().offset == std::uint64_t(kDataLba) * kSector &&
                       fixture.reads->front().count == kSector,
                   "EDD must use 2048-byte CD sectors and the requested LBA");
-             need(std::equal(fixture.bytes->begin() + kDataLba * kSector,
-                             fixture.bytes->begin() + (kDataLba + 1) * kSector,
-                             pc.cpu.memory.begin() + kBuffer),
+             need(ram_bytes(pc, kBuffer, kSector) == Bytes(
+                             fixture.bytes->begin() + kDataLba * kSector,
+                             fixture.bytes->begin() + (kDataLba + 1) * kSector),
                   "The complete CD data sector must reach guest RAM");
              need(pc.cpu.read16(kDap + 2) == 1 && pc.cpu.read16(kParameters + 24) == 2048,
                   "BIOS parameter packets contain wrong transfer size");
@@ -317,29 +323,25 @@ int main() {
         {"extended read at EOF fails without touching guest RAM", [] {
              PcMachine pc(2 * 1024 * 1024);
              const auto fixture = mount(pc, isoFixture(readGuest(kVolumeSectors)));
-             std::fill_n(pc.cpu.memory.begin() + kBuffer, kSector, 0xa5);
+             pc.cpu.memory.fill(kBuffer, 0xa5, kSector);
              run(pc);
              completed(pc, 'F');
              need(pc.disk_reads == 0 && fixture.reads->empty(), "EOF must not invoke disk reader");
              need(pc.cpu.read16(kDap + 2) == 0 && (pc.cpu.read16(kSavedDiskAx) >> 8) == 4,
                   "EOF must report zero sectors and BIOS disk error 04");
-             need(std::all_of(pc.cpu.memory.begin() + kBuffer,
-                              pc.cpu.memory.begin() + kBuffer + kSector,
-                              [](std::uint8_t value) { return value == 0xa5; }),
+             need(ram_bytes(pc, kBuffer, kSector) == Bytes(kSector, 0xa5),
                   "Failed disk read changed guest RAM");
          }},
         {"failed host read is atomic from the guest perspective", [] {
              PcMachine pc(2 * 1024 * 1024);
              const auto fixture = mount(pc, isoFixture(readGuest()), true);
-             std::fill_n(pc.cpu.memory.begin() + kBuffer, kSector, 0xa5);
+             pc.cpu.memory.fill(kBuffer, 0xa5, kSector);
              run(pc);
              completed(pc, 'F');
              need(fixture.reads->size() == 1 && pc.disk_reads == 0,
                   "A failed callback must not count as a successful disk read");
              need(pc.cpu.read16(kDap + 2) == 0, "Failed read must report zero transferred sectors");
-             need(std::all_of(pc.cpu.memory.begin() + kBuffer,
-                              pc.cpu.memory.begin() + kBuffer + kSector,
-                              [](std::uint8_t value) { return value == 0xa5; }),
+             need(ram_bytes(pc, kBuffer, kSector) == Bytes(kSector, 0xa5),
                   "Partial host data leaked into guest RAM");
          }},
         {"64-bit out-of-range LBA does not wrap", [] {

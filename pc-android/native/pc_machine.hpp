@@ -2,6 +2,7 @@
 #include "x86_cpu.hpp"
 #include "boot_media.hpp"
 #include "demo_boot.hpp"
+#include "long_mode_guest.hpp"
 #include <algorithm>
 #include <chrono>
 #include <deque>
@@ -25,8 +26,13 @@ class PcMachine {
   PcMachine& operator=(const PcMachine&)=delete;
   PcMachine(PcMachine&&)=delete;
   PcMachine& operator=(PcMachine&&)=delete;
-  explicit PcMachine(std::size_t ram_bytes=16*1024*1024):cpu(ram_bytes) {
-    if(ram_bytes<2*1024*1024||ram_bytes>128*1024*1024)throw std::invalid_argument("RAM fuera de 2..128 MiB en esta etapa");
+  static std::size_t checked_ram(std::size_t bytes) {
+    if(bytes<2*1024*1024||bytes>std::size_t(2048)*1024*1024)throw std::invalid_argument("RAM virtual fuera de 2..2048 MiB");
+    return bytes;
+  }
+  explicit PcMachine(std::size_t ram_bytes=16*1024*1024,
+                     std::size_t resident_budget_bytes=std::size_t(1024)*1024*1024)
+      :cpu(checked_ram(ram_bytes),std::min(ram_bytes,resident_budget_bytes)) {
     cpu.interrupt_hook=[this](Cpu&,std::uint8_t n){return bios(n);};
     cpu.in_hook=[this](std::uint16_t port,unsigned width){return input(port,width);};
     cpu.out_hook=[this](std::uint16_t port,unsigned width,std::uint32_t v){return output(port,width,v);};
@@ -36,6 +42,11 @@ class PcMachine {
     auto bytes=std::make_shared<std::vector<std::uint8_t>>(demo_boot_disk());
     mount([bytes](std::uint64_t off,std::uint8_t* dst,std::size_t n){if(off>bytes->size()||n>bytes->size()-off)return false;std::copy_n(bytes->data()+off,n,dst);return true;},bytes->size(),"raw");
     if(host_error.empty())boot_kind="demo-x86";
+  }
+  void boot_long_mode_demo() {
+    auto bytes=std::make_shared<std::vector<std::uint8_t>>(long_mode_boot_disk());
+    mount([bytes](std::uint64_t off,std::uint8_t* dst,std::size_t n){if(off>bytes->size()||n>bytes->size()-off)return false;std::copy_n(bytes->data()+off,n,dst);return true;},bytes->size(),"raw");
+    if(host_error.empty())boot_kind="demo-x64";
   }
   void mount(Reader reader,std::uint64_t bytes,const std::string& mode="auto") {
     // Parse and validate the new medium before replacing the current machine.
@@ -48,12 +59,12 @@ class PcMachine {
   void reset() {
     host_error.clear();pending.clear();waiting_key=false;keys_.clear();disk_reads=0;last_disk_status_=0;
     video_mode_=3;pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
-    if(!reader_){host_error="Selecciona una ISO, disco o arranque de prueba";return;}
-    std::fill(cpu.memory.begin(),cpu.memory.end(),0);
+    if(!reader_)return;
+    cpu.memory.reset_zero();
     cpu.reset(plan_.initial_cs,plan_.initial_ip);cpu.a20_enabled=true;
     cpu.segments[0]=cpu.segments[2]=cpu.segments[3]=0;
     cpu.set_reg16(4,0x7c00);cpu.set_reg16(2,plan_.drive);cpu.eflags=0x202;
-    std::copy(plan_.image.begin(),plan_.image.end(),cpu.memory.begin()+std::size_t(plan_.load_segment)*16);
+    cpu.memory.write_block(std::size_t(plan_.load_segment)*16,plan_.image.data(),plan_.image.size());
     // BIOS data area: video mode 3, 80 columns, page0, conventional RAM.
     cpu.write16(0x410,0x0020);cpu.write16(0x413,640);cpu.write8(0x449,3);cpu.write16(0x44a,80);cpu.write16(0x44c,4000);
     cpu.write8(0x484,24);cpu.write8(0x475,plan_.drive==0x80?1:0);clear_screen();started_=std::chrono::steady_clock::now();
@@ -63,7 +74,7 @@ class PcMachine {
     budget=std::min(budget,50000u);
     for(unsigned i=0;i<budget&&!waiting_key;++i){
       auto r=cpu.step();
-      if(r==StepResult::Faulted){pending="La CPU se detuvo en una operación no implementada o inválida. Consulta el diagnóstico; Windows completo sigue pendiente.";break;}
+      if(r==StepResult::Faulted){pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
       if(r==StepResult::Halted)break;
     }
   }
@@ -85,12 +96,20 @@ class PcMachine {
   }
   std::string json() const {
     std::ostringstream o;
-    const auto message=!host_error.empty()?host_error:(cpu.fault?cpu.fault->describe():(!reader_?"Selecciona una ISO, disco o arranque de prueba":waiting_key?"Esperando entrada de teclado BIOS":cpu.halted?"El invitado ejecutó HLT":"CPU x86 en modo real"));
+    const std::string message=!host_error.empty()?host_error:(cpu.fault?cpu.fault->describe():(!reader_?"Selecciona una ISO, disco o arranque de prueba":waiting_key?"Esperando entrada de teclado BIOS":cpu.halted?"El invitado ejecutó HLT":std::string("CPU propia: ")+cpu.mode_name()));
     o<<"{\"status\":"<<quote(status())<<",\"instructions\":"<<cpu.instructions<<",\"cs\":"<<cpu.segments[1]<<",\"ip\":"<<cpu.eip<<",\"flags\":"<<cpu.eflags<<",\"regs\":[";
-    for(unsigned i=0;i<8;++i){if(i)o<<',';o<<cpu.regs[i];}
-    o<<"],\"message\":"<<quote(message)<<",\"boot_kind\":"<<quote(boot_kind)<<",\"pending\":"<<quote(pending)<<",\"disk_reads\":"<<disk_reads<<",\"ram_bytes\":"<<cpu.memory.size()<<",\"engine\":\"cosmic-pc-own-x86\",\"windows_ready\":false}";
+    for(unsigned i=0;i<cpu.regs.size();++i){if(i)o<<',';o<<cpu.regs[i];}
+    o<<"],\"regs_hex\":[";
+    for(unsigned i=0;i<cpu.regs.size();++i){if(i)o<<',';o<<quote(hex64(cpu.regs[i]));}
+    o<<"],\"rip_hex\":"<<quote(hex64(cpu.eip))<<",\"cpu_mode\":"<<quote(cpu.mode_name())
+     <<",\"message\":"<<quote(message)<<",\"boot_kind\":"<<quote(boot_kind)<<",\"pending\":"<<quote(pending)
+     <<",\"disk_reads\":"<<disk_reads<<",\"ram_bytes\":"<<cpu.memory.size()
+     <<",\"ram_allocated_bytes\":"<<cpu.memory.allocated_bytes()<<",\"ram_budget_bytes\":"<<cpu.memory.budget_bytes()
+     <<",\"ram_metadata_bytes\":"<<cpu.memory.metadata_bytes()<<",\"ram_allocated_pages\":"<<cpu.memory.allocated_pages()
+     <<",\"ram_policy\":\"zero-pages-on-demand\",\"engine\":\"cosmic-pc-own-x86\",\"windows_ready\":false,\"graphics_3d_ready\":false}";
     return o.str();
   }
+  static std::string hex64(std::uint64_t value){std::ostringstream o;o<<std::hex<<std::uppercase<<std::setfill('0')<<std::setw(16)<<value;return o.str();}
   static std::string quote(const std::string& s){std::ostringstream o;o<<'"';for(unsigned char c:s){if(c=='"'||c=='\\')o<<'\\'<<char(c);else if(c=='\n')o<<"\\n";else if(c=='\r')o<<"\\r";else if(c=='\t')o<<"\\t";else if(c<32)o<<"\\u00"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(c)<<std::dec;else o<<char(c);}o<<'"';return o.str();}
  private:
   Reader reader_;
@@ -103,8 +122,8 @@ class PcMachine {
   static constexpr std::uint32_t CF=1,ZF=64;
   std::uint8_t lo(unsigned r)const{return cpu.regs[r]&255;}
   std::uint8_t hi(unsigned r)const{return(cpu.regs[r]>>8)&255;}
-  void low(unsigned r,std::uint8_t v){cpu.regs[r]=(cpu.regs[r]&~255u)|v;}
-  void high(unsigned r,std::uint8_t v){cpu.regs[r]=(cpu.regs[r]&~0xff00u)|(std::uint32_t(v)<<8);}
+  void low(unsigned r,std::uint8_t v){cpu.regs[r]=(cpu.regs[r]&~std::uint64_t(255))|v;}
+  void high(unsigned r,std::uint8_t v){cpu.regs[r]=(cpu.regs[r]&~std::uint64_t(0xff00))|(std::uint64_t(v)<<8);}
   void carry(bool v){cpu.eflags=(cpu.eflags&~CF)|(v?CF:0);}
   void zero(bool v){cpu.eflags=(cpu.eflags&~ZF)|(v?ZF:0);}
   std::uint32_t physical(unsigned segment,std::uint16_t off)const{return std::uint32_t(cpu.segments[segment])*16+off;}

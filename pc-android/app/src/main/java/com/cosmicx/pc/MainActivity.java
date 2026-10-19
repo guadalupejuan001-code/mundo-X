@@ -3,6 +3,7 @@ package com.cosmicx.pc;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ComponentCallbacks2;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,6 +18,7 @@ import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
@@ -57,9 +59,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** A local, native Android frontend. It never substitutes a simulated desktop for guest output. */
 public final class MainActivity extends Activity {
     private static final int OPEN_IMAGE = 410;
-    private static final int RAM_MIB = 16;
+    private static final int LOGICAL_RAM_MIB = 2048;
+    private static final int RESIDENT_RAM_BUDGET_MIB = 1024;
     private static final int SLICE_BUDGET = 5000;
     private static final long FRAME_INTERVAL_MS = 50;
+    private static final long MEMORY_SAMPLE_INTERVAL_MS = 1000;
     private static final String PREFS = "cosmic_pc_images";
     private static final String LAST_URI = "last_image_uri";
     private static final String LAST_NAME = "last_image_name";
@@ -79,7 +83,7 @@ public final class MainActivity extends Activity {
     private final AtomicBoolean sliceQueued = new AtomicBoolean(false);
     private final AtomicInteger runGeneration = new AtomicInteger(0);
     private final ExecutorService machineThread = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "COSMIC-X-x86");
+        Thread thread = new Thread(runnable, "COSMIC-X-CPU");
         thread.setPriority(Thread.NORM_PRIORITY - 1);
         return thread;
     });
@@ -87,20 +91,38 @@ public final class MainActivity extends Activity {
     // Only the single machine executor may read or write these fields or use the native handle.
     private long machine;
     private long lastFrameAt;
+    private long lastPssSampleAt = -1;
+    private long processPssBytes = -1;
+    private final Debug.MemoryInfo processMemoryInfo = new Debug.MemoryInfo();
+
+    // While paused, refresh the process measurement without executing guest CPU steps.
+    private final Runnable idleMemoryRefresh = new Runnable() {
+        @Override
+        public void run() {
+            if (!foreground.get() || destroyed.get()) return;
+            if (!busy && !runRequested.get()) inspectInWorker();
+            main.postDelayed(this, MEMORY_SAMPLE_INTERVAL_MS);
+        }
+    };
 
     // View state is confined to the UI thread.
     private boolean busy;
     private boolean machineAvailable;
+    private boolean memoryPressurePaused;
+    private String frontendMessage = "";
     private String nativeStatus = "empty";
     private String bootKind = "none";
     private String lastDiagnostic = "COSMIC X PC\nInicializando el motor propio…";
     private TextView statusView;
     private TextView metricsView;
+    private TextView cpuModeView;
+    private TextView memoryView;
     private TextView messageView;
     private TextView imageView;
     private TerminalView terminal;
     private EditText keyboard;
     private Button demoButton;
+    private Button longModeDemoButton;
     private Button openButton;
     private Button reopenButton;
     private Button runButton;
@@ -125,7 +147,7 @@ public final class MainActivity extends Activity {
         refreshControls();
         executeWorker(() -> {
             try {
-                machine = NativeMachine.create(RAM_MIB);
+                machine = NativeMachine.createWithBudget(LOGICAL_RAM_MIB, RESIDENT_RAM_BUDGET_MIB);
                 if (machine == 0) {
                     throw new IllegalStateException("No native machine handle");
                 }
@@ -182,9 +204,15 @@ public final class MainActivity extends Activity {
         source.addView(imageView);
         LinearLayout sourceRow = row(source);
         demoButton = button(getString(R.string.boot_demo), true);
-        openButton = button(getString(R.string.open_image), false);
-        pair(sourceRow, demoButton, openButton, 56);
+        longModeDemoButton = button(getString(R.string.boot_x64_demo), false);
+        pair(sourceRow, demoButton, longModeDemoButton, 56);
         demoButton.setOnClickListener(v -> loadDemo());
+        longModeDemoButton.setOnClickListener(v -> loadLongModeDemo());
+
+        openButton = button(getString(R.string.open_image), false);
+        LinearLayout.LayoutParams openParams = new LinearLayout.LayoutParams(-1, dp(48));
+        openParams.topMargin = dp(8);
+        source.addView(openButton, openParams);
         openButton.setOnClickListener(v -> chooseImage());
 
         reopenButton = button(getString(R.string.reopen_image), false);
@@ -216,13 +244,23 @@ public final class MainActivity extends Activity {
         statusView.setContentDescription("pc-status");
         statusView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         stateRow.addView(statusView, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView ram = text("16 MiB", 12, MUTED);
-        ram.setTypeface(Typeface.MONOSPACE);
-        stateRow.addView(ram);
-        metricsView = text("CS:IP — · 0 pasos CPU", 11, MUTED);
+        cpuModeView = text("x86 / x64", 12, MUTED);
+        cpuModeView.setTypeface(Typeface.MONOSPACE);
+        stateRow.addView(cpuModeView);
+        metricsView = text("CS:RIP —\n0 pasos CPU", 11, MUTED);
         metricsView.setTypeface(Typeface.MONOSPACE);
         metricsView.setPadding(0, dp(8), 0, 0);
         state.addView(metricsView);
+        memoryView = text(getString(R.string.ram_virtual, "—") + "\n"
+                + getString(R.string.ram_guest, "—", "—") + "\n"
+                + getString(R.string.app_pss, "—"), 11, MUTED);
+        memoryView.setContentDescription("pc-memory");
+        memoryView.setPadding(0, dp(10), 0, 0);
+        memoryView.setLineSpacing(dp(2), 1f);
+        state.addView(memoryView);
+        TextView memoryHint = text(getString(R.string.ram_budget_hint), 11, MUTED);
+        memoryHint.setPadding(0, dp(6), 0, 0);
+        state.addView(memoryHint);
 
         TextView screenTitle = section(getString(R.string.video_section));
         LinearLayout.LayoutParams screenTitleParams = new LinearLayout.LayoutParams(-1, -2);
@@ -298,9 +336,16 @@ public final class MainActivity extends Activity {
         operate(() -> NativeMachine.bootDemo(machine));
     }
 
+    private void loadLongModeDemo() {
+        imageView.setText(R.string.x64_demo_selected);
+        operate(() -> NativeMachine.bootLongModeDemo(machine));
+    }
+
     /** Loading, reset and stepping are serialized with CPU slices and never run on the UI thread. */
     private void operate(NativeOperation operation) {
         if (busy || !machineAvailable || destroyed.get()) return;
+        memoryPressurePaused = false;
+        frontendMessage = "";
         runGeneration.incrementAndGet();
         runRequested.set(false);
         busy = true;
@@ -317,6 +362,8 @@ public final class MainActivity extends Activity {
     private void startRun() {
         if (busy || !machineAvailable || !canAdvanceCpu()
                 || destroyed.get() || !foreground.get()) return;
+        memoryPressurePaused = false;
+        frontendMessage = "";
         runRequested.set(true);
         refreshControls();
         queueSlice();
@@ -407,6 +454,8 @@ public final class MainActivity extends Activity {
 
     private void mountUri(Uri uri, boolean persistent) {
         if (busy || !machineAvailable || destroyed.get()) return;
+        memoryPressurePaused = false;
+        frontendMessage = "";
         runGeneration.incrementAndGet();
         runRequested.set(false);
         busy = true;
@@ -475,6 +524,7 @@ public final class MainActivity extends Activity {
         runRequested.set(false);
         postUi(() -> {
             busy = false;
+            frontendMessage = message;
             imageView.setText(R.string.image_not_opened);
             messageView.setText(message);
             messageView.setTextColor(AMBER);
@@ -498,10 +548,15 @@ public final class MainActivity extends Activity {
 
     private void sendKeys(String text) {
         if (busy || !machineAvailable || destroyed.get()) return;
-        final boolean resumeWaiting = "waiting_key".equals(nativeStatus) && foreground.get();
+        final boolean inputFromForeground = foreground.get();
         final int generation = runGeneration.get();
         executeWorker(() -> {
             try {
+                // The CPU may have entered a keyboard wait before its last UI snapshot arrives.
+                // Inspect and send on this executor so a real wait is resumed consistently.
+                JSONObject beforeInput = new JSONObject(NativeMachine.inspect(machine));
+                final boolean resumeWaiting = inputFromForeground
+                        && "waiting_key".equals(beforeInput.optString("status"));
                 for (int i = 0; i < text.length(); i++) {
                     int ascii = text.charAt(i);
                     NativeMachine.key(machine, ascii, scanCode(ascii));
@@ -509,6 +564,12 @@ public final class MainActivity extends Activity {
                 if (resumeWaiting && foreground.get() && !destroyed.get()
                         && generation == runGeneration.get()) {
                     runRequested.set(true);
+                    postUi(() -> {
+                        if (foreground.get() && generation == runGeneration.get()) {
+                            memoryPressurePaused = false;
+                            frontendMessage = "";
+                        }
+                    });
                 }
                 publish(NativeMachine.inspect(machine), false);
                 queueSlice();
@@ -580,9 +641,29 @@ public final class MainActivity extends Activity {
         publish(new JSONObject(json), operationFinished);
     }
 
-    private void publish(JSONObject state, boolean operationFinished) {
+    private void publish(JSONObject state, boolean operationFinished) throws JSONException {
+        sampleProcessMemory(state);
         String screen = NativeMachine.screen(machine);
         postUi(() -> applySnapshot(state, screen, operationFinished));
+    }
+
+    /** Called only on the machine executor. PSS measures this Android process, not just guest RAM. */
+    private void sampleProcessMemory(JSONObject state) throws JSONException {
+        long now = SystemClock.uptimeMillis();
+        if (lastPssSampleAt < 0 || now - lastPssSampleAt >= MEMORY_SAMPLE_INTERVAL_MS) {
+            try {
+                Debug.getMemoryInfo(processMemoryInfo);
+                int pssKiB = processMemoryInfo.getTotalPss();
+                processPssBytes = pssKiB < 0 ? -1 : (long) pssKiB * 1024L;
+            } catch (RuntimeException ignored) {
+                // Unavailable telemetry must never stop the CPU or masquerade as zero usage.
+                processPssBytes = -1;
+            }
+            lastPssSampleAt = SystemClock.uptimeMillis();
+        }
+        state.put("process_pss_bytes", processPssBytes < 0 ? JSONObject.NULL : processPssBytes);
+        state.put("process_pss_sample_age_ms",
+                Math.max(0L, SystemClock.uptimeMillis() - lastPssSampleAt));
     }
 
     private void applySnapshot(JSONObject state, String screen, boolean operationFinished) {
@@ -592,49 +673,94 @@ public final class MainActivity extends Activity {
         bootKind = state.optString("boot_kind", "none");
         // A queued display snapshot must not cancel a newer Run or keyboard-resume request.
         // Only the executor and explicit UI controls own runRequested transitions.
-        metricsView.setText(String.format(Locale.US, "CS:IP %04X:%08X · %,d pasos CPU",
-                state.optInt("cs") & 0xffff, state.optInt("ip"),
-                state.optLong("instructions")));
+        cpuModeView.setText(state.optString("cpu_mode", "—"));
+        metricsView.setText(String.format(Locale.US, "CS:RIP %04X:%s\n%,d pasos CPU",
+                state.optInt("cs") & 0xffff, instructionPointer(state), state.optLong("instructions")));
+        memoryView.setText(getString(R.string.ram_virtual,
+                memorySizeLabel(state.optLong("ram_bytes", -1))) + "\n"
+                + getString(R.string.ram_guest,
+                memorySizeLabel(state.optLong("ram_allocated_bytes", -1)),
+                memorySizeLabel(state.optLong("ram_budget_bytes", -1))) + "\n"
+                + getString(R.string.app_pss,
+                memorySizeLabel(state.optLong("process_pss_bytes", -1))));
         String message = state.optString("message", "").trim();
         String pending = state.optString("pending", "").trim();
         if (!pending.isEmpty() && !message.contains(pending)) {
             message += (message.isEmpty() ? "" : "\n") + "Pendiente: " + pending;
         }
         if (message.isEmpty()) message = getString(R.string.start_hint);
+        // Periodic memory snapshots must not erase a loader/provider error before it can be read.
+        if (!frontendMessage.isEmpty()) message = frontendMessage + "\n" + message;
+        if (memoryPressurePaused) message = getString(R.string.memory_pressure_paused) + "\n" + message;
         messageView.setText(message);
-        messageView.setTextColor("fault".equals(nativeStatus) ? AMBER : MUTED);
+        messageView.setTextColor("fault".equals(nativeStatus) || memoryPressurePaused
+                || !frontendMessage.isEmpty() ? AMBER : MUTED);
         terminal.setScreen(screen);
         lastDiagnostic = diagnostic(state, screen);
         refreshControls();
     }
 
     private String diagnostic(JSONObject state, String screen) {
-        StringBuilder result = new StringBuilder("COSMIC X PC\nMotor x86 propio · RAM: ")
-                .append(RAM_MIB).append(" MiB\nAndroid ").append(Build.VERSION.RELEASE)
+        StringBuilder result = new StringBuilder("COSMIC X PC\nMotor x86/x64 propio\nAndroid ")
+                .append(Build.VERSION.RELEASE)
                 .append(" · SDK ").append(Build.VERSION.SDK_INT)
                 .append("\nDispositivo: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
                 .append("\nEstado: ").append(state.optString("status"))
                 .append("\nArranque: ").append(state.optString("boot_kind"))
+                .append("\nModo CPU: ").append(state.optString("cpu_mode", "—"))
+                .append("\nRAM virtual: ").append(memorySizeLabel(state.optLong("ram_bytes", -1)))
+                .append("\nRAM usada por invitado: ")
+                .append(memorySizeLabel(state.optLong("ram_allocated_bytes", -1)))
+                .append(" / límite ").append(memorySizeLabel(state.optLong("ram_budget_bytes", -1)))
+                .append("\nDirectorio de RAM: ")
+                .append(memorySizeLabel(state.optLong("ram_metadata_bytes", -1)))
+                .append(" · páginas asignadas: ").append(state.optLong("ram_allocated_pages", 0))
+                .append("\nPSS de la app: ")
+                .append(memorySizeLabel(state.optLong("process_pss_bytes", -1)))
+                .append(" · antigüedad de muestra: ")
+                .append(state.optLong("process_pss_sample_age_ms", 0)).append(" ms")
+                .append("\nEl límite del invitado no es un límite de memoria total del proceso.")
+                .append(frontendMessage.isEmpty() ? "" : "\nInterfaz: " + frontendMessage)
+                .append(memoryPressurePaused ? "\nPausa por aviso de presión de memoria de Android." : "")
                 .append("\nPasos CPU: ").append(state.optLong("instructions"))
-                .append("\nCS:IP ").append(String.format(Locale.US, "%04X:%08X",
-                        state.optInt("cs") & 0xffff, state.optInt("ip")))
+                .append("\nCS:RIP ").append(String.format(Locale.US, "%04X:%s",
+                        state.optInt("cs") & 0xffff, instructionPointer(state)))
                 .append(" · FLAGS ").append(String.format(Locale.US, "%08X", state.optInt("flags")));
-        JSONArray registers = state.optJSONArray("regs");
-        String[] names = {"EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"};
+        JSONArray registers = state.optJSONArray("regs_hex");
+        String[] names = {"RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI",
+                "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"};
         if (registers != null) {
             for (int index = 0; index < Math.min(names.length, registers.length()); index++) {
-                if (index % 4 == 0) result.append('\n');
+                if (index % 2 == 0) result.append('\n');
                 result.append(names[index]).append('=')
-                        .append(String.format(Locale.US, "%08X", registers.optInt(index))).append(' ');
+                        .append(registers.optString(index, "—").toUpperCase(Locale.US)).append(' ');
+            }
+        } else {
+            // Compatibility with the original 32-bit snapshot format, preserving unsigned values.
+            registers = state.optJSONArray("regs");
+            String[] oldNames = {"EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"};
+            if (registers != null) {
+                for (int index = 0; index < Math.min(oldNames.length, registers.length()); index++) {
+                    if (index % 4 == 0) result.append('\n');
+                    result.append(oldNames[index]).append('=')
+                            .append(String.format(Locale.US, "%08X", registers.optLong(index) & 0xffffffffL))
+                            .append(' ');
+                }
             }
         }
         try {
-            result.append("\n\nEstado nativo JSON:\n").append(state.toString(2));
+            result.append("\n\nEstado del motor y medición Android JSON:\n").append(state.toString(2));
         } catch (JSONException ignored) {
-            result.append("\n\nEstado nativo JSON:\n").append(state);
+            result.append("\n\nEstado del motor y medición Android JSON:\n").append(state);
         }
         result.append("\n\nSalida real de vídeo 80x25:\n").append(screen == null ? "" : screen);
         return result.toString();
+    }
+
+    private static String instructionPointer(JSONObject state) {
+        String hex = state.optString("rip_hex", "");
+        if (!hex.isEmpty()) return hex.toUpperCase(Locale.US);
+        return String.format(Locale.US, "%016X", state.optLong("ip") & 0xffffffffL);
     }
 
     private void fail(String description, Throwable error, boolean operationFinished) {
@@ -644,6 +770,7 @@ public final class MainActivity extends Activity {
             if (error instanceof LinkageError) machineAvailable = false;
             nativeStatus = "fault";
             String report = description + " (" + error.getClass().getSimpleName() + ").";
+            frontendMessage = report;
             messageView.setText(report);
             messageView.setTextColor(AMBER);
             lastDiagnostic = "COSMIC X PC\n" + report + "\n\n" + lastDiagnostic;
@@ -657,6 +784,7 @@ public final class MainActivity extends Activity {
         if (busy) label = getString(R.string.working);
         else if ("fault".equals(nativeStatus)) label = getString(R.string.incomplete_instruction);
         else if (!hasBootImage()) label = getString(R.string.select_boot);
+        else if (memoryPressurePaused) label = getString(R.string.memory_paused);
         else if (running) label = getString(R.string.running);
         else if ("waiting_key".equals(nativeStatus)) label = getString(R.string.waiting_key);
         else if ("halted".equals(nativeStatus)) label = getString(R.string.halted);
@@ -666,6 +794,7 @@ public final class MainActivity extends Activity {
         statusView.setTextColor("fault".equals(nativeStatus) ? AMBER : GREEN);
         boolean usable = machineAvailable && !busy;
         enabled(demoButton, usable);
+        enabled(longModeDemoButton, usable);
         enabled(openButton, usable);
         enabled(reopenButton, usable);
         enabled(runButton, usable && !running && canAdvanceCpu());
@@ -733,6 +862,8 @@ public final class MainActivity extends Activity {
         // Native execution resumes only following an explicit user action.
         refreshControls();
         inspectInWorker();
+        main.removeCallbacks(idleMemoryRefresh);
+        main.postDelayed(idleMemoryRefresh, MEMORY_SAMPLE_INTERVAL_MS);
     }
 
     @Override
@@ -740,9 +871,24 @@ public final class MainActivity extends Activity {
         runGeneration.incrementAndGet();
         foreground.set(false);
         runRequested.set(false);
+        main.removeCallbacks(idleMemoryRefresh);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         inspectInWorker();
         super.onPause();
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        // Android 14+ no longer sends RUNNING_CRITICAL. This is an extra response for older
+        // devices, not a guarantee that Android will warn before terminating this process.
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL
+                && foreground.get() && machineAvailable && !destroyed.get()) {
+            memoryPressurePaused = true;
+            pauseMachine();
+            messageView.setText(R.string.memory_pressure_paused);
+            messageView.setTextColor(AMBER);
+        }
     }
 
     @Override
@@ -780,6 +926,14 @@ public final class MainActivity extends Activity {
 
     private String sizeLabel(long bytes) {
         if (bytes >= 1024L * 1024 * 1024) return String.format(Locale.getDefault(), "%.2f GiB", bytes / 1073741824.0);
+        return String.format(Locale.getDefault(), "%.1f MiB", bytes / 1048576.0);
+    }
+
+    private String memorySizeLabel(long bytes) {
+        if (bytes < 0) return "—";
+        if (bytes < 1024L * 1024) {
+            return String.format(Locale.getDefault(), "%.1f KiB", bytes / 1024.0);
+        }
         return String.format(Locale.getDefault(), "%.1f MiB", bytes / 1048576.0);
     }
 

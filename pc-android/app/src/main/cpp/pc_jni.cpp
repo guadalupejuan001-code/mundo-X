@@ -17,11 +17,23 @@ cosmic_pc::PcMachine& machine(jlong h){auto it=machines.find(h);if(it==machines.
 jstring java(JNIEnv* e,const std::string& s){return e->NewStringUTF(s.c_str());}
 void exception(JNIEnv* e,const std::exception& ex){e->ThrowNew(e->FindClass("java/lang/IllegalStateException"),ex.what());}
 template<class F> jstring action(JNIEnv* e,jlong h,F fn){std::lock_guard<std::mutex> guard(lock_);try{auto& m=machine(h);try{fn(m);}catch(const std::exception& ex){m.host_error=ex.what();}return java(e,m.json());}catch(const std::exception& ex){exception(e,ex);return nullptr;}}
+jlong create_machine(JNIEnv* e,jint mb,jint resident_mb){
+  std::lock_guard<std::mutex> guard(lock_);
+  try{
+    if(mb<2||mb>2048)throw std::runtime_error("RAM virtual permitida: 2..2048 MiB");
+    if(resident_mb<1||resident_mb>1024||resident_mb>mb)throw std::runtime_error("Límite de RAM ocupada: 1..1024 MiB, sin exceder la RAM virtual");
+    const jlong h=next_id++;
+    machines[h]=std::make_unique<cosmic_pc::PcMachine>(std::size_t(mb)*1024*1024,std::size_t(resident_mb)*1024*1024);
+    return h;
+  }catch(const std::exception& ex){exception(e,ex);return 0;}
+}
 }
 extern "C" {
-JNIEXPORT jlong JNICALL Java_com_cosmicx_pc_NativeMachine_create(JNIEnv* e,jclass,jint mb){std::lock_guard<std::mutex> guard(lock_);try{if(mb<2||mb>128)throw std::runtime_error("RAM permitida: 2..128 MiB");const jlong h=next_id++;machines[h]=std::make_unique<cosmic_pc::PcMachine>(std::size_t(mb)*1024*1024);return h;}catch(const std::exception& ex){exception(e,ex);return 0;}}
+JNIEXPORT jlong JNICALL Java_com_cosmicx_pc_NativeMachine_create(JNIEnv* e,jclass,jint mb){return create_machine(e,mb,std::min(mb,1024));}
+JNIEXPORT jlong JNICALL Java_com_cosmicx_pc_NativeMachine_createWithBudget(JNIEnv* e,jclass,jint mb,jint resident_mb){return create_machine(e,mb,resident_mb);}
 JNIEXPORT void JNICALL Java_com_cosmicx_pc_NativeMachine_destroy(JNIEnv*,jclass,jlong h){std::lock_guard<std::mutex> guard(lock_);machines.erase(h);}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootDemo(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.boot_demo();});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootLongModeDemo(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.boot_long_mode_demo();});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_reset(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.reset();});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_inspect(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto&){});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_run(JNIEnv* e,jclass,jlong h,jint budget){return action(e,h,[&](auto& m){if(budget<1||budget>50000)throw std::runtime_error("Presupuesto de ejecución inválido");m.run(budget);});}

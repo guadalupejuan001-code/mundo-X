@@ -35,11 +35,16 @@ timeout 180 "$adb_bin" shell am instrument -w com.cosmicx.pc.test/com.cosmicx.pc
 "$adb_bin" logcat -d > "$evidence_dir/logcat.txt"
 "$adb_bin" exec-out run-as com.cosmicx.pc cat files/pc-screen.png > "$evidence_dir/pc-screen.png"
 "$adb_bin" exec-out run-as com.cosmicx.pc cat files/pc-tests.json > "$evidence_dir/pc-tests.json"
+"$adb_bin" exec-out run-as com.cosmicx.pc cat files/pc-x64-state.json > "$evidence_dir/pc-x64-state.json"
 python3 - <<'PY'
 import json
 from pathlib import Path
-assert 'COSMIC_PC_TESTS_PASSED tests=8 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
+assert 'COSMIC_PC_TESTS_PASSED tests=12 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
 v=json.loads(Path('pc-evidence/pc-tests.json').read_text())
-assert v['tests']==8 and v['failures']==0 and not v['windows_booted']
+assert v['tests']==12 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
+assert v['logical_ram_bytes']==2**31 and v['guest_payload_cap_bytes']==2**30
+assert 0<v['activity_process_pss_bytes']<2**31
+x=json.loads(Path('pc-evidence/pc-x64-state.json').read_text())
+assert x['cpu_mode']=='long64' and x['status']=='halted' and x['regs_hex'][0]=='2345678922222223'
 assert Path('pc-evidence/pc-screen.png').stat().st_size>1000
 PY

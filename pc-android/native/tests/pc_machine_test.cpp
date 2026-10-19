@@ -11,6 +11,7 @@ std::vector<std::uint8_t> boot(std::initializer_list<std::uint8_t> code){std::ve
 int main(){try{
   cosmic_pc::PcMachine pc;
   need(pc.status()=="empty","no medium is not runnable");pc.run(1000);need(pc.cpu.instructions==0,"empty machine does not execute");
+  pc.reset();need(pc.status()=="empty","reset without a medium still asks for a boot source");
   pc.boot_demo();need(pc.status()=="ready","demo boot ready");need(pc.cpu.memory[0x7c00]==0xfa,"bootsector copied");
   need(pc.cpu.read8(0x475)==1,"raw hard disk in BDA");
   drain(pc);

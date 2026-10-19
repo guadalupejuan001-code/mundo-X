@@ -266,9 +266,9 @@ void hooks_and_fault_tests() {
   run(cpu); check(in_width == 4 && output == 0x78, "I/O hook widths and mask");
   load(cpu, {0xe4, 0x99}); cpu.in_hook = nullptr;
   check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::UnsupportedPort && cpu.eip == 0x1000, "unknown port stops instead of fabricating value");
-  load(cpu, {0x0f, 0x20, 0xc0, 0x0c, 0x01, 0x0f, 0x22, 0xc0}); one(cpu); one(cpu);
-  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::UnsupportedState, "protected-mode request faults");
-  check(cpu.cr0 == 0x10 && cpu.eip == 0x1005 && cpu.regs[Cpu::EAX] == 0x11, "PM request preserves CR0 and faulting IP");
+  load(cpu, {0x0f, 0x20, 0xc0, 0x66, 0x0d, 0x01, 0x00, 0x00, 0x80, 0x0f, 0x22, 0xc0}); one(cpu); one(cpu);
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::UnsupportedState, "legacy paging request faults explicitly");
+  check(cpu.cr0 == 0x10 && cpu.eip == 0x1009 && cpu.regs[Cpu::EAX] == 0x80000011, "unsupported paging preserves CR0 and faulting IP");
   check(cpu.fault->opcode == 0x0f22 && cpu.fault->bytes.size() == 3 && !cpu.fault->describe().empty(), "fault includes opcode bytes and address");
   load(cpu, {0x0f, 0x0b});
   check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::InvalidInstruction && cpu.instructions == 0, "UD2 explicit invalid instruction");
