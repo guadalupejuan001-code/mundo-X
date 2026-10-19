@@ -820,9 +820,13 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private void ultraFailure() throws Exception {
+        // Landscape controls leave only 320x41 render pixels on the CI phone.
+        // Restore the real portrait viewport before requiring a selectable object interior.
+        orient(false);
         scene(64);
         QuantumRenderer.Capture ids = frame(true);
-        select(choose(ids), ids);
+        Pick selected = choose(ids);
+        select(selected, ids);
         gl(() -> {
             activity.renderer.editSelected(2);
             activity.renderer.coupling(true);
@@ -913,6 +917,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
                 .put("cancelledBeforeWrite", cancelled[0]).put("cancelledDuringExport", cancelled[1])
                 .put("ioFailurePropagated", ioFailure[0]).put("stateUnchanged", true)
                 .put("selectionUnchanged", activity.renderer.selectedId() == logical.selectedId)
+                .put("selectedId", selected.id).put("selectedPixels", selected.area)
+                .put("selectionFrameWidth", ids.width).put("selectionFrameHeight", ids.height)
                 .put("recoveredChangedPixels", baseline.changed(recovered)).put("partialFileRemoved", preservedFile)
                 .put("previousCompleteFilePreserved", preservedFile).put("shippingPauseCancellation", true));
     }

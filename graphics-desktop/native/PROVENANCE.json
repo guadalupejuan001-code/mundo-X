@@ -1,17 +1,22 @@
 {
   "repository": "https://github.com/guadalupejuan001-code/mundo-X",
   "base_commit": "3663e93f667e4d4a2c30f3c900293e9f60265b9f",
-  "scope": "Content-addressed snapshot of canonical Graphics headers compiled directly by Android and desktop. base_commit identifies the starting revision; files include the restored additions described below. No vendor copies.",
+  "scope": "Content-addressed snapshot of canonical Graphics headers compiled directly by Android and desktop. base_commit identifies the starting revision; files include the restored additions and exact-preserving optimizations described below. No vendor copies.",
   "files": [
     {
       "path": "native/include/mundo_x/compact_core.hpp",
-      "git_blob_sha1": "7a303f23c0837ceec5e620118645f4b353d1aa95",
-      "sha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c"
+      "git_blob_sha1": "e2f86b135704b56a6b643acf2f2635efe33af7b7",
+      "sha256": "3596321e48428f006de86a8467356f178ce9662430be69876dbf35c3d3f5a027"
     },
     {
       "path": "native/include/mundo_x/dense_core.hpp",
       "git_blob_sha1": "551150407bd498e28fabb938300b7024ffe2687c",
       "sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f"
+    },
+    {
+      "path": "native/include/mundo_x/pauli_observer.hpp",
+      "git_blob_sha1": "41bda135a171ccf37fb09e7df938d394f06a5e14",
+      "sha256": "a4e0cea872cf7f267f1990a29b9e2e1b3f77ececf70851afbbd83692d329e183"
     }
   ],
   "historical_graphics_baseline": {
@@ -47,10 +52,29 @@
       }
     ]
   },
+  "exact_core_optimizations": {
+    "baseline_commit": "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac",
+    "validation_report": "results/core_performance_2026-10-19.json",
+    "files": [
+      {
+        "path": "native/include/mundo_x/compact_core.hpp",
+        "baseline_git_blob_sha1": "7a303f23c0837ceec5e620118645f4b353d1aa95",
+        "baseline_sha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c",
+        "changes": "Single-pass CZ, packed signed row multiplication and deterministic Z reduction, and an owning packed generator export."
+      },
+      {
+        "path": "native/include/mundo_x/pauli_observer.hpp",
+        "baseline_git_blob_sha1": "aa26011319dec14a4ceb0f0748ab41bbfbf80e75",
+        "baseline_sha256": "82365223e25e59dd235e89ed841b136b7ca0ce2fdd10c2aebf669b759c121c6c",
+        "changes": "Observer construction consumes the canonical core's packed generator export instead of serializing and parsing ASCII generators."
+      }
+    ]
+  },
   "integration_notes": [
     "CompactCore now includes the original VM computational-basis helpers while retaining the current seeded measurements and Graphics observer behavior. Its current hash differs from the preserved historical Graphics baseline.",
     "DenseCore includes the author repository phase branch and preserves current Real/FP64 precision.",
     "ReducedExactTRepresentation combines the original Ecos additions with the current optimized Clifford/T updates, arbitrary phases and product-state transfers; its current hashes are recorded in android-experiments/PROVENANCE.json.",
-    "The shared observer and state/session bridge live under native/include/mundo_x and native/src. They are adapters over these original cores."
+    "The shared observer and state/session bridge live under native/include/mundo_x and native/src. They are adapters over these original cores.",
+    "The exact_core_optimizations section preserves the pre-optimization hashes; the files section records the current canonical headers. The linked comparison report records matching signed-state, observable and measurement fingerprints against that baseline."
   ]
 }
