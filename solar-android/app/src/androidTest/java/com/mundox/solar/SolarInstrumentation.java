@@ -122,9 +122,33 @@ public final class SolarInstrumentation extends Instrumentation {
         metrics.put("initialWindowFocused", true);
         expect(activity.bridge().stateBytes() > 0, "CompactCore native state is absent");
         prepare(3, false, false);
+        awaitStableViewport();
+        prepare(3, false, false);
         SolarRenderer.Capture earth = frame();
+        double firstDate = activity.renderer().julianDate();
+        SolarRenderer.Capture repeated = frame();
+        boolean sameDimensions = earth.width == repeated.width && earth.height == repeated.height;
+        int delta = sameDimensions ? changed(earth, repeated) : -1;
+        JSONObject pair = new JSONObject().put("format", "RGBA8, bottom row first")
+                .put("firstWidth", earth.width).put("firstHeight", earth.height)
+                .put("secondWidth", repeated.width).put("secondHeight", repeated.height)
+                .put("changedPixels", delta).put("firstJulianDate", firstDate)
+                .put("secondJulianDate", activity.renderer().julianDate())
+                .put("paused", activity.renderer().isPaused()).put("qualityLimit", TEST_QUALITY);
+        write("initial-paused-pair.json", pair.toString(2));
+        metrics.put("deterministicPausedChangedPixels", delta);
+        if (delta != 0) {
+            save("initial-paused-first.png", earth); save("initial-paused-second.png", repeated);
+            try (FileOutputStream out = new FileOutputStream(new File(evidence, "initial-paused-first.rgba"))) {
+                out.write(earth.rgba);
+            }
+            try (FileOutputStream out = new FileOutputStream(new File(evidence, "initial-paused-second.rgba"))) {
+                out.write(repeated.rgba);
+            }
+        }
         substantial(earth, "Earth launch");
-        expect(changed(earth, frame()) == 0, "Paused surface is not deterministic");
+        expect(sameDimensions, "Initial framebuffer dimensions changed: " + pair);
+        expect(delta == 0, "Paused surface changed " + delta + " pixels: " + pair);
         JSONArray textures = new JSONArray();
         for (String path : new String[]{"textures/earth.png", "textures/moon.jpg", "textures/jupiter.jpg"}) {
             BitmapFactory.Options options = new BitmapFactory.Options();
@@ -144,7 +168,6 @@ public final class SolarInstrumentation extends Instrumentation {
         metrics.put("packagedNasaTextures", textures);
         metrics.put("uploadedNasaTextures", 3);
         metrics.put("initialBrightPixels", bright(earth));
-        metrics.put("deterministicPausedChangedPixels", 0);
     }
 
     private void astronomyAndMagnetism() throws Exception {
@@ -434,6 +457,41 @@ public final class SolarInstrumentation extends Instrumentation {
             activity.renderer().setJulianDate(TEST_JD); activity.renderer().setFreeFlight(false);
             activity.renderer().setAnimationTimeForTest(0);
             if (destination < 0) activity.renderer().overview(); else activity.renderer().focus(destination); });
+    }
+
+    /** Complete initial Surface/layout and quality transitions before the pixel experiment. */
+    private void awaitStableViewport() throws Exception {
+        long deadline = SystemClock.elapsedRealtime() + 15_000;
+        long stableSince = SystemClock.elapsedRealtime();
+        int[] previous = null;
+        int stableFrames = 0, samples = 0;
+        while (SystemClock.elapsedRealtime() < deadline) {
+            int[] geometry = new int[6];
+            main(() -> {
+                geometry[0] = activity.surface().getWidth(); geometry[1] = activity.surface().getHeight();
+                android.graphics.Rect bounds = activity.surface().getHolder().getSurfaceFrame();
+                geometry[2] = bounds.width(); geometry[3] = bounds.height();
+                geometry[4] = activity.surface().isLayoutRequested() ? 1 : 0;
+                geometry[5] = activity.hasWindowFocus() ? 1 : 0;
+            });
+            SolarRenderer.Capture observed = frame();
+            float ratio = Math.min(1f, (float) TEST_QUALITY / Math.max(1, Math.max(geometry[2], geometry[3])));
+            boolean fitted = geometry[0] > 0 && geometry[1] > 0 && geometry[0] == geometry[2]
+                    && geometry[1] == geometry[3] && geometry[4] == 0 && geometry[5] == 1
+                    && observed.width == Math.round(geometry[2] * ratio)
+                    && observed.height == Math.round(geometry[3] * ratio);
+            int[] signature = {geometry[0], geometry[1], geometry[2], geometry[3], observed.width, observed.height};
+            if (fitted && Arrays.equals(previous, signature)) stableFrames++;
+            else { stableFrames = fitted ? 1 : 0; stableSince = SystemClock.elapsedRealtime(); }
+            previous = signature; samples++;
+            if (stableFrames >= 3 && SystemClock.elapsedRealtime() - stableSince >= 500) {
+                metrics.put("startupViewportSamples", samples);
+                metrics.put("startupViewport", new JSONArray().put(observed.width).put(observed.height));
+                return;
+            }
+            SystemClock.sleep(50);
+        }
+        throw new AssertionError("Initial Surface/framebuffer geometry did not stabilize: " + Arrays.toString(previous));
     }
 
     private void ready(long timeout) {
