@@ -19,8 +19,22 @@ import static android.opengl.GLES30.*;
 /** The GLES observer borrows the authoritative core prepared by the application. */
 public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public static final int MAX_OBJECTS=1_048_576;
+    public static final int PRESENTATION_LEGACY=0,PRESENTATION_COSMIC=1;
     public interface Listener { void status(String text); }
     public interface CaptureListener { void captured(Capture image); }
+    /** Last completed frame. Reading this value never queries or measures the core. */
+    public static final class FrameStats {
+        public final int objectCount,width,height,qubits,observables,selectedId;
+        public final long coreRevision,frameNumber;
+        /** Synchronous draw and driver completion wall time; this is not an FPS estimate. */
+        public final double drawMs;
+        public final String device;
+        private FrameStats(QuantumRenderer r,double elapsed){
+            objectCount=r.count;width=r.width;height=r.height;qubits=r.core.qubits;
+            observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;
+            frameNumber=r.drawNumber;drawMs=elapsed;device=r.device;
+        }
+    }
     public static final class Capture {
         public final int width,height;
         public final byte[] rgba;
@@ -91,6 +105,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private int program,vao,editTexture,quantumTexture,colorTexture,depth,fbo;
     private int viewWidth=1,viewHeight=1,width=1,height=1,limit=640;
     private int count=1_000_000,selected=-1;
+    // App presentation preference, intentionally outside the portable logical world.
+    private int presentation=PRESENTATION_LEGACY;
     private long seed=2026;
     private boolean framebufferDirty=true,editsDirty=true,failed=false;
     private boolean overview=true;
@@ -103,6 +119,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private int captureDebug;
     private int pickX=-1,pickY=-1;
     private long drawNumber;
+    private volatile FrameStats latestFrame;
     public volatile boolean hasFrame;
     public volatile String failure;
     public volatile String device="";
@@ -186,7 +203,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     @Override public void onSurfaceCreated(GL10 unused,EGLConfig config){
         // EGL context recreation invalidates every old GL name, never the world.
         program=vao=editTexture=quantumTexture=colorTexture=depth=fbo=0;
-        hasFrame=false;failure=null;failed=false;locations.clear();
+        hasFrame=false;failure=null;failed=false;latestFrame=null;locations.clear();
         int vert=0,frag=0;
         try{
             vert=shader(GL_VERTEX_SHADER,vertexSource);frag=shader(GL_FRAGMENT_SHADER,fragmentSource);
@@ -268,10 +285,11 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private double draw(int debug){
         glBindFramebuffer(GL_FRAMEBUFFER,fbo);glViewport(0,0,width,height);glUseProgram(program);glBindVertexArray(vao);
         int side=(int)Math.ceil(Math.sqrt(count));
-        i("uCount",count);i("uSide",side);i("uEditCount",edits.size());i("uSelected",selected);i("uDebug",debug);i("uEdits",0);i("uQuantum",1);i("uQuantumCount",coefficients.length);
+        i("uCount",count);i("uSide",side);i("uEditCount",edits.size());i("uSelected",selected);i("uDebug",debug);i("uEdits",0);i("uQuantum",1);i("uQuantumCount",coefficients.length);i("uPresentation",presentation);
         int seedBits=(int)seed;glUniform4ui(loc("uSeedBytes"),seedBits&255,(seedBits>>>8)&255,(seedBits>>>16)&255,(seedBits>>>24)&255);
         f("uTime",timeValue);f("uFogDistance",Math.max(50,side*2.2f));f("uQuantumStrength",strength);
         f("uNear",near);f("uFar",far);f("uAspect",aspect);f("uTanHalfFov",(float)Math.tan(Math.toRadians(cameraFov*.5)));
+        f("uPixelAngle",2f*(float)Math.tan(Math.toRadians(cameraFov*.5))/height);
         v("uEye",eye);v("uCameraForward",forward);v("uCameraRight",right);v("uCameraUp",up);
         glUniform2f(loc("uResolution"),width,height);glUniformMatrix4fv(loc("uVp"),1,false,vp,0);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,quantumTexture);
@@ -303,6 +321,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             glBlitFramebuffer(0,0,width,height,0,0,viewWidth,viewHeight,GL_COLOR_BUFFER_BIT,GL_LINEAR);glBindFramebuffer(GL_FRAMEBUFFER,0);
             check("Pantalla");
             hasFrame=true;drawNumber++;
+            latestFrame=new FrameStats(this,elapsed);
             if(requested!=null)capture=null;
             listener.status(String.format(Locale.US,"%,d objetos · %dx%d · %.1f ms\n%d qubits · %d observables · estado %d%s\n%s",count,width,height,elapsed,core.qubits,coefficients.length,uploadedCore,selected>=0?" · ID "+selected:"",device));
             if(requested!=null)requested.captured(pixels);
@@ -320,6 +339,17 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     }
     public void toggleView(){overview=!overview;pitch=overview?.65f:.3f;zoom=1;overrideEye=null;overrideTarget=null;cameraFov=48;}
     public void streetView(){overview=false;pitch=.3f;zoom=1;overrideEye=null;overrideTarget=null;cameraFov=48;}
+    /** A readable city camera for a newly created scene; all world IDs remain present. */
+    public void scenicView(){overview=false;yaw=.67f;pitch=.30f;zoom=.96f;overrideEye=null;overrideTarget=null;cameraFov=48;}
+    /** Call before attaching the renderer, or on its GL thread. Does not change project data. */
+    public void setPresentation(int value){
+        if(value!=PRESENTATION_LEGACY&&value!=PRESENTATION_COSMIC)
+            throw new IllegalArgumentException("Presentación gráfica desconocida");
+        presentation=value;
+    }
+    public int presentation(){return presentation;}
+    /** Null until the first successful frame after creating the current EGL context. */
+    public FrameStats frameStats(){return latestFrame;}
     public void orbit(float dx,float dy){
         if(!finite(dx)||!finite(dy))throw new IllegalArgumentException("Movimiento de cámara inválido");
         yaw=(yaw+dx*.006f)%(float)(Math.PI*2);pitch=Math.max(.04f,Math.min(1.52f,pitch+dy*.005f));overrideEye=null;overrideTarget=null;cameraFov=48;

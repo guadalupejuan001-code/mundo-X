@@ -141,8 +141,9 @@ class Renderer:
         g.glTexParameteri(0x0DE1,0x2802,0x812F);g.glTexParameteri(0x0DE1,0x2803,0x812F)
         g.glActiveTexture(0x84C0);g.check('quantum texture')
 
-    def draw(self,route,cam,t=0.,debug=0,selected=-1,read=False):
+    def draw(self,route,cam,t=0.,debug=0,selected=-1,read=False,presentation=0):
         if route not in ('eye','procedural','explicit'):raise ValueError(route)
+        if presentation not in (0,1):raise ValueError('Unknown observer presentation')
         if route=='explicit' and not self.explicit_ready:raise ValueError('Explicit reference not prepared')
         if not math.isfinite(t):raise ValueError('Nonfinite time')
         g=self.gl;p=self.programs['eye' if route=='eye' else 'raster']
@@ -150,10 +151,11 @@ class Renderer:
         g.glUseProgram(p);g.glBindVertexArray(self.vao)
         for name,value in [('uCount',self.count),('uSide',self.side),('uEditCount',len(self.edits)),
                            ('uSelected',selected),('uDebug',debug),('uEdits',0),('uExplicit',int(route=='explicit')),
-                           ('uQuantum',1),('uQuantumCount',len(self.quantum))]:
+                           ('uQuantum',1),('uQuantumCount',len(self.quantum)),('uPresentation',presentation)]:
             g.glUniform1i(self.loc(p,name),value)
         for name,value in [('uTime',t),('uFogDistance',max(50,self.side*2.2)),('uQuantumStrength',self.quantum_strength),
-                           ('uNear',cam['near']),('uFar',cam['far']),('uAspect',cam['aspect']),('uTanHalfFov',cam['tan_half_fov'])]:
+                           ('uNear',cam['near']),('uFar',cam['far']),('uAspect',cam['aspect']),('uTanHalfFov',cam['tan_half_fov']),
+                           ('uPixelAngle',2*cam['tan_half_fov']/self.height)]:
             g.glUniform1f(self.loc(p,name),value)
         seed=self.seed&0xffffffff;g.glUniform4ui(self.loc(p,'uSeedBytes'),*(seed>>(8*i)&255 for i in range(4)))
         g.glUniform3f(self.loc(p,'uEye'),*cam['eye'])

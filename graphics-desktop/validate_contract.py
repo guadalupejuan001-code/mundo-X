@@ -46,6 +46,25 @@ def run():
     try:
         first,_=engine.observe(cam,t=0.)
         assert state(core)==before
+        # COSMIC presentation must color the same source geometry and ID field.
+        _,cosmic_first=engine.renderer.draw('eye',cam,read=True,presentation=1)
+        _,legacy_ids=engine.renderer.draw('eye',cam,debug=1,read=True,presentation=0)
+        _,cosmic_ids=engine.renderer.draw('eye',cam,debug=1,read=True,presentation=1)
+        assert np.array_equal(legacy_ids,cosmic_ids),'Presentation changed object ownership'
+        color_changes=int(np.any(first!=cosmic_first,axis=2).sum())
+        assert color_changes>100 and state(core)==before
+        _,cosmic_repeat=engine.renderer.draw('eye',cam,read=True,presentation=1)
+        assert np.array_equal(cosmic_first,cosmic_repeat),'Static presentation is not deterministic'
+        id_pixels=cosmic_ids.astype(np.int64)
+        id_field=id_pixels[:,:,0]+(id_pixels[:,:,1]<<8)+(id_pixels[:,:,2]<<16)-1
+        visible_ids,areas=np.unique(id_field[id_field>=0],return_counts=True)
+        selected=int(visible_ids[np.argmax(areas)])
+        _,highlighted=engine.renderer.draw('eye',cam,read=True,presentation=1,selected=selected)
+        selected_changes=np.any(cosmic_first!=highlighted,axis=2)
+        assert selected_changes.any() and not selected_changes[id_field!=selected].any()
+        checks['cosmic_presentation']={'same_id_pixels':True,'deterministic':True,
+                                      'changed_color_pixels':color_changes,'selection_stays_on_id':True,
+                                      'core_unchanged':True}
         queries_before=scene.observable_batches
         engine.observe(street(192,108,.2),read=False)
         assert scene.observable_batches==queries_before and state(core)==before
@@ -53,6 +72,10 @@ def run():
         after_gate=state(core)
         second,_=engine.observe(cam,t=0.)
         assert state(core)==after_gate
+        _,cosmic_second=engine.renderer.draw('eye',cam,read=True,presentation=1)
+        cosmic_changed=int(np.any(cosmic_first!=cosmic_second,axis=2).sum())
+        assert cosmic_changed>0 and state(core)==after_gate
+        checks['cosmic_presentation']['gate_changes_pixels']=cosmic_changed
         assert scene.compile().coefficients.tolist()==[-1,1,1,0,0,0,0]
         changed=int(np.any(first!=second,axis=2).sum());assert changed>0
         checks['external_gate_changes_image']={'changed_pixels':changed,'resolution':[192,108]}
@@ -83,12 +106,16 @@ def run():
     renderer=QuantumGraphicsEngine(neutral,192,108)
     try:
         before_image,_=renderer.observe(cam,t=0.)
+        _,cosmic_before=renderer.renderer.draw('eye',cam,read=True,presentation=1)
         q_before=neutral.compile().coefficients.copy()
         core.apply([('Z',0)])
         after_image,_=renderer.observe(cam,t=0.)
+        _,cosmic_after=renderer.renderer.draw('eye',cam,read=True,presentation=1)
+        assert np.array_equal(cosmic_before,cosmic_after),'Cosmetic material introduced false quantum coupling'
         assert not np.array_equal(q_before,neutral.compile().coefficients)
         delta=int(np.any(before_image!=after_image,axis=2).sum());assert delta==0
         checks['zero_coupling_control']={'changed_pixels':delta,'quantum_observables_changed':True}
+        checks['cosmic_presentation']['zero_coupling_changed_pixels']=0
     finally:
         renderer.close();neutral.close();core.close()
     for entry in json.loads((ROOT/'native/PROVENANCE.json').read_text())['files']:

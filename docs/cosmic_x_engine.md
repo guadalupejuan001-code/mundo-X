@@ -44,11 +44,15 @@ núcleos del mismo repositorio. No se incorpora la implementación de otro motor
 Se conservan las herramientas y dependencias de compilación y representación
 que ya utilizaba el proyecto.
 
-CompactCore permanece idéntico al punto de partida de Graphics. DenseCore
-incorpora las funciones de la rama propia de fases y conserva `Real` y la
-referencia FP64 del `main` actual. Los archivos `PROVENANCE.json` registran
-los hashes actuales y los históricos. La integración conserva medición Z,
-semillas de 64 bits, contadores y las optimizaciones de Reduced.
+CompactCore incorpora ahora las operaciones de estados de base de la VM
+original de 8 bits. Reduced recupera T inversa, observables dispersos,
+presupuestos y cancelación del experimento Ecos, junto con las optimizaciones
+actuales de Clifford/T, fases arbitrarias y transferencia de estados producto.
+DenseCore conserva las funciones de la rama propia de fases, `Real` y la
+referencia FP64 del `main` actual. Los archivos `PROVENANCE.json` distinguen
+los hashes actuales del punto de partida histórico de Graphics; el registro
+de `android-experiments` identifica los archivos originales recuperados.
+La integración conserva medición Z, semillas de 64 bits y contadores.
 
 La idea, creación y dirección del proyecto corresponden a X. El desarrollo
 incluye asistencia de IA. Este registro identifica la procedencia del código

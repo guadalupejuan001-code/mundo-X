@@ -38,6 +38,7 @@ class CompactCore {
 
   void hadamard(std::size_t q) {
     check(q);
+    basis_canonical_ = false;
     for (std::size_t r = 0; r < n_; ++r) {
       const bool x = get(x_, r, q);
       const bool z = get(z_, r, q);
@@ -84,6 +85,7 @@ class CompactCore {
     check(control);
     check(target);
     if (control == target) throw std::invalid_argument("control == target");
+    basis_canonical_ = false;
 
     for (std::size_t r = 0; r < n_; ++r) {
       const bool xc = get(x_, r, control);
@@ -269,6 +271,7 @@ class CompactCore {
     }
 
     if (pivot == n_) return false;
+    basis_canonical_ = false;
 
     // Make every non-pivot generator commute with the measured Z_q by
     // eliminating X/Y on the measured column.
@@ -315,6 +318,47 @@ class CompactCore {
 
     if (negative) *negative = false;
     return 'I';
+  }
+
+  // Restricted helpers for a deterministic computational-basis machine.
+  // Canonical means row q is exactly +/-Z_q. The flag tracks *all* mutations;
+  // raw CNOT/H/measurement invalidate it instead of assuming a row ordering.
+  bool computational_basis_bit(std::size_t q) const {
+    check(q);
+    if (!basis_canonical_)
+      throw std::logic_error("computational basis is not canonical");
+    return phase_[q] != 0;
+  }
+
+  void canonicalize_computational_basis() {
+    for (const auto word : x_)
+      if (word) throw std::logic_error("state is not a computational basis state");
+    basis_canonical_ = false;
+    for (std::size_t q = 0; q < n_; ++q) {
+      std::size_t pivot = q;
+      while (pivot < n_ && !get(z_, pivot, q)) ++pivot;
+      if (pivot == n_) throw std::logic_error("basis stabilizers lost rank");
+      if (pivot != q) {
+        for (std::size_t w = 0; w < words_; ++w) {
+          std::swap(x_[q * words_ + w], x_[pivot * words_ + w]);
+          std::swap(z_[q * words_ + w], z_[pivot * words_ + w]);
+        }
+        std::swap(phase_[q], phase_[pivot]);
+      }
+      for (std::size_t r = 0; r < n_; ++r)
+        if (r != q && get(z_, r, q)) multiply_rows(r, q);
+    }
+    basis_canonical_ = true;
+  }
+
+  void computational_basis_cnot(std::size_t control, std::size_t target) {
+    if (!basis_canonical_)
+      throw std::logic_error("computational basis is not canonical");
+    cnot(control, target);
+    // CNOT maps the target generator Z_t to Z_c Z_t. Multiplication by
+    // the control generator restores +/-Z_t without changing the state.
+    multiply_rows(target, control);
+    basis_canonical_ = true;
   }
 
  private:
@@ -467,6 +511,7 @@ class CompactCore {
   std::vector<std::uint64_t> x_;
   std::vector<std::uint64_t> z_;
   std::vector<std::uint8_t> phase_;
+  bool basis_canonical_ = true;
 };
 
 }  // namespace mundo_x
