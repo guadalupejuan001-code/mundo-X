@@ -971,6 +971,53 @@ public final class GraphicsInstrumentation extends Instrumentation {
         metrics.put("ultra8kNativePssKiB", pss[0]);
         metrics.put("ultra8kLegacyReturnChangedPixels", before.changed(returned));
         metrics.put("ultra8kPerformanceScope", "One-object scene on recorded GLES device; synchronized wall time, not FPS or phone results");
+
+        // Prove the 8K shipping path can be owned by the rule-defined infinite core,
+        // not only by the finite 1000-qubit profile.
+        CosmicProject.Document finiteProject = liveProject().document;
+        String infiniteA=InfiniteProgram.FAR_ADDRESS,infiniteB=InfiniteProgram.partner(infiniteA);
+        try{
+            CosmicProject.Document infiniteProject;
+            try(NativeCore prepared=NativeCore.infinite(NativeCore.BELL_PAIRS)){
+                QuantumRenderer view=new QuantumRenderer(getTargetContext(),prepared,text->{});
+                view.observeAddresses(infiniteA,infiniteB);view.objectCount(1);view.resolution(320);
+                view.coupling(true);view.setTime(0);view.testCamera(new float[]{5,4,7},new float[]{0,1,0});
+                view.setPresentation(QuantumRenderer.PRESENTATION_LEGACY);
+                infiniteProject=CosmicProject.fromSnapshots("8K · Infinite",prepared.snapshot(),view.snapshot());
+            }
+            install(infiniteProject);NativeCore infiniteOwner=activity.core;
+            expect(infiniteOwner.isInfinite()&&infiniteOwner.infiniteStats().activeQubits==0,
+                    "8K Infinite fixture materialized its rule background before drawing");
+            String untouched=infiniteOwner.snapshot().infiniteSnapshot;long untouchedEpoch=infiniteOwner.epoch();
+            AtomicReference<QuantumRenderer.FrameStats> infiniteFrame=new AtomicReference<>();
+            gl(()->{
+                activity.renderer.setPresentation(QuantumRenderer.PRESENTATION_LEGACY);
+                activity.renderer.setSpatialCulling(true);activity.renderer.setSynchronousTiming(true);
+                try{activity.renderer.uhd8k();activity.renderer.onDrawFrame(null);infiniteFrame.set(activity.renderer.frameStats());}
+                finally{activity.renderer.setSynchronousTiming(false);}
+            });
+            QuantumRenderer.FrameStats firstInfinite=infiniteFrame.get();
+            expect(firstInfinite!=null&&firstInfinite.infinite&&firstInfinite.width==7680&&firstInfinite.height==4320
+                    &&firstInfinite.gpuSynchronized&&untouched.equals(infiniteOwner.snapshot().infiniteSnapshot)
+                    &&infiniteOwner.epoch()==untouchedEpoch&&infiniteOwner.infiniteStats().activeQubits==0,
+                    "8K draw mutated or failed to use the InfiniteCore owner");
+            long revision=infiniteOwner.version();
+            gl(()->activity.renderer.gate(NativeCore.Z,infiniteA,infiniteB));
+            expect(infiniteOwner.version()==revision+1&&infiniteOwner.query(InfiniteProgram.pair(infiniteA,infiniteB))[0]==-1,
+                    "Large-address InfiniteCore gate did not reach the 8K owner");
+            gl(()->{activity.renderer.setSynchronousTiming(true);try{activity.renderer.onDrawFrame(null);infiniteFrame.set(activity.renderer.frameStats());}
+                    finally{activity.renderer.setSynchronousTiming(false);}});
+            QuantumRenderer.FrameStats changedInfinite=infiniteFrame.get();
+            expect(changedInfinite.coreRevision==infiniteOwner.version()&&changedInfinite.coreEpoch==infiniteOwner.epoch(),
+                    "8K framebuffer did not refresh the changed InfiniteCore observation");
+            gl(()->{activity.renderer.gate(NativeCore.Z,infiniteA,infiniteB);infiniteOwner.executeInfinite("compact\n");});
+            expect(infiniteOwner.infiniteStats().activeQubits==0,"8K Infinite fixture did not compact back to its rule background");
+            metrics.put("ultra8kInfinite",new JSONObject().put("domain","∞").put("addressDigits",infiniteA.length())
+                    .put("width",firstInfinite.width).put("height",firstInfinite.height)
+                    .put("readOnlyBackgroundDraw",true).put("activeBefore",0).put("activeAfterCompact",0)
+                    .put("initialDrawMs",firstInfinite.drawMs).put("changedDrawMs",changedInfinite.drawMs)
+                    .put("changedRevisionObserved",true));
+        }finally{install(finiteProject);frame(false);}
     }
 
     private void ultraDifferential() throws Exception {
