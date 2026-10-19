@@ -138,6 +138,8 @@ jobs:
             cosmic-build.log
             cosmic-coexist-build.log
             cosmic-android/app/build/reports/**
+            cosmic-dist/*.txt
+            cosmic-dist/*.json
           if-no-files-found: warn
           retention-days: 14
 

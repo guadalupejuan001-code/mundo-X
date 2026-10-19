@@ -89,7 +89,7 @@ def main():
     badging = (directory / (APP[:-4] + "-manifest.txt")).read_text()
     require(re.search(r"package: name='com\.mundox\.cosmic' versionCode='1' versionName='0\.3\.0'", badging),
             "Wrong unified application ID or version")
-    require("sdkVersion:'26'" in badging and "targetSdkVersion:'35'" in badging,
+    require("minSdkVersion:'26'" in badging and "targetSdkVersion:'35'" in badging,
             "Wrong supported Android SDK profile")
     require("launchable-activity: name='com.mundox.cosmic.CosmicActivity'" in badging,
             "The new CosmicActivity is not the launcher")
