@@ -5,8 +5,9 @@
   "files": [
     {
       "path": "native/include/mundo_x/compact_core.hpp",
-      "git_blob_sha1": "e2f86b135704b56a6b643acf2f2635efe33af7b7",
-      "sha256": "3596321e48428f006de86a8467356f178ce9662430be69876dbf35c3d3f5a027"
+      "source_commit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+      "git_blob_sha1": "fed566907b8642b4a323ee6f1ce26a343fd60914",
+      "sha256": "916023862a935f7aec45b4fe7e9285e11715e08408f88d265e50255c64435647"
     },
     {
       "path": "native/include/mundo_x/dense_core.hpp",
@@ -83,5 +84,11 @@
       "Reuse original packed generator export, single-pass CZ and packed signed row operations.",
       "1,000-qubit product profile and explicit lossless register expansion."
     ]
+  },
+  "infinite_core_extension": {
+    "source_commit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+    "scope": "The independent native InfiniteCore module adds exact tensor-product composition to the canonical CompactCore header. Its seven new native sources and this header are individually pinned by the source manifest.",
+    "canonical_header": "native/include/mundo_x/compact_core.hpp",
+    "source_manifest": "tools/cosmic_source_provenance.py"
   }
 }

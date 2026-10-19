@@ -9,6 +9,9 @@ on:
       - 'native/tests/infinite_*.cpp'
       - 'examples/infinite_*.xi'
       - 'tools/validate_infinite_cli.py'
+      - 'tools/cosmic_source_provenance.py'
+      - 'graphics-desktop/native/PROVENANCE.json'
+      - 'android-experiments/PROVENANCE.json'
       - 'CMakeLists.txt'
       - '.github/workflows/infinite-core.yml'
   pull_request:
@@ -19,6 +22,9 @@ on:
       - 'native/tests/infinite_*.cpp'
       - 'examples/infinite_*.xi'
       - 'tools/validate_infinite_cli.py'
+      - 'tools/cosmic_source_provenance.py'
+      - 'graphics-desktop/native/PROVENANCE.json'
+      - 'android-experiments/PROVENANCE.json'
       - 'CMakeLists.txt'
       - '.github/workflows/infinite-core.yml'
   workflow_dispatch:
@@ -40,9 +46,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
+      - name: Preserve canonical source bytes on checkout
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -52,19 +61,23 @@ jobs:
           mkdir -p infinite-evidence
           git rev-parse HEAD > infinite-evidence/source-commit.txt
           cmake -S . -B infinite-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Verify exact declared source provenance
+        run: python tools/cosmic_source_provenance.py > infinite-evidence/source-provenance.json
       - name: Build the isolated runner and contracts
         run: |
           cmake --build infinite-build --config Release --parallel 2 --target \
             mundo_x_infinite test_infinite_address test_infinite_core \
             test_infinite_tensor infinite_scale test_compact_measurement mundo_x_native_tests \
+            test_core_1000 test_engine_session \
             2>&1 | tee infinite-evidence/build.log
       - name: Check exact operations, CLI and original CompactCore compatibility
         run: |
           ctest --test-dir infinite-build -C Release --output-on-failure \
-            -R '^(infinite_|compact_measurement$|native_core_and_xasm$)' \
+            -R '^(infinite_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
             --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \
             | tee infinite-evidence/ctest.log
       - name: Record measured scope and make the separate CLI available
+        timeout-minutes: 2
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             infinite-build/Release/infinite_scale.exe > infinite-evidence/scale.json
