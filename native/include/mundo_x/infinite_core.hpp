@@ -241,12 +241,12 @@ class InfiniteCore {
   // All input is validated before an early zero result is returned. Queries
   // create only temporary observer data and never materialize the background.
   double expectation(const std::vector<Term>& terms, int sign = 1) const {
-    std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>> observers;
+    std::vector<std::unique_ptr<mundo_x_bridge::PauliObserver>> observers(state_->components.size());
     return expectation_cached(terms, sign, observers);
   }
 
   std::vector<double> expectations(const std::vector<QueryRef>& queries) const {
-    std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>> observers;
+    std::vector<std::unique_ptr<mundo_x_bridge::PauliObserver>> observers(state_->components.size());
     std::vector<double> values;
     values.reserve(queries.size());
     for (const auto& query : queries) {
@@ -339,7 +339,7 @@ class InfiniteCore {
 
  private:
   double expectation_cached(const std::vector<Term>& terms, int sign,
-                            std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>>& observers) const {
+                            std::vector<std::unique_ptr<mundo_x_bridge::PauliObserver>>& observers) const {
     if (sign != 1 && sign != -1)
       throw std::invalid_argument("Pauli sign must be +1 or -1");
     if (terms.size() > limits_.max_query_terms)
@@ -379,11 +379,11 @@ class InfiniteCore {
       }
     }
     for (auto& query : active) {
-      auto found = observers.find(query.first);
-      if (found == observers.end())
-        found = observers.emplace(query.first, std::make_unique<mundo_x_bridge::PauliObserver>(
-            state_->components[query.first]->core)).first;
-      answer *= found->second->expectation(std::move(query.second));
+      auto& observer = observers[query.first];
+      if (!observer)
+        observer = std::make_unique<mundo_x_bridge::PauliObserver>(
+            state_->components[query.first]->core);
+      answer *= observer->expectation(std::move(query.second));
       if (answer == 0.0) return 0.0;
     }
     return answer;
