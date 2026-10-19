@@ -18,8 +18,10 @@ def require(condition, message):
 
 def main():
     directory = Path(sys.argv[1] if len(sys.argv) > 1 else "solar-evidence")
-    uhd = len(sys.argv) > 2 and sys.argv[2] == "--uhd4k"
-    require(len(sys.argv) <= 3 and (len(sys.argv) < 3 or uhd), "Unexpected solar verification profile")
+    profile = sys.argv[2] if len(sys.argv) > 2 else ""
+    require(len(sys.argv) <= 3 and profile in ("", "--uhd4k", "--uhd8k"), "Unexpected solar verification profile")
+    uhd = profile in ("--uhd4k", "--uhd8k")
+    ultra = profile == "--uhd8k"
     output = (directory / "instrumentation.txt").read_text()
     require("COSMIC_SOLAR_TESTS_PASSED" in output, "Solar instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Solar instrumentation did not finish successfully")
@@ -41,6 +43,8 @@ def main():
         expected_tests.update({"uhd_framebuffer_return_preserves_scene", "uhd_fit_picking_preserves_scene",
                                "entry_all_planets_and_moons", "entry_atmosphere_and_grazing_frames",
                                "entry_uhd_lifecycle_and_orientation", "map_ui_planet_and_moon_selection"})
+    if ultra:
+        expected_tests.add("ultra_8k_framebuffer_and_infinite_core")
     require(len(tests) == len(expected_tests) and set(names) == expected_tests,
             "Incomplete or unexpected solar test inventory")
     require(report["testsRun"] == len(tests) and report["testsFailed"] == 0,
@@ -51,11 +55,13 @@ def main():
             "The JUnit report disagrees with device JSON")
     metrics = report["metrics"]
     require(metrics.get("uhd4kSuite", False) is uhd, "The Android run used the wrong legacy/UHD profile")
+    require(metrics.get("uhd8kSuite", False) is ultra, "The Android run used the wrong 8K profile")
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"],
             "The device does not match the Android 15 x86_64 validation target")
     require("swiftshader" in metrics["glRenderer"].lower(), "Unexpected GLES validation driver")
-    require(metrics["nativeQubits"] == 8 and metrics["nativeStateBytes"] > 0,
-            "The actual COSMIC native core was not observed on Android")
+    require(metrics["nativePresetAddresses"] == 8 and metrics["nativeInfinite"] is True
+            and metrics["nativeActiveQubits"] >= 0 and metrics["nativeStateBytes"] >= 0,
+            "The rules-based InfiniteCore was not observed on Android")
     require(metrics["framesRendered"] > 0, "No actual GLES frames were rendered")
     require(metrics["initialWindowFocused"] is True, "The launched Activity did not receive input focus")
     require(metrics["bodyCount"] == 23 and metrics["planetCount"] == 8 and metrics["moonCount"] == 14,
@@ -100,8 +106,10 @@ def main():
             "Android lifecycle lost the native preparation or the saved focused scene")
 
     expected_apks = {"COSMIC-X-Solar.apk", "COSMIC-X-Solar-tests.apk"}
-    if uhd:
+    if profile == "--uhd4k":
         expected_apks = {"COSMIC-X-Solar-4K.apk", "COSMIC-X-Solar-4K-tests.apk", "COSMIC-X-Solar-coexist.apk"}
+    elif ultra:
+        expected_apks = {"COSMIC-X-Solar-8K.apk", "COSMIC-X-Solar-8K-tests.apk", "COSMIC-X-Solar-coexist.apk"}
     checksums = {}
     for row in (directory / "apk-SHA256SUMS.txt").read_text().splitlines():
         parts = row.split()
@@ -154,8 +162,14 @@ def main():
     require(portrait["height"] > portrait["width"] and landscape["width"] > landscape["height"],
             "Actual Activity screenshots do not verify both display orientations")
     if uhd:
-        require(metrics["applicationId"] == "com.cosmicx.solar.uhd" and metrics["uhdPixels"] == 8_294_400,
+        expected_id = "com.cosmicx.solar.ultra" if ultra else "com.cosmicx.solar.uhd"
+        require(metrics["applicationId"] == expected_id and metrics["uhdPixels"] == 8_294_400,
                 "The standalone package or UHD pixel count is wrong")
+        if ultra:
+            require(metrics["ultra8kPixels"] == 33_177_600
+                    and metrics["ultra8kInfiniteCorePreserved"] is True
+                    and {metrics["ultra8kWidth"], metrics["ultra8kHeight"]} == {4320, 7680},
+                    "The Solar 8K framebuffer or InfiniteCore preservation check failed")
         require(metrics["uhdReturnChangedPixels"] == 0 and metrics["uhdNativeOwnerPreserved"] is True
                 and metrics["uhdSelectedBody"] == 3 and metrics["uhdBandChangedPixels"] == 0,
                 "UHD transition or FIT picking changed the wrong state")
@@ -208,13 +222,14 @@ def main():
                 and all(provenance.get(name) == value for name, value in expected_provenance.items()),
                 "Solar UHD evidence does not match the verified integrated core, resolution and science sources")
         coexist = set((directory / "coinstallation.txt").read_text().splitlines())
-        require({"package:com.cosmicx.solar", "package:com.cosmicx.solar.uhd"} <= coexist,
+        expected_package = "package:com.cosmicx.solar.ultra" if ultra else "package:com.cosmicx.solar.uhd"
+        require({"package:com.cosmicx.solar", expected_package} <= coexist,
                 "The original and UHD solar packages did not coexist")
         print("Verified real UHD, FIT picking, 22 local environments, atmosphere controls and live map touches.")
     (directory / "verified-images.json").write_text(json.dumps(image_manifest, indent=2) + "\n")
     print(f"Verified {len(tests)} solar Android tests and {len(images)} actual PNG captures.")
     print("Driver: " + metrics["glRenderer"])
-    print(f"Native state: {metrics['nativeQubits']} qubits; {metrics['nativeStateBytes']} bytes.")
+    print(f"InfiniteCore support: {metrics['nativeActiveQubits']} active addresses; {metrics['nativeStateBytes']} tableau bytes.")
     print("These are Android software-emulator correctness results, not Samsung A16 performance measurements.")
 
 
