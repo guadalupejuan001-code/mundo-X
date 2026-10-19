@@ -215,6 +215,14 @@ def main():
     require(abs(metrics["ultra8kEquivalentCompletedFpsBefore"] - 1000.0 / baseline) < 1e-9
             and abs(metrics["ultra8kEquivalentCompletedFpsAfter"] - 1000.0 / optimized) < 1e-9,
             "8K equivalent completed-frame rate does not match synchronized timing")
+    infinite = metrics["ultra8kInfinite"]
+    require(infinite["domain"] == "∞" and infinite["addressDigits"] == 101
+            and (infinite["width"], infinite["height"]) == (7680, 4320)
+            and infinite["readOnlyBackgroundDraw"] is True
+            and infinite["activeBefore"] == infinite["activeAfterCompact"] == 0
+            and infinite["changedRevisionObserved"] is True
+            and infinite["initialDrawMs"] > 0 and infinite["changedDrawMs"] > 0,
+            "8K framebuffer was not verified with the rule-defined InfiniteCore owner")
 
     comparisons = metrics["ultra8kDifferential"]
     require(len(comparisons) == 4 and {(item["width"], item["height"], item["ids"]) for item in comparisons}
