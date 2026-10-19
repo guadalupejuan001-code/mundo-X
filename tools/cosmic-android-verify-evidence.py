@@ -97,15 +97,24 @@ def verify_cosmic(directory, output):
             and abs(echo["signal_z"] + .5) < 1e-10 and abs(echo["control_z"] - 1) < 1e-10,
             "Restored echo JNI did not match its reference")
     require("tx=0B rx=0B" in experiments["sincronizada"]["rendererStatus"], "Offline smoke test exchanged network data")
+    game = experiments["juego"]["surfaceCapture"]
+    require(game == json.loads((directory / "game-surface-readback.json").read_text())
+            and game["source"] == "android.view.PixelCopy of actual GLSurfaceView" and game["result"] == 0
+            and game["displayRotation"] in (90, 270) and game["displayWidth"] > game["displayHeight"] > 0
+            and game["width"] > game["height"] > 0 and game["nonblackPixels"] > game["width"] * game["height"] // 100
+            and game["colorfulPixels"] > 1024 and game["distinctRgbColorsCappedAt4096"] >= 32,
+            "The actual landscape game SurfaceView is blank or its native buffer proof is missing")
 
     required = {"cosmic-motor.png", "cosmic-nucleo.png", "cosmic-labs.png", "cosmic-archivo.png",
                 "cosmic-render-color.png", "cosmic-render-ids.png",
                 "cosmic-coupled-before.png", "cosmic-coupled-after.png", "cosmic-uncoupled-before.png", "cosmic-uncoupled-after.png",
                 "cosmic-saf-before.png", "cosmic-saf-after.png", "cosmic-background-before.png", "cosmic-background-after.png",
-                "cosmic-recreate-before.png", "cosmic-recreate-after.png", "cosmic-reopen-after.png",
+                "cosmic-recreate-before.png", "cosmic-recreate-after.png", "cosmic-reopen-after.png", "experiment-juego-surface.png",
                 *("experiment-" + name + ".png" for name in EXPERIMENTS)}
     require(required <= set(report["images"]), "An actual app/experiment framebuffer or screenshot is missing")
     manifest = image_manifest(directory, required)
+    require(manifest["experiment-juego-surface.png"]["width"] == game["width"]
+            and manifest["experiment-juego-surface.png"]["height"] == game["height"], "Game PixelCopy PNG dimensions differ")
     for pair in ("uncoupled", "saf", "background", "recreate"):
         require(manifest[f"cosmic-{pair}-before.png"]["sha256"] == manifest[f"cosmic-{pair}-after.png"]["sha256"],
                 "Independent PNG comparison disagrees for " + pair)

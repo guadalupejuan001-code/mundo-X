@@ -2,16 +2,21 @@ package com.mundox.cosmic;
 
 import android.app.Activity;
 import android.app.Instrumentation;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.opengl.GLES30;
+import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -20,8 +25,11 @@ import android.os.SystemClock;
 import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.Choreographer;
+import android.view.PixelCopy;
+import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.TextView;
 import com.mundox.graphics.CosmicProject;
 import com.mundox.graphics.NativeCore;
@@ -445,6 +453,7 @@ public final class CosmicInstrumentation extends Instrumentation {
                 details.put("rendererStatus", privateText(opened, "stats"));
             } else if (id.equals("juego")) {
                 await(() -> !privateText(opened, "hud").contains("initializing") && privateText(opened, "hud").contains("CITY"), "procedural game GPU frame");
+                details.put("surfaceCapture", gameSurface(opened));
             } else if (id.equals("sincronizada")) {
                 await(() -> privateText(opened, "stats").contains("frame="), "offline synchronized GPU frame");
                 String state = privateText(opened, "stats");
@@ -506,6 +515,86 @@ public final class CosmicInstrumentation extends Instrumentation {
             click(tag);
             await(() -> picker.getHits() == 1, "production document request " + action);
         } finally { removeMonitor(picker); }
+    }
+
+    private JSONObject gameSurface(Activity target) throws Exception {
+        Field field = target.getClass().getDeclaredField("gl"); field.setAccessible(true);
+        GLSurfaceView view = (GLSurfaceView) field.get(target);
+        int[] size = new int[2];
+        int[] displayState = new int[3];
+        await(() -> {
+            mainSync(() -> {
+                size[0] = view.getWidth(); size[1] = view.getHeight();
+                if (target.getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE) size[0] = 0;
+                // Use the application display, not the Activity's temporary fixed-rotation configuration.
+                android.view.Display display = ((WindowManager) getTargetContext().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
+                Point real = new Point(); display.getRealSize(real);
+                displayState[0] = display.getRotation(); displayState[1] = real.x; displayState[2] = real.y;
+            });
+            return size[0] > size[1] && size[1] > 0 && displayState[1] > displayState[2]
+                    && (displayState[0] == Surface.ROTATION_90 || displayState[0] == Surface.ROTATION_270);
+        }, "landscape game surface and actual display rotation");
+        Bitmap bitmap = Bitmap.createBitmap(size[0], size[1], Bitmap.Config.ARGB_8888);
+        try {
+            long deadline = SystemClock.elapsedRealtime() + TIMEOUT;
+            int status;
+            do {
+                CountDownLatch copied = new CountDownLatch(1);
+                AtomicReference<Integer> result = new AtomicReference<>(PixelCopy.ERROR_UNKNOWN);
+                mainSync(() -> PixelCopy.request(view, bitmap, value -> { result.set(value); copied.countDown(); },
+                        new Handler(Looper.getMainLooper())));
+                require(copied.await(TIMEOUT, TimeUnit.MILLISECONDS), "Game PixelCopy timed out");
+                status = result.get();
+                if (status == PixelCopy.ERROR_SOURCE_NO_DATA) SystemClock.sleep(80);
+            } while (status == PixelCopy.ERROR_SOURCE_NO_DATA && SystemClock.elapsedRealtime() < deadline);
+            require(status == PixelCopy.SUCCESS, "Game PixelCopy failed with Android result " + status);
+            saveBitmap("experiment-juego-surface.png", bitmap);
+            int[] pixels = new int[size[0] * size[1]]; bitmap.getPixels(pixels, 0, size[0], 0, 0, size[0], size[1]);
+            int nonblack = 0, colorful = 0;
+            Set<Integer> colors = new HashSet<>();
+            for (int pixel : pixels) {
+                int r = Color.red(pixel), g = Color.green(pixel), b = Color.blue(pixel);
+                int high = Math.max(r, Math.max(g, b)), low = Math.min(r, Math.min(g, b));
+                if (high > 8) nonblack++;
+                if (high > 20 && high - low > 8) colorful++;
+                if (colors.size() < 4096) colors.add(pixel & 0xffffff);
+            }
+            JSONObject proof = new JSONObject().put("source", "android.view.PixelCopy of actual GLSurfaceView")
+                    .put("result", status).put("width", size[0]).put("height", size[1])
+                    .put("displayRotation", displayState[0] * 90).put("displayWidth", displayState[1]).put("displayHeight", displayState[2])
+                    .put("nonblackPixels", nonblack).put("colorfulPixels", colorful)
+                    .put("distinctRgbColorsCappedAt4096", colors.size()).put("image", "experiment-juego-surface.png");
+            write("game-surface-readback.json", proof.toString(2));
+            if (nonblack <= pixels.length / 100 || colorful <= 1024 || colors.size() < 32) gameGlDiagnostics(target, view);
+            require(nonblack > pixels.length / 100 && colorful > 1024 && colors.size() >= 32,
+                    "Actual game SurfaceView is blank or lacks rendered colors: " + proof);
+            return proof;
+        } finally { bitmap.recycle(); }
+    }
+
+    private void gameGlDiagnostics(Activity target, GLSurfaceView view) throws Exception {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<JSONObject> result = new AtomicReference<>();
+        view.queueEvent(() -> {
+            JSONObject data = new JSONObject();
+            int[] previous = new int[1]; GLES30.glGetIntegerv(GLES30.GL_FRAMEBUFFER_BINDING, previous, 0);
+            try {
+                data.put("pendingGlError", GLES30.glGetError());
+                Field rendererField = target.getClass().getDeclaredField("renderer"); rendererField.setAccessible(true);
+                Object observer = rendererField.get(target);
+                Field framebufferField = observer.getClass().getDeclaredField("fbo"); framebufferField.setAccessible(true);
+                int framebuffer = framebufferField.getInt(observer);
+                GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, framebuffer);
+                data.put("colorFramebuffer", framebuffer).put("framebufferStatus", GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER));
+                java.nio.ByteBuffer pixel = java.nio.ByteBuffer.allocateDirect(4);
+                GLES30.glReadPixels(0, 0, 1, 1, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, pixel);
+                JSONArray rgba = new JSONArray(); for (int i = 0; i < 4; i++) rgba.put(pixel.get(i) & 255);
+                data.put("colorAttachmentCornerRgba", rgba).put("diagnosticGlError", GLES30.glGetError());
+            } catch (Throwable error) { try { data.put("error", Log.getStackTraceString(error)); } catch (Exception ignored) { } }
+            finally { GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, previous[0]); result.set(data); done.countDown(); }
+        });
+        require(done.await(TIMEOUT, TimeUnit.MILLISECONDS), "Game GL diagnosis timed out");
+        write("game-gles-diagnostics.json", result.get().toString(2));
     }
 
     private static Uri projectUri(String file) { return Uri.parse("content://" + ProjectEvidenceProvider.AUTHORITY + "/" + file); }
