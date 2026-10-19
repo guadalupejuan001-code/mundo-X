@@ -175,6 +175,55 @@ void repeated_gates(std::ostream& out) {
       << ",\"elapsed_us\":" << microseconds(begin, end) << ",\"ok\":true}";
 }
 
+void batched_observer_reuse(std::ostream& out) {
+  constexpr std::size_t n = 1000, query_count = 24, repeats = 5;
+  Core::Limits limits;
+  limits.max_component_qubits = 1024;
+  Core core(Core::Background::Zero, limits);
+  std::vector<Core::Gate> gates;
+  gates.reserve(n);
+  gates.push_back({'H', "0", ""});
+  for (std::size_t q = 1; q < n; ++q)
+    gates.push_back({'C', std::to_string(q - 1), std::to_string(q)});
+  core.apply(gates);
+
+  std::vector<Core::Query> queries;
+  queries.reserve(query_count);
+  for (std::size_t i = 0; i < query_count; ++i) {
+    const auto q = 1 + (i * 37) % (n - 1);
+    queries.push_back(Core::Query{{Core::Term{"0", 'Z'}, Core::Term{std::to_string(q), 'Z'}}, 1});
+  }
+
+  const auto warm = core.expectations(queries);
+  for (const auto value : warm) require(value == 1.0, "batch warmup correlation mismatch");
+
+  double serial_us = 0, batch_us = 0;
+  std::vector<double> serial, batch;
+  for (std::size_t repeat = 0; repeat < repeats; ++repeat) {
+    serial.clear();
+    const auto serial_begin = Clock::now();
+    for (const auto& query : queries)
+      serial.push_back(core.expectation(query.terms, query.sign));
+    const auto serial_end = Clock::now();
+    serial_us += microseconds(serial_begin, serial_end);
+
+    const auto batch_begin = Clock::now();
+    batch = core.expectations(queries);
+    const auto batch_end = Clock::now();
+    batch_us += microseconds(batch_begin, batch_end);
+    require(serial == batch, "batched observer reuse changed query results");
+  }
+  serial_us /= repeats;
+  batch_us /= repeats;
+  require(batch_us > 0, "batched observer timing is invalid");
+  out << "{\"case\":\"batched_observer_reuse\",\"qubits\":" << n
+      << ",\"queries\":" << query_count << ",\"repeats\":" << repeats
+      << ",\"serial_mean_us\":" << serial_us
+      << ",\"batch_mean_us\":" << batch_us
+      << ",\"serial_over_batch\":" << serial_us / batch_us
+      << ",\"same_results\":true,\"ok\":true}";
+}
+
 void ghz_component(std::ostream& out) {
   constexpr std::size_t n = 1000;
   const auto begin = Clock::now();
@@ -248,6 +297,9 @@ int main() {
     report << ',';
     current_case = "repeated_gates";
     repeated_gates(report);
+    report << ',';
+    current_case = "batched_observer_reuse";
+    batched_observer_reuse(report);
     report << ',';
     current_case = "ghz_component";
     ghz_component(report);
