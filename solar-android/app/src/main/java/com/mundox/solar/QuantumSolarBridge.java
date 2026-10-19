@@ -1,22 +1,30 @@
 package com.mundox.solar;
 
+import com.mundox.graphics.InfiniteProgram;
 import com.mundox.graphics.NativeCore;
-import java.util.Arrays;
 
-/** The existing COSMIC X CompactCore owns the state. This adapter only prepares
- * explicit user presets and caches read-only Pauli observations for the observer.
- * No ephemeris, magnetic constant or physical force is inferred from these values. */
+/**
+ * Solar now owns the same rules-based InfiniteCore route used by the rest of
+ * COSMIC X. The eight addresses below are only the finite support touched by
+ * the visual presets; the register itself has no final address.
+ *
+ * No ephemeris, magnetic constant or physical force is inferred from these
+ * values. The core only modulates illustrative field/wind traces.
+ */
 public final class QuantumSolarBridge implements AutoCloseable {
-    public static final int QUBITS = 8;
+    public static final int PRESET_ADDRESSES = 8;
+    /** Compatibility name for old reports: this is active preset support, not total qubits. */
+    public static final int QUBITS = PRESET_ADDRESSES;
     public static final String[] PRESETS = {"Base", "Superposición", "Entrelazado", "Fase"};
     private static final String[] OBSERVABLES = {
-        "XIIIIIII", "YIIIIIII", "ZIIIIIII", "XXIIIIII",
-        "YYIIIIII", "ZZIIIIII", "IIXXIIII", "IIZZIIII"
+        "X:0", "Y:0", "Z:0", "X:0 X:1",
+        "Y:0 Y:1", "Z:0 Z:1", "X:2 X:3", "Z:2 Z:3"
     };
+
     private NativeCore core;
     private volatile float[] values = new float[8];
     private volatile int preset;
-    private volatile long revision, bytes;
+    private volatile long revision, bytes, activeQubits;
     private boolean closed;
 
     public QuantumSolarBridge() { this(2); }
@@ -25,25 +33,31 @@ public final class QuantumSolarBridge implements AutoCloseable {
     public synchronized void setPreset(int value) {
         if (closed) throw new IllegalStateException("Núcleo cerrado");
         if (value < 0 || value >= PRESETS.length) throw new IllegalArgumentException("Preparación desconocida");
-        NativeCore candidate = new NativeCore(QUBITS);
+        NativeCore candidate = NativeCore.infinite(NativeCore.ZERO);
         try {
             if (value == 1) {
-                for (int q=0; q<QUBITS; q++) candidate.apply(NativeCore.H,q,0);
+                for (int q=0; q<PRESET_ADDRESSES; q++)
+                    candidate.apply(NativeCore.H, Integer.toString(q), "");
             } else if (value >= 2) {
-                for (int q=0; q<QUBITS; q+=2) {
-                    candidate.apply(NativeCore.H,q,0);
-                    candidate.apply(NativeCore.CX,q,q+1);
+                for (int q=0; q<PRESET_ADDRESSES; q+=2) {
+                    String a=Integer.toString(q), b=Integer.toString(q+1);
+                    candidate.apply(NativeCore.H,a,"");
+                    candidate.apply(NativeCore.CX,a,b);
                 }
-                if (value==3) for (int q=0; q<QUBITS; q+=2) candidate.apply(NativeCore.S,q,0);
+                if (value==3) for (int q=0; q<PRESET_ADDRESSES; q+=2)
+                    candidate.apply(NativeCore.S,Integer.toString(q),"");
             }
-            float[] result = candidate.query(OBSERVABLES);
-            long actualBytes = candidate.stateBytes();
-            if (result.length != 8 || actualBytes <= 0) throw new IllegalStateException("Respuesta incompleta del núcleo");
+            for (String observable: OBSERVABLES) InfiniteProgram.validate(observable);
+            NativeCore.Observation observation = candidate.observe(OBSERVABLES);
+            float[] result = observation.values;
+            NativeCore.InfiniteStats stats = candidate.infiniteStats();
+            if (result.length != 8) throw new IllegalStateException("Respuesta incompleta del núcleo infinito");
             for (float n: result) if (!Float.isFinite(n) || Math.abs(n)>1.00001f)
                 throw new IllegalStateException("Observable fuera de rango");
             NativeCore previous = core;
             core = candidate; candidate = null;
-            values = result; preset = value; bytes = actualBytes; revision++;
+            values = result; preset = value; bytes = stats.tableauBytes;
+            activeQubits = stats.activeQubits; revision++;
             if (previous != null) previous.close();
         } finally { if (candidate != null) candidate.close(); }
     }
@@ -51,15 +65,19 @@ public final class QuantumSolarBridge implements AutoCloseable {
     /** Immutable cached view; callers must not write into this array. */
     public float[] coefficients() { return values; }
     public long revision() { return revision; }
-    /** Native state payload only, never the process RAM. */
+    /** Native tableau payload only. Rule-defined untouched infinity can be zero bytes. */
     public long stateBytes() { return bytes; }
+    public long activeQubits() { return activeQubits; }
+    public boolean isInfinite() { return true; }
     public int preset() { return preset; }
-    public String status() { return "Núcleo X · 8 qubits · " + PRESETS[preset]; }
+    public String status() {
+        return "Núcleo X · ∞ · "+activeQubits+" activos · "+PRESETS[preset];
+    }
     public synchronized long nativeRevision() { return core.version(); }
     public synchronized float[] verifyReadOnly() {
         long before = core.version();
-        float[] out = core.query(OBSERVABLES);
-        if (core.version()!=before) throw new IllegalStateException("La observación modificó el núcleo");
+        float[] out = core.observe(OBSERVABLES).values;
+        if (core.version()!=before) throw new IllegalStateException("La observación modificó el núcleo infinito");
         return out;
     }
     @Override public synchronized void close() {
