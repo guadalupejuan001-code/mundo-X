@@ -8,6 +8,8 @@
 
 **COSMIC X Engine 0.2.0 para Android:** [aplicación, controles y compilación](graphics-android/README.md). El núcleo cuántico y el motor gráfico comparten la sesión nativa. Permite crear, abrir y guardar proyectos `.cosmic`, operar sobre 1 a 256 qubits del perfil compacto, conservar los observables originales y editar hasta 1.048.576 cajas por ID. Incluye proyectos Bell y GHZ. El [visor de escritorio](graphics-desktop/README.md) compila el mismo puente y abre el mismo [formato de proyecto](graphics-desktop/PROJECT_FORMAT.md). [Integración y procedencia](docs/cosmic_x_engine.md).
 
+**COSMIC X Solar para Android:** [explorador, controles, modelos y compilación](solar-android/README.md). Añade el Sol, ocho planetas y catorce lunas con navegación 3D, tiempo variable, mapas de NASA y representaciones magnéticas. Compila el núcleo original y usa sus observables para las trazas visuales. Funciona sin conexión; los modelos y sus límites están documentados en [datos y fuentes](solar-android/docs/solar-science.md).
+
 **Nueva línea: Motor X visual.** [Programar cálculo y escenas dentro del mismo
 runtime](docs/motor_x_visual.md), conservando reglas, IDs y cambios. Esta rama
 añade exportación compatible con XLab y una primera conexión explícita entre
