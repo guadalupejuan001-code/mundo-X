@@ -6,7 +6,7 @@ COSMIC X Engine es el título del conjunto. Dentro se conserva la computación c
 
 **Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 19 de octubre de 2026.
 
-Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
+Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K/8K con InfiniteCore, atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
 
 **InfiniteCore integrado.** El [dominio por reglas y componentes finitos](docs/infinite_core.md)
 dispone de una [sesión compartida con el emulador y el motor gráfico](docs/infinite_integration.md).
@@ -22,7 +22,7 @@ en `.cosmic` v2, y el perfil finito de 1.000 qubits conserva `.cosmic` v1.
 | COSMIC X Engine Android | Paneles Motor, Núcleo y Proyectos, más 14 experimentos originales dentro de la misma instalación. | [App COSMIC](cosmic-android/README.md) |
 | Graphics Android 4K/8K | Escena procedural, selección y edición por ID, renderizado UHD, modo 8K sujeto a capacidades y exportación PNG por mosaicos. | [Graphics](graphics-android/README.md), [4K](graphics-android/docs/4k.md), [8K](graphics-android/docs/8k.md) |
 | Motor gráfico de escritorio | Compila el mismo puente nativo, observa la misma representación y abre/guarda archivos `.cosmic` compatibles con Android. | [Escritorio](graphics-desktop/README.md), [formato](graphics-desktop/PROJECT_FORMAT.md) |
-| COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y captura UHD. Su demostración conserva un circuito de ocho qubits. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
+| COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y salida 4K/8K. Sus trazas visuales observan InfiniteCore por reglas usando ocho direcciones activas de preset, no un registro finito de ocho qubits. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
 | COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3; dispositivo InfiniteCore y viewport sobre la sesión cuántica compartida. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
 | Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
@@ -42,7 +42,7 @@ El contrato comprueba entrelazamiento GHZ sobre los 1.000 qubits, correlaciones,
 | CompactCore nativo / XASM | Circuitos estabilizadores, entrelazamiento Clifford y medición Z reproducible; incluye `examples/ghz1000.x`. |
 | Reduced Exact T | Interfaz XASM de 1 a 63 qubits, 128 puertas T y 65.536 componentes como límites. El costo depende del crecimiento real de componentes. |
 | FactorizedCore | Mantiene factores independientes y bloques con presupuesto; el límite de bloque denso sigue siendo 20 qubits. |
-| Solar y laboratorios | Cada experimento conserva la dimensión que necesita su modelo; Solar usa ocho qubits para sus trazas visuales. |
+| Solar y laboratorios | Cada experimento conserva su modelo; Solar usa InfiniteCore y materializa sólo las direcciones tocadas por sus presets visuales. |
 
 El tableau de 1.000 almacena **257.000 bytes** en sus buffers. Esa cifra no incluye observador, historial, Java, Android ni GPU. El perfil compacto corresponde a estados estabilizadores; los circuitos generales con muchas puertas T no adquieren por este cambio el mismo costo de memoria. [Fórmula, benchmark de 20/60/1.000 y límites](docs/core_1000_qubits.md#memoria-y-observación).
 
@@ -89,8 +89,9 @@ Requisitos de construcción declarados: **Java 17, Gradle 8.9, AGP 8.7.3, SDK 35
 | Graphics | `com.mundox.graphics` · 0.4.0 | `gradle -p graphics-android :app:assembleDebug` |
 | Graphics 4K | `com.mundox.graphics.uhd` · 0.4.0 | `gradle -p graphics-android -Pcosmic4kStandalone=true :app:assembleDebug` |
 | Graphics 8K | `com.mundox.graphics.ultra` · 0.4.0 | `gradle -p graphics-android -Pcosmic8kStandalone=true :app:assembleDebug` |
-| Solar | `com.cosmicx.solar` · 1.1.0 | `gradle -p solar-android :app:assembleDebug` |
-| Solar 4K | `com.cosmicx.solar.uhd` · 1.1.0 | `gradle -p solar-android -Psolar4kStandalone=true :app:assembleDebug` |
+| Solar | `com.cosmicx.solar` · 1.2.0 | `gradle -p solar-android :app:assembleDebug` |
+| Solar 4K | `com.cosmicx.solar.uhd` · 1.2.0 | `gradle -p solar-android -Psolar4kStandalone=true :app:assembleDebug` |
+| Solar 8K | `com.cosmicx.solar.ultra` · 1.2.0 | `gradle -p solar-android -Psolar8kStandalone=true :app:assembleDebug` |
 | PC propia | `com.cosmicx.pc` · 0.4.0 | `gradle -p pc-android :app:assembleDebug` |
 | XLab original | Proyecto Android de la raíz | `gradle :app:assembleDebug` |
 
@@ -104,7 +105,7 @@ Los paneles Motor y Núcleo de COSMIC comparten `NativeCore`. Observar, seleccio
 
 ### Solar y PC
 
-Solar reutiliza el núcleo y la geometría de resolución compartidos, pero sus órbitas, escalas, tiempo y ambientes tienen modelos propios. Incluye **23 cuerpos**, descenso a 22 planetas/lunas, mapa interactivo, texturas incorporadas y representaciones magnéticas. Sus aproximaciones orbitales y visuales están delimitadas en [ciencia solar](solar-android/docs/solar-science.md) y [atmósferas y mapa](solar-android/docs/atmosphere-science.md); no constituyen una simulación climática completa.
+Solar reutiliza InfiniteCore y la geometría de resolución compartida 4K/8K, pero sus órbitas, escalas, tiempo y ambientes tienen modelos propios. Incluye **23 cuerpos**, descenso a 22 planetas/lunas, mapa interactivo, texturas incorporadas y representaciones magnéticas. Sus aproximaciones orbitales y visuales están delimitadas en [ciencia solar](solar-android/docs/solar-science.md) y [atmósferas y mapa](solar-android/docs/atmosphere-science.md); no constituyen una simulación climática completa.
 
 COSMIC X PC **0.4.0** ejecuta un intérprete C++ propio. Su prueba x64 realiza la transición real → protegido → largo y verifica datos de 64 bits en registros y RAM. La CPU incorpora SHRD (`0F AC/AD`) y SHLD (`0F A4/A5`) en 16/32/64 bits, incluida la instrucción que antes detenía un cargador ISO con `two-byte opcode is not implemented`. La regresión reproduce el opcode; la compatibilidad de la ISO completa necesita su propio arranque comprobado.
 
@@ -138,7 +139,7 @@ Los workflows comprueban los cambios de código en solicitudes de integración a
 | [Contratos nativos y escritorio](.github/workflows/cosmic-contracts.yml) | Núcleos, GHZ de 1.000, qubit 999, presupuestos, restauración, proyectos `.cosmic`, VM, CPU/PC y relación causal entre núcleo e imagen. |
 | [COSMIC Android](.github/workflows/cosmic-android.yml) | 25 casos COSMIC, 18 Graphics y 8 MicroLab sobre las fuentes compartidas. |
 | [Graphics](.github/workflows/graphics-android.yml), [4K](.github/workflows/graphics-4k.yml), [8K](.github/workflows/graphics-8k.yml) | Inventarios de 20, 24 y 28 casos: registro de 1.000, Infinite, estado portable, framebuffer, selección, orientación y PNG. |
-| [Solar](.github/workflows/solar-android.yml) y [Solar 4K](.github/workflows/solar-4k.yml) | 511 comprobaciones analíticas; 13 casos Android del perfil normal y 19 del perfil UHD/ambientes. |
+| [Solar](.github/workflows/solar-android.yml), [Solar 4K](.github/workflows/solar-4k.yml) y [Solar 8K](.github/workflows/solar-8k.yml) | 511 comprobaciones analíticas; perfil normal, contratos UHD/ambientes y prueba específica del framebuffer 8K con preservación de InfiniteCore. |
 | [PC propia](.github/workflows/own-pc-android.yml) | Diez suites nativas y 29 casos Android previstos: arranque, memoria, regresión ISO, vídeo huésped/GLES hasta 8K, propiedad de instantáneas JNI y sesión Infinite compartida entre CPU y viewport. |
 | [Windows](.github/workflows/windows-x64.yml), [runtime visual](.github/workflows/visual-runtime.yml), [XLab](.github/workflows/android-apk.yml) | Compilación del conjunto en sus plataformas y regresiones de los experimentos conservados. |
 
