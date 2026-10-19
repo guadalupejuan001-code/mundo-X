@@ -61,8 +61,10 @@ class InfiniteSession {
     std::lock_guard<std::mutex> lock(mutex_);
     Observation result;
     result.values.reserve(observables.size());
+    InfiniteCore::ObserverCache observers;
     for (const auto& observable : observables)
-      result.values.push_back(core_.expectation(observable.terms, observable.sign));
+      result.values.push_back(
+          core_.expectation_cached(observable.terms, observable.sign, observers));
     result.stats = core_.stats();
     result.revision = result.stats.revision;
     result.epoch = epoch_;
