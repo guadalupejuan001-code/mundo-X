@@ -340,55 +340,64 @@ public final class CosmicProject {
         }
     }
 
-    /** Small strict JSON grammar owned by this project. The valid project
-     * schema never approaches depth64, string1024 or node750000; these guards
-     * reject malformed resource-heavy documents before allocation grows freely.
+    /** Small strict JSON grammar owned by this project. Keys and ordinary text
+     * keep the 1024-character guard; only the current-state snapshot and sparse
+     * observables may use the bounded file budget. The schema validator still
+     * enforces each version's backend and Pauli width, regardless of field order.
+     * Depth and node guards reject malformed resource-heavy documents early.
      */
     private static final class StrictJson {
+        private enum Context {ROOT,CORE,GRAPHICS,SNAPSHOT,OBSERVABLES,OBSERVABLE,OTHER}
         private final String source;
         private int cursor,nodes;
         StrictJson(String source){this.source=source;}
         Object read() throws JSONException {
-            Object result=value(0);space();
+            Object result=value(0,Context.ROOT);space();
             if(cursor!=source.length())throw syntax("Texto después del documento");
             return result;
         }
-        private Object value(int depth) throws JSONException {
+        private Object value(int depth,Context context) throws JSONException {
             if(depth>64||++nodes>750_000)throw syntax("Documento demasiado complejo");
             space();if(cursor==source.length())throw syntax("Valor ausente");
             char ch=source.charAt(cursor);
-            if(ch=='{')return objectValue(depth+1);
-            if(ch=='[')return arrayValue(depth+1);
-            if(ch=='\"')return stringValue();
+            if(ch=='{')return objectValue(depth+1,context);
+            if(ch=='[')return arrayValue(depth+1,context);
+            if(ch=='\"')return stringValue(context==Context.SNAPSHOT||context==Context.OBSERVABLE?MAX_FILE_BYTES:1024);
             if(ch=='t'){literal("true");return Boolean.TRUE;}
             if(ch=='f'){literal("false");return Boolean.FALSE;}
             if(ch=='n'){literal("null");return JSONObject.NULL;}
             if(ch=='-'||(ch>='0'&&ch<='9'))return numberValue();
             throw syntax("Valor JSON inválido");
         }
-        private JSONObject objectValue(int depth) throws JSONException {
+        private JSONObject objectValue(int depth,Context context) throws JSONException {
             cursor++;JSONObject result=new JSONObject();space();
             if(take('}'))return result;
             while(true){
                 space();if(cursor==source.length()||source.charAt(cursor)!='\"')throw syntax("Clave de objeto requerida");
-                String key=stringValue();
+                String key=stringValue(1024);
                 if(result.has(key))throw syntax("Clave JSON duplicada: "+key);
                 space();if(!take(':'))throw syntax("Falta ':'");
-                result.put(key,value(depth));space();
+                Context child=Context.OTHER;
+                if(context==Context.ROOT){
+                    if(key.equals("core"))child=Context.CORE;
+                    else if(key.equals("graphics"))child=Context.GRAPHICS;
+                }else if(context==Context.CORE&&key.equals("snapshot"))child=Context.SNAPSHOT;
+                else if(context==Context.GRAPHICS&&key.equals("observables"))child=Context.OBSERVABLES;
+                result.put(key,value(depth,child));space();
                 if(take('}'))return result;
                 if(!take(','))throw syntax("Falta ',' entre campos");
             }
         }
-        private JSONArray arrayValue(int depth) throws JSONException {
+        private JSONArray arrayValue(int depth,Context context) throws JSONException {
             cursor++;JSONArray result=new JSONArray();space();
             if(take(']'))return result;
             while(true){
-                result.put(value(depth));space();
+                result.put(value(depth,context==Context.OBSERVABLES?Context.OBSERVABLE:Context.OTHER));space();
                 if(take(']'))return result;
                 if(!take(','))throw syntax("Falta ',' entre valores");
             }
         }
-        private String stringValue(){
+        private String stringValue(int maximumLength){
             cursor++;StringBuilder result=new StringBuilder();
             while(cursor<source.length()){
                 char ch=source.charAt(cursor++);
@@ -415,7 +424,7 @@ public final class CosmicProject {
                     }
                 }
                 result.append(ch);
-                if(result.length()>1024)throw syntax("Texto demasiado largo para un proyecto");
+                if(result.length()>maximumLength)throw syntax("Texto demasiado largo para un proyecto");
             }
             throw syntax("Texto sin comillas finales");
         }
