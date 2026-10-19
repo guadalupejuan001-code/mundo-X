@@ -96,10 +96,8 @@ int main() {
     observables.reserve(4096);
     for (std::size_t i = 0; i < 4096; ++i) {
       const auto a = address_1001(i * 2);
-      const auto b = address_1001(i * 2 + 1);
       // Use independent remote sites only as single-site Z probes. Bell singles are zero.
-      observables.push_back({{{a, 'Z'}}, 1});
-      (void)b;
+      observables.push_back({1, {{a, 'Z'}}});
     }
     const auto remote_begin = Clock::now();
     const auto remote_values = remote.query_batch(observables);
