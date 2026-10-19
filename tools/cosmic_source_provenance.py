@@ -4,8 +4,9 @@
 The 4K, 8K and Solar builds now consume the 1,000-qubit core. They must not
 claim that the older 4K core is unchanged. This manifest verifies every file
 in the shared native source inventory and records the actual baseline delta.
-The independent InfiniteCore module has an explicit, pinned extension: seven
-new native sources and the shared CompactCore tensor-product helper.
+The initial InfiniteCore extension and its session/graphics integration each
+have an immutable source reference. Unchanged sources retain their historical
+origins; every new or revised native/JNI source is verified byte for byte.
 """
 
 from __future__ import annotations
@@ -19,24 +20,37 @@ ORIGINAL_REFERENCE = "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac"
 CORE_REFERENCE = "ef4636240af73351a18710e988346791fbdc3b58"
 RESOLUTION_REFERENCE = "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6"
 INFINITE_REFERENCE = "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
+INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
     "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java",
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java",
 )
 ADDITIONAL_SOURCES = {
     "native/tests/core_performance_benchmark.cpp": RESOLUTION_REFERENCE,
     "native/src/basis_vm_main.cpp": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
     "native/include/mundo_x/infinite_address.hpp": INFINITE_REFERENCE,
-    "native/include/mundo_x/infinite_core.hpp": INFINITE_REFERENCE,
-    "native/src/infinite_runner.cpp": INFINITE_REFERENCE,
+    "native/include/mundo_x/infinite_core.hpp": INTEGRATION_REFERENCE,
+    "native/src/infinite_runner.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_address.cpp": INFINITE_REFERENCE,
     "native/tests/infinite_core.cpp": INFINITE_REFERENCE,
     "native/tests/infinite_scale.cpp": INFINITE_REFERENCE,
     "native/tests/infinite_tensor.cpp": INFINITE_REFERENCE,
+    "native/include/mundo_x/infinite_bridge.h": INTEGRATION_REFERENCE,
+    "native/include/mundo_x/infinite_bridge.hpp": INTEGRATION_REFERENCE,
+    "native/include/mundo_x/infinite_program.hpp": INTEGRATION_REFERENCE,
+    "native/include/mundo_x/infinite_session.hpp": INTEGRATION_REFERENCE,
+    "native/src/infinite_bridge.cpp": INTEGRATION_REFERENCE,
+    "native/tests/infinite_bridge.cpp": INTEGRATION_REFERENCE,
+    "native/tests/infinite_session.cpp": INTEGRATION_REFERENCE,
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": INTEGRATION_REFERENCE,
 }
 REVISED_SOURCES = {
-    "native/include/mundo_x/compact_core.hpp": INFINITE_REFERENCE,
+    "native/include/mundo_x/compact_core.hpp": INTEGRATION_REFERENCE,
+    "graphics-android/app/src/main/cpp/CMakeLists.txt": INTEGRATION_REFERENCE,
+    "graphics-android/app/src/main/cpp/graphics_jni.cpp": INTEGRATION_REFERENCE,
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": INTEGRATION_REFERENCE,
 }
 RESOLUTION_SOURCE = "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java"
 
@@ -110,11 +124,20 @@ def verify_integrated_core(root):
         "coreSourceReferenceCommits": dict(sorted(expected.items())),
         "infiniteCoreExtension": {
             "referenceCommit": INFINITE_REFERENCE,
-            "scope": "Independent native InfiniteCore headers, CLI and tests, plus the "
-                     "CompactCore tensor-product helper for finite active components.",
+            "scope": "Initial independent InfiniteCore reference. Unchanged sources retain "
+                     "these pins; session and graphics deltas are declared separately.",
             "sourceReferenceCommits": {
                 name: reference for name, reference in sorted(expected.items())
                 if reference == INFINITE_REFERENCE
+            },
+        },
+        "infiniteSessionIntegration": {
+            "referenceCommit": INTEGRATION_REFERENCE,
+            "scope": "Live shared session, exact portable state and RNG, bounded C/JNI "
+                     "transport, packed stabilizer import and sparse Java input validation.",
+            "sourceReferenceCommits": {
+                name: reference for name, reference in sorted(expected.items())
+                if reference == INTEGRATION_REFERENCE
             },
         },
         "sourceChangesFromOriginal": changes,

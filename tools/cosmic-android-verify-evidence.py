@@ -220,6 +220,7 @@ def verify_graphics(directory, output):
         "lifecycle-before.png", "lifecycle-after.png", "activity.png", "portable-bell-color.png", "portable-bell-ids.png",
         "portable-ghz-color.png", "portable-ghz-ids.png", "portable-roundtrip-before.png", "portable-roundtrip-after.png",
         "portable-recreate-before.png", "portable-recreate-after.png",
+        "infinite-coupled-before.png", "infinite-coupled-after.png", "infinite-activity.png",
     }
     require(required <= set(report["images"]), "Original observer framebuffer evidence is incomplete")
     exports = report["projectExports"]
@@ -229,7 +230,6 @@ def verify_graphics(directory, output):
         require(item["stateFile"] == item["file"] + ".state.json", "Unexpected native proof filename")
         for name in (item["file"], item["stateFile"]):
             require(0 < (directory / name).stat().st_size <= 16 * 1024 * 1024, "Missing or oversized portable evidence")
-    required |= {"infinite-coupled-before.png", "infinite-coupled-after.png", "infinite-activity.png"}
     return {"tests": len(GRAPHICS_CASES), "images": image_manifest(directory, required),
             "portableCodecChecks": codec["checks"], "infinite": infinite}
 

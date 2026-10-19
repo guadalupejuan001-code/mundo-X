@@ -5,9 +5,9 @@
   "files": [
     {
       "path": "native/include/mundo_x/compact_core.hpp",
-      "source_commit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
-      "git_blob_sha1": "fed566907b8642b4a323ee6f1ce26a343fd60914",
-      "sha256": "916023862a935f7aec45b4fe7e9285e11715e08408f88d265e50255c64435647"
+      "source_commit": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "git_blob_sha1": "3239af9186ab9ea306eac6fc99cd72eea145f1c2",
+      "sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb"
     },
     {
       "path": "native/include/mundo_x/dense_core.hpp",
@@ -88,6 +88,12 @@
   "infinite_core_extension": {
     "source_commit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
     "scope": "The independent native InfiniteCore module adds exact tensor-product composition to the canonical CompactCore header. Its seven new native sources and this header are individually pinned by the source manifest.",
+    "canonical_header": "native/include/mundo_x/compact_core.hpp",
+    "source_manifest": "tools/cosmic_source_provenance.py"
+  },
+  "infinite_session_integration": {
+    "source_commit": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "scope": "Validated packed state import preserves the exact post-measurement stabilizer state. The shared session and C/JNI bridge preserve the portable RNG and atomic observations across the emulator and renderer.",
     "canonical_header": "native/include/mundo_x/compact_core.hpp",
     "source_manifest": "tools/cosmic_source_provenance.py"
   }

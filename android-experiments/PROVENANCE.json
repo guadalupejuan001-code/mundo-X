@@ -64,10 +64,10 @@
     {
       "path": "native/include/mundo_x/compact_core.hpp",
       "historical_git_blob": "69f24c218f1ec1100b127add98aaf7dd61d04ef9",
-      "changes": "Original computational-basis flag and VM helpers added; existing seeded measurements and canonical graphics engine retained. Reuses packed generator/CZ/row optimizations from own commit bbefd978 for the 1000-qubit profile. Adds the exact tensor-product helper used by the independent native InfiniteCore module; its source inventory is pinned individually in tools/cosmic_source_provenance.py.",
-      "current_source_commit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
-      "current_git_blob_sha1": "fed566907b8642b4a323ee6f1ce26a343fd60914",
-      "current_sha256": "916023862a935f7aec45b4fe7e9285e11715e08408f88d265e50255c64435647"
+      "changes": "Original computational-basis flag and VM helpers added; existing seeded measurements and canonical graphics engine retained. Reuses packed generator/CZ/row optimizations from own commit bbefd978 for the 1000-qubit profile. Adds the exact tensor-product helper used by the independent native InfiniteCore module; its source inventory is pinned individually in tools/cosmic_source_provenance.py. Adds validated packed state import/export for exact InfiniteCore snapshots; the historical origins and finite VM behavior remain preserved.",
+      "current_source_commit": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "current_git_blob_sha1": "3239af9186ab9ea306eac6fc99cd72eea145f1c2",
+      "current_sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb"
     },
     {
       "path": "native/include/mundo_x/exact_t_experiment.hpp",
