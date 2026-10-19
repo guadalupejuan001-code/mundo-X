@@ -7,12 +7,13 @@ import time
 
 from project import ProjectSession
 from core_profile import DEFAULT_QUBITS, MAX_PROJECT_QUBITS
+from infinite_format import address, default_observables
 
 
 def gate(text):
     fields = text.upper().split(":")
     try:
-        return [fields[0], *[int(q) for q in fields[1:]]]
+        return [fields[0], *[address(q) for q in fields[1:]]]
     except ValueError as error:
         raise argparse.ArgumentTypeError("Use --gate H:0 or --gate CX:0:1") from error
 
@@ -34,6 +35,10 @@ def main():
     parser.add_argument("--name", help="Project title")
     parser.add_argument("--objects", type=int, help="Population 1..1048576 (new project default: 1000000)")
     parser.add_argument("--qubits", type=int, help=f"New project qubits (default: {DEFAULT_QUBITS})")
+    parser.add_argument("--infinite", choices=("zero", "bell"), help="Create an Infinite project with this rule background")
+    parser.add_argument("--address", help="First decimal address in the Infinite graphic program")
+    parser.add_argument("--partner", help="Second decimal address; default is the Bell partner of --address")
+    parser.add_argument("--command", action="append", default=[], help="Atomic .xi request on Infinite; repeatable")
     parser.add_argument("--expand-qubits", type=int,
                         help="Expand an imported project, adding |0> qubits while preserving its state and world")
     parser.add_argument("--seed", type=int, help="Unsigned 32-bit procedural seed (new project default: 2026)")
@@ -47,6 +52,10 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("cosmic-observation.png"))
     parser.add_argument("--no-render", action="store_true", help="Edit/export without creating a GLES context")
     args = parser.parse_args()
+    if args.infinite and (args.project or args.qubits is not None or args.expand_qubits is not None):
+        parser.error("--infinite creates a new addressed project; omit --project/--qubits/--expand-qubits")
+    if args.partner is not None and args.address is None:
+        parser.error("--partner requires --address")
     if args.project and args.qubits is not None:
         parser.error("--qubits is for new projects; an imported state keeps its qubit count")
     if args.expand_qubits is not None and not args.project:
@@ -65,6 +74,12 @@ def main():
                     session = original.expanded(args.expand_qubits)
             else:
                 session = ProjectSession.open(args.project)
+        elif args.infinite:
+            session = ProjectSession.create_infinite(name=args.name or "Mundo X · Infinito",
+                       objects=args.objects if args.objects is not None else 1_000_000,
+                       background=args.infinite, first=args.address or "0", second=args.partner,
+                       seed=args.seed if args.seed is not None else 2026,
+                       coupling=args.coupling if args.coupling is not None else .25)
         else:
             session = ProjectSession.create(name=args.name or "Mundo X", objects=args.objects if args.objects is not None else 1_000_000,
                                             qubits=args.qubits if args.qubits is not None else DEFAULT_QUBITS,
@@ -85,12 +100,21 @@ def main():
                 session.camera = {"mode": "orbit", "overview": args.view == "overview", "yaw": .67, "pitch": .65, "zoom": 1.}
             if args.time is not None:
                 session.set_time(args.time)
+            if args.address is not None:
+                if session.core.backend != "infinite":
+                    raise ValueError("--address requires an Infinite project")
+                session.scene.set_observables(default_observables(args.address,args.partner))
             if args.gate:
-                session.apply(args.gate)
+                gates = args.gate if session.core.backend == "infinite" else [
+                    [row[0], *[int(q) for q in row[1:]]] for row in args.gate]
+                session.apply(gates)
+            command_results = [session.execute(command) for command in args.command]
             if args.edit:
                 session.edit_many(args.edit)
             session.to_dict()  # Validate before creating output files.
             report = {"title": "COSMIC X Engine", "project": session.name, "scene": session.scene.describe()}
+            if command_results:
+                report["command_results"] = command_results
             if args.export_project:
                 report["exported_project"] = str(session.save(args.export_project).resolve())
             if not args.no_render:

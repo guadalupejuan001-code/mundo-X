@@ -32,6 +32,8 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.TextView;
 import com.mundox.graphics.CosmicProject;
+import com.mundox.graphics.InfiniteProgram;
+import android.view.accessibility.AccessibilityNodeInfo;
 import com.mundox.graphics.NativeCore;
 import com.mundox.graphics.QuantumRenderer;
 import java.io.ByteArrayOutputStream;
@@ -54,7 +56,7 @@ import org.json.JSONObject;
 
 /** Real Android/JNI/GLES integration checks for the new application, without an external test framework. */
 public final class CosmicInstrumentation extends Instrumentation {
-    private static final int EXPECTED_TESTS = 25;
+    private static final int EXPECTED_TESTS = 26;
     private static final long TIMEOUT = 45_000;
     private static final String[][] EXPERIMENTS = {
         {"circuitos", "com.mundox.lab.XLabActivity"},
@@ -94,7 +96,7 @@ public final class CosmicInstrumentation extends Instrumentation {
             owner = activity.core;
             core = owner.snapshot();
             graphics = activity.renderer.snapshot();
-            generators = owner.generators();
+            generators = owner.isInfinite()?new String[0]:owner.generators();
             observations = owner.query(graphics.observables);
             normalized = CosmicProject.encode(CosmicProject.fromSnapshots("Validation", core, graphics));
         }
@@ -129,6 +131,7 @@ public final class CosmicInstrumentation extends Instrumentation {
                 check("experiment_" + experiment[0] + "_launch", () -> experiment(experiment[0], experiment[1]));
             }
             check("invalid_saf_import_preserves_session", this::invalidDocument);
+            check("infinite_ui_shared_state_and_persistence", this::infiniteUi);
             metrics.put("glRenderer", activity.renderer.device);
             metrics.put("nativeStateBytes", activity.core.stateBytes());
         } catch (Throwable error) {
@@ -169,7 +172,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         }
         results.add(result(name, error == null, SystemClock.elapsedRealtime() - began, error));
         // Keep completed proof if a later Android call stalls or its process is terminated.
-        // The verifier still requires the complete, exact 25-case inventory.
+        // The verifier still requires the complete, exact case inventory.
         try { reports(); }
         catch (Exception reporting) { throw new AssertionError("Could not checkpoint Android evidence", reporting); }
         sendStatus(error == null ? 0 : -2, status);
@@ -297,6 +300,88 @@ public final class CosmicInstrumentation extends Instrumentation {
         require(before.changed(after) == 0, "Disabled coupling still changed new viewport pixels");
         saveFrame("cosmic-uncoupled-before.png", before); saveFrame("cosmic-uncoupled-after.png", after);
         metrics.put("uncoupledChangedPixels", 0);
+    }
+
+    private void clickWindowText(String label) throws Exception {
+        await(()->{
+            AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();
+            if(root==null)return false;
+            try{
+                List<AccessibilityNodeInfo> nodes=root.findAccessibilityNodeInfosByText(label);
+                boolean clicked=false;
+                for(AccessibilityNodeInfo node:nodes){
+                    try{if(!clicked&&label.contentEquals(node.getText()==null?"":node.getText()))
+                        clicked=node.performAction(AccessibilityNodeInfo.ACTION_CLICK);}
+                    finally{node.recycle();}
+                }
+                return clicked;
+            }finally{root.recycle();}
+        },"dialog control "+label);afterUiTraversal();
+    }
+
+    private void infiniteUi() throws Exception {
+        World previous=world();String previousName=privateString(activity,"projectName");
+        byte[] previousFile=CosmicProject.encode(CosmicProject.fromSnapshots(previousName,previous.core,previous.graphics));
+        String a=InfiniteProgram.FAR_ADDRESS,b=InfiniteProgram.partner(a);
+        try{
+            click("nav_archivo");NativeCore oldOwner=activity.core;click("example_infinite");
+            await(()->activity.core!=oldOwner&&activity.core.isInfinite()&&activity.renderer.hasFrame,"infinite world created from project controls");
+            unitScene(true);NativeCore owner=activity.core;
+            String pristine=owner.snapshot().infiniteSnapshot;long epoch=owner.epoch();
+            click("nav_nucleo");click("select_qubit");
+            clickWindowText("Ir a 10¹⁰⁰ y su pareja");clickWindowText("Observar");
+            await(()->privateString(activity,"addressA").equals(a)&&privateString(activity,"addressB").equals(b),"full large-address focus");
+            await(()->description(activity,"core_signals").contains(a)&&text(activity,"core_revision").contains("0 activos"),"large-address observer UI refresh");
+            require(pristine.equals(owner.snapshot().infiniteSnapshot)&&owner.infiniteStats().activeQubits==0&&owner.epoch()==epoch,"Address picker mutated state or truncated a decimal address");
+            require(description(activity,"core_signals").contains(a),"Accessible observer did not expose full address");
+            require(text(activity,"core_revision").contains("0 activos"),"UI did not distinguish active resources from infinite domain");
+            screen("cosmic-infinite-core.png");click("nav_motor");
+            QuantumRenderer.Capture before=frame(false);frame(true);frame(false);
+            require(pristine.equals(owner.snapshot().infiniteSnapshot),"Infinite rendering consumed RNG or changed native state");
+            long revision=owner.version();click("nav_nucleo");click("gate_z");
+            await(()->owner.version()==revision+1,"large-address UI gate");click("nav_motor");
+            QuantumRenderer.Capture after=frame(false);int changed=before.changed(after);
+            require(activity.core==owner&&owner.query(InfiniteProgram.pair(a,b))[0]==-1&&changed>20,"UI gate and GLES observer did not share the same infinite owner");
+            saveFrame("cosmic-infinite-before.png",before);saveFrame("cosmic-infinite-after.png",after);
+            click("nav_nucleo");click("gate_z");await(()->owner.version()==revision+2,"second large-address UI gate");click("nav_motor");
+            require(before.changed(frame(false))==0,"Two UI Z gates did not restore exact infinite image");
+            click("nav_nucleo");click("coupling");click("nav_motor");QuantumRenderer.Capture off=frame(false);
+            click("nav_nucleo");click("gate_z");await(()->owner.version()==revision+3,"uncoupled large-address UI gate");click("nav_motor");
+            require(owner.query(InfiniteProgram.pair(a,b))[0]==-1&&off.changed(frame(false))==0,"Infinite uncoupled control failed");
+            click("nav_nucleo");click("gate_z");click("coupling");click("nav_motor");
+            gl(()->owner.executeInfinite("seed 5489\nmeasure "+a+"\n"));
+            World saved=world();QuantumRenderer.Capture savedImage=frame(false);
+            Uri uri=projectUri("infinite-session.cosmic");getTargetContext().getContentResolver().delete(uri,null,null);
+            click("nav_archivo");documentAction("project_save",Intent.ACTION_CREATE_DOCUMENT,uri);
+            await(()->providerLong(uri,OpenableColumns.SIZE)>0&&!new File(getTargetContext().getCacheDir(),"cosmic-pending-export.json").exists(),"infinite SAF export");
+            byte[] bytes=readProject(uri);CosmicProject.Document portable=CosmicProject.decode(bytes);
+            require(portable.core.infinite&&portable.core.infiniteSnapshot.equals(saved.core.infiniteSnapshot),"SAF did not save current infinite state and RNG");
+            writeBytes("unified-infinite-saf-export.cosmic",bytes);
+            click("nav_motor");gl(()->activity.core.executeInfinite("h "+a+"\n"));NativeCore mutated=activity.core;
+            click("nav_archivo");documentAction("project_open",Intent.ACTION_OPEN_DOCUMENT,uri);
+            await(()->activity.core!=mutated&&activity.core.isInfinite()&&activity.renderer.hasFrame,"infinite SAF import");click("nav_motor");
+            sameWorld(saved,world(),"Infinite SAF round trip lost current state");
+            require(savedImage.changed(frame(false))==0&&privateString(activity,"addressA").equals(a),"Infinite import lost pixels or full address focus");
+            // Recreate the real Activity and restore its private session, including the opaque RNG state.
+            CosmicActivity original=activity;mainSync(original::recreate);
+            await(()->ownerMonitor.getLastActivity() instanceof CosmicActivity&&ownerMonitor.getLastActivity()!=original,"infinite Activity recreation");
+            refreshOwner();click("nav_motor");sameWorld(saved,world(),"Private infinite snapshot was not restored");
+            require(savedImage.changed(frame(false))==0&&privateString(activity,"addressA").equals(a)&&privateString(activity,"addressB").equals(b),"Recreation changed image or decimal focus");
+            String continuation="h "+a+"\nmeasure "+a+"\nh "+a+"\nmeasure "+a+"\n";
+            try(NativeCore reference=new NativeCore(saved.core)){
+                String expected=reference.executeInfinite(continuation),actual=activity.core.executeInfinite(continuation);
+                require(expected.equals(actual)&&reference.snapshot().infiniteSnapshot.equals(activity.core.snapshot().infiniteSnapshot),"Android private resume lost RNG continuation");
+            }
+            metrics.put("infiniteUi",new JSONObject().put("address",a).put("partner",b).put("sharedOwner",true)
+                .put("readOnlyAddressSelection",true).put("readOnlyDraw",true).put("coupledChangedPixels",changed)
+                .put("uncoupledChangedPixels",0).put("safRoundtripChangedPixels",0).put("recreateChangedPixels",0)
+                .put("snapshotContinuationExact",true).put("safUsedProductionCallbacks",true));
+        }finally{
+            Uri uri=projectUri("infinite-return-finite.cosmic");
+            try(OutputStream output=getTargetContext().getContentResolver().openOutputStream(uri,"wt")){require(output!=null,"Missing finite return document");output.write(previousFile);}
+            NativeCore current=activity.core;click("nav_archivo");documentAction("project_open",Intent.ACTION_OPEN_DOCUMENT,uri);
+            await(()->activity.core!=current&&!activity.core.isInfinite()&&activity.renderer.hasFrame,"finite project restored after infinite test");click("nav_motor");
+        }
     }
 
     private void documents() throws Exception {
@@ -687,7 +772,8 @@ public final class CosmicInstrumentation extends Instrumentation {
         return result.get();
     }
     private static void sameNative(World a, World b, String reason) {
-        require(a.core.qubits == b.core.qubits && a.core.version == b.core.version
+        require(a.core.infinite == b.core.infinite && (!a.core.infinite || a.core.infiniteSnapshot.equals(b.core.infiniteSnapshot))
+                && a.core.qubits == b.core.qubits && a.core.version == b.core.version
                 && Arrays.equals(a.core.gateHistory, b.core.gateHistory)
                 && Arrays.equals(a.generators, b.generators) && Arrays.equals(a.observations, b.observations), reason);
     }

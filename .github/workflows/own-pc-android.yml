@@ -2,10 +2,10 @@ name: COSMIC X PC own x86 engine
 on:
   push:
     branches: ['main', 'codex/own-pc-x86-20261019']
-    paths: ['pc-android/**', 'CMakeLists.txt', '.github/workflows/own-pc-android.yml']
+    paths: ['pc-android/**', 'native/**', 'graphics-android/app/src/main/**', 'CMakeLists.txt', '.github/workflows/own-pc-android.yml']
   pull_request:
     branches: ['main']
-    paths: ['pc-android/**', 'CMakeLists.txt', '.github/workflows/own-pc-android.yml']
+    paths: ['pc-android/**', 'native/**', 'graphics-android/app/src/main/**', 'CMakeLists.txt', '.github/workflows/own-pc-android.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,15 +46,66 @@ jobs:
           cp pc-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk pc-dist/COSMIC-X-PC-tests.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs pc-dist/COSMIC-X-PC.apk > pc-dist/signature.txt
           python3 - <<'PY'
-          import hashlib, json, subprocess, zipfile
+          import hashlib, json, os, re, subprocess, zipfile
           from pathlib import Path
           apk=Path('pc-dist/COSMIC-X-PC.apk')
+          badging=subprocess.check_output([os.environ['ANDROID_HOME']+'/build-tools/35.0.0/aapt','dump','badging',str(apk)],text=True)
+          package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
+          assert package and package.groups()==('com.cosmicx.pc','4','0.4.0'),badging.splitlines()[:1]
+          Path('pc-dist/apk-badging.txt').write_text(badging)
           with zipfile.ZipFile(apk) as z:
               names={n for n in z.namelist() if n.startswith('lib/')}
-              expected={'lib/'+abi+'/'+lib for abi in ('arm64-v8a','x86_64') for lib in ('libcosmic_pc.so','libc++_shared.so')}
+              expected={'lib/'+abi+'/'+lib for abi in ('arm64-v8a','x86_64') for lib in ('libcosmic_pc.so','libmx_graphics.so','libc++_shared.so')}
               assert names==expected,(names,expected)
               assert z.testzip() is None
-          data={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'bytes':apk.stat().st_size,'version':'0.2.0','engine':'own C++ x86/x64 interpreter','external_emulation_engines':[],'logical_ram_bytes':2**31,'guest_payload_cap_bytes':2**30,'windows_booted':False}
+              dex=b''.join(z.read(n) for n in z.namelist() if re.fullmatch(r'classes\d*\.dex',n))
+              for descriptor in (b'Lcom/cosmicx/pc/PcVideoRenderer;',b'Lcom/cosmicx/pc/PcVideoView;',b'Lcom/mundox/graphics/RenderResolution;',b'Lcom/mundox/graphics/NativeCore;',b'Lcom/mundox/graphics/InfiniteProgram;',b'Lcom/mundox/graphics/QuantumRenderer;'):
+                  assert descriptor in dex,descriptor
+          shared_java=[
+              'RenderResolution.java','NativeCore.java','InfiniteProgram.java','QuantumRenderer.java',
+              'TilePlan.java','FramePng.java','StreamPng.java',
+          ]
+          shared_sources=['graphics-android/app/src/main/java/com/mundox/graphics/'+name for name in shared_java]
+          gradle=Path('pc-android/app/build.gradle').read_text()
+          assert '../../graphics-android/app/src/main/java' in gradle
+          for name in shared_java:
+              assert 'com/mundox/graphics/'+name in gradle,name
+              assert not Path('pc-android/app/src/main/java/com/mundox/graphics/'+name).exists(),name
+          bridge_sources=[
+              'pc-android/native/x86_cpu.hpp','pc-android/native/sparse_ram.hpp',
+              'pc-android/native/pc_machine.hpp','pc-android/native/pc_video.hpp','pc-android/native/graphics_demo.hpp',
+              'pc-android/app/src/main/cpp/pc_jni.cpp',
+              'pc-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java',
+              'pc-android/app/src/main/java/com/cosmicx/pc/MainActivity.java',
+              'pc-android/app/src/main/java/com/cosmicx/pc/PcVideoRenderer.java',
+              'pc-android/app/src/main/java/com/cosmicx/pc/PcVideoView.java',
+          ]
+          quantum_sources=[
+              'pc-android/native/quantum_device.hpp','pc-android/native/quantum_guest.hpp',
+              'native/include/mundo_x/infinite_address.hpp','native/include/mundo_x/infinite_core.hpp',
+              'native/include/mundo_x/infinite_program.hpp','native/include/mundo_x/infinite_session.hpp',
+              'native/include/mundo_x/infinite_bridge.h','native/include/mundo_x/infinite_bridge.hpp',
+              'native/include/mundo_x/compact_core.hpp','native/include/mundo_x/pauli_observer.hpp',
+              'native/src/infinite_bridge.cpp','native/src/graphics_core_bridge.cpp',
+              'graphics-android/app/src/main/cpp/graphics_jni.cpp',
+              'pc-android/app/src/main/cpp/CMakeLists.txt','pc-android/app/build.gradle',
+          ]
+          digest=lambda name:hashlib.sha256(Path(name).read_bytes()).hexdigest()
+          data={
+              'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'sha256':digest(apk),'bytes':apk.stat().st_size,'package':package[1],
+              'version_code':int(package[2]),'version':package[3],
+              'engine':'own C++ x86/x64 interpreter','external_emulation_engines':[],
+              'quantum_device':'InfiniteSession via byte ports 0x5850/0x5851',
+              'graphics':'shared live InfiniteSession and repository QuantumRenderer',
+              'logical_ram_bytes':2**31,'guest_payload_cap_bytes':2**30,'windows_booted':False,
+              'video_pipeline':'guest VBE linear framebuffer -> immutable JNI snapshot -> own GLES 3 presenter',
+              'guest_video_max_size':[7680,4320],'guest_video_aperture_bytes':128*2**20,
+              'video_texture_budget_bytes':512*2**20,'video_snapshot_budget_bytes':256*2**20,
+              'video_bridge_source_sha256':{name:digest(name) for name in bridge_sources},
+              'shared_source_sha256':{name:digest(name) for name in shared_sources},
+              'quantum_bridge_source_sha256':{name:digest(name) for name in quantum_sources},
+          }
           Path('pc-dist/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
           print(json.dumps(data))
           PY

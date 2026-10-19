@@ -551,6 +551,7 @@ class Cpu {
 
   void string_operation(std::uint8_t op);
   void shift(const ModRM& m, unsigned bytes, unsigned count);
+  void double_shift(const ModRM& m, unsigned bytes, unsigned count, bool left);
   void group3(const ModRM& m, unsigned bytes);
   void multiply_signed(unsigned destination, std::uint64_t a, std::uint64_t b, unsigned bytes);
   SegmentCache descriptor(std::uint16_t selector);
@@ -843,6 +844,45 @@ inline void Cpu::shift(const ModRM& m, unsigned bytes, unsigned count) {
   put(m.rm, bytes, value);
 }
 
+inline void Cpu::double_shift(const ModRM& m, unsigned bytes, unsigned count, bool left) {
+  // Intel SDM Vol. 2B, SHLD/SHRD: the mask depends on operand size, not on
+  // address size. Fetch/decode the entire instruction before resolving RIP.
+  // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+  count &= bytes == 8 ? 63 : 31;
+  const auto original = get(m.rm, bytes);
+  // A zero count preserves flags but still writes the destination, including
+  // zero-extension of an r32 destination in long mode and memory protection.
+  if (count == 0) { put(m.rm, bytes, original); return; }
+  const auto source = get_reg(m.reg, bytes);
+  const unsigned bits = bytes * 8U;
+  std::uint64_t value;
+  if (count > bits) {
+    // Only the 16-bit form can reach this case after masking. Intel leaves its
+    // result and arithmetic flags undefined. Our deterministic policy rotates
+    // the concatenated 32-bit pair and preserves those flags; callers must not
+    // rely on this policy as an architectural guarantee. Counts are 17..31,
+    // so neither expression can invoke an oversized or negative C++ shift.
+    const auto pair = std::uint32_t(left ? (original << 16) | source
+                                         : (source << 16) | original);
+    const auto rotated = left ? std::uint32_t((pair << count) | (pair >> (32U - count)))
+                              : std::uint32_t((pair >> count) | (pair << (32U - count)));
+    put(m.rm, bytes, left ? rotated >> 16 : rotated & 0xffffU);
+    return;
+  }
+  // A full-width count is possible only for 16-bit operands. Handle it
+  // separately so a 64-bit C++ operand is never shifted by 64.
+  if (count == bits) value = source;
+  else value = left ? (original << count) | (source >> (bits - count))
+                    : (original >> count) | (source << (bits - count));
+  value &= mask(bytes);
+  set_flag(CF, ((original >> (left ? bits - count : count - 1)) & 1U) != 0);
+  szp(value, bytes);
+  if (count == 1) set_flag(OF, ((original ^ value) & sign_bit(bytes)) != 0);
+  // AF is undefined for every nonzero shift; OF is undefined for count > 1.
+  // Preserve both wherever the architecture does not define their value.
+  put(m.rm, bytes, value);
+}
+
 inline void Cpu::multiply_signed(unsigned destination, std::uint64_t a,
                                  std::uint64_t b, unsigned bytes) {
   const auto value_mask = mask(bytes);
@@ -997,6 +1037,11 @@ inline void Cpu::extended() {
     }
     case 0xa0: push(segments[FS], stack_operand_width()); return;
     case 0xa1: load_segment(FS, std::uint16_t(pop(stack_operand_width()))); return;
+    case 0xa4: case 0xa5: case 0xac: case 0xad: {
+      const auto m = modrm();
+      const unsigned count = (op & 1U) ? reg8(ECX) : fetch8();
+      double_shift(m, bytes, count, (op & 8U) == 0); return;
+    }
     case 0xa8: push(segments[GS], stack_operand_width()); return;
     case 0xa9: load_segment(GS, std::uint16_t(pop(stack_operand_width()))); return;
     case 0xaf: {

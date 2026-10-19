@@ -246,6 +246,130 @@ void shifts_multiply_divide_tests() {
   check(cpu.regs[Cpu::EAX] == 1431655765U && cpu.regs[Cpu::EDX] == 1, "DIV32 uses full EDX:EAX");
 }
 
+void double_shift_tests() {
+  Cpu cpu;
+  constexpr std::uint32_t status = Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::OF;
+  // Regression for the reported ISO stop. Reproduce its real-mode CS:IP and
+  // 0F AD opcode with an explicit ModRM; this is not a full ISO boot test.
+  cpu.reset(0x07c0, 0x039c);
+  constexpr std::uint8_t iso_regression[] = {0x0f, 0xad, 0xd8};
+  cpu.memory.write_block(0x7f9c, iso_regression, sizeof(iso_regression));
+  cpu.set_reg16(Cpu::EAX, 0x1234); cpu.set_reg16(Cpu::EBX, 0x5678); cpu.set_reg8(Cpu::ECX, 4);
+  one(cpu);
+  check(cpu.reg16(Cpu::EAX) == 0x8123 && cpu.reg16(Cpu::EBX) == 0x5678,
+        "ISO regression SHRD AX,BX,CL executes and preserves BX");
+  check(cpu.eip == 0x039f && cpu.segments[Cpu::CS] == 0x07c0 && cpu.instructions == 1,
+        "ISO regression advances the real-mode instruction exactly once");
+
+  // All four opcodes, real-mode operand-size override, both incoming flag
+  // polarities, and a fixed arithmetic result independent of the decoder.
+  for (const unsigned bits : {16U, 32U}) for (const bool left : {false, true}) {
+    for (const bool immediate : {false, true}) for (const bool initial : {false, true}) {
+      const auto op = std::uint8_t((left ? 0xa4 : 0xac) + (immediate ? 0 : 1));
+      if (bits == 16) load(cpu, {0x0f, op, 0xd8, 4});
+      else load(cpu, {0x66, 0x0f, op, 0xd8, 4});
+      cpu.regs[Cpu::EAX] = bits == 16 ? 0x1122334455661234ULL : 0x1122334412345678ULL;
+      cpu.regs[Cpu::EBX] = bits == 16 ? 0xaabbccddeeff5678ULL : 0xaabbccdd9abcdef0ULL;
+      cpu.regs[Cpu::ECX] = 0xabcdef0012345604ULL;
+      cpu.eflags = 2 | Cpu::IF | Cpu::DF | (initial ? status : 0);
+      const auto saved = cpu.regs;
+      one(cpu);
+      const auto expected = bits == 16 ? (left ? 0x1122334455662345ULL : 0x1122334455668123ULL)
+                                        : (left ? 0x23456789ULL : 0x01234567ULL);
+      check(cpu.regs[Cpu::EAX] == expected, "SHLD/SHRD16/32 value and upper register bits");
+      check(cpu.regs[Cpu::EBX] == saved[Cpu::EBX] && cpu.regs[Cpu::ECX] == saved[Cpu::ECX],
+            "SHLD/SHRD preserves source and full count register");
+      check(cpu.eip == 0x1000 + (bits == 32 ? 1U : 0U) + (immediate ? 4U : 3U),
+            "SHLD/SHRD instruction length for imm8/CL");
+      check(cpu.flag(Cpu::CF) == (left || bits == 32) && !cpu.flag(Cpu::ZF) && !cpu.flag(Cpu::PF) &&
+            cpu.flag(Cpu::SF) == (bits == 16 && !left), "SHLD/SHRD defined status flags");
+      check(cpu.flag(Cpu::AF) == initial && cpu.flag(Cpu::OF) == initial && cpu.flag(Cpu::IF) && cpu.flag(Cpu::DF),
+            "SHLD/SHRD preserves undefined and control flags");
+    }
+  }
+
+  for (const bool left : {false, true}) for (const bool immediate : {false, true}) {
+    const auto op = std::uint8_t((left ? 0xa4 : 0xac) + (immediate ? 0 : 1));
+    for (const std::uint8_t raw : {0, 32, 64, 128}) {
+      load(cpu, {0x0f, op, 0xd8, raw});
+      cpu.regs[Cpu::EAX] = 0x1234567812345678ULL; cpu.regs[Cpu::EBX] = UINT64_MAX;
+      cpu.set_reg8(Cpu::ECX, raw); cpu.eflags = 2 | status | Cpu::IF | Cpu::DF;
+      one(cpu);
+      check(cpu.regs[Cpu::EAX] == 0x1234567812345678ULL && cpu.eflags == (2 | status | Cpu::IF | Cpu::DF),
+            "masked zero SHLD/SHRD16 count preserves destination and all flags");
+    }
+    for (const std::uint8_t raw : {16, 48}) {
+      load(cpu, {0x0f, op, 0xd8, raw});
+      cpu.set_reg16(Cpu::EAX, 0x8001); cpu.set_reg16(Cpu::EBX, 0);
+      cpu.set_reg8(Cpu::ECX, raw); cpu.eflags = 2 | status;
+      one(cpu);
+      check(cpu.reg16(Cpu::EAX) == 0 && cpu.flag(Cpu::CF) && cpu.flag(Cpu::PF) && cpu.flag(Cpu::ZF) &&
+            !cpu.flag(Cpu::SF) && cpu.flag(Cpu::AF) && cpu.flag(Cpu::OF), "full-width SHLD/SHRD16 count16 flags");
+    }
+    // Intel does not define count17..31 for word operands. Exercise every raw
+    // byte under sanitizers without treating any CPU's undefined flags as an
+    // oracle. The emulator explicitly preserves those flags and upper bits.
+    for (unsigned raw = 0; raw < 256; ++raw) if ((raw & 31) > 16) {
+      load(cpu, {0x0f, op, 0xd8, std::uint8_t(raw)});
+      cpu.regs[Cpu::EAX] = 0x123456789abc1234ULL; cpu.regs[Cpu::EBX] = 0x5678;
+      cpu.set_reg8(Cpu::ECX, std::uint8_t(raw)); cpu.eflags = 2 | status;
+      one(cpu);
+      check((cpu.regs[Cpu::EAX] & ~0xffffULL) == 0x123456789abc0000ULL &&
+            cpu.regs[Cpu::EBX] == 0x5678 && cpu.eflags == (2 | status),
+            "undefined word-count policy remains bounded and preserves other state");
+    }
+    // Zero count is still a memory operand: a segment-limit fault must not
+    // modify registers, flags, memory or the instruction pointer.
+    for (const std::uint8_t raw : {0, 1}) {
+      load(cpu, {0x0f, op, 0x1e, 0xff, 0xff, raw});
+      cpu.set_reg8(Cpu::ECX, raw); cpu.regs[Cpu::EBX] = 0x5678; cpu.eflags = 2 | status;
+      cpu.memory[0xffff] = 0xa5; const auto saved = cpu.regs;
+      check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit,
+            "SHLD/SHRD memory operand respects segment limit, including count0");
+      check(cpu.regs == saved && cpu.eflags == (2 | status) && cpu.eip == 0x1000 && cpu.memory[0xffff] == 0xa5,
+            "faulting SHLD/SHRD rolls back all architectural effects");
+    }
+  }
+
+  struct FlagCase { bool left; std::uint16_t destination, source, result; bool carry, overflow; };
+  const FlagCase flags[] = {{true, 0x8000, 0, 0, true, true}, {true, 0x1000, 0, 0x2000, false, false},
+                            {false, 0x1234, 0xffff, 0x891a, false, true}, {false, 0x8001, 1, 0xc000, true, false}};
+  for (const auto& f : flags) for (const bool initial : {false, true}) {
+    load(cpu, {0x0f, std::uint8_t(f.left ? 0xa4 : 0xac), 0xd8, 1});
+    cpu.set_reg16(Cpu::EAX, f.destination); cpu.set_reg16(Cpu::EBX, f.source);
+    cpu.eflags = 2 | (initial ? status : 0); one(cpu);
+    check(cpu.reg16(Cpu::EAX) == f.result && cpu.flag(Cpu::CF) == f.carry && cpu.flag(Cpu::OF) == f.overflow,
+          "one-bit SHLD/SHRD computes CF and sign-change OF");
+    check(cpu.flag(Cpu::AF) == initial, "one-bit SHLD/SHRD preserves undefined AF");
+  }
+
+  load(cpu, {0x26, 0x0f, 0xad, 0x5a, 0xfe}); // SHRD ES:[BP+SI-2],BX,CL
+  cpu.segments[Cpu::ES] = 0x2000; cpu.segments[Cpu::SS] = 0x3000;
+  cpu.set_reg16(Cpu::EBP, 0x10); cpu.set_reg16(Cpu::ESI, 6);
+  cpu.set_reg16(Cpu::EBX, 0x5678); cpu.set_reg8(Cpu::ECX, 4);
+  cpu.write16(0x20014, 0x1234); cpu.write16(0x30014, 0xabcd); one(cpu);
+  check(cpu.read16(0x20014) == 0x8123 && cpu.read16(0x30014) == 0xabcd,
+        "SHRD memory16 handles signed displacement and segment override");
+
+  load(cpu, {0x67, 0x66, 0x0f, 0xa4, 0x5c, 0xbe, 0x08, 4}); // SHLD [ESI+EDI*4+8],EBX,4
+  cpu.segments[Cpu::DS] = 0x1000; cpu.regs[Cpu::ESI] = 0x200; cpu.regs[Cpu::EDI] = 3;
+  cpu.regs[Cpu::EBX] = 0x9abcdef0; cpu.write32(0x10214, 0x12345678);
+  cpu.memory[0x10213] = 0xa5; cpu.memory[0x10218] = 0x5a; one(cpu);
+  check(cpu.read32(0x10214) == 0x23456789 && cpu.memory[0x10213] == 0xa5 && cpu.memory[0x10218] == 0x5a,
+        "SHLD memory32 SIB and address/operand overrides write exactly four bytes");
+
+  load(cpu, {0x0f, 0xad, 0xd9}); cpu.set_reg16(Cpu::ECX, 0x1204); cpu.set_reg16(Cpu::EBX, 0x5678); one(cpu);
+  check(cpu.reg16(Cpu::ECX) == 0x8120, "SHRD CX,BX,CL reads the original count before writing CX");
+  load(cpu, {0x0f, 0xad, 0xc8}); cpu.set_reg16(Cpu::ECX, 0x5604); cpu.set_reg16(Cpu::EAX, 0x1234); one(cpu);
+  check(cpu.reg16(Cpu::EAX) == 0x4123 && cpu.reg16(Cpu::ECX) == 0x5604, "SHRD AX,CX,CL preserves aliased source/count");
+  load(cpu, {0x0f, 0xad, 0xc0}); cpu.set_reg16(Cpu::EAX, 0x1234); cpu.set_reg8(Cpu::ECX, 4); one(cpu);
+  check(cpu.reg16(Cpu::EAX) == 0x4123, "SHRD with identical source/destination reads original source");
+  load(cpu, {0x0f, 0xac, 0xd8}, 0xfffd); cpu.set_reg16(Cpu::EAX, 0x1234); cpu.eflags = 2 | status;
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit &&
+        cpu.eip == 0xfffd && cpu.reg16(Cpu::EAX) == 0x1234 && cpu.eflags == (2 | status),
+        "truncated SHRD immediate faults before any destination/flag change");
+}
+
 void signed_multiply_boundaries() {
   Cpu cpu;
   // A full signed 16/32-bit product fits in int64_t. This direct product is an
@@ -336,7 +460,7 @@ int main() {
   try {
     arithmetic_exhaustive(); register_and_decode_tests(); memory_address_tests();
     stack_control_tests(); string_tests(); real_mode_control_boundaries();
-    shifts_multiply_divide_tests(); signed_multiply_boundaries(); hooks_and_fault_tests();
+    shifts_multiply_divide_tests(); double_shift_tests(); signed_multiply_boundaries(); hooks_and_fault_tests();
     std::cout << "PASS x86 CPU: " << checks << " checks, including 655360 exhaustive 8-bit ALU executions\n";
     return 0;
   } catch (const std::exception& e) {

@@ -9,6 +9,7 @@ from pathlib import Path
 import math,os,subprocess,tempfile,time
 import numpy as np
 from core_runtime import Core
+from infinite_runtime import InfiniteCore, default_observables
 from core_profile import DEFAULT_QUBITS
 from renderer import Renderer,camera,overview,street
 
@@ -19,15 +20,15 @@ def build_native():
     # and core headers. No vendored copy or external engine implementation.
     folder=ROOT.parent/'native'
     binary=ROOT/'native/libmx_optical.so'
-    source=folder/'src/graphics_core_bridge.cpp'
-    dependencies=list((folder/'include').rglob('*.hpp'))+list((folder/'include').rglob('*.h'))+[source]
+    sources=[folder/'src/graphics_core_bridge.cpp',folder/'src/infinite_bridge.cpp']
+    dependencies=list((folder/'include').rglob('*.hpp'))+list((folder/'include').rglob('*.h'))+sources
     if not binary.exists() or any(p.stat().st_mtime>binary.stat().st_mtime for p in dependencies):
         binary.parent.mkdir(parents=True,exist_ok=True)
         fd,temporary=tempfile.mkstemp(prefix='.mx-build-',suffix='.so',dir=binary.parent)
         os.close(fd)
         try:
             subprocess.run(['c++','-std=c++17','-O3','-shared','-fPIC','-pthread',
-                            '-I',str(folder/'include'),str(source),'-o',temporary],check=True)
+                            '-I',str(folder/'include'),*[str(p) for p in sources],'-o',temporary],check=True)
             os.replace(temporary,binary)
         except subprocess.CalledProcessError as error:
             raise RuntimeError('The shared native core did not compile; see compiler output') from error
@@ -131,6 +132,21 @@ class QuantumScene:
         scene._attach(core,count,seed,coupling,owns_core=False,observables=observables)
         return scene
 
+    @classmethod
+    def from_infinite_core(cls,core,*,count=1_000_000,seed=2026,coupling=.25,observables=None):
+        """Borrow a live InfiniteSession and observe a finite, fixed program.
+
+        There is no total register-size integer. Addresses stay in the sparse
+        operators on the CPU; the existing GPU sees only their coefficients.
+        """
+        if not isinstance(core,InfiniteCore):
+            raise ValueError('A live InfiniteCore from infinite_runtime is required')
+        core._live()
+        scene=cls.__new__(cls)
+        scene._attach(core,count,seed,coupling,owns_core=False,
+                      observables=default_observables() if observables is None else observables)
+        return scene
+
     def _attach(self,core,count,seed,coupling,owns_core,observables=None):
         self.count=count;self.seed=seed;self.coupling=coupling
         self._core=core;self._owns_core=owns_core
@@ -190,6 +206,8 @@ class QuantumScene:
         self._sorted_edits=tuple(sorted(self._edits.items()));self.scene_revision+=1
 
     def compile(self):
+        if isinstance(self._core,InfiniteCore):
+            return self._compile_infinite()
         core_key=(self._core.epoch,self.program_revision)
         signature=(self.scene_revision,*core_key)
         if self._snapshot is not None and self._snapshot.signature==signature:return self._snapshot
@@ -202,8 +220,42 @@ class QuantumScene:
         self.compilations+=1
         return self._snapshot
 
+    def _compile_infinite(self):
+        # An epoch read can skip an unchanged observation. When an observation
+        # is needed its coefficients, revision and epoch MUST come from one
+        # native lock: a concurrent PC/host writer may change the same session.
+        current_epoch=self._core.epoch
+        core_key=(current_epoch,self.program_revision)
+        signature=(self.scene_revision,*core_key)
+        if self._snapshot is not None and self._snapshot.signature==signature:
+            return self._snapshot
+        if core_key!=self._cached_core_key:
+            observed=self._core.query_observation(self._observables)
+            self._values=observed.values.astype(np.float32)
+            self._values.flags.writeable=False
+            self._cached_core_key=(observed.epoch,self.program_revision)
+            self._observed_revision=observed.revision
+            self.observable_batches+=1
+        observed_epoch,program_revision=self._cached_core_key
+        self._snapshot=VisualSnapshot(self.count,self.seed,self.scene_revision,
+            self._observed_revision,program_revision,observed_epoch,self._sorted_edits,
+            self._values,self.coupling)
+        self.compilations+=1
+        return self._snapshot
+
     def describe(self):
         snapshot=self.compile()
+        if isinstance(self._core,InfiniteCore):
+            stats=self._core.stats()
+            return {'objects':self.count,'backend':'infinite-clifford','background':stats['background'],
+                    'active_qubits':stats['active_qubits'],'components':stats['components'],
+                    'largest_component':stats['largest_component'],'observables':len(self._observables),
+                    'scene_revision':self.scene_revision,'core_revision':snapshot.core_revision,
+                    'program_revision':self.program_revision,'independent_edits':len(self._edits),
+                    'logical_rule_bytes':32+8*len(self._edits),'core_tableau_bytes':stats['tableau_bytes'],
+                    'core_address_bytes':stats['address_bytes'],'coefficient_bytes':snapshot.coefficients.nbytes,
+                    'scope':'Infinite rule background with finite Clifford components and a finite graphic program; '
+                            'payload byte counts exclude total RAM and GPU overhead'}
         return {'objects':self.count,'qubits':self._core.n,'observables':len(self._observables),
                 'scene_revision':self.scene_revision,'core_revision':self._core.revision,
                 'program_revision':self.program_revision,'independent_edits':len(self._edits),

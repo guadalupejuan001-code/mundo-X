@@ -1,10 +1,15 @@
-# Formato de proyecto `.cosmic`, versión 1
+# Formato de proyecto `.cosmic`, versiones 1 y 2
 
 Un archivo es un objeto JSON UTF-8, sin referencias externas ni código que se
 ejecute al abrirlo. Su tamaño máximo es 16 MiB (16.777.216 bytes). Se rechazan
 claves duplicadas, claves desconocidas, campos faltantes, números no finitos y
 versiones desconocidas. El codec Python se encuentra en `project.py` y usa la
 biblioteca estándar para leer, validar y escribir el documento.
+
+La versión 1 conserva el registro finito y su historial. La versión 2 incorpora
+`InfiniteCore` con un snapshot de su estado actual. La sección siguiente describe
+v1; las diferencias de v2 están al final. Una versión y un backend incompatibles
+se rechazan.
 
 ## Raíz y núcleo
 
@@ -112,3 +117,48 @@ documento mediante su selector de archivos y valida los mismos límites.
 Los ejemplos completos son `examples/bell-observer.cosmic` y
 `examples/ghz-city.cosmic`. El segundo cubre una semilla mayor que 2³¹−1, para
 evitar que el transporte entre Java y Python cambie sus 32 bits.
+
+## Versión 2: InfiniteCore
+
+La raíz conserva exactamente `format`, `version`, `name`, `core`, `graphics`.
+`version` es el entero `2`. `core` contiene exactamente:
+
+```json
+{
+  "backend": "infinite-clifford",
+  "snapshot": "MXI1:<estado codificado por el núcleo nativo>"
+}
+```
+
+El texto entre ángulos ilustra el lugar del contenido; un snapshot válido lo
+produce `mxi_snapshot` / `InfiniteCore.snapshot()`. Su contenido es ASCII con
+prefijo `MXI1:` y datos hexadecimales. Conserva fondo, revisión, direcciones
+canónicas, componentes, bits X/Z, signos de los generadores y el estado completo
+del generador aleatorio MT19937-64. No contiene una lista histórica de puertas.
+No se duplican esos campos como números JSON.
+
+`graphics` conserva sus mismos campos y la ley `opaque-grid-v1`. La diferencia
+es que cada cadena en `observables` expresa un producto Pauli disperso:
+
+```json
+["X:1000000000 X:1000000001", "- Y:1000000000 Y:1000000001", "Z:0"]
+```
+
+El signo `+` o `-` es un token opcional separado por espacios. La cadena vacía
+representa la identidad positiva. Cada término usa `I`, `X`, `Y` o `Z` y una
+dirección de 1..4.096 dígitos ASCII. No se repite una dirección después de
+normalizar los ceros iniciales. Hay hasta 4.096 términos por observable y hasta
+4.096 observables por programa. Se conserva el límite total de archivo de
+16 MiB y los límites de geometría/cámara/ediciones de v1.
+
+El códec comprueba la estructura del documento; la importación nativa comprueba
+además dimensiones, presupuestos del consumidor, direcciones únicas, parejas
+Bell completas, bits válidos, conmutación y rango completo del tableau y estado
+RNG válido. Construye un candidato antes de sustituir el estado activo. El
+archivo no puede ampliar los presupuestos del consumidor. Un snapshot que no
+quepa en el transporte se rechaza al guardar; no reduce ni aproxima el estado.
+
+Restaurar conserva la revisión histórica y avanza la época del handle vivo.
+El observador invalida su caché aunque el estado importado tenga la misma
+revisión que el anterior. Los operadores gráficos guardados mantienen su papel
+después de cada puerta o medición.

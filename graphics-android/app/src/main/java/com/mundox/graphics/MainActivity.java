@@ -65,6 +65,7 @@ public final class MainActivity extends Activity {
     private Button animateButton, viewButton, couplingButton, qubitButton, qualityButton, styleButton;
     private boolean animate, overview=true, coupled=true;
     private int qubit, quality=640;
+    private volatile String addressA="0",addressB="1";
     private float animationTime;
     private long lastTick;
     private volatile boolean animationFrameQueued;
@@ -90,6 +91,7 @@ public final class MainActivity extends Activity {
         int qubit,quality;
         float animationTime;
         String projectName;
+        String addressA,addressB;
     }
 
     @Override public void onCreate(Bundle state) {
@@ -113,7 +115,8 @@ public final class MainActivity extends Activity {
                 core=new NativeCore(previous.core);
                 if(previous.projectName!=null)projectName=previous.projectName;
                 overview=previous.visual.overview;coupled=previous.visual.coupling;
-                qubit=Math.max(0,Math.min(core.qubits-1,previous.qubit));quality=previous.visual.resolutionLimit;
+                qubit=core.isInfinite()?0:Math.max(0,Math.min(core.qubits-1,previous.qubit));quality=previous.visual.resolutionLimit;
+                restoreAddresses(previous.addressA,previous.addressB,previous.visual.observables);
                 animationTime=previous.visual.time;savedSession=previous;
                 renderer=new QuantumRenderer(this,core,this::showStatus,previous.visual);
             }else{
@@ -174,7 +177,7 @@ public final class MainActivity extends Activity {
         projects.addView(button("Nuevo",this::newProject));
         projects.addView(button("Abrir .cosmic",this::openProject));
         projects.addView(button("Guardar",this::exportProject));
-        if(core.qubits<NativeCore.DEFAULT_QUBITS){
+        if(!core.isInfinite()&&core.qubits<NativeCore.DEFAULT_QUBITS){
             Button expand=button("Ampliar a "+NativeCore.DEFAULT_QUBITS+" · añadir |0⟩",this::expandProject);
             expand.setTag("project_expand_qubits");projects.addView(expand);
         }
@@ -206,21 +209,20 @@ public final class MainActivity extends Activity {
 
         TextView coreLabel=label("NÚCLEO CUÁNTICO",10,LIME);coreLabel.setLetterSpacing(.10f);coreLabel.setPadding(dp(6),dp(4),0,dp(2));controls.addView(coreLabel);
         LinearLayout quantum=row();
-        qubitButton=button("Qubit "+qubit,()->{
-            String[] names=new String[core.qubits];for(int q=0;q<names.length;q++)names[q]="Qubit "+q;
-            new AlertDialog.Builder(this).setTitle("Qubit de control").setSingleChoiceItems(names,qubit,(dialog,which)->{
-                qubit=which;qubitButton.setText("Qubit "+qubit);dialog.dismiss();action(()->{});
-            }).show();
-        });quantum.addView(qubitButton);
+        qubitButton=button(core.isInfinite()?"Dirección "+InfiniteProgram.shortAddress(addressA):"Qubit "+qubit,this::chooseQubit);
+        qubitButton.setTag("select_qubit");quantum.addView(qubitButton);
         quantum.addView(button("H",()->applyGate(0)));quantum.addView(button("S",()->applyGate(1)));
         quantum.addView(button("X",()->applyGate(2)));quantum.addView(button("Z",()->applyGate(3)));
         quantum.addView(button("Y",()->applyGate(6)));
         Button pairGate=button("CX / CZ",()->{
-            String[] gates={"CX · destino Q"+((qubit+1)%core.qubits),"CZ · destino Q"+((qubit+1)%core.qubits)};
-            new AlertDialog.Builder(this).setTitle("Conectar con el siguiente qubit").setItems(gates,(d,index)->{
-                final int control=qubit,target=(qubit+1)%core.qubits;action(()->renderer.gate(index==0?4:5,control,target));
+            String destination=core.isInfinite()?InfiniteProgram.shortAddress(addressB):"Q"+((qubit+1)%core.qubits);
+            String[] gates={"CX · destino "+destination,"CZ · destino "+destination};
+            new AlertDialog.Builder(this).setTitle(core.isInfinite()?"Conectar las direcciones A y B":"Conectar con el siguiente qubit").setItems(gates,(d,index)->{
+                if(core.isInfinite()){final String a=addressA,b=addressB;action(()->renderer.gate(index==0?4:5,a,b));}
+                else {final int control=qubit,target=(qubit+1)%core.qubits;action(()->renderer.gate(index==0?4:5,control,target));}
             }).show();
-        });pairGate.setEnabled(core.qubits>1);pairGate.setAlpha(core.qubits>1?1f:.4f);quantum.addView(pairGate);
+        });pairGate.setEnabled(core.isInfinite()||core.qubits>1);pairGate.setAlpha(core.isInfinite()||core.qubits>1?1f:.4f);quantum.addView(pairGate);
+        if(core.isInfinite()){Button extra=button("Infinito…",this::infiniteActions);extra.setTag("infinite_actions");quantum.addView(extra);}
         couplingButton=button(coupled?"Acoplamiento: sí":"Acoplamiento: no",()->{
             coupled=!coupled;couplingButton.setText(coupled?"Acoplamiento: sí":"Acoplamiento: no");final boolean active=coupled;action(()->renderer.coupling(active));
         });quantum.addView(couplingButton);controls.addView(scroll(quantum));
@@ -229,13 +231,13 @@ public final class MainActivity extends Activity {
         editing.addView(button("Subir objeto",()->edit(1)));editing.addView(button("Ocultar",()->edit(-1)));
         editing.addView(button("Restaurar ID",()->edit(0)));
         editing.addView(button("Restablecer",()->new AlertDialog.Builder(this).setTitle("Restablecer el mundo")
-            .setMessage("Se preparará el estado de grafo con los qubits actuales y se borrarán las ediciones de objetos.")
+            .setMessage(core.isInfinite()?"Se recuperará el fondo infinito y se borrarán las ediciones de objetos.":"Se preparará el estado de grafo con los qubits actuales y se borrarán las ediciones de objetos.")
             .setNegativeButton("Cancelar",null).setPositiveButton("Restablecer",(d,w)->{
                 animate=false;animateButton.setText("Animar");main.removeCallbacks(tick);animationTime=0;saveProtected=false;restoreMessage=null;
                 action(()->renderer.reset());
             }).show()));
         editing.addView(button("Información",()->new AlertDialog.Builder(this).setTitle("COSMIC X Engine · "+applicationVersion())
-            .setMessage("Computación cuántica de Mundo X\n\nNúcleo cuántico: el proyecto activo tiene "+core.qubits+" qubits emulados. Sus puertas modifican el estado compartido. El motor utiliza sus observables para representar la escena.\n\nLos archivos .cosmic reúnen el estado, sus operaciones, los observables originales, el mundo y la cámara. Puedes abrir el mismo proyecto en Android y en el visor de escritorio.\n\n8K UHD genera 7.680 × 4.320 píxeles, o 4.320 × 7.680 en vertical. Calidad → 8K activa el fotograma completo cuando el dispositivo puede alojarlo. PNG 8K permite guardar esa resolución por bloques desde cualquier calidad de vista. La preparación puede cancelarse y mantiene fija la escena.\n\nLa imagen se ajusta a la pantalla conservando sus proporciones. Se muestra la resolución realmente activa. El tiempo de envío de trabajo de CPU se distingue de una medición sincronizada de dibujo; ninguno representa los FPS sostenidos.\n\nIdea, creación y dirección del proyecto: X. Desarrollado con asistencia de IA sobre el código propio de Mundo X.")
+            .setMessage("Computación cuántica de Mundo X\n\nNúcleo cuántico: el proyecto activo tiene "+core.domainLabel()+". Sus puertas modifican el estado compartido. El motor utiliza sus observables para representar la escena.\n\nLos archivos .cosmic reúnen el estado, sus operaciones, los observables originales, el mundo y la cámara. Puedes abrir el mismo proyecto en Android y en el visor de escritorio.\n\n8K UHD genera 7.680 × 4.320 píxeles, o 4.320 × 7.680 en vertical. Calidad → 8K activa el fotograma completo cuando el dispositivo puede alojarlo. PNG 8K permite guardar esa resolución por bloques desde cualquier calidad de vista. La preparación puede cancelarse y mantiene fija la escena.\n\nLa imagen se ajusta a la pantalla conservando sus proporciones. Se muestra la resolución realmente activa. El tiempo de envío de trabajo de CPU se distingue de una medición sincronizada de dibujo; ninguno representa los FPS sostenidos.\n\nIdea, creación y dirección del proyecto: X. Desarrollado con asistencia de IA sobre el código propio de Mundo X.")
             .setPositiveButton("Entendido",null).show()));controls.addView(scroll(editing));
         root.addView(controls);
         final View[] chrome={heading,visualLabel,controls};
@@ -282,20 +284,22 @@ public final class MainActivity extends Activity {
         EditText qubits=field(form,"Qubits del proyecto · 1 a "+NativeCore.MAX_QUBITS,String.valueOf(NativeCore.DEFAULT_QUBITS),true);
         EditText objects=field(form,"Objetos · 1 a 1.048.576","1000000",true);
         EditText seed=field(form,"Semilla · 0 a 4.294.967.295","2026",true);
+        InfiniteControls.ModeChoice mode=new InfiniteControls.ModeChoice(this,qubits);form.addView(mode.button,0);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Nuevo proyecto").setView(form)
             .setNegativeButton("Cancelar",null).setPositiveButton("Crear",null).create();
         dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             try{
                 final String title=name.getText().toString().trim();
-                final int n=Integer.parseInt(qubits.getText().toString()),count=Integer.parseInt(objects.getText().toString());
+                final int backend=mode.mode,background=mode.background();
+                final int n=backend==0?Integer.parseInt(qubits.getText().toString()):0,count=Integer.parseInt(objects.getText().toString());
                 final long worldSeed=Long.parseLong(seed.getText().toString());
-                if(n<1||n>NativeCore.MAX_QUBITS||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)
+                if((backend==0&&(n<1||n>NativeCore.MAX_QUBITS))||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)
                     throw new IllegalArgumentException("Revisa los rangos indicados");
                 final long serial=++projectLoadSerial;
                 dialog.dismiss();
                 storage.execute(()->{
-                    try(NativeCore prepared=new NativeCore(n)){
-                        prepared.resetGraph();QuantumRenderer observer=new QuantumRenderer(this,prepared,this::showStatus);
+                    try(NativeCore prepared=backend==0?new NativeCore(n):NativeCore.infinite(background)){
+                        if(backend==0)prepared.resetGraph();QuantumRenderer observer=new QuantumRenderer(this,prepared,this::showStatus);
                         observer.objectCount(count);observer.worldSeed(worldSeed);
                         prepareProject(CosmicProject.fromSnapshots(title,prepared.snapshot(),observer.snapshot()),serial);
                     }catch(Exception error){showStatus("No se pudo crear el proyecto: "+error.getMessage());}
@@ -306,7 +310,7 @@ public final class MainActivity extends Activity {
     }
 
     private void expandProject(){
-        if(surface==null||destroyed||expandingProject||activeImageExport!=null||core.qubits>=NativeCore.DEFAULT_QUBITS)return;
+        if(surface==null||destroyed||expandingProject||activeImageExport!=null||core.isInfinite()||core.qubits>=NativeCore.DEFAULT_QUBITS)return;
         final long serial=++projectLoadSerial;final NativeCore source=core;
         expansionSerial=serial;expandingProject=true;expansionWasAnimating=animate;animate=false;main.removeCallbacks(tick);
         animateButton.setText("Animar");
@@ -366,10 +370,11 @@ public final class MainActivity extends Activity {
         }
         core=candidate;renderer=observer;applyPresentation();projectName=project.name;overview=project.graphics.overview;
         coupled=project.graphics.coupling;quality=project.graphics.resolutionLimit;qubit=0;animationTime=project.graphics.time;
+        restoreAddresses(null,null,project.graphics.observables);
         saveProtected=false;restoreMessage=null;
         SavedSession current=new SavedSession();current.core=project.core;current.visual=project.graphics;
         current.projectName=project.name;current.qubit=0;current.quality=quality;current.animationTime=animationTime;
-        current.overview=overview;current.coupled=coupled;savedSession=current;
+        current.overview=overview;current.coupled=coupled;current.addressA=addressA;current.addressB=addressB;savedSession=current;
         buildScreen();if(resumed)surface.onResume();
         if(previousCore!=null)previousCore.close();
         surface.queueEvent(this::captureSession);surface.requestRender();
@@ -564,7 +569,31 @@ public final class MainActivity extends Activity {
         surface.setContentDescription("Mundo tridimensional: arrastra para girar, pellizca para acercar y toca para seleccionar un objeto");
     }
 
-    private void applyGate(int operation){final int q=qubit;action(()->renderer.gate(operation,q,0));}
+    private void restoreAddresses(String first,String second,String[] observables){
+        if(!core.isInfinite()){addressA="0";addressB="1";return;}
+        String[] focus=InfiniteProgram.focus(observables);
+        try{addressA=InfiniteProgram.address(first);addressB=InfiniteProgram.address(second);InfiniteProgram.pair(addressA,addressB);}
+        catch(Exception ignored){addressA=focus[0];addressB=focus[1];}
+    }
+    private void chooseQubit(){
+        if(core.isInfinite()){
+            InfiniteControls.addresses(this,addressA,addressB,(a,b)->action(()->{
+                renderer.observeAddresses(a,b);addressA=a;addressB=b;
+                main.post(()->qubitButton.setText("Dirección "+InfiniteProgram.shortAddress(a)));
+            }));return;
+        }
+        String[] names=new String[core.qubits];for(int q=0;q<names.length;q++)names[q]="Qubit "+q;
+        new AlertDialog.Builder(this).setTitle("Qubit de control").setSingleChoiceItems(names,qubit,(dialog,which)->{
+            qubit=which;qubitButton.setText("Qubit "+qubit);dialog.dismiss();action(()->{});
+        }).show();
+    }
+    private void infiniteActions(){InfiniteControls.actions(this,core,addressA,script->action(()->{
+        String output=core.executeInfinite(script);main.post(()->{if(!destroyed)InfiniteControls.result(this,output);});
+    }));}
+    private void applyGate(int operation){
+        if(core.isInfinite()){final String a=addressA,b=addressB;action(()->renderer.gate(operation,a,b));}
+        else {final int q=qubit;action(()->renderer.gate(operation,q,0));}
+    }
     private void edit(int operation){action(()->{
         if(renderer.selectedId()<0){main.post(()->Toast.makeText(this,"Toca primero una caja del mundo",Toast.LENGTH_SHORT).show());return;}
         renderer.editSelected(operation);
@@ -619,7 +648,7 @@ public final class MainActivity extends Activity {
     private void captureSession(){
         if(saveProtected||destroyed)return;
         SavedSession snapshot=new SavedSession();snapshot.core=core.snapshot();snapshot.visual=renderer.snapshot();
-        snapshot.projectName=projectName;
+        snapshot.projectName=projectName;snapshot.addressA=addressA;snapshot.addressB=addressB;
         snapshot.overview=snapshot.visual.overview;snapshot.coupled=snapshot.visual.coupling;
         snapshot.qubit=qubit;snapshot.quality=snapshot.visual.resolutionLimit;snapshot.animationTime=snapshot.visual.time;
         savedSession=snapshot;

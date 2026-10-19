@@ -9,7 +9,8 @@ find_package(Threads REQUIRED)
 
 # The repository-owned C bridge and EngineSession can be linked by hosts and
 # shared libraries without keeping another copy of the quantum core source.
-add_library(mundo_x_graphics_core STATIC native/src/graphics_core_bridge.cpp)
+add_library(mundo_x_graphics_core STATIC
+  native/src/graphics_core_bridge.cpp native/src/infinite_bridge.cpp)
 target_include_directories(mundo_x_graphics_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
 target_compile_features(mundo_x_graphics_core PUBLIC cxx_std_17)
@@ -39,8 +40,8 @@ if (MSVC)
   set_property(TARGET mundo_x_vm PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# Isolated rules-based infinite domain; existing runners and APK defaults keep
-# their own finite-session contracts.
+# Rules-based infinite domain; shared live sessions also serve PC and graphics.
+# Existing finite runners retain their own register contracts.
 add_executable(mundo_x_infinite native/src/infinite_runner.cpp)
 target_include_directories(mundo_x_infinite PRIVATE native/include)
 if (MSVC)
@@ -74,7 +75,7 @@ if (BUILD_TESTING)
   add_test(NAME existing_hello COMMAND mundo_x hello)
   add_test(NAME existing_teleport COMMAND mundo_x teleport)
   add_test(NAME existing_magic COMMAND mundo_x magic-witness)
-  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage factorized_structure micro_lab compact_measurement xasm_measurement visual_scene xasm_visual integrated_runtime engine_session lab_circuit lab_memory lab_protocols core_performance core_60 core_1000 xasm_60 infinite_address infinite_core infinite_tensor)
+  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage factorized_structure micro_lab compact_measurement xasm_measurement visual_scene xasm_visual integrated_runtime engine_session lab_circuit lab_memory lab_protocols core_performance core_60 core_1000 xasm_60 infinite_address infinite_core infinite_tensor infinite_session infinite_bridge)
   foreach(test_name IN LISTS native_tests)
     add_executable(test_${test_name} native/tests/${test_name}.cpp)
     target_include_directories(test_${test_name} PRIVATE native/include)
@@ -91,6 +92,8 @@ if (BUILD_TESTING)
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 30)
   endforeach()
   target_link_libraries(test_engine_session PRIVATE mundo_x_graphics_core)
+  target_link_libraries(test_infinite_session PRIVATE Threads::Threads)
+  target_link_libraries(test_infinite_bridge PRIVATE mundo_x_graphics_core)
   target_link_libraries(test_core_60 PRIVATE mundo_x_graphics_core)
   target_link_libraries(test_core_1000 PRIVATE mundo_x_graphics_core)
   set_tests_properties(core_60 core_1000 xasm_60 PROPERTIES TIMEOUT 120)

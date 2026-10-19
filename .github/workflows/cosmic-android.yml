@@ -12,6 +12,7 @@ on:
       - 'native/**'
       - 'tools/cosmic-android-*'
       - 'tools/cosmic-verify-portability.py'
+      - 'tools/infinite_device_evidence.py'
       - '.github/workflows/cosmic-android.yml'
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - 'native/**'
       - 'tools/cosmic-android-*'
       - 'tools/cosmic-verify-portability.py'
+      - 'tools/infinite_device_evidence.py'
       - '.github/workflows/cosmic-android.yml'
   workflow_dispatch:
 

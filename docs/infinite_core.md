@@ -5,12 +5,13 @@ en los enteros no negativos, un fondo definido por una regla y modificaciones
 finitas. La regla no necesita declarar un último qubit. El trabajo concreto se
 realiza sobre componentes finitos con el `CompactCore` propio de Mundo X.
 
-Es un desarrollo separado en `codex/infinite-core-rules-20261019`, iniciado desde
-`main` `e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf` y actualizado a la nueva base
-`7fd001c524ca234d98f07ba46fb074f9f4572a97`, que integró el perfil de 1.000 qubits
-durante este trabajo. Tiene su ejecutable `mundo_x_infinite` y programas `.xi`.
-La sesión, las aplicaciones y la rama de pruebas `codex/core-1000-qubits-20261019`
-conservan su funcionamiento independiente de este módulo.
+Se inició como desarrollo separado y ahora dispone de una sesión compartida
+para el emulador PC y el motor gráfico. Conserva su ejecutable
+`mundo_x_infinite` y sus programas `.xi`. Los proyectos finitos de 1.000 qubits
+siguen usando su perfil existente; los proyectos Infinite seleccionan su propio
+fondo y trabajan con direcciones decimales. La conexión, el guardado del estado
+y el dispositivo del emulador se describen en
+[infinite_integration.md](infinite_integration.md).
 
 ## Qué significa infinito aquí
 

@@ -21,8 +21,7 @@ creación y dirección corresponden a X, con asistencia de IA en el desarrollo.
 
 ## Proyectos `.cosmic`
 
-- **Nuevo** permite elegir nombre, 1 a 1000 qubits, 1 a 1.048.576 objetos y una
-  semilla de 32 bits sin signo. Prepara el estado de grafo del núcleo propio.
+- **Nuevo** permite elegir núcleo **Finito**, **Infinito · pares Bell** o **Infinito · fondo cero**, además de nombre, objetos y semilla. El modo finito conserva su preparación de grafo y el rango de 1 a 1000 qubits.
 - **Abrir .cosmic** importa un proyecto mediante el selector de Android.
 - **Ampliar a 1000 · añadir |0⟩** aparece en proyectos más pequeños. Conserva
   estado, historial, observables, cámara, ediciones y preferencias de resolución;
@@ -36,8 +35,7 @@ creación y dirección corresponden a X, con asistencia de IA en el desarrollo.
 El [formato](../graphics-desktop/PROJECT_FORMAT.md) está versionado. La
 importación valida el documento completo y prepara una sesión candidata antes
 de reemplazar el proyecto activo. Un archivo inválido conserva el proyecto
-actual. El formato v1 admite el perfil `compact-clifford` y la escena
-`opaque-grid-v1`; rechaza perfiles y operaciones desconocidos.
+actual. El formato v1 conserva el perfil `compact-clifford`. El v2 identifica `infinite-clifford` y guarda un snapshot nativo opaco `MXI1` con el fondo, los componentes activos, sus tableaus actuales y el generador aleatorio. Ambos usan la escena `opaque-grid-v1`. La validación estructural Java no interpreta el estado cuántico: la sesión candidata nativa valida el snapshot antes de adoptarlo.
 
 ## Controles
 
@@ -69,15 +67,24 @@ actual. El formato v1 admite el perfil `compact-clifford` y la escena
 - **Restablecer** prepara el estado de grafo con la cantidad actual de qubits
   y borra las ediciones de objetos, después de confirmarlo.
 
-La sesión privada se guarda de forma atómica para retomarla. El historial
-nativo es la fuente de verdad; el guardado Java conserva ese historial junto
-con los controles visuales. Se mantiene la lectura de las sesiones de Graphics
+La sesión privada se guarda de forma atómica para retomarla. Conserva el historial de los proyectos finitos o el snapshot exacto de los infinitos, junto con los controles visuales y las direcciones elegidas. Se mantiene la lectura de las sesiones de Graphics
 0.1.1. Los archivos `.cosmic` transportan el proyecto entre plataformas.
+
+## Direcciones del núcleo infinito
+
+En un proyecto infinito, **Dirección** abre dos campos de texto: A recibe las puertas de un qubit y B es el destino de CX/CZ. **Usar pareja Bell de A** calcula la dirección emparejada; **Ir a 10¹⁰⁰ y su pareja** permite trabajar con una dirección de 101 dígitos. Se aceptan hasta 4096 dígitos ASCII por dirección y se normalizan los ceros iniciales. Los IDs nunca pasan por un entero Java o JNI.
+
+**Observar** instala cinco observables dispersos fijos: XX(A,B), ZZ(A,B), YY(A,B), X(A) y Z(A). La selección consulta el estado sin materializar nuevos qubits. En el fondo Bell, Z(A) invierte XX y cambia las alturas de los objetos asociados; una segunda Z recupera la imagen si el mundo y la cámara siguen fijos. Desactivar **Acoplamiento** conserva las operaciones del núcleo y elimina su efecto visual.
+
+**Infinito…** muestra los recursos activos y permite medir Z, compactar componentes que coinciden exactamente con el fondo, elegir otro fondo o ejecutar un programa `.xi`. La petición entera se prepara como una transacción, incluidas las mediciones y su RNG. El fondo describe un dominio infinito formal; las operaciones y los componentes materializados siguen sujetos a límites finitos. Los bytes de tableau mostrados no representan la RAM completa del proceso.
+
+El renderer toma valores, revisión y época de una sola consulta nativa. Su caché se invalida por cambios del núcleo, por restauraciones con igual revisión y por cambios del programa visual. El anfitrión PC puede adoptar un propietario compartido de la misma sesión nativa; dibujar no requiere copiar snapshots ni reproducir puertas en otro núcleo.
 
 ## Núcleo y observación
 
 Android y escritorio compilan directamente
-[`native/src/graphics_core_bridge.cpp`](../native/src/graphics_core_bridge.cpp)
+[`native/src/graphics_core_bridge.cpp`](../native/src/graphics_core_bridge.cpp) y
+[`native/src/infinite_bridge.cpp`](../native/src/infinite_bridge.cpp)
 con los encabezados canónicos de `native/include/mundo_x`, sin copias separadas
 del núcleo. La [procedencia](app/src/main/cpp/PROVENANCE.json) registra los
 hashes actuales y el punto de partida de Graphics.
@@ -148,3 +155,7 @@ El workflow dedicado **COSMIC X Engine 4K** compila la variante, conserva las
 pruebas gráficas anteriores y exige evidencia de los framebuffers UHD reales.
 
 [Alcance, memoria, compatibilidad y uso de 4K](docs/4k.md).
+
+### Pruebas del modo infinito
+
+`GraphicsInstrumentation` añade `native_infinite_contracts` e `infinite_live_renderer_and_portability`. Comprueban direcciones de 101 dígitos, consultas sin mutación, rollback de mediciones fallidas, compacción exacta, píxeles acoplados/desacoplados, invalidación de caché por programa/época y guardado v2. El fixture `assets/projects/infinite-native-fixture.json` contiene preparación y continuación generadas por el núcleo GCC; Android debe obtener exactamente el mismo texto de salida y snapshot con libc++. La prueba exporta `portable-infinite-android.cosmic` y su `.state.json` para validar después la dirección Android → escritorio, incluida la continuación RNG. Estos casos necesitan ejecución instrumental; la compilación por sí sola no demuestra los píxeles ni la portabilidad del estado.

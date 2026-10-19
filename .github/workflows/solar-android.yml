@@ -6,6 +6,7 @@ on:
     paths:
       - 'solar-android/**'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
       - 'graphics-android/app/src/main/cpp/graphics_jni.cpp'
       - 'native/**'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'solar-android/**'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
       - 'graphics-android/app/src/main/cpp/graphics_jni.cpp'
       - 'native/**'

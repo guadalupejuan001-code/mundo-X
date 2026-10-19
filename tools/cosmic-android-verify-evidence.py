@@ -10,6 +10,8 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from infinite_device_evidence import GRAPHICS_CASES as INFINITE_GRAPHICS_CASES, COSMIC_CASES as INFINITE_COSMIC_CASES
+import infinite_device_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS = {"circuitos", "micromundo", "objetos", "ecos", "vm8", "cuantica", "visual", "gpu",
@@ -29,6 +31,8 @@ GRAPHICS_CASES = {
     "portable_codec_strict_validation", "portable_desktop_fixtures_import", "portable_mutation_export_reimport",
     "portable_invalid_import_preserves_session", "portable_activity_recreation",
 }
+COSMIC_CASES |= INFINITE_COSMIC_CASES
+GRAPHICS_CASES |= INFINITE_GRAPHICS_CASES
 MICRO_CASES = {
     "jni_buffer_bounds_and_session_lifetime", "render_and_pause", "single_step", "particle_capacity",
     "quantum_gates_and_bell_entropy", "colony_growth_food_and_seeding", "coupling_switch_and_seed_reset",
@@ -73,6 +77,7 @@ def device_report(directory, expected, marker, output):
 
 def verify_cosmic(directory, output):
     report, m = device_report(directory, COSMIC_CASES, "COSMIC_UNIFIED_TESTS_PASSED", output)
+    infinite = infinite_device_evidence.verify_cosmic_metrics(m, require)
     require(m["applicationId"] == "com.mundox.cosmic" and m["version"] == "0.3.1"
             and m["activityCount"] == 16 and m["windowsActivityPresent"] is False, "Wrong new app inventory")
     require(m["initialObjects"] == 16_384 and m["initialQubits"] == 1000 and m["initialObservables"] == 3000
@@ -113,6 +118,7 @@ def verify_cosmic(directory, output):
             "The actual landscape game SurfaceView is blank or its native buffer proof is missing")
 
     required = {"cosmic-motor.png", "cosmic-nucleo.png", "cosmic-labs.png", "cosmic-archivo.png",
+                "cosmic-infinite-core.png", "cosmic-infinite-before.png", "cosmic-infinite-after.png",
                 "cosmic-render-color.png", "cosmic-render-ids.png",
                 "cosmic-coupled-before.png", "cosmic-coupled-after.png", "cosmic-uncoupled-before.png", "cosmic-uncoupled-after.png",
                 "cosmic-saf-before.png", "cosmic-saf-after.png", "cosmic-background-before.png", "cosmic-background-after.png",
@@ -152,14 +158,23 @@ def verify_cosmic(directory, output):
     with tempfile.TemporaryDirectory(prefix="cosmic-unified-portability-") as build:
         bridge = portability.compile_bridge(build)
         native = portability.verify_native(bridge, document, proof)
+        infinite_document = portability.read_project(directory / "unified-infinite-saf-export.cosmic")
+        infinite_handle = bridge.infinite_restore(infinite_document)
+        try:
+            require(bridge.infinite_string("snapshot", infinite_handle) == infinite_document["core"]["snapshot"],
+                    "Production Infinite SAF export changed on desktop import")
+            bridge.infinite_query(infinite_handle, infinite_document["graphics"]["observables"])
+        finally:
+            bridge.lib.mxi_destroy(infinite_handle)
     native.update({"status": "passed", "source": "Production CosmicActivity SAF export", "gpuContextCreated": False})
     (directory / "unified-portability-verification.json").write_text(json.dumps(native, indent=2) + "\n")
-    return {"tests": len(COSMIC_CASES), "images": manifest, "experiments": 14,
+    return {"tests": len(COSMIC_CASES), "images": manifest, "experiments": 14, "infinite": infinite,
             "signedPauliReferenceComparisons": native["signed_pauli_reference_comparisons"], "coinstallation": isolation}
 
 
 def verify_graphics(directory, output):
     report, m = device_report(directory, GRAPHICS_CASES, "MUNDOX_GRAPHICS_TESTS_PASSED", output)
+    infinite = infinite_device_evidence.verify_graphics_metrics(m, require)
     require(m["qubits"] == 1000 and m["defaultQubits"] == 1000 and m["defaultObservables"] == 3000
             and m["millionObjectCount"] == 1_000_000 and m["maximumObjectCount"] == 1_048_576,
             "1000-qubit graphics limits were not exercised in the new APK")
@@ -210,11 +225,13 @@ def verify_graphics(directory, output):
     exports = report["projectExports"]
     expected = {"portable-bell-android.cosmic", "portable-ghz-android.cosmic", "portable-mutated-android.cosmic"}
     require(len(exports) == 3 and {item["file"] for item in exports} == expected, "Original Android exports are missing")
-    for item in exports:
+    for item in exports + infinite_device_evidence.exports(report, require):
         require(item["stateFile"] == item["file"] + ".state.json", "Unexpected native proof filename")
         for name in (item["file"], item["stateFile"]):
             require(0 < (directory / name).stat().st_size <= 16 * 1024 * 1024, "Missing or oversized portable evidence")
-    return {"tests": len(GRAPHICS_CASES), "images": image_manifest(directory, required), "portableCodecChecks": codec["checks"]}
+    required |= {"infinite-coupled-before.png", "infinite-coupled-after.png", "infinite-activity.png"}
+    return {"tests": len(GRAPHICS_CASES), "images": image_manifest(directory, required),
+            "portableCodecChecks": codec["checks"], "infinite": infinite}
 
 
 def verify_micro(directory, output):

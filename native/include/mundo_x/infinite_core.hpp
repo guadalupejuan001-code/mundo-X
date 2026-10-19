@@ -4,6 +4,7 @@
 #include "mundo_x/pauli_observer.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -67,6 +68,11 @@ class InfiniteCore {
     bool operator!=(const Stats& other) const { return !(*this == other); }
   };
 
+  // Snapshot text is an ASCII MXI1: envelope around a little-endian binary
+  // current state. This transport budget is separate from tableau payload.
+  // Limits are deliberately not imported: the receiving owner sets them.
+  static constexpr std::size_t max_snapshot_bytes = std::size_t{16} * 1024 * 1024;
+
   explicit InfiniteCore(Background background = Background::Zero)
       : InfiniteCore(background, Limits{}) {}
 
@@ -101,6 +107,116 @@ class InfiniteCore {
     out.address_bytes = state_->address_bytes;
     out.revision = state_->revision;
     return out;
+  }
+
+  std::string snapshot() const {
+    std::size_t bytes = 1 + 8 + 8 + 8 + PortableRng::word_count * 8;
+    for (const auto& component : state_->components) {
+      bytes = checked_add(bytes, 8, "snapshot dimensions overflow");
+      for (const auto& id : component->ids) {
+        bytes = checked_add(bytes, 8, "snapshot dimensions overflow");
+        bytes = checked_add(bytes, id.size(), "snapshot dimensions overflow");
+      }
+      bytes = checked_add(bytes, component->core.state_bytes(),
+                          "snapshot dimensions overflow");
+    }
+    if (bytes > (max_snapshot_bytes - 5) / 2)
+      throw std::length_error("snapshot exceeds 16 MiB transport budget");
+    HexWriter out(bytes);
+    out.byte(background_ == Background::Zero ? 0 : 1);
+    out.u64(state_->revision);
+    out.u64(state_->components.size());
+    out.u64(state_->rng.position);
+    for (const auto word : state_->rng.words) out.u64(word);
+    for (const auto& component : state_->components) {
+      out.u64(component->ids.size());
+      for (const auto& id : component->ids) {
+        out.u64(id.size());
+        for (const auto ch : id) out.byte(static_cast<std::uint8_t>(ch));
+      }
+      const auto packed = component->core.packed_state();
+      for (const auto sign : packed.signs) out.byte(sign);
+      for (const auto word : packed.x) out.u64(word);
+      for (const auto word : packed.z) out.u64(word);
+    }
+    return std::move(out.text);
+  }
+
+  // Decoding checks sizes and the consumer's budgets before each allocation,
+  // then validates signs, unused bits, commutation, rank, unique canonical
+  // addresses, complete Bell pairs, and the complete portable RNG state.
+  static InfiniteCore from_snapshot(const std::string& saved, const Limits& limits) {
+    HexReader input(saved);
+    const auto background = input.byte();
+    if (background > 1) throw std::invalid_argument("invalid snapshot background");
+    InfiniteCore result(background == 0 ? Background::Zero : Background::BellPairs, limits);
+    auto& state = *result.state_;
+    state.revision = input.u64();
+    const auto count = input.size();
+    if (count > limits.max_active_qubits)
+      throw std::length_error("snapshot exceeds active qubit materialization budget");
+    state.rng.position = input.size();
+    for (auto& word : state.rng.words) word = input.u64();
+    state.rng.validate();
+    // Every component needs at least its count, one address length/digit,
+    // and one 17-byte tableau. This check precedes metadata reservation.
+    if (count > input.remaining() / 34)
+      throw std::invalid_argument("truncated snapshot components");
+    state.components.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+      const auto n = input.size();
+      if (n == 0) throw std::invalid_argument("snapshot component is empty");
+      const auto active = checked_add(state.locations.size(), n, "snapshot qubit count overflow");
+      const auto payload = checked_add(state.tableau_bytes, tableau_bytes(n),
+                                       "snapshot tableau size overflow");
+      result.check_resources(active, n, payload);
+      // Bounds below are independent of any advertised vector dimensions.
+      input.require(checked_add(tableau_bytes(n), n * 8, "snapshot size overflow"));
+      std::vector<std::string> ids;
+      ids.reserve(n);
+      for (std::size_t q = 0; q < n; ++q) {
+        const auto digits = input.size();
+        if (digits == 0 || digits > limits.max_address_digits)
+          throw std::length_error("snapshot address digit budget exceeded");
+        auto id = input.string(digits);
+        if (result.canonical(id) != id)
+          throw std::invalid_argument("snapshot address is not canonical");
+        if (!state.locations.emplace(id, Location{index, q}).second)
+          throw std::invalid_argument("snapshot contains duplicate addresses");
+        state.address_bytes = checked_add(state.address_bytes, digits,
+                                          "snapshot address text overflows");
+        ids.push_back(std::move(id));
+      }
+      const auto words = n / 64 + (n % 64 != 0);
+      input.require(tableau_bytes(n));
+      CompactCore::PackedState packed;
+      packed.qubits = n;
+      packed.signs.resize(n);
+      packed.x.resize(n * words);
+      packed.z.resize(n * words);
+      for (auto& sign : packed.signs) sign = input.byte();
+      for (auto& word : packed.x) word = input.u64();
+      for (auto& word : packed.z) word = input.u64();
+      auto core = CompactCore::from_packed_state(packed);
+      state.components.push_back(std::make_shared<Component>(std::move(ids), std::move(core)));
+      state.tableau_bytes = payload;
+    }
+    if (input.remaining() != 0)
+      throw std::invalid_argument("snapshot has trailing data");
+    if (result.background_ == Background::BellPairs) {
+      for (const auto& item : state.locations) {
+        const auto partner = state.locations.find(infinite_detail::partner_address(item.first));
+        if (partner == state.locations.end() ||
+            partner->second.component != item.second.component)
+          throw std::invalid_argument("snapshot splits an implicit Bell pair");
+      }
+    }
+    return result;
+  }
+
+  void restore(const std::string& saved) {
+    auto candidate = from_snapshot(saved, limits_);
+    *this = std::move(candidate);
   }
 
   // A whole batch commits once. Any bad syntax, unsupported operation,
@@ -182,7 +298,9 @@ class InfiniteCore {
     auto candidate = std::make_shared<State>(*state_); // Includes an RNG copy.
     const auto location = materialize(*candidate, id);
     auto& component = mutable_component(*candidate, location.component);
-    const auto outcome = component.core.measure_z(location.qubit, candidate->rng);
+    const bool outcome_one = (candidate->rng() & 1U) != 0;
+    component.core.measure_z_forced(location.qubit, outcome_one);
+    const CompactCore::ZMeasurement outcome{outcome_one, 0.5, true};
     ++candidate->revision;
     state_.swap(candidate); // RNG is consumed only by a committed projection.
     return outcome;
@@ -246,6 +364,106 @@ class InfiniteCore {
   }
 
  private:
+  // Same MT19937-64 algorithm and seed/output sequence as std::mt19937_64.
+  // Its explicit state makes snapshots portable between libstdc++ and libc++
+  // without relying on their implementation-dependent stream representations.
+  struct PortableRng {
+    using Standard = std::mt19937_64;
+    static constexpr std::size_t word_count = Standard::state_size;
+    std::array<std::uint64_t, word_count> words{};
+    std::size_t position = word_count;
+    PortableRng() { seed(42); }
+    void seed(std::uint64_t value) {
+      words[0] = value;
+      for (std::size_t i = 1; i < word_count; ++i)
+        words[i] = Standard::initialization_multiplier *
+            (words[i - 1] ^ (words[i - 1] >> (Standard::word_size - 2))) + i;
+      position = word_count;
+    }
+    void validate() const {
+      if (position > word_count)
+        throw std::invalid_argument("snapshot RNG position is invalid");
+      std::uint64_t any = 0;
+      for (const auto word : words) any |= word;
+      if (any == 0) throw std::invalid_argument("snapshot RNG state is zero");
+    }
+    std::uint64_t operator()() {
+      if (position == word_count) {
+        constexpr auto lower = (std::uint64_t{1} << Standard::mask_bits) - 1;
+        for (std::size_t i = 0; i < word_count; ++i) {
+          const auto joined = (words[i] & ~lower) |
+                              (words[(i + 1) % word_count] & lower);
+          words[i] = words[(i + Standard::shift_size) % word_count] ^
+                     (joined >> 1) ^ ((joined & 1) ? Standard::xor_mask : 0);
+        }
+        position = 0;
+      }
+      auto value = words[position++];
+      value ^= (value >> Standard::tempering_u) & Standard::tempering_d;
+      value ^= (value << Standard::tempering_s) & Standard::tempering_b;
+      value ^= (value << Standard::tempering_t) & Standard::tempering_c;
+      value ^= value >> Standard::tempering_l;
+      return value;
+    }
+  };
+
+  struct HexWriter {
+    std::string text = "MXI1:";
+    explicit HexWriter(std::size_t bytes) { text.reserve(5 + 2 * bytes); }
+    void byte(std::uint8_t value) {
+      constexpr char digits[] = "0123456789abcdef";
+      text.push_back(digits[value >> 4]); text.push_back(digits[value & 15]);
+    }
+    void u64(std::uint64_t value) {
+      for (unsigned i = 0; i < 8; ++i) { byte(static_cast<std::uint8_t>(value)); value >>= 8; }
+    }
+  };
+
+  struct HexReader {
+    const std::string& text;
+    std::size_t cursor = 5;
+    explicit HexReader(const std::string& value) : text(value) {
+      if (value.size() > max_snapshot_bytes)
+        throw std::length_error("snapshot exceeds 16 MiB transport budget");
+      if (value.size() < 5 || value.compare(0, 5, "MXI1:") != 0 || (value.size() - 5) % 2)
+        throw std::invalid_argument("unsupported or malformed infinite snapshot");
+    }
+    std::size_t remaining() const { return (text.size() - cursor) / 2; }
+    void require(std::size_t bytes) const {
+      if (bytes > remaining()) throw std::invalid_argument("truncated infinite snapshot");
+    }
+    static unsigned nibble(char value) {
+      if (value >= '0' && value <= '9') return static_cast<unsigned>(value - '0');
+      if (value >= 'a' && value <= 'f') return static_cast<unsigned>(value - 'a' + 10);
+      throw std::invalid_argument("snapshot contains invalid hexadecimal text");
+    }
+    std::uint8_t byte() {
+      require(1);
+      const auto value = static_cast<std::uint8_t>((nibble(text[cursor]) << 4) |
+                                                  nibble(text[cursor + 1]));
+      cursor += 2;
+      return value;
+    }
+    std::uint64_t u64() {
+      require(8);
+      std::uint64_t value = 0;
+      for (unsigned i = 0; i < 8; ++i) value |= std::uint64_t{byte()} << (8 * i);
+      return value;
+    }
+    std::size_t size() {
+      const auto value = u64();
+      if (value > std::numeric_limits<std::size_t>::max())
+        throw std::length_error("snapshot size exceeds this platform");
+      return static_cast<std::size_t>(value);
+    }
+    std::string string(std::size_t bytes) {
+      require(bytes);
+      std::string value(bytes, '\0');
+      for (auto& ch : value) ch = static_cast<char>(byte());
+      return value;
+    }
+  };
+
   struct Location { std::size_t component, qubit; };
   struct Component {
     std::vector<std::string> ids;
@@ -260,7 +478,7 @@ class InfiniteCore {
     LocationMap locations;
     std::size_t tableau_bytes = 0, address_bytes = 0;
     std::uint64_t revision = 0;
-    std::mt19937_64 rng{42};
+    PortableRng rng;
   };
 
   static std::size_t checked_add(std::size_t a, std::size_t b, const char* message) {

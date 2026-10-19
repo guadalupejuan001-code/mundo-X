@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'native/include/mundo_x/**'
-      - 'native/src/infinite_runner.cpp'
+      - 'native/src/infinite_*.cpp'
       - 'native/tests/infinite_*.cpp'
       - 'examples/infinite_*.xi'
       - 'tools/validate_infinite_cli.py'
@@ -18,7 +18,7 @@ on:
     branches: [main]
     paths:
       - 'native/include/mundo_x/**'
-      - 'native/src/infinite_runner.cpp'
+      - 'native/src/infinite_*.cpp'
       - 'native/tests/infinite_*.cpp'
       - 'examples/infinite_*.xi'
       - 'tools/validate_infinite_cli.py'
@@ -63,11 +63,12 @@ jobs:
           cmake -S . -B infinite-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Verify exact declared source provenance
         run: python tools/cosmic_source_provenance.py > infinite-evidence/source-provenance.json
-      - name: Build the isolated runner and contracts
+      - name: Build the runner and integrated session contracts
         run: |
           cmake --build infinite-build --config Release --parallel 2 --target \
             mundo_x_infinite test_infinite_address test_infinite_core \
-            test_infinite_tensor infinite_scale test_compact_measurement mundo_x_native_tests \
+            test_infinite_tensor test_infinite_session test_infinite_bridge infinite_scale \
+            test_compact_measurement mundo_x_native_tests \
             test_core_1000 test_engine_session \
             2>&1 | tee infinite-evidence/build.log
       - name: Check exact operations, CLI and original CompactCore compatibility
@@ -76,7 +77,7 @@ jobs:
             -R '^(infinite_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
             --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \
             | tee infinite-evidence/ctest.log
-      - name: Record measured scope and make the separate CLI available
+      - name: Record measured scope and make the CLI available
         timeout-minutes: 2
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then

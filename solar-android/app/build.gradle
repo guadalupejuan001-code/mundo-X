@@ -25,6 +25,7 @@ android {
                 srcDir '../../graphics-android/app/src/main/java'
                 include 'com/mundox/solar/**'
                 include 'com/mundox/graphics/NativeCore.java'
+                include 'com/mundox/graphics/InfiniteProgram.java'
                 include 'com/mundox/graphics/RenderResolution.java'
             }
         }
