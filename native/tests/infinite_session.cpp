@@ -208,6 +208,8 @@ void snapshots() {
   check(view.values == std::vector<double>({1, 1}) &&
         view.stats.active_qubits == 1024 && view.stats.tableau_bytes == 263168 &&
         large_copy.probability_one("0") == 0.5, "1024-qubit GHZ snapshot lost state or coherence");
+  check(view.observer_builds == 1,
+        "query batch rebuilt the same 1024-qubit Pauli observer");
   check(large_copy.snapshot() == large_snapshot, "1024-qubit packed snapshot changed on import");
 }
 
