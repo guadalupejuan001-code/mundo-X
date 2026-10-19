@@ -60,6 +60,9 @@ jobs:
         run: |
           python tools/visual/check_visual_cli.py --binary cosmic-native-build/mundo_x \
             | tee cosmic-evidence/native/visual-cli.log
+      - name: Record the actual cost of the 1,000-qubit register
+        run: |
+          cosmic-native-build/core_1000_benchmark > cosmic-evidence/native/core-1000-benchmark.json
       - name: Upload native evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -105,6 +108,11 @@ jobs:
           python graphics-desktop/validate_projects.py \
             --output cosmic-evidence/desktop/projects.json \
             | tee cosmic-evidence/desktop/projects.log
+      - name: Verify the full register and lossless expansion from previous projects
+        run: |
+          python graphics-desktop/check_core_profile.py \
+            --output cosmic-evidence/desktop/core-1000-projects.json \
+            | tee cosmic-evidence/desktop/core-1000-projects.log
       - name: Verify geometric queries, IDs and edits
         run: |
           python graphics-desktop/validate.py \

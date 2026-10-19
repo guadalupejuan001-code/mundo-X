@@ -83,6 +83,9 @@ public final class CosmicActivity extends Activity {
     private boolean coupled=true;
     private float animationTime;
     private long lastTick,projectLoadSerial;
+    private long expansionSerial;
+    private boolean expandingProject,expansionWasAnimating;
+    private AlertDialog expansionDialog;
     private String statusText="Preparando tu mundo…";
     private String startupMessage;
 
@@ -130,7 +133,7 @@ public final class CosmicActivity extends Activity {
         }
         try{
             if(core==null){
-                core=new NativeCore(20);core.resetGraph();renderer=new QuantumRenderer(this,core,this::showStatus);
+                core=new NativeCore(NativeCore.DEFAULT_QUBITS);core.resetGraph();renderer=new QuantumRenderer(this,core,this::showStatus);
                 renderer.objectCount(16_384);renderer.scenicView();renderer.resolution(960);
             }
             renderer.setPresentation(QuantumRenderer.PRESENTATION_COSMIC);
@@ -156,7 +159,7 @@ public final class CosmicActivity extends Activity {
         TextView engine=ui.eyebrow("ENGINE",MUTED);engine.setPadding(ui.dp(9),ui.dp(4),0,0);brand.addView(engine);title.addView(brand);
         TextView subtitle=ui.eyebrow("COMPUTACIÓN CUÁNTICA",CYAN);subtitle.setTextSize(9);subtitle.setPadding(0,ui.dp(5),0,0);title.addView(subtitle);
         heading.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        TextView info=ui.text("0.3",11,MUTED,true);info.setGravity(Gravity.CENTER);info.setContentDescription("Información de COSMIC X Engine 0.3.0");info.setTag("app_info");
+        TextView info=ui.text("0.3",11,MUTED,true);info.setGravity(Gravity.CENTER);info.setContentDescription("Información de COSMIC X Engine 0.3.1");info.setTag("app_info");
         ui.clickable(info,PANEL,12);info.setOnClickListener(v->showInfo());heading.addView(info,new LinearLayout.LayoutParams(ui.dp(42),ui.dp(42)));root.addView(heading);
 
         pages=new FrameLayout(this);root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
@@ -249,8 +252,11 @@ public final class CosmicActivity extends Activity {
         activeProjectDetail=ui.text("",12,MUTED,false);active.addView(activeProjectDetail);active.addView(ui.space(16));
         LinearLayout files=ui.row();ui.weightedButton(files,ui.button("Guardar .cosmic","project_save",true,this::exportProject),true);ui.weightedButton(files,ui.button("Abrir archivo","project_open",false,this::openProject),false);active.addView(files);
         active.addView(ui.space(8));active.addView(ui.button("Guardar copia en este dispositivo","project_local_copy",false,this::saveLocalCopy),ui.full());body.addView(active);
+        if(core.qubits<NativeCore.DEFAULT_QUBITS){
+            active.addView(ui.space(8));active.addView(ui.button("Ampliar a "+NativeCore.DEFAULT_QUBITS+" qubits · añadir |0⟩","project_expand_qubits",false,this::expandProject),ui.full());
+        }
         body.addView(ui.space(16));body.addView(ui.button("+  Crear un mundo","new_project",false,this::newProject),ui.full());body.addView(ui.space(24));body.addView(ui.eyebrow("PUNTOS DE PARTIDA",MUTED));body.addView(ui.space(10));
-        body.addView(projectCard("Ciudad cuántica","20 qubits · escena cercana","example_city",CYAN,()->createScene("Ciudad cuántica",20,16_384,2026)),ui.full());body.addView(ui.space(8));
+        body.addView(projectCard("Ciudad cuántica",NativeCore.DEFAULT_QUBITS+" qubits · escena cercana","example_city",CYAN,()->createScene("Ciudad cuántica",NativeCore.DEFAULT_QUBITS,16_384,2026)),ui.full());body.addView(ui.space(8));
         body.addView(projectCard("Observador Bell","2 qubits · correlaciones de Pauli","example_bell",VIOLET,()->loadAsset("bell-observer.cosmic")),ui.full());body.addView(ui.space(8));
         body.addView(projectCard("Ciudad GHZ","3 qubits · un millón de objetos","example_ghz",GOLD,()->loadAsset("ghz-city.cosmic")),ui.full());
         body.addView(ui.space(24));body.addView(ui.eyebrow("GUARDADOS AQUÍ",MUTED));body.addView(ui.space(10));projectList=ui.column();body.addView(projectList);refreshSavedProjects();return scroll;
@@ -312,7 +318,7 @@ public final class CosmicActivity extends Activity {
     }
 
     private void action(Runnable change){
-        GLSurfaceView target=surface;if(target==null||destroyed)return;
+        GLSurfaceView target=surface;if(target==null||destroyed||expandingProject)return;
         target.queueEvent(()->{if(destroyed)return;try{change.run();captureSession();refreshCore();}catch(Throwable error){showStatus("No se pudo aplicar: "+error.getMessage());}});target.requestRender();
     }
     /** Native observations and snapshots are taken in the same GL queue as mutations. */
@@ -386,14 +392,37 @@ public final class CosmicActivity extends Activity {
     private EditText field(String hint,String value,boolean numeric){EditText input=new EditText(this);input.setHint(hint);input.setText(value);input.setTextColor(TEXT);input.setTextSize(14);input.setSingleLine(true);input.setSelectAllOnFocus(true);input.setInputType(numeric?InputType.TYPE_CLASS_NUMBER:InputType.TYPE_CLASS_TEXT);return input;}
     private void newProject(){
         LinearLayout form=ui.column();form.setPadding(ui.dp(22),ui.dp(5),ui.dp(22),0);
-        EditText name=field("Nombre","Mi nuevo mundo",false),qubits=field("Qubits","20",true),objects=field("Objetos","16384",true),seed=field("Semilla","2026",true);
-        for(int j=0;j<4;j++){form.addView(ui.text(new String[]{"Nombre","Qubits · 1 a 256","Objetos · 1 a 1.048.576","Semilla · 0 a 4.294.967.295"}[j],11,MUTED,false));form.addView(new EditText[]{name,qubits,objects,seed}[j]);}
+        EditText name=field("Nombre","Mi nuevo mundo",false),qubits=field("Qubits",String.valueOf(NativeCore.DEFAULT_QUBITS),true),objects=field("Objetos","16384",true),seed=field("Semilla","2026",true);
+        for(int j=0;j<4;j++){form.addView(ui.text(new String[]{"Nombre","Qubits · 1 a "+NativeCore.MAX_QUBITS,"Objetos · 1 a 1.048.576","Semilla · 0 a 4.294.967.295"}[j],11,MUTED,false));form.addView(new EditText[]{name,qubits,objects,seed}[j]);}
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Crear un mundo").setView(form).setNegativeButton("Cancelar",null).setPositiveButton("Crear",null).create();
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{
             String title=name.getText().toString().trim();int n=Integer.parseInt(qubits.getText().toString()),count=Integer.parseInt(objects.getText().toString());long worldSeed=Long.parseLong(seed.getText().toString());
-            if(title.isEmpty()||title.codePointCount(0,title.length())>128||n<1||n>256||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)throw new IllegalArgumentException("Revisa los rangos de tu proyecto.");
+            if(title.isEmpty()||title.codePointCount(0,title.length())>128||n<1||n>NativeCore.MAX_QUBITS||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)throw new IllegalArgumentException("Revisa los rangos de tu proyecto.");
             createScene(title,n,count,worldSeed);dialog.dismiss();
         }catch(Exception error){message(error.getMessage());}}));dialog.show();
+    }
+    private void expandProject(){
+        if(surface==null||expandingProject||core.qubits>=NativeCore.DEFAULT_QUBITS)return;
+        final long serial=++projectLoadSerial;final NativeCore source=core;
+        expansionSerial=serial;expandingProject=true;expansionWasAnimating=animate;animate=false;main.removeCallbacks(tick);
+        playButton.setText("Animar");
+        expansionDialog=new AlertDialog.Builder(this).setTitle("Ampliando a "+NativeCore.DEFAULT_QUBITS+" qubits")
+            .setMessage("Conservando el proyecto y añadiendo qubits en |0⟩…").setCancelable(false).show();
+        surface.queueEvent(()->{try{
+            if(source!=core){main.post(()->finishExpansion(serial,false));return;}
+            CosmicProject.Document expanded=CosmicProject.expandQubits(projectName,source.snapshot(),renderer.snapshot(),NativeCore.DEFAULT_QUBITS);
+            storage.execute(()->{try{prepareProject(expanded,serial);}
+                catch(Exception error){main.post(()->{finishExpansion(serial,false);message("No se pudo ampliar el proyecto: "+error.getMessage());});}});
+        }catch(Exception error){main.post(()->{finishExpansion(serial,false);message("No se pudo ampliar el proyecto: "+error.getMessage());});}});
+        surface.requestRender();
+    }
+    private void finishExpansion(long serial,boolean installed){
+        if(expansionSerial!=serial)return;
+        expandingProject=false;expansionSerial=0;
+        if(expansionDialog!=null){expansionDialog.dismiss();expansionDialog=null;}
+        if(!installed&&expansionWasAnimating&&!destroyed&&!isFinishing()){
+            animate=true;playButton.setText("Pausar");lastTick=0;if(resumed)main.post(tick);
+        }
     }
     private void createScene(String name,int n,int count,long seed){final long serial=++projectLoadSerial;storage.execute(()->{try(NativeCore candidate=new NativeCore(n)){
         candidate.resetGraph();QuantumRenderer observer=new QuantumRenderer(this,candidate,s->{});observer.objectCount(count);observer.worldSeed(seed);observer.scenicView();observer.resolution(960);
@@ -402,7 +431,8 @@ public final class CosmicActivity extends Activity {
     private void prepareProject(CosmicProject.Document project,long serial) throws Exception{
         NativeCore candidate=new NativeCore(project.core);
         try{candidate.query(project.graphics.observables);QuantumRenderer observer=new QuantumRenderer(this,candidate,this::showStatus,project.graphics);observer.setPresentation(QuantumRenderer.PRESENTATION_COSMIC);
-            main.post(()->{if(destroyed||isFinishing()||serial!=projectLoadSerial){candidate.close();return;}installProject(project,candidate,observer);});
+            main.post(()->{if(destroyed||isFinishing()||serial!=projectLoadSerial){candidate.close();finishExpansion(serial,false);return;}
+                finishExpansion(serial,true);installProject(project,candidate,observer);});
         }catch(Throwable error){candidate.close();throw error;}
     }
     private void installProject(CosmicProject.Document project,NativeCore candidate,QuantumRenderer observer){
@@ -427,7 +457,7 @@ public final class CosmicActivity extends Activity {
 
     private void showInfo(){
         QuantumRenderer.FrameStats s=renderer.frameStats();String details=s==null?statusText:String.format(Locale.US,"%,d objetos · %d × %d px\n%.1f ms por dibujo · %d observables\n%s",s.objectCount,s.width,s.height,s.drawMs,s.observables,s.device);
-        new AlertDialog.Builder(this).setTitle("COSMIC X Engine · 0.3.0").setMessage("Computación cuántica de Mundo X\nNúcleo cuántico + motor gráfico cuántico integrado\n\n"+details+"\n\nLa escena observa el núcleo activo. Las puertas cambian ese estado; mover la cámara y elegir objetos lo conservan. Los valores del núcleo son expectativas de Pauli calculadas en software.\n\nTus 14 experimentos originales están dentro de esta app. Cada laboratorio conserva su modelo y controles.\n\nLos archivos .cosmic guardan las operaciones, observables, semilla, objetos y cámara. La nueva iluminación es una presentación del mismo motor.\n\nIdea, creación y dirección: X. Desarrollo sobre el código de Mundo X con asistencia de IA.").setPositiveButton("Continuar",null).show();
+        new AlertDialog.Builder(this).setTitle("COSMIC X Engine · 0.3.1").setMessage("Computación cuántica de Mundo X\nNúcleo cuántico + motor gráfico cuántico integrado\n\n"+details+"\n\nLa escena observa el núcleo activo. Las puertas cambian ese estado; mover la cámara y elegir objetos lo conservan. Los valores del núcleo son expectativas de Pauli calculadas en software.\n\nTus 14 experimentos originales están dentro de esta app. Cada laboratorio conserva su modelo y controles.\n\nLos archivos .cosmic guardan las operaciones, observables, semilla, objetos y cámara. La nueva iluminación es una presentación del mismo motor.\n\nIdea, creación y dirección: X. Desarrollo sobre el código de Mundo X con asistencia de IA.").setPositiveButton("Continuar",null).show();
     }
 
     @Override protected void onResume(){super.onResume();resumed=true;if(surface!=null&&tab<2){surface.onResume();surface.requestRender();if(animate){lastTick=0;main.post(tick);}}}
@@ -441,6 +471,7 @@ public final class CosmicActivity extends Activity {
     @Override protected void onDestroy(){
         // Prepared project callbacks must run their destroyed guard and close their candidate.
         destroyed=true;++projectLoadSerial;main.removeCallbacks(tick);
+        if(expansionDialog!=null){expansionDialog.dismiss();expansionDialog=null;}expansionSerial=0;expandingProject=false;
         if(surface!=null){surface.onPause();if(surface.getParent() instanceof ViewGroup)((ViewGroup)surface.getParent()).removeView(surface);}
         storage.shutdown();if(core!=null)core.close();super.onDestroy();
     }

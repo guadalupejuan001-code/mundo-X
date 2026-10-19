@@ -174,7 +174,7 @@ def verify_native(bridge, document, proof):
 def verify_directory(directory):
     directory = Path(directory)
     report = evidence_json(directory / "report.json")
-    require(report["testsRun"] == 15 and report["testsFailed"] == 0, "Portable device tests did not all pass")
+    require(report["testsRun"] == 18 and report["testsFailed"] == 0, "Portable device tests did not all pass")
     exports = report["projectExports"]
     require(len(exports) == 3 and {item["file"] for item in exports} == set(EXPECTED_EXPORTS),
             "Unexpected Android export inventory")

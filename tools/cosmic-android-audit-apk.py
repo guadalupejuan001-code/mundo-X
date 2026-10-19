@@ -10,8 +10,8 @@ import sys
 import zipfile
 from pathlib import Path
 
-APP = "COSMIC-X-Engine-0.3.0.apk"
-TESTS = "COSMIC-X-Engine-0.3.0-tests.apk"
+APP = "COSMIC-X-Engine-0.3.1.apk"
+TESTS = "COSMIC-X-Engine-0.3.1-tests.apk"
 COMPANION = "Mundo-X-Graphics-coexist.apk"
 ABIS = {"arm64-v8a", "x86_64"}
 LIBRARIES = {"libmx_graphics.so", "libmundox.so", "libmundox_basis.so", "libmundox_echoes.so"}
@@ -70,7 +70,7 @@ def dex_classes(data):
 
 def main():
     directory = Path(sys.argv[1] if len(sys.argv) > 1 else "cosmic-dist")
-    report = {"schemaVersion": 1, "applicationId": "com.mundox.cosmic", "version": "0.3.0"}
+    report = {"schemaVersion": 1, "applicationId": "com.mundox.cosmic", "version": "0.3.1"}
     checksums = {}
     signatures = {}
     for name in (APP, TESTS, COMPANION):
@@ -87,7 +87,7 @@ def main():
     require(signatures[APP] == signatures[TESTS], "Application and instrumentation signing certificates differ")
 
     badging = (directory / (APP[:-4] + "-manifest.txt")).read_text()
-    require(re.search(r"package: name='com\.mundox\.cosmic' versionCode='1' versionName='0\.3\.0'", badging),
+    require(re.search(r"package: name='com\.mundox\.cosmic' versionCode='2' versionName='0\.3\.1'", badging),
             "Wrong unified application ID or version")
     require("minSdkVersion:'26'" in badging and "targetSdkVersion:'35'" in badging,
             "Wrong supported Android SDK profile")
@@ -139,7 +139,7 @@ def main():
     (directory / "SHA256SUMS.txt").write_text("".join(value + "  " + name + "\n" for name, value in checksums.items()))
     (directory / "build-commit.txt").write_text(commit + "\n")
     (directory / "apk-audit.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(f"Verified com.mundox.cosmic 0.3.0, {len(ACTIVITIES)} activities and {len(required)} native ABI/library pairs.")
+    print(f"Verified com.mundox.cosmic 0.3.1, {len(ACTIVITIES)} activities and {len(required)} native ABI/library pairs.")
     print("The Windows emulation project is absent from the actual native and DEX payloads.")
     print("The previous graphics APK is included solely for installation isolation validation.")
 

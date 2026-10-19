@@ -92,6 +92,17 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             this.cameraNear=near;this.cameraFar=far;this.cameraFov=fov;
             this.observables=observables.clone();this.editIds=ids.clone();this.editValues=values.clone();
         }
+        /** Copy a live session while extending its operators; retain hidden session preferences. */
+        Snapshot(Snapshot source,String[] observables){
+            objectCount=source.objectCount;selectedId=source.selectedId;resolutionLimit=source.resolutionLimit;
+            projectVersion=source.projectVersion;seed=source.seed;overview=source.overview;coupling=source.coupling;
+            yaw=source.yaw;pitch=source.pitch;zoom=source.zoom;time=source.time;quantumStrength=source.quantumStrength;
+            enabledQuantumStrength=source.enabledQuantumStrength;
+            cameraNear=source.cameraNear;cameraFar=source.cameraFar;cameraFov=source.cameraFov;
+            overrideEye=source.overrideEye==null?null:source.overrideEye.clone();
+            overrideTarget=source.overrideTarget==null?null:source.overrideTarget.clone();
+            this.observables=observables.clone();editIds=source.editIds.clone();editValues=source.editValues.clone();
+        }
     }
     private final NativeCore core;
     private final Listener listener;

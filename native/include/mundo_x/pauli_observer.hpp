@@ -81,8 +81,10 @@ class PauliObserver {
   explicit PauliObserver(const mundo_x::CompactCore& core) : n_(core.qubits()) {
     rows_.reserve(n_);
     pivots_.reserve(n_);
-    for (std::size_t r = 0; r < n_; ++r)
-      rows_.push_back(Pauli::parse(core.generator_string(r), n_));
+    for (std::size_t r = 0; r < n_; ++r) {
+      auto packed = core.generator_packed(r);
+      rows_.push_back({std::move(packed.x), std::move(packed.z), packed.phase});
+    }
     std::size_t rank = 0;
     for (std::size_t c = 0; c < 2 * n_ && rank < n_; ++c) {
       std::size_t pivot = rank;

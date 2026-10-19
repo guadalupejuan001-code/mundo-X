@@ -67,6 +67,9 @@ public final class MainActivity extends Activity {
     private String restoreMessage;
     private volatile String projectName="Mundo X · mundo inicial";
     private long projectLoadSerial;
+    private long expansionSerial;
+    private boolean expandingProject, expansionWasAnimating;
+    private AlertDialog expansionDialog;
     private static final int OPEN_PROJECT=701, SAVE_PROJECT=702;
 
     private static final class SavedSession implements Serializable {
@@ -98,13 +101,13 @@ public final class MainActivity extends Activity {
                 animationTime=previous.visual.time;savedSession=previous;
                 renderer=new QuantumRenderer(this,core,this::showStatus,previous.visual);
             }else{
-                core=new NativeCore(20);core.resetGraph();
+                core=new NativeCore(NativeCore.DEFAULT_QUBITS);core.resetGraph();
                 renderer=new QuantumRenderer(this,core,this::showStatus);
             }
         }catch(Throwable error){
             if(core!=null)core.close();
             saveProtected=true;restoreMessage="No se pudo recuperar la sesión. Tu archivo se conserva; Restablecer permite empezar otra.";
-            try{core=new NativeCore(20);core.resetGraph();renderer=new QuantumRenderer(this,core,this::showStatus);}
+            try{core=new NativeCore(NativeCore.DEFAULT_QUBITS);core.resetGraph();renderer=new QuantumRenderer(this,core,this::showStatus);}
             catch(Throwable nativeError){
                 TextView text=label("No se pudo iniciar COSMIC X Engine.\n"+nativeError,16,PAPER);
                 text.setPadding(dp(24),dp(64),dp(24),dp(24));text.setBackgroundColor(INK);setContentView(text);return;
@@ -150,6 +153,10 @@ public final class MainActivity extends Activity {
         projects.addView(button("Nuevo",this::newProject));
         projects.addView(button("Abrir .cosmic",this::openProject));
         projects.addView(button("Guardar",this::exportProject));
+        if(core.qubits<NativeCore.DEFAULT_QUBITS){
+            Button expand=button("Ampliar a "+NativeCore.DEFAULT_QUBITS+" · añadir |0⟩",this::expandProject);
+            expand.setTag("project_expand_qubits");projects.addView(expand);
+        }
         projects.addView(button("Ejemplos",()->new AlertDialog.Builder(this).setTitle("Proyectos del mismo núcleo y motor gráfico")
             .setItems(new String[]{"Observador Bell · 2 qubits","Ciudad GHZ · 3 qubits"},(dialog,index)->
                 loadAssetProject(index==0?"bell-observer.cosmic":"ghz-city.cosmic")).show()));
@@ -225,7 +232,7 @@ public final class MainActivity extends Activity {
     private void newProject(){
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(18),dp(4),dp(18),0);
         EditText name=field(form,"Nombre","Mundo X · nuevo",false);
-        EditText qubits=field(form,"Qubits del proyecto · 1 a 256","20",true);
+        EditText qubits=field(form,"Qubits del proyecto · 1 a "+NativeCore.MAX_QUBITS,String.valueOf(NativeCore.DEFAULT_QUBITS),true);
         EditText objects=field(form,"Objetos · 1 a 1.048.576","1000000",true);
         EditText seed=field(form,"Semilla · 0 a 4.294.967.295","2026",true);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Nuevo proyecto").setView(form)
@@ -235,7 +242,7 @@ public final class MainActivity extends Activity {
                 final String title=name.getText().toString().trim();
                 final int n=Integer.parseInt(qubits.getText().toString()),count=Integer.parseInt(objects.getText().toString());
                 final long worldSeed=Long.parseLong(seed.getText().toString());
-                if(n<1||n>256||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)
+                if(n<1||n>NativeCore.MAX_QUBITS||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)
                     throw new IllegalArgumentException("Revisa los rangos indicados");
                 final long serial=++projectLoadSerial;
                 dialog.dismiss();
@@ -251,6 +258,33 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void expandProject(){
+        if(surface==null||expandingProject||core.qubits>=NativeCore.DEFAULT_QUBITS)return;
+        final long serial=++projectLoadSerial;final NativeCore source=core;
+        expansionSerial=serial;expandingProject=true;expansionWasAnimating=animate;animate=false;main.removeCallbacks(tick);
+        animateButton.setText("Animar");
+        expansionDialog=new AlertDialog.Builder(this).setTitle("Ampliando a "+NativeCore.DEFAULT_QUBITS+" qubits")
+            .setMessage("Conservando el proyecto y añadiendo qubits en |0⟩…").setCancelable(false).show();
+        surface.queueEvent(()->{
+            try{
+                if(source!=core){main.post(()->finishExpansion(serial,false));return;}
+                CosmicProject.Document expanded=CosmicProject.expandQubits(projectName,source.snapshot(),renderer.snapshot(),NativeCore.DEFAULT_QUBITS);
+                storage.execute(()->{try{prepareProject(expanded,serial);}
+                    catch(Exception error){main.post(()->finishExpansion(serial,false));showStatus("No se pudo ampliar el proyecto: "+error.getMessage());}});
+            }catch(Exception error){main.post(()->finishExpansion(serial,false));showStatus("No se pudo ampliar el proyecto: "+error.getMessage());}
+        });
+        surface.requestRender();
+    }
+
+    private void finishExpansion(long serial,boolean installed){
+        if(expansionSerial!=serial)return;
+        expandingProject=false;expansionSerial=0;
+        if(expansionDialog!=null){expansionDialog.dismiss();expansionDialog=null;}
+        if(!installed&&expansionWasAnimating&&!isFinishing()&&!isDestroyed()){
+            animate=true;animateButton.setText("Pausar");lastTick=0;if(resumed)main.post(tick);
+        }
+    }
+
     private EditText field(LinearLayout form,String label,String value,boolean number){
         TextView caption=label(label,12,MUTED);form.addView(caption);
         EditText input=new EditText(this);input.setText(value);input.setTextColor(PAPER);input.setSingleLine(true);
@@ -264,7 +298,8 @@ public final class MainActivity extends Activity {
             candidate.query(project.graphics.observables);
             QuantumRenderer observer=new QuantumRenderer(this,candidate,this::showStatus,project.graphics);
             main.post(()->{
-                if(isFinishing()||isDestroyed()||serial!=projectLoadSerial){candidate.close();return;}
+                if(isFinishing()||isDestroyed()||serial!=projectLoadSerial){candidate.close();finishExpansion(serial,false);return;}
+                finishExpansion(serial,true);
                 installProject(project,candidate,observer);
             });
         }catch(Throwable error){candidate.close();throw error;}
@@ -371,7 +406,7 @@ public final class MainActivity extends Activity {
         renderer.editSelected(operation);
     });}
     private void action(Runnable change){
-        if(surface==null)return;
+        if(surface==null||expandingProject)return;
         surface.queueEvent(()->{
             try{change.run();captureSession();}catch(Throwable error){showStatus("No se pudo aplicar el cambio: "+error.getMessage());}
         });surface.requestRender();
@@ -434,7 +469,8 @@ public final class MainActivity extends Activity {
     }
     @Override public Object onRetainNonConfigurationInstance(){return savedSession;}
     @Override protected void onDestroy(){
-        main.removeCallbacks(tick);storage.shutdown();if(core!=null)core.close();super.onDestroy();
+        main.removeCallbacks(tick);if(expansionDialog!=null){expansionDialog.dismiss();expansionDialog=null;}
+        expansionSerial=0;expandingProject=false;storage.shutdown();if(core!=null)core.close();super.onDestroy();
     }
 
     private int dp(float value){return Math.round(value*getResources().getDisplayMetrics().density);}

@@ -21,6 +21,7 @@ def main():
     require("MUNDOX_GRAPHICS_TESTS_PASSED" in output, "Instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Instrumentation did not finish successfully")
     expected = {
+        "default_1000_qubit_world", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
         "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
         "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
         "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration",
@@ -42,7 +43,17 @@ def main():
     metrics = report["metrics"]
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"], "Wrong emulator API or ABI")
     require("swiftshader" in metrics["glRenderer"].lower(), "GLES driver is not SwiftShader")
-    require(metrics["qubits"] == 20 and metrics["nativeStateBytes"] > 0, "Missing live native state")
+    require(metrics["qubits"] == 1000 and metrics["nativeStateBytes"] > 0
+            and metrics["defaultQubits"] == 1000 and metrics["defaultObservables"] == 3000, "Missing live 1000-qubit state")
+    native = metrics["native1000"]
+    require(native["qubits"] == 1000 and native["highQubits"] == [32, 53, 59, 64, 511, 999]
+            and native["ghzExpectations"] == [1, 1, 1, 1, 1, 0, 0, 0] and native["snapshotRoundtrip"] is True
+            and native["stateBytes"] > 0, "GHZ1000, high-bit gates or snapshot replay failed")
+    require(metrics["legacyExpansionSourceQubits"] == [8, 20, 60] and metrics["expandedProjectQubits"] == 1000
+            and metrics["legacyExpansionChangedPixels"] == 0 and metrics["legacyExpansionPreservedState"] is True
+            and metrics["legacyExpansionAddedQubitsZero"] is True and metrics["legacyExpansionHiddenStatePreserved"] is True
+            and metrics["legacyExpansionBlockedConcurrentGate"] is True and metrics["expandedProjectRoundtrip"] is True,
+            "Legacy-to-1000 project expansion lost state or scene")
     require(metrics["millionObjectCount"] == 1_000_000 and metrics["maximumObjectCount"] == 1_048_576,
             "Full scene limits were not tested")
     require(metrics["coupledChangedPixels"] > 20 and metrics["uncoupledChangedPixels"] == 0,
@@ -51,7 +62,8 @@ def main():
             "Selection or lifecycle comparison failed")
     codec = metrics["projectCodec"]
     require(codec["passed"] is True and codec["checks"] >= 99 and codec["rejectedInvalidDocuments"] >= 83
-            and codec["nativeOrGlCreated"] is False, "Strict portable codec checks incomplete")
+            and codec["nativeOrGlCreated"] is False and codec["expandedQubits"] == 1000
+            and codec["legacyQubitCounts"] == [2, 8, 20, 60], "Strict portable codec checks incomplete")
     fixtures = {item["fixture"]: item for item in metrics["portableFixtures"]}
     require(len(metrics["portableFixtures"]) == 2 and set(fixtures) == {"bell-observer.cosmic", "ghz-city.cosmic"},
             "Desktop fixture import inventory incomplete")

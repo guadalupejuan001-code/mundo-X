@@ -37,7 +37,7 @@ import org.json.JSONObject;
 /** Device tests use the shipping JNI core, shaders, GL thread and activity lifecycle. */
 public final class GraphicsInstrumentation extends Instrumentation {
     private static final String TAG = "MundoXGraphicsTests";
-    private static final int EXPECTED_TESTS = 15;
+    private static final int EXPECTED_TESTS = 18;
     private static final long FRAME_TIMEOUT_MS = 45_000;
     private MainActivity activity;
     private File evidence;
@@ -99,7 +99,9 @@ public final class GraphicsInstrumentation extends Instrumentation {
             activity = (MainActivity) startActivitySync(launch);
             waitUntil(() -> activity.resumed, 15_000, "Activity did not resume");
 
+            runCase("default_1000_qubit_world", this::defaultThousand);
             runCase("native_bell_invariants", this::nativeBell);
+            runCase("native_1000_qubit_invariants", this::nativeThousand);
             runCase("renderer_borrows_native_state", this::borrowedState);
             runCase("gles_one_million_objects", () -> largeScene(1_000_000, "million"));
             runCase("gles_maximum_object_limit", () -> largeScene(1_048_576, "maximum"));
@@ -110,14 +112,15 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("edit_restoration", this::editRestoration);
             runCase("pause_resume_preserves_state", this::pauseResume);
 
-            // Preserve the original 20-qubit baseline metrics before tests
-            // deliberately replace the active app with 2/3-qubit projects.
+            // Record the active 1000-qubit profile before project migration tests
+            // deliberately replace it with legacy and pedagogical projects.
             metrics.put("glRenderer", activity.renderer.device);
             metrics.put("qubits", activity.core.qubits);
             metrics.put("nativeStateBytes", activity.core.stateBytes());
-            metrics.put("baselineMetricsScope", "Original ten tests, before portable project replacement");
+            metrics.put("baselineMetricsScope", "1000-qubit default, before portable project replacement");
 
             runCase("portable_codec_strict_validation", this::portableCodec);
+            runCase("portable_1000_and_legacy_expansion", this::portableThousand);
             runCase("portable_desktop_fixtures_import", this::portableFixtures);
             runCase("portable_mutation_export_reimport", this::portableRoundtrip);
             runCase("portable_invalid_import_preserves_session", this::portableInvalidImport);
@@ -167,6 +170,87 @@ public final class GraphicsInstrumentation extends Instrumentation {
         }
         results.add(new Result(name, (SystemClock.elapsedRealtime() - start) / 1000.0, failure));
         sendStatus(failure == null ? 0 : -2, status);
+    }
+
+    private void defaultThousand() throws Exception {
+        expect(NativeCore.DEFAULT_QUBITS == 1000 && NativeCore.MAX_QUBITS == 1000,
+                "The shipping profile and project limit must both be 1000");
+        expect(activity.core.qubits == 1000, "A fresh app did not start a 1000-qubit core");
+        frame(false);
+        QuantumRenderer.FrameStats stats = activity.renderer.frameStats();
+        expect(stats != null && stats.qubits == 1000 && stats.observables == 3000,
+                "The live renderer did not receive the complete 1000-qubit visual program");
+        metrics.put("defaultQubits", activity.core.qubits);
+        metrics.put("defaultObservables", stats.observables);
+    }
+
+    private static String pauli(int qubits, char axis, int... positions) {
+        char[] out = new char[qubits]; Arrays.fill(out, 'I');
+        for (int q : positions) out[q] = axis;
+        return new String(out);
+    }
+
+    private static String uniformPauli(int qubits, char axis) {
+        char[] out = new char[qubits]; Arrays.fill(out, axis); return new String(out);
+    }
+
+    private void nativeThousand() throws Exception {
+        int[] high = {32, 53, 59, 64, 511, 999};
+        try (NativeCore core = new NativeCore(1000)) {
+            for (int q : high) {
+                String x = pauli(1000, 'X', q), y = pauli(1000, 'Y', q), z = pauli(1000, 'Z', q);
+                expect(Arrays.equals(core.query(new String[]{x, y, z}), new float[]{0, 0, 1}), "Fresh high qubit is not |0>: " + q);
+                core.apply(NativeCore.H, q, 0);
+                expect(core.query(new String[]{x})[0] == 1, "H lost high qubit " + q);
+                core.apply(NativeCore.S, q, 0);
+                expect(core.query(new String[]{y})[0] == 1, "S phase lost high qubit " + q);
+                core.apply(NativeCore.Z, q, 0);
+                expect(core.query(new String[]{y})[0] == -1, "Z phase lost high qubit " + q);
+                core.apply(NativeCore.X, q, 0);
+                core.apply(NativeCore.Y, q, 0);
+                expect(core.query(new String[]{y})[0] == 1, "X/Y action lost high qubit " + q);
+            }
+        }
+        try (NativeCore core = new NativeCore(1000)) {
+            core.apply(NativeCore.H, 0, 0);
+            for (int q = 1; q < 1000; q++) core.apply(NativeCore.CX, q - 1, q);
+            String allX = uniformPauli(1000, 'X'), allZ = uniformPauli(1000, 'Z');
+            String[] operators = {allX, allZ, pauli(1000, 'Z', 0, 999), pauli(1000, 'Z', 31, 32),
+                    pauli(1000, 'Z', 63, 64), pauli(1000, 'Z', 53), pauli(1000, 'Z', 511), pauli(1000, 'Z', 999)};
+            float[] ghz = {1, 1, 1, 1, 1, 0, 0, 0};
+            expect(Arrays.equals(core.query(operators), ghz), "GHZ1000 global correlations or local mixed states are wrong");
+            core.apply(NativeCore.Z, 999, 0);
+            expect(core.query(new String[]{allX})[0] == -1, "Z999 did not reverse GHZ1000 phase");
+            core.apply(NativeCore.Z, 999, 0);
+            core.apply(NativeCore.CZ, 32, 999);
+            expect(core.query(new String[]{allX})[0] == -1, "CZ32,999 did not reverse GHZ1000 phase");
+            core.apply(NativeCore.CZ, 32, 999);
+            core.apply(NativeCore.X, 53, 0);
+            expect(Arrays.equals(core.query(new String[]{allX, allZ, pauli(1000, 'Z', 32, 53), pauli(1000, 'Z', 53, 999)}),
+                    new float[]{1, -1, -1, -1}), "X53 aliased a different bit of GHZ1000");
+            NativeCore.Snapshot before = core.snapshot();
+            String[] generators = core.generators(); float[] values = core.query(operators);
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (ObjectOutputStream output = new ObjectOutputStream(bytes)) { output.writeObject(before); }
+            NativeCore.Snapshot saved;
+            try (ObjectInputStream input = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                saved = (NativeCore.Snapshot) input.readObject();
+            }
+            try (NativeCore restored = new NativeCore(saved)) {
+                sameCore(before, restored.snapshot(), "1000-qubit snapshot changed history or revision");
+                expect(Arrays.equals(generators, restored.generators()) && Arrays.equals(values, restored.query(operators)),
+                        "1000-qubit snapshot replay changed the native state");
+            }
+            JSONArray bits = new JSONArray(), expected = new JSONArray();
+            for (int q : high) bits.put(q); for (float value : ghz) expected.put((double)value);
+            metrics.put("native1000", new JSONObject().put("qubits", core.qubits).put("highQubits", bits)
+                    .put("ghzExpectations", expected).put("snapshotRoundtrip", true)
+                    .put("stateBytes", core.stateBytes()).put("gateCount", before.gateHistory.length / 3));
+        }
+        boolean rejected = false;
+        try (NativeCore invalid = new NativeCore(1001)) { }
+        catch (IllegalArgumentException expected) { rejected = true; }
+        expect(rejected, "The declared 1000-qubit project limit was not enforced");
     }
 
     private void nativeBell() {
@@ -438,6 +522,106 @@ public final class GraphicsInstrumentation extends Instrumentation {
         return value.get();
     }
 
+    private void portableThousand() throws Exception {
+        CosmicProject.Document legacy20 = null;
+        JSONArray sizes = new JSONArray();
+        for (int oldSize : new int[]{8, 20, 60}) {
+            try (NativeCore original = new NativeCore(oldSize)) {
+                original.apply(NativeCore.H, oldSize - 1, 0);
+                original.apply(NativeCore.CX, oldSize - 1, 0);
+                original.apply(NativeCore.Z, oldSize - 1, 0);
+                QuantumRenderer visual = new QuantumRenderer(getTargetContext(), original, text -> { });
+                visual.objectCount(64); visual.resolution(320); visual.worldSeed(4_000_000_001L);
+                CosmicProject.Document legacy = CosmicProject.fromSnapshots("Android · legado " + oldSize, original.snapshot(), visual.snapshot());
+                legacy = CosmicProject.decode(CosmicProject.encode(legacy));
+                expect(legacy.core.qubits == oldSize, "Import silently expanded a legacy project");
+                byte[] before = CosmicProject.encode(legacy);
+                CosmicProject.Document expanded = CosmicProject.expandQubits(legacy, 1000);
+                CosmicProject.Document back = CosmicProject.decode(CosmicProject.encode(expanded));
+                sameCore(expanded.core, back.core, "Portable expansion lost native history");
+                sameGraphics(expanded.graphics, back.graphics, "Portable expansion lost graphics");
+                expect(Arrays.equals(before, CosmicProject.encode(legacy)), "Expansion mutated its original project");
+                try (NativeCore larger = new NativeCore(back.core)) {
+                    expect(larger.qubits == 1000 && larger.version() == original.version(), "Expansion replaced the source revision");
+                    expect(Arrays.equals(original.query(legacy.graphics.observables), larger.query(back.graphics.observables)),
+                            "Expansion changed legacy quantum observations");
+                    assertAddedZero(larger.generators(), oldSize);
+                }
+                if (oldSize == 20) {
+                    JSONObject json = new JSONObject(new String(before, StandardCharsets.UTF_8));
+                    json.getJSONObject("graphics").put("coupling", -.125);
+                    legacy20 = CosmicProject.decode(json.toString().getBytes(StandardCharsets.UTF_8));
+                }
+                sizes.put(oldSize);
+            }
+        }
+        expect(legacy20 != null, "Missing explicit 20-qubit migration fixture");
+        install(legacy20);
+        gl(() -> {
+            activity.renderer.coupling(false); activity.renderer.orbit(11, -4); activity.renderer.setTime(1.25f);
+            activity.renderer.testCamera(new float[]{13, 15, 19}, new float[]{0, 1, 0});
+        });
+        QuantumRenderer.Capture ids = frame(true); Pick selected = choose(ids); select(selected, ids);
+        gl(() -> activity.renderer.editSelected(3));
+        LiveProject before = liveProject();
+        AtomicReference<QuantumRenderer.Snapshot> raw = new AtomicReference<>();
+        gl(() -> raw.set(activity.renderer.snapshot()));
+        QuantumRenderer.Snapshot beforeVisual = raw.get();
+        QuantumRenderer.Capture image = frame(false);
+        NativeCore previous = activity.core;
+        runOnMainSync(() -> {
+            View button = activity.getWindow().getDecorView().findViewWithTag("project_expand_qubits");
+            expect(button != null && button.performClick(), "Missing production expansion action for the legacy project");
+            // Deliver an already-resolved gate callback while candidate preparation is pending.
+            // The UI commit cannot run until this main-thread callback returns.
+            View gate = findText(activity.getWindow().getDecorView(), "H");
+            expect(gate != null && gate.performClick(), "Missing gate control during expansion race check");
+            CountDownLatch checked = new CountDownLatch(1);
+            AtomicReference<Long> revision = new AtomicReference<>();
+            activity.surface.queueEvent(() -> { revision.set(previous.version()); checked.countDown(); });
+            try { expect(checked.await(10, TimeUnit.SECONDS), "Pending expansion gate check timed out"); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new AssertionError(interrupted); }
+            expect(revision.get() == before.document.core.version, "A gate callback mutated the source while expansion was pending");
+        });
+        waitUntil(() -> activity.core != previous && activity.core.qubits == 1000 && activity.renderer.hasFrame,
+                FRAME_TIMEOUT_MS, "Production expansion did not install a 1000-qubit project");
+        LiveProject after = liveProject();
+        expect(after.document.core.version == before.document.core.version
+                && Arrays.equals(after.document.core.gateHistory, before.document.core.gateHistory)
+                && Arrays.equals(after.expectations, before.expectations), "Production expansion reset the legacy quantum state");
+        CosmicProject.Document expected = CosmicProject.expandQubits(before.document, 1000);
+        sameCore(expected.core, after.document.core, "Production expansion has the wrong native project");
+        sameGraphics(expected.graphics, after.document.graphics, "Production expansion changed portable visual state");
+        assertAddedZero(after.generators, 20);
+        gl(() -> raw.set(activity.renderer.snapshot()));
+        expect(raw.get().enabledQuantumStrength == beforeVisual.enabledQuantumStrength
+                && raw.get().enabledQuantumStrength == -.125f && raw.get().yaw == beforeVisual.yaw
+                && raw.get().pitch == beforeVisual.pitch && raw.get().zoom == beforeVisual.zoom
+                && raw.get().overview == beforeVisual.overview, "Production expansion lost hidden session preferences");
+        QuantumRenderer.Capture expandedImage = frame(false);
+        expect(image.changed(expandedImage) == 0, "Production expansion changed the frozen framebuffer");
+        runOnMainSync(() -> expect(activity.getWindow().getDecorView().findViewWithTag("project_expand_qubits") == null,
+                "Expansion action remains enabled at the maximum profile"));
+        install(CosmicProject.decode(CosmicProject.encode(after.document)));
+        sameLive(after, liveProject(), "1000-qubit export/reimport changed the live portable project");
+        expect(expandedImage.changed(frame(false)) == 0, "1000-qubit reimport changed the frozen framebuffer");
+        metrics.put("legacyExpansionSourceQubits", sizes);
+        metrics.put("expandedProjectQubits", activity.core.qubits);
+        metrics.put("legacyExpansionChangedPixels", image.changed(expandedImage));
+        metrics.put("legacyExpansionPreservedState", true);
+        metrics.put("legacyExpansionAddedQubitsZero", true);
+        metrics.put("legacyExpansionHiddenStatePreserved", true);
+        metrics.put("legacyExpansionBlockedConcurrentGate", true);
+        metrics.put("expandedProjectRoundtrip", true);
+    }
+
+    private static void assertAddedZero(String[] generators, int oldSize) {
+        expect(generators.length == 1000, "Expanded core did not expose 1000 generators");
+        for (int q = oldSize; q < generators.length; q++)
+            expect(generators[q].equals("+" + pauli(generators.length, 'Z', q)),
+                    "An added qubit was entangled or was not initialized to |0>: " + q);
+    }
+
     private void portableFixtures() throws Exception {
         JSONArray imported = new JSONArray();
         for (String file : new String[]{"bell-observer.cosmic", "ghz-city.cosmic"}) {
@@ -689,12 +873,18 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private static boolean containsText(View view, String text) {
-        if (view instanceof TextView && text.contentEquals(((TextView) view).getText())) return true;
+        return findText(view, text) != null;
+    }
+
+    private static View findText(View view, String text) {
+        if (view instanceof TextView && text.contentEquals(((TextView) view).getText())) return view;
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) if (containsText(group.getChildAt(i), text)) return true;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View found = findText(group.getChildAt(i), text); if (found != null) return found;
+            }
         }
-        return false;
+        return null;
     }
 
     private void scene(int count) throws Exception {

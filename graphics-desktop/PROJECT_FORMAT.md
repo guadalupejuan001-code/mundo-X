@@ -17,7 +17,7 @@ biblioteca estándar para leer, validar y escribir el documento.
 | `graphics` | Objeto con los campos gráficos de la siguiente sección. |
 | `core.backend` | Cadena exacta `compact-clifford`. |
 | `core.initialState` | Cadena exacta `zero`: estado inicial `|0…0⟩`. |
-| `core.qubits` | Entero 1..256. |
+| `core.qubits` | Entero 1..1000; los proyectos nuevos comienzan en 1000. |
 | `core.revision` | Entero 0..9.007.199.254.740.991. Serial guardado de cambios por lote; no equivale al número de puertas. |
 | `core.gates` | Lista ordenada de hasta 100.000 puertas; puede estar vacía. |
 

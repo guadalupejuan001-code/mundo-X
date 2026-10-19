@@ -105,9 +105,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p cosmic-dist
-          cp cosmic-android/app/build/outputs/apk/debug/app-debug.apk cosmic-dist/COSMIC-X-Engine-0.3.0.apk
+          cp cosmic-android/app/build/outputs/apk/debug/app-debug.apk cosmic-dist/COSMIC-X-Engine-0.3.1.apk
           cp cosmic-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
-            cosmic-dist/COSMIC-X-Engine-0.3.0-tests.apk
+            cosmic-dist/COSMIC-X-Engine-0.3.1-tests.apk
           cp graphics-android/app/build/outputs/apk/debug/app-debug.apk cosmic-dist/Mundo-X-Graphics-coexist.apk
           for cosmic_apk in cosmic-dist/*.apk; do
             "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$cosmic_apk" \
@@ -115,16 +115,16 @@ jobs:
             "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$cosmic_apk" \
               > "${cosmic_apk%.apk}-manifest.txt"
           done
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree cosmic-dist/COSMIC-X-Engine-0.3.0.apk \
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree cosmic-dist/COSMIC-X-Engine-0.3.1.apk \
             --file AndroidManifest.xml > cosmic-dist/app-manifest-tree.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree cosmic-dist/COSMIC-X-Engine-0.3.0-tests.apk \
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree cosmic-dist/COSMIC-X-Engine-0.3.1-tests.apk \
             --file AndroidManifest.xml > cosmic-dist/test-manifest-tree.txt
           python3 tools/cosmic-android-audit-apk.py cosmic-dist
 
       - name: Upload the new app and its validation companion
         uses: actions/upload-artifact@v4
         with:
-          name: COSMIC-X-Engine-0.3.0-APK
+          name: COSMIC-X-Engine-0.3.1-APK
           path: cosmic-dist/**
           if-no-files-found: error
           retention-days: 14
@@ -133,7 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: COSMIC-X-Engine-0.3.0-Build-Logs
+          name: COSMIC-X-Engine-0.3.1-Build-Logs
           path: |
             cosmic-build.log
             cosmic-coexist-build.log
@@ -161,7 +161,7 @@ jobs:
       - name: Download the exact APKs from this build
         uses: actions/download-artifact@v4
         with:
-          name: COSMIC-X-Engine-0.3.0-APK
+          name: COSMIC-X-Engine-0.3.1-APK
           path: cosmic-apks
 
       - name: Enable emulator and install Android 15 image
@@ -186,7 +186,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: COSMIC-X-Engine-0.3.0-Android-${{ matrix.suite }}
+          name: COSMIC-X-Engine-0.3.1-Android-${{ matrix.suite }}
           path: cosmic-evidence/**
           if-no-files-found: warn
           retention-days: 14

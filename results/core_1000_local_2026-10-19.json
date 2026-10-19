@@ -1,0 +1,85 @@
+{
+  "schema": "cosmic-core-1000-local-validation-v1",
+  "base_commit": "e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf",
+  "optimization_source_commit": "bbefd97841828a4cbd130b5501d6086980144e77",
+  "profile_qubits": 1000,
+  "graphics_backend": "compact-clifford",
+  "status": "passed",
+  "ctest": {
+    "tests": 46,
+    "failures": 0,
+    "errors": 0,
+    "selected_output": {
+      "core_performance": "PASS core_performance exact_checks=70153 word_boundaries=63,64,65,127,128,129,256 packed_export=PASS direct_cz=PASS signed_elimination=PASS",
+      "core_60": "PASS core_60 qubits=60 oracle_qubits=6 physical_indices=0,1,31,32,53,59 checks=91243 oracle_comparisons=39744 measurement_branches=34 max_oracle_error=5.5511151231257827e-16 tolerance=1e-10 ghz60_phase=PASS ghz60_t=PASS snapshot_bridge=PASS q60_rejection=PASS",
+      "core_1000": "PASS core_1000 qubits=1000 oracle_qubits=8 physical_indices=0,31,32,63,64,511,512,999 checks=30721 oracle_comparisons=11304 measurement_branches=8 max_oracle_error=5.5511151231257778e-17 tolerance=1e-10 ghz1000_phase=PASS snapshot_bridge=PASS q1000_rejection=PASS dense1000_allocated=false backend=compact-clifford",
+      "xasm_60": "checks=43 failures=0"
+    }
+  },
+  "desktop_project_validation": {
+    "profile_qubits": 1000,
+    "backend": "compact-clifford",
+    "physical_phone_benchmark": false,
+    "gpu_context_created": false,
+    "expansions": [
+      {
+        "from": 2,
+        "to": 1000,
+        "history_state_world_preserved": true,
+        "added_zero_qubits": 998,
+        "high_qubit_gate_verified": true,
+        "roundtrip_preserved": true
+      },
+      {
+        "from": 8,
+        "to": 1000,
+        "history_state_world_preserved": true,
+        "added_zero_qubits": 992,
+        "high_qubit_gate_verified": true,
+        "roundtrip_preserved": true
+      },
+      {
+        "from": 20,
+        "to": 1000,
+        "history_state_world_preserved": true,
+        "added_zero_qubits": 980,
+        "high_qubit_gate_verified": true,
+        "roundtrip_preserved": true
+      },
+      {
+        "from": 60,
+        "to": 1000,
+        "history_state_world_preserved": true,
+        "added_zero_qubits": 940,
+        "high_qubit_gate_verified": true,
+        "roundtrip_preserved": true
+      }
+    ],
+    "default": {
+      "qubits": 1000,
+      "observable_channels": 3000,
+      "native_tableau_bytes": 257000,
+      "project_file_bytes": 3170973,
+      "roundtrip_preserved": true
+    },
+    "cli_expansion_and_high_qubit_gate": true,
+    "status": "passed"
+  },
+  "existing_desktop_gles_contracts": "passed",
+  "existing_portable_project_gles_contracts": "passed",
+  "benchmark_file": "core_1000_benchmark_2026-10-19.json",
+  "phone_benchmark": false,
+  "scope": "Local native/Linux and desktop GLES evidence. Android workflow results are retained separately.",
+  "source_sha256": {
+    "native/include/mundo_x/compact_core.hpp": "3596321e48428f006de86a8467356f178ce9662430be69876dbf35c3d3f5a027",
+    "native/include/mundo_x/pauli_observer.hpp": "a4e0cea872cf7f267f1990a29b9e2e1b3f77ececf70851afbbd83692d329e183",
+    "native/include/mundo_x/engine_session.hpp": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+    "native/include/mundo_x/xasm.hpp": "b79a19dfbff4175964a221717ed273d149c2afb6eb376b2c97cbc7310945deb2",
+    "native/include/mundo_x/exact_t_experiment.hpp": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+    "native/src/graphics_core_bridge.cpp": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+    "native/tests/core_1000.cpp": "e04b8f446a36d868d657324dd501922096385d8e7c7219bb6f7ae2fa5f4a131b",
+    "native/tests/core_60.cpp": "7c5083cdb7dee0001dfa60d278ff6b8a4abdc58ea1a2c70647bfcfc9c573dad4",
+    "native/tests/xasm_60.cpp": "c54a50d4a1a1d3296a2f1975a2dda5cadf7fc26ed050a435ce506eff5b59c2cd",
+    "native/tests/core_1000_benchmark.cpp": "7851e6fa28791703b66313250bce7659eff296b38b18c30151d021828e8ac13b"
+  }
+}

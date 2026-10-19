@@ -18,9 +18,11 @@ COSMIC_CASES = {
     "application_identity_and_exclusions", "new_motor_live_framebuffer", "four_panels_retain_native_owner",
     "camera_and_observer_preserve_state", "gate_changes_coupled_image", "gate_preserves_uncoupled_image",
     "saf_export_and_reimport", "invalid_saf_import_preserves_session", "background_resume_preserves_world",
+    "legacy_project_expansion_preserves_world",
     "activity_recreation_restores_project", *("experiment_" + name + "_launch" for name in EXPERIMENTS),
 }
 GRAPHICS_CASES = {
+    "default_1000_qubit_world", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
     "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
     "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
     "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration", "pause_resume_preserves_state",
@@ -71,10 +73,11 @@ def device_report(directory, expected, marker, output):
 
 def verify_cosmic(directory, output):
     report, m = device_report(directory, COSMIC_CASES, "COSMIC_UNIFIED_TESTS_PASSED", output)
-    require(m["applicationId"] == "com.mundox.cosmic" and m["version"] == "0.3.0"
+    require(m["applicationId"] == "com.mundox.cosmic" and m["version"] == "0.3.1"
             and m["activityCount"] == 16 and m["windowsActivityPresent"] is False, "Wrong new app inventory")
-    require(m["initialObjects"] == 16_384 and m["initialQubits"] == 20 and m["initialVisiblePixels"] > 100
-            and m["initialDistinctIds"] > 0 and m["initialResolutionLimit"] == 960, "New home did not display the real default world")
+    require(m["initialObjects"] == 16_384 and m["initialQubits"] == 1000 and m["initialObservables"] == 3000
+            and m["initialVisiblePixels"] > 100 and m["initialDistinctIds"] > 0
+            and m["initialResolutionLimit"] == 960, "New home did not display the real default world")
     require(m["panelCount"] == 4 and m["panelsPreservedOwner"] is True
             and m["cameraPreservedOwner"] is True and m["observationWasReadOnly"] is True, "Navigation/camera altered the native core")
     require(m["coupledChangedPixels"] > 20 and m["uncoupledChangedPixels"] == 0 and m["gatePreservedOwner"] is True,
@@ -82,6 +85,10 @@ def verify_cosmic(directory, output):
     require(m["safExportBytes"] > 0 and m["safExportQubits"] == 2 and m["safUsedProductionCallbacks"] is True
             and m["safRoundtripChangedPixels"] == 0 and m["invalidImportChangedPixels"] == 0
             and m["invalidImportPreservedOwner"] is True, "Real document callbacks failed to preserve the project")
+    require(m["expandedFromQubits"] == 2 and m["expandedToQubits"] == 1000 and m["expansionChangedPixels"] == 0
+            and m["expansionPreservedState"] is True and m["expansionAddedQubitsZero"] is True
+            and m["expansionPreservedHiddenState"] is True and m["expansionBlockedConcurrentGate"] is True,
+            "Production legacy expansion lost the saved world")
     require(m["backgroundChangedPixels"] == 0 and m["backgroundPreservedOwner"] is True
             and m["recreateChangedPixels"] == 0 and m["recreateCreatedNewOwner"] is True
             and m["reopenChangedPixels"] == 0 and m["restoredEnabledCoupling"] == -.125
@@ -109,13 +116,14 @@ def verify_cosmic(directory, output):
                 "cosmic-render-color.png", "cosmic-render-ids.png",
                 "cosmic-coupled-before.png", "cosmic-coupled-after.png", "cosmic-uncoupled-before.png", "cosmic-uncoupled-after.png",
                 "cosmic-saf-before.png", "cosmic-saf-after.png", "cosmic-background-before.png", "cosmic-background-after.png",
+                "cosmic-expansion-before.png", "cosmic-expansion-after.png",
                 "cosmic-recreate-before.png", "cosmic-recreate-after.png", "cosmic-reopen-after.png", "experiment-juego-surface.png",
                 *("experiment-" + name + ".png" for name in EXPERIMENTS)}
     require(required <= set(report["images"]), "An actual app/experiment framebuffer or screenshot is missing")
     manifest = image_manifest(directory, required)
     require(manifest["experiment-juego-surface.png"]["width"] == game["width"]
             and manifest["experiment-juego-surface.png"]["height"] == game["height"], "Game PixelCopy PNG dimensions differ")
-    for pair in ("uncoupled", "saf", "background", "recreate"):
+    for pair in ("uncoupled", "saf", "expansion", "background", "recreate"):
         require(manifest[f"cosmic-{pair}-before.png"]["sha256"] == manifest[f"cosmic-{pair}-after.png"]["sha256"],
                 "Independent PNG comparison disagrees for " + pair)
     require(manifest["cosmic-coupled-before.png"]["sha256"] != manifest["cosmic-coupled-after.png"]["sha256"],
@@ -152,13 +160,24 @@ def verify_cosmic(directory, output):
 
 def verify_graphics(directory, output):
     report, m = device_report(directory, GRAPHICS_CASES, "MUNDOX_GRAPHICS_TESTS_PASSED", output)
-    require(m["qubits"] == 20 and m["millionObjectCount"] == 1_000_000 and m["maximumObjectCount"] == 1_048_576,
-            "Original graphics limits were not exercised in the new APK")
+    require(m["qubits"] == 1000 and m["defaultQubits"] == 1000 and m["defaultObservables"] == 3000
+            and m["millionObjectCount"] == 1_000_000 and m["maximumObjectCount"] == 1_048_576,
+            "1000-qubit graphics limits were not exercised in the new APK")
+    native = m["native1000"]
+    require(native["qubits"] == 1000 and native["highQubits"] == [32, 53, 59, 64, 511, 999]
+            and native["ghzExpectations"] == [1, 1, 1, 1, 1, 0, 0, 0] and native["snapshotRoundtrip"] is True
+            and native["stateBytes"] > 0, "Native GHZ1000, high-bit gates or snapshot replay failed")
+    require(m["legacyExpansionSourceQubits"] == [8, 20, 60] and m["expandedProjectQubits"] == 1000
+            and m["legacyExpansionChangedPixels"] == 0 and m["legacyExpansionPreservedState"] is True
+            and m["legacyExpansionAddedQubitsZero"] is True and m["legacyExpansionHiddenStatePreserved"] is True
+            and m["legacyExpansionBlockedConcurrentGate"] is True and m["expandedProjectRoundtrip"] is True,
+            "Original app expansion to 1000 lost project state or graphics")
     require(m["coupledChangedPixels"] > 20 and m["uncoupledChangedPixels"] == 0
             and m["removedIdPixels"] == 0 and m["pauseResumeChangedPixels"] == 0, "Original core/renderer invariants failed")
     codec = m["projectCodec"]
     require(codec["passed"] is True and codec["checks"] >= 99 and codec["rejectedInvalidDocuments"] >= 83
-            and codec["nativeOrGlCreated"] is False, "Strict portable codec validation incomplete")
+            and codec["nativeOrGlCreated"] is False and codec["expandedQubits"] == 1000
+            and codec["legacyQubitCounts"] == [2, 8, 20, 60], "Strict portable codec validation incomplete")
     fixtures = {item["fixture"]: item for item in m["portableFixtures"]}
     require(len(m["portableFixtures"]) == 2 and set(fixtures) == {"bell-observer.cosmic", "ghz-city.cosmic"}
             and all(item["passed"] is True and item["visiblePixels"] > 100 for item in fixtures.values()), "Imported fixtures failed to render")
@@ -235,7 +254,7 @@ def main():
     verify = {"cosmic": verify_cosmic, "graphics": verify_graphics, "micro": verify_micro}[suite]
     result = verify(directory, output)
     result.update({"schemaVersion": 1, "status": "passed", "suite": suite, "buildCommit": commit,
-                   "applicationId": "com.mundox.cosmic", "apkSha256": checksums["COSMIC-X-Engine-0.3.0.apk"],
+                   "applicationId": "com.mundox.cosmic", "apkSha256": checksums["COSMIC-X-Engine-0.3.1.apk"],
                    "performanceScope": "Software emulator correctness; not measured phone performance"})
     (directory / "verified-evidence.json").write_text(json.dumps(result, indent=2) + "\n")
     print(f"Verified {result['tests']} {suite} device tests and {len(result['images'])} actual PNG captures on the new APK.")

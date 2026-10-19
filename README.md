@@ -6,7 +6,17 @@
 
 **Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 19 de octubre de 2026.
 
-**COSMIC X Engine 0.2.0 para Android:** [aplicación, controles y compilación](graphics-android/README.md). El núcleo cuántico y el motor gráfico comparten la sesión nativa. Permite crear, abrir y guardar proyectos `.cosmic`, operar sobre 1 a 256 qubits del perfil compacto, conservar los observables originales y editar hasta 1.048.576 cajas por ID. Incluye proyectos Bell y GHZ. El [visor de escritorio](graphics-desktop/README.md) compila el mismo puente y abre el mismo [formato de proyecto](graphics-desktop/PROJECT_FORMAT.md). [Integración y procedencia](docs/cosmic_x_engine.md).
+**Registro integrado de 1.000 qubits — COSMIC X Engine 0.3.1:** los proyectos nuevos
+de Android y escritorio usan el núcleo compacto propio con 1.000 qubits y 3.000
+observables. La acción **Ampliar a 1000** incorpora qubits inicializados en cero
+a una sesión anterior, conservando sus puertas, observables, cámara y objetos.
+El contrato nativo verifica GHZ de 1.000 qubits, medición, signos Pauli y el
+qubit 999. [Uso, límites de cada núcleo y pruebas](docs/core_1000_qubits.md).
+La puerta T continúa en la representación reducida propia, cuya interfaz XASM
+admite hasta 63 qubits con presupuesto de componentes; la sesión gráfica utiliza
+el backend compacto Clifford.
+
+**Aplicación gráfica Android:** [controles y compilación](graphics-android/README.md). El núcleo cuántico y el motor gráfico comparten la sesión nativa. Permite crear, abrir y guardar proyectos `.cosmic`, operar sobre 1 a 1.000 qubits del perfil compacto, conservar los observables originales y editar hasta 1.048.576 cajas por ID. Incluye proyectos Bell y GHZ. El [visor de escritorio](graphics-desktop/README.md) compila el mismo puente y abre el mismo [formato de proyecto](graphics-desktop/PROJECT_FORMAT.md). [Integración y procedencia](docs/cosmic_x_engine.md).
 
 **Nueva línea: Motor X visual.** [Programar cálculo y escenas dentro del mismo
 runtime](docs/motor_x_visual.md), conservando reglas, IDs y cambios. Esta rama

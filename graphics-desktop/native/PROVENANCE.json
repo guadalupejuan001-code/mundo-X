@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "native/include/mundo_x/compact_core.hpp",
-      "git_blob_sha1": "7a303f23c0837ceec5e620118645f4b353d1aa95",
-      "sha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c"
+      "git_blob_sha1": "e2f86b135704b56a6b643acf2f2635efe33af7b7",
+      "sha256": "3596321e48428f006de86a8467356f178ce9662430be69876dbf35c3d3f5a027"
     },
     {
       "path": "native/include/mundo_x/dense_core.hpp",
@@ -52,5 +52,12 @@
     "DenseCore includes the author repository phase branch and preserves current Real/FP64 precision.",
     "ReducedExactTRepresentation combines the original Ecos additions with the current optimized Clifford/T updates, arbitrary phases and product-state transfers; its current hashes are recorded in android-experiments/PROVENANCE.json.",
     "The shared observer and state/session bridge live under native/include/mundo_x and native/src. They are adapters over these original cores."
-  ]
+  ],
+  "core_1000_profile": {
+    "optimization_source_commit": "bbefd97841828a4cbd130b5501d6086980144e77",
+    "changes": [
+      "Reuse original packed generator export, single-pass CZ and packed signed row operations.",
+      "1,000-qubit product profile and explicit lossless register expansion."
+    ]
+  }
 }

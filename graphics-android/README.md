@@ -11,7 +11,7 @@ creación y dirección corresponden a X, con asistencia de IA en el desarrollo.
 
 ## Proyectos `.cosmic`
 
-- **Nuevo** permite elegir nombre, 1 a 256 qubits, 1 a 1.048.576 objetos y una
+- **Nuevo** permite elegir nombre, 1 a 1000 qubits, 1 a 1.048.576 objetos y una
   semilla de 32 bits sin signo. Prepara el estado de grafo del núcleo propio.
 - **Abrir .cosmic** importa un proyecto mediante el selector de Android.
 - **Guardar** exporta estado e historial, observables originales, mundo,
@@ -62,7 +62,7 @@ objeto: la cámara y el dibujo conservan el estado y el historial. La caché se
 invalida al operar o restaurar, incluso si el proyecto restaurado tiene el
 mismo número de revisión.
 
-El mundo inicial usa 20 qubits, 1.000.000 de objetos y 60 observables:
+El mundo inicial usa 1.000 qubits, 1.000.000 de objetos y 3.000 observables:
 los generadores iniciales y las consultas locales X/Z. Los proyectos
 importados conservan su propio conjunto de observables, incluso cuando
 hay menos objetos que canales. El observador obtiene valores esperados

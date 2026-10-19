@@ -23,7 +23,7 @@ import hashlib
 import sys
 from pathlib import Path
 directory = Path(sys.argv[1])
-expected_names = {'COSMIC-X-Engine-0.3.0.apk', 'COSMIC-X-Engine-0.3.0-tests.apk', 'Mundo-X-Graphics-coexist.apk'}
+expected_names = {'COSMIC-X-Engine-0.3.1.apk', 'COSMIC-X-Engine-0.3.1-tests.apk', 'Mundo-X-Graphics-coexist.apk'}
 found = set()
 for row in (directory / 'SHA256SUMS.txt').read_text().splitlines():
     expected, name = row.split()
@@ -100,8 +100,8 @@ if [[ "$cosmic_suite" == cosmic ]]; then
   "$cosmic_adb" -s "$cosmic_serial" shell \
     "run-as com.mundox.graphics sh -c 'echo cosmic-unified-coexist > files/cosmic-coexist-sentinel'"
 fi
-"$cosmic_adb" -s "$cosmic_serial" install -r "$cosmic_apks/COSMIC-X-Engine-0.3.0.apk"
-"$cosmic_adb" -s "$cosmic_serial" install -r "$cosmic_apks/COSMIC-X-Engine-0.3.0-tests.apk"
+"$cosmic_adb" -s "$cosmic_serial" install -r "$cosmic_apks/COSMIC-X-Engine-0.3.1.apk"
+"$cosmic_adb" -s "$cosmic_serial" install -r "$cosmic_apks/COSMIC-X-Engine-0.3.1-tests.apk"
 "$cosmic_adb" -s "$cosmic_serial" shell pm list instrumentation > "$cosmic_evidence/instrumentation-inventory.txt"
 "$cosmic_adb" -s "$cosmic_serial" logcat -c
 

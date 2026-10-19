@@ -64,6 +64,32 @@ public final class ProjectCodecChecks {
         String precise=orbit.replace("\"yaw\":0.67","\"yaw\":0.1234567891234567");
         String preciseOut=new String(CosmicProject.encode(CosmicProject.decode(utf8(precise))),StandardCharsets.UTF_8);
         check(preciseOut.contains("0.1234567891234567"),"imported JSON precision retention");
+        byte[] originalBell=CosmicProject.encode(bell);
+        for(int oldQubits:new int[]{2,8,20,60}){
+            CosmicProject.Document legacy=oldQubits==2?bell:CosmicProject.expandQubits(bell,oldQubits);
+            byte[] original=CosmicProject.encode(legacy);
+            CosmicProject.Document expanded=CosmicProject.expandQubits(legacy,1000);
+            check(expanded.core.qubits==1000&&expanded.core.version==legacy.core.version
+                &&Arrays.equals(expanded.core.gateHistory,legacy.core.gateHistory),"1000-qubit expansion preserves legacy history "+oldQubits);
+            char[] padding=new char[1000-oldQubits];Arrays.fill(padding,'I');String suffix=new String(padding);
+            for(int i=0;i<legacy.graphics.observables.length;i++)
+                check(expanded.graphics.observables[i].equals(legacy.graphics.observables[i]+suffix),"expansion preserves signed Pauli "+oldQubits);
+            check(Arrays.equals(original,CosmicProject.encode(legacy)),"expansion does not mutate original "+oldQubits);
+            CosmicProject.Document expandedBack=CosmicProject.decode(CosmicProject.encode(expanded));
+            check(expandedBack.core.qubits==1000&&Arrays.equals(expandedBack.graphics.observables,expanded.graphics.observables)
+                &&Arrays.equals(expandedBack.graphics.editIds,legacy.graphics.editIds)
+                &&expandedBack.graphics.seed==legacy.graphics.seed&&expandedBack.graphics.selectedId==legacy.graphics.selectedId,
+                "1000-qubit portable roundtrip preserves scene "+oldQubits);
+        }
+        check(Arrays.equals(originalBell,CosmicProject.encode(bell)),"original Bell fixture remains two qubits");
+        String expandedPrecise=new String(CosmicProject.encode(CosmicProject.expandQubits(CosmicProject.decode(utf8(precise)),1000)),StandardCharsets.UTF_8);
+        check(expandedPrecise.contains("0.1234567891234567"),"expansion retains imported JSON number precision");
+        JSONObject highGate=new JSONObject(new String(CosmicProject.encode(CosmicProject.expandQubits(bell,1000)),StandardCharsets.UTF_8));
+        highGate.getJSONObject("core").getJSONArray("gates").put(new JSONArray().put("H").put(999))
+            .put(new JSONArray().put("CX").put(999).put(32)).put(new JSONArray().put("Y").put(53));
+        CosmicProject.Document high=CosmicProject.decode(utf8(highGate.toString()));
+        check(Arrays.equals(high.core.gateHistory,new long[]{0,0,0,4,0,1,0,999,0,4,999,32,6,53,0}),"gate999 and cross-word operands roundtrip");
+        for(int target:new int[]{-1,0,1,2,1001})reject(()->CosmicProject.expandQubits(bell,target),"invalid expansion target "+target);
         CosmicProject.Document boundary=CosmicProject.decode(utf8(orbit.replace("\"pitch\":0.65","\"pitch\":0.04")
             .replace("\"zoom\":1.0","\"zoom\":0.12")));
         check(CosmicProject.decode(CosmicProject.encode(CosmicProject.fromSnapshots(boundary.name,boundary.core,boundary.graphics)))
@@ -114,7 +140,7 @@ public final class ProjectCodecChecks {
         for(String malformedJson:malformed)reject(malformedJson,"lenient/malformed JSON");
         for(String value:new String[]{"1.0","1e0","true","\"1\"","null"})
             reject(BELL.replace("\"version\":1","\"version\":"+value),"wrong version type");
-        for(String value:new String[]{"2.0","2e0","true","\"2\"","null","0","257"})
+        for(String value:new String[]{"2.0","2e0","true","\"2\"","null","0","1001"})
             reject(BELL.replace("\"qubits\":2","\"qubits\":"+value),"wrong qubit type/range");
         reject(BELL.replace("\"revision\":1","\"revision\":9007199254740992"),"revision overflow");
         reject(BELL.replace("\"revision\":1","\"revision\":-1"),"negative revision");
@@ -173,6 +199,7 @@ public final class ProjectCodecChecks {
         JSONObject result=new JSONObject();
         result.put("passed",true);result.put("checks",checks);result.put("rejectedInvalidDocuments",rejections);
         result.put("nativeOrGlCreated",false);result.put("format",CosmicProject.FORMAT);
+        result.put("expandedQubits",1000);result.put("legacyQubitCounts",new JSONArray(Arrays.asList(2,8,20,60)));
         return result;
     }
 }
