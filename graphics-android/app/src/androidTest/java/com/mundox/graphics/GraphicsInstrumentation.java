@@ -54,10 +54,11 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private final JSONObject metrics = new JSONObject();
     private final JSONArray images = new JSONArray();
     private final JSONArray projectExports = new JSONArray();
+    private final JSONArray infiniteProjectExports = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
     private boolean testUhd;
     private boolean testUltra;
-    private int expectedTests = LEGACY_TESTS;
+    private int expectedTests = LEGACY_TESTS + 2;
     private String portableName;
 
     private interface Checked { void run() throws Exception; }
@@ -122,6 +123,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("default_1000_qubit_world", this::defaultThousand);
             runCase("native_bell_invariants", this::nativeBell);
             runCase("native_1000_qubit_invariants", this::nativeThousand);
+            runCase("native_infinite_contracts", this::nativeInfinite);
             runCase("renderer_borrows_native_state", this::borrowedState);
             runCase("gles_one_million_objects", () -> largeScene(1_000_000, "million"));
             runCase("gles_maximum_object_limit", () -> largeScene(1_048_576, "maximum"));
@@ -159,6 +161,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("portable_mutation_export_reimport", this::portableRoundtrip);
             runCase("portable_invalid_import_preserves_session", this::portableInvalidImport);
             runCase("portable_activity_recreation", this::portableRecreation);
+            runCase("infinite_live_renderer_and_portability", this::infiniteRenderer);
 
             metrics.put("portableFinalQubits", activity.core.qubits);
             metrics.put("portableFinalStateBytes", activity.core.stateBytes());
@@ -301,6 +304,146 @@ public final class GraphicsInstrumentation extends Instrumentation {
             expect(core.version() == version + 1, "Gate version must advance exactly once");
             expect(core.stateBytes() > 0, "Native state must report allocated bytes");
         }
+    }
+
+    private void nativeInfinite() throws Exception {
+        String a=InfiniteProgram.FAR_ADDRESS,b=InfiniteProgram.partner(a);
+        expect(a.length()==101&&b.length()==101,"Large addresses were narrowed");
+        expect(InfiniteProgram.address("0000001").equals("1")&&InfiniteProgram.partner("18446744073709551616").equals("18446744073709551617"),"Decimal address aliases or >uint64 partner failed");
+        String[] program=InfiniteProgram.pair(a,b);
+        try(NativeCore zero=NativeCore.infinite(NativeCore.ZERO)){
+            expect(Arrays.equals(zero.query(program),new float[]{0,1,0,0,1}),"Infinite zero background is wrong");
+            expect(zero.infiniteStats().activeQubits==0,"Reading zero background allocated sites");
+        }
+        try(NativeCore core=NativeCore.infinite(NativeCore.BELL_PAIRS)){
+            String initial=core.snapshot().infiniteSnapshot;long epoch=core.epoch();
+            NativeCore.Observation observation=core.observe(program);
+            expect(Arrays.equals(observation.values,new float[]{1,1,-1,0,0})&&observation.revision==core.version()&&observation.epoch==epoch,"Atomic Bell query metadata or values are wrong");
+            QuantumRenderer borrowed=new QuantumRenderer(getTargetContext(),core,text->{});borrowed.observeAddresses(a,b);
+            expect(initial.equals(core.snapshot().infiniteSnapshot)&&epoch==core.epoch()&&core.infiniteStats().activeQubits==0,"Observer construction/materialization changed infinite state or RNG");
+            for(String invalid:new String[]{"","-1","+1"," 1","1 ","1e100","１","1\u0000"}){
+                boolean rejected=false;try{core.apply(NativeCore.X,invalid,b);}catch(IllegalArgumentException expected){rejected=true;}
+                expect(rejected,"Infinite JNI accepted nondecimal address "+invalid);
+                expect(initial.equals(core.snapshot().infiniteSnapshot)&&core.epoch()==epoch,"Invalid address changed state");
+            }
+            boolean failed=false;
+            try{core.executeInfinite("measure "+a+"\ncx "+a+" "+a+"\n");}catch(IllegalStateException expected){failed=true;}
+            expect(failed&&initial.equals(core.snapshot().infiniteSnapshot)&&core.epoch()==epoch,"Failed transaction retained a measurement or consumed RNG");
+            core.apply(NativeCore.Z,"000"+a,b);
+            expect(core.query(program)[0]==-1&&core.infiniteStats().activeQubits==2,"A large-address gate did not reach the canonical Bell pair");
+            core.apply(NativeCore.Z,a,b);core.executeInfinite("compact\n");
+            expect(core.infiniteStats().activeQubits==0&&core.infiniteStats().components==0,"Exact background compaction did not release sites");
+            core.executeInfinite("seed 18446744073709551615\nmeasure "+a+"\n");
+            NativeCore.Snapshot saved=core.snapshot();
+            String continuation="h "+a+"\nmeasure "+a+"\nh "+a+"\nmeasure "+a+"\nh "+a+"\nmeasure "+a+"\n";
+            try(NativeCore restored=new NativeCore(saved)){
+                expect(core.executeInfinite(continuation).equals(restored.executeInfinite(continuation)),"Snapshot lost measurement RNG continuation");
+                expect(core.snapshot().infiniteSnapshot.equals(restored.snapshot().infiniteSnapshot),"Continuation changed restored exact tableaus or RNG");
+            }
+            // The value codec keeps current tableaus opaque; only native import may validate their mathematics.
+            CosmicProject.Document document=CosmicProject.fromSnapshots("Infinito",core.snapshot(),borrowed.snapshot());
+            CosmicProject.Document back=CosmicProject.decode(CosmicProject.encode(document));
+            expect(back.core.infinite&&back.core.qubits==0&&back.core.infiniteSnapshot.equals(core.snapshot().infiniteSnapshot),"Portable v2 lost backend or current state");
+            try(NativeCore restored=new NativeCore(back.core)){
+                expect(Arrays.equals(core.query(program),restored.query(program)),"Portable v2 altered sparse observations");
+            }
+            JSONObject malformed=new JSONObject(new String(CosmicProject.encode(document),StandardCharsets.UTF_8));
+            malformed.getJSONObject("core").put("snapshot","MXI1:00");
+            CosmicProject.Document bad=CosmicProject.decode(malformed.toString().getBytes(StandardCharsets.UTF_8));
+            String before=core.snapshot().infiniteSnapshot;failed=false;
+            try(NativeCore rejected=new NativeCore(bad.core)){throw new AssertionError("Native accepted a truncated infinite snapshot");}
+            catch(IllegalStateException expected){failed=true;}
+            expect(failed&&before.equals(core.snapshot().infiniteSnapshot),"Invalid infinite import damaged live owner");
+        }
+        try(InputStream input=getTargetContext().getAssets().open("projects/infinite-native-fixture.json")){
+            ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] chunk=new byte[4096];int read;
+            while((read=input.read(chunk))!=-1)bytes.write(chunk,0,read);
+            JSONObject gcc=new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8));
+            expect(gcc.getInt("format")==1&&gcc.getString("producer").equals("gcc-native"),"Wrong native portability fixture");
+            try(NativeCore restored=NativeCore.infinite(NativeCore.ZERO)){
+                restored.restoreInfinite(gcc.getString("snapshot"));
+                expect(restored.snapshot().infiniteSnapshot.equals(gcc.getString("snapshot")),"GCC snapshot changed on Android import");
+                expect(restored.executeInfinite(gcc.getString("continuation_program")).equals(gcc.getString("expected_output")),"Android libc++ measurement continuation differs from native GCC fixture");
+                expect(restored.snapshot().infiniteSnapshot.equals(gcc.getString("expected_snapshot")),"Android continuation did not retain the exact portable RNG/tableau state");
+            }
+        }
+        metrics.put("infiniteNativeContracts",new JSONObject().put("addressDigits",a.length()).put("readOnlyQueries",true)
+            .put("transactionRollbackIncludesRng",true).put("snapshotContinuationExact",true).put("compactionReleasedBackground",true).put("gccFixtureContinuationExact",true));
+    }
+
+    private void infiniteRenderer() throws Exception {
+        CosmicProject.Document previous=liveProject().document;
+        String a=InfiniteProgram.FAR_ADDRESS,b=InfiniteProgram.partner(a);String[] program=InfiniteProgram.pair(a,b);
+        try{
+            CosmicProject.Document project;
+            try(NativeCore prepared=NativeCore.infinite(NativeCore.BELL_PAIRS)){
+                QuantumRenderer view=new QuantumRenderer(getTargetContext(),prepared,text->{});view.observeAddresses(a,b);
+                view.objectCount(1);view.resolution(320);view.coupling(true);view.setTime(0);
+                view.testCamera(new float[]{5,4,7},new float[]{0,1,0});
+                project=CosmicProject.fromSnapshots("Infinito · Bell 10^100",prepared.snapshot(),view.snapshot());
+            }
+            install(project);NativeCore owner=activity.core;
+            expect(owner.isInfinite(),"Project did not install infinite owner");
+            String pristine=owner.snapshot().infiniteSnapshot;long readEpoch=owner.epoch();
+            QuantumRenderer.Capture before=frame(false);frame(true);frame(false);
+            expect(pristine.equals(owner.snapshot().infiniteSnapshot)&&owner.infiniteStats().activeQubits==0&&owner.epoch()==readEpoch,"Drawing mutated infinite state, RNG or active resources");
+            long revision=owner.version();gl(()->activity.renderer.gate(NativeCore.Z,a,b));
+            expect(activity.core==owner&&owner.version()==revision+1&&owner.query(program)[0]==-1,"Renderer did not borrow the same infinite owner");
+            QuantumRenderer.Capture after=frame(false);int changed=before.changed(after);
+            expect(changed>20,"Infinite Bell correlation did not alter the image");
+            expect(Arrays.equals(program,visualSnapshot().observables),"A gate replaced the fixed observer program");
+            QuantumRenderer.FrameStats stamp=activity.renderer.frameStats();
+            expect(stamp.infinite&&stamp.coreRevision==owner.version()&&stamp.coreEpoch==owner.epoch(),"Frame metadata does not describe its query");
+            save("infinite-coupled-before.png",before);save("infinite-coupled-after.png",after);
+
+            String negative=owner.snapshot().infiniteSnapshot;long programEpoch=owner.epoch();
+            gl(()->activity.renderer.observeAddresses("0","1"));
+            expect(before.changed(frame(false))==0,"Changing only the observed address kept a stale coefficient texture");
+            expect(negative.equals(owner.snapshot().infiniteSnapshot)&&programEpoch==owner.epoch(),"Changing observer program mutated state");
+            gl(()->activity.renderer.observeAddresses(a,b));
+            expect(after.changed(frame(false))==0,"Returning to a large-address program retained stale coefficients");
+
+            String positive;
+            try(NativeCore alternate=NativeCore.infinite(NativeCore.BELL_PAIRS)){
+                alternate.apply(NativeCore.X,a,b);expect(alternate.version()==owner.version(),"Epoch fixture needs equal revisions");
+                positive=alternate.snapshot().infiniteSnapshot;
+            }
+            long oldEpoch=owner.epoch();gl(()->owner.restoreInfinite(positive));
+            expect(owner.version()==revision+1&&owner.epoch()!=oldEpoch&&before.changed(frame(false))==0,"Same-revision restore failed to invalidate by epoch");
+            gl(()->owner.restoreInfinite(negative));
+            expect(after.changed(frame(false))==0,"Restored negative correlation was not rendered");
+            gl(()->activity.renderer.gate(NativeCore.Z,a,b));
+            expect(before.changed(frame(false))==0,"Z twice did not restore exact infinite pixels");
+
+            gl(()->activity.renderer.coupling(false));QuantumRenderer.Capture off=frame(false);
+            gl(()->activity.renderer.gate(NativeCore.Z,a,b));
+            expect(owner.query(program)[0]==-1&&off.changed(frame(false))==0,"Uncoupled infinite gate changed image or failed to change state");
+            gl(()->{activity.renderer.gate(NativeCore.Z,a,b);activity.renderer.coupling(true);});
+            gl(()->owner.executeInfinite("seed 5489\nmeasure "+a+"\n"));
+            AtomicReference<CosmicProject.Document> saved=new AtomicReference<>();
+            gl(()->{try{saved.set(CosmicProject.fromSnapshots(project.name,owner.snapshot(),activity.renderer.snapshot()));}catch(Exception error){throw new IllegalStateException(error);}});
+            CosmicProject.Document exported=saved.get();String savedText=exported.core.infiniteSnapshot;
+            float[] values=owner.query(exported.graphics.observables);QuantumRenderer.Capture savedPixels=frame(false);
+            String continuation="h "+a+"\nmeasure "+a+"\nh "+a+"\nmeasure "+a+"\nh "+a+"\nmeasure "+a+"\n";
+            String output=owner.executeInfinite(continuation),continued=owner.snapshot().infiniteSnapshot;
+            try(NativeCore restored=new NativeCore(exported.core)){
+                expect(output.equals(restored.executeInfinite(continuation))&&continued.equals(restored.snapshot().infiniteSnapshot),"Exported infinite state lost RNG continuation");
+            }
+            String file="portable-infinite-android.cosmic",proof=file+".state.json";
+            try(FileOutputStream stream=new FileOutputStream(new File(evidence,file))){stream.write(CosmicProject.encode(exported));}
+            JSONArray expectations=new JSONArray();for(float value:values)expectations.put((double)value);
+            write(proof,new JSONObject().put("schemaVersion",2).put("snapshot",savedText)
+                .put("observables",new JSONArray(Arrays.asList(exported.graphics.observables))).put("expectations",expectations)
+                .put("continuationProgram",continuation).put("continuationOutput",output).put("continuationSnapshot",continued).toString(2)+"\n");
+            infiniteProjectExports.put(new JSONObject().put("file",file).put("stateFile",proof));
+            install(CosmicProject.decode(CosmicProject.encode(exported)));
+            expect(savedPixels.changed(frame(false))==0&&savedText.equals(activity.core.snapshot().infiniteSnapshot),"Portable v2 import changed exact state or pixels");
+            saveScreen("infinite-activity.png");
+            metrics.put("infiniteRenderer",new JSONObject().put("address",a).put("partner",b).put("sharedOwner",true)
+                .put("coupledChangedPixels",changed).put("uncoupledChangedPixels",0).put("readOnlyDraw",true)
+                .put("programCacheInvalidated",true).put("sameRevisionEpochInvalidated",true).put("roundtripChangedPixels",0)
+                .put("snapshotContinuationExact",true));
+        }finally{install(previous);frame(false);}
     }
 
     private void borrowedState() throws Exception {
@@ -1760,7 +1903,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
         xml.append("</testsuite>\n");
         JSONObject report = new JSONObject().put("schemaVersion", 1).put("testsRun", results.size())
                 .put("testsFailed", failures()).put("tests", tests).put("metrics", metrics).put("images", images)
-                .put("projectExports", projectExports).put("captureSamples", captureSamples);
+                .put("projectExports", projectExports).put("infiniteProjectExports", infiniteProjectExports).put("captureSamples", captureSamples);
         write("report.json", report.toString(2) + "\n");
         write("junit.xml", xml.toString());
     }

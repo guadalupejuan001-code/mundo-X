@@ -34,14 +34,15 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         public final int objectCount,width,height,qubits,observables,selectedId;
         /** Actual framebuffer mode and its FIT destination, in Android top-left coordinates. */
         public final int resolutionMode,viewWidth,viewHeight,displayLeft,displayTop,displayWidth,displayHeight;
-        public final long coreRevision,frameNumber;
+        public final long coreRevision,coreEpoch,frameNumber;
+        public final boolean infinite;
         /** CPU submission wall time by default; includes driver completion only when gpuSynchronized. */
         public final double drawMs;
         public final boolean gpuSynchronized;
         public final String device;
         private FrameStats(QuantumRenderer r,double elapsed){
             objectCount=r.count;width=r.width;height=r.height;qubits=r.core.qubits;
-            observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;
+            observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;coreEpoch=r.uploadedEpoch;infinite=r.core.isInfinite();
             frameNumber=r.drawNumber;drawMs=elapsed;device=r.device;gpuSynchronized=r.synchronousTiming;
             resolutionMode=r.resolutionMode;viewWidth=r.viewWidth;viewHeight=r.viewHeight;
             displayLeft=r.display.left;displayTop=r.display.top;
@@ -160,6 +161,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private float[] coefficients;
     private long uploadedCore=-1;
     private long uploadedEpoch=-1;
+    private long programRevision,uploadedProgram=-1;
     private final TreeMap<Integer,Integer> edits=new TreeMap<>();
     private final HashMap<String,Integer> locations=new HashMap<>();
     private int program,vao,editTexture,quantumTexture,colorTexture,depth,fbo;
@@ -227,13 +229,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                ||state.cameraNear<.001f||state.cameraNear>=state.cameraFar||state.cameraFar>1_000_000
                ||state.cameraFov<1||state.cameraFov>170)))
             throw new IllegalArgumentException("Estado visual guardado inválido");
-        for(String pauli:state.observables){
-            if(pauli==null)throw new IllegalArgumentException("Observable guardado nulo");
-            int start=pauli.length()==core.qubits+1&&(pauli.charAt(0)=='+'||pauli.charAt(0)=='-')?1:0;
-            if(pauli.length()-start!=core.qubits)throw new IllegalArgumentException("Longitud de observable guardado inválida");
-            for(int q=start;q<pauli.length();q++)if("IXYZ".indexOf(pauli.charAt(q))<0)
-                throw new IllegalArgumentException("Observable guardado inválido");
-        }
+        validateProgram(state.observables);
         int previous=-1;
         for(int j=0;j<state.editIds.length;j++){
             int id=state.editIds[j],value=state.editValues[j];
@@ -282,7 +278,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             int[] id=new int[1];glGenVertexArrays(1,id,0);vao=id[0];glBindVertexArray(vao);
             editTexture=texture();quantumTexture=texture();
             glDisable(GL_DITHER);glDisable(GL_BLEND);glDisable(GL_CULL_FACE);
-            framebufferDirty=true;editsDirty=true;uploadedCore=-1;uploadedEpoch=-1;failed=false;
+            framebufferDirty=true;editsDirty=true;uploadedCore=-1;uploadedEpoch=-1;uploadedProgram=-1;failed=false;
             device=glGetString(GL_RENDERER);check("Inicio");
         }catch(Throwable e){if(program!=0){glDeleteProgram(program);program=0;}error(e);}
         finally{if(vert!=0)glDeleteShader(vert);if(frag!=0)glDeleteShader(frag);}
@@ -399,17 +395,21 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);
             glTexImage2D(GL_TEXTURE_2D,0,GL_RG32I,w,h,0,GL_RG_INTEGER,GL_INT,bytes);sampling();check("Ediciones");editsDirty=false;
         }
-        long version,epoch;
+        NativeCore.Observation observation=null;
         synchronized(core){
-            version=core.version();epoch=core.epoch();
-            if(version!=uploadedCore||epoch!=uploadedEpoch)coefficients=core.query(observables);
+            if(core.epoch()!=uploadedEpoch||programRevision!=uploadedProgram)
+                observation=core.observe(observables);
         }
-        if(version!=uploadedCore||epoch!=uploadedEpoch){
+        if(observation!=null){
+            // The PC may write through another owner. Values AND both stamps
+            // come from the same native query lock, never a separate version read.
+            coefficients=observation.values;
             int max=maxTexture(),w=Math.min(Math.min(4096,max),coefficients.length),h=(coefficients.length+w-1)/w;
             if(h>max)throw new IllegalStateException("Los observables exceden la textura de este dispositivo");
             ByteBuffer bytes=direct(w*h*4);bytes.asFloatBuffer().put(coefficients);
             glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,quantumTexture);
-            glTexImage2D(GL_TEXTURE_2D,0,GL_R32F,w,h,0,GL_RED,GL_FLOAT,bytes);sampling();check("Observables");uploadedCore=version;uploadedEpoch=epoch;
+            glTexImage2D(GL_TEXTURE_2D,0,GL_R32F,w,h,0,GL_RED,GL_FLOAT,bytes);sampling();check("Observables");
+            uploadedCore=observation.revision;uploadedEpoch=observation.epoch;uploadedProgram=programRevision;
         }
         glActiveTexture(GL_TEXTURE0);check("Estado");
     }
@@ -496,15 +496,40 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             hasFrame=true;drawNumber++;
             latestFrame=new FrameStats(this,elapsed);
             if(requested!=null)capture=null;
-            listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %.1f ms %s\n%d qubits · %d observables · estado %d%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",elapsed,synchronousTiming?"GPU completada":"CPU envío",core.qubits,coefficients.length,uploadedCore,selected>=0?" · ID "+selected:"",device,resolutionMessage==null?"":"\n"+resolutionMessage));
+            listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %.1f ms %s\n%s · %d observables · estado %s%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",elapsed,synchronousTiming?"GPU completada":"CPU envío",core.domainLabel(),coefficients.length,Long.toUnsignedString(uploadedCore),selected>=0?" · ID "+selected:"",device,resolutionMessage==null?"":"\n"+resolutionMessage));
             if(requested!=null)requested.captured(pixels);
         }catch(Throwable e){error(e);}
     }
     private void error(Throwable e){failed=true;failure=e.toString();listener.status("No se pudo dibujar: "+failure);}
     public void gate(int op,int a,int b){core.apply(op,a,b);}
+    public void gate(int op,String first,String second){core.apply(op,first,second);}
+    private void validateProgram(String[] values){
+        if(values==null||values.length<1||values.length>4096)throw new IllegalArgumentException("Se requieren de 1 a 4096 observables");
+        long bytes=0;
+        for(String pauli:values){
+            if(pauli==null)throw new IllegalArgumentException("Observable guardado nulo");
+            bytes+=pauli.length();if(bytes>16*1024*1024)throw new IllegalArgumentException("El programa visual supera 16 MiB");
+            if(core.isInfinite()){InfiniteProgram.validate(pauli);continue;}
+            int start=pauli.length()==core.qubits+1&&(pauli.charAt(0)=='+'||pauli.charAt(0)=='-')?1:0;
+            if(pauli.length()-start!=core.qubits)throw new IllegalArgumentException("Longitud de observable guardado inválida");
+            for(int q=start;q<pauli.length();q++)if("IXYZ".indexOf(pauli.charAt(q))<0)throw new IllegalArgumentException("Observable guardado inválido");
+        }
+    }
+    /** Call on the GL thread (or before attaching). Observing a new program never mutates the core. */
+    public void setObservables(String[] program){
+        validateProgram(program);String[] candidate=program.clone();core.query(candidate);
+        observables=candidate;programRevision++;uploadedProgram=-1;
+    }
+    public void observeAddresses(String first,String second){
+        if(!core.isInfinite())throw new IllegalStateException("Las direcciones dispersas requieren un núcleo infinito");
+        setObservables(InfiniteProgram.pair(first,second));
+    }
     public void reset(){
-        synchronized(core){core.resetGraph();observables=core.visualProgram();}
-        uploadedCore=-1;uploadedEpoch=-1;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;pickPending=false;timeValue=0;
+        synchronized(core){
+            if(core.isInfinite())core.resetInfinite(core.infiniteStats().background);
+            else {core.resetGraph();observables=core.visualProgram();}
+        }
+        uploadedCore=-1;uploadedEpoch=-1;uploadedProgram=-1;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;pickPending=false;timeValue=0;
     }
     public void setTime(float seconds){
         if(!finite(seconds)||Math.abs(seconds)>1_000_000)throw new IllegalArgumentException("Tiempo fuera del rango del proyecto");

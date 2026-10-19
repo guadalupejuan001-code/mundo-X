@@ -14,7 +14,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-/** Portable .cosmic v1 codec. Validation never creates a native core or GL state.
+/** Portable .cosmic v1/v2 codec. Structural validation creates no native core or GL state.
+ * v2 carries an opaque current InfiniteCore state; native import validates its mathematics.
  * JSON is read by the strict reader below: Android's lenient JSONTokener is not
  * used for imported files. No project code or external reference is executed.
  */
@@ -86,7 +87,7 @@ public final class CosmicProject {
     public static Document expandQubits(Document source,int qubits) throws Exception {
         // Detach the authoritative description, including precise imported JSON numbers.
         Document copy=decode(encode(source));
-        if(qubits<=copy.core.qubits||qubits>MAX_QUBITS)
+        if(copy.core.infinite||qubits<=copy.core.qubits||qubits>MAX_QUBITS)
             throw invalid("La ampliación requiere más qubits que el proyecto actual, hasta "+MAX_QUBITS);
         char[] identities=new char[qubits-copy.core.qubits];Arrays.fill(identities,'I');
         String suffix=new String(identities);
@@ -105,7 +106,7 @@ public final class CosmicProject {
 
     public static Document fromSnapshots(String name,NativeCore.Snapshot core,QuantumRenderer.Snapshot graphics) throws Exception {
         if(core==null||graphics==null)throw invalid("Falta el estado del núcleo o del observador");
-        if(core.gateHistory==null||core.gateHistory.length%3!=0||core.gateHistory.length>MAX_GATES*3)
+        if(!core.infinite&&(core.gateHistory==null||core.gateHistory.length%3!=0||core.gateHistory.length>MAX_GATES*3))
             throw invalid("core.gates: historial inválido");
         if(graphics.projectVersion!=0&&graphics.projectVersion!=1)throw invalid("Versión visual no admitida");
         if(graphics.coupling!=(graphics.quantumStrength!=0f))throw invalid("Acoplamiento visual inconsistente");
@@ -117,6 +118,11 @@ public final class CosmicProject {
         number(Float.valueOf(graphics.pitch),.04,1.52,"camera.pitch");
         number(Float.valueOf(graphics.zoom),.12,6,"camera.zoom");
 
+        JSONObject coreJson=new JSONObject();
+        if(core.infinite){
+            InfiniteProgram.snapshot(core.infiniteSnapshot);
+            coreJson.put("backend","infinite-clifford");coreJson.put("snapshot",core.infiniteSnapshot);
+        }else{
         JSONArray gates=new JSONArray();
         for(int i=0;i<core.gateHistory.length;i+=3){
             long operation=core.gateHistory[i];
@@ -125,9 +131,10 @@ public final class CosmicProject {
             if(operation==NativeCore.CX||operation==NativeCore.CZ)gate.put(core.gateHistory[i+2]);
             gates.put(gate);
         }
-        JSONObject coreJson=new JSONObject();
         coreJson.put("backend","compact-clifford");coreJson.put("initialState","zero");
         coreJson.put("qubits",core.qubits);coreJson.put("revision",core.version);coreJson.put("gates",gates);
+
+        }
 
         JSONObject camera=new JSONObject();
         final boolean legacy=graphics.projectVersion==0;
@@ -158,15 +165,15 @@ public final class CosmicProject {
         graphicsJson.put("time",Float.valueOf(graphics.time));graphicsJson.put("selectedId",graphics.selectedId);
         graphicsJson.put("resolutionLimit",graphics.resolutionLimit);
         JSONObject description=new JSONObject();
-        description.put("format",FORMAT);description.put("version",1);description.put("name",name==null?JSONObject.NULL:name);
+        description.put("format",FORMAT);description.put("version",core.infinite?2:1);description.put("name",name==null?JSONObject.NULL:name);
         description.put("core",coreJson);description.put("graphics",graphicsJson);
         return validate(description);
     }
 
     private static Document validate(JSONObject document) throws JSONException {
         keys(document,"project","format","version","name","core","graphics");
-        if(!FORMAT.equals(document.get("format"))||integer(document.get("version"),1,1,"version")!=1)
-            throw invalid("Formato o versión .cosmic no admitido");
+        if(!FORMAT.equals(document.get("format")))throw invalid("Formato .cosmic no admitido");
+        int fileVersion=(int)integer(document.get("version"),1,2,"version");
         String name=string(document.get("name"),"project.name");
         unicode(name);
         int length=name.codePointCount(0,name.length());
@@ -174,10 +181,17 @@ public final class CosmicProject {
         for(int i=0;i<name.length();i++)if(name.charAt(i)<32)throw invalid("project.name: carácter de control");
 
         JSONObject core=object(document.get("core"),"core");
+        final NativeCore.Snapshot coreState;
+        int qubits=0;
+        if(fileVersion==2){
+            keys(core,"core","backend","snapshot");
+            if(!"infinite-clifford".equals(core.get("backend")))throw invalid("La versión 2 requiere infinite-clifford");
+            coreState=NativeCore.Snapshot.infinite(string(core.get("snapshot"),"core.snapshot"));
+        }else{
         keys(core,"core","backend","initialState","qubits","revision","gates");
         if(!"compact-clifford".equals(core.get("backend"))||!"zero".equals(core.get("initialState")))
             throw invalid("Esta versión admite compact-clifford desde el estado cero");
-        int qubits=(int)integer(core.get("qubits"),1,MAX_QUBITS,"core.qubits");
+        qubits=(int)integer(core.get("qubits"),1,MAX_QUBITS,"core.qubits");
         long revision=integer(core.get("revision"),0,MAX_REVISION,"core.revision");
         JSONArray gates=array(core.get("gates"),"core.gates");
         if(gates.length()>MAX_GATES)throw invalid("core.gates: máximo 100.000 operaciones");
@@ -197,6 +211,9 @@ public final class CosmicProject {
             history[3*i]=operation;history[3*i+1]=first;history[3*i+2]=second;
         }
 
+            coreState=NativeCore.Snapshot.of(qubits,revision,history);
+        }
+
         JSONObject graphics=object(document.get("graphics"),"graphics");
         keys(graphics,"graphics","program","objects","seed","coupling","observables","edits","camera","time","selectedId","resolutionLimit");
         if(!"opaque-grid-v1".equals(graphics.get("program")))throw invalid("Programa gráfico no admitido");
@@ -208,6 +225,7 @@ public final class CosmicProject {
         String[] program=new String[observables.length()];
         for(int i=0;i<observables.length();i++){
             String pauli=string(observables.get(i),"graphics.observables");
+            if(fileVersion==2){InfiniteProgram.validate(pauli);program[i]=pauli;continue;}
             int start=pauli.startsWith("+")||pauli.startsWith("-")?1:0;
             if(pauli.length()-start!=qubits)throw invalid("graphics.observables: longitud Pauli inválida");
             for(int q=start;q<pauli.length();q++)if("IXYZ".indexOf(pauli.charAt(q))<0)throw invalid("graphics.observables: se requiere IXYZ");
@@ -258,7 +276,6 @@ public final class CosmicProject {
         int selected=(int)integer(graphics.get("selectedId"),-1,count-1,"graphics.selectedId");
         int resolution=(int)integer(graphics.get("resolutionLimit"),64,4096,"graphics.resolutionLimit");
         // These are detached value objects; no native library or renderer is initialized.
-        NativeCore.Snapshot coreState=NativeCore.Snapshot.of(qubits,revision,history);
         QuantumRenderer.Snapshot graphicState=new QuantumRenderer.Snapshot(count,selected,resolution,seed,overview,
             yaw,pitch,zoom,time,strength,eye,target,near,far,fov,program,ids,values);
         return new Document(name,coreState,graphicState,document);
@@ -323,55 +340,64 @@ public final class CosmicProject {
         }
     }
 
-    /** Small strict JSON grammar owned by this project. The valid project
-     * schema never approaches depth64, string1024 or node750000; these guards
-     * reject malformed resource-heavy documents before allocation grows freely.
+    /** Small strict JSON grammar owned by this project. Keys and ordinary text
+     * keep the 1024-character guard; only the current-state snapshot and sparse
+     * observables may use the bounded file budget. The schema validator still
+     * enforces each version's backend and Pauli width, regardless of field order.
+     * Depth and node guards reject malformed resource-heavy documents early.
      */
     private static final class StrictJson {
+        private enum Context {ROOT,CORE,GRAPHICS,SNAPSHOT,OBSERVABLES,OBSERVABLE,OTHER}
         private final String source;
         private int cursor,nodes;
         StrictJson(String source){this.source=source;}
         Object read() throws JSONException {
-            Object result=value(0);space();
+            Object result=value(0,Context.ROOT);space();
             if(cursor!=source.length())throw syntax("Texto después del documento");
             return result;
         }
-        private Object value(int depth) throws JSONException {
+        private Object value(int depth,Context context) throws JSONException {
             if(depth>64||++nodes>750_000)throw syntax("Documento demasiado complejo");
             space();if(cursor==source.length())throw syntax("Valor ausente");
             char ch=source.charAt(cursor);
-            if(ch=='{')return objectValue(depth+1);
-            if(ch=='[')return arrayValue(depth+1);
-            if(ch=='\"')return stringValue();
+            if(ch=='{')return objectValue(depth+1,context);
+            if(ch=='[')return arrayValue(depth+1,context);
+            if(ch=='\"')return stringValue(context==Context.SNAPSHOT||context==Context.OBSERVABLE?MAX_FILE_BYTES:1024);
             if(ch=='t'){literal("true");return Boolean.TRUE;}
             if(ch=='f'){literal("false");return Boolean.FALSE;}
             if(ch=='n'){literal("null");return JSONObject.NULL;}
             if(ch=='-'||(ch>='0'&&ch<='9'))return numberValue();
             throw syntax("Valor JSON inválido");
         }
-        private JSONObject objectValue(int depth) throws JSONException {
+        private JSONObject objectValue(int depth,Context context) throws JSONException {
             cursor++;JSONObject result=new JSONObject();space();
             if(take('}'))return result;
             while(true){
                 space();if(cursor==source.length()||source.charAt(cursor)!='\"')throw syntax("Clave de objeto requerida");
-                String key=stringValue();
+                String key=stringValue(1024);
                 if(result.has(key))throw syntax("Clave JSON duplicada: "+key);
                 space();if(!take(':'))throw syntax("Falta ':'");
-                result.put(key,value(depth));space();
+                Context child=Context.OTHER;
+                if(context==Context.ROOT){
+                    if(key.equals("core"))child=Context.CORE;
+                    else if(key.equals("graphics"))child=Context.GRAPHICS;
+                }else if(context==Context.CORE&&key.equals("snapshot"))child=Context.SNAPSHOT;
+                else if(context==Context.GRAPHICS&&key.equals("observables"))child=Context.OBSERVABLES;
+                result.put(key,value(depth,child));space();
                 if(take('}'))return result;
                 if(!take(','))throw syntax("Falta ',' entre campos");
             }
         }
-        private JSONArray arrayValue(int depth) throws JSONException {
+        private JSONArray arrayValue(int depth,Context context) throws JSONException {
             cursor++;JSONArray result=new JSONArray();space();
             if(take(']'))return result;
             while(true){
-                result.put(value(depth));space();
+                result.put(value(depth,context==Context.OBSERVABLES?Context.OBSERVABLE:Context.OTHER));space();
                 if(take(']'))return result;
                 if(!take(','))throw syntax("Falta ',' entre valores");
             }
         }
-        private String stringValue(){
+        private String stringValue(int maximumLength){
             cursor++;StringBuilder result=new StringBuilder();
             while(cursor<source.length()){
                 char ch=source.charAt(cursor++);
@@ -398,7 +424,7 @@ public final class CosmicProject {
                     }
                 }
                 result.append(ch);
-                if(result.length()>1024)throw syntax("Texto demasiado largo para un proyecto");
+                if(result.length()>maximumLength)throw syntax("Texto demasiado largo para un proyecto");
             }
             throw syntax("Texto sin comillas finales");
         }

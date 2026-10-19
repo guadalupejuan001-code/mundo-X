@@ -9,6 +9,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from cosmic_source_provenance import verify_integrated_core
+from infinite_device_evidence import GRAPHICS_CASES as INFINITE_GRAPHICS_CASES
+import infinite_device_evidence
 
 
 def require(condition, message):
@@ -37,6 +39,7 @@ def main():
     if uhd:
         expected.update({"uhd_real_framebuffer_and_legacy_return", "uhd_id_selection_and_letterbox",
                          "uhd_orientation_roundtrip", "uhd_lifecycle_snapshot_native_preserved"})
+    expected |= INFINITE_GRAPHICS_CASES
     if ultra:
         expected.update({"ultra8k_real_framebuffer_and_budget_limits",
                          "ultra8k_tiles_match_monolithic_color_and_ids",
@@ -53,6 +56,7 @@ def main():
     require(int(xml.attrib["tests"]) == len(expected) and int(xml.attrib["failures"]) == 0,
             "JUnit report disagrees with JSON results")
     metrics = report["metrics"]
+    infinite_device_evidence.verify_graphics_metrics(metrics, require)
     require(metrics.get("uhd4kSuite", False) is uhd, "Wrong UHD/legacy test profile")
     require(metrics.get("ultra8kSuite", False) is ultra, "Wrong 8K test profile")
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"], "Wrong emulator API or ABI")
@@ -116,6 +120,7 @@ def main():
         checksums[name] = checksum
     require(set(checksums) == expected_apks, "Missing COSMIC APK checksums")
     required_images = {
+        "infinite-coupled-before.png", "infinite-coupled-after.png", "infinite-activity.png",
         "million-color.png", "million-ids.png", "maximum-color.png", "maximum-ids.png",
         "coupling-on-before.png", "coupling-on-after.png", "coupling-off-before.png",
         "coupling-off-after.png", "selection-before.png", "selection-highlight.png",
@@ -202,7 +207,7 @@ def main():
     require(len(exports) == 3 and {entry["file"] for entry in exports} == expected_projects,
             "Portable Android exports missing")
     project_manifest = {}
-    for entry in exports:
+    for entry in exports + infinite_device_evidence.exports(report, require):
         require(entry["stateFile"] == entry["file"] + ".state.json", "Unexpected native state evidence path")
         for name in (entry["file"], entry["stateFile"]):
             data = (directory / name).read_bytes()

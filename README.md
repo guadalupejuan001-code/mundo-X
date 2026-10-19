@@ -8,6 +8,12 @@ COSMIC X Engine es el título del conjunto. Dentro se conserva la computación c
 
 Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
 
+**InfiniteCore integrado.** El [dominio por reglas y componentes finitos](docs/infinite_core.md)
+dispone de una [sesión compartida con el emulador y el motor gráfico](docs/infinite_integration.md).
+El invitado x86/x64 envía programas al núcleo por puertos IN/OUT; el viewport del PC
+observa esa misma sesión. Los proyectos Infinite guardan su estado actual y RNG
+en `.cosmic` v2, y el perfil finito de 1.000 qubits conserva `.cosmic` v1.
+
 ## Qué incluye el código integrado
 
 | Componente | Función y alcance | Código y documentación |
@@ -17,7 +23,7 @@ Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el 
 | Graphics Android 4K/8K | Escena procedural, selección y edición por ID, renderizado UHD, modo 8K sujeto a capacidades y exportación PNG por mosaicos. | [Graphics](graphics-android/README.md), [4K](graphics-android/docs/4k.md), [8K](graphics-android/docs/8k.md) |
 | Motor gráfico de escritorio | Compila el mismo puente nativo, observa la misma representación y abre/guarda archivos `.cosmic` compatibles con Android. | [Escritorio](graphics-desktop/README.md), [formato](graphics-desktop/PROJECT_FORMAT.md) |
 | COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y captura UHD. Su demostración conserva un circuito de ocho qubits. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
-| COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
+| COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3; dispositivo InfiniteCore y viewport sobre la sesión cuántica compartida. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
 | Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
 | Bridge X y Transformer X | Codificación de bytes en modos y modelo PyTorch entrenable. Se conserva como línea independiente; todavía no alimenta CompactCore. | [Bridge X](src/bridge_x.py), [Transformer X](src/transformer_x.py), [entrenamiento](experiments/train_file_v0_1.py) |
@@ -59,7 +65,7 @@ ctest --test-dir build --output-on-failure
 ./build/pc-android/cosmic_pc_cli --demo64 --ram-mib 2048 --resident-mib 1024
 ```
 
-La compilación raíz incluye los contratos del núcleo, la VM y las nueve suites de PC, incluida `pc_video`. `BUILD_TESTING=OFF` permite construir los ejecutables sin los tests. Las instrucciones de PC ejecutan los arranques propios de demostración; no arrancan Windows.
+La compilación raíz incluye los contratos del núcleo, la VM y las diez suites de PC, incluidas `pc_video` y `pc_quantum`. `BUILD_TESTING=OFF` permite construir los ejecutables sin los tests. Las instrucciones de PC ejecutan los arranques propios de demostración; no arrancan Windows.
 
 ### Crear o ampliar un proyecto de escritorio
 
@@ -85,7 +91,7 @@ Requisitos de construcción declarados: **Java 17, Gradle 8.9, AGP 8.7.3, SDK 35
 | Graphics 8K | `com.mundox.graphics.ultra` · 0.4.0 | `gradle -p graphics-android -Pcosmic8kStandalone=true :app:assembleDebug` |
 | Solar | `com.cosmicx.solar` · 1.1.0 | `gradle -p solar-android :app:assembleDebug` |
 | Solar 4K | `com.cosmicx.solar.uhd` · 1.1.0 | `gradle -p solar-android -Psolar4kStandalone=true :app:assembleDebug` |
-| PC propia | `com.cosmicx.pc` · 0.3.0 | `gradle -p pc-android :app:assembleDebug` |
+| PC propia | `com.cosmicx.pc` · 0.4.0 | `gradle -p pc-android :app:assembleDebug` |
 | XLab original | Proyecto Android de la raíz | `gradle :app:assembleDebug` |
 
 Los indicadores de Graphics 4K y 8K son mutuamente excluyentes. Se puede añadir `:app:assembleDebugAndroidTest` para construir las pruebas instrumentales. GitHub Actions conserva APK, firma, SHA-256, revisión del código y evidencia; los artefactos corresponden a la ejecución seleccionada.
@@ -100,9 +106,11 @@ Los paneles Motor y Núcleo de COSMIC comparten `NativeCore`. Observar, seleccio
 
 Solar reutiliza el núcleo y la geometría de resolución compartidos, pero sus órbitas, escalas, tiempo y ambientes tienen modelos propios. Incluye **23 cuerpos**, descenso a 22 planetas/lunas, mapa interactivo, texturas incorporadas y representaciones magnéticas. Sus aproximaciones orbitales y visuales están delimitadas en [ciencia solar](solar-android/docs/solar-science.md) y [atmósferas y mapa](solar-android/docs/atmosphere-science.md); no constituyen una simulación climática completa.
 
-COSMIC X PC **0.3.0** ejecuta un intérprete C++ propio. Su prueba x64 realiza la transición real → protegido → largo y verifica datos de 64 bits en registros y RAM. La CPU incorpora SHRD (`0F AC/AD`) y SHLD (`0F A4/A5`) en 16/32/64 bits, incluida la instrucción que antes detenía un cargador ISO con `two-byte opcode is not implemented`. La regresión reproduce el opcode; la compatibilidad de la ISO completa necesita su propio arranque comprobado.
+COSMIC X PC **0.4.0** ejecuta un intérprete C++ propio. Su prueba x64 realiza la transición real → protegido → largo y verifica datos de 64 bits en registros y RAM. La CPU incorpora SHRD (`0F AC/AD`) y SHLD (`0F A4/A5`) en 16/32/64 bits, incluida la instrucción que antes detenía un cargador ISO con `two-byte opcode is not implemented`. La regresión reproduce el opcode; la compatibilidad de la ISO completa necesita su propio arranque comprobado.
 
 PC incorpora ahora un dispositivo de vídeo lineal con una interfaz VBE limitada. **Prueba gráfica** permite generar píxeles desde instrucciones del huésped a **1280 × 720, 3840 × 2160 y 7680 × 4320**. Un presentador GLES 3 propio consume ese framebuffer mediante JNI y utiliza la misma clase [RenderResolution](graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java) que Graphics. La interfaz distingue **fuente huésped**, **salida de renderizado** y **superficie visible de Android**: seleccionar salida 8K no convierte una fuente de texto o de menor resolución en un huésped 8K ni cambia la resolución física del teléfono. La asignación 8K comprueba las capacidades GL y conserva la última salida válida si el dispositivo la rechaza.
+
+El panel Núcleo permite enviar programas al mismo `InfiniteSession` que utiliza el invitado mediante los puertos `0x5850` y `0x5851`. El viewport cuántico utiliza `QuantumRenderer` para observar esa sesión; **Guardar núcleo** conserva su estado actual y RNG en un archivo `.mxi`. Las pruebas comprueban que una instrucción del invitado cambia observables y píxeles del viewport. [Conexión, comandos y persistencia](docs/infinite_integration.md).
 
 El perfil Android conserva **2 GiB de RAM virtual** con un límite de **1 GiB de páginas respaldadas**. Vídeo tiene presupuestos separados: **512 MiB para texturas GL simultáneas** y **256 MiB para instantáneas nativas**; PSS informa el proceso Android por separado. Esos límites no garantizan un consumo total fijo de 2 GiB. La CPU x86/x64 no recibe aceleración del núcleo de qubits por compartir este repositorio. **Todavía no instala ni ejecuta Windows completo o juegos de PC.** [Uso, dispositivo de vídeo, pruebas y límites](pc-android/README.md).
 
@@ -129,22 +137,23 @@ Los workflows comprueban los cambios de código en solicitudes de integración a
 | --- | --- |
 | [Contratos nativos y escritorio](.github/workflows/cosmic-contracts.yml) | Núcleos, GHZ de 1.000, qubit 999, presupuestos, restauración, proyectos `.cosmic`, VM, CPU/PC y relación causal entre núcleo e imagen. |
 | [COSMIC Android](.github/workflows/cosmic-android.yml) | 25 casos COSMIC, 18 Graphics y 8 MicroLab sobre las fuentes compartidas. |
-| [Graphics](.github/workflows/graphics-android.yml), [4K](.github/workflows/graphics-4k.yml), [8K](.github/workflows/graphics-8k.yml) | Inventarios de 18, 22 y 26 casos: registro de 1.000, ampliación, estado, framebuffer, selección, orientación y PNG. |
+| [Graphics](.github/workflows/graphics-android.yml), [4K](.github/workflows/graphics-4k.yml), [8K](.github/workflows/graphics-8k.yml) | Inventarios de 20, 24 y 28 casos: registro de 1.000, Infinite, estado portable, framebuffer, selección, orientación y PNG. |
 | [Solar](.github/workflows/solar-android.yml) y [Solar 4K](.github/workflows/solar-4k.yml) | 511 comprobaciones analíticas; 13 casos Android del perfil normal y 19 del perfil UHD/ambientes. |
-| [PC propia](.github/workflows/own-pc-android.yml) | Nueve suites nativas y 20 casos Android previstos: conserva los 12 anteriores y añade regresión ISO, vídeo huésped/GLES hasta 8K y propiedad de instantáneas JNI. |
+| [PC propia](.github/workflows/own-pc-android.yml) | Diez suites nativas y 29 casos Android previstos: arranque, memoria, regresión ISO, vídeo huésped/GLES hasta 8K, propiedad de instantáneas JNI y sesión Infinite compartida entre CPU y viewport. |
 | [Windows](.github/workflows/windows-x64.yml), [runtime visual](.github/workflows/visual-runtime.yml), [XLab](.github/workflows/android-apk.yml) | Compilación del conjunto en sus plataformas y regresiones de los experimentos conservados. |
 
 Los recuentos describen el inventario esperado; el resultado de cada ejecución está en [Actions](https://github.com/guadalupejuan001-code/mundo-X/actions). Una prueba que pasa demuestra las condiciones examinadas. Las pruebas GLES en Android virtual no sustituyen una medición de rendimiento en el teléfono físico.
 
 El auditor común [cosmic_source_provenance.py](tools/cosmic_source_provenance.py) compara los archivos compartidos byte a byte con las revisiones de referencia. Los informes 4K/8K/Solar declaran la actualización al núcleo de 1.000 y las diferencias reales respecto al núcleo 4K anterior; también comprueban firma, identidad y bibliotecas de sus APK.
 
-La procedencia de PC 0.3.0 registra la identidad real del APK, el commit y los SHA-256 de su puente de vídeo, del dispositivo VBE, de la CPU y de `RenderResolution.java`. Sus pruebas guardan por separado el estado del huésped, el estado del presentador y capturas; el inventario documentado no sustituye al resultado de Actions de esa revisión.
+La procedencia de PC 0.4.0 registra la identidad real del APK, el commit y los SHA-256 de su puente de vídeo, del dispositivo VBE, de la CPU, del puente Infinite y de las clases gráficas compartidas. Comprueba las bibliotecas `libcosmic_pc.so`, `libmx_graphics.so` y `libc++_shared.so` para ARM64 y x86_64. Sus pruebas guardan por separado el estado del huésped, el estado del presentador y capturas; el inventario documentado no sustituye al resultado de Actions de esa revisión.
 
 | Trabajo incorporado | Revisión de origen |
 | --- | --- |
 | Perfil completo de 1.000 y correcciones de entrada | [`ef46362`](https://github.com/guadalupejuan001-code/mundo-X/commit/ef4636240af73351a18710e988346791fbdc3b58) |
 | Graphics 8K, incluyendo la línea 4K y optimizaciones propias | [`9fd8fc7`](https://github.com/guadalupejuan001-code/mundo-X/commit/9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6) |
 | Solar 4K, mapa y atmósferas | [`b6a324f`](https://github.com/guadalupejuan001-code/mundo-X/commit/b6a324f7d9a13709771f4589c8c082883607b788) |
+| PC VBE/GLES hasta 8K y corrección SHLD/SHRD | [`bab0dd5`](https://github.com/guadalupejuan001-code/mundo-X/commit/bab0dd54e88f57191067a4e2b960291f16640acf) |
 | PC x86/x64 y RAM por demanda | [`155f954`](https://github.com/guadalupejuan001-code/mundo-X/commit/155f954a79027a1cb3f2b9c1a43e5da8661b3303) |
 | Consola original de la VM `.mxvm`, recuperada junto al motor ya integrado | [`9d095a8`](https://github.com/guadalupejuan001-code/mundo-X/commit/9d095a81b3820f4c50fc48fecd9c7ff08bd22b40) |
 

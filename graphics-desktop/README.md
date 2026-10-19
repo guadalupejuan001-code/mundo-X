@@ -142,7 +142,7 @@ cantidad total de objetos y la cantidad visible desde una cámara son medidas
 distintas.
 
 El perfil `.cosmic` documenta límites de intercambio para controlar archivos y
-recursos: 256 qubits, 100.000 puertas, 4.096 observables, 100.000 ediciones y
+recursos: 1.000 qubits, 100.000 puertas, 4.096 observables, 100.000 ediciones y
 16 MiB por archivo. Estos límites no describen toda la capacidad matemática
 del repositorio. Las rutas Reduced/Factorized conservan sus contratos propios;
 este formato v1 rechaza operaciones o representaciones que no puede restaurar
@@ -157,3 +157,21 @@ incluye una ventana interactiva de edición.
 
 El contrato detallado está en [PROJECT_FORMAT.md](PROJECT_FORMAT.md), y el origen
 de los encabezados originales se conserva en `native/PROVENANCE.json`.
+
+## Proyectos Infinite
+
+`--infinite zero` o `--infinite bell` crea un proyecto con direcciones decimales
+y estado actual guardado en `.cosmic` v2. `--address` fija la región observada;
+`--partner` permite elegir el segundo operando. `--gate` conserva los operandos
+como texto y `--command` ejecuta una petición `.xi` atómica, incluidas medidas.
+La imagen sigue usando el mismo motor, sus objetos, selección, cámara y shaders.
+
+```bash
+python graphics-desktop/demo.py --infinite bell --address 100000000000000000000 \
+  --gate Z:100000000000000000000 --export-project infinito.cosmic --no-render
+EGL_PLATFORM=surfaceless LIBGL_ALWAYS_SOFTWARE=1 \
+  python graphics-desktop/validate_infinite.py
+```
+
+El modelo y la conexión con el invitado PC se explican en
+[infinite_integration.md](../docs/infinite_integration.md).

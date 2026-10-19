@@ -1,12 +1,65 @@
 # COSMIC X PC — motor x86/x64 propio para Android
 
-Este módulo desarrolla un emulador de PC propio dentro del proyecto COSMIC X. Interpreta instrucciones x86/x64 y conecta su CPU con RAM, vídeo de texto y framebuffer gráfico, teclado BIOS y lectura de disco. La versión **0.3.0** añade SHRD/SHLD, un dispositivo VBE lineal hasta 8K y un presentador GLES 3 propio; conserva la memoria por demanda y el arranque de prueba real → protegido → largo de 64 bits. **Esta versión todavía no ejecuta ni instala Windows completo ni juegos de PC.**
+Este módulo desarrolla un emulador de PC propio dentro del proyecto COSMIC X. Interpreta instrucciones x86/x64 y conecta su CPU con RAM, vídeo de texto y framebuffer gráfico, teclado BIOS y lectura de disco. La versión 0.3.0 incorporó SHRD/SHLD, un dispositivo VBE lineal hasta 8K y un presentador GLES 3 propio; la versión **0.4.0** conserva la memoria por demanda y el arranque de prueba real → protegido → largo de 64 bits. **Esta versión todavía no ejecuta ni instala Windows completo ni juegos de PC.**
+
+La versión **0.4.0** conecta **InfiniteCore como dispositivo del PC y el motor gráfico GLES canónico**. El huésped x86/x64, los comandos de la app y el observador cuántico acceden a una misma sesión. La pantalla de texto/framebuffer que escribe el huésped y el mundo del observador cuántico tienen sus propias vistas. Se conservan el intérprete, la RAM, los medios de arranque y el presentador VBE/GLES incorporado en 0.3.0.
 
 La aplicación contiene el intérprete C++ `cosmic_pc`; no contiene QEMU, Limbo, Bochs, Wine ni otro motor de emulación. El código de este módulo se escribió para este proyecto. El presentador utiliza la clase de geometría y validación [RenderResolution](../graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java) compartida con Graphics. El núcleo de 1.000 qubits no ejecuta ni acelera las instrucciones x86/x64: el estado de la CPU y la imagen que escribe el huésped conservan su propio significado.
 
+## Usar el núcleo y su motor gráfico desde el PC
+
+La tarjeta **Núcleo cuántico · Motor gráfico** permite aplicar programas `.xi`, observar dos direcciones decimales y guardar/abrir el estado del núcleo. Se puede usar antes de seleccionar un medio de arranque. Las operaciones se serializan con los pasos de la CPU en el hilo de trabajo de la app.
+
+Este programa prepara un par Bell entre direcciones alejadas y consulta correlaciones reales:
+
+```text
+h 0
+cx 0 1000000000
+expect X:0 X:1000000000
+expect Y:0 Y:1000000000
+stats
+```
+
+En un fondo cero, sus resultados son `XX=1`, `YY=-1`, `ZZ=1` y probabilidad Z individual `0.5`. La tarjeta muestra esas correlaciones junto con ZI/IZ, qubits activos, componentes, revisión y época. Las direcciones viajan como texto ASCII decimal; admiten valores superiores a 64 bits, incluidos `10^100`, dentro del presupuesto de dígitos. La distancia entre direcciones no asigna RAM intermedia.
+
+El visor usa los shaders, `QuantumRenderer` y el puente `mx_graphics` del motor gráfico existente. Su propietario nativo retiene la misma `InfiniteSession` del PC. Las consultas para dibujar devuelven valores, revisión y época bajo una sola operación de sesión. No se exporta/importa el estado para refrescar cada imagen. La cámara y **Acoplamiento: sí/no** cambian la visualización; el editor cambia el estado del núcleo. El visor solicita imágenes al cambiar el estado, sin animación continua por defecto.
+
+**Prueba núcleo x86** y **Prueba núcleo x64** cargan otros programas de arranque propios. Su primera etapa lee la segunda por BIOS; el huésped envía el programa por `OUT`, comprueba presencia/error con `IN` y decide qué texto escribir. La variante x64 realiza además su transición real → protegido → largo. **Prueba Z del huésped** prepara Bell, aplica Z desde el huésped y verifica `XX=-1`, `YY=1`, `ZZ=1`; con acoplamiento, el cambio llega al mundo del motor gráfico.
+
+**Fondo cero/Bell** reinicia solo el núcleo y conserva la CPU, RAM, medio montado y canal de respuesta del huésped. **Reiniciar** y cargar un arranque válido restablecen el PC y su dispositivo a fondo cero. Una imagen inválida se valida antes de sustituir la máquina. Pausar y girar el teléfono conservan la sesión actual mediante el ciclo de vida de la Activity.
+
+**Guardar núcleo** exporta un archivo `.mxi` con el estado exacto MXI1 y el generador aleatorio; **Abrir núcleo** lo valida por completo antes de sustituir la sesión. Estos archivos guardan el núcleo, no una imagen de RAM/disco del PC ni el mundo gráfico completo. El selector Android concede acceso al archivo elegido. Los errores de lectura, formato o presupuesto conservan el estado previo.
+
+### Contrato del dispositivo InfiniteCore
+
+El modelo dispone de dos puertos de 16 bits, accedidos con instrucciones de **un byte**, por ejemplo `IN AL,DX` y `OUT DX,AL`:
+
+| Puerto | Lectura | Escritura |
+| --- | --- | --- |
+| `0x5850` | Siguiente byte ASCII de respuesta; `0` si está vacía | Añade un byte a la petición |
+| `0x5851` | Estado: bit 7 presente, bit 0 respuesta disponible, bit 1 error, bit 2 desbordamiento | `1`: vaciar canal; `2`: ejecutar petición acumulada |
+
+El huésped vacía el canal, envía los bytes del programa y escribe `2` al puerto de control. La ejecución es síncrona y atómica por petición completa, incluidas aserciones, medidas y RNG. Las consultas producen líneas JSON; puertas y aserciones válidas pueden no producir texto. Una respuesta de error contiene `{"ok":false,"error":"..."}`. El huésped debe consultar el bit de disponibilidad antes de leer. Enviar otra petición sustituye la respuesta anterior. Consultar el panel o ejecutar un comando de la app no drena ni reemplaza el canal del huésped.
+
+Se acepta la gramática del núcleo: `h/s/x/y/z`, `cx/cz`, `expect`, `probz`, `measure`, `postselect`, `seed`, `compact`, `stats`, `begin/end` y `assert expect/probz`. `background zero|bell`, como primer comando de una petición, reinicia explícitamente su fondo. No se admiten NUL, direcciones no decimales ni comandos arbitrarios de anfitrión. Un error de programa, un ancho de puerto incorrecto o un desbordamiento se informa en el dispositivo; no se convierte en un fallo de CPU. Tras desbordamiento hay que vaciar el canal: nunca se ejecuta el prefijo truncado.
+
+Presupuestos del perfil PC:
+
+| Recurso | Límite |
+| --- | ---: |
+| Petición huésped/app | 65.536 bytes ASCII |
+| Qubits activos | 4096 |
+| Qubits por componente | 1024 |
+| Payload del tableau | 16 MiB |
+| Dígitos por dirección de entrada | 4096 |
+| Snapshot MXI1 | 16 MiB |
+| Vista del último resultado en la app | 8192 bytes, con aviso si se recorta |
+
+Estos presupuestos son independientes del respaldo de RAM x86. El tableau, las direcciones, el transporte, el visor y Android añaden consumo al proceso, medido por PSS. El dominio formal de direcciones no implica recursos físicos infinitos, ejecución de Windows ni mejoras de FPS acreditadas.
+
 ## Ejecutar la prueba en Android
 
-1. Instalar el APK `COSMIC-X-PC.apk`. La compilación de desarrollo admite Android 8.0 o posterior en ARM64 y x86_64.
+1. Instalar el APK `COSMIC-X-PC.apk`. La compilación de desarrollo admite Android 8.0 o posterior y GLES 3 en ARM64 y x86_64.
 2. Pulsar **Arranque de prueba** y después **Ejecutar**.
 3. El programa invitado calcula `0x1234 + 0x0102`, escribe y comprueba la RAM, solicita un sector por `INT 13h` y verifica su contenido. Solo entonces imprime `ALU + RAM + lectura de disco: OK`.
 4. Escribir una tecla y pulsar **Enviar**. El invitado recibe esa tecla por `INT 16h`, la imprime por `INT 10h` y ejecuta `HLT`.
@@ -112,6 +165,8 @@ Esta corrección permite ejecutar esa familia de instrucciones. La ISO concreta 
 | `native/boot_media.hpp` | Lectura acotada de medios raw e ISO, validación del catálogo y plan de arranque |
 | `native/pc_machine.hpp` | Memoria de PC, dispositivo de vídeo y servicios BIOS de teclado, disco y memoria |
 | `native/pc_video.hpp` | Framebuffer lineal propio, subconjunto VBE, modos, regiones de copia y conversión BGRX/RGBA |
+| `native/quantum_device.hpp` | Dispositivo IN/OUT acotado sobre la sesión InfiniteCore compartida |
+| `native/quantum_guest.hpp` | Arranques propios que usan el dispositivo desde x86/x64 y comprueban sus resultados |
 | `native/demo_boot.hpp` | Generador del programa x86 propio y su disco de dos sectores |
 | `native/long_mode_guest.hpp` | Programa de arranque propio que configura y comprueba la transición a 64 bits |
 | `native/graphics_demo.hpp` | Programa huésped propio que configura VBE, escribe píxeles y verifica el resultado |
@@ -150,7 +205,7 @@ Desde este directorio, con un compilador C++17:
 bash tools/test-native.sh
 ```
 
-El script compila nueve suites: RAM, CPU, transición de modos, oráculo nativo, medios, PC, ISO, memoria y vídeo. `pc_video_test` ejecuta programas huéspedes 720p y 8K, verifica píxeles y comprueba VBE, copias y presupuestos. Después ejecuta ambos arranques de consola y guarda sus imágenes en `build/native/cosmic-x86-demo.img` y `build/native/cosmic-x64-demo.img`.
+El script compila **diez suites**: RAM, CPU, transición de modos, oráculo nativo, medios, PC, ISO, memoria, vídeo y dispositivo InfiniteCore. `pc_video_test` ejecuta programas huéspedes 720p y 8K y comprueba VBE, píxeles, copias y presupuestos. `pc_quantum_test` verifica sesión, puertos, atomicidad y huéspedes del núcleo. Después ejecuta los arranques de consola x86/x64 y los dos del dispositivo; guarda sus imágenes en `build/native/`.
 
 También admite CMake:
 
@@ -165,6 +220,9 @@ Uso de la CLI:
 ```sh
 build/native/cosmic_pc_cli --demo
 build/native/cosmic_pc_cli --demo64 --ram-mib 2048 --resident-mib 1024
+build/native/cosmic_pc_cli --demo-quantum
+build/native/cosmic_pc_cli --demo-quantum64
+build/native/cosmic_pc_cli --demo --quantum programa.xi
 build/native/cosmic_pc_cli --image /ruta/al/medio.iso --max-instructions 1000000
 ```
 
@@ -176,7 +234,7 @@ Herramientas declaradas: JDK 17, Gradle 8.9, Android Gradle Plugin 8.7.3, SDK 35
 gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-El workflow [.github/workflows/own-pc-android.yml](../.github/workflows/own-pc-android.yml) compila las dos ABI, verifica firma, identidad 0.3.0, bibliotecas y clases del puente gráfico, y está configurado para ejecutar **20 pruebas instrumentales** con ese APK. Conserva las 12 pruebas anteriores y añade ocho de ISO, vídeo huésped, presentación GL e instantáneas. Se ejecuta con Android 15 y un AVD de 2048 MiB; ese tamaño pertenece al dispositivo virtual de pruebas. La app mantiene el perfil de huésped 2048/1024 MiB y comprueba su propia muestra de PSS.
+El workflow [.github/workflows/own-pc-android.yml](../.github/workflows/own-pc-android.yml) compila las dos ABI, verifica firma, identidad 0.4.0, bibliotecas y clases de ambos puentes gráficos, y está configurado para ejecutar **29 pruebas instrumentales** con ese APK: 12 heredadas, ocho de ISO/vídeo y nueve de InfiniteCore. Se ejecuta con Android 15 y un AVD de 2048 MiB; ese tamaño pertenece al dispositivo virtual de pruebas. La app mantiene el perfil de huésped 2048/1024 MiB y comprueba su propia muestra de PSS. `libcosmic_pc.so` enlaza con una única `libmx_graphics.so`, que contiene los puentes canónicos; ambas usan `libc++_shared.so`.
 
 El artefacto de CI conserva APK, SHA-256, commit, hashes del puente y de `RenderResolution.java`, logs, `pc-tests.json`, `pc-x64-state.json`, `pc-video-state.json` y las capturas `pc-screen.png`/`pc-video-screen.png`. La firma es de desarrollo. La configuración y el inventario de tests no declaran por sí mismos un resultado aprobado: el resultado válido es el de [Actions](https://github.com/guadalupejuan001-code/mundo-X/actions/workflows/own-pc-android.yml) para el commit correspondiente.
 
@@ -190,6 +248,8 @@ El artefacto de CI conserva APK, SHA-256, commit, hashes del puente y de `Render
 - La integración prueba teclado, reinicio, memoria, acceso al archivo después de cerrar el descriptor Java y la actividad operando la CPU real.
 - La memoria por demanda se compara con datos de referencia y se prueba en límites, reinicios y fallos de presupuesto. El perfil de 2 GiB también se verifica a través de JNI y JSON.
 - El invitado de 64 bits ejecuta la transición de modos, conserva resultados por encima de 32 bits y repite el proceso tras un reinicio. La Activity presenta una muestra numérica de PSS.
+- Los invitados del núcleo ejercitan ramas de éxito y fallo en modo real y largo. Se verifica rollback completo de comandos, FIFO acotada, errores sin fallo de CPU, direcciones largas y conservación de arranque/RAM/teclado.
+- La instrumentación exige que un Z del huésped cambie píxeles del viewport GLES acoplado, que la vista desacoplada permanezca idéntica y que un Z inverso desde la app restaure los píxeles. También verifica que el propietario gráfico comparte la sesión y puede cerrarse independientemente del PC.
 - El dispositivo de vídeo comprueba tablas y modos VBE, píxeles escritos por el huésped, conversión de color, copias acotadas, modo texto y rechazos de presupuesto. Android añade verificación del enlace JNI/GLES, resolución real de fuente/salida, lectura de píxeles e instantáneas conservadas durante cambios de máquina.
 
 Durante el desarrollo de 0.3.0, GCC 13.3/C++17 aprobó **5.902.496 comprobaciones CPU**, **304 aserciones de modo largo** y los oráculos de **7.872 vectores ALU + 38.912 SHLD/SHRD**. Las suites CPU y modo largo también aprobaron UBSan. Estas mediciones locales corresponden a la CPU; la ejecución Android de la revisión completa se documenta mediante sus artefactos de CI.

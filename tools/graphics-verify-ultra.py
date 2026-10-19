@@ -185,8 +185,8 @@ def main():
     metrics = report["metrics"]
     require(metrics["ultra8kSuite"] is True and metrics["uhd4kSuite"] is True, "Missing 8K/UHD instrumentation profile")
     inventory = {test["name"]: test for test in report["tests"]}
-    require(report["testsRun"] == 26 and report["testsFailed"] == 0
-            and len(report["tests"]) == len(inventory) == 26
+    require(report["testsRun"] == 28 and report["testsFailed"] == 0
+            and len(report["tests"]) == len(inventory) == 28
             and all(test["passed"] is True for test in inventory.values()),
             "Missing shared 1000-qubit, UHD or 8K cases")
     require(ULTRA_TESTS <= inventory.keys() and all(inventory[name]["passed"] for name in ULTRA_TESTS),

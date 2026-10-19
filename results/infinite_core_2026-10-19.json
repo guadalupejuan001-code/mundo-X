@@ -1,0 +1,389 @@
+{
+  "schema": 1,
+  "module": "InfiniteCore 0.1.0",
+  "recorded_at_utc": "2026-10-19T12:17:51.044988+00:00",
+  "status": "passed",
+  "branch": "codex/infinite-core-rules-20261019",
+  "source_code_commit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+  "integration_base_commit": "7fd001c524ca234d98f07ba46fb074f9f4572a97",
+  "initial_base_commit": "e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf",
+  "protected_1000_branch": "codex/core-1000-qubits-20261019",
+  "protected_1000_commit": "ef4636240af73351a18710e988346791fbdc3b58",
+  "environment": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+    "cmake": "cmake version 4.4.4",
+    "python": "3.12.14",
+    "configuration": "Release",
+    "cli_compiler_flags": "-O3 -DNDEBUG -std=gnu++17 -O3 -Wall -Wextra -Wpedantic",
+    "hardware_scope": "host environment, not Android or GPU"
+  },
+  "ctest": {
+    "tests": 10,
+    "failures": 0,
+    "cases": [
+      {
+        "name": "compact_measurement",
+        "status": "passed",
+        "seconds": 0.0101742,
+        "stdout": "PASS compact_measurement checks=8317 measurements=502 random=124\n"
+      },
+      {
+        "name": "engine_session",
+        "status": "passed",
+        "seconds": 0.16312,
+        "stdout": "PASS shared_session signed_pauli_comparisons=87296 max_abs_error=3.44169e-15 transactional_apply_restore=PASS readonly_observation=PASS portable_history=PASS wide_qubits=130 same_revision_cache_invalidation=PASS concurrent_snapshot=PASS\n"
+      },
+      {
+        "name": "core_1000",
+        "status": "passed",
+        "seconds": 0.952333,
+        "stdout": "PASS core_1000 qubits=1000 oracle_qubits=8 physical_indices=0,31,32,63,64,511,512,999 checks=30721 oracle_comparisons=11304 measurement_branches=8 max_oracle_error=5.5511151231257778e-17 tolerance=1e-10 ghz1000_phase=PASS snapshot_bridge=PASS q1000_rejection=PASS dense1000_allocated=false backend=compact-clifford\n"
+      },
+      {
+        "name": "infinite_address",
+        "status": "passed",
+        "seconds": 0.0113506,
+        "stdout": "infinite_address checks=494 failures=0\n"
+      },
+      {
+        "name": "infinite_core",
+        "status": "passed",
+        "seconds": 0.524435,
+        "stdout": "{\"ok\":true,\"checks\":220377,\"oracle_comparisons\":146438,\"gates\":3456,\"measurements\":202,\"allocation_failures\":35}\n"
+      },
+      {
+        "name": "infinite_tensor",
+        "status": "passed",
+        "seconds": 0.0224403,
+        "stdout": "{\"ok\":true,\"checks\":106805,\"dense_comparisons\":1534,\"tensor_cases\":115}\n"
+      },
+      {
+        "name": "infinite_example_zero",
+        "status": "passed",
+        "seconds": 0.00734562,
+        "stdout": "{\"type\":\"stats\",\"background\":\"zero\",\"domain\":\"nonnegative_decimal_addresses\",\"active_qubits\":0,\"components\":0,\"largest_component\":0,\"tableau_bytes\":0,\"address_bytes\":0,\"revision\":0,\"limits\":{\"max_active_qubits\":4096,\"max_component_qubits\":1024,\"max_state_bytes\":67108864,\"max_address_digits\":4096,\"max_query_terms\":4096}}\n{\"type\":\"stats\",\"background\":\"zero\",\"domain\":\"nonnegative_decimal_addresses\",\"active_qubits\":2,\"components\":1,\"largest_component\":2,\"tableau_bytes\":34,\"address_bytes\":102,\"revision\":1,\"limits\":{\"max_active_qubits\":4096,\"max_component_qubits\":1024,\"max_state_bytes\":67108864,\"max_address_digits\":4096,\"max_query_terms\":4096}}\n{\"type\":\"compact\",\"released_qubits\":2}\n{\"type\":\"stats\",\"background\":\"zero\",\"domain\":\"nonnegative_decimal_addresses\",\"active_qubits\":0,\"components\":0,\"largest_component\":0,\"tableau_bytes\":0,\"address_bytes\":0,\"revision\":3,\"limits\":{\"max_active_qubits\":4096,\"max_component_qubits\":1024,\"max_state_bytes\":67108864,\"max_address_digits\":4096,\"max_query_terms\":4096}}\n"
+      },
+      {
+        "name": "infinite_example_bell",
+        "status": "passed",
+        "seconds": 0.00545094,
+        "stdout": "{\"type\":\"stats\",\"background\":\"bell\",\"domain\":\"nonnegative_decimal_addresses\",\"active_qubits\":0,\"components\":0,\"largest_component\":0,\"tableau_bytes\":0,\"address_bytes\":0,\"revision\":0,\"limits\":{\"max_active_qubits\":4096,\"max_component_qubits\":1024,\"max_state_bytes\":67108864,\"max_address_digits\":4096,\"max_query_terms\":4096}}\n{\"type\":\"stats\",\"background\":\"bell\",\"domain\":\"nonnegative_decimal_addresses\",\"active_qubits\":2,\"components\":1,\"largest_component\":2,\"tableau_bytes\":34,\"address_bytes\":38,\"revision\":1,\"limits\":{\"max_active_qubits\":4096,\"max_component_qubits\":1024,\"max_state_bytes\":67108864,\"max_address_digits\":4096,\"max_query_terms\":4096}}\n{\"type\":\"compact\",\"released_qubits\":2}\n{\"type\":\"stats\",\"background\":\"bell\",\"domain\":\"nonnegative_decimal_addresses\",\"active_qubits\":0,\"components\":0,\"largest_component\":0,\"tableau_bytes\":0,\"address_bytes\":0,\"revision\":3,\"limits\":{\"max_active_qubits\":4096,\"max_component_qubits\":1024,\"max_state_bytes\":67108864,\"max_address_digits\":4096,\"max_query_terms\":4096}}\n{\"type\":\"postsele...\n[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]\n"
+      },
+      {
+        "name": "infinite_cli_contract",
+        "status": "passed",
+        "seconds": 1.87555,
+        "stdout": "{\"suite\": \"infinite_cli\", \"status\": \"passed\", \"cases\": 51, \"checks\": 125}\n"
+      },
+      {
+        "name": "native_core_and_xasm",
+        "status": "passed",
+        "seconds": 0.0524873,
+        "stdout": "PASS compact compatibility\nPASS reduced XASM\nPASS T phase identities\nPASS seeded Clifford+T circuits\nPASS parser diagnostics\nPASS limits and failed assertions\n"
+      }
+    ]
+  },
+  "scale_probe": {
+    "schema": 1,
+    "probe": "infinite_scale",
+    "ok": true,
+    "scope": "in-process host wall time and logical retained payload; not process RAM",
+    "address_pattern": "remote target = decimal 1 followed by target_decimal_power zeroes",
+    "cases": [
+      {
+        "case": "remote_bell",
+        "background": "zero",
+        "first_address": "0",
+        "target_decimal_power": 0,
+        "target_digits": 1,
+        "gates": 2,
+        "stats_before": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 0
+        },
+        "stats_after": {
+          "active_qubits": 2,
+          "components": 1,
+          "largest_component": 2,
+          "tableau_bytes": 34,
+          "address_bytes": 2,
+          "revision": 1
+        },
+        "p_first_one": 0.5,
+        "p_target_one": 0.5,
+        "xx": 1,
+        "yy": -1,
+        "zz": 1,
+        "apply_us": 14.053,
+        "query_us": 7.408,
+        "elapsed_us": 22.756,
+        "ok": true
+      },
+      {
+        "case": "remote_bell",
+        "background": "zero",
+        "first_address": "0",
+        "target_decimal_power": 9,
+        "target_digits": 10,
+        "gates": 2,
+        "stats_before": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 0
+        },
+        "stats_after": {
+          "active_qubits": 2,
+          "components": 1,
+          "largest_component": 2,
+          "tableau_bytes": 34,
+          "address_bytes": 11,
+          "revision": 1
+        },
+        "p_first_one": 0.5,
+        "p_target_one": 0.5,
+        "xx": 1,
+        "yy": -1,
+        "zz": 1,
+        "apply_us": 3.533,
+        "query_us": 2.219,
+        "elapsed_us": 6.684,
+        "ok": true
+      },
+      {
+        "case": "remote_bell",
+        "background": "zero",
+        "first_address": "0",
+        "target_decimal_power": 100,
+        "target_digits": 101,
+        "gates": 2,
+        "stats_before": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 0
+        },
+        "stats_after": {
+          "active_qubits": 2,
+          "components": 1,
+          "largest_component": 2,
+          "tableau_bytes": 34,
+          "address_bytes": 102,
+          "revision": 1
+        },
+        "p_first_one": 0.5,
+        "p_target_one": 0.5,
+        "xx": 1,
+        "yy": -1,
+        "zz": 1,
+        "apply_us": 3.669,
+        "query_us": 2.458,
+        "elapsed_us": 6.942,
+        "ok": true
+      },
+      {
+        "case": "remote_bell",
+        "background": "zero",
+        "first_address": "0",
+        "target_decimal_power": 1000,
+        "target_digits": 1001,
+        "gates": 2,
+        "stats_before": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 0
+        },
+        "stats_after": {
+          "active_qubits": 2,
+          "components": 1,
+          "largest_component": 2,
+          "tableau_bytes": 34,
+          "address_bytes": 1002,
+          "revision": 1
+        },
+        "p_first_one": 0.5,
+        "p_target_one": 0.5,
+        "xx": 1,
+        "yy": -1,
+        "zz": 1,
+        "apply_us": 4.778,
+        "query_us": 3.687,
+        "elapsed_us": 9.156,
+        "ok": true
+      },
+      {
+        "case": "implicit_bell_queries",
+        "background": "bell_pairs",
+        "pairs": 1000,
+        "address_digits": 1001,
+        "queries": 4001,
+        "largest_query_terms": 2000,
+        "stats_before": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 0
+        },
+        "stats_after": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 0
+        },
+        "xx_sum": 1000,
+        "yy_sum": -1000,
+        "zz_sum": 1000,
+        "p_one_sum": 500,
+        "finite_all_zz": 1,
+        "elapsed_us": 51841.54,
+        "ok": true
+      },
+      {
+        "case": "repeated_gates",
+        "background": "zero",
+        "gates": 10000,
+        "batches": 2,
+        "stats_before": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 0
+        },
+        "stats_after_materialization": {
+          "active_qubits": 1,
+          "components": 1,
+          "largest_component": 1,
+          "tableau_bytes": 17,
+          "address_bytes": 1,
+          "revision": 1
+        },
+        "stats_after_gates": {
+          "active_qubits": 1,
+          "components": 1,
+          "largest_component": 1,
+          "tableau_bytes": 17,
+          "address_bytes": 1,
+          "revision": 2
+        },
+        "stats_after_compaction": {
+          "active_qubits": 0,
+          "components": 0,
+          "largest_component": 0,
+          "tableau_bytes": 0,
+          "address_bytes": 0,
+          "revision": 3
+        },
+        "payload_unchanged": true,
+        "p_one_before_compaction": 0,
+        "released_qubits": 1,
+        "elapsed_us": 1239.329,
+        "ok": true
+      },
+      {
+        "case": "ghz_component",
+        "background": "zero",
+        "qubits": 1000,
+        "gates": 1000,
+        "batches": 1,
+        "component_budget": 1024,
+        "stats_after": {
+          "active_qubits": 1000,
+          "components": 1,
+          "largest_component": 1000,
+          "tableau_bytes": 257000,
+          "address_bytes": 2890,
+          "revision": 1
+        },
+        "p_first_one": 0.5,
+        "p_last_one": 0.5,
+        "z_first_z_last": 1,
+        "x_all": 1,
+        "apply_us": 87270.231,
+        "query_us": 7682.807,
+        "query_budget_seconds": 30,
+        "elapsed_us": 95120.981,
+        "ok": true
+      }
+    ]
+  },
+  "source_sha256": {
+    "native/include/mundo_x/compact_core.hpp": "916023862a935f7aec45b4fe7e9285e11715e08408f88d265e50255c64435647",
+    "native/include/mundo_x/infinite_address.hpp": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+    "native/include/mundo_x/infinite_core.hpp": "4810d861b717935892102a4ebc957c9c5501af73f03b83df2d9af70b62853216",
+    "native/include/mundo_x/pauli_observer.hpp": "a4e0cea872cf7f267f1990a29b9e2e1b3f77ececf70851afbbd83692d329e183",
+    "native/include/mundo_x/dense_core.hpp": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+    "native/include/mundo_x/engine_session.hpp": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+    "native/src/graphics_core_bridge.cpp": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+    "native/src/infinite_runner.cpp": "3f02e5fd512657e4d03cdf1ee764d2dd6fb109ff2bb6b21ba17bd551206b9f30",
+    "native/tests/infinite_address.cpp": "7cd34dc3722ade0329510b79b6ef73f0fa6d40dfc11d2cb77ddba9bbc58d6969",
+    "native/tests/infinite_core.cpp": "81838a8c8f1e4805866b3da5aa2c18cf8310ccf8c85be098149e4501f4e22865",
+    "native/tests/infinite_tensor.cpp": "c243a2fdc14ceed62b5c1f032b8acd8286d02b4400e0cebcad3055ebc42a083f",
+    "native/tests/infinite_scale.cpp": "48927e5e0a8e0c6622f21e275aba573682bd89abffc63f80baeeacb6a764cfd5",
+    "native/tests/compact_measurement.cpp": "be6196f9de45f6827b47c578baa9dd0ad8a5383e7097bf6003ba6a8a74330564",
+    "native/tests/core_1000.cpp": "e04b8f446a36d868d657324dd501922096385d8e7c7219bb6f7ae2fa5f4a131b",
+    "native/tests/engine_session.cpp": "ebaec77b3498a2f0155cf5c0a56e0afe5649ea488be9a169df532309d5b9bf84",
+    "tests/native_tests.cpp": "288630c424a15905b0e9e770633071e5ced0954629d9c2f992fd75bb7952bb9b",
+    "tools/validate_infinite_cli.py": "796d2f53e09fd80bf4edc2ba42b711fbab14c12cd39ff746af2049fe15223211",
+    "examples/infinite_zero.xi": "85b38dc1226bb9ae0b651da32c0c21b14021e1a311f734dc8438aa449725e4d7",
+    "examples/infinite_bell.xi": "744fe29bcf8fe1377e5dea3a531969ae2d768269db8b5c652abf107502e6d45c",
+    "CMakeLists.txt": "1134f20e819f518a02fd018ee00b4bfb05f7111c23842f6e743b36cbf510971f"
+  },
+  "limits": {
+    "max_active_qubits": 4096,
+    "max_component_qubits": 1024,
+    "max_state_bytes": 67108864,
+    "max_address_digits": 4096,
+    "max_query_terms": 4096
+  },
+  "interpretation": [
+    "Addresses name sites; increasing an address does not increase the number of active qubits.",
+    "tableau_bytes and address_bytes are logical payload counters, not process RAM; metadata, copies and temporary query memory are excluded.",
+    "Timing values are single in-process host samples, with no device or speedup inference; other validation ran in the same environment.",
+    "The GHZ1000 probe includes the X product on all 1000 sites to check coherence as well as Z correlation.",
+    "The finite Clifford algebra is exact up to global phase; independent floating-point oracle comparisons use tolerance 1e-10.",
+    "This finite collection of tests is evidence for the supported contracts, not a proof of correctness for every possible program.",
+    "The code was first checked on e06ba2a, then rebased and the affected suites rebuilt and rerun against integrated main 7fd001c.",
+    "Linux local checks are recorded here. Windows/Linux GitHub Actions results are recorded by their separate run, not inferred here."
+  ],
+  "source_provenance": {
+    "status": "passed",
+    "verified_source_files": 60,
+    "infinite_extension_files": 8,
+    "unchanged_previous_origin_files": 52,
+    "extension": {
+      "referenceCommit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+      "scope": "Independent native InfiniteCore headers, CLI and tests, plus the CompactCore tensor-product helper for finite active components.",
+      "sourceReferenceCommits": {
+        "native/include/mundo_x/compact_core.hpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+        "native/include/mundo_x/infinite_address.hpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+        "native/include/mundo_x/infinite_core.hpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+        "native/src/infinite_runner.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+        "native/tests/infinite_address.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+        "native/tests/infinite_core.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+        "native/tests/infinite_scale.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+        "native/tests/infinite_tensor.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
+      }
+    },
+    "historical_core_reference": "ef4636240af73351a18710e988346791fbdc3b58",
+    "source_manifest": "tools/cosmic_source_provenance.py"
+  }
+}

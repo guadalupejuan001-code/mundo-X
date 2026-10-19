@@ -15,6 +15,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from infinite_device_evidence import GRAPHICS_CASES as INFINITE_GRAPHICS_CASES
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "graphics-desktop"))
@@ -35,6 +36,7 @@ LEGACY_DEVICE_TESTS = {
     "portable_desktop_fixtures_import", "portable_mutation_export_reimport",
     "portable_invalid_import_preserves_session", "portable_activity_recreation",
 }
+LEGACY_DEVICE_TESTS |= INFINITE_GRAPHICS_CASES
 UHD_DEVICE_TESTS = {
     "uhd_real_framebuffer_and_legacy_return", "uhd_id_selection_and_letterbox",
     "uhd_orientation_roundtrip", "uhd_lifecycle_snapshot_native_preserved",
@@ -99,6 +101,23 @@ class NativeBridge:
         lib.mx_revision.restype = ct.c_uint64
         lib.mx_state_bytes.argtypes = [ct.c_void_p]
         lib.mx_state_bytes.restype = ct.c_size_t
+        lib.mxi_create.argtypes = [ct.c_int]
+        lib.mxi_create.restype = ct.c_void_p
+        lib.mxi_destroy.argtypes = [ct.c_void_p]
+        lib.mxi_destroy.restype = None
+        lib.mxi_last_error.argtypes = []
+        lib.mxi_last_error.restype = ct.c_char_p
+        lib.mxi_restore.argtypes = [ct.c_void_p, ct.c_char_p]
+        lib.mxi_restore.restype = ct.c_int
+        lib.mxi_snapshot.argtypes = [ct.c_void_p, ct.POINTER(ct.c_void_p)]
+        lib.mxi_snapshot.restype = ct.c_int
+        lib.mxi_execute.argtypes = [ct.c_void_p, ct.c_char_p, ct.POINTER(ct.c_void_p)]
+        lib.mxi_execute.restype = ct.c_int
+        lib.mxi_query.argtypes = [ct.c_void_p, ct.POINTER(ct.c_char_p), ct.c_size_t,
+                                 ct.POINTER(ct.c_double), ct.POINTER(ct.c_uint64), ct.POINTER(ct.c_uint64)]
+        lib.mxi_query.restype = ct.c_int
+        lib.mxi_free_string.argtypes = [ct.c_void_p]
+        lib.mxi_free_string.restype = None
 
     def check(self, status):
         if status:
@@ -139,15 +158,83 @@ class NativeBridge:
         self.check(self.lib.mx_history(handle, output, count))
         return list(output)
 
+    def infinite_check(self, status):
+        if status:
+            raise ValueError("Infinite native core: " + self.lib.mxi_last_error().decode("utf-8", "replace"))
+
+    def infinite_restore(self, document):
+        require(document["version"] == 2 and document["core"]["backend"] == "infinite-clifford",
+                "Infinite portability requires a v2 document")
+        handle = self.lib.mxi_create(0)
+        if not handle:
+            self.infinite_check(-1)
+        try:
+            self.infinite_check(self.lib.mxi_restore(handle, document["core"]["snapshot"].encode("ascii")))
+            return handle
+        except Exception:
+            self.lib.mxi_destroy(handle)
+            raise
+
+    def infinite_string(self, name, handle, *args):
+        out = ct.c_void_p()
+        try:
+            self.infinite_check(getattr(self.lib, "mxi_" + name)(handle, *args, ct.byref(out)))
+            require(bool(out.value), "Missing native string result")
+            return ct.string_at(out).decode("ascii")
+        finally:
+            if out.value:
+                self.lib.mxi_free_string(out)
+
+    def infinite_query(self, handle, observables):
+        encoded = [value.encode("ascii") for value in observables]
+        strings = (ct.c_char_p * len(encoded))(*encoded)
+        output = (ct.c_double * len(encoded))()
+        revision, epoch = ct.c_uint64(), ct.c_uint64()
+        self.infinite_check(self.lib.mxi_query(handle, strings, len(encoded), output,
+                                             ct.byref(revision), ct.byref(epoch)))
+        return list(output), revision.value, epoch.value
+
 
 def compile_bridge(directory):
     source = ROOT / "native/src/graphics_core_bridge.cpp"
+    infinite_source = ROOT / "native/src/infinite_bridge.cpp"
     binary = Path(directory) / "libcosmic-portability.so"
     result = subprocess.run(["c++", "-std=c++17", "-O2", "-shared", "-fPIC", "-pthread",
-                             "-I", str(ROOT / "native/include"), str(source), "-o", str(binary)],
+                             "-I", str(ROOT / "native/include"), str(source), str(infinite_source), "-o", str(binary)],
                             capture_output=True, text=True, timeout=60)
     require(result.returncode == 0, "Cannot build the canonical desktop bridge:\n" + result.stderr)
     return NativeBridge(binary)
+
+
+def verify_infinite_native(bridge, document, proof):
+    """Import Android's actual state and reproduce subsequent random outcomes."""
+    require(type(proof.get("schemaVersion")) is int and proof["schemaVersion"] == 2,
+            "Unknown Infinite proof schema")
+    require(proof["snapshot"] == document["core"]["snapshot"], "Infinite proof lost its saved current state")
+    observables = document["graphics"]["observables"]
+    require(proof["observables"] == observables, "Infinite proof changed the original graphic program")
+    require(any(len(term.split(":", 1)[-1]) >= 101 for pauli in observables
+                for term in pauli.split() if ":" in term), "Infinite export did not preserve a 101-digit address")
+    continuation = proof["continuationProgram"]
+    require(type(continuation) is str and len(continuation) <= 65536 and "\0" not in continuation
+            and any(line.strip().startswith("measure ") for line in continuation.splitlines()),
+            "Missing bounded measurement continuation")
+    handle = bridge.infinite_restore(document)
+    try:
+        saved = bridge.infinite_string("snapshot", handle)
+        require(saved == proof["snapshot"], "Desktop and Android current-state snapshots differ")
+        values, revision, _ = bridge.infinite_query(handle, observables)
+        require(values == proof["expectations"], "Desktop and Android Infinite observables differ")
+        require(bridge.infinite_string("snapshot", handle) == saved, "Observation changed the imported Infinite state or RNG")
+        output = bridge.infinite_string("execute", handle, continuation.encode("ascii"))
+        require(output == proof["continuationOutput"], "Desktop and Android measurement outcomes differ after restore")
+        require(bridge.infinite_string("snapshot", handle) == proof["continuationSnapshot"],
+                "Desktop and Android current state or RNG diverged after continuation")
+        return {"backend": "infinite-clifford", "observables": len(observables), "revision": revision,
+                "current_state_and_observables_equal": True, "measurement_and_rng_continuation_equal": True,
+                "observations_preserved_state": True, "numeric_address_conversion": False}
+    finally:
+        bridge.lib.mxi_destroy(handle)
 
 
 def verify_native(bridge, document, proof):
@@ -207,6 +294,7 @@ def verify_directory(directory):
     require(len(exports) == 3 and {item["file"] for item in exports} == set(EXPECTED_EXPORTS),
             "Unexpected Android export inventory")
     results = []
+    infinite_results = []
     with tempfile.TemporaryDirectory(prefix="cosmic-portability-") as native_directory:
         bridge = compile_bridge(native_directory)
         for item in sorted(exports, key=lambda entry: entry["file"]):
@@ -235,8 +323,20 @@ def verify_directory(directory):
             result.update({"file": filename, "sourceFixture": source_file, "unchanged_source_fields_equal": equivalent,
                            "sha256": hashlib.sha256((directory / filename).read_bytes()).hexdigest()})
             results.append(result)
+        infinite_exports = report.get("infiniteProjectExports", [])
+        require(len(infinite_exports) == 1 and infinite_exports[0]["file"] == "portable-infinite-android.cosmic"
+                and infinite_exports[0]["stateFile"] == "portable-infinite-android.cosmic.state.json",
+                "Missing Infinite Android project export")
+        for item in infinite_exports:
+            document = read_project(directory / item["file"])
+            proof = evidence_json(directory / item["stateFile"])
+            result = verify_infinite_native(bridge, document, proof)
+            result.update({"file": item["file"],
+                           "sha256": hashlib.sha256((directory / item["file"]).read_bytes()).hexdigest()})
+            infinite_results.append(result)
     return {"schemaVersion": 1, "status": "passed", "projects": results, "stdlib_only": True,
-            "core_source": "native/src/graphics_core_bridge.cpp", "gpu_context_created": False,
+            "core_source": "native/src/graphics_core_bridge.cpp", "infinite_projects": infinite_results,
+            "infinite_source": "native/src/infinite_bridge.cpp", "gpu_context_created": False,
             "cross_driver_pixel_identity_required": False,
             "scope": "Android exports replayed by the desktop native core; geometry checked separately by device GLES tests"}
 

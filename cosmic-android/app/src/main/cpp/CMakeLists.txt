@@ -7,6 +7,7 @@ get_filename_component(MUNDO_X_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.."
 # Compile the existing original sources directly. No PC/x86/Windows source belongs here.
 add_library(mx_graphics SHARED
     "${MUNDO_X_ROOT}/native/src/graphics_core_bridge.cpp"
+    "${MUNDO_X_ROOT}/native/src/infinite_bridge.cpp"
     "${MUNDO_X_ROOT}/graphics-android/app/src/main/cpp/graphics_jni.cpp")
 add_library(mundox SHARED
     "${MUNDO_X_ROOT}/app/src/main/cpp/native-lib.cpp"

@@ -98,6 +98,51 @@ public final class ProjectCodecChecks {
             "[[\"H\",0],[\"S\",0],[\"X\",0],[\"Z\",0],[\"CX\",0,1],[\"CZ\",0,1],[\"Y\",0]]")));
         check(Arrays.equals(gates.core.gateHistory,new long[]{0,0,0,1,0,0,2,0,0,3,0,0,4,0,1,5,0,1,6,0,0}),"stable native gate IDs");
 
+        JSONObject infiniteJson=new JSONObject(BELL);
+        infiniteJson.put("version",2).put("core",new JSONObject().put("backend","infinite-clifford").put("snapshot","MXI1:00"));
+        infiniteJson.getJSONObject("graphics").put("observables",new JSONArray().put("X:"+InfiniteProgram.FAR_ADDRESS+" X:"+InfiniteProgram.partner(InfiniteProgram.FAR_ADDRESS)).put("- Y:0 Y:1").put(""));
+        CosmicProject.Document infinite=CosmicProject.decode(utf8(infiniteJson.toString()));
+        check(infinite.core.infinite&&infinite.core.qubits==0&&infinite.core.infiniteSnapshot.equals("MXI1:00"),"v2 structurally retains opaque state without native creation");
+        check(CosmicProject.decode(CosmicProject.encode(infinite)).core.infinite,"v2 decode/encode backend");
+        check(CosmicProject.decode(CosmicProject.encode(CosmicProject.fromSnapshots(infinite.name,infinite.core,infinite.graphics))).graphics.observables[0].equals(infinite.graphics.observables[0]),"v2 current snapshot retains full decimal addresses");
+        check(InfiniteProgram.address("000001").equals("1")&&InfiniteProgram.partner("18446744073709551616").equals("18446744073709551617"),"address canonicalization beyond 64 bits");
+        reject(()->CosmicProject.expandQubits(infinite,1000),"finite expansion of infinite domain");
+        for(String badAddress:new String[]{"","-1","+1"," 1","1 ","1e100","１"})reject(()->InfiniteProgram.address(badAddress),"invalid decimal address");
+        char[] maximum=new char[4096];Arrays.fill(maximum,'9');check(InfiniteProgram.address(new String(maximum)).length()==4096,"full 4096-digit address");
+        reject(()->InfiniteProgram.address("0"+new String(maximum)),"raw input budget bypass");
+        // Real snapshots exceed the old tokenizer's 1024-character guard even
+        // with no active qubits because they retain the complete random state.
+        char[] snapshotHex=new char[12_288];Arrays.fill(snapshotHex,'0');
+        String longSnapshot="MXI1:"+new String(snapshotHex),lastAddress=new String(maximum);
+        String longObservable="X:"+lastAddress+" Z:"+InfiniteProgram.partner(lastAddress);
+        JSONObject longJson=new JSONObject(infiniteJson.toString());
+        longJson.getJSONObject("core").put("snapshot",longSnapshot);
+        longJson.getJSONObject("graphics").put("observables",new JSONArray().put(longObservable).put("Z:0"));
+        CosmicProject.Document large=CosmicProject.decode(utf8(longJson.toString()));
+        check(large.core.infiniteSnapshot.equals(longSnapshot)&&large.graphics.observables[0].equals(longObservable),
+            "v2 parses full current state and paired 4096-digit addresses");
+        CosmicProject.Document largeBack=CosmicProject.decode(CosmicProject.encode(large));
+        check(largeBack.core.infiniteSnapshot.equals(longSnapshot)&&Arrays.equals(largeBack.graphics.observables,large.graphics.observables),
+            "v2 large snapshot and sparse observable roundtrip exactly");
+        String versionLast="{\"graphics\":"+longJson.getJSONObject("graphics")+",\"core\":"+longJson.getJSONObject("core")
+            +",\"format\":\""+CosmicProject.FORMAT+"\",\"name\":\"Long v2\",\"version\":2}";
+        check(CosmicProject.decode(utf8(versionLast)).core.infiniteSnapshot.equals(longSnapshot),"v2 large payloads do not depend on JSON field order");
+        JSONObject longName=new JSONObject(infiniteJson.toString());longName.put("name",longSnapshot);
+        reject(longName.toString(),"large v2 payload budget does not extend common fields");
+        JSONObject longKey=new JSONObject(infiniteJson.toString());longKey.put(longSnapshot,0);
+        reject(longKey.toString(),"JSON key length remains bounded");
+        char[] longFinitePauli=new char[1025];Arrays.fill(longFinitePauli,'X');
+        reject(BELL.replace("\"+XX\"","\""+new String(longFinitePauli)+"\""),"v1 Pauli width remains bounded");
+        for(String bad:new String[]{"X:0 Z:00","+X:0","X:+1","X:1e100","X:１","X:1 # comment","X:1\u0000"}){
+            JSONObject copy=new JSONObject(infiniteJson.toString());copy.getJSONObject("graphics").put("observables",new JSONArray().put(bad));
+            reject(copy.toString(),"invalid sparse observable");
+        }
+        for(String bad:new String[]{"","MXI2:00","MXI1:0","MXI1:0z"}){
+            JSONObject copy=new JSONObject(infiniteJson.toString());copy.getJSONObject("core").put("snapshot",bad);reject(copy.toString(),"invalid v2 snapshot envelope");
+        }
+        JSONObject extra=new JSONObject(infiniteJson.toString());extra.getJSONObject("core").put("qubits",2);reject(extra.toString(),"v2 duplicated finite metadata");
+        JSONObject wrongBackend=new JSONObject(infiniteJson.toString());wrongBackend.getJSONObject("core").put("backend","compact-clifford");reject(wrongBackend.toString(),"v2 finite backend");
+
         String escapedRocket="\\ud83d\\ude80";
         check(CosmicProject.decode(utf8(BELL.replace("Bell X",escapedRocket))).name.codePointCount(0,2)==1,"escaped Unicode pair");
         StringBuilder name=new StringBuilder();for(int i=0;i<128;i++)name.appendCodePoint(0x1f680);

@@ -1,0 +1,98 @@
+name: InfiniteCore rules and finite components
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/include/mundo_x/**'
+      - 'native/src/infinite_*.cpp'
+      - 'native/tests/infinite_*.cpp'
+      - 'examples/infinite_*.xi'
+      - 'tools/validate_infinite_cli.py'
+      - 'tools/cosmic_source_provenance.py'
+      - 'graphics-desktop/native/PROVENANCE.json'
+      - 'android-experiments/PROVENANCE.json'
+      - 'CMakeLists.txt'
+      - '.github/workflows/infinite-core.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/include/mundo_x/**'
+      - 'native/src/infinite_*.cpp'
+      - 'native/tests/infinite_*.cpp'
+      - 'examples/infinite_*.xi'
+      - 'tools/validate_infinite_cli.py'
+      - 'tools/cosmic_source_provenance.py'
+      - 'graphics-desktop/native/PROVENANCE.json'
+      - 'android-experiments/PROVENANCE.json'
+      - 'CMakeLists.txt'
+      - '.github/workflows/infinite-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  contracts:
+    name: InfiniteCore / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Preserve canonical source bytes on checkout
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Record source and configure
+        run: |
+          mkdir -p infinite-evidence
+          git rev-parse HEAD > infinite-evidence/source-commit.txt
+          cmake -S . -B infinite-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Verify exact declared source provenance
+        run: python tools/cosmic_source_provenance.py > infinite-evidence/source-provenance.json
+      - name: Build the runner and integrated session contracts
+        run: |
+          cmake --build infinite-build --config Release --parallel 2 --target \
+            mundo_x_infinite test_infinite_address test_infinite_core \
+            test_infinite_tensor test_infinite_session test_infinite_bridge infinite_scale \
+            test_compact_measurement mundo_x_native_tests \
+            test_core_1000 test_engine_session \
+            2>&1 | tee infinite-evidence/build.log
+      - name: Check exact operations, CLI and original CompactCore compatibility
+        run: |
+          ctest --test-dir infinite-build -C Release --output-on-failure \
+            -R '^(infinite_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
+            --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \
+            | tee infinite-evidence/ctest.log
+      - name: Record measured scope and make the CLI available
+        timeout-minutes: 2
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            infinite-build/Release/infinite_scale.exe > infinite-evidence/scale.json
+            cp infinite-build/Release/mundo_x_infinite.exe infinite-evidence/
+          else
+            infinite-build/infinite_scale > infinite-evidence/scale.json
+            cp infinite-build/mundo_x_infinite infinite-evidence/
+          fi
+          cp examples/infinite_*.xi infinite-evidence/
+          cp docs/infinite_core.md infinite-evidence/
+          cat infinite-evidence/scale.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: InfiniteCore-${{ matrix.os }}
+          path: infinite-evidence/
+          if-no-files-found: warn

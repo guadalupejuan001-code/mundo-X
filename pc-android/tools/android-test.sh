@@ -56,9 +56,11 @@ collect_evidence
 python3 - <<'PY'
 import json
 from pathlib import Path
-assert 'COSMIC_PC_TESTS_PASSED tests=20 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
+assert 'COSMIC_PC_TESTS_PASSED tests=29 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
 v=json.loads(Path('pc-evidence/pc-tests.json').read_text())
-assert v['tests']==20 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
+assert v['tests']==29 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
+assert v['infinite_guest_verified'] and v['shared_session_graphics_verified']
+assert v['coupled_changed_pixels']>10 and v['uncoupled_changed_pixels']==0
 assert v['iso_shrd_verified'] and v['guest_8k_verified'] and v['output_8k_verified'] and v['video_tests']==8
 assert v['logical_ram_bytes']==2**31 and v['guest_payload_cap_bytes']==2**30
 assert 0<v['native_test_process_pss_bytes']<2**31

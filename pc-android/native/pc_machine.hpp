@@ -3,6 +3,8 @@
 #include "boot_media.hpp"
 #include "demo_boot.hpp"
 #include "long_mode_guest.hpp"
+#include "quantum_device.hpp"
+#include "quantum_guest.hpp"
 #include "pc_video.hpp"
 #include "graphics_demo.hpp"
 #include <algorithm>
@@ -12,6 +14,7 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <utility>
 
 namespace cosmic_pc {
 // Original BIOS service model and PC integration. This is deliberately explicit
@@ -20,6 +23,8 @@ class PcMachine {
  public:
   using Reader=std::function<bool(std::uint64_t,std::uint8_t*,std::size_t)>;
   Cpu cpu;
+  const std::shared_ptr<mundo_x::InfiniteSession> quantum_session;
+  PcQuantumDevice quantum_device;
   bool waiting_key=false;
   std::string host_error, boot_kind="none", pending;
   std::uint64_t disk_reads=0;
@@ -32,9 +37,18 @@ class PcMachine {
     if(bytes<2*1024*1024||bytes>std::size_t(2048)*1024*1024)throw std::invalid_argument("RAM virtual fuera de 2..2048 MiB");
     return bytes;
   }
+  static mundo_x::InfiniteCore::Limits quantum_limits() {
+    mundo_x::InfiniteCore::Limits limits;
+    limits.max_component_qubits = 1024;
+    limits.max_state_bytes = 16 * 1024 * 1024;
+    return limits;
+  }
   explicit PcMachine(std::size_t ram_bytes=16*1024*1024,
                      std::size_t resident_budget_bytes=std::size_t(1024)*1024*1024)
-      :cpu(checked_ram(ram_bytes),std::min(ram_bytes,resident_budget_bytes)) {
+      :cpu(checked_ram(ram_bytes),std::min(ram_bytes,resident_budget_bytes)),
+       quantum_session(std::make_shared<mundo_x::InfiniteSession>(
+           mundo_x::InfiniteCore::Background::Zero, quantum_limits())),
+       quantum_device(quantum_session) {
     cpu.interrupt_hook=[this](Cpu&,std::uint8_t n){return bios(n);};
     cpu.in_hook=[this](std::uint16_t port,unsigned width){return input(port,width);};
     cpu.out_hook=[this](std::uint16_t port,unsigned width,std::uint32_t v){return output(port,width,v);};
@@ -51,6 +65,11 @@ class PcMachine {
     mount([bytes](std::uint64_t off,std::uint8_t* dst,std::size_t n){if(off>bytes->size()||n>bytes->size()-off)return false;std::copy_n(bytes->data()+off,n,dst);return true;},bytes->size(),"raw");
     if(host_error.empty())boot_kind="demo-x64";
   }
+  void boot_quantum_demo(bool long_mode=false,bool apply_z=false) {
+    auto bytes=std::make_shared<std::vector<std::uint8_t>>(quantum_boot_disk(long_mode,true,apply_z));
+    mount([bytes](std::uint64_t off,std::uint8_t* dst,std::size_t n){if(off>bytes->size()||n>bytes->size()-off)return false;std::copy_n(bytes->data()+off,n,dst);return true;},bytes->size(),"raw");
+    if(host_error.empty())boot_kind=apply_z?"demo-quantum-guest-z":(long_mode?"demo-quantum-x64":"demo-quantum-x86");
+  }
   void boot_graphics_demo(unsigned width=1280,unsigned height=720) {
     if(!PcVideo::available(cpu.memory))throw std::runtime_error("La salida VBE necesita la región de vídeo dentro del perfil de 2 GiB");
     auto bytes=std::make_shared<std::vector<std::uint8_t>>(graphics_boot_disk(width,height));
@@ -66,6 +85,10 @@ class PcMachine {
     reader_=std::move(reader);media_bytes_=bytes;plan_=plan;boot_kind=plan.kind;reset();
   }
   void reset() {
+    quantum_session->reset(mundo_x::InfiniteCore::Background::Zero);
+    quantum_device.power_reset();
+    quantum_output_.clear();quantum_error_.clear();quantum_truncated_=false;
+    quantum_cache_valid_=false;
     host_error.clear();pending.clear();waiting_key=false;keys_.clear();disk_reads=0;last_disk_status_=0;
     video_mode_=3;video_.text_mode(3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
     if(!reader_)return;
@@ -91,6 +114,70 @@ class PcMachine {
   void key(std::uint8_t ascii,std::uint8_t scan) {
     if(waiting_key){cpu.set_reg16(0,std::uint16_t(scan)<<8|ascii);waiting_key=false;}
     else if(keys_.size()<256)keys_.push_back(std::uint16_t(scan)<<8|ascii);
+  }
+  // Host commands use the same session as guest ports, but do not consume or
+  // replace the guest's in-progress request/response. Expected errors are local.
+  void quantum_command(const std::string& program) {
+    try {
+      if(program.size()>PcQuantumDevice::max_request_bytes)
+        throw std::length_error("Quantum request exceeds 65536 bytes");
+      auto output=quantum_session->execute(program);
+      quantum_truncated_=output.size()>8192;
+      if(quantum_truncated_)output.resize(8192);
+      quantum_output_=std::move(output);quantum_error_.clear();
+    } catch(const std::exception& error) { quantum_error_=error.what(); }
+  }
+  void quantum_reset(const std::string& background) {
+    try {
+      if(background!="zero"&&background!="bell")throw std::invalid_argument("Background must be zero or bell");
+      quantum_session->reset(background=="zero"?mundo_x::InfiniteCore::Background::Zero:mundo_x::InfiniteCore::Background::BellPairs);
+      quantum_output_.clear();quantum_error_.clear();quantum_truncated_=false;
+    } catch(const std::exception& error) { quantum_error_=error.what(); }
+  }
+  void quantum_restore(const std::string& snapshot) {
+    try {
+      quantum_session->restore(snapshot);
+      quantum_output_.clear();quantum_error_.clear();quantum_truncated_=false;
+    } catch(const std::exception& error) { quantum_error_=error.what(); }
+  }
+  std::string quantum_snapshot() const { return quantum_session->snapshot(); }
+  void quantum_reject(const std::string& message) { quantum_error_=message; }
+  void quantum_probe(const std::string& first,const std::string& second) {
+    try {
+      auto a=mundo_x::infinite_detail::canonical_address(first,quantum_session->limits().max_address_digits);
+      auto b=mundo_x::infinite_detail::canonical_address(second,quantum_session->limits().max_address_digits);
+      if(a==b)throw std::invalid_argument("Choose two different addresses for the correlation panel");
+      auto observation=quantum_session->query_batch(correlation_observables(a,b));
+      quantum_first_.swap(a);quantum_second_.swap(b);
+      std::swap(quantum_observation_,observation);
+      quantum_cache_valid_=true;quantum_error_.clear();
+    } catch(const std::exception& error) { quantum_error_=error.what(); }
+  }
+  std::string quantum_json() const {
+    const auto stats=quantum_session->stats();
+    const auto epoch=quantum_session->epoch();
+    if(!quantum_cache_valid_||quantum_observation_.revision!=stats.revision||quantum_observation_.epoch!=epoch){
+      quantum_observation_=quantum_session->query_batch(correlation_observables(quantum_first_,quantum_second_));
+      quantum_cache_valid_=true;
+    }
+    const auto& observation=quantum_observation_;
+    const auto limits=quantum_session->limits();
+    std::ostringstream o;
+    o<<"{\"engine\":\"InfiniteCore\",\"background\":"<<quote(quantum_session->background()==mundo_x::InfiniteCore::Background::Zero?"zero":"bell")
+     <<",\"epoch\":"<<observation.epoch<<",\"revision\":"<<observation.revision
+     <<",\"active_qubits\":"<<observation.stats.active_qubits<<",\"components\":"<<observation.stats.components
+     <<",\"largest_component\":"<<observation.stats.largest_component<<",\"tableau_bytes\":"<<observation.stats.tableau_bytes
+     <<",\"address_bytes\":"<<observation.stats.address_bytes
+     <<",\"max_active_qubits\":"<<limits.max_active_qubits<<",\"max_component_qubits\":"<<limits.max_component_qubits
+     <<",\"max_state_bytes\":"<<limits.max_state_bytes<<",\"max_address_digits\":"<<limits.max_address_digits
+     <<",\"first\":"<<quote(quantum_first_)<<",\"second\":"<<quote(quantum_second_)
+     <<",\"labels\":[\"XX\",\"YY\",\"ZZ\",\"ZI\",\"IZ\"],\"values\":[";
+    for(std::size_t i=0;i<observation.values.size();++i){if(i)o<<',';o<<observation.values[i];}
+    o<<"],\"output\":"<<quote(quantum_output_)<<",\"output_truncated\":"<<(quantum_truncated_?"true":"false")
+     <<",\"error\":"<<quote(quantum_error_)<<",\"port_status\":"<<unsigned(quantum_device.status())
+     <<",\"guest_requests\":"<<quantum_device.requests()<<",\"guest_errors\":"<<quantum_device.errors()
+     <<",\"request_bytes\":"<<quantum_device.request_bytes()<<",\"response_bytes\":"<<quantum_device.remaining()<<"}";
+    return o.str();
   }
   std::string screen() const {
     std::string out;
@@ -134,12 +221,20 @@ class PcMachine {
      <<",\"video_bytes\":"<<video.byte_size<<",\"video_address\":"<<video.physical_address
      <<",\"video_format\":"<<quote(video.graphics?"BGRX8888":"VGA-char-attribute")
      <<",\"video_aperture_bytes\":"<<(PcVideo::available(cpu.memory)?PcVideo::kApertureBytes:0)
-     <<",\"ram_policy\":\"zero-pages-on-demand\",\"engine\":\"cosmic-pc-own-x86\",\"windows_ready\":false,\"graphics_3d_ready\":false}";
+     <<",\"ram_policy\":\"zero-pages-on-demand\",\"engine\":\"cosmic-pc-own-x86\",\"windows_ready\":false,\"graphics_3d_ready\":false,\"quantum\":"<<quantum_json()<<"}";
     return o.str();
   }
   static std::string hex64(std::uint64_t value){std::ostringstream o;o<<std::hex<<std::uppercase<<std::setfill('0')<<std::setw(16)<<value;return o.str();}
   static std::string quote(const std::string& s){std::ostringstream o;o<<'"';for(unsigned char c:s){if(c=='"'||c=='\\')o<<'\\'<<char(c);else if(c=='\n')o<<"\\n";else if(c=='\r')o<<"\\r";else if(c=='\t')o<<"\\t";else if(c<32)o<<"\\u00"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(c)<<std::dec;else o<<char(c);}o<<'"';return o.str();}
  private:
+  std::string quantum_first_="0",quantum_second_="1000000000";
+  std::string quantum_output_,quantum_error_;
+  bool quantum_truncated_=false;
+  mutable bool quantum_cache_valid_=false;
+  mutable mundo_x::InfiniteSession::Observation quantum_observation_;
+  static std::vector<mundo_x::InfiniteSession::Observable> correlation_observables(const std::string& a,const std::string& b){
+    return {{1,{{a,'X'},{b,'X'}}},{1,{{a,'Y'},{b,'Y'}}},{1,{{a,'Z'},{b,'Z'}}},{1,{{a,'Z'}}},{1,{{b,'Z'}}}};
+  }
   PcVideo video_;
   Reader reader_;
   std::uint64_t media_bytes_=0;
@@ -288,6 +383,7 @@ class PcMachine {
     }
   }
   std::optional<std::uint32_t> input(std::uint16_t p,unsigned width){
+    if(p==PcQuantumDevice::data_port||p==PcQuantumDevice::control_port)return quantum_device.input(p,width);
     if(width!=1)return std::nullopt;
     if(p==0x92)return cpu.a20_enabled?2u:0u;
     if(p==0x21)return pic1_;
@@ -298,6 +394,7 @@ class PcMachine {
     return std::nullopt;
   }
   bool output(std::uint16_t p,unsigned width,std::uint32_t v){
+    if(p==PcQuantumDevice::data_port||p==PcQuantumDevice::control_port)return quantum_device.output(p,width,v);
     if(width!=1)return false;
     if(p==0x92){if(v&1)missing("Reinicio por puerto A20 pendiente");cpu.a20_enabled=v&2;return true;}
     if(p==0x21){pic1_=v;return true;}if(p==0xa1){pic2_=v;return true;}

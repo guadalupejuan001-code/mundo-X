@@ -15,6 +15,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
+import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Debug;
@@ -29,6 +30,7 @@ import android.text.InputFilter;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -36,6 +38,7 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -45,7 +48,14 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.mundox.graphics.NativeCore;
+import com.mundox.graphics.QuantumRenderer;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.ByteBuffer;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -53,12 +63,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.mundox.graphics.RenderResolution;
 
 /** A local, native Android frontend. It never substitutes a simulated desktop for guest output. */
 public final class MainActivity extends Activity {
     private static final int OPEN_IMAGE = 410;
+    private static final int SAVE_QUANTUM = 411;
+    private static final int OPEN_QUANTUM = 412;
+    private static final int MAX_QUANTUM_SNAPSHOT_BYTES = 16 * 1024 * 1024;
     private static final int LOGICAL_RAM_MIB = 2048;
     private static final int RESIDENT_RAM_BUDGET_MIB = 1024;
     private static final int SLICE_BUDGET = 5000;
@@ -135,6 +149,19 @@ public final class MainActivity extends Activity {
     private Button sendButton;
     private Button escapeButton;
     private Button backspaceButton;
+    private final AtomicReference<NativeCore> graphicsOwner = new AtomicReference<>();
+    private GLSurfaceView quantumSurface;
+    private QuantumRenderer quantumRenderer;
+    private FrameLayout quantumViewport;
+    private TextView quantumStatsView, quantumResultView, quantumGraphicsStatus;
+    private EditText quantumProgram, quantumFirst, quantumSecond;
+    private Button quantumRunButton, quantumZeroButton, quantumBellButton, quantumProbeButton;
+    private Button quantumSaveButton, quantumOpenButton, quantumDemoButton, quantum64DemoButton;
+    private Button quantumPhaseDemoButton;
+    private Button quantumCouplingButton;
+    private boolean quantumCoupled = true;
+    private float quantumTouchX, quantumTouchY;
+    private String renderedFirst = "0", renderedSecond = "1000000000";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -155,6 +182,7 @@ public final class MainActivity extends Activity {
                     throw new IllegalStateException("No native machine handle");
                 }
                 publish(NativeMachine.inspect(machine), true);
+                prepareQuantumGraphics();
             } catch (Exception | LinkageError error) {
                 fail("No se pudo iniciar el motor nativo", error, true);
             }
@@ -287,6 +315,8 @@ public final class MainActivity extends Activity {
         messageView.setPadding(0, dp(12), 0, 0);
         content.addView(messageView);
 
+        buildQuantumPanel(content);
+
         TextView screenTitle = section(getString(R.string.video_section));
         LinearLayout.LayoutParams screenTitleParams = new LinearLayout.LayoutParams(-1, -2);
         screenTitleParams.topMargin = dp(20);
@@ -409,6 +439,236 @@ public final class MainActivity extends Activity {
         copy.setOnClickListener(v -> copyDiagnostic());
     }
 
+    private void buildQuantumPanel(LinearLayout content) {
+        LinearLayout panel = card(content, 16);
+        panel.addView(section("NÚCLEO CUÁNTICO · MOTOR GRÁFICO"));
+        quantumStatsView = text("Preparando la sesión del PC…", 11, MUTED);
+        quantumStatsView.setContentDescription("pc-quantum-stats");
+        quantumStatsView.setPadding(0, dp(8), 0, dp(8));
+        panel.addView(quantumStatsView);
+        quantumViewport = new FrameLayout(this);
+        quantumViewport.setBackgroundColor(Color.BLACK);
+        panel.addView(quantumViewport, new LinearLayout.LayoutParams(-1, dp(230)));
+        quantumGraphicsStatus = text("Preparando el mundo…", 10, MUTED);
+        quantumGraphicsStatus.setContentDescription("pc-quantum-graphics-status");
+        quantumGraphicsStatus.setMaxLines(3);
+        quantumGraphicsStatus.setPadding(0, dp(6), 0, dp(6));
+        panel.addView(quantumGraphicsStatus);
+        LinearLayout visualControls = row(panel);
+        Button camera = button("Cambiar vista", false);
+        quantumCouplingButton = button("Acoplamiento: sí", false);
+        pair(visualControls, camera, quantumCouplingButton, 48);
+        camera.setOnClickListener(v -> renderAction(() -> quantumRenderer.toggleView()));
+        quantumCouplingButton.setOnClickListener(v -> {
+            quantumCoupled = !quantumCoupled;
+            quantumCouplingButton.setText(quantumCoupled ? "Acoplamiento: sí" : "Acoplamiento: no");
+            final boolean enabled = quantumCoupled;
+            renderAction(() -> quantumRenderer.coupling(enabled));
+        });
+        panel.addView(text("El mundo usa observables de la misma sesión que el huésped. Arrastra para mover la cámara.", 11, MUTED));
+        LinearLayout addresses = row(panel);
+        quantumFirst = quantumInput("Dirección A", "0", false);
+        quantumSecond = quantumInput("Dirección B", "1000000000", false);
+        pair(addresses, quantumFirst, quantumSecond, 48);
+        quantumProbeButton = button("Observar estas direcciones", false);
+        panel.addView(quantumProbeButton, new LinearLayout.LayoutParams(-1, dp(48)));
+        quantumProbeButton.setOnClickListener(v -> {
+            final String first = quantumFirst.getText().toString();
+            final String second = quantumSecond.getText().toString();
+            operate(() -> NativeMachine.quantumProbe(machine, first, second));
+        });
+        quantumProgram = quantumInput("Programa .xi", "h 0\ncx 0 1000000000\nexpect X:0 X:1000000000\nexpect Y:0 Y:1000000000\nstats", true);
+        quantumProgram.setContentDescription("pc-quantum-program");
+        panel.addView(quantumProgram, new LinearLayout.LayoutParams(-1, dp(140)));
+        quantumRunButton = button("Aplicar programa", true);
+        panel.addView(quantumRunButton, new LinearLayout.LayoutParams(-1, dp(48)));
+        quantumRunButton.setOnClickListener(v -> {
+            final String program = quantumProgram.getText().toString();
+            operate(() -> NativeMachine.quantumCommand(machine, program));
+        });
+        LinearLayout resets = row(panel);
+        quantumZeroButton = button("Fondo cero", false);
+        quantumBellButton = button("Fondo Bell", false);
+        pair(resets, quantumZeroButton, quantumBellButton, 48);
+        quantumZeroButton.setOnClickListener(v -> operate(() -> NativeMachine.quantumReset(machine, "zero")));
+        quantumBellButton.setOnClickListener(v -> operate(() -> NativeMachine.quantumReset(machine, "bell")));
+        quantumResultView = text("Los resultados del núcleo aparecerán aquí.", 11, WHITE);
+        quantumResultView.setTypeface(Typeface.MONOSPACE);
+        quantumResultView.setContentDescription("pc-quantum-result");
+        quantumResultView.setTextIsSelectable(true);
+        quantumResultView.setMaxLines(8);
+        quantumResultView.setPadding(0, dp(8), 0, dp(8));
+        panel.addView(quantumResultView);
+        LinearLayout storage = row(panel);
+        quantumSaveButton = button("Guardar núcleo", false);
+        quantumOpenButton = button("Abrir núcleo", false);
+        pair(storage, quantumSaveButton, quantumOpenButton, 48);
+        quantumSaveButton.setOnClickListener(v -> chooseQuantumFile(true));
+        quantumOpenButton.setOnClickListener(v -> chooseQuantumFile(false));
+        LinearLayout demos = row(panel);
+        quantumDemoButton = button("Prueba núcleo x86", false);
+        quantum64DemoButton = button("Prueba núcleo x64", false);
+        pair(demos, quantumDemoButton, quantum64DemoButton, 52);
+        quantumDemoButton.setOnClickListener(v -> loadQuantumDemo(false));
+        quantum64DemoButton.setOnClickListener(v -> loadQuantumDemo(true));
+        quantumPhaseDemoButton = button("Prueba Z del huésped", false);
+        panel.addView(quantumPhaseDemoButton, new LinearLayout.LayoutParams(-1, dp(48)));
+        quantumPhaseDemoButton.setOnClickListener(v -> {
+            imageView.setText("Prueba de fase Z desde x86 · pulsa Ejecutar");
+            operate(() -> NativeMachine.bootQuantumPhaseDemo(machine));
+        });
+        panel.addView(text("Las pruebas cargan otro arranque. Reiniciar el PC restablece también el núcleo; guardar conserva su estado y secuencia aleatoria.", 11, MUTED));
+    }
+
+    private EditText quantumInput(String hint, String value, boolean multiline) {
+        EditText input = new EditText(this);
+        input.setTextColor(WHITE); input.setHintTextColor(MUTED);
+        input.setHint(hint); input.setText(value); input.setTextSize(12);
+        input.setTypeface(Typeface.MONOSPACE);
+        input.setSingleLine(!multiline);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                | (multiline ? InputType.TYPE_TEXT_FLAG_MULTI_LINE : 0));
+        // Preserve the complete pasted input. JNI rejects its original length;
+        // truncating here could turn it into another address or a valid prefix.
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setBackground(rounded(BACKGROUND, BORDER, 8)); input.setBackgroundTintList(null);
+        input.setPadding(dp(8), dp(8), dp(8), dp(8));
+        return input;
+    }
+
+    // Create an independently owned bridge handle, retaining the actual shared
+    // PcMachine session. Closing either owner does not invalidate the other.
+    private void prepareQuantumGraphics() {
+        NativeCore prepared = null;
+        try {
+            NativeCore.ensureLoaded();
+            prepared = NativeCore.adoptInfiniteHandle(NativeMachine.quantumGraphicsHandle(machine));
+            if (destroyed.get()) { prepared.close(); return; }
+            graphicsOwner.set(prepared);
+            if (destroyed.get()) {
+                NativeCore owner = graphicsOwner.getAndSet(null);
+                if (owner != null) owner.close();
+                return;
+            }
+            main.post(this::installQuantumGraphics);
+        } catch (Exception | LinkageError error) {
+            if (prepared != null) prepared.close();
+            postUi(() -> quantumGraphicsStatus.setText("No se pudo abrir el visor: " + error.getMessage()));
+        }
+    }
+
+    private void installQuantumGraphics() {
+        NativeCore owner = graphicsOwner.get();
+        if (destroyed.get() || owner == null) return;
+        try {
+            quantumRenderer = new QuantumRenderer(this, owner,
+                    value -> postUi(() -> quantumGraphicsStatus.setText(value)));
+            quantumRenderer.observeAddresses(renderedFirst, renderedSecond);
+            quantumRenderer.resolution(360);
+            quantumRenderer.objectCount(256);
+            quantumRenderer.scenicView();
+            quantumRenderer.coupling(quantumCoupled);
+            quantumSurface = new GLSurfaceView(this);
+            quantumSurface.setContentDescription("pc-quantum-viewport");
+            quantumSurface.setEGLContextClientVersion(3);
+            quantumSurface.setEGLConfigChooser(8, 8, 8, 8, 24, 0);
+            quantumSurface.setPreserveEGLContextOnPause(true);
+            quantumSurface.setRenderer(quantumRenderer);
+            quantumSurface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+            quantumSurface.setOnTouchListener((view, event) -> {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    quantumTouchX = event.getX(); quantumTouchY = event.getY();
+                    view.getParent().requestDisallowInterceptTouchEvent(true);
+                } else if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+                    final float dx = event.getX() - quantumTouchX, dy = event.getY() - quantumTouchY;
+                    quantumTouchX = event.getX(); quantumTouchY = event.getY();
+                    renderAction(() -> quantumRenderer.orbit(dx, dy));
+                } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                    view.getParent().requestDisallowInterceptTouchEvent(false); view.performClick();
+                }
+                return true;
+            });
+            quantumViewport.addView(quantumSurface, new FrameLayout.LayoutParams(-1, -1));
+            if (!foreground.get()) quantumSurface.onPause();
+            quantumSurface.requestRender();
+        } catch (Exception | LinkageError error) {
+            quantumGraphicsStatus.setText("No se pudo abrir el visor: " + error.getMessage());
+            NativeCore current = graphicsOwner.getAndSet(null);
+            if (current != null) current.close();
+        }
+    }
+
+    private void renderAction(Runnable action) {
+        if (quantumSurface == null || quantumRenderer == null || destroyed.get()) return;
+        quantumSurface.queueEvent(() -> {
+            if (destroyed.get()) return;
+            try { action.run(); }
+            catch (Exception error) { postUi(() -> quantumGraphicsStatus.setText("Visor: " + error.getMessage())); }
+        });
+        quantumSurface.requestRender();
+    }
+
+    private void loadQuantumDemo(boolean longMode) {
+        imageView.setText(longMode ? "Prueba del núcleo desde x64 · pulsa Ejecutar" : "Prueba del núcleo desde x86 · pulsa Ejecutar");
+        operate(() -> NativeMachine.bootQuantumDemo(machine, longMode));
+    }
+
+    private void chooseQuantumFile(boolean save) {
+        if (busy || !machineAvailable || destroyed.get()) return;
+        pauseMachine();
+        try {
+            Intent intent = new Intent(save ? Intent.ACTION_CREATE_DOCUMENT : Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType(save ? "text/plain" : "*/*");
+            if (save) intent.putExtra(Intent.EXTRA_TITLE, "COSMIC-PC-nucleo.mxi");
+            startActivityForResult(intent, save ? SAVE_QUANTUM : OPEN_QUANTUM);
+        } catch (RuntimeException error) {
+            quantumResultView.setText("No se pudo abrir el selector: " + error.getMessage());
+        }
+    }
+
+    private void quantumFile(Uri uri, boolean save) {
+        if (busy || !machineAvailable || destroyed.get()) return;
+        runGeneration.incrementAndGet(); runRequested.set(false); busy = true; refreshControls();
+        executeWorker(() -> {
+            try {
+                if (save) {
+                    String snapshot = NativeMachine.quantumSnapshot(machine);
+                    byte[] bytes = snapshot.getBytes(StandardCharsets.US_ASCII);
+                    if (bytes.length > MAX_QUANTUM_SNAPSHOT_BYTES) throw new IOException("Estado del núcleo demasiado grande");
+                    try (OutputStream output = getContentResolver().openOutputStream(uri, "wt")) {
+                        if (output == null) throw new IOException("No se pudo abrir el destino");
+                        output.write(bytes); output.flush();
+                    }
+                    publish(NativeMachine.inspect(machine), true);
+                    postUi(() -> quantumResultView.setText("Núcleo guardado: estado exacto y generador aleatorio."));
+                } else {
+                    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                    try (InputStream input = getContentResolver().openInputStream(uri)) {
+                        if (input == null) throw new IOException("No se pudo abrir el archivo");
+                        byte[] block = new byte[8192]; int count;
+                        while ((count = input.read(block)) != -1) {
+                            if (count > MAX_QUANTUM_SNAPSHOT_BYTES - bytes.size()) throw new IOException("Archivo del núcleo excede 16 MiB");
+                            for (int i = 0; i < count; ++i) if (block[i] <= 0) throw new IOException("El estado debe ser texto ASCII sin NUL");
+                            bytes.write(block, 0, count);
+                        }
+                    }
+                    String snapshot = new String(bytes.toByteArray(), StandardCharsets.US_ASCII);
+                    JSONObject state = new JSONObject(NativeMachine.quantumRestore(machine, snapshot));
+                    publish(state, true);
+                    if (state.getJSONObject("quantum").optString("error").isEmpty())
+                        postUi(() -> quantumResultView.setText("Núcleo recuperado. La CPU y el medio del PC se conservan."));
+                }
+            } catch (Exception error) {
+                postUi(() -> {
+                    busy = false;
+                    quantumResultView.setText("Archivo del núcleo: " + error.getMessage());
+                    refreshControls();
+                });
+            }
+        });
+    }
+
     private void loadDemo() {
         imageView.setText(R.string.demo_selected);
         operate(() -> NativeMachine.bootDemo(machine));
@@ -519,6 +779,11 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SAVE_QUANTUM || requestCode == OPEN_QUANTUM) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null)
+                quantumFile(data.getData(), requestCode == SAVE_QUANTUM);
+            return;
+        }
         if (requestCode != OPEN_IMAGE || resultCode != RESULT_OK || data == null) return;
         Uri uri = data.getData();
         if (uri == null || destroyed.get()) return;
@@ -791,8 +1056,40 @@ public final class MainActivity extends Activity {
         videoView.setGuestText(graphics ? "" : screen);
         videoView.refresh();
         updateVideoStatus(videoView.getStatus());
+        applyQuantumSnapshot(state.optJSONObject("quantum"));
         lastDiagnostic = diagnostic(state, screen);
         refreshControls();
+    }
+
+    private void applyQuantumSnapshot(JSONObject quantum) {
+        if (quantum == null) return;
+        JSONArray values = quantum.optJSONArray("values");
+        StringBuilder correlations = new StringBuilder();
+        String[] labels = {"XX", "YY", "ZZ", "ZI", "IZ"};
+        if (values != null) for (int i = 0; i < Math.min(labels.length, values.length()); ++i) {
+            if (i != 0) correlations.append(" · ");
+            correlations.append(labels[i]).append('=').append(String.format(Locale.US, "%.0f", values.optDouble(i)));
+        }
+        quantumStatsView.setText("Fondo " + quantum.optString("background")
+                + " · " + quantum.optLong("active_qubits") + "/" + quantum.optLong("max_active_qubits") + " activos"
+                + " · " + quantum.optLong("components") + " componentes\n"
+                + "Componente mayor: " + quantum.optLong("largest_component") + "/" + quantum.optLong("max_component_qubits")
+                + " · tableau " + memorySizeLabel(quantum.optLong("tableau_bytes"))
+                + " · revisión " + quantum.optLong("revision") + " / época " + quantum.optLong("epoch")
+                + "\n" + correlations);
+        String error = quantum.optString("error");
+        String output = quantum.optString("output").trim();
+        if (quantum.optBoolean("output_truncated")) output += "\n[Vista de resultados limitada a 8192 bytes]";
+        if ((quantum.optInt("port_status") & 2) != 0) output += "\nEl huésped recibió un error del dispositivo.";
+        quantumResultView.setText(!error.isEmpty() ? "Error del núcleo: " + error
+                : output.isEmpty() ? "Sesión lista. " + correlations : output);
+        quantumResultView.setTextColor(error.isEmpty() ? WHITE : AMBER);
+        final String first = quantum.optString("first", "0"), second = quantum.optString("second", "1000000000");
+        if (!first.equals(renderedFirst) || !second.equals(renderedSecond)) {
+            renderedFirst = first; renderedSecond = second;
+            renderAction(() -> quantumRenderer.observeAddresses(first, second));
+        }
+        if (quantumSurface != null) quantumSurface.requestRender();
     }
 
     /** Called on the UI thread; reports allocated output dimensions, including any rejected mode. */
@@ -912,6 +1209,11 @@ public final class MainActivity extends Activity {
         enabled(backspaceButton, usable);
         enabled(escapeButton, usable);
         keyboard.setEnabled(usable);
+        enabled(quantumRunButton, usable); enabled(quantumZeroButton, usable); enabled(quantumBellButton, usable);
+        enabled(quantumProbeButton, usable); enabled(quantumSaveButton, usable); enabled(quantumOpenButton, usable);
+        enabled(quantumDemoButton, usable); enabled(quantum64DemoButton, usable);
+        enabled(quantumPhaseDemoButton, usable);
+        quantumProgram.setEnabled(usable); quantumFirst.setEnabled(usable); quantumSecond.setEnabled(usable);
         if (running) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
@@ -974,6 +1276,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (videoView != null) videoView.onResume();
         foreground.set(true);
+        if (quantumSurface != null) { quantumSurface.onResume(); quantumSurface.requestRender(); }
         // Native execution resumes only following an explicit user action.
         refreshControls();
         inspectInWorker();
@@ -986,6 +1289,7 @@ public final class MainActivity extends Activity {
         runGeneration.incrementAndGet();
         foreground.set(false);
         runRequested.set(false);
+        if (quantumSurface != null) quantumSurface.onPause();
         main.removeCallbacks(idleMemoryRefresh);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         inspectInWorker();
@@ -1014,6 +1318,14 @@ public final class MainActivity extends Activity {
         runRequested.set(false);
         destroyed.set(true);
         main.removeCallbacksAndMessages(null);
+        if (quantumSurface != null) {
+            quantumSurface.onPause();
+            // Detach joins the GL thread before its independently owned handle closes.
+            quantumViewport.removeView(quantumSurface);
+            quantumSurface = null;
+        }
+        NativeCore graphics = graphicsOwner.getAndSet(null);
+        if (graphics != null) graphics.close();
         // Do not interrupt JNI. Destruction follows any in-flight native call on its own executor.
         try {
             machineThread.execute(() -> {

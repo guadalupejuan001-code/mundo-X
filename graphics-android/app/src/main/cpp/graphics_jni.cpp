@@ -5,7 +5,11 @@
 #include <vector>
 #include <exception>
 #include <limits>
+#include <new>
 #include "mundo_x/graphics_core_bridge.h"
+#include "mundo_x/infinite_bridge.h"
+#include "mundo_x/infinite_bridge.hpp"
+#include "mundo_x/infinite_session.hpp"
 namespace {
 constexpr std::uint64_t max_project_revision=9007199254740991ULL;
 constexpr std::size_t max_project_gates=100000;
@@ -19,8 +23,9 @@ struct UtfChars {
     JNIEnv* env;
     jstring text;
     const char* chars;
-    UtfChars(JNIEnv* e,jstring s):env(e),text(s),chars(e->GetStringUTFChars(s,nullptr)){}
-    ~UtfChars(){if(chars)env->ReleaseStringUTFChars(text,chars);env->DeleteLocalRef(text);}
+    bool remove_local;
+    UtfChars(JNIEnv* e,jstring s,bool remove=true):env(e),text(s),chars(e->GetStringUTFChars(s,nullptr)),remove_local(remove){}
+    ~UtfChars(){if(chars)env->ReleaseStringUTFChars(text,chars);if(remove_local)env->DeleteLocalRef(text);}
 };
 }
 extern "C" JNIEXPORT jlong JNICALL
@@ -145,4 +150,100 @@ Java_com_mundox_graphics_NativeCore_nRestore(JNIEnv* e,jclass,jlong p,jlongArray
         if(mx_restore(handle(p),triples.data(),triples.size()/3,static_cast<std::uint64_t>(revision)))
             fail(e,mx_last_error());
     }catch(const std::exception& x){fail(e,x.what());}
+}
+
+namespace {
+struct InfiniteText {
+    char* value=nullptr;
+    ~InfiniteText(){mxi_free_string(value);}
+};
+// Infinite commands and snapshots are ASCII. Validate Java UTF-16 before JNI's
+// modified UTF-8 conversion so embedded NULs cannot change a native request.
+bool infinite_ascii(JNIEnv* e,jstring text){
+    if(!text){fail(e,"Falta el texto infinito");return false;}
+    const auto size=e->GetStringLength(text);
+    if(size>16*1024*1024){fail(e,"El texto infinito supera 16 MiB");return false;}
+    const jchar* chars=e->GetStringChars(text,nullptr);if(!chars)return false;
+    bool valid=true;
+    for(jsize i=0;i<size;i++)if(chars[i]==0||chars[i]>127){valid=false;break;}
+    e->ReleaseStringChars(text,chars);
+    if(!valid)fail(e,"El texto infinito requiere ASCII sin caracteres nulos");
+    return valid;
+}
+}
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteCreate(JNIEnv* e,jclass,jint background){
+    void* p=mxi_create(background);if(!p)fail(e,mxi_last_error());
+    return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(p));
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteDestroy(JNIEnv*,jclass,jlong p){mxi_destroy(handle(p));}
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteExecute(JNIEnv* e,jclass,jlong p,jstring script){
+    try{
+        if(!infinite_ascii(e,script))return nullptr;
+        UtfChars utf(e,script,false);if(!utf.chars)return nullptr;
+        auto session=mundo_x::infinite_session_from_handle(handle(p));
+        // Prepare the Java response before commit as well. Java allocation
+        // failure must not consume a measurement or advance the shared RNG.
+        return session->execute_prepared(std::string(utf.chars),[&](const std::string& output){
+            jstring result=e->NewStringUTF(output.c_str());
+            if(!result||e->ExceptionCheck())throw std::bad_alloc();
+            return result;
+        });
+    }catch(const std::exception& x){fail(e,x.what());return nullptr;}
+}
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteSnapshot(JNIEnv* e,jclass,jlong p){
+    InfiniteText out;
+    if(mxi_snapshot(handle(p),&out.value)){fail(e,mxi_last_error());return nullptr;}
+    return e->NewStringUTF(out.value?out.value:"");
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteRestore(JNIEnv* e,jclass,jlong p,jstring snapshot){
+    if(!infinite_ascii(e,snapshot))return;
+    UtfChars utf(e,snapshot,false);if(!utf.chars)return;
+    if(mxi_restore(handle(p),utf.chars))fail(e,mxi_last_error());
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteReset(JNIEnv* e,jclass,jlong p,jint background){
+    if(mxi_reset(handle(p),background))fail(e,mxi_last_error());
+}
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteQuery(JNIEnv* e,jclass,jlong p,jobjectArray strings,jlongArray stamp){
+    try{
+        if(!p||!strings||!stamp||e->GetArrayLength(stamp)!=2){fail(e,"Consulta infinita inválida");return nullptr;}
+        const auto count=e->GetArrayLength(strings);
+        if(count>4096){fail(e,"La consulta admite hasta 4096 observables");return nullptr;}
+        std::vector<std::string> texts;texts.reserve(count);std::size_t total=0;
+        for(jsize i=0;i<count;i++){
+            auto s=static_cast<jstring>(e->GetObjectArrayElement(strings,i));
+            if(!infinite_ascii(e,s)){if(s)e->DeleteLocalRef(s);return nullptr;}
+            UtfChars utf(e,s);if(!utf.chars)return nullptr;
+            texts.emplace_back(utf.chars);total+=texts.back().size();
+            if(total>16*1024*1024){fail(e,"El programa visual supera 16 MiB");return nullptr;}
+        }
+        std::vector<const char*> pointers;for(const auto& s:texts)pointers.push_back(s.c_str());
+        std::vector<double> values(count);std::uint64_t revision=0,epoch=0;
+        if(mxi_query(handle(p),pointers.data(),count,values.data(),&revision,&epoch)){
+            fail(e,mxi_last_error());return nullptr;
+        }
+        std::vector<jfloat> result(values.begin(),values.end());
+        auto out=e->NewFloatArray(count);if(!out)return nullptr;
+        if(count)e->SetFloatArrayRegion(out,0,count,result.data());
+        if(e->ExceptionCheck())return nullptr;
+        const jlong metadata[]={static_cast<jlong>(revision),static_cast<jlong>(epoch)};
+        e->SetLongArrayRegion(stamp,0,2,metadata);
+        return out;
+    }catch(const std::exception& x){fail(e,x.what());return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_mundox_graphics_NativeCore_nInfiniteStats(JNIEnv* e,jclass,jlong p){
+    mx_infinite_stats s{};
+    if(mxi_get_stats(handle(p),&s)){fail(e,mxi_last_error());return nullptr;}
+    const jlong values[]={static_cast<jlong>(s.active_qubits),static_cast<jlong>(s.components),
+        static_cast<jlong>(s.largest_component),static_cast<jlong>(s.tableau_bytes),
+        static_cast<jlong>(s.address_bytes),static_cast<jlong>(s.revision),static_cast<jlong>(s.epoch),
+        static_cast<jlong>(s.background)};
+    auto out=e->NewLongArray(8);if(out)e->SetLongArrayRegion(out,0,8,values);return out;
 }

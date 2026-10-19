@@ -16,6 +16,19 @@ public final class NativeMachine {
     public static native void destroy(long machine);
     public static native String bootDemo(long machine);
     public static native String bootLongModeDemo(long machine);
+    /** Guest IN/OUT demonstration; longMode also performs the guest's x64 transition. */
+    public static native String bootQuantumDemo(long machine, boolean longMode);
+    public static native String bootQuantumPhaseDemo(long machine);
+    /** Atomic ASCII .xi request, at most 65536 bytes; errors live in state.quantum.error. */
+    public static native String quantumCommand(long machine, String program);
+    public static native String quantumReset(long machine, String background);
+    /** Exact decimal strings; visualizes XX, YY, ZZ, ZI and IZ on the same session. */
+    public static native String quantumProbe(long machine, String first, String second);
+    /** Native MXI1 state and RNG snapshot, bounded to 16 MiB. */
+    public static native String quantumSnapshot(long machine);
+    public static native String quantumRestore(long machine, String snapshot);
+    /** New owned graphics handle; NativeCore.adoptInfiniteHandle must close it. */
+    public static native long quantumGraphicsHandle(long machine);
     /** Boots original x86 guest code that selects VBE and writes actual framebuffer pixels. */
     public static native String bootGraphicsDemo(long machine, int width, int height);
     /** The native implementation duplicates fd before returning. */

@@ -9,6 +9,7 @@
 #include <vector>
 #include <limits>
 #include "pc_machine.hpp"
+#include "mundo_x/infinite_bridge.hpp"
 
 namespace {
 std::mutex lock_;
@@ -87,6 +88,26 @@ std::uint8_t* direct_buffer(JNIEnv* e,jobject buffer,std::size_t bytes){
         throw std::invalid_argument("Buffer directo de vídeo insuficiente");
     return data;
 }
+std::string ascii(JNIEnv* e,jstring source,std::size_t maximum){
+  if(!source)throw std::invalid_argument("Falta texto del núcleo");
+  const auto length=e->GetStringLength(source);
+  if(std::size_t(length)>maximum)throw std::length_error("Texto del núcleo excede el límite de bytes");
+  std::string result(std::size_t(length),'\0');
+  const jchar* chars=e->GetStringChars(source,nullptr);
+  if(!chars)throw std::runtime_error("No se pudo leer el texto del núcleo");
+  bool valid=true;
+  for(jsize i=0;i<length;++i){if(chars[i]==0||chars[i]>127){valid=false;break;}result[std::size_t(i)]=char(chars[i]);}
+  e->ReleaseStringChars(source,chars);
+  if(!valid)throw std::invalid_argument("El núcleo acepta texto ASCII sin caracteres NUL");
+  return result;
+}
+// Validation failures from this device never poison the x86 host_error state.
+template<class F> jstring quantum_action(JNIEnv* e,jlong h,F fn){
+  std::lock_guard<std::mutex> guard(lock_);
+  try{auto& m=machine(h);try{fn(m);}catch(const std::exception& ex){m.quantum_reject(ex.what());}
+    if(e->ExceptionCheck())return nullptr;return java(e,state_json(m));
+  }catch(const std::exception& ex){if(!e->ExceptionCheck())exception(e,ex);return nullptr;}
+}
 jlong create_machine(JNIEnv* e,jint mb,jint resident_mb){
   std::lock_guard<std::mutex> guard(lock_);
   try{
@@ -104,6 +125,14 @@ JNIEXPORT jlong JNICALL Java_com_cosmicx_pc_NativeMachine_createWithBudget(JNIEn
 JNIEXPORT void JNICALL Java_com_cosmicx_pc_NativeMachine_destroy(JNIEnv*,jclass,jlong h){std::lock_guard<std::mutex> guard(lock_);frame_cache.erase(h);machines.erase(h);}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootDemo(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.boot_demo();});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootLongModeDemo(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.boot_long_mode_demo();});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootQuantumDemo(JNIEnv* e,jclass,jlong h,jboolean long_mode){return action(e,h,[&](auto& m){m.boot_quantum_demo(long_mode==JNI_TRUE);});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootQuantumPhaseDemo(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.boot_quantum_demo(false,true);});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumCommand(JNIEnv* e,jclass,jlong h,jstring program){return quantum_action(e,h,[&](auto& m){m.quantum_command(ascii(e,program,cosmic_pc::PcQuantumDevice::max_request_bytes));});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumReset(JNIEnv* e,jclass,jlong h,jstring background){return quantum_action(e,h,[&](auto& m){m.quantum_reset(ascii(e,background,4));});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumProbe(JNIEnv* e,jclass,jlong h,jstring first,jstring second){return quantum_action(e,h,[&](auto& m){m.quantum_probe(ascii(e,first,4096),ascii(e,second,4096));});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumRestore(JNIEnv* e,jclass,jlong h,jstring snapshot){return quantum_action(e,h,[&](auto& m){m.quantum_restore(ascii(e,snapshot,16*1024*1024));});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumSnapshot(JNIEnv* e,jclass,jlong h){std::lock_guard<std::mutex> guard(lock_);try{return java(e,machine(h).quantum_snapshot());}catch(const std::exception& ex){exception(e,ex);return nullptr;}}
+JNIEXPORT jlong JNICALL Java_com_cosmicx_pc_NativeMachine_quantumGraphicsHandle(JNIEnv* e,jclass,jlong h){std::lock_guard<std::mutex> guard(lock_);try{return reinterpret_cast<jlong>(mundo_x::share_infinite_session(machine(h).quantum_session));}catch(const std::exception& ex){exception(e,ex);return 0;}}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootGraphicsDemo(JNIEnv* e,jclass,jlong h,jint width,jint height){return action(e,h,[&](auto& m){if(width<1||height<1)throw std::invalid_argument("Resolución de invitado inválida");m.boot_graphics_demo(unsigned(width),unsigned(height));});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_reset(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.reset();});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_inspect(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto&){},false);}

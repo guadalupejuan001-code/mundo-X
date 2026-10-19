@@ -1,8 +1,9 @@
 """Portable .cosmic projects for the existing quantum core and graphic observer.
 
-The JSON codec uses only Python's standard library. Loading a project validates
-the whole document before constructing a new core; it never mutates an active
-session, executes project code or follows external references.
+The JSON codec uses only Python's standard library. It validates the document
+structure before constructing a candidate core. Infinite snapshots receive a
+second, mathematical validation by the native importer before adoption. Loading
+never mutates an active session or follows external references.
 """
 from copy import deepcopy
 import json
@@ -13,9 +14,11 @@ import struct
 import tempfile
 from threading import RLock
 from core_profile import DEFAULT_QUBITS, MAX_PROJECT_QUBITS
+from infinite_format import validate_observable, validate_snapshot
 
 FORMAT = "cosmic-x-engine-project"
 VERSION = 1
+INFINITE_VERSION = 2
 MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_QUBITS = MAX_PROJECT_QUBITS
 MAX_GATES = 100_000
@@ -92,29 +95,36 @@ def validate_camera(camera):
 def validate_project(value):
     """Return an independent validated document, without native or GL work."""
     _keys(value, ("format", "version", "name", "core", "graphics"), "project")
-    if value["format"] != FORMAT or type(value["version"]) is not int or value["version"] != VERSION:
+    if value["format"] != FORMAT or type(value["version"]) is not int or value["version"] not in (VERSION, INFINITE_VERSION):
         raise ValueError("Unsupported .cosmic format/version")
     name = value["name"]
     if not isinstance(name, str) or not 1 <= len(name) <= 128 or any(ord(c) < 32 or 0xD800 <= ord(c) <= 0xDFFF for c in name):
         raise ValueError("project.name: 1..128 characters without control characters required")
     core = value["core"]
-    _keys(core, ("backend", "initialState", "qubits", "revision", "gates"), "core")
-    if core["backend"] != "compact-clifford" or core["initialState"] != "zero":
-        raise ValueError("This project version supports compact-clifford replay from zero")
-    n = _integer(core["qubits"], 1, MAX_QUBITS, "core.qubits")
-    _integer(core["revision"], 0, MAX_REVISION, "core.revision")
-    gates = core["gates"]
-    if not isinstance(gates, list) or len(gates) > MAX_GATES:
-        raise ValueError(f"core.gates: at most {MAX_GATES} gates required")
-    for gate in gates:
-        if not isinstance(gate, list) or not gate or type(gate[0]) is not str or gate[0] not in GATES:
-            raise ValueError("core.gates: H/S/X/Y/Z/CX/CZ required")
-        if len(gate) != GATES[gate[0]] + 1:
-            raise ValueError("core.gates: incorrect gate arity")
-        for q in gate[1:]:
-            _integer(q, 0, n - 1, "core.gates operand")
-        if len(gate) == 3 and gate[1] == gate[2]:
-            raise ValueError("core.gates: two distinct operands required")
+    infinite = value["version"] == INFINITE_VERSION
+    if infinite:
+        _keys(core, ("backend", "snapshot"), "core")
+        if core["backend"] != "infinite-clifford":
+            raise ValueError(".cosmic v2 requires the infinite-clifford backend")
+        validate_snapshot(core["snapshot"])
+    else:
+        _keys(core, ("backend", "initialState", "qubits", "revision", "gates"), "core")
+        if core["backend"] != "compact-clifford" or core["initialState"] != "zero":
+            raise ValueError(".cosmic v1 supports compact-clifford replay from zero")
+        n = _integer(core["qubits"], 1, MAX_QUBITS, "core.qubits")
+        _integer(core["revision"], 0, MAX_REVISION, "core.revision")
+        gates = core["gates"]
+        if not isinstance(gates, list) or len(gates) > MAX_GATES:
+            raise ValueError(f"core.gates: at most {MAX_GATES} gates required")
+        for gate in gates:
+            if not isinstance(gate, list) or not gate or type(gate[0]) is not str or gate[0] not in GATES:
+                raise ValueError("core.gates: H/S/X/Y/Z/CX/CZ required")
+            if len(gate) != GATES[gate[0]] + 1:
+                raise ValueError("core.gates: incorrect gate arity")
+            for q in gate[1:]:
+                _integer(q, 0, n - 1, "core.gates operand")
+            if len(gate) == 3 and gate[1] == gate[2]:
+                raise ValueError("core.gates: two distinct operands required")
     graphics = value["graphics"]
     _keys(graphics, ("program", "objects", "seed", "coupling", "observables", "edits", "camera", "time", "selectedId", "resolutionLimit"), "graphics")
     if graphics["program"] != "opaque-grid-v1":
@@ -126,6 +136,9 @@ def validate_project(value):
     if not isinstance(observables, list) or not 1 <= len(observables) <= MAX_OBSERVABLES:
         raise ValueError(f"graphics.observables: 1..{MAX_OBSERVABLES} observables required")
     for pauli in observables:
+        if infinite:
+            validate_observable(pauli)
+            continue
         if not isinstance(pauli, str):
             raise ValueError("graphics.observables: Pauli strings required")
         body = pauli[1:] if pauli[:1] in ("+", "-") else pauli
@@ -219,14 +232,20 @@ class ProjectSession:
         document = validate_project(document)
         self._mutation_lock = RLock()
         from core_runtime import Core
+        from infinite_runtime import InfiniteCore
         from engine import QuantumScene, build_native
         build_native()
         config, graphics = document["core"], document["graphics"]
-        self.core = Core(config["qubits"])
+        infinite = document["version"] == INFINITE_VERSION
+        self.core = InfiniteCore() if infinite else Core(config["qubits"])
         try:
-            self.core.restore(config["gates"], config["revision"])
-            self.scene = QuantumScene.from_core(self.core, count=graphics["objects"], seed=graphics["seed"],
-                                                coupling=graphics["coupling"], observables=graphics["observables"])
+            if infinite:
+                self.core.restore(config["snapshot"])
+            else:
+                self.core.restore(config["gates"], config["revision"])
+            attach = QuantumScene.from_infinite_core if infinite else QuantumScene.from_core
+            self.scene = attach(self.core, count=graphics["objects"], seed=graphics["seed"],
+                                coupling=graphics["coupling"], observables=graphics["observables"])
             self.scene.restore_edits(graphics["edits"])
         except Exception:
             self.core.close()
@@ -272,6 +291,23 @@ class ProjectSession:
         instance._borrowed = False
         return instance
 
+    @classmethod
+    def create_infinite(cls, *, name="Mundo X · Infinito", objects=1_000_000,
+                        background="bell", first="0", second=None, seed=2026, coupling=.25):
+        from engine import QuantumScene, build_native
+        from infinite_runtime import InfiniteCore, default_observables
+        build_native()
+        core = InfiniteCore(background)
+        try:
+            scene = QuantumScene.from_infinite_core(core, count=objects, seed=seed, coupling=coupling,
+                                                   observables=default_observables(first, second))
+            instance = cls.from_scene(scene, name=name)
+            instance._borrowed = False
+            return instance
+        except Exception:
+            core.close()
+            raise
+
     @property
     def time(self):
         return self._time
@@ -292,6 +328,10 @@ class ProjectSession:
         The standalone Core remains unrestricted. CNOT retains the existing
         CLI alias and is stored canonically as CX in a portable project.
         """
+        if self.core.backend == "infinite":
+            with self._mutation_lock:
+                self.core.apply(gates)
+            return
         try:
             iterator = iter(gates)
         except TypeError as error:
@@ -324,6 +364,13 @@ class ProjectSession:
     def edit(self, object_id, value):
         self.edit_many(((object_id, value),))
 
+    def execute(self, program):
+        """Run an atomic Infinite request, including measurement and compaction."""
+        if self.core.backend != "infinite":
+            raise ValueError(".xi commands require an Infinite project")
+        with self._mutation_lock:
+            return self.core.execute(program)
+
     def edit_many(self, updates):
         """Apply an edit batch through the scene's atomic 100k-edit guard."""
         with self._mutation_lock:
@@ -331,13 +378,16 @@ class ProjectSession:
 
     def to_dict(self):
         with self._mutation_lock:
-            if self.core.backend != "compact":
-                raise ValueError(".cosmic v1 requires the compact Clifford backend")
+            if self.core.backend not in ("compact", "infinite"):
+                raise ValueError("A portable compact or Infinite project is required")
             state = self.core.snapshot()
+            infinite = self.core.backend == "infinite"
+            core = ({"backend": "infinite-clifford", "snapshot": state} if infinite else
+                    {"backend": "compact-clifford", "initialState": "zero", "qubits": self.core.n,
+                     "revision": state["revision"], "gates": [list(g) for g in state["gates"]]})
             document = {
-                "format": FORMAT, "version": VERSION, "name": self.name,
-                "core": {"backend": "compact-clifford", "initialState": "zero", "qubits": self.core.n,
-                         "revision": state["revision"], "gates": [list(g) for g in state["gates"]]},
+                "format": FORMAT, "version": INFINITE_VERSION if infinite else VERSION, "name": self.name,
+                "core": core,
                 "graphics": {"program": "opaque-grid-v1", "objects": self.scene.count, "seed": self.scene.seed,
                              "coupling": self.scene.coupling, "observables": list(self.scene.observables),
                              "edits": [list(edit) for edit in self.scene.edits], "camera": deepcopy(self.camera),
@@ -356,6 +406,8 @@ class ProjectSession:
         validation fails; callers adopt the returned session explicitly.
         """
         document = self.to_dict()
+        if document["version"] == INFINITE_VERSION:
+            raise ValueError("Infinite uses decimal addresses; choose another address instead of expanding a register")
         previous = document["core"]["qubits"]
         _integer(qubits, previous + 1, MAX_QUBITS, "expanded core.qubits")
         document["core"]["qubits"] = qubits

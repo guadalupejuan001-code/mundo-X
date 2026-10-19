@@ -13,6 +13,16 @@ Una app nueva para la computación cuántica de Mundo X: su núcleo, su motor gr
 
 El estilo COSMIC añade materiales, ventanas, luz, niebla, cielo y suelo al renderer original. La presentación es independiente del estado portable: no cambia geometría, identidades, puertas, observables ni selección. Los proyectos importados conservan su cámara.
 
+## Modo Infinito
+
+En **Proyectos → Crear un mundo**, el selector de núcleo ofrece **Finito**, **Infinito · pares Bell** e **Infinito · fondo cero**. También hay una tarjeta **Mundo infinito**. Los proyectos finitos existentes conservan sus qubits, sus puertas y el formato `.cosmic` v1.
+
+En **Núcleo**, el botón de dirección admite A y B como cadenas decimales completas. Puedes escribir una dirección larga, usar su pareja Bell o elegir el ejemplo 10¹⁰⁰. Las puertas H/S/X/Y/Z actúan sobre A; CX/CZ conectan A y B. Al observar esas direcciones, el motor usa el programa fijo XX, ZZ, YY, X(A), Z(A). El panel muestra correlaciones XX/ZZ y la probabilidad local P(1), junto con el fondo y la cantidad finita de recursos activos. Cambiar de panel o consultar el fondo no materializa qubits.
+
+**Infinito…** permite consultar recursos, medir, compactar, restablecer el fondo o ejecutar `.xi`. Las consultas y el dibujo conservan el estado y el RNG. Una medición explícita sí puede cambiar ambos. Los proyectos infinitos usan `.cosmic` v2, con un snapshot exacto de los tableaus actuales y del RNG, para continuar desde una medición guardada. La sesión privada conserva además las direcciones seleccionadas.
+
+El caso instrumental `infinite_ui_shared_state_and_persistence` usa los controles reales de direcciones y puertas, compara píxeles acoplados/desacoplados y pasa por los callbacks SAF de guardar/abrir y la recreación de la Activity. Sus métricas se publican bajo `infiniteUi`. La validación del archivo y la sesión candidata nativa se completa antes de reemplazar el mundo activo.
+
 ## Experimentos incluidos
 
 | Experimento | Código original |

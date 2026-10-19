@@ -21,7 +21,8 @@ public final class ProjectEvidenceProvider extends ContentProvider {
     private File file(Uri uri) {
         String name = uri.getLastPathSegment();
         if (!AUTHORITY.equals(uri.getAuthority()) || uri.getPathSegments().size() != 1
-                || !("session.cosmic".equals(name) || "invalid.cosmic".equals(name))) {
+                || !("session.cosmic".equals(name) || "invalid.cosmic".equals(name)
+                    || "infinite-session.cosmic".equals(name) || "infinite-return-finite.cosmic".equals(name))) {
             throw new IllegalArgumentException("Unknown local test project");
         }
         return new File(getContext().getFilesDir(), name);

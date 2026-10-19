@@ -31,6 +31,15 @@ class CompactCore {
     unsigned phase;
   };
 
+  // Current-state storage, row-major with ceil(qubits/64) words per row.
+  // signs[r] is 0/1 for +/- of the Hermitian I/X/Y/Z generator, not the
+  // i-exponent returned by generator_packed(). No gate replay is required.
+  struct PackedState {
+    std::size_t qubits = 0;
+    std::vector<std::uint64_t> x, z;
+    std::vector<std::uint8_t> signs;
+  };
+
   explicit CompactCore(std::size_t qubits)
       : n_(checked_qubit_count(qubits)), words_(n_ / 64 + (n_ % 64 != 0)),
         x_(n_ * words_, 0), z_(n_ * words_, 0), phase_(n_, 0) {
@@ -41,6 +50,126 @@ class CompactCore {
   std::size_t qubits() const { return n_; }
   std::size_t state_bytes() const {
     return (x_.size() + z_.size()) * sizeof(std::uint64_t) + phase_.size();
+  }
+
+  PackedState packed_state() const { return {n_, x_, z_, phase_}; }
+
+  // Validate an untrusted tableau before returning an independently owned
+  // pure stabilizer state. Commutation alone is insufficient: dependent rows
+  // could encode fewer than n constraints, or even an inconsistent -I.
+  // Full binary rank plus Hermitian signs and pairwise commutation excludes
+  // both cases. Padding is rejected instead of silently changing a snapshot.
+  static CompactCore from_packed_state(const PackedState& saved) {
+    const auto n = checked_qubit_count(saved.qubits);
+    const auto words = n / 64 + (n % 64 != 0);
+    const auto entries = n * words;
+    if (saved.x.size() != entries || saved.z.size() != entries ||
+        saved.signs.size() != n)
+      throw std::invalid_argument("packed tableau dimensions do not match");
+    const unsigned remainder = static_cast<unsigned>(n % 64);
+    const auto padding = remainder == 0 ? std::uint64_t{0}
+                         : ~((std::uint64_t{1} << remainder) - 1);
+    for (std::size_t row = 0; row < n; ++row) {
+      if (saved.signs[row] > 1)
+        throw std::invalid_argument("packed tableau sign must be 0 or 1");
+      if ((saved.x[row * words + words - 1] |
+           saved.z[row * words + words - 1]) & padding)
+        throw std::invalid_argument("packed tableau has nonzero unused bits");
+      for (std::size_t other = 0; other < row; ++other) {
+        unsigned parity = 0;
+        for (std::size_t word = 0; word < words; ++word)
+          parity ^= popcount64((saved.x[row * words + word] &
+                               saved.z[other * words + word]) ^
+                              (saved.z[row * words + word] &
+                               saved.x[other * words + word])) & 1U;
+        if (parity != 0)
+          throw std::invalid_argument("packed tableau generators do not commute");
+      }
+    }
+
+    auto x = saved.x;
+    auto z = saved.z;
+    std::size_t rank = 0;
+    for (std::size_t column = 0; column < 2 * n && rank < n; ++column) {
+      auto& labels = column < n ? x : z;
+      const auto bit = column < n ? column : column - n;
+      const auto word = bit / 64;
+      const auto mask = std::uint64_t{1} << (bit % 64);
+      std::size_t pivot = rank;
+      while (pivot < n && !(labels[pivot * words + word] & mask)) ++pivot;
+      if (pivot == n) continue;
+      if (pivot != rank) {
+        for (std::size_t w = 0; w < words; ++w) {
+          std::swap(x[rank * words + w], x[pivot * words + w]);
+          std::swap(z[rank * words + w], z[pivot * words + w]);
+        }
+      }
+      for (std::size_t row = rank + 1; row < n; ++row) {
+        if (!(labels[row * words + word] & mask)) continue;
+        for (std::size_t w = 0; w < words; ++w) {
+          x[row * words + w] ^= x[rank * words + w];
+          z[row * words + w] ^= z[rank * words + w];
+        }
+      }
+      ++rank;
+    }
+    if (rank != n)
+      throw std::invalid_argument("packed tableau generators are not independent");
+
+    CompactCore result(n);
+    result.x_ = saved.x;
+    result.z_ = saved.z;
+    result.phase_ = saved.signs;
+    // This acceleration flag is derived, never trusted from serialized input.
+    result.basis_canonical_ = true;
+    for (std::size_t row = 0; row < n; ++row) {
+      for (std::size_t word = 0; word < words; ++word) {
+        const auto expected = word == row / 64
+            ? std::uint64_t{1} << (row % 64) : std::uint64_t{0};
+        if (saved.x[row * words + word] != 0 ||
+            saved.z[row * words + word] != expected)
+          result.basis_canonical_ = false;
+      }
+    }
+    return result;
+  }
+
+  // Concatenate two independent *current* stabilizer states. Left qubits keep
+  // indices [0,left.n), right qubits follow them. This copies the signed packed
+  // generators, including a right-hand word shifted across a 64-bit boundary;
+  // it does not replay gates, measure either input, or assume a basis state.
+  // As with every stabilizer tableau, an unobservable global state phase is
+  // not represented. All generator signs and physical correlations are kept.
+  static CompactCore tensor_product(const CompactCore& left,
+                                    const CompactCore& right) {
+    if (right.n_ > std::numeric_limits<std::size_t>::max() - left.n_)
+      throw std::length_error("tensor product qubit count overflows");
+    CompactCore result(left.n_ + right.n_); // Validates storage before allocation.
+    for (auto& word : result.z_) word = 0; // Remove the constructor's +Z_i rows.
+    auto append = [&result](const CompactCore& source, std::size_t qubit_offset) {
+      const std::size_t word_offset = qubit_offset / 64;
+      const unsigned shift = static_cast<unsigned>(qubit_offset % 64);
+      for (std::size_t row = 0; row < source.n_; ++row) {
+        const std::size_t output_row = (qubit_offset + row) * result.words_;
+        const std::size_t input_row = row * source.words_;
+        for (std::size_t word = 0; word < source.words_; ++word) {
+          const std::size_t destination = word_offset + word;
+          const auto x = source.x_[input_row + word];
+          const auto z = source.z_[input_row + word];
+          result.x_[output_row + destination] |= x << shift;
+          result.z_[output_row + destination] |= z << shift;
+          if (shift != 0 && destination + 1 < result.words_) {
+            result.x_[output_row + destination + 1] |= x >> (64 - shift);
+            result.z_[output_row + destination + 1] |= z >> (64 - shift);
+          }
+        }
+        result.phase_[qubit_offset + row] = source.phase_[row];
+      }
+    };
+    append(left, 0);
+    append(right, left.n_);
+    result.basis_canonical_ = left.basis_canonical_ && right.basis_canonical_;
+    return result;
   }
 
   void hadamard(std::size_t q) {
