@@ -6,10 +6,12 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -48,6 +50,7 @@ enum class ExactExperimentOp : std::uint8_t {
   CZ,
   T,
   P,  // arbitrary phase; angle stored separately by ReducedExactTRepresentation
+  TDagger,
 };
 
 struct ExactExperimentGate {
@@ -374,13 +377,17 @@ class ExactTExperiment {
       case ExactExperimentOp::T: dense.phase_t(gate.a); break;
       case ExactExperimentOp::P:
         throw std::logic_error("arbitrary phase requires its angle log");
+      case ExactExperimentOp::TDagger:
+        dense.phase_t(gate.a);
+        for (unsigned i = 0; i < 3; ++i) dense.phase_s(gate.a);
+        break;
     }
   }
 
   void replay_branch(DenseCore& dense, const Branch& branch) const {
     std::size_t t_index = 0;
     for (const auto& gate : circuit_) {
-      if (gate.op == ExactExperimentOp::T) {
+      if (gate.op == ExactExperimentOp::T || gate.op == ExactExperimentOp::TDagger) {
         if ((branch.t_choices >> t_index) & 1ULL)
           dense.pauli_z(gate.a);
         ++t_index;
@@ -467,8 +474,14 @@ class ReducedExactTRepresentation {
     }
   };
 
-  explicit ReducedExactTRepresentation(std::size_t qubits)
-      : n_(validated_qubits(qubits)), base_(n_) {
+  explicit ReducedExactTRepresentation(
+      std::size_t qubits,
+      std::size_t max_components = std::numeric_limits<std::size_t>::max(),
+      std::function<bool()> cancelled = {})
+      : n_(validated_qubits(qubits)), max_components_(max_components), cancelled_(std::move(cancelled)), base_(n_) {
+    if (max_components_ == 0)
+      throw std::invalid_argument("max_components must be positive");
+    check_cancelled();
     components_[PauliKey{}] = {1.0, 0.0};
   }
 
@@ -579,11 +592,63 @@ class ReducedExactTRepresentation {
     apply_clifford({ExactExperimentOp::CZ, narrow(a), narrow(b)});
   }
 
-  void phase_t(std::size_t q) {
+  void phase_t(std::size_t q) { apply_t(q, false); }
+
+  void phase_t_dagger(std::size_t q) { apply_t(q, true); }
+
+  // The canonical Pauli cosets acting on a pure stabilizer base form an
+  // orthonormal basis. Thus no dense 2^n vector is needed for these observables.
+  // All results are UNNORMALIZED: divide expectation by sparse_norm() when
+  // computing a normalized observable. "Exact" means no branch truncation or
+  // approximate pruning; coefficients still use ordinary double arithmetic.
+  double sparse_norm() const {
+    check_cancelled();
+    double total = 0.0, correction = 0.0;
+    std::size_t visited = 0;
+    for (const auto& entry : components_) {
+      const double term = std::norm(entry.second) - correction;
+      const double next = total + term;
+      correction = (next - total) - term;
+      total = next;
+      poll_components(++visited);
+    }
+    return total;
+  }
+
+  // Q = i^phase X^x Z^z, with phase interpreted modulo four. For example,
+  // one-qubit Y has x=1, z=1, phase=1. Non-Hermitian Paulis are supported and
+  // may yield complex results. Bits outside the declared register are errors.
+  std::complex<double> pauli_expectation(std::uint64_t x, std::uint64_t z,
+                                         std::uint8_t phase = 0) const {
+    if (((x | z) >> n_) != 0) throw std::out_of_range("Pauli mask outside qubit register");
+    check_cancelled();
+    const auto basis = stabilizer_basis();
+    const Pauli observable{x, z, static_cast<std::uint8_t>(phase & 3U)};
+    std::complex<double> total{0.0, 0.0};
+    std::size_t visited = 0;
+    for (const auto& entry : components_) {
+      const Pauli p{entry.first.x, entry.first.z, 0};
+      const auto acted = canonicalize(multiply(observable, p), basis);
+      const auto found = components_.find(PauliKey{acted.x, acted.z});
+      if (found != components_.end())
+        total += std::conj(found->second) * phase_unit(acted.phase) * entry.second;
+      poll_components(++visited);
+    }
+    return total;
+  }
+
+  double z_expectation(std::size_t q) const {
     check(q);
+    return pauli_expectation(0, std::uint64_t{1} << q).real();
+  }
+
+ private:
+  void apply_t(std::size_t q, bool dagger) {
+    check(q);
+    check_cancelled();
 
     const double s = 1.0 / std::sqrt(2.0);
-    const std::complex<double> e{s, s};
+    const std::complex<double> e{s, dagger ? -s : s};
     const std::complex<double> alpha =
         (std::complex<double>{1.0, 0.0} + e) * 0.5;
     const std::complex<double> beta =
@@ -593,7 +658,8 @@ class ReducedExactTRepresentation {
     ComponentMap next;
     next.reserve(std::min<std::size_t>(
         std::size_t{1} << std::min<std::size_t>(n_, 20),
-        components_.size() * 2 + 1));
+        std::min(max_components_, components_.size() > (std::numeric_limits<std::size_t>::max() - 1) / 2
+            ? std::numeric_limits<std::size_t>::max() : components_.size() * 2 + 1)));
 
     const Pauli zq = pauli_z_op(q);
     // Every stored label is already canonical for this base. Multiplying by
@@ -602,23 +668,28 @@ class ReducedExactTRepresentation {
     // Keep the multiplication order: the correction need not commute with p.
     const Pauli correction = multiply(zq, canonicalize(zq, basis));
 
+    std::size_t visited = 0;
     for (const auto& entry : components_) {
       const Pauli p{entry.first.x, entry.first.z, 0};
       accumulate_canonical(next, p, entry.second * alpha);
       accumulate_canonical(next, multiply(multiply(zq, p), correction),
                            entry.second * beta);
+      poll_components(++visited);
     }
 
+    check_cancelled();
+    circuit_.push_back({dagger ? ExactExperimentOp::TDagger : ExactExperimentOp::T, narrow(q), 0});
     components_ = std::move(next);
-    circuit_.push_back({ExactExperimentOp::T, narrow(q), 0});
     ++t_count_;
   }
 
+ public:
   // P(theta) = (1+exp(i theta))/2 I + (1-exp(i theta))/2 Z.
   // This preserves the existing Pauli-coset representation and does not
   // approximate theta with a Clifford+T synthesis or discard components.
   void phase(std::size_t q, double theta) {
     check(q);
+    check_cancelled();
     if (!std::isfinite(theta)) throw std::invalid_argument("non-finite phase");
     const std::complex<double> e{std::cos(theta), std::sin(theta)};
     const auto alpha = (std::complex<double>{1., 0.} + e) * .5;
@@ -627,12 +698,16 @@ class ReducedExactTRepresentation {
     ComponentMap next;
     next.reserve(std::min<std::size_t>(
         std::size_t{1} << std::min<std::size_t>(n_, 20),
-        components_.size() * 2 + 1));
+        std::min(max_components_, components_.size() > (std::numeric_limits<std::size_t>::max() - 1) / 2
+            ? std::numeric_limits<std::size_t>::max() : components_.size() * 2 + 1)));
+    std::size_t visited = 0;
     for (const auto& entry : components_) {
       const Pauli p{entry.first.x, entry.first.z, 0};
       accumulate(next, p, entry.second * alpha, basis);
       accumulate(next, multiply(pauli_z_op(q), p), entry.second * beta, basis);
+      poll_components(++visited);
     }
+    check_cancelled();
     // Reserve log entries before changing the state (allocation failure safety).
     if (circuit_.size() == circuit_.capacity())
       circuit_.reserve(std::max<std::size_t>(1, circuit_.capacity() * 2));
@@ -662,7 +737,9 @@ class ReducedExactTRepresentation {
     return norm;
   }
 
-  double pauli_expectation(char axis, std::size_t q) const {
+  // Restrict the axis overload to char so integer Pauli masks stay unambiguous.
+  template <typename Axis, std::enable_if_t<std::is_same<Axis, char>::value, int> = 0>
+  double pauli_expectation(Axis axis, std::size_t q) const {
     check(q);
     Pauli observable;
     if (axis == 'X') observable = pauli_x_op(q);
@@ -835,10 +912,19 @@ class ReducedExactTRepresentation {
   using ComponentMap =
       std::unordered_map<PauliKey, std::complex<double>, PauliKeyHash>;
 
-  static std::size_t validated_qubits(std::size_t qubits) {
-    if (qubits == 0 || qubits > 63)
+  static std::size_t validated_qubits(std::size_t n) {
+    if (n == 0 || n > 63)
       throw std::invalid_argument("reduced representation supports 1..63 qubits");
-    return qubits;
+    return n;
+  }
+
+  void check_cancelled() const {
+    if (cancelled_ && cancelled_())
+      throw std::runtime_error("reduced representation cancelled");
+  }
+
+  void poll_components(std::size_t visited) const {
+    if ((visited & 255U) == 0) check_cancelled();
   }
 
   static std::size_t complex_matrix_rank(
@@ -973,12 +1059,14 @@ class ReducedExactTRepresentation {
     return p;
   }
 
-  StabilizerBasis stabilizer_basis() const {
+  StabilizerBasis stabilizer_basis() const { return stabilizer_basis(base_); }
+
+  StabilizerBasis stabilizer_basis(const CompactCore& state) const {
     StabilizerBasis basis;
     basis.rows.reserve(n_);
 
     for (std::size_t r = 0; r < n_; ++r)
-      basis.rows.push_back(parse_generator(base_.generator_string(r)));
+      basis.rows.push_back(parse_generator(state.generator_string(r)));
 
     std::size_t rank = 0;
     for (std::size_t col = 0; col < 2 * n_ && rank < n_; ++col) {
@@ -1026,16 +1114,20 @@ class ReducedExactTRepresentation {
     accumulate_canonical(map, canonicalize(p, basis), coefficient);
   }
 
-  static void accumulate_canonical(ComponentMap& map, Pauli p,
-                                   std::complex<double> coefficient) {
+  void accumulate_canonical(ComponentMap& map, Pauli p,
+                            std::complex<double> coefficient) const {
     coefficient *= phase_unit(p.phase);
     p.phase = 0;
 
     const PauliKey key{p.x, p.z};
     auto it = map.find(key);
-    if (it == map.end())
+    if (it == map.end()) {
+      // Count every stored key, including exactly zero coefficients. Never
+      // approximate-prune to fit the budget, and never insert beyond the cap.
+      if (map.size() >= max_components_)
+        throw std::runtime_error("reduced component limit reached");
       map.emplace(key, coefficient);
-    else
+    } else
       it->second += coefficient;
   }
 
@@ -1080,6 +1172,7 @@ class ReducedExactTRepresentation {
         break;
       }
       case ExactExperimentOp::T:
+      case ExactExperimentOp::TDagger:
       case ExactExperimentOp::P:
         throw std::logic_error("non-Clifford phase cannot be conjugated as Clifford");
     }
@@ -1087,35 +1180,49 @@ class ReducedExactTRepresentation {
     return p;
   }
 
-  void update_base(const ExactExperimentGate& gate) {
+  void update_base(const ExactExperimentGate& gate) { update_base(base_, gate); }
+
+  static void update_base(CompactCore& state, const ExactExperimentGate& gate) {
     switch (gate.op) {
-      case ExactExperimentOp::H: base_.hadamard(gate.a); break;
-      case ExactExperimentOp::S: base_.phase_s(gate.a); break;
-      case ExactExperimentOp::X: base_.pauli_x(gate.a); break;
-      case ExactExperimentOp::Z: base_.pauli_z(gate.a); break;
-      case ExactExperimentOp::CX: base_.cnot(gate.a, gate.b); break;
-      case ExactExperimentOp::CZ: base_.controlled_z(gate.a, gate.b); break;
+      case ExactExperimentOp::H: state.hadamard(gate.a); break;
+      case ExactExperimentOp::S: state.phase_s(gate.a); break;
+      case ExactExperimentOp::X: state.pauli_x(gate.a); break;
+      case ExactExperimentOp::Z: state.pauli_z(gate.a); break;
+      case ExactExperimentOp::CX: state.cnot(gate.a, gate.b); break;
+      case ExactExperimentOp::CZ: state.controlled_z(gate.a, gate.b); break;
       case ExactExperimentOp::T:
+      case ExactExperimentOp::TDagger:
       case ExactExperimentOp::P:
         throw std::logic_error("non-Clifford phase cannot update stabilizer base");
     }
   }
 
   void apply_clifford(const ExactExperimentGate& gate) {
-    circuit_.push_back(gate);
-    base_circuit_.push_back(gate);
-
-    update_base(gate);
-    const auto basis = stabilizer_basis();
+    check_cancelled();
+    // Prepare the entire update before committing: cancellation or a component
+    // limit leaves the existing state and gate history untouched.
+    CompactCore next_base = base_;
+    update_base(next_base, gate);
+    const auto basis = stabilizer_basis(next_base);
 
     ComponentMap next;
-    next.reserve(components_.size() + 1);
+    next.reserve(components_.size());
 
+    std::size_t visited = 0;
     for (const auto& entry : components_) {
       const Pauli p{entry.first.x, entry.first.z, 0};
       accumulate(next, conjugate(p, gate), entry.second, basis);
+      poll_components(++visited);
     }
 
+    check_cancelled();
+    if (circuit_.size() == circuit_.capacity())
+      circuit_.reserve(std::max<std::size_t>(1, circuit_.capacity() * 2));
+    if (base_circuit_.size() == base_circuit_.capacity())
+      base_circuit_.reserve(std::max<std::size_t>(1, base_circuit_.capacity() * 2));
+    circuit_.push_back(gate);
+    base_circuit_.push_back(gate);
+    base_ = std::move(next_base);
     components_ = std::move(next);
   }
 
@@ -1132,6 +1239,11 @@ class ReducedExactTRepresentation {
       case ExactExperimentOp::T: dense.phase_t(gate.a); break;
       case ExactExperimentOp::P:
         throw std::logic_error("arbitrary phase requires its angle log");
+      case ExactExperimentOp::TDagger:
+        // DenseCore has T and S: T S^3 = T^dagger, with no global phase.
+        dense.phase_t(gate.a);
+        for (unsigned i = 0; i < 3; ++i) dense.phase_s(gate.a);
+        break;
     }
   }
 
@@ -1166,6 +1278,8 @@ class ReducedExactTRepresentation {
   }
 
   std::size_t n_;
+  std::size_t max_components_;
+  std::function<bool()> cancelled_;
   std::size_t t_count_ = 0;
   CompactCore base_;
   ComponentMap components_;

@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="com.mundox.cosmic.ProjectEvidenceProvider"
+            android:authorities="com.mundox.cosmic.test.projects"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+    </application>
+    <!-- AGP applies defaultConfig.testInstrumentationRunner to the first entry. -->
+    <instrumentation
+        android:name="com.mundox.cosmic.CosmicInstrumentation"
+        android:targetPackage="com.mundox.cosmic"
+        android:functionalTest="true" />
+    <instrumentation
+        android:name="com.mundox.graphics.GraphicsInstrumentation"
+        android:targetPackage="com.mundox.cosmic"
+        android:functionalTest="true" />
+    <instrumentation
+        android:name="com.mundox.lab.MicroLabInstrumentation"
+        android:targetPackage="com.mundox.cosmic"
+        android:functionalTest="true" />
+</manifest>

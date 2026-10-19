@@ -1,0 +1,83 @@
+{
+  "repository": "guadalupejuan001-code/mundo-X",
+  "historical_ref": "codex/quantum-echo-android",
+  "historical_commit": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
+  "common_base": "f858053bf0a47e6c760428f3526ec74ff89e40c3",
+  "integration": "Restore only the existing Mundo X VM and Ecos sources; retain the current canonical engine and all later optimizations.",
+  "sources": [
+    {
+      "source": "app/src/main/java/com/mundox/lab/BasisVmActivity.java",
+      "destination": "android-experiments/java/com/mundox/lab/BasisVmActivity.java",
+      "git_blob": "ae45e52477c83e2381fa244f57ef32d0fe521ed8",
+      "adaptation": "JNI facade renamed NativeCore→BasisVmNative; stable view tags added for integrated UI validation; Activity package and runtime behavior retained."
+    },
+    {
+      "source": "echoes/src/main/java/com/mundox/echoes/MainActivity.java",
+      "destination": "android-experiments/java/com/mundox/echoes/MainActivity.java",
+      "git_blob": "035053bd3544137a3615b3b4811123b3af5f13d5",
+      "adaptation": "Relocated; stable view tags added for integrated UI validation."
+    },
+    {
+      "source": "echoes/src/main/cpp/native-echo.cpp",
+      "destination": "android-experiments/src/main/cpp/native-echo.cpp",
+      "git_blob": "9fda5fef3ba4814f79aabc99ec086baa9cb2c389",
+      "adaptation": "Relocated without source changes."
+    },
+    {
+      "source": "native/include/mundo_x/basis_vm.hpp",
+      "destination": "android-experiments/native/include/mundo_x/basis_vm.hpp",
+      "git_blob": "39725bffcb22a750d3e5df6c303f2ba456d9a717",
+      "adaptation": "Relocated without source changes; includes canonical CompactCore."
+    },
+    {
+      "source": "native/include/mundo_x/quantum_echo.hpp",
+      "destination": "android-experiments/native/include/mundo_x/quantum_echo.hpp",
+      "git_blob": "cb7678ac032638455333e435837b4921ca4e87f7",
+      "adaptation": "Relocated without source changes; includes canonical ReducedExactTRepresentation."
+    },
+    {
+      "source": "native/tests/basis_vm_test.cpp",
+      "destination": "android-experiments/native/tests/basis_vm_test.cpp",
+      "git_blob": "d83320cf1678f94b33c4cd6bf614d736f26e7fbe",
+      "adaptation": "Original numeric and machine invariant checks."
+    },
+    {
+      "source": "native/tests/quantum_echo_test.cpp",
+      "destination": "android-experiments/native/tests/quantum_echo_test.cpp",
+      "git_blob": "9c157b8eb052e667884b5a9de17469d94798a98b",
+      "adaptation": "Original independent circuit/control checks."
+    },
+    {
+      "source": "native/tests/sparse_observable_test.cpp",
+      "destination": "android-experiments/native/tests/sparse_observable_test.cpp",
+      "git_blob": "18e61cead12227735b9f80a24aa2e82902d3212e",
+      "adaptation": "Original independent double-precision oracle, bounds and cancellation checks, plus interleaved arbitrary-phase/inverse-T compatibility against that oracle."
+    }
+  ],
+  "adapted_jni": {
+    "source": "app/src/main/cpp/native-lib.cpp",
+    "git_blob": "53c5a8f3f231a46f3bf152bc5ee324a9bf96fde3",
+    "destination": "android-experiments/src/main/cpp/basis-vm-jni.cpp",
+    "adaptation": "Only the three original VM methods extracted, JNI class renamed to BasisVmNative and linked in mundox_basis."
+  },
+  "canonical_extensions": [
+    {
+      "path": "native/include/mundo_x/compact_core.hpp",
+      "historical_git_blob": "69f24c218f1ec1100b127add98aaf7dd61d04ef9",
+      "changes": "Original computational-basis flag and VM helpers added; existing seeded measurements and canonical graphics engine retained.",
+      "current_git_blob_sha1": "7a303f23c0837ceec5e620118645f4b353d1aa95",
+      "current_sha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c"
+    },
+    {
+      "path": "native/include/mundo_x/exact_t_experiment.hpp",
+      "historical_git_blob": "7db00be6e4c28611a068df21de2cc69f4759bf8e",
+      "changes": "Original T-dagger, sparse arbitrary-Pauli observables, component budgets and cancellation added; current optimized conjugation, T correction, phase and product-transfer operations retained.",
+      "current_git_blob_sha1": "98932308341f33cc6bb52008b86bb01a905ac25c",
+      "current_sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda"
+    }
+  ],
+  "excluded": [
+    "COSMIC X PC / Windows 10 emulation / pc-android"
+  ],
+  "external_engines_added": []
+}

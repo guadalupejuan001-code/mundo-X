@@ -22,6 +22,36 @@ bool boxHit(vec3 ro,vec3 rd,vec3 lower,vec3 upper,out float entry,out float leav
   }
   return leave>=max(entry,0.0);
 }
+vec3 cosmicSky(vec3 direction){
+  float horizon=pow(1.0-clamp(abs(direction.y),0.0,1.0),5.0);
+  vec3 sky=mix(vec3(.025,.041,.085),vec3(.075,.065,.17),smoothstep(-.1,.7,direction.y));
+  sky+=horizon*vec3(.105,.135,.205);
+  vec3 glowDirection=normalize(vec3(-.65,.24,-.7));
+  sky+=pow(max(dot(direction,glowDirection),0.0),20.0)*vec3(.08,.045,.14);
+  return sky;
+}
+// The ground is a presentation backdrop, not an additional object or pick target.
+// Debug IDs always retain the original black background and exact object hits.
+vec4 cosmicBackdrop(vec3 direction,vec3 ro,vec3 rd,float maximum){
+  vec3 sky=cosmicSky(direction);
+  if(rd.y>=-1e-6)return vec4(sky,1.0);
+  float groundT=(-.025-ro.y)/rd.y;
+  if(groundT<0.0||groundT>maximum)return vec4(sky,1.0);
+  vec3 point=ro+rd*groundT;
+  float extent=float(uSide)*1.1+2.2;
+  if(max(abs(point.x),abs(point.z))>extent)return vec4(sky,1.0);
+  vec2 grid=(point.xz+float(uSide)*1.1)/2.2;
+  vec2 aa=max(fwidth(grid),vec2(.0002));
+  vec2 line=1.0-smoothstep(aa*.55,aa*1.3,abs(fract(grid+.5)-.5));
+  float thinGrid=max(line.x,line.y);
+  // Fade fine lines before they become subpixel, preserving a calm distant field.
+  thinGrid*=1.0-smoothstep(.12,.45,max(aa.x,aa.y));
+  vec3 ground=vec3(.027,.041,.072)+thinGrid*vec3(.055,.105,.15);
+  float distanceToEye=groundT+uNear;
+  float fogEnd=clamp(uFogDistance*.55,75.0,220.0);
+  float fog=smoothstep(fogEnd*.18,fogEnd,distanceToEye);
+  return vec4(mix(ground,sky,fog*.95),1.0);
+}
 void main(){
   outColor=uDebug==1?vec4(0,0,0,1):vec4(.067,.086,.075,1);
   gl_FragDepth=1.0;
@@ -33,6 +63,11 @@ void main(){
   mat3 rot=rotation(),inverseRot=transpose(rot);
   vec3 ro=inverseRot*nearPoint,rd=inverseRot*direction;
   float maximum=(uFar-uNear)/viewCosine;
+  if(uPresentation==1&&uDebug!=1){
+    outColor=cosmicBackdrop(direction,ro,rd,maximum);
+    // GL_LESS against the clear depth must allow the cosmetic background through.
+    gl_FragDepth=.999999;
+  }
   float halfGrid=float(uSide)*1.1;
   float maxHeight=5.18*(1.0+abs(uQuantumStrength));
   float entry,leave;vec3 normal;

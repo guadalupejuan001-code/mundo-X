@@ -1,0 +1,12 @@
+<resources>
+    <style name="CosmicTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowBackground">#080D18</item>
+        <item name="android:statusBarColor">#080D18</item>
+        <item name="android:navigationBarColor">#080D18</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:colorAccent">#75E5DF</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

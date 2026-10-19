@@ -1,0 +1,31 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <queries>
+        <package android:name="com.riotgames.league.wildrift" />
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
+    </queries>
+    <application android:allowBackup="false" android:label="COSMIC X Engine"
+        android:icon="@drawable/ic_cosmic" android:roundIcon="@drawable/ic_cosmic"
+        android:supportsRtl="true" android:theme="@style/CosmicTheme">
+        <activity android:name=".CosmicActivity" android:exported="true" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name="com.mundox.graphics.MainActivity" android:exported="false" android:theme="@style/AppTheme" />
+        <activity android:name="com.mundox.lab.XLabActivity" android:exported="false" android:screenOrientation="portrait" android:theme="@style/XLabTheme" />
+        <activity android:name="com.mundox.lab.MicroLabActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.ObjectLabActivity" android:exported="false" />
+        <activity android:name="com.mundox.lab.MainActivity" android:exported="false" />
+        <activity android:name="com.mundox.lab.QuantumInterfaceActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.VisualExperimentActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.GpuVisualActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.ProceduralGameDemoActivity" android:exported="false" android:screenOrientation="landscape" />
+        <activity android:name="com.mundox.lab.SyncedGpuActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.InternetSyncActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.DeviceLauncherActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.PerformanceLauncherActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.lab.BasisVmActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.mundox.echoes.MainActivity" android:exported="false" android:screenOrientation="portrait" />
+    </application>
+</manifest>

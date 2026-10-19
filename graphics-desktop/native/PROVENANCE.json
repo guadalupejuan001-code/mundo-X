@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/guadalupejuan001-code/mundo-X",
-  "commit": "844681fb8d04c55690e4e6494278391a5b70b313",
-  "scope": "Canonical headers from the integrated Mundo X repository, compiled directly by Android and desktop. No vendor copies.",
+  "base_commit": "3663e93f667e4d4a2c30f3c900293e9f60265b9f",
+  "scope": "Content-addressed snapshot of canonical Graphics headers compiled directly by Android and desktop. base_commit identifies the starting revision; files include the restored additions described below. No vendor copies.",
   "files": [
     {
       "path": "native/include/mundo_x/compact_core.hpp",
-      "git_blob_sha1": "f40c1477bce9bdd882afed7c54379d883c2ab33a",
-      "sha256": "aa9c89923b4ae839612532770ac7c7a461d5baeac3c8ac264bb8df2bd570027c"
+      "git_blob_sha1": "7a303f23c0837ceec5e620118645f4b353d1aa95",
+      "sha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c"
     },
     {
       "path": "native/include/mundo_x/dense_core.hpp",
@@ -29,9 +29,28 @@
       }
     ]
   },
+  "restored_android_additions": {
+    "repository": "https://github.com/guadalupejuan001-code/mundo-X",
+    "ref": "codex/quantum-echo-android",
+    "commit": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
+    "manifest": "android-experiments/PROVENANCE.json",
+    "headers": [
+      {
+        "path": "native/include/mundo_x/compact_core.hpp",
+        "historical_git_blob_sha1": "69f24c218f1ec1100b127add98aaf7dd61d04ef9",
+        "restored": "Computational-basis invariant and operations used by the original eight-bit VM."
+      },
+      {
+        "path": "native/include/mundo_x/exact_t_experiment.hpp",
+        "historical_git_blob_sha1": "7db00be6e4c28611a068df21de2cc69f4759bf8e",
+        "restored": "Inverse T, sparse observables, component budgets and cancellation used by the original Ecos experiment."
+      }
+    ]
+  },
   "integration_notes": [
-    "CompactCore remains byte-identical to the historical Graphics baseline.",
+    "CompactCore now includes the original VM computational-basis helpers while retaining the current seeded measurements and Graphics observer behavior. Its current hash differs from the preserved historical Graphics baseline.",
     "DenseCore includes the author repository phase branch and preserves current Real/FP64 precision.",
+    "ReducedExactTRepresentation combines the original Ecos additions with the current optimized Clifford/T updates, arbitrary phases and product-state transfers; its current hashes are recorded in android-experiments/PROVENANCE.json.",
     "The shared observer and state/session bridge live under native/include/mundo_x and native/src. They are adapters over these original cores."
   ]
 }

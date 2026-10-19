@@ -72,6 +72,18 @@ if (BUILD_TESTING)
   endforeach()
   target_link_libraries(test_engine_session PRIVATE mundo_x_graphics_core)
   target_link_libraries(test_lab_memory PRIVATE Threads::Threads)
+  # Original Android VM/Ecos experiments restored into the unified APK.
+  foreach(experiment_test basis_vm quantum_echo sparse_observable)
+    add_executable(test_${experiment_test}
+      android-experiments/native/tests/${experiment_test}_test.cpp)
+    target_include_directories(test_${experiment_test} PRIVATE
+      native/include android-experiments/native/include)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      target_compile_options(test_${experiment_test} PRIVATE -O3 -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME ${experiment_test} COMMAND test_${experiment_test})
+    set_tests_properties(${experiment_test} PROPERTIES TIMEOUT 120)
+  endforeach()
   if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(native_exams native_original_exams factorized_diversity)
     foreach(exam_name IN LISTS native_exams)
