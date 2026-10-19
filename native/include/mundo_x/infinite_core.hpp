@@ -48,6 +48,10 @@ class InfiniteCore {
   // address. T and arbitrary phase operations are deliberately unsupported.
   struct Gate { char op; std::string first, second; };
   struct Term { std::string address; char axis; };
+  // Non-owning batch view used by InfiniteSession. A batch shares temporary
+  // PauliObserver preparation across all observables that touch the same
+  // materialized component. Background-only terms still allocate nothing.
+  struct QueryRef { const std::vector<Term>* terms; int sign = 1; };
   struct Stats {
     std::size_t active_qubits = 0;
     std::size_t components = 0;
@@ -237,51 +241,21 @@ class InfiniteCore {
   // All input is validated before an early zero result is returned. Queries
   // create only temporary observer data and never materialize the background.
   double expectation(const std::vector<Term>& terms, int sign = 1) const {
-    if (sign != 1 && sign != -1)
-      throw std::invalid_argument("Pauli sign must be +1 or -1");
-    if (terms.size() > limits_.max_query_terms)
-      throw std::length_error("Pauli query term budget exceeded");
-    TermMap normalized;
-    for (const auto& term : terms) {
-      if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
-        throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
-      auto address = canonical(term.address);
-      if (!normalized.emplace(std::move(address), term.axis).second)
-        throw std::invalid_argument("duplicate canonical address in Pauli query");
-    }
-
-    std::map<std::size_t, mundo_x_bridge::Pauli> active;
-    double answer = static_cast<double>(sign);
-    for (const auto& term : normalized) {
-      const auto& address = term.first;
-      const char axis = term.second;
-      if (axis == 'I') continue;
-      const auto found = state_->locations.find(address);
-      if (found != state_->locations.end()) {
-        const auto location = found->second;
-        auto query = active.find(location.component);
-        if (query == active.end())
-          query = active.emplace(location.component,
-              identity_pauli(state_->components[location.component]->ids.size())).first;
-        set_axis(query->second, location.qubit, axis);
-      } else if (background_ == Background::Zero) {
-        if (axis != 'Z') return 0.0;
-      } else {
-        const auto partner = infinite_detail::partner_address(address);
-        const auto other = normalized.find(partner);
-        // A Bell pair has zero single-site X/Y/Z expectations. Its only
-        // nonidentity Pauli correlations are XX=+1, YY=-1 and ZZ=+1.
-        if (other == normalized.end() || other->second != axis) return 0.0;
-        if (!infinite_detail::is_odd(address) && axis == 'Y') answer = -answer;
-      }
-    }
-    for (auto& query : active) {
-      const mundo_x_bridge::PauliObserver observer(state_->components[query.first]->core);
-      answer *= observer.expectation(std::move(query.second));
-      if (answer == 0.0) return 0.0;
-    }
-    return answer;
+    std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>> observers;
+    return expectation_cached(terms, sign, observers);
   }
+
+  std::vector<double> expectations(const std::vector<QueryRef>& queries) const {
+    std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>> observers;
+    std::vector<double> values;
+    values.reserve(queries.size());
+    for (const auto& query : queries) {
+      if (!query.terms) throw std::invalid_argument("null Pauli query");
+      values.push_back(expectation_cached(*query.terms, query.sign, observers));
+    }
+    return values;
+  }
+
 
   // Fixed-size Z queries do not need a sparse-term allocation or the general
   // max_query_terms budget. The address budget still applies.
@@ -364,6 +338,58 @@ class InfiniteCore {
   }
 
  private:
+  double expectation_cached(const std::vector<Term>& terms, int sign,
+                            std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>>& observers) const {
+    if (sign != 1 && sign != -1)
+      throw std::invalid_argument("Pauli sign must be +1 or -1");
+    if (terms.size() > limits_.max_query_terms)
+      throw std::length_error("Pauli query term budget exceeded");
+    TermMap normalized;
+    for (const auto& term : terms) {
+      if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
+        throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
+      auto address = canonical(term.address);
+      if (!normalized.emplace(std::move(address), term.axis).second)
+        throw std::invalid_argument("duplicate canonical address in Pauli query");
+    }
+
+    std::map<std::size_t, mundo_x_bridge::Pauli> active;
+    double answer = static_cast<double>(sign);
+    for (const auto& term : normalized) {
+      const auto& address = term.first;
+      const char axis = term.second;
+      if (axis == 'I') continue;
+      const auto found = state_->locations.find(address);
+      if (found != state_->locations.end()) {
+        const auto location = found->second;
+        auto query = active.find(location.component);
+        if (query == active.end())
+          query = active.emplace(location.component,
+              identity_pauli(state_->components[location.component]->ids.size())).first;
+        set_axis(query->second, location.qubit, axis);
+      } else if (background_ == Background::Zero) {
+        if (axis != 'Z') return 0.0;
+      } else {
+        const auto partner = infinite_detail::partner_address(address);
+        const auto other = normalized.find(partner);
+        // A Bell pair has zero single-site X/Y/Z expectations. Its only
+        // nonidentity Pauli correlations are XX=+1, YY=-1 and ZZ=+1.
+        if (other == normalized.end() || other->second != axis) return 0.0;
+        if (!infinite_detail::is_odd(address) && axis == 'Y') answer = -answer;
+      }
+    }
+    for (auto& query : active) {
+      auto found = observers.find(query.first);
+      if (found == observers.end())
+        found = observers.emplace(query.first, std::make_unique<mundo_x_bridge::PauliObserver>(
+            state_->components[query.first]->core)).first;
+      answer *= found->second->expectation(std::move(query.second));
+      if (answer == 0.0) return 0.0;
+    }
+    return answer;
+  }
+
+
   // Same MT19937-64 algorithm and seed/output sequence as std::mt19937_64.
   // Its explicit state makes snapshots portable between libstdc++ and libc++
   // without relying on their implementation-dependent stream representations.
