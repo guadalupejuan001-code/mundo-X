@@ -23,6 +23,9 @@ namespace mundo_x {
 // Gates do not automatically search for factorization. Explicit try_split has
 // O(2^k) work on one k-qubit block; it accepts only coefficient-wise == after
 // reconstruction, with no tolerance, pruning, or approximate mode.
+// Exact singleton eigenstates can avoid a merge for CX/CZ. Splits rebalance
+// factors with reversible powers of two when coefficient-wise reconstruction
+// remains unchanged; no amplitudes or global phase are discarded.
 // Singleton coefficients use one flat 32*n-byte buffer; this capacity remains
 // reserved when qubits enter larger factors. Factor ids are representative
 // qubits (the first qubit in each block), eliminating a per-qubit free list.
@@ -212,9 +215,24 @@ class FactorizedCore {
     const Complex* state = factor_state(id);
     const std::size_t dimension = factor_dimension(id);
     const std::size_t bit = std::size_t{1} << location_[q].bit;
+    // Factor scales are a gauge: one may be very small while another is
+    // correspondingly large. Scale the query before squaring so a nonzero
+    // finite factor cannot look like a zero/infinite norm through underflow
+    // or overflow. This does not modify the represented state.
+    double scale = 0.0;
+    for (std::size_t i = 0; i < dimension; ++i) {
+      if (!std::isfinite(state[i].real()) || !std::isfinite(state[i].imag()))
+        throw std::runtime_error("non-finite or zero factor norm");
+      scale = std::max(scale, std::abs(state[i].real()));
+      scale = std::max(scale, std::abs(state[i].imag()));
+    }
+    if (!(scale > 0.0))
+      throw std::runtime_error("non-finite or zero factor norm");
     double numerator = 0.0, denominator = 0.0;
     for (std::size_t i = 0; i < dimension; ++i) {
-      const double mass = std::norm(state[i]);
+      const double real = state[i].real() / scale;
+      const double imag = state[i].imag() / scale;
+      const double mass = real * real + imag * imag;
       denominator += mass;
       if (i & bit) numerator += mass;
     }
@@ -319,6 +337,8 @@ class FactorizedCore {
         if (left->state[a] * right->state[b] !=
             block.state[left_indices[a] | right_indices[b]]) return false;
 
+    rebalance_split(*left, *right);
+
     // Every allocation and strict check is complete before modifying state.
     const std::size_t old_width = block.qubits.size();
     const std::size_t left_width = left->qubits.size();
@@ -386,6 +406,49 @@ class FactorizedCore {
   }
   static std::size_t retained_amplitude_bytes(const Block& block) {
     return block.qubits.size() == 1 ? 0 : block.state.capacity() * sizeof(Complex);
+  }
+  static Complex scale_binary(Complex value, int exponent) {
+    return {std::scalbn(value.real(), exponent),
+            std::scalbn(value.imag(), exponent)};
+  }
+  static bool reversible_scale(Complex value, int exponent) {
+    const Complex scaled = scale_binary(value, exponent);
+    return std::isfinite(scaled.real()) && std::isfinite(scaled.imag()) &&
+           scale_binary(scaled, -exponent) == value;
+  }
+  static int binary_norm_exponent(const std::vector<Complex>& state) {
+    double peak = 0.0;
+    for (const auto value : state) {
+      peak = std::max(peak, std::abs(value.real()));
+      peak = std::max(peak, std::abs(value.imag()));
+    }
+    const int exponent = std::ilogb(peak);
+    double squared_norm = 0.0;
+    for (const auto value : state)
+      squared_norm += std::norm(scale_binary(value, -exponent));
+    return exponent + std::ilogb(std::sqrt(squared_norm));
+  }
+  static void rebalance_split(Block& left, Block& right) {
+    // Balance both norms so repeatedly retaining either side of a cut cannot
+    // accumulate all of the small scale in that side. The exponent estimate
+    // only chooses a candidate gauge; the exact checks below decide acceptance.
+    const int exponent = (binary_norm_exponent(right.state) -
+                          binary_norm_exponent(left.state)) / 2;
+    if (exponent == 0) return;
+    // Powers of two avoid introducing a rounded sqrt/norm into the factors.
+    // Reject even this rescaling if it would drop a subnormal component,
+    // overflow, or change any reconstructed coefficient. Keep the original
+    // strictly verified split in that case.
+    for (const auto value : left.state)
+      if (!reversible_scale(value, exponent)) return;
+    for (const auto value : right.state)
+      if (!reversible_scale(value, -exponent)) return;
+    for (const auto b : right.state)
+      for (const auto a : left.state)
+        if (scale_binary(a, exponent) * scale_binary(b, -exponent) != a * b)
+          return;
+    for (auto& value : left.state) value = scale_binary(value, exponent);
+    for (auto& value : right.state) value = scale_binary(value, -exponent);
   }
   static std::size_t retained_qubit_bytes(const Block& block) {
     return block.qubits.size() == 1 ? 0 : block.qubits.capacity() * sizeof(std::size_t);
@@ -461,6 +524,26 @@ class FactorizedCore {
       if (control[0] == Complex{0.0, 0.0}) {
         if (cz) pauli_z(b); else pauli_x(b);
         return;
+      }
+    }
+    // CZ is symmetric: a basis-state singleton on either side is enough.
+    // CX on an X eigenstate target only kicks its +/- sign back to control.
+    // Equality is exact, including complex/global scale. Near eigenstates
+    // take the ordinary entangling path; no numerical threshold is used.
+    if (!blocks_[b_location.block]) {
+      const auto& target = singletons_[b];
+      if (cz) {
+        if (target[1] == Complex{0.0, 0.0}) return;
+        if (target[0] == Complex{0.0, 0.0}) {
+          pauli_z(a);
+          return;
+        }
+      } else {
+        if (target[0] == target[1]) return;
+        if (target[0] == -target[1]) {
+          pauli_z(a);
+          return;
+        }
       }
     }
     if (a_location.block == b_location.block) {

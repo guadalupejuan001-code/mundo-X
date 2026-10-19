@@ -121,6 +121,10 @@ public final class XLabActivity extends Activity {
         legacy.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));
         masthead.addView(legacy);
         root.addView(masthead);
+        Button micro = tagged(button("MICROMUNDO  →  Partículas · Colonia · Qubits", true), "open_micro");
+        micro.setTextSize(12);
+        micro.setOnClickListener(v -> startActivity(new Intent(this, MicroLabActivity.class)));
+        root.addView(micro);
         root.addView(text("INSTRUMENTOS DE COMPUTACIÓN · SIMULACIÓN SOFTWARE", 9, MUTED, true));
         root.addView(rule(), new LinearLayout.LayoutParams(-1, dp(1)));
         pages = new FrameLayout(this);

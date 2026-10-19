@@ -1,0 +1,3 @@
+ObjectSceneModel: 448 checks passed
+ObjectDrawPlan: 1542 checks passed
+All app and instrumentation Java compiled with ECJ, Android API 35, Java target 8.

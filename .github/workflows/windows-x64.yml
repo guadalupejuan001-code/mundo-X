@@ -6,6 +6,7 @@ on:
     paths:
       - 'native/**'
       - 'examples/**'
+      - 'tests/**'
       - 'CMakeLists.txt'
       - 'tools/windows/**'
       - '.github/workflows/windows-x64.yml'
@@ -27,16 +28,24 @@ jobs:
         shell: pwsh
         run: cmake --build build --config Release --parallel 2
 
-      - name: Smoke tests
+      - name: Native core and XASM tests
         shell: pwsh
         run: |
           ctest --test-dir build -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Smoke tests
+        shell: pwsh
+        run: |
           .\build\Release\mundo_x.exe hello
           .\build\Release\mundo_x.exe run examples\bell.x
           .\build\Release\mundo_x.exe run examples\measurement_bell.x
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\build\Release\mundo_x.exe run examples\measurement_interference.x
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\build\Release\mundo_x.exe run-mx examples\mx_layers.mx
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\build\Release\mundo_x_phase.exe examples\adder50.qx adaptive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\build\Release\mundo_x.exe cluster 4 4 --dense
           .\build\Release\mundo_x.exe cluster 32 32
@@ -54,11 +63,16 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist\examples | Out-Null
           Copy-Item build\Release\mundo_x.exe dist\mundo_x.exe
+          Copy-Item build\Release\mundo_x_phase.exe dist\mundo_x_phase.exe
           Copy-Item examples\*.x dist\examples\
+          Copy-Item examples\*.mx dist\examples\
+          Copy-Item examples\*.qx dist\examples\
           Copy-Item tools\windows\INICIAR.cmd dist\INICIAR.cmd
           Copy-Item tools\windows\LEEME.txt dist\LEEME.txt
           $exeHash = (Get-FileHash dist\mundo_x.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$exeHash  mundo_x.exe" | Out-File -Encoding ascii dist\SHA256SUMS.txt
+          $phaseHash = (Get-FileHash dist\mundo_x_phase.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$phaseHash  mundo_x_phase.exe" | Out-File -Append -Encoding ascii dist\SHA256SUMS.txt
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4

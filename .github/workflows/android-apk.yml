@@ -8,6 +8,8 @@ on:
       - 'native/**'
       - 'CMakeLists.txt'
       - 'tools/android/**'
+      - 'examples/**'
+      - 'tests/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
@@ -87,6 +89,9 @@ jobs:
           ./native-build/mundo_x magic-witness
           echo "=== Independent gate-growth trace: 8 qubits / 12 T ==="
           ./native-build/mundo_x t-trace-variant 8 12
+
+      - name: Native core and XASM tests
+        run: ctest --test-dir native-build --output-on-failure
 
       - name: Install Android packages
         shell: bash
@@ -174,7 +179,9 @@ jobs:
       - name: Enable emulator acceleration
         run: |
           sudo chmod 666 /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
+          # The app has no Google Play dependency. AOSP avoids first-boot
+          # Messaging/Settings ANR dialogs stealing focus from clipboard tests.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
 
       - name: Run interactive laboratory on Android 15
         shell: bash

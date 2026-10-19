@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 get_filename_component(MUNDO_X_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
 
-add_library(mundox SHARED native-lib.cpp lab-jni.cpp)
+add_library(mundox SHARED native-lib.cpp lab-jni.cpp micro-jni.cpp)
 
 target_include_directories(
     mundox

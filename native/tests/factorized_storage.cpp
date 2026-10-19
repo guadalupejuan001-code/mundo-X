@@ -158,6 +158,29 @@ void retained_capacity_and_reuse() {
   require(pairs.same_factor(6, 1) && pairs.same_factor(7, 0) && !pairs.same_factor(0, 1), "dense cut lookup identity");
 }
 
+void eigenstate_gates_allocate_nothing() {
+  Core core(3, 2);
+  core.hadamard(0); core.phase_t(0); core.cnot(0, 1);
+  core.hadamard(2);
+  std::size_t calls = 0;
+  {
+    allocation_probe::Guard probe;
+    for (unsigned i = 0; i < 1000; ++i) {
+      core.cnot(1, 2);       // + target
+      core.pauli_z(2);
+      core.cnot(1, 2);       // - target, phase kickback
+      core.pauli_z(2);
+    }
+    core.hadamard(2);        // 0 target
+    core.controlled_z(1, 2);
+    core.pauli_x(2);         // 1 target
+    core.controlled_z(1, 2);
+    calls = allocation_probe::calls;
+  }
+  require(calls == 0, "singleton eigenstate gates must not allocate");
+  require(core.factor_count() == 2, "eigenstate gates preserve partition");
+}
+
 template <class Setup, class Operation>
 void reject_every_allocation(Setup setup, Operation operation, const char* message) {
   bool reached_success = false;
@@ -198,7 +221,7 @@ void allocation_transactions() {
   }
   reject_every_allocation([] { Core c(8); c.hadamard(7); c.phase_s(7); return c; },
                          [](Core& c) { c.cnot(7, 0); return true; }, "singleton merge must eventually succeed");
-  reject_every_allocation([] { Core c(8); c.hadamard(7); c.cnot(7, 2); c.hadamard(0); return c; },
+  reject_every_allocation([] { Core c(8); c.hadamard(7); c.cnot(7, 2); c.hadamard(0); c.phase_t(0); return c; },
                          [](Core& c) { c.cnot(2, 0); return true; }, "mixed merge must eventually succeed");
   reject_every_allocation([] { Core c(8); c.hadamard(7); c.cnot(7, 2); c.hadamard(0); c.cnot(0, 5); return c; },
                          [](Core& c) { c.controlled_z(2, 5); return true; }, "dense merge must eventually succeed");
@@ -215,6 +238,7 @@ int main() {
   try {
     constant_allocation_product();
     retained_capacity_and_reuse();
+    eigenstate_gates_allocate_nothing();
     allocation_transactions();
     std::cout << "factorized_storage PASS checks=" << checks
               << " injected_allocation_failures=" << injected_failures << '\n';

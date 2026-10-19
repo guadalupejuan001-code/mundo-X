@@ -54,9 +54,9 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     private Spinner count;
     private EditText seed, selection;
     private TextView stats, detail, status, result, selectedInfo, viewState;
-    private Button animated, ruleRoute, explicitRoute;
+    private Button animated, ruleRoute, explicitRoute, culling;
     private int selected;
-    private boolean animation = true, busy;
+    private boolean animation = true, busy, spatialCulling = true;
     private volatile boolean destroyed, renderingPaused;
     private long sceneRevision;
     private long requestId;
@@ -109,6 +109,11 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         root.addView(viewport, new LinearLayout.LayoutParams(-1, 0, 1.1f));
         bindGestures();
         stats = tag(label("Preparando contexto OpenGL ES…", 10, LIME, true), "objects_stats");
+        // Pending/visible messages wrap differently. A changing label height
+        // would resize the GL viewport, invalidate visibility, then change the
+        // label again, repeatedly redrawing even a quiet million-object scene.
+        stats.setLines(3);
+        stats.setEllipsize(android.text.TextUtils.TruncateAt.END);
         root.addView(stats);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(false);
         LinearLayout panel = column(); panel.setPadding(0, dp(6), 0, dp(18)); scroll.addView(panel);
@@ -119,6 +124,16 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
         explicitRoute = control(button("Explícita", false)); explicitRoute.setTag("objects_explicit");
         ruleRoute.setOnClickListener(v -> route(false)); explicitRoute.setOnClickListener(v -> route(true));
         routes.addView(ruleRoute, weight()); routes.addView(explicitRoute, weight()); panel.addView(routes);
+        culling = control(button("Fuera de cámara: omitir", false)); culling.setTag("objects_culling");
+        culling.setOnClickListener(v -> {
+            spatialCulling = !spatialCulling;
+            final boolean enabled = spatialCulling;
+            culling.setText(enabled ? "Fuera de cámara: omitir" : "Fuera de cámara: dibujar todo");
+            verification = "{}"; benchmark = "{}";
+            state("preparing", "Comprobando la misma escena con el nuevo alcance de dibujo.");
+            queueDraw(() -> renderer.setSpatialCulling(enabled));
+        });
+        panel.addView(culling);
         LinearLayout recovery = row();
         Button recenter = taggedControl("Recentrar / recuperar", "objects_recenter", recovery);
         recenter.setOnClickListener(v -> {
@@ -459,7 +474,10 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
     @Override public void onStats(ObjectSceneRenderer.Stats value) {
         ui.post(() -> {
             if (destroyed || value.sceneRevision != sceneRevision) return; latest = value;
-            if (!value.animationEnabled && !value.benchmarking) {
+            if (!"visible".equals(value.visibility) && !value.benchmarking) {
+                stats.setText(String.format(Locale.US, "%s · %,d objetos · dibujo sin confirmar\n%s",
+                        value.route, value.count, value.renderer));
+            } else if (!value.animationEnabled && !value.benchmarking) {
                 stats.setText(String.format(Locale.US, "%s · %,d objetos · Campo quieto · dibujo al cambiar\n%s",
                         value.route, value.count, value.renderer));
             } else {
@@ -467,11 +485,13 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                         value.route, value.count, value.frameP50Ms, value.frameP95Ms, value.renderer));
             }
             stats.setContentDescription("frames=" + value.frames + ";benchmarking=" + value.benchmarking
-                    + ";animation=" + value.animationEnabled + ";visibility=" + value.visibility);
+                    + ";animation=" + value.animationEnabled + ";visibility=" + value.visibility
+                    + ";submitted=" + value.submittedInstances + ";culled=" + value.culledInstances);
             detail.setText(String.format(Locale.US,
-                    "Regla + cambios (formato): %,d B · transformaciones: %,d B\nGPU reservada: VBO %,d B + textura %,d B · malla %,d B\nPSS proceso: %.1f MiB · CPU envío: %.3f ms",
+                    "Enviados a dibujar: %,d · fuera de cámara omitidos: %,d · lotes: %,d\nRegla + cambios (formato): %,d B · transformaciones: %,d B\nGPU reservada: VBO %,d B + textura %,d B · malla %,d B\nPlan de dibujo (arrays): %,d B · PSS proceso: %.1f MiB\nCPU envío: %.3f ms",
+                    value.submittedInstances, value.culledInstances, value.drawCalls,
                     model.logicalRuleBytes(), value.explicitBytes, value.allocatedExplicitBytes, value.allocatedSparseBytes,
-                    value.meshBytes, Debug.getPss() / 1024.0, value.cpuSubmitMs));
+                    value.meshBytes, value.plannerStorageBytes, Debug.getPss() / 1024.0, value.cpuSubmitMs));
             if (value.count == model.count()) {
                 viewState.setContentDescription(value.drawSuspended ? "error" : value.visibility);
                 viewState.setTextColor(value.drawSuspended || "empty".equals(value.visibility) ? CORAL : LIME);
@@ -542,6 +562,14 @@ public final class ObjectLabActivity extends Activity implements ObjectSceneRend
                 out.put("projection_far", latest.projectionFar); out.put("camera_distance", latest.cameraDistance);
                 out.put("visibility", latest.visibility); out.put("draw_suspended", latest.drawSuspended);
                 out.put("animation_enabled", latest.animationEnabled);
+                out.put("graphics_pipeline", "indexed_batched_spatial_v1");
+                out.put("spatial_culling", latest.spatialCulling);
+                out.put("submitted_instances", latest.submittedInstances);
+                out.put("culled_instances", latest.culledInstances);
+                out.put("draw_calls", latest.drawCalls);
+                out.put("planner_array_payload_bytes", latest.plannerStorageBytes);
+                out.put("submitted_unique_vertex_candidates", latest.submittedUniqueVertexCandidates);
+                out.put("submitted_triangles", latest.submittedTriangles);
                 out.put("render_policy", latest.animationEnabled ? "continuous" : "when_dirty");
                 out.put("viewport_width", latest.viewWidth); out.put("viewport_height", latest.viewHeight);
             }

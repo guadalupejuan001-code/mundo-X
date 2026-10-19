@@ -1,0 +1,55 @@
+name: Verify procedural graphics
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/java/com/mundox/lab/ObjectDrawPlan*.java'
+      - 'app/src/main/java/com/mundox/lab/ObjectScene*.java'
+      - 'tools/graphics/**'
+      - '.github/workflows/graphics-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  graphics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare host GLES and Android compile API
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35'
+      - name: Check model and conservative planner
+        run: |
+          mkdir -p "$RUNNER_TEMP/graphics-classes" graphics-evidence
+          javac -d "$RUNNER_TEMP/graphics-classes" \
+            app/src/main/java/com/mundox/lab/ObjectSceneModel.java \
+            app/src/main/java/com/mundox/lab/ObjectSceneModelChecks.java \
+            app/src/main/java/com/mundox/lab/ObjectDrawPlan.java \
+            app/src/main/java/com/mundox/lab/ObjectDrawPlanChecks.java
+          java -cp "$RUNNER_TEMP/graphics-classes" com.mundox.lab.ObjectSceneModelChecks | tee graphics-evidence/model.txt
+          java -cp "$RUNNER_TEMP/graphics-classes" com.mundox.lab.ObjectDrawPlanChecks | tee graphics-evidence/planner.txt
+      - name: Compare real GLES output with original full renderer
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          python3 tools/graphics/verify_gles.py \
+            --android-jar "$ANDROID_HOME/platforms/android-35/android.jar" \
+            --output graphics-evidence/gles.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Mundo-X-Graphics-Evidence
+          path: graphics-evidence/
+          if-no-files-found: warn

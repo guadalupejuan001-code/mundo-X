@@ -1,0 +1,24 @@
+# Constantes, parámetros tipados y repetición con índice local.
+backend reduced;
+let N = 3;
+let rounds = 4;
+qubits N;
+
+circuit layer(a: qubit, b: qubit, repetitions: count) {
+    repeat repetitions {
+        h(a);
+        t(a);
+        cx(a, b);
+    }
+}
+
+repeat N as i {
+    h(q[i]);
+}
+layer(q[0], q[1], rounds);
+layer(q[1], q[2], rounds);
+cz(q[0], q[N - 1]);
+show;
+bytes;
+assert fidelity;
+assert norm;
