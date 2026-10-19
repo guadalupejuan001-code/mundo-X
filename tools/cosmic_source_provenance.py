@@ -21,6 +21,7 @@ CORE_REFERENCE = "ef4636240af73351a18710e988346791fbdc3b58"
 RESOLUTION_REFERENCE = "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6"
 INFINITE_REFERENCE = "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
 INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
+UPGRADE_REFERENCE = "726eacd6869fd9c21944009f3d6115ca93e3372a"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -31,7 +32,7 @@ ADDITIONAL_SOURCES = {
     "native/tests/core_performance_benchmark.cpp": RESOLUTION_REFERENCE,
     "native/src/basis_vm_main.cpp": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
     "native/include/mundo_x/infinite_address.hpp": INFINITE_REFERENCE,
-    "native/include/mundo_x/infinite_core.hpp": INTEGRATION_REFERENCE,
+    "native/include/mundo_x/infinite_core.hpp": UPGRADE_REFERENCE,
     "native/src/infinite_runner.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_address.cpp": INFINITE_REFERENCE,
     "native/tests/infinite_core.cpp": INFINITE_REFERENCE,
@@ -40,11 +41,13 @@ ADDITIONAL_SOURCES = {
     "native/include/mundo_x/infinite_bridge.h": INTEGRATION_REFERENCE,
     "native/include/mundo_x/infinite_bridge.hpp": INTEGRATION_REFERENCE,
     "native/include/mundo_x/infinite_program.hpp": INTEGRATION_REFERENCE,
-    "native/include/mundo_x/infinite_session.hpp": INTEGRATION_REFERENCE,
+    "native/include/mundo_x/infinite_session.hpp": UPGRADE_REFERENCE,
     "native/src/infinite_bridge.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_bridge.cpp": INTEGRATION_REFERENCE,
-    "native/tests/infinite_session.cpp": INTEGRATION_REFERENCE,
+    "native/tests/infinite_session.cpp": UPGRADE_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": INTEGRATION_REFERENCE,
+    "native/include/mundo_x/physics_world.hpp": UPGRADE_REFERENCE,
+    "native/tests/physics_world.cpp": UPGRADE_REFERENCE,
 }
 REVISED_SOURCES = {
     "native/include/mundo_x/compact_core.hpp": INTEGRATION_REFERENCE,
@@ -141,6 +144,14 @@ def verify_integrated_core(root):
             },
         },
         "sourceChangesFromOriginal": changes,
+        "verifiedUpgrade": {
+            "referenceCommit": UPGRADE_REFERENCE,
+            "scope": "Per-query-batch Pauli observer reuse plus deterministic finite physics foundation.",
+            "sourceReferenceCommits": {
+                name: reference for name, reference in sorted(expected.items())
+                if reference == UPGRADE_REFERENCE
+            },
+        },
         "sharedResolutionReferenceCommit": RESOLUTION_REFERENCE,
         "sharedResolutionGeometrySha256": _sha(resolution),
     }
