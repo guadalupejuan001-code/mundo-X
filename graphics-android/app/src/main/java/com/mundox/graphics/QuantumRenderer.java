@@ -35,7 +35,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         /** Actual framebuffer mode and its FIT destination, in Android top-left coordinates. */
         public final int resolutionMode,viewWidth,viewHeight,displayLeft,displayTop,displayWidth,displayHeight;
         public final long coreRevision,coreEpoch,frameNumber;
-        public final boolean infinite;
+        public final long fullPixels,shadedPixels;
+        public final boolean infinite,spatialCulling;
         /** CPU submission wall time by default; includes driver completion only when gpuSynchronized. */
         public final double drawMs;
         public final boolean gpuSynchronized;
@@ -44,6 +45,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             objectCount=r.count;width=r.width;height=r.height;qubits=r.core.qubits;
             observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;coreEpoch=r.uploadedEpoch;infinite=r.core.isInfinite();
             frameNumber=r.drawNumber;drawMs=elapsed;device=r.device;gpuSynchronized=r.synchronousTiming;
+            fullPixels=r.lastFullPixels;shadedPixels=r.lastShadedPixels;spatialCulling=r.lastSpatialCulling;
             resolutionMode=r.resolutionMode;viewWidth=r.viewWidth;viewHeight=r.viewHeight;
             displayLeft=r.display.left;displayTop=r.display.top;
             displayWidth=r.display.width;displayHeight=r.display.height;
@@ -176,6 +178,12 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private long seed=2026;
     private boolean framebufferDirty=true,editsDirty=true,failed=false;
     private boolean synchronousTiming=false,exporting=false;
+    // Exact work culling: legacy presentation outside the projected scene is
+    // already the framebuffer clear value, so those fragments need not run.
+    // COSMIC presentation keeps full-screen sky/ground shading and bypasses it.
+    private boolean spatialCulling=true,lastSpatialCulling=false;
+    private int cullLeft,cullBottom,cullRight,cullTop;
+    private long lastFullPixels=1,lastShadedPixels=1;
     private boolean overview=true;
     private float yaw=.67f,pitch=.65f,zoom=1f,timeValue=0f,strength=.25f;
     private float enabledStrength=.25f,overrideNear=.1f,overrideFar=10000,cameraFov=48;
@@ -433,6 +441,30 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         Matrix.setLookAtM(view,0,eye[0],eye[1],eye[2],target[0],target[1],target[2],up[0],up[1],up[2]);
         Matrix.perspectiveM(projection,0,cameraFov,aspect,near,far);Matrix.multiplyMM(vp,0,projection,0,view,0);
     }
+    private void updateSpatialCull(int fullWidth,int fullHeight){
+        cullLeft=0;cullBottom=0;cullRight=fullWidth;cullTop=fullHeight;lastSpatialCulling=false;
+        if(!spatialCulling||presentation!=PRESENTATION_LEGACY)return;
+        float halfGrid=(float)Math.ceil(Math.sqrt(count))*1.1f;
+        float maxHeight=5.18f*(1f+Math.abs(strength));
+        float angle=timeValue*.12f,cs=(float)Math.cos(angle),sn=(float)Math.sin(angle);
+        float minX=Float.POSITIVE_INFINITY,minY=Float.POSITIVE_INFINITY;
+        float maxX=Float.NEGATIVE_INFINITY,maxY=Float.NEGATIVE_INFINITY;
+        float[] local=new float[4],clip=new float[4];
+        for(int xi=0;xi<2;xi++)for(int yi=0;yi<2;yi++)for(int zi=0;zi<2;zi++){
+            float x=xi==0?-halfGrid:halfGrid,z=zi==0?-halfGrid:halfGrid;
+            local[0]=cs*x+sn*z;local[1]=yi==0?0f:maxHeight;local[2]=-sn*x+cs*z;local[3]=1f;
+            Matrix.multiplyMV(clip,0,vp,0,local,0);
+            if(!finite(clip[3])||clip[3]<=1e-5f)return; // near-plane crossing: full target is safest.
+            float nx=clip[0]/clip[3],ny=clip[1]/clip[3];
+            if(!finite(nx)||!finite(ny))return;
+            float px=(nx*.5f+.5f)*fullWidth,py=(ny*.5f+.5f)*fullHeight;
+            minX=Math.min(minX,px);maxX=Math.max(maxX,px);minY=Math.min(minY,py);maxY=Math.max(maxY,py);
+        }
+        final int pad=3;
+        cullLeft=Math.max(0,(int)Math.floor(minX)-pad);cullBottom=Math.max(0,(int)Math.floor(minY)-pad);
+        cullRight=Math.min(fullWidth,(int)Math.ceil(maxX)+pad);cullTop=Math.min(fullHeight,(int)Math.ceil(maxY)+pad);
+        lastSpatialCulling=true;
+    }
     private void drawState(int debug,int fullWidth,int fullHeight){
         glUseProgram(program);glBindVertexArray(vao);
         int side=(int)Math.ceil(Math.sqrt(count));
@@ -447,12 +479,22 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LESS);glDepthMask(true);
         glDisable(GL_SCISSOR_TEST);
         if(debug==1)glClearColor(0,0,0,1);else glClearColor(.067f,.086f,.075f,1);
+        updateSpatialCull(fullWidth,fullHeight);
     }
     private double drawTarget(int target,int tileWidth,int tileHeight,int originX,int originY,boolean wait){
         glBindFramebuffer(GL_FRAMEBUFFER,target);glViewport(0,0,tileWidth,tileHeight);
         glUniform2f(loc("uPixelOrigin"),originX,originY);
+        glDisable(GL_SCISSOR_TEST);
         if(wait)glFinish();
-        long started=System.nanoTime();glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
+        long started=System.nanoTime();glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+        long full=(long)tileWidth*tileHeight,shaded=full;
+        if(lastSpatialCulling){
+            int left=Math.max(cullLeft,originX),right=Math.min(cullRight,originX+tileWidth);
+            int bottom=Math.max(cullBottom,originY),top=Math.min(cullTop,originY+tileHeight);
+            shaded=Math.max(0,right-left)*(long)Math.max(0,top-bottom);
+            if(shaded>0){glEnable(GL_SCISSOR_TEST);glScissor(left-originX,bottom-originY,right-left,top-bottom);glDrawArrays(GL_TRIANGLES,0,3);}
+        }else glDrawArrays(GL_TRIANGLES,0,3);
+        glDisable(GL_SCISSOR_TEST);lastFullPixels=full;lastShadedPixels=shaded;
         if(wait)glFinish();
         double elapsed=(System.nanoTime()-started)/1e6;check("Observación");return elapsed;
     }
@@ -550,6 +592,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public FrameStats frameStats(){return latestFrame;}
     /** Explicit opt-in for a completion-time benchmark; normal frames never force glFinish. */
     public void setSynchronousTiming(boolean enabled){synchronousTiming=enabled;}
+    /** Test/diagnostic switch. It never changes project data or render quality. */
+    public void setSpatialCulling(boolean enabled){spatialCulling=enabled;}
     public void orbit(float dx,float dy){
         if(!finite(dx)||!finite(dy))throw new IllegalArgumentException("Movimiento de cámara inválido");
         yaw=(yaw+dx*.006f)%(float)(Math.PI*2);pitch=Math.max(.04f,Math.min(1.52f,pitch+dy*.005f));overrideEye=null;overrideTarget=null;cameraFov=48;
