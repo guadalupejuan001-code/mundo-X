@@ -186,14 +186,13 @@ public class ProceduralGameDemoActivity extends Activity {
 
         private int fbo, colorTex, depthRbo;
         private int cubeVbo, instanceVbo, groundVbo;
-        private int buildingProgram, groundProgram, skyProgram, birdProgram, postProgram;
+        private int buildingProgram, groundProgram, skyProgram, birdProgram;
         private int instanceCount = 0;
 
         private int bVP, bCam, bFog;
         private int gVP, gCam, gTime, gCenter, gSize;
         private int sTime, sRes, sAngles;
         private int birdVP, birdCam, birdTime;
-        private int pTex, pTexel;
 
         volatile float moveX = 0f;
         volatile float moveY = 0f;
@@ -345,18 +344,12 @@ public class ProceduralGameDemoActivity extends Activity {
                 "precision highp float; in float vAlpha; out vec4 fragColor;\n" +
                 "void main(){vec2 p=gl_PointCoord*2.0-1.0;float wing=abs(p.y+.45*abs(p.x));if(wing>.30||abs(p.x)>.92)discard;fragColor=vec4(.015,.020,.026,vAlpha);}\n";
 
-        private final String POST_FS =
-                "#version 300 es\n" +
-                "precision highp float; uniform sampler2D uTex; uniform vec2 uTexel; in vec2 vUv; out vec4 fragColor;\n" +
-                "void main(){vec3 c=texture(uTex,vUv).rgb;vec3 n=texture(uTex,vUv+vec2(0,uTexel.y)).rgb;vec3 s=texture(uTex,vUv-vec2(0,uTexel.y)).rgb;vec3 e=texture(uTex,vUv+vec2(uTexel.x,0)).rgb;vec3 w=texture(uTex,vUv-vec2(uTexel.x,0)).rgb;vec3 q=c*1.32-(n+s+e+w)*.080;float l=dot(q,vec3(.2126,.7152,.0722));q=mix(vec3(l),q,1.08);fragColor=vec4(clamp(q,0.0,1.0),1.0);}\n";
-
         @Override
         public void onSurfaceCreated(GL10 unused, EGLConfig config) {
             skyProgram = link(SKY_VS, SKY_FS);
             buildingProgram = link(BUILDING_VS, BUILDING_FS);
             groundProgram = link(GROUND_VS, GROUND_FS);
             birdProgram = link(BIRD_VS, BIRD_FS);
-            postProgram = link(SKY_VS, POST_FS);
 
             bVP = GLES30.glGetUniformLocation(buildingProgram, "uVP");
             bCam = GLES30.glGetUniformLocation(buildingProgram, "uCam");
@@ -375,9 +368,6 @@ public class ProceduralGameDemoActivity extends Activity {
             birdVP = GLES30.glGetUniformLocation(birdProgram, "uVP");
             birdCam = GLES30.glGetUniformLocation(birdProgram, "uCam");
             birdTime = GLES30.glGetUniformLocation(birdProgram, "uTime");
-
-            pTex = GLES30.glGetUniformLocation(postProgram, "uTex");
-            pTexel = GLES30.glGetUniformLocation(postProgram, "uTexel");
 
             int[] ids = new int[3];
             GLES30.glGenBuffers(3, ids, 0);
@@ -674,15 +664,13 @@ public class ProceduralGameDemoActivity extends Activity {
             GLES30.glDisable(GLES30.GL_DEPTH_TEST);
             GLES30.glDrawArrays(GLES30.GL_POINTS,0,52);
 
-            // Upscale + sharpen
+            // Present the completed scene directly, with linear upscaling.
+            // This transfer does not depend on the instanced draw's vertex state.
+            GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER,fbo);
+            GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER,0);
+            GLES30.glBlitFramebuffer(0,0,renderW,renderH,0,0,width,height,
+                    GLES30.GL_COLOR_BUFFER_BIT,GLES30.GL_LINEAR);
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER,0);
-            GLES30.glViewport(0,0,width,height);
-            GLES30.glUseProgram(postProgram);
-            GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D,colorTex);
-            GLES30.glUniform1i(pTex,0);
-            GLES30.glUniform2f(pTexel,1f/renderW,1f/renderH);
-            GLES30.glDrawArrays(GLES30.GL_TRIANGLES,0,3);
 
             if (now-hudNs>350_000_000L) {
                 hudNs=now;
