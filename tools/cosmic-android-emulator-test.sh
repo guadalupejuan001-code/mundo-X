@@ -51,17 +51,43 @@ printf 'no\n' | "$cosmic_sdk/cmdline-tools/latest/bin/avdmanager" create avd --f
   -gpu swiftshader -no-snapshot -memory 2048 -cores 2 \
   > "$cosmic_evidence/emulator.log" 2>&1 &
 cosmic_emulator_pid=$!
+cosmic_runtime_collected=false
 
 cosmic_collect() {
   timeout 15 "$cosmic_adb" -s "$cosmic_serial" logcat -d > "$cosmic_evidence/logcat.txt" 2>&1 || true
   timeout 15 "$cosmic_adb" -s "$cosmic_serial" shell dumpsys meminfo com.mundox.cosmic \
     > "$cosmic_evidence/app-memory.txt" 2>&1 || true
   if [[ -n "$cosmic_runtime" ]]; then
-    if timeout 20 "$cosmic_adb" -s "$cosmic_serial" exec-out run-as com.mundox.cosmic \
-        tar -C files -cf - "$cosmic_runtime" > "$cosmic_evidence/runtime-evidence.tar" \
-        2> "$cosmic_evidence/evidence-pull.log"; then
-      tar -xf "$cosmic_evidence/runtime-evidence.tar" -C "$cosmic_evidence" --strip-components=1 || true
-    fi
+    [[ "$cosmic_runtime_collected" == true ]] && return 0
+    local cosmic_copy_attempt cosmic_extract
+    # adb may exit successfully after a truncated stream. Validate and extract
+    # a complete attempt before exposing it to the evidence verifier.
+    for cosmic_copy_attempt in 1 2 3; do
+      printf 'Runtime evidence attempt %s/3 (%s)\n' "$cosmic_copy_attempt" "$cosmic_runtime" \
+        >> "$cosmic_evidence/evidence-pull.log"
+      cosmic_extract="$(mktemp -d "$cosmic_evidence/runtime-extract.XXXXXX")"
+      if timeout 20 "$cosmic_adb" -s "$cosmic_serial" exec-out run-as com.mundox.cosmic \
+          tar -C files -cf - "$cosmic_runtime" > "$cosmic_evidence/runtime-evidence.tar.partial" \
+          2>> "$cosmic_evidence/evidence-pull.log" \
+          && tar -tf "$cosmic_evidence/runtime-evidence.tar.partial" >/dev/null \
+            2>> "$cosmic_evidence/evidence-pull.log" \
+          && tar -xf "$cosmic_evidence/runtime-evidence.tar.partial" -C "$cosmic_extract" \
+            --strip-components=1 --no-same-owner \
+            2>> "$cosmic_evidence/evidence-pull.log" \
+          && [[ -s "$cosmic_extract/report.json" ]] \
+          && cp -a "$cosmic_extract/." "$cosmic_evidence/" \
+          && mv "$cosmic_evidence/runtime-evidence.tar.partial" "$cosmic_evidence/runtime-evidence.tar"; then
+        rm -rf -- "$cosmic_extract"
+        cosmic_runtime_collected=true
+        return 0
+      fi
+      rm -rf -- "$cosmic_extract"
+      printf 'Incomplete runtime evidence; report.json and a valid archive are required.\n' \
+        >> "$cosmic_evidence/evidence-pull.log"
+      if [[ "$cosmic_copy_attempt" != 3 ]]; then sleep 2; fi
+    done
+    echo 'Could not collect complete runtime evidence after three attempts.' >&2
+    return 1
   else
     timeout 30 "$cosmic_adb" -s "$cosmic_serial" pull \
       /sdcard/Android/data/com.mundox.cosmic/files/. "$cosmic_evidence/" \
@@ -69,7 +95,7 @@ cosmic_collect() {
   fi
 }
 cosmic_cleanup() {
-  cosmic_collect
+  cosmic_collect || true
   timeout 10 "$cosmic_adb" -s "$cosmic_serial" emu kill >/dev/null 2>&1 \
     || kill "$cosmic_emulator_pid" 2>/dev/null || true
 }

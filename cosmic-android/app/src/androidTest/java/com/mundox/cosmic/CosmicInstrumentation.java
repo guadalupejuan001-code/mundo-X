@@ -363,12 +363,18 @@ public final class CosmicInstrumentation extends Instrumentation {
             click("nav_motor");gl(()->activity.core.executeInfinite("h "+a+"\n"));NativeCore mutated=activity.core;
             click("nav_archivo");documentAction("project_open",Intent.ACTION_OPEN_DOCUMENT,uri);
             await(()->activity.core!=mutated&&activity.core.isInfinite()&&activity.renderer.hasFrame,"infinite SAF import");click("nav_motor");
-            sameWorld(saved,world(),"Infinite SAF round trip lost current state");
+            World imported=world();
+            writeBytes("cosmic-infinite-saf-before.json",saved.normalized);
+            writeBytes("cosmic-infinite-saf-after.json",imported.normalized);
+            sameNative(saved,imported,"Infinite SAF round trip changed the native snapshot or observations");
+            require(Arrays.equals(saved.graphics.observables,imported.graphics.observables),"Infinite SAF round trip changed the observable program");
+            // A portable lookAt camera stores eye/target, not its inactive orbit preferences.
+            require(Arrays.equals(saved.normalized,imported.normalized),"Infinite SAF round trip changed the portable project");
             require(savedImage.changed(frame(false))==0&&privateString(activity,"addressA").equals(a),"Infinite import lost pixels or full address focus");
             // Recreate the real Activity and restore its private session, including the opaque RNG state.
             CosmicActivity original=activity;mainSync(original::recreate);
             await(()->ownerMonitor.getLastActivity() instanceof CosmicActivity&&ownerMonitor.getLastActivity()!=original,"infinite Activity recreation");
-            refreshOwner();click("nav_motor");sameWorld(saved,world(),"Private infinite snapshot was not restored");
+            refreshOwner();click("nav_motor");sameWorld(imported,world(),"Private infinite snapshot was not restored");
             require(savedImage.changed(frame(false))==0&&privateString(activity,"addressA").equals(a)&&privateString(activity,"addressB").equals(b),"Recreation changed image or decimal focus");
             String continuation="h "+a+"\nmeasure "+a+"\nh "+a+"\nmeasure "+a+"\n";
             try(NativeCore reference=new NativeCore(saved.core)){
