@@ -492,7 +492,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         seed=value;
     }
     public void coupling(boolean enabled){strength=enabled?enabledStrength:0;}
-    public void pick(int x,int y){selected=-1;pickX=x;pickY=y;pickPending=true;}
+    public void pick(int x,int y){pickX=x;pickY=y;pickPending=true;}
     public void editSelected(int action){
         if(action==-1)action=7;
         if(action<0||action>7)throw new IllegalArgumentException("Edición inválida");

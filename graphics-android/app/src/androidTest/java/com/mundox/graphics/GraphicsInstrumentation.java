@@ -1083,8 +1083,21 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private void saveScreen(String name) throws Exception {
-        Bitmap bitmap = getUiAutomation().takeScreenshot();
-        if (bitmap == null) throw new AssertionError("Cannot capture activity screenshot");
+        // SurfaceFlinger can transiently refuse the display capture just after
+        // rotation even though the app's FBO and logical state are complete.
+        // Retry only an unavailable compositor image, never a pixel mismatch.
+        waitForIdleSync();
+        Bitmap bitmap = null;
+        int attempts = 0;
+        while (bitmap == null && attempts < 5) {
+            attempts++;
+            bitmap = getUiAutomation().takeScreenshot();
+            if (bitmap == null && attempts < 5) SystemClock.sleep(200);
+        }
+        JSONObject history = metrics.optJSONObject("activityScreenshotAttempts");
+        if (history == null) { history = new JSONObject(); metrics.put("activityScreenshotAttempts", history); }
+        history.put(name, attempts);
+        if (bitmap == null) throw new AssertionError("Cannot capture activity screenshot after five compositor requests");
         try { saveBitmap(name, bitmap); } finally { bitmap.recycle(); }
     }
 
