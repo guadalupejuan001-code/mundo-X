@@ -60,9 +60,11 @@ class InfiniteSession {
     validate_query_transport(observables);
     std::lock_guard<std::mutex> lock(mutex_);
     Observation result;
-    result.values.reserve(observables.size());
+    std::vector<InfiniteCore::QueryRef> queries;
+    queries.reserve(observables.size());
     for (const auto& observable : observables)
-      result.values.push_back(core_.expectation(observable.terms, observable.sign));
+      queries.push_back({&observable.terms, observable.sign});
+    result.values = core_.expectations(queries);
     result.stats = core_.stats();
     result.revision = result.stats.revision;
     result.epoch = epoch_;
