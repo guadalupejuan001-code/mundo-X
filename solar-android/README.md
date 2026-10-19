@@ -1,10 +1,10 @@
-# COSMIC X Solar 4K
+# COSMIC X Solar 8K
 
 Explorador del sistema solar para Android, construido como una nueva aplicación
-de **COSMIC X Engine**. Integra el núcleo original de Mundo X y amplía su
+de **COSMIC X Engine**. Integra el InfiniteCore por reglas de Mundo X y amplía su
 observador gráfico con planetas esféricos, anillos, órbitas y capas magnéticas.
 Esta versión comparte la infraestructura de resolución del motor **4K/8K** y
-ofrece un modo **Solar 4K UHD**, un mapa orbital interactivo y una cámara de
+ofrece modos **Solar 4K UHD y Solar 8K UHD**, un mapa orbital interactivo y una cámara de
 descenso para los ocho planetas y las catorce lunas del catálogo.
 
 ## Explorar
@@ -25,6 +25,7 @@ Miranda. La aplicación funciona sin conexión y no solicita permiso de Internet
 | Altitud / Subir / Bajar | Cambiar la altura de la cámara de descenso |
 | Regresar a órbita | Recuperar la cámara exterior y sus capas |
 | Calidad → 4K UHD | Renderizar a 3840 × 2160 o 2160 × 3840 según orientación |
+| Calidad → 8K UHD | Renderizar a 7680 × 4320 o 4320 × 7680 según orientación, si la GPU lo admite |
 | Guardar PNG | Exportar el framebuffer a una imagen sin los controles |
 | Volar | Activar un control táctil para avanzar, retroceder y desplazarse |
 | Campos | Mostrar el entorno magnético del destino |
@@ -40,9 +41,9 @@ completo ocuparían menos de un píxel. La escala de visualización no cambia lo
 datos del catálogo.
 
 La calidad Ahorro, Equilibrada o Alta limita la dimensión mayor del framebuffer
-a 640, 960 o 1440 píxeles. **4K UHD** solicita una imagen de 8.294.400 píxeles,
-ajustada a la pantalla sin deformarla. Si la GPU rechaza la asignación, el motor
-conserva una resolución válida y avisa. Estos modos definen la resolución de la
+a 640, 960 o 1440 píxeles. **4K UHD** solicita 8.294.400 píxeles y **8K UHD**
+solicita 33.177.600. Ambos se ajustan a la pantalla sin deformarse. Si la GPU
+rechaza la asignación, el motor conserva la última resolución válida y avisa. Estos modos definen la resolución de la
 imagen; el rendimiento depende del dispositivo. El inicio utiliza Equilibrada
 para que el usuario pueda activar UHD desde el mismo explorador.
 
@@ -101,11 +102,12 @@ Se compilan directamente, sin una copia divergente:
 
 La cadena activa es:
 
-`SolarActivity → QuantumSolarBridge → NativeCore → JNI → EngineSession / CompactCore`.
+`SolarActivity → QuantumSolarBridge → NativeCore.infinite → JNI → InfiniteSession → InfiniteCore`.
 
-El núcleo compartido admite registros de hasta **1.000 qubits** en Android.
-`QuantumSolarBridge` utiliza una preparación solar de **ocho qubits** mediante puertas
-originales y consulta ocho observables de Pauli. Los modos Base, Superposición,
+Solar utiliza ahora el **dominio infinito por reglas** de InfiniteCore. No existe
+un último índice lógico. `QuantumSolarBridge` toca sólo ocho direcciones para los
+presets visuales y consulta ocho observables dispersos; el resto del fondo no se
+materializa. Los modos Base, Superposición,
 Entrelazado y Fase cambian ese estado. El observador consume sus resultados
 para el muestreo y la animación de trazas. Consultar el estado no añade puertas
 ni colapsa el registro. La estructura nativa ocupa una cantidad pequeña de
@@ -137,17 +139,18 @@ Requisitos de la compilación reproducible:
 | ABI | arm64-v8a y x86_64 |
 
 ```sh
-gradle -p solar-android --no-daemon -Psolar4kStandalone=true \
+gradle -p solar-android --no-daemon -Psolar8kStandalone=true \
   :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-La variante entregada tiene paquete `com.cosmicx.solar.uhd`, versión **1.1.0**
-y nombre **COSMIC X Solar 4K**. Puede instalarse junto al Solar anterior
-(`com.cosmicx.solar`) y al motor gráfico independiente. Omitir la propiedad
-`solar4kStandalone` construye la identidad solar original. Las compilaciones
+La variante 8K tiene paquete `com.cosmicx.solar.ultra`, versión **1.2.0** y
+nombre **COSMIC X Solar 8K**. La variante 4K conserva
+`com.cosmicx.solar.uhd`. Ambas pueden instalarse junto al Solar normal
+(`com.cosmicx.solar`). Omitir `solar4kStandalone` y `solar8kStandalone`
+construye la identidad solar original. Las compilaciones
 de desarrollo usan firma debug.
 
-El workflow [solar-4k.yml](../.github/workflows/solar-4k.yml) construye
+Los workflows [solar-4k.yml](../.github/workflows/solar-4k.yml) y [solar-8k.yml](../.github/workflows/solar-8k.yml) construyen
 el APK, verifica firma y ABI, registra SHA-256 y procedencia del núcleo, y lo
 prueba en Android 15 con el driver de software SwiftShader y 2 GB configurados
 para el emulador. Esas comprobaciones no miden el rendimiento de un Samsung A16.
