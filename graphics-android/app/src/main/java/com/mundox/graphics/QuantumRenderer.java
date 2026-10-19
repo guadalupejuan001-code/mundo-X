@@ -187,6 +187,12 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private int pickX=-1,pickY=-1;
     private boolean pickPending;
     private long drawNumber;
+    // Exact framebuffer reuse: when every input that can affect pixels is
+    // unchanged, keep the already completed color/depth image instead of
+    // launching the full fragment traversal again. This never substitutes a
+    // lower-resolution image and is disabled for synchronized benchmarks,
+    // picking and captures.
+    private long renderedVisualKey=Long.MIN_VALUE,reusedFrames;
     private volatile FrameStats latestFrame;
     public volatile boolean hasFrame;
     public volatile String failure;
@@ -471,10 +477,32 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         for(int j=0;j<data.length;j+=4)if((data[j]&255)==255&&(data[j+1]&255)==0&&(data[j+2]&255)==255)throw new IllegalStateException("Se agotó el recorrido de celdas");
         return new Capture(width,height,data);
     }
+    private static long hashStep(long hash,long value){return (hash^value)*0x100000001b3L;}
+    private long visualKey(){
+        long hash=0xcbf29ce484222325L;
+        hash=hashStep(hash,width);hash=hashStep(hash,height);hash=hashStep(hash,count);
+        hash=hashStep(hash,selected);hash=hashStep(hash,seed);hash=hashStep(hash,presentation);
+        hash=hashStep(hash,overview?1:0);
+        hash=hashStep(hash,Float.floatToIntBits(yaw));hash=hashStep(hash,Float.floatToIntBits(pitch));
+        hash=hashStep(hash,Float.floatToIntBits(zoom));hash=hashStep(hash,Float.floatToIntBits(timeValue));
+        hash=hashStep(hash,Float.floatToIntBits(strength));hash=hashStep(hash,Float.floatToIntBits(cameraFov));
+        hash=hashStep(hash,Float.floatToIntBits(overrideNear));hash=hashStep(hash,Float.floatToIntBits(overrideFar));
+        if(overrideEye!=null)for(float value:overrideEye)hash=hashStep(hash,Float.floatToIntBits(value));
+        if(overrideTarget!=null)for(float value:overrideTarget)hash=hashStep(hash,Float.floatToIntBits(value));
+        hash=hashStep(hash,coefficients==null?-1:coefficients.length);
+        if(coefficients!=null)for(float value:coefficients)hash=hashStep(hash,Float.floatToIntBits(value));
+        hash=hashStep(hash,edits.size());
+        for(Map.Entry<Integer,Integer> e:edits.entrySet()){
+            hash=hashStep(hash,e.getKey());hash=hashStep(hash,e.getValue());
+        }
+        return hash;
+    }
+
     @Override public void onDrawFrame(GL10 unused){
         if(failed||program==0)return;
         try{
             if(framebufferDirty)sizeFramebuffer();sync();camera();
+            boolean forceColorRedraw=pickPending;
             if(pickPending){
                 if(display.contains(pickX,pickY)){
                     draw(1);int x=display.framebufferX(pickX),y=height-1-display.framebufferY(pickY);
@@ -486,7 +514,13 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                 pickPending=false;pickX=-1;pickY=-1;
             }
             CaptureListener requested=capture;int debug=requested==null?0:captureDebug;
-            double elapsed=draw(debug);Capture pixels=requested==null?null:read();
+            long visualKey=visualKey();
+            boolean reuse=hasFrame&&!forceColorRedraw&&requested==null&&!synchronousTiming
+                    &&visualKey==renderedVisualKey;
+            double elapsed=reuse?0.0:draw(debug);
+            if(reuse)reusedFrames++;
+            else if(debug==0)renderedVisualKey=visualKey;
+            Capture pixels=requested==null?null:read();
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
             glBindFramebuffer(GL_READ_FRAMEBUFFER,fbo);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
             int bottom=viewHeight-display.top-display.height;
@@ -496,7 +530,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             hasFrame=true;drawNumber++;
             latestFrame=new FrameStats(this,elapsed);
             if(requested!=null)capture=null;
-            listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %.1f ms %s\n%s · %d observables · estado %s%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",elapsed,synchronousTiming?"GPU completada":"CPU envío",core.domainLabel(),coefficients.length,Long.toUnsignedString(uploadedCore),selected>=0?" · ID "+selected:"",device,resolutionMessage==null?"":"\n"+resolutionMessage));
+            listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %.1f ms %s%s\n%s · %d observables · estado %s%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",elapsed,synchronousTiming?"GPU completada":"CPU envío",reuse?" · framebuffer reutilizado":"",core.domainLabel(),coefficients.length,Long.toUnsignedString(uploadedCore),selected>=0?" · ID "+selected:"",device,resolutionMessage==null?"":"\n"+resolutionMessage));
             if(requested!=null)requested.captured(pixels);
         }catch(Throwable e){error(e);}
     }
@@ -529,7 +563,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             if(core.isInfinite())core.resetInfinite(core.infiniteStats().background);
             else {core.resetGraph();observables=core.visualProgram();}
         }
-        uploadedCore=-1;uploadedEpoch=-1;uploadedProgram=-1;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;pickPending=false;timeValue=0;
+        uploadedCore=-1;uploadedEpoch=-1;uploadedProgram=-1;renderedVisualKey=Long.MIN_VALUE;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;pickPending=false;timeValue=0;
     }
     public void setTime(float seconds){
         if(!finite(seconds)||Math.abs(seconds)>1_000_000)throw new IllegalArgumentException("Tiempo fuera del rango del proyecto");
