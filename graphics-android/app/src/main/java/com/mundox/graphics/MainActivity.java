@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -18,8 +20,10 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -29,6 +33,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
@@ -59,6 +65,9 @@ public final class MainActivity extends Activity {
     private long lastTick;
     private volatile boolean animationFrameQueued;
     private String restoreMessage;
+    private volatile String projectName="Mundo X · mundo inicial";
+    private long projectLoadSerial;
+    private static final int OPEN_PROJECT=701, SAVE_PROJECT=702;
 
     private static final class SavedSession implements Serializable {
         private static final long serialVersionUID=1L;
@@ -67,6 +76,7 @@ public final class MainActivity extends Activity {
         boolean overview,coupled;
         int qubit,quality;
         float animationTime;
+        String projectName;
     }
 
     @Override public void onCreate(Bundle state) {
@@ -74,7 +84,7 @@ public final class MainActivity extends Activity {
         sessionFile=new AtomicFile(new File(getFilesDir(),"graphics-session-v1.bin"));
         ActivityManager manager=(ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
         if(manager.getDeviceConfigurationInfo().reqGlEsVersion<0x30000){
-            TextView text=label("Mundo X Graphics necesita OpenGL ES 3.0 en este dispositivo.",18,PAPER);
+            TextView text=label("COSMIC X Engine necesita OpenGL ES 3.0 en este dispositivo.",18,PAPER);
             text.setPadding(dp(24),dp(64),dp(24),dp(24));text.setBackgroundColor(INK);setContentView(text);return;
         }
         try {
@@ -82,6 +92,7 @@ public final class MainActivity extends Activity {
                 ?(SavedSession)getLastNonConfigurationInstance():readSession();
             if(previous!=null){
                 core=new NativeCore(previous.core);
+                if(previous.projectName!=null)projectName=previous.projectName;
                 overview=previous.visual.overview;coupled=previous.visual.coupling;
                 qubit=Math.max(0,Math.min(core.qubits-1,previous.qubit));quality=previous.visual.resolutionLimit;
                 animationTime=previous.visual.time;savedSession=previous;
@@ -95,7 +106,7 @@ public final class MainActivity extends Activity {
             saveProtected=true;restoreMessage="No se pudo recuperar la sesión. Tu archivo se conserva; Restablecer permite empezar otra.";
             try{core=new NativeCore(20);core.resetGraph();renderer=new QuantumRenderer(this,core,this::showStatus);}
             catch(Throwable nativeError){
-                TextView text=label("No se pudo iniciar Mundo X Graphics.\n"+nativeError,16,PAPER);
+                TextView text=label("No se pudo iniciar COSMIC X Engine.\n"+nativeError,16,PAPER);
                 text.setPadding(dp(24),dp(64),dp(24),dp(24));text.setBackgroundColor(INK);setContentView(text);return;
             }
         }
@@ -113,10 +124,12 @@ public final class MainActivity extends Activity {
         });
         LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);heading.setPadding(dp(16),dp(10),dp(12),dp(8));
         LinearLayout title=new LinearLayout(this);title.setOrientation(LinearLayout.VERTICAL);
-        TextView name=label("MUNDO X",11,LIME);name.setLetterSpacing(.22f);
-        TextView graphics=label("Graphics",25,PAPER);graphics.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        title.addView(name);title.addView(graphics);heading.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        TextView version=label("0.1.1  /  ANDROID",10,MUTED);version.setLetterSpacing(.07f);heading.addView(version);root.addView(heading);
+        TextView name=label("COSMIC X ENGINE",21,PAPER);name.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        TextView graphics=label("Computación cuántica",12,LIME);
+        TextView project=label(projectName,10,MUTED);project.setSingleLine(true);project.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.addView(name);title.addView(graphics);title.addView(project);heading.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        TextView version=label("0.2.0",10,MUTED);version.setLetterSpacing(.07f);heading.addView(version);root.addView(heading);
+        TextView visualLabel=label("MOTOR GRÁFICO CUÁNTICO",10,LIME);visualLabel.setLetterSpacing(.10f);visualLabel.setPadding(dp(16),0,0,dp(4));root.addView(visualLabel);
 
         FrameLayout viewport=new FrameLayout(this);viewport.setBackgroundColor(INK);
         surface=new GLSurfaceView(this);surface.setEGLContextClientVersion(3);
@@ -133,6 +146,14 @@ public final class MainActivity extends Activity {
         installGestures();
 
         LinearLayout controls=new LinearLayout(this);controls.setOrientation(LinearLayout.VERTICAL);controls.setPadding(dp(8),dp(6),dp(8),dp(5));
+        LinearLayout projects=row();
+        projects.addView(button("Nuevo",this::newProject));
+        projects.addView(button("Abrir .cosmic",this::openProject));
+        projects.addView(button("Guardar",this::exportProject));
+        projects.addView(button("Ejemplos",()->new AlertDialog.Builder(this).setTitle("Proyectos del mismo núcleo y motor gráfico")
+            .setItems(new String[]{"Observador Bell · 2 qubits","Ciudad GHZ · 3 qubits"},(dialog,index)->
+                loadAssetProject(index==0?"bell-observer.cosmic":"ghz-city.cosmic")).show()));
+        controls.addView(scroll(projects));
         LinearLayout navigation=row();
         viewButton=button(overview?"Vista: global":"Vista: calle",()->{
             overview=!overview;viewButton.setText(overview?"Vista: global":"Vista: calle");action(()->renderer.toggleView());
@@ -151,6 +172,7 @@ public final class MainActivity extends Activity {
             }).show()));
         controls.addView(scroll(navigation));
 
+        TextView coreLabel=label("NÚCLEO CUÁNTICO",10,LIME);coreLabel.setLetterSpacing(.10f);coreLabel.setPadding(dp(6),dp(4),0,dp(2));controls.addView(coreLabel);
         LinearLayout quantum=row();
         qubitButton=button("Qubit "+qubit,()->{
             String[] names=new String[core.qubits];for(int q=0;q<names.length;q++)names[q]="Qubit "+q;
@@ -161,12 +183,12 @@ public final class MainActivity extends Activity {
         quantum.addView(button("H",()->applyGate(0)));quantum.addView(button("S",()->applyGate(1)));
         quantum.addView(button("X",()->applyGate(2)));quantum.addView(button("Z",()->applyGate(3)));
         quantum.addView(button("Y",()->applyGate(6)));
-        quantum.addView(button("CX / CZ",()->{
+        Button pairGate=button("CX / CZ",()->{
             String[] gates={"CX · destino Q"+((qubit+1)%core.qubits),"CZ · destino Q"+((qubit+1)%core.qubits)};
             new AlertDialog.Builder(this).setTitle("Conectar con el siguiente qubit").setItems(gates,(d,index)->{
                 final int control=qubit,target=(qubit+1)%core.qubits;action(()->renderer.gate(index==0?4:5,control,target));
             }).show();
-        }));
+        });pairGate.setEnabled(core.qubits>1);pairGate.setAlpha(core.qubits>1?1f:.4f);quantum.addView(pairGate);
         couplingButton=button(coupled?"Acoplamiento: sí":"Acoplamiento: no",()->{
             coupled=!coupled;couplingButton.setText(coupled?"Acoplamiento: sí":"Acoplamiento: no");final boolean active=coupled;action(()->renderer.coupling(active));
         });quantum.addView(couplingButton);controls.addView(scroll(quantum));
@@ -175,16 +197,157 @@ public final class MainActivity extends Activity {
         editing.addView(button("Subir objeto",()->edit(1)));editing.addView(button("Ocultar",()->edit(-1)));
         editing.addView(button("Restaurar ID",()->edit(0)));
         editing.addView(button("Restablecer",()->new AlertDialog.Builder(this).setTitle("Restablecer el mundo")
-            .setMessage("Se restaurará el estado inicial del núcleo y se borrarán las ediciones de objetos.")
+            .setMessage("Se preparará el estado de grafo con los qubits actuales y se borrarán las ediciones de objetos.")
             .setNegativeButton("Cancelar",null).setPositiveButton("Restablecer",(d,w)->{
                 animate=false;animateButton.setText("Animar");main.removeCallbacks(tick);animationTime=0;saveProtected=false;restoreMessage=null;
                 action(()->renderer.reset());
             }).show()));
-        editing.addView(button("Información",()->new AlertDialog.Builder(this).setTitle("Mundo X Graphics 0.1.1")
-            .setMessage("El núcleo emulado de 20 qubits aporta observables a la geometría y al color. Las puertas modifican ese mismo estado.\n\nEl mundo contiene hasta 1.048.576 cajas con identidad estable. Toca una caja para editarla. Cámara, puertas y ediciones se conservan al cerrar la app.\n\nLa calidad cambia la resolución de la imagen; el número de objetos se elige por separado. Los milisegundos muestran el dibujo sincronizado de ese fotograma, no los FPS completos.\n\nAutor de la idea y dirección: X.")
+        editing.addView(button("Información",()->new AlertDialog.Builder(this).setTitle("COSMIC X Engine · 0.2.0")
+            .setMessage("Computación cuántica de Mundo X\n\nNúcleo cuántico: el proyecto activo tiene "+core.qubits+" qubits emulados. Sus puertas modifican el estado compartido.\n\nMotor gráfico cuántico: observa ese estado y reconstruye el mundo por reglas e IDs. Mover la cámara conserva el núcleo.\n\nLos archivos .cosmic reúnen el estado, sus operaciones, los observables originales, el mundo y la cámara. Puedes abrir el mismo proyecto en Android y en el visor de escritorio.\n\nLa calidad controla la resolución. El tiempo mostrado corresponde al dibujo de un fotograma.\n\nIdea, creación y dirección del proyecto: X. Desarrollado con asistencia de IA sobre el código propio de Mundo X.")
             .setPositiveButton("Entendido",null).show()));controls.addView(scroll(editing));
         root.addView(controls);setContentView(root);root.requestApplyInsets();
         if(restoreMessage!=null)showStatus(restoreMessage);
+    }
+
+    private void openProject(){
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+        try{startActivityForResult(intent,OPEN_PROJECT);}catch(Exception error){showStatus("No se pudo abrir el selector: "+error.getMessage());}
+    }
+
+    private void loadAssetProject(String file){
+        final long serial=++projectLoadSerial;
+        storage.execute(()->{
+            try(InputStream input=getAssets().open("projects/"+file)){prepareProject(CosmicProject.read(input),serial);}
+            catch(Exception error){showStatus("No se pudo abrir el proyecto: "+error.getMessage());}
+        });
+    }
+
+    private void newProject(){
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(18),dp(4),dp(18),0);
+        EditText name=field(form,"Nombre","Mundo X · nuevo",false);
+        EditText qubits=field(form,"Qubits del proyecto · 1 a 256","20",true);
+        EditText objects=field(form,"Objetos · 1 a 1.048.576","1000000",true);
+        EditText seed=field(form,"Semilla · 0 a 4.294.967.295","2026",true);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Nuevo proyecto").setView(form)
+            .setNegativeButton("Cancelar",null).setPositiveButton("Crear",null).create();
+        dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{
+                final String title=name.getText().toString().trim();
+                final int n=Integer.parseInt(qubits.getText().toString()),count=Integer.parseInt(objects.getText().toString());
+                final long worldSeed=Long.parseLong(seed.getText().toString());
+                if(n<1||n>256||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)
+                    throw new IllegalArgumentException("Revisa los rangos indicados");
+                final long serial=++projectLoadSerial;
+                dialog.dismiss();
+                storage.execute(()->{
+                    try(NativeCore prepared=new NativeCore(n)){
+                        prepared.resetGraph();QuantumRenderer observer=new QuantumRenderer(this,prepared,this::showStatus);
+                        observer.objectCount(count);observer.worldSeed(worldSeed);
+                        prepareProject(CosmicProject.fromSnapshots(title,prepared.snapshot(),observer.snapshot()),serial);
+                    }catch(Exception error){showStatus("No se pudo crear el proyecto: "+error.getMessage());}
+                });
+            }catch(Exception error){Toast.makeText(this,error.getMessage(),Toast.LENGTH_LONG).show();}
+        }));
+        dialog.show();
+    }
+
+    private EditText field(LinearLayout form,String label,String value,boolean number){
+        TextView caption=label(label,12,MUTED);form.addView(caption);
+        EditText input=new EditText(this);input.setText(value);input.setTextColor(PAPER);input.setSingleLine(true);
+        input.setInputType(number?android.text.InputType.TYPE_CLASS_NUMBER:android.text.InputType.TYPE_CLASS_TEXT);
+        form.addView(input);return input;
+    }
+
+    private void prepareProject(CosmicProject.Document project,long serial) throws Exception{
+        NativeCore candidate=new NativeCore(project.core);
+        try{
+            candidate.query(project.graphics.observables);
+            QuantumRenderer observer=new QuantumRenderer(this,candidate,this::showStatus,project.graphics);
+            main.post(()->{
+                if(isFinishing()||isDestroyed()||serial!=projectLoadSerial){candidate.close();return;}
+                installProject(project,candidate,observer);
+            });
+        }catch(Throwable error){candidate.close();throw error;}
+    }
+
+    /** Commit a fully validated candidate on the UI thread after the old GL thread pauses. */
+    private void installProject(CosmicProject.Document project,NativeCore candidate,QuantumRenderer observer){
+        main.removeCallbacks(tick);animate=false;animationFrameQueued=false;
+        GLSurfaceView previousSurface=surface;NativeCore previousCore=core;
+        if(previousSurface!=null){
+            previousSurface.onPause();
+            // Detach joins the previous GL thread before its borrowed core is replaced.
+            if(previousSurface.getParent() instanceof ViewGroup)
+                ((ViewGroup)previousSurface.getParent()).removeView(previousSurface);
+        }
+        core=candidate;renderer=observer;projectName=project.name;overview=project.graphics.overview;
+        coupled=project.graphics.coupling;quality=project.graphics.resolutionLimit;qubit=0;animationTime=project.graphics.time;
+        saveProtected=false;restoreMessage=null;
+        SavedSession current=new SavedSession();current.core=project.core;current.visual=project.graphics;
+        current.projectName=project.name;current.qubit=0;current.quality=quality;current.animationTime=animationTime;
+        current.overview=overview;current.coupled=coupled;savedSession=current;
+        buildScreen();if(resumed)surface.onResume();
+        if(previousCore!=null)previousCore.close();
+        surface.queueEvent(this::captureSession);surface.requestRender();
+    }
+
+    /** Instrumentation uses the same candidate validation and UI commit as file imports. */
+    void installProjectForTest(CosmicProject.Document project) throws Exception{
+        NativeCore candidate=new NativeCore(project.core);
+        try{
+            candidate.query(project.graphics.observables);
+            QuantumRenderer observer=new QuantumRenderer(this,candidate,this::showStatus,project.graphics);
+            ++projectLoadSerial;installProject(project,candidate,observer);
+        }catch(Throwable error){if(core!=candidate)candidate.close();throw error;}
+    }
+
+    private AtomicFile pendingExportFile(){return new AtomicFile(new File(getCacheDir(),"cosmic-export-pending.json"));}
+    private void exportProject(){
+        if(surface==null)return;
+        surface.queueEvent(()->{
+            try{
+                final byte[] bytes=CosmicProject.encode(CosmicProject.fromSnapshots(projectName,core.snapshot(),renderer.snapshot()));
+                storage.execute(()->{
+                    AtomicFile staged=pendingExportFile();FileOutputStream output=null;
+                    try{
+                        output=staged.startWrite();output.write(bytes);staged.finishWrite(output);
+                        main.post(()->{
+                            if(isFinishing()||isDestroyed())return;
+                            Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                                .setType("application/json").putExtra(Intent.EXTRA_TITLE,"Mundo-X.cosmic");
+                            try{startActivityForResult(save,SAVE_PROJECT);}
+                            catch(Exception error){showStatus("No se pudo abrir el destino: "+error.getMessage());}
+                        });
+                    }catch(Exception error){if(output!=null)staged.failWrite(output);showStatus("No se pudo preparar el proyecto: "+error.getMessage());}
+                });
+            }catch(Exception error){showStatus("No se pudo preparar el proyecto: "+error.getMessage());}
+        });
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(result!=RESULT_OK||data==null||data.getData()==null)return;
+        Uri uri=data.getData();
+        if(request==OPEN_PROJECT){
+            final long serial=++projectLoadSerial;
+            storage.execute(()->{
+                try(InputStream input=getContentResolver().openInputStream(uri)){
+                    if(input==null)throw new IllegalArgumentException("Archivo sin contenido");
+                    prepareProject(CosmicProject.read(input),serial);
+                }catch(Exception error){showStatus("El proyecto actual se conserva. No se pudo importar: "+error.getMessage());}
+            });
+        }else if(request==SAVE_PROJECT){
+            storage.execute(()->{
+                try(InputStream staged=pendingExportFile().openRead()){
+                    byte[] bytes=CosmicProject.encode(CosmicProject.read(staged));
+                    try(OutputStream output=getContentResolver().openOutputStream(uri,"wt")){
+                        if(output==null)throw new IllegalArgumentException("Destino sin acceso");
+                        output.write(bytes);output.flush();
+                    }
+                    pendingExportFile().delete();showStatus("Proyecto .cosmic guardado");
+                }catch(Exception error){showStatus("No se pudo exportar el proyecto: "+error.getMessage());}
+            });
+        }
     }
 
     private void installGestures(){
@@ -218,11 +381,16 @@ public final class MainActivity extends Activity {
     private final Runnable tick=new Runnable(){
         @Override public void run(){
             if(!animate||!resumed||surface==null)return;
-            long now=System.nanoTime();if(lastTick!=0)animationTime+=Math.min(.25f,(now-lastTick)/1e9f);lastTick=now;
+            long now=System.nanoTime();if(lastTick!=0)animationTime=Math.min(1000000f,animationTime+Math.min(.25f,(now-lastTick)/1e9f));lastTick=now;
             if(!animationFrameQueued){
                 animationFrameQueued=true;final float seconds=animationTime;
-                surface.queueEvent(()->{renderer.setTime(seconds);animationFrameQueued=false;});surface.requestRender();
+                surface.queueEvent(()->{
+                    try{renderer.setTime(seconds);}
+                    catch(Exception error){showStatus("No se pudo avanzar el tiempo: "+error.getMessage());}
+                    finally{animationFrameQueued=false;}
+                });surface.requestRender();
             }
+            if(animationTime>=1000000f){animate=false;animateButton.setText("Animar");return;}
             main.postDelayed(this,33);
         }
     };
@@ -240,6 +408,7 @@ public final class MainActivity extends Activity {
     private void captureSession(){
         if(saveProtected)return;
         SavedSession snapshot=new SavedSession();snapshot.core=core.snapshot();snapshot.visual=renderer.snapshot();
+        snapshot.projectName=projectName;
         snapshot.overview=snapshot.visual.overview;snapshot.coupled=snapshot.visual.coupling;
         snapshot.qubit=qubit;snapshot.quality=snapshot.visual.resolutionLimit;snapshot.animationTime=snapshot.visual.time;
         savedSession=snapshot;

@@ -1,0 +1,8 @@
+__pycache__/
+native/*.so
+native/.mx-build-*
+*.png
+validation.json
+benchmark.json
+contract-validation.json
+project-validation.json

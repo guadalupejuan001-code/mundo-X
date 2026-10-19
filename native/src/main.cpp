@@ -2,20 +2,28 @@
 #include <charconv>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/dense_core.hpp"
 #include "mundo_x/xasm.hpp"
 #include "mundo_x/teleport.hpp"
 #include "mundo_x/exact_t_experiment.hpp"
+#include "mundo_x/mxlang.hpp"
 
 using mundo_x::CompactCore;
 using mundo_x::DenseCore;
@@ -266,7 +274,30 @@ static int teleport() {
   return result.all_passed ? 0 : 1;
 }
 
-static int run_program(const std::string& path) {
+static void print_program_result(const mundo_x::XasmRunResult& result,
+                                const std::string& kind,
+                                const std::string& path, double ms) {
+  std::cout << kind << " program=" << path << "\n";
+  std::cout << "qubits=" << result.qubits
+            << " instructions=" << result.instructions;
+  if (result.backend == "reduced") {
+    std::cout << " backend=reduced"
+              << " components=" << result.components
+              << " t_gates=" << result.t_gates
+              << " logical_payload_bytes=" << result.logical_payload_bytes;
+  } else {
+    std::cout << " state_bytes=" << result.state_bytes;
+  }
+  std::cout << " ms=" << std::fixed << std::setprecision(3) << ms << "\n";
+  std::cout << result.output;
+  if (result.scene_objects) {
+    std::cout << "visual_instructions=" << result.visual_instructions
+              << " scene_objects=" << result.scene_objects
+              << " scene_logical_rule_bytes=" << result.scene_rule_bytes << "\n";
+  }
+}
+
+static int run_program(const std::string& path, bool scene_stdout = false) {
   try {
     const auto start = std::chrono::steady_clock::now();
     const auto result = mundo_x::run_xasm_file(path);
@@ -275,16 +306,83 @@ static int run_program(const std::string& path) {
     const double ms =
         std::chrono::duration<double, std::milli>(end - start).count();
 
-    std::cout << "XASM program=" << path << "\n";
-    std::cout << "qubits=" << result.qubits
-              << " instructions=" << result.instructions
-              << " state_bytes=" << result.state_bytes
-              << " ms=" << std::fixed << std::setprecision(3) << ms << "\n";
-    std::cout << result.output;
+    if (scene_stdout) {
+      if (!result.assertions_passed) throw std::runtime_error("scene export requires passing assertions");
+      if (result.scene_text.empty()) throw std::runtime_error("program did not create a scene");
+#ifdef _WIN32
+      // The portable scene format uses LF. CRT text mode would silently emit
+      // CRLF bytes, which are outside ObjectSceneModel's canonical format.
+      if (_setmode(_fileno(stdout), _O_BINARY) == -1)
+        throw std::runtime_error("cannot configure scene stdout for binary output");
+#endif
+      std::cout << result.scene_text;
+      std::cout.flush();
+      if (!std::cout) throw std::runtime_error("failed to write scene to stdout");
+      return 0;
+    }
+
+    print_program_result(result, "XASM", path, ms);
 
     return result.assertions_passed ? 0 : 1;
   } catch (const std::exception& e) {
     std::cerr << "XASM ERROR: " << e.what() << "\n";
+    return 1;
+  }
+}
+
+static std::string mx_diagnostic(const std::string& path,
+                                 const std::string& message) {
+  if (message.compare(0, 5, "line ") == 0)
+    return path + ":" + message.substr(5);
+  return path + ": " + message;
+}
+
+static int compile_mx_program(const std::string& path) {
+  try {
+    const auto program = mundo_x::compile_mx_file(path);
+    // Keep stdout suitable for redirection to a plain XASM file.
+    std::cout << program.xasm;
+    if (!std::cout) throw std::runtime_error("cannot write compiled XASM");
+    return 0;
+  } catch (const std::exception& e) {
+    std::cerr << "MX ERROR " << mx_diagnostic(path, e.what()) << "\n";
+    return 1;
+  }
+}
+
+static int run_mx_program(const std::string& path) {
+  try {
+    const auto start = std::chrono::steady_clock::now();
+    const auto program = mundo_x::compile_mx_file(path);
+    std::istringstream input(program.xasm);
+    mundo_x::XasmRunResult result;
+    try {
+      result = mundo_x::run_xasm(input);
+    } catch (const std::exception& e) {
+      const std::string message = e.what();
+      if (message.compare(0, 5, "line ") == 0) {
+        std::istringstream location(message.substr(5));
+        std::size_t generated_line = 0;
+        char colon = '\0';
+        if ((location >> generated_line >> colon) && colon == ':' &&
+            generated_line > 0 && generated_line <= program.source_map.size()) {
+          const auto& origin = program.source_map[generated_line - 1];
+          std::string detail;
+          std::getline(location, detail);
+          throw std::runtime_error("line " + std::to_string(origin.line) +
+                                   ":" + std::to_string(origin.column) +
+                                   ":" + detail);
+        }
+      }
+      throw;
+    }
+    const auto end = std::chrono::steady_clock::now();
+    const double ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+    print_program_result(result, "MX", path, ms);
+    return result.assertions_passed ? 0 : 1;
+  } catch (const std::exception& e) {
+    std::cerr << "MX ERROR " << mx_diagnostic(path, e.what()) << "\n";
     return 1;
   }
 }
@@ -371,11 +469,17 @@ static int run_cli(int argc, char** argv) {
            "t-trace <qubits> <t_gates> | "
            "t-trace-variant <qubits> <t_gates> | "
            "bench <qubits> [--dense] | "
-           "cluster <rows> <cols> [--dense] | practice <qubits> | run <program.x>\n";
+           "cluster <rows> <cols> [--dense] | practice <qubits> | "
+           "run <program.x> [--scene-stdout] | compile <program.mx> | run-mx <program.mx>\n";
     return 2;
   }
 
   const std::string cmd = argv[1];
+
+  if (cmd == "compile" || cmd == "run-mx") {
+    if (argc != 3) return 2;
+    return cmd == "compile" ? compile_mx_program(argv[2]) : run_mx_program(argv[2]);
+  }
 
   if (cmd == "hello") return hello();
   if (cmd == "teleport") return teleport();
@@ -424,8 +528,11 @@ static int run_cli(int argc, char** argv) {
   }
 
   if (cmd == "run") {
-    if (argc < 3) return 2;
-    return run_program(argv[2]);
+    if (argc != 3 && argc != 4) throw std::invalid_argument("run <program.x> [--scene-stdout]");
+    const bool scene_stdout = argc == 4;
+    if (scene_stdout && std::string(argv[3]) != "--scene-stdout")
+      throw std::invalid_argument("unknown run option: " + std::string(argv[3]));
+    return run_program(argv[2], scene_stdout);
   }
 
   if (cmd == "practice") {

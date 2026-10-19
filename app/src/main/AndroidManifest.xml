@@ -12,11 +12,12 @@
 
     <application
         android:allowBackup="false"
-        android:label="XLab · Objetos+"
+        android:label="${appLabel}"
         android:icon="@drawable/ic_xlab"
         android:roundIcon="@drawable/ic_xlab"
         android:supportsRtl="true"
         android:theme="@style/XLabTheme">
+        <activity android:name=".MicroLabActivity" android:screenOrientation="portrait" />
         <activity android:name=".QuantumInterfaceActivity" android:screenOrientation="portrait" />
         <activity android:name=".VisualExperimentActivity" android:screenOrientation="portrait" />
         <activity android:name=".GpuVisualActivity" android:screenOrientation="portrait" />

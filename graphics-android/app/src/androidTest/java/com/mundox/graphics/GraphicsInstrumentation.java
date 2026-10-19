@@ -8,10 +8,14 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
@@ -33,13 +37,15 @@ import org.json.JSONObject;
 /** Device tests use the shipping JNI core, shaders, GL thread and activity lifecycle. */
 public final class GraphicsInstrumentation extends Instrumentation {
     private static final String TAG = "MundoXGraphicsTests";
-    private static final int EXPECTED_TESTS = 10;
+    private static final int EXPECTED_TESTS = 15;
     private static final long FRAME_TIMEOUT_MS = 45_000;
     private MainActivity activity;
     private File evidence;
     private final List<Result> results = new ArrayList<>();
     private final JSONObject metrics = new JSONObject();
     private final JSONArray images = new JSONArray();
+    private final JSONArray projectExports = new JSONArray();
+    private String portableName;
 
     private interface Checked { void run() throws Exception; }
     private static final class Result {
@@ -59,6 +65,18 @@ public final class GraphicsInstrumentation extends Instrumentation {
             this.x = x;
             this.y = y;
             this.area = area;
+        }
+    }
+    private static final class LiveProject {
+        final CosmicProject.Document document;
+        final String[] generators;
+        final float[] expectations;
+        final long stateBytes;
+        LiveProject(CosmicProject.Document document, String[] generators, float[] expectations, long stateBytes) {
+            this.document = document;
+            this.generators = generators;
+            this.expectations = expectations;
+            this.stateBytes = stateBytes;
         }
     }
 
@@ -92,9 +110,21 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("edit_restoration", this::editRestoration);
             runCase("pause_resume_preserves_state", this::pauseResume);
 
+            // Preserve the original 20-qubit baseline metrics before tests
+            // deliberately replace the active app with 2/3-qubit projects.
             metrics.put("glRenderer", activity.renderer.device);
             metrics.put("qubits", activity.core.qubits);
             metrics.put("nativeStateBytes", activity.core.stateBytes());
+            metrics.put("baselineMetricsScope", "Original ten tests, before portable project replacement");
+
+            runCase("portable_codec_strict_validation", this::portableCodec);
+            runCase("portable_desktop_fixtures_import", this::portableFixtures);
+            runCase("portable_mutation_export_reimport", this::portableRoundtrip);
+            runCase("portable_invalid_import_preserves_session", this::portableInvalidImport);
+            runCase("portable_activity_recreation", this::portableRecreation);
+
+            metrics.put("portableFinalQubits", activity.core.qubits);
+            metrics.put("portableFinalStateBytes", activity.core.stateBytes());
             saveScreen("activity.png");
         } catch (Throwable error) {
             results.add(new Result("instrumentation_setup_or_reporting", 0, error));
@@ -359,6 +389,314 @@ public final class GraphicsInstrumentation extends Instrumentation {
         metrics.put("pauseResumeVersion", version);
     }
 
+    private void portableCodec() throws Exception {
+        NativeCore owner = activity.core;
+        NativeCore.Snapshot before = owner.snapshot();
+        JSONObject result = ProjectCodecChecks.run(getTargetContext());
+        expect(result.getBoolean("passed") && result.getInt("checks") >= 99
+                && result.getInt("rejectedInvalidDocuments") >= 83, "Strict codec checks incomplete");
+        expect(!result.getBoolean("nativeOrGlCreated"), "Value codec must not create a rendering session");
+        sameCore(before, owner.snapshot(), "Codec affected active native session");
+        expect(activity.core == owner, "Codec replaced active native owner");
+        metrics.put("projectCodec", result);
+    }
+
+    private CosmicProject.Document fixture(String name) throws Exception {
+        try (InputStream input = getTargetContext().getAssets().open("projects/" + name)) {
+            return CosmicProject.read(input);
+        }
+    }
+
+    private void install(CosmicProject.Document project) throws Exception {
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        runOnMainSync(() -> {
+            try { activity.installProjectForTest(project); }
+            catch (Throwable caught) { error.set(caught); }
+        });
+        if (error.get() instanceof Exception) throw (Exception) error.get();
+        if (error.get() != null) throw new AssertionError("Project installation", error.get());
+        portableName = project.name;
+        waitForIdleSync();
+        expect(activity.resumed, "Project installation paused the app");
+        expectProjectHeading(project.name);
+    }
+
+    private LiveProject liveProject() throws Exception {
+        AtomicReference<LiveProject> value = new AtomicReference<>();
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        gl(() -> {
+            try {
+                NativeCore.Snapshot core = activity.core.snapshot();
+                QuantumRenderer.Snapshot visual = activity.renderer.snapshot();
+                CosmicProject.Document document = CosmicProject.fromSnapshots(portableName, core, visual);
+                value.set(new LiveProject(document, activity.core.generators(),
+                        activity.core.query(visual.observables), activity.core.stateBytes()));
+            } catch (Throwable caught) { error.set(caught); }
+        });
+        if (error.get() != null) throw new AssertionError("Cannot export live project", error.get());
+        expect(value.get() != null, "Missing live project export");
+        return value.get();
+    }
+
+    private void portableFixtures() throws Exception {
+        JSONArray imported = new JSONArray();
+        for (String file : new String[]{"bell-observer.cosmic", "ghz-city.cosmic"}) {
+            CosmicProject.Document source = fixture(file);
+            install(source);
+            LiveProject actual = liveProject();
+            sameCore(source.core, actual.document.core, "Desktop fixture core/history changed on import");
+            sameGraphics(source.graphics, actual.document.graphics, "Desktop fixture world/camera changed on import");
+            try (NativeCore reference = new NativeCore(source.core)) {
+                expect(Arrays.equals(reference.generators(), actual.generators), "Fixture native generators changed");
+                expect(Arrays.equals(reference.query(source.graphics.observables), actual.expectations),
+                        "Fixture observables are not driven by its imported core");
+            }
+            QuantumRenderer.Capture color = frame(false), ids = frame(true);
+            expect(color.nonBackground() > 100, "Imported fixture produced no substantial GLES image");
+            expectValidIds(ids, source.graphics.objectCount);
+            sameLive(actual, liveProject(), "Rendering imported fixture changed its project");
+            String prefix = file.startsWith("bell") ? "portable-bell" : "portable-ghz";
+            save(prefix + "-color.png", color);
+            save(prefix + "-ids.png", ids);
+            exportEvidence(prefix + "-android.cosmic", file, true, actual);
+            if (file.startsWith("ghz")) {
+                expect(actual.document.graphics.seed == 4_000_000_001L,
+                        "Unsigned 32-bit world seed was truncated by Android");
+                expect(actual.document.graphics.quantumStrength == -.125f,
+                        "Imported negative coupling was replaced by a default");
+                expect(actual.document.graphics.observables.length == 11,
+                        "Imported operators were replaced with a default 3*n program");
+            }
+            imported.put(new JSONObject().put("fixture", file).put("qubits", actual.document.core.qubits)
+                    .put("objects", actual.document.graphics.objectCount).put("seed", actual.document.graphics.seed)
+                    .put("coupling", actual.document.graphics.quantumStrength)
+                    .put("observables", actual.document.graphics.observables.length)
+                    .put("cameraMode", actual.document.graphics.overrideEye == null ? "orbit" : "lookAt")
+                    .put("visiblePixels", color.nonBackground()).put("passed", true));
+        }
+        metrics.put("portableFixtures", imported);
+    }
+
+    private void portableRoundtrip() throws Exception {
+        CosmicProject.Document source = fixture("bell-observer.cosmic");
+        install(source);
+        gl(() -> activity.renderer.resolution(320));
+        Pick chosen = choose(frame(true));
+        QuantumRenderer.Capture selectionIds = frame(true);
+        select(chosen, selectionIds);
+        LiveProject before = liveProject();
+        QuantumRenderer.Capture unedited = frame(false);
+        gl(() -> activity.renderer.editSelected(7));
+        QuantumRenderer.Capture edited = frame(false);
+        expect(unedited.changed(edited) > 10, "Portable roundtrip test did not visibly edit an object");
+        expect(area(frame(true), chosen.id) == 0, "Portable edited ID remained visible");
+        sameCore(before.document.core, activity.core.snapshot(), "Visual edit changed the native core");
+
+        gl(() -> activity.renderer.gate(NativeCore.Y, 0, 0));
+        LiveProject afterGate = liveProject();
+        expect(afterGate.document.core.version == before.document.core.version + 1,
+                "Portable Y gate did not advance native revision");
+        expect(afterGate.document.core.gateHistory.length == before.document.core.gateHistory.length + 3,
+                "Portable gate was not appended to authoritative native history");
+        gl(() -> {
+            activity.renderer.orbit(17, -6);
+            activity.renderer.zoom(1.1f);
+            activity.renderer.setTime(1.75f);
+        });
+        portableName = "Android · Bell editado";
+        LiveProject exported = liveProject();
+        sameCore(afterGate.document.core, exported.document.core, "Camera/time applied unexpected gates");
+        expect(Arrays.equals(source.graphics.observables, exported.document.graphics.observables),
+                "Original visual operators were regenerated after native mutation");
+        expect(exported.document.graphics.overrideEye == null, "Camera gesture did not produce an orbital camera");
+        QuantumRenderer.Capture first = frame(false);
+        QuantumRenderer.Capture firstIds = frame(true);
+        byte[] bytes = CosmicProject.encode(exported.document);
+        CosmicProject.Document decoded = CosmicProject.decode(bytes);
+        sameCore(exported.document.core, decoded.core, "Encoded project lost native history");
+        sameGraphics(exported.document.graphics, decoded.graphics, "Encoded project lost graphics state");
+        install(decoded);
+        LiveProject imported = liveProject();
+        sameLive(exported, imported, "Live portable roundtrip changed state or graphics");
+        QuantumRenderer.Capture second = frame(false), secondIds = frame(true);
+        expect(first.changed(second) == 0 && firstIds.changed(secondIds) == 0,
+                "Reimport changed camera, edits, time, observables or the GLES image");
+        save("portable-roundtrip-before.png", first);
+        save("portable-roundtrip-after.png", second);
+        exportEvidence("portable-mutated-android.cosmic", "bell-observer.cosmic", false, imported);
+        metrics.put("portableRoundtripChangedPixels", first.changed(second));
+        metrics.put("portableRoundtripIdDifferences", firstIds.changed(secondIds));
+        metrics.put("portableEditedId", chosen.id);
+        metrics.put("portableEditChangedPixels", unedited.changed(edited));
+        metrics.put("portableCameraPreservedCore", true);
+    }
+
+    private void portableInvalidImport() throws Exception {
+        LiveProject before = liveProject();
+        NativeCore owner = activity.core;
+        QuantumRenderer observer = activity.renderer;
+        QuantumRenderer.Capture image = frame(false);
+        int rejected = 0;
+        JSONObject invalidJson = new JSONObject(new String(CosmicProject.encode(before.document), StandardCharsets.UTF_8));
+        invalidJson.put("version", 2);
+        try { CosmicProject.decode(invalidJson.toString().getBytes(StandardCharsets.UTF_8)); }
+        catch (IllegalArgumentException expected) { rejected++; }
+
+        // Document snapshots are detached arrays. The shipping install path
+        // must still reject a damaged candidate before replacing the owner.
+        CosmicProject.Document invalidGates = fixture("bell-observer.cosmic");
+        invalidGates.core.gateHistory[0] = 99;
+        try { install(invalidGates); }
+        catch (IllegalArgumentException | IllegalStateException expected) { rejected++; }
+        CosmicProject.Document invalidOperators = fixture("bell-observer.cosmic");
+        invalidOperators.graphics.observables[0] = "BAD";
+        try { install(invalidOperators); }
+        catch (IllegalArgumentException | IllegalStateException expected) { rejected++; }
+        expect(rejected == 3, "Invalid JSON or native/observer candidate was accepted");
+
+        int refusedRevisionOperations = 0;
+        NativeCore.Snapshot maximum = NativeCore.Snapshot.of(before.document.core.qubits,
+                9_007_199_254_740_991L, before.document.core.gateHistory);
+        try (NativeCore limited = new NativeCore(maximum)) {
+            try { limited.apply(NativeCore.H, 0, 0); }
+            catch (IllegalStateException expected) { refusedRevisionOperations++; }
+            sameCore(maximum, limited.snapshot(), "Rejected gate changed maximum-revision state");
+            try { limited.resetGraph(); }
+            catch (IllegalStateException expected) { refusedRevisionOperations++; }
+            sameCore(maximum, limited.snapshot(), "Rejected reset changed maximum-revision state");
+        }
+        expect(refusedRevisionOperations == 2, "Maximum portable revision accepted another mutation");
+        int[] refusedTimeOperations = {0};
+        gl(() -> {
+            try { activity.renderer.setTime(1_000_001f); }
+            catch (IllegalArgumentException expected) { refusedTimeOperations[0]++; }
+            try { activity.renderer.setTime(-1_000_001f); }
+            catch (IllegalArgumentException expected) { refusedTimeOperations[0]++; }
+        });
+        expect(refusedTimeOperations[0] == 2, "Renderer accepted time outside the portable range");
+        expect(activity.core == owner && activity.renderer == observer, "Invalid import replaced the active session");
+        sameLive(before, liveProject(), "Invalid import mutated the active project");
+        QuantumRenderer.Capture after = frame(false);
+        expect(image.changed(after) == 0, "Invalid import changed framebuffer output");
+        metrics.put("portableRejectedActiveImports", rejected);
+        metrics.put("portableRejectedRevisionOperations", refusedRevisionOperations);
+        metrics.put("portableRejectedTimeOperations", refusedTimeOperations[0]);
+        metrics.put("portableInvalidImportChangedPixels", image.changed(after));
+    }
+
+    private void portableRecreation() throws Exception {
+        install(fixture("ghz-city.cosmic"));
+        gl(() -> {
+            activity.renderer.resolution(320);
+            activity.renderer.coupling(false);
+            activity.renderer.gate(NativeCore.Y, 2, 0);
+            activity.renderer.orbit(3, -1);
+            activity.renderer.setTime(1.25f);
+        });
+        LiveProject before = liveProject();
+        QuantumRenderer.Capture image = frame(false);
+        MainActivity original = activity;
+        NativeCore oldOwner = original.core;
+        ActivityMonitor monitor = addMonitor(MainActivity.class.getName(), null, false);
+        try {
+            runOnMainSync(original::recreate);
+            Activity next = waitForMonitorWithTimeout(monitor, 25_000);
+            expect(next instanceof MainActivity && next != original, "Activity.recreate did not create a new instance");
+            activity = (MainActivity) next;
+            waitUntil(() -> activity.resumed, 15_000, "Recreated activity did not resume");
+            waitForIdleSync();
+        } finally { removeMonitor(monitor); }
+        expect(activity.core != oldOwner, "Activity recreation did not reconstruct its owning native session");
+        expectProjectHeading(portableName);
+        LiveProject after = liveProject();
+        sameLive(before, after, "Activity recreation lost the imported project");
+        QuantumRenderer.Capture recreated = frame(false);
+        expect(image.changed(recreated) == 0, "Activity recreation changed the saved GLES scene");
+        save("portable-recreate-before.png", image);
+        save("portable-recreate-after.png", recreated);
+        metrics.put("portableRecreateChangedPixels", image.changed(recreated));
+        metrics.put("portableRecreateNewOwner", true);
+        gl(() -> activity.renderer.coupling(true));
+        LiveProject reenabled = liveProject();
+        sameCore(after.document.core, reenabled.document.core, "Reenabling visual coupling changed the core");
+        expect(reenabled.document.graphics.quantumStrength == -.125f,
+                "Recreation forgot the disabled custom coupling strength");
+        metrics.put("portableRecreateRestoredCoupling", reenabled.document.graphics.quantumStrength);
+    }
+
+    private static void sameCore(NativeCore.Snapshot expected, NativeCore.Snapshot actual, String reason) {
+        expect(expected.qubits == actual.qubits && expected.version == actual.version
+                && Arrays.equals(expected.gateHistory, actual.gateHistory), reason);
+    }
+
+    private static void sameGraphics(QuantumRenderer.Snapshot expected, QuantumRenderer.Snapshot actual, String reason) {
+        boolean equal = expected.objectCount == actual.objectCount && expected.seed == actual.seed
+                && expected.selectedId == actual.selectedId && expected.resolutionLimit == actual.resolutionLimit
+                && expected.time == actual.time && expected.quantumStrength == actual.quantumStrength
+                && expected.coupling == actual.coupling && Arrays.equals(expected.observables, actual.observables)
+                && Arrays.equals(expected.editIds, actual.editIds) && Arrays.equals(expected.editValues, actual.editValues);
+        if (expected.overrideEye == null) {
+            equal &= actual.overrideEye == null && actual.overrideTarget == null && expected.overview == actual.overview
+                    && expected.yaw == actual.yaw && expected.pitch == actual.pitch && expected.zoom == actual.zoom;
+        } else {
+            equal &= Arrays.equals(expected.overrideEye, actual.overrideEye) && Arrays.equals(expected.overrideTarget, actual.overrideTarget)
+                    && expected.cameraNear == actual.cameraNear && expected.cameraFar == actual.cameraFar
+                    && expected.cameraFov == actual.cameraFov;
+        }
+        expect(equal, reason);
+    }
+
+    private static void sameLive(LiveProject expected, LiveProject actual, String reason) {
+        sameCore(expected.document.core, actual.document.core, reason + " (core)");
+        sameGraphics(expected.document.graphics, actual.document.graphics, reason + " (graphics)");
+        expect(expected.document.name.equals(actual.document.name) && Arrays.equals(expected.generators, actual.generators)
+                && Arrays.equals(expected.expectations, actual.expectations), reason + " (native observations)");
+    }
+
+    private void exportEvidence(String file, String source, boolean sourceEquivalent, LiveProject state) throws Exception {
+        try (FileOutputStream output = new FileOutputStream(new File(evidence, file))) {
+            output.write(CosmicProject.encode(state.document));
+        }
+        JSONArray history = new JSONArray(), values = new JSONArray();
+        for (long value : state.document.core.gateHistory) history.put(value);
+        for (float value : state.expectations) values.put((double) value);
+        String proof = file + ".state.json";
+        JSONObject nativeState = new JSONObject().put("schemaVersion", 1).put("projectFile", file)
+                .put("qubits", state.document.core.qubits).put("revision", state.document.core.version)
+                .put("nativeGateHistory", history).put("nativeStateBytes", state.stateBytes)
+                .put("generators", new JSONArray(Arrays.asList(state.generators)))
+                .put("observables", new JSONArray(Arrays.asList(state.document.graphics.observables)))
+                .put("expectations", values);
+        write(proof, nativeState.toString(2) + "\n");
+        projectExports.put(new JSONObject().put("file", file).put("stateFile", proof)
+                .put("sourceFixture", source).put("sourceEquivalent", sourceEquivalent));
+    }
+
+    private static void expectValidIds(QuantumRenderer.Capture ids, int count) {
+        int visible = 0;
+        for (int y = 0; y < ids.height; y++) for (int x = 0; x < ids.width; x++) {
+            int id = ids.idAt(x, y);
+            expect(id >= -1 && id < count, "Imported scene returned an invalid object ID");
+            if (id >= 0) visible++;
+        }
+        expect(visible > 100, "Imported scene ID framebuffer is empty");
+    }
+
+    private void expectProjectHeading(String name) {
+        AtomicReference<Boolean> found = new AtomicReference<>(false);
+        runOnMainSync(() -> found.set(containsText(activity.getWindow().getDecorView(), name)));
+        expect(Boolean.TRUE.equals(found.get()), "Project name missing from the actual activity heading");
+    }
+
+    private static boolean containsText(View view, String text) {
+        if (view instanceof TextView && text.contentEquals(((TextView) view).getText())) return true;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) if (containsText(group.getChildAt(i), text)) return true;
+        }
+        return false;
+    }
+
     private void scene(int count) throws Exception {
         gl(() -> {
             activity.renderer.reset();
@@ -509,7 +847,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
         }
         xml.append("</testsuite>\n");
         JSONObject report = new JSONObject().put("schemaVersion", 1).put("testsRun", results.size())
-                .put("testsFailed", failures()).put("tests", tests).put("metrics", metrics).put("images", images);
+                .put("testsFailed", failures()).put("tests", tests).put("metrics", metrics).put("images", images)
+                .put("projectExports", projectExports);
         write("report.json", report.toString(2) + "\n");
         write("junit.xml", xml.toString());
     }

@@ -4,16 +4,11 @@
 #include <string>
 #include <vector>
 #include <exception>
-extern "C" {
-const char* mx_last_error();
-void* mx_create(int,std::size_t);
-void mx_destroy(void*);
-int mx_apply(void*,const std::uint64_t*,std::size_t);
-int mx_query(void*,const char* const*,std::size_t,double*);
-int mx_generator(void*,std::size_t,char*,std::size_t);
-std::size_t mx_state_bytes(void*);
-}
+#include <limits>
+#include "mundo_x/graphics_core_bridge.h"
 namespace {
+constexpr std::uint64_t max_project_revision=9007199254740991ULL;
+constexpr std::size_t max_project_gates=100000;
 void fail(JNIEnv* e,const char* message){
     if(e->ExceptionCheck())return;
     jclass type=e->FindClass("java/lang/IllegalStateException");
@@ -30,7 +25,7 @@ struct UtfChars {
 }
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_mundox_graphics_NativeCore_nCreate(JNIEnv* e,jclass,jint n){
-    if(n<1){fail(e,"El registro necesita qubits");return 0;}
+    if(n<1||n>256){fail(e,"El proyecto admite de 1 a 256 qubits");return 0;}
     void* p=mx_create(0,static_cast<std::size_t>(n));
     if(!p)fail(e,mx_last_error());
     return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(p));
@@ -42,7 +37,16 @@ Java_com_mundox_graphics_NativeCore_nApply(JNIEnv* e,jclass,jlong p,jlongArray d
     try{
         if(!p||!data){fail(e,"Núcleo cerrado o lote nulo");return;}
         const auto size=e->GetArrayLength(data);
-        if(size%3){fail(e,"Lote de puertas inválido");return;}
+        if(size%3||size>static_cast<jsize>(max_project_gates*3)){fail(e,"Lote de puertas inválido");return;}
+        if(size){
+            const auto revision=mx_revision(handle(p));
+            if(mx_last_error()[0]){fail(e,mx_last_error());return;}
+            const auto history=mx_history_count(handle(p));
+            if(mx_last_error()[0]){fail(e,mx_last_error());return;}
+            if(revision>=max_project_revision||history>max_project_gates-static_cast<std::size_t>(size/3)){
+                fail(e,"La operación excede los límites del proyecto");return;
+            }
+        }
         std::vector<jlong> rows(size);if(size)e->GetLongArrayRegion(data,0,size,rows.data());
         if(e->ExceptionCheck())return;
         std::vector<std::uint64_t> gates(rows.begin(),rows.end());
@@ -85,4 +89,60 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_com_mundox_graphics_NativeCore_nStateBytes(JNIEnv* e,jclass,jlong p){
     if(!p){fail(e,"Núcleo cerrado");return 0;}
     return static_cast<jlong>(mx_state_bytes(handle(p)));
+}
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_mundox_graphics_NativeCore_nVersion(JNIEnv* e,jclass,jlong p){
+    if(!p){fail(e,"Núcleo cerrado");return 0;}
+    const auto version=mx_revision(handle(p));
+    if(mx_last_error()[0]){fail(e,mx_last_error());return 0;}
+    if(version>max_project_revision){fail(e,"Revisión fuera del formato de proyecto");return 0;}
+    return static_cast<jlong>(version);
+}
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_mundox_graphics_NativeCore_nEpoch(JNIEnv* e,jclass,jlong p){
+    if(!p){fail(e,"Núcleo cerrado");return 0;}
+    const auto epoch=mx_epoch(handle(p));
+    if(mx_last_error()[0]){fail(e,mx_last_error());return 0;}
+    if(epoch>static_cast<std::uint64_t>(std::numeric_limits<jlong>::max())){fail(e,"Época de observación fuera de rango");return 0;}
+    return static_cast<jlong>(epoch);
+}
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_mundox_graphics_NativeCore_nHistoryCount(JNIEnv* e,jclass,jlong p){
+    if(!p){fail(e,"Núcleo cerrado");return 0;}
+    return static_cast<jlong>(mx_history_count(handle(p)));
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_mundox_graphics_NativeCore_nSnapshot(JNIEnv* e,jclass,jlong p){
+    try{
+        if(!p){fail(e,"Núcleo cerrado");return nullptr;}
+        std::size_t capacity=mx_history_count(handle(p));
+        for(int attempt=0;attempt<8;attempt++){
+            if(capacity>max_project_gates){fail(e,"Historial fuera del formato de proyecto");return nullptr;}
+            std::vector<std::uint64_t> triples(capacity*3);
+            std::size_t actual=0;std::uint64_t revision=0;
+            int result=mx_snapshot(handle(p),triples.data(),capacity,&actual,&revision);
+            if(actual>capacity){capacity=actual;continue;}
+            if(result){fail(e,mx_last_error());return nullptr;}
+            if(revision>max_project_revision){fail(e,"Revisión fuera del formato de proyecto");return nullptr;}
+            std::vector<jlong> values(actual*3+1);values[0]=static_cast<jlong>(revision);
+            for(std::size_t j=0;j<actual*3;j++)values[j+1]=static_cast<jlong>(triples[j]);
+            auto out=e->NewLongArray(static_cast<jsize>(values.size()));
+            if(out)e->SetLongArrayRegion(out,0,static_cast<jsize>(values.size()),values.data());
+            return out;
+        }
+        fail(e,"El núcleo cambió durante el guardado");return nullptr;
+    }catch(const std::exception& x){fail(e,x.what());return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_graphics_NativeCore_nRestore(JNIEnv* e,jclass,jlong p,jlongArray data,jlong revision){
+    try{
+        if(!p||!data||revision<0||static_cast<std::uint64_t>(revision)>max_project_revision){fail(e,"Snapshot del núcleo inválido");return;}
+        const auto size=e->GetArrayLength(data);
+        if(size%3||size>static_cast<jsize>(max_project_gates*3)){fail(e,"Historial del núcleo inválido");return;}
+        std::vector<jlong> values(size);if(size)e->GetLongArrayRegion(data,0,size,values.data());
+        if(e->ExceptionCheck())return;
+        std::vector<std::uint64_t> triples(values.begin(),values.end());
+        if(mx_restore(handle(p),triples.data(),triples.size()/3,static_cast<std::uint64_t>(revision)))
+            fail(e,mx_last_error());
+    }catch(const std::exception& x){fail(e,x.what());}
 }

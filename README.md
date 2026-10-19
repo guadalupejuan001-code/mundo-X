@@ -1,10 +1,18 @@
-# Mundo X
+# COSMIC X Engine
 
-**Plataforma de computación basada en representaciones compactas, simulación cuántica por software y reconstrucción de información mediante reglas.**
+**Computación cuántica de Mundo X: núcleo cuántico y motor gráfico cuántico integrado.**
 
-**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
+**COSMIC X Engine es el título del conjunto.** Dentro se conserva la computación cuántica de Mundo X, con sus núcleos propios y el motor gráfico que observa el estado compartido. El nombre no sustituye los componentes ni cambia su autoría. La evolución cuántica se ejecuta por software y la imagen se dibuja mediante OpenGL ES.
 
-**Mundo X Graphics 0.1.1 para Android:** [aplicación, controles y compilación](graphics-android/README.md). Integra el observador de Graphics con un CompactCore compartido, puertas sobre 20 qubits, selección y edición por ID, sesión persistente y hasta 1.048.576 cajas procedurales. El workflow propio entrega la APK y las comprobaciones en emulador.
+**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 19 de octubre de 2026.
+
+**COSMIC X Engine 0.2.0 para Android:** [aplicación, controles y compilación](graphics-android/README.md). El núcleo cuántico y el motor gráfico comparten la sesión nativa. Permite crear, abrir y guardar proyectos `.cosmic`, operar sobre 1 a 256 qubits del perfil compacto, conservar los observables originales y editar hasta 1.048.576 cajas por ID. Incluye proyectos Bell y GHZ. El [visor de escritorio](graphics-desktop/README.md) compila el mismo puente y abre el mismo [formato de proyecto](graphics-desktop/PROJECT_FORMAT.md). [Integración y procedencia](docs/cosmic_x_engine.md).
+
+**Nueva línea: Motor X visual.** [Programar cálculo y escenas dentro del mismo
+runtime](docs/motor_x_visual.md), conservando reglas, IDs y cambios. Esta rama
+añade exportación compatible con XLab y una primera conexión explícita entre
+resultados del cálculo y estados visuales. La transferencia a Android se hace
+mediante **Restaurar escena**; no es una nueva versión publicada del APK.
 
 **XLab 0.3.2 para Android:** [descargar ZIP con APK firmado](https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.2/XLab-Objetos-0.3.2.zip).
 Descomprime el ZIP y abre el APK incluido. [Descarga alternativa](https://raw.githubusercontent.com/guadalupejuan001-code/mundo-X/6b206566022afa8b7b20b9e6dd3153ce8dad9182/dist/XLab-Objetos-0.3.2.zip).
@@ -13,6 +21,11 @@ y escala progresiva de rendimiento](docs/xlab_0_3_objetos.md). Acceso directo
 desde **Objetos ↗**, hasta 1.048.576 instancias como límite de ensayo, con parada
 por cadencia, memoria, temperatura o tiempo y restauración de la escena.
 [Validación: 19 recorridos Android, ensayo de 1.048.576 objetos y dibujo bajo demanda](results/xlab_millon_2026-10-18.md).
+
+**Desarrollo gráfico en esta rama:** [planificación por regiones, malla indexada y
+lotes con IDs estables](docs/graphics_spatial.md). Este código añade una comparación
+contra el dibujo completo y contadores de trabajo enviado. Los enlaces de APK
+anteriores corresponden a la versión publicada 0.3.2.
 
 También conserva la [mesa de circuitos, pruebas interactivas, protocolos
 de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con
@@ -72,6 +85,15 @@ casos examinados y conservó productos de diez millones de qubits con unos
 el informe registra también límites, falsos negativos de separación y costos.
 El controlador incluido en aquel registro y su comando fueron retirados.
 
+**Estructura y estabilidad del 18 de octubre:** [corrección de uniones innecesarias y escala de factores](results/factorized_structure_2026-10-18.md).
+FactorizedCore reconoce destinos independientes que no se entrelazan bajo CX/CZ
+y equilibra separaciones verificadas mediante potencias de dos reversibles.
+Un circuito producto de 20 qubits pasa de 16 MiB a 640 bytes de amplitudes;
+el mismo patrón completa 100.000 qubits. La regresión que fallaba en la pareja
+1.074 completa 8.191 separaciones, comprobadas también reteniendo el otro lado.
+Estos resultados corresponden a las familias documentadas y no eliminan el
+crecimiento exponencial de los bloques generales. No se añaden filtros ni poda.
+
 ## Índice
 
 - [Principio y arquitectura](#principio-y-arquitectura)
@@ -103,26 +125,19 @@ Esto **no significa que la CPU deje de usar bits o ejecutar instrucciones conven
 
 ### Vista general
 
-~~~text
-                           MUNDO X
-             Representación y evolución de estados
-                              |
-          +-------------------+-------------------+
-          |                   |                   |
-   Cálculo cuántico       Aprendizaje        Aplicaciones
-     por software        de estados          y validación
-          |                   |                   |
-    Dense / Quantum       Bridge X           Android Lab
-    Core (referencia)        |                Windows x64
-          |             Transformer X        Render GPU/3D
-    Compact Core           (separado)         Red / relay
-          |
-    Clifford / tableau
-          |
-    Exact T / Reduced Exact T
-          |
-     Teleport / XASM / pruebas de equivalencia
-~~~
+```mermaid
+flowchart TD
+    A["COSMIC X Engine · título"] --> B["Computación cuántica de Mundo X"]
+    B --> C["Núcleo cuántico"]
+    B --> D["Motor gráfico cuántico integrado"]
+    C -->|"Observables del estado compartido"| D
+```
+
+El núcleo conserva sus representaciones Compact, Reduced Exact T, Factorized y
+Adaptive Phase, con sus límites y herramientas respectivos. La sesión gráfica
+portable de esta versión conecta CompactCore con el observador de Graphics.
+Los módulos de aprendizaje, las aplicaciones de laboratorio y las utilidades
+conservan sus rutas e identidades dentro del repositorio.
 
 **Aclaración de integración:** Compact Core y Reduced Exact T pertenecen al motor nativo C++. Transformer X es un módulo PyTorch separado: **no está conectado actualmente al simulador compacto**. Las escenas GPU son gráficos clásicos que pueden recibir parámetros del estado simulado; no emplean una GPU cuántica.
 
@@ -201,7 +216,7 @@ No transporta materia ni transmite un qubit físico: es una simulación matemát
 
 **Archivo:** [`native/include/mundo_x/xasm.hpp`](native/include/mundo_x/xasm.hpp).
 
-Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes`, comprobaciones `assert` y ahora `probz`, `measure` y `seed`. **La puerta T reducida se ejecuta desde el runtime nativo o el laboratorio Android, no desde XASM.**
+Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes`, comprobaciones `assert` y ahora `probz`, `measure` y `seed`.
 
 `probz q` consulta las probabilidades de medición Z; `measure q` obtiene un
 resultado y proyecta el estado. `seed n` controla el muestreo seudoaleatorio
@@ -210,6 +225,7 @@ y [Bell](examples/measurement_bell.x) muestran fases y correlaciones.
 Estas instrucciones también están en `practice`; aún no hay controles Android
 para programarlas. Las consultas deterministas generales pueden requerir
 eliminación del tableau: [costos y alcance](docs/origen_y_recorrido_cuantico.md#recorrido-programable-añadido).
+**XASM v0.2** añade el modo experimental `backend reduced`, declarado antes de `qubits`, para programar circuitos Clifford+T con `t <q>`. Conserva Compact Core como modo predeterminado. El modo reducido permite de 1 a 12 qubits y hasta 128 puertas T; `assert fidelity` y `assert norm` activan explícitamente la validación densa. `show` informa componentes y puertas T, y `bytes` identifica la carga lógica estimada; esa cifra no mide la RAM total. Consulta [sintaxis, límites y ejemplos de XASM v0.2](docs/xasm_v0_2.md).
 
 ~~~text
 qubits 2
@@ -220,9 +236,26 @@ bytes
 assert ghz
 ~~~
 
-Ejemplos reales: [`examples/hello.x`](examples/hello.x), [`examples/bell.x`](examples/bell.x), [`examples/ghz4.x`](examples/ghz4.x).
+Ejemplos reales: [`examples/hello.x`](examples/hello.x), [`examples/bell.x`](examples/bell.x), [`examples/ghz4.x`](examples/ghz4.x), [`examples/magic_t.x`](examples/magic_t.x), [`examples/clifford_t.x`](examples/clifford_t.x).
 
-### 6. Bridge X y Transformer X — aprendizaje sobre modos
+### 6. Lenguaje de alto nivel Mundo X — prototipo `.mx`
+
+El compilador [`mxlang.hpp`](native/include/mundo_x/mxlang.hpp) permite describir circuitos mediante constantes, expresiones, repeticiones y bloques reutilizables con parámetros de tipo `qubit` o `count`. Así se evita escribir manualmente cada instrucción. El comando `compile` genera XASM v0.2 y `run-mx` compila y ejecuta con los motores existentes; la compilación comprueba tipos, índices, límites y ubicaciones de origen antes de ejecutar.
+
+~~~text
+backend compact;
+qubits 2;
+circuit bell(a: qubit, b: qubit) {
+    h(a);
+    cx(a, b);
+}
+bell(q[0], q[1]);
+assert ghz;
+~~~
+
+La primera versión es un **lenguaje estático de circuitos**, con reglas documentadas y expansión acotada. Sus bloques se convierten en una secuencia XASM; no añade ejecución paralela ni nuevas operaciones matemáticas al motor. Consulta la [guía del lenguaje `.mx`](docs/mx_language_v0_1.md) y los ejemplos [`mx_bell.mx`](examples/mx_bell.mx), [`mx_magic.mx`](examples/mx_magic.mx) y [`mx_layers.mx`](examples/mx_layers.mx).
+
+### 7. Bridge X y Transformer X — aprendizaje sobre modos
 
 **Archivos:** [`src/bridge_x.py`](src/bridge_x.py), [`src/transformer_x.py`](src/transformer_x.py), [`experiments/train_file_v0_1.py`](experiments/train_file_v0_1.py).
 
@@ -342,6 +375,10 @@ ctest --test-dir build --output-on-failure
 ./build/mundo_x run examples/bell.x
 ./build/mundo_x run examples/measurement_interference.x
 ./build/mundo_x run examples/measurement_bell.x
+./build/mundo_x run examples/magic_t.x
+./build/mundo_x run examples/clifford_t.x
+./build/mundo_x run-mx examples/mx_layers.mx
+./build/mundo_x compile examples/mx_bell.mx > bell_generated.x
 ./build/mundo_x bench 24 --dense
 ./build/mundo_x cluster 4 4 --dense
 ./build/mundo_x cluster 32 32
@@ -363,6 +400,8 @@ cmake -S . -B build -A x64
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 .\build\Release\mundo_x.exe hello
+.\build\Release\mundo_x.exe run examples\magic_t.x
+.\build\Release\mundo_x.exe run-mx examples\mx_bell.mx
 .\build\Release\mundo_x.exe teleport
 .\build\Release\mundo_x.exe t-reduced-experiment 8 64
 ~~~
@@ -417,7 +456,8 @@ mundo-X/
 │   │   ├── compact_core.hpp          # estados estabilizadores compactos
 │   │   ├── exact_t_experiment.hpp    # T, reducción y diagnósticos
 │   │   ├── teleport.hpp              # teletransportación simulada
-│   │   └── xasm.hpp                  # intérprete .x
+│   │   ├── xasm.hpp                  # intérprete .x
+│   │   └── mxlang.hpp                # compilador de alto nivel .mx → .x
 │   └── src/main.cpp                  # ejecutable y comandos
 ├── src/
 │   ├── quantum_core.py               # referencia PyTorch
@@ -425,7 +465,7 @@ mundo-X/
 │   └── transformer_x.py              # modelo neuronal
 ├── experiments/                      # scripts y entrenamiento
 ├── tests/                            # pruebas Python
-├── examples/                         # programas XASM
+├── examples/                         # programas XASM y fuente .mx
 ├── app/                              # Android Lab: JNI, GPU, red, UI
 ├── tools/mundox_relay.py             # relay TCP
 ├── results/                           # resultados históricos
@@ -483,3 +523,20 @@ La conclusión de cada prueba se conserva aunque el resultado sea negativo. Mund
 
 **Mundo X — representar, transformar, verificar.**
 
+
+## Fases generales y sumador de 50 qubits
+
+La ruta opcional `AdaptivePhaseCore` ejecuta fases de ángulo general, conserva
+estados producto y pasa al motor reducido cuando aparece entrelazamiento.
+La transición predeterminada transfiere el estado ya calculado, sin guardar
+ni repetir todas las puertas anteriores. La reproducción original sigue
+disponible mediante `adaptive-replay`.
+
+En el sumador de 50 qubits, la carga lógica del motor producto es ahora de
+1.600 bytes. Se verificaron 131 circuitos por las tres rutas (393 ejecuciones)
+y otras 16 entradas de 50 qubits. Esta funcionalidad nativa aún no está
+conectada a la interfaz Android.
+
+[Transferencia de estado, resultados y límites](docs/state-transfer.md).
+Los [resultados de la primera versión](docs/phase-engine.md) se conservan
+identificados por su revisión.

@@ -1,0 +1,121 @@
+name: COSMIC X Engine contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'graphics-desktop/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'CMakeLists.txt'
+      - 'tools/visual/**'
+      - '.github/workflows/cosmic-contracts.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'graphics-desktop/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'CMakeLists.txt'
+      - 'tools/visual/**'
+      - '.github/workflows/cosmic-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  native-contracts:
+    name: Native core and session contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Record checked source
+        run: |
+          mkdir -p cosmic-evidence/native
+          git rev-parse HEAD > cosmic-evidence/native/source-commit.txt
+      - name: Configure and compile the native core
+        run: |
+          cmake -S . -B cosmic-native-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+          cmake --build cosmic-native-build --parallel 2 2>&1 | tee cosmic-evidence/native/build.log
+      - name: Verify all native contracts
+        run: |
+          ctest --test-dir cosmic-native-build --output-on-failure \
+            --output-junit "$GITHUB_WORKSPACE/cosmic-evidence/native/ctest.xml" \
+            | tee cosmic-evidence/native/ctest.log
+      - name: Verify visual program export and failure behavior
+        run: |
+          python tools/visual/check_visual_cli.py --binary cosmic-native-build/mundo_x \
+            | tee cosmic-evidence/native/visual-cli.log
+      - name: Upload native evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Native-Contracts
+          path: |
+            cosmic-evidence/native/
+            cosmic-native-build/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+
+  desktop-contracts:
+    name: Shared core, project and graphic observer contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EGL_PLATFORM: surfaceless
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: graphics-desktop/requirements.txt
+      - name: Record checked source
+        run: |
+          mkdir -p cosmic-evidence/desktop
+          git rev-parse HEAD > cosmic-evidence/desktop/source-commit.txt
+      - name: Prepare headless GLES and Python dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ libegl1 libegl-mesa0 libgles2 libgl1-mesa-dri
+          python -m pip install -r graphics-desktop/requirements.txt
+      - name: Verify shared native state and causal graphic coupling
+        run: |
+          python graphics-desktop/validate_contract.py \
+            | tee cosmic-evidence/desktop/shared-core.log
+      - name: Verify portable project state and image restoration
+        run: |
+          python graphics-desktop/validate_projects.py \
+            --output cosmic-evidence/desktop/projects.json \
+            | tee cosmic-evidence/desktop/projects.log
+      - name: Verify geometric queries, IDs and edits
+        run: |
+          python graphics-desktop/validate.py \
+            | tee cosmic-evidence/desktop/geometry.log
+      - name: Upload desktop evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Desktop-Contracts
+          path: |
+            cosmic-evidence/desktop/
+            graphics-desktop/contract-validation.json
+            graphics-desktop/validation.json
+          if-no-files-found: warn

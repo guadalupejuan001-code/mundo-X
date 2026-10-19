@@ -26,11 +26,22 @@ Otros experimentos:
   .\mundo_x.exe hello
   .\mundo_x.exe teleport
   .\mundo_x.exe t-reduced-experiment 8 24
+  .\mundo_x.exe run-mx examples\mx_layers.mx
+  .\mundo_x.exe run examples\clifford_t.x
+  .\mundo_x_phase.exe examples\adder50.qx adaptive
+  .\mundo_x.exe run examples\visual_interference.x --scene-stdout
 
 Esta version ejecuta simulacion cuantica en una CPU convencional.
-No genera qubits fisicos ni acredita ventaja cuantica. El lenguaje XASM
-programa CompactCore (Clifford); T sigue en los experimentos del runtime.
+No genera qubits fisicos ni acredita ventaja cuantica. XASM usa CompactCore
+por defecto; backend reduced permite programar Clifford+T (1..12 qubits,
+128 puertas T). El frontend .mx compila circuitos reutilizables a XASM.
+Las instrucciones scene crean escenas exportables para XLab.
 
-El .exe incluye el runtime C++ de MSVC mediante enlace estatico.
+mundo_x_phase ejecuta el nucleo de fases generales sobre archivos .qx.
+La ruta adaptive mantiene estados producto y transfiere al motor reducido
+cuando aparece entrelazamiento, con los presupuestos documentados.
+Los ejecutables y formatos conservan sus nombres para compatibilidad.
+
+Los .exe incluyen el runtime C++ de MSVC mediante enlace estatico.
 La compilacion no tiene firma digital. SHA256SUMS.txt permite verificar bytes;
 un hash, por si solo, no autentica al autor.
