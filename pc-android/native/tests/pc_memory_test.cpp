@@ -53,8 +53,22 @@ int main() {
         drain(pc);
         need(!pc.cpu.fault && pc.cpu.halted, "Guest E820 query must finish");
         need(pc.cpu.read32(0x9000) == 0x100000 && pc.cpu.read32(0x9004) == 0, "E820 extended region start");
-        need(pc.cpu.read32(0x9008) == 0x7ff00000 && pc.cpu.read32(0x900c) == 0, "E820 must report the exact logical RAM boundary");
-        need(pc.cpu.regs[3] == 0 && (pc.cpu.eflags & 1) == 0, "E820 must end enumeration successfully");
+        need(pc.cpu.read32(0x9008) == 0x3ff00000 && pc.cpu.read32(0x900c) == 0,
+             "E820 usable low RAM must end before the framebuffer aperture");
+        need(pc.cpu.regs[3] == 3 && (pc.cpu.eflags & 1) == 0, "E820 must continue through the reserved video range");
+        for (const std::uint8_t index : {std::uint8_t{3}, std::uint8_t{4}}) {
+            boot(pc, {0x66,0xb8,0x20,0xe8,0,0, 0x66,0xba,0x50,0x41,0x4d,0x53,
+                      0x66,0xb9,0x18,0,0,0, 0x66,0xbb,index,0,0,0, 0xbf,0,0x90, 0xcd,0x15,0xf4});
+            drain(pc);
+            need(!pc.cpu.fault && pc.cpu.halted && !(pc.cpu.eflags & 1), "Guest must enumerate the remaining physical map");
+            need(pc.cpu.read32(0x9000) == (index == 3 ? 0x40000000 : 0x48000000) &&
+                 pc.cpu.read32(0x9004) == 0, "E820 framebuffer/post-framebuffer start");
+            need(pc.cpu.read32(0x9008) == (index == 3 ? 0x08000000 : 0x38000000) &&
+                 pc.cpu.read32(0x900c) == 0, "E820 must retain the exact 2-GiB physical boundary");
+            need(pc.cpu.read32(0x9010) == (index == 3 ? 2u : 1u),
+                 "E820 must reserve VRAM while leaving higher physical RAM usable");
+            need(pc.cpu.regs[3] == (index == 3 ? 4u : 0u), "E820 enumeration completion");
+        }
 
         // A dword store straddles two new pages with only one page of budget left.
         // It must stop explicitly and leave all guest-visible state unchanged.

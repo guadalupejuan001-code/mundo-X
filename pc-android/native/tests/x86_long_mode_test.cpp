@@ -139,6 +139,90 @@ void addressing_stack_and_alu_tests() {
   check(cpu.regs[Cpu::EAX] == 0x8000000000000000ULL && cpu.flag(Cpu::OF) && cpu.flag(Cpu::CF), "IMUL64 overflow uses defined host arithmetic");
 }
 
+void double_shift_long_mode_tests() {
+  Cpu cpu; boot(cpu);
+  constexpr std::uint32_t status = Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::OF;
+  for (const bool left : {false, true}) for (const bool immediate : {false, true}) {
+    const auto op = std::uint8_t((left ? 0xa4 : 0xac) + (immediate ? 0 : 1));
+    program(cpu, {0x48, 0x0f, op, 0xd8, 4});
+    cpu.regs[Cpu::EAX] = 0x123456789abcdef0ULL; cpu.regs[Cpu::EBX] = 0xfedcba9876543211ULL;
+    cpu.regs[Cpu::ECX] = 0xffffffffffff0004ULL; one(cpu);
+    check(cpu.regs[Cpu::EAX] == (left ? 0x23456789abcdef0fULL : 0x1123456789abcdefULL), "SHLD/SHRD64 fixed result");
+    check(cpu.regs[Cpu::EBX] == 0xfedcba9876543211ULL && cpu.regs[Cpu::ECX] == 0xffffffffffff0004ULL &&
+          cpu.eip == 0xa000 + (immediate ? 5U : 4U), "SHLD/SHRD64 source/count and instruction length");
+    for (const std::uint8_t raw : {63, 127, 255}) {
+      program(cpu, {0x48, 0x0f, op, 0xd8, raw});
+      cpu.regs[Cpu::EAX] = 0x8000000000000001ULL; cpu.regs[Cpu::EBX] = 3;
+      cpu.set_reg8(Cpu::ECX, raw); one(cpu);
+      check(cpu.regs[Cpu::EAX] == (left ? 0x8000000000000001ULL : 7ULL) && !cpu.flag(Cpu::CF),
+            "SHLD/SHRD64 count63 and six-bit count mask");
+    }
+    for (const std::uint8_t raw : {0, 64, 128}) {
+      program(cpu, {0x48, 0x0f, op, 0xd8, raw});
+      cpu.regs[Cpu::EAX] = 0x123456789abcdef0ULL; cpu.regs[Cpu::EBX] = UINT64_MAX;
+      cpu.set_reg8(Cpu::ECX, raw); cpu.eflags = 2 | status; one(cpu);
+      check(cpu.regs[Cpu::EAX] == 0x123456789abcdef0ULL && cpu.eflags == (2 | status),
+            "SHLD/SHRD64 masked zero count retains all 64 destination bits and flags");
+    }
+    for (const std::uint8_t raw : {1, 65}) {
+      program(cpu, {0x48, 0x0f, op, 0xd8, raw});
+      cpu.regs[Cpu::EAX] = left ? 0x8000000000000001ULL : 1ULL;
+      cpu.regs[Cpu::EBX] = left ? 0ULL : 1ULL; cpu.set_reg8(Cpu::ECX, raw); cpu.eflags = 2;
+      one(cpu);
+      check(cpu.regs[Cpu::EAX] == (left ? 2ULL : 0x8000000000000000ULL) && cpu.flag(Cpu::CF) && cpu.flag(Cpu::OF),
+            "SHLD/SHRD64 one-bit carry and overflow");
+    }
+    // REX.R/B select R9 as source and R8 as destination at every operand size.
+    for (const unsigned bytes : {2U, 4U, 8U}) {
+      if (bytes == 2) program(cpu, {0x66, 0x45, 0x0f, op, 0xc8, 0});
+      else program(cpu, {std::uint8_t(bytes == 8 ? 0x4d : 0x45), 0x0f, op, 0xc8, 0});
+      cpu.regs[Cpu::R8] = 0x123456789abcdef0ULL; cpu.regs[Cpu::R9] = UINT64_MAX;
+      cpu.set_reg8(Cpu::ECX, 0); cpu.eflags = 2 | status; one(cpu);
+      check(cpu.regs[Cpu::R8] == (bytes == 4 ? 0x9abcdef0ULL : 0x123456789abcdef0ULL) &&
+            cpu.regs[Cpu::R9] == UINT64_MAX && cpu.eflags == (2 | status),
+            "SHLD/SHRD extended register count0 honors r16 preservation / r32 zero-extension / r64");
+    }
+  }
+
+  program(cpu, {0x4d, 0x0f, 0xad, 0xc8}); // SHRD R8,R9,CL
+  cpu.regs[Cpu::R8] = 0x123456789abcdef0ULL; cpu.regs[Cpu::R9] = 0xfedcba9876543211ULL;
+  cpu.set_reg8(Cpu::ECX, 4); one(cpu);
+  check(cpu.regs[Cpu::R8] == 0x1123456789abcdefULL && cpu.regs[Cpu::R9] == 0xfedcba9876543211ULL,
+        "SHRD extended REX.R/B source and destination operate on all 64 bits");
+  program(cpu, {0x66, 0x48, 0x0f, 0xa4, 0xd8, 4});
+  cpu.regs[Cpu::EAX] = 0x123456789abcdef0ULL; cpu.regs[Cpu::EBX] = 0xfedcba9876543211ULL; one(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x23456789abcdef0fULL, "SHLD REX.W following 66 selects64");
+  program(cpu, {0x48, 0x66, 0x0f, 0xa4, 0xd8, 4});
+  cpu.regs[Cpu::EAX] = 0x123456789abc1234ULL; cpu.regs[Cpu::EBX] = 0x5678; one(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x123456789abc2345ULL, "SHLD legacy66 after REX cancels REX.W");
+
+  // RIP-relative address must be resolved after the immediate count is read.
+  program(cpu, {0x48, 0x0f, 0xac, 0x1d, 7, 0, 0, 0, 4});
+  cpu.regs[Cpu::EBX] = 0xfedcba9876543211ULL; cpu.write64(0xa010, 0x123456789abcdef0ULL);
+  cpu.memory[0xa00f] = 0xa5; cpu.memory[0xa018] = 0x5a; one(cpu);
+  check(cpu.read64(0xa010) == 0x1123456789abcdefULL && cpu.memory[0xa00f] == 0xa5 && cpu.memory[0xa018] == 0x5a,
+        "SHRD RIP-relative memory64 includes imm8 in final RIP and writes eight bytes");
+  program(cpu, {0x64, 0x67, 0x4f, 0x0f, 0xa4, 0x5c, 0x91, 8, 4});
+  cpu.fs_base = 0x1000; cpu.regs[Cpu::R9] = 0xffffffff0000b000ULL; cpu.regs[Cpu::R10] = 3;
+  cpu.regs[Cpu::R11] = 0xfedcba9876543211ULL; cpu.write64(0xc014, 0x123456789abcdef0ULL); one(cpu);
+  check(cpu.read64(0xc014) == 0x23456789abcdef0fULL && cpu.regs[Cpu::R11] == 0xfedcba9876543211ULL,
+        "SHLD memory64 applies FS, address32, extended SIB and REX.R source independently");
+
+  // A read-modify-write must respect write protection even with count zero.
+  cpu.fs_base = 0;
+  for (unsigned i = 0; i < 512; ++i) cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
+  cpu.write64(0x3000, 0x4003); cpu.write64(0x4000 + 11 * 8, 0xd001);
+  cpu.regs[Cpu::EBX] = 0xb000; cpu.regs[Cpu::EDX] = 0x1234;
+  cpu.write64(0xd000, 0xabcdef1234567890ULL);
+  for (const std::uint8_t count : {0, 1}) {
+    program(cpu, {0x48, 0x0f, 0xac, 0x13, count}); // SHRD [RBX],RDX,imm8
+    cpu.eflags = 2 | status; const auto saved = cpu.regs;
+    expect_fault(cpu, FaultCode::PageFault, "SHRD observes supervisor write protection for every count");
+    check(cpu.fault->error_code == 3 && cpu.regs == saved && cpu.eflags == (2 | status) &&
+          cpu.read64(0xd000) == 0xabcdef1234567890ULL, "faulting SHRD rolls back memory and flags");
+  }
+}
+
 void signed_multiply_boundaries() {
   Cpu cpu; boot(cpu);
   // Fixed mathematical products keep the INT64_MIN and overflow regressions
@@ -237,7 +321,8 @@ void paging_and_fault_tests() {
 
 int main() {
   try {
-    boot_and_register_tests(); addressing_stack_and_alu_tests(); signed_multiply_boundaries(); paging_and_fault_tests();
+    boot_and_register_tests(); addressing_stack_and_alu_tests(); double_shift_long_mode_tests();
+    signed_multiply_boundaries(); paging_and_fault_tests();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;
   } catch (const std::exception& e) {

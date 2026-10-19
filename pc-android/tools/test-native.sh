@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build/native
-for name in sparse_ram x86_cpu x86_long_mode x86_alu64_oracle boot_media pc_machine pc_iso pc_memory; do
+for name in sparse_ram x86_cpu x86_long_mode x86_alu64_oracle boot_media pc_machine pc_iso pc_memory pc_video; do
   g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic "native/tests/${name}_test.cpp" -o "build/native/${name}_test"
   if "build/native/${name}_test"; then
     :

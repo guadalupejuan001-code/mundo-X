@@ -13,7 +13,7 @@ endif()
 
 include(CTest)
 if (BUILD_TESTING)
-    foreach(name sparse_ram x86_cpu x86_long_mode x86_alu64_oracle boot_media pc_machine pc_iso pc_memory)
+    foreach(name sparse_ram x86_cpu x86_long_mode x86_alu64_oracle boot_media pc_machine pc_iso pc_memory pc_video)
         add_executable(${name}_test native/tests/${name}_test.cpp)
         if (MSVC)
             target_compile_options(${name}_test PRIVATE /W4)

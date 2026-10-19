@@ -403,6 +403,26 @@ int main() {
              need(pc.cpu.reg8(4) == 1 && fixture.reads->empty() && pc.disk_reads == 0,
                   "Wrong-drive read did not return BIOS error 01 without I/O");
          }},
+        {"ISO guest configures VBE and produces real framebuffer pixels", [] {
+             PcMachine pc(std::size_t(2048) * 1024 * 1024);
+             const auto fixture = mount(pc, isoFixture(cosmic_pc::graphics_boot_disk(1280,720)));
+             need(pc.boot_kind == "iso", "Graphics fixture must enter through the ISO boot path");
+             for (unsigned slice = 0; slice < 4 && !pc.cpu.halted && !pc.cpu.fault; ++slice)
+                 pc.run(50000);
+             need(!pc.cpu.fault && pc.cpu.halted,
+                  pc.cpu.fault ? pc.cpu.fault->describe() : "ISO graphics guest did not finish");
+             need(pc.cpu.read32(cosmic_pc::kGraphicsDemoResultAddress) == cosmic_pc::kGraphicsDemoResult,
+                  "ISO guest failed its pixel readback checks");
+             const auto video = pc.video_info();
+             need(video.graphics && video.width == 1280 && video.height == 720,
+                  "VBE mode selected by ISO guest must reach the presentation metadata");
+             std::array<std::uint8_t,4> pixel{};
+             pc.copy_video_rgba(1279,719,1,1,pixel.data(),pixel.size());
+             need(pixel == std::array<std::uint8_t,4>{{0xf5,0xf7,0xfa,255}},
+                  "The final visible pixel must come from guest CPU writes through the ISO boot path");
+             need(fixture.reads->empty() && pc.disk_reads == 0,
+                  "This complete single-sector graphics guest should not fabricate extra disk reads");
+         }},
     };
 
     for (const auto& test : cases) {
