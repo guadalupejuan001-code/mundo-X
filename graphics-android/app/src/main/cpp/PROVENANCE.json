@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/guadalupejuan001-code/mundo-X",
+  "commit": "ebd53fca714e7afaeeaa0044981df3565061022d",
+  "files": [
+    {
+      "path": "native/include/mundo_x/compact_core.hpp",
+      "git_blob_sha1": "f40c1477bce9bdd882afed7c54379d883c2ab33a",
+      "sha256": "aa9c89923b4ae839612532770ac7c7a461d5baeac3c8ac264bb8df2bd570027c"
+    },
+    {
+      "path": "native/include/mundo_x/dense_core.hpp",
+      "git_blob_sha1": "14db1153b2a9a5eaf54f3070f2597496ba1bb899",
+      "sha256": "e11895e5e10792c7ab13efcf6102931fcfe5ad0b76df23ccd8665290ca0772bc"
+    }
+  ]
+}

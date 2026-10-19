@@ -4,6 +4,8 @@
 
 **Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 18 de octubre de 2026.
 
+**Mundo X Graphics 0.1.1 para Android:** [aplicación, controles y compilación](graphics-android/README.md). Integra el observador de Graphics con un CompactCore compartido, puertas sobre 20 qubits, selección y edición por ID, sesión persistente y hasta 1.048.576 cajas procedurales. El workflow propio entrega la APK y las comprobaciones en emulador.
+
 **XLab 0.3.2 para Android:** [descargar ZIP con APK firmado](https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.2/XLab-Objetos-0.3.2.zip).
 Descomprime el ZIP y abre el APK incluido. [Descarga alternativa](https://raw.githubusercontent.com/guadalupejuan001-code/mundo-X/6b206566022afa8b7b20b9e6dd3153ce8dad9182/dist/XLab-Objetos-0.3.2.zip).
 [Objetos 3D persistentes, comparación de imágenes GPU
@@ -480,3 +482,4 @@ La conclusión de cada prueba se conserva aunque el resultado sea negativo. Mund
 ---
 
 **Mundo X — representar, transformar, verificar.**
+

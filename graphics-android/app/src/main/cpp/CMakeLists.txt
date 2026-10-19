@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(mx_graphics LANGUAGES CXX)
+add_library(mx_graphics SHARED core_bridge.cpp graphics_jni.cpp)
+target_compile_features(mx_graphics PRIVATE cxx_std_17)
+target_compile_options(mx_graphics PRIVATE -O3 -Wall -Wextra)
+target_link_options(mx_graphics PRIVATE "-Wl,-z,max-page-size=16384")
