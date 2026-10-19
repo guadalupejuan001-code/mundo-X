@@ -2,11 +2,14 @@
 <resources>
     <string name="app_name">COSMIC X PC</string>
     <string name="local_engine">LOCAL · MOTOR PROPIO</string>
-    <string name="scope_notice">Pruebas x86 y x64. Windows y juegos todavía pendientes.</string>
+    <string name="scope_notice">Motor x86/x64 propio con vídeo de texto y framebuffer VBE. Windows completo y juegos todavía pendientes.</string>
     <string name="boot_section">ORIGEN DEL ARRANQUE</string>
     <string name="no_image">Carga una prueba o abre una imagen local.</string>
     <string name="boot_demo">Arranque de prueba</string>
     <string name="boot_x64_demo">Prueba x64</string>
+    <string name="boot_graphics_demo">Prueba gráfica</string>
+    <string name="graphics_demo_resolution">Resolución que dibujará el invitado</string>
+    <string name="graphics_demo_selected">Prueba gráfica propia · %1$d × %2$d · pulsa Ejecutar</string>
     <string name="open_image">Abrir ISO/disco</string>
     <string name="reopen_image">Reabrir última imagen</string>
     <string name="demo_selected">Arranque de prueba propio · pulsa Ejecutar</string>
@@ -18,8 +21,10 @@
     <string name="memory_paused">EN PAUSA · MEMORIA</string>
     <string name="memory_pressure_paused">Android avisó de presión de memoria. Ejecución en pausa; la RAM del invitado se conserva.</string>
     <string name="initializing">INICIANDO MOTOR</string>
-    <string name="video_section">SALIDA DE VÍDEO · 80 × 25</string>
-    <string name="video_hint">Desliza horizontalmente para ver las 80 columnas.</string>
+    <string name="video_section">VÍDEO DEL PC</string>
+    <string name="video_waiting">Preparando la salida gráfica…</string>
+    <string name="video_adaptive">Auto</string>
+    <string name="video_hint">Auto, 4K y 8K eligen la salida del renderizador. El programa invitado determina su propio modo de vídeo.</string>
     <string name="start_hint">Carga una prueba o una imagen y pulsa Ejecutar. Paso avanza un paso CPU.</string>
     <string name="run">Ejecutar</string>
     <string name="pause">Pausa</string>
@@ -51,4 +56,5 @@
     <string name="select_boot">Selecciona un arranque</string>
     <string name="diagnostic_copied">Diagnóstico copiado.</string>
     <string name="empty_video">La memoria de vídeo todavía no contiene texto.</string>
+    <string name="empty_video_fault">El programa se detuvo sin producir texto. El diagnóstico aparece encima del vídeo.</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.cosmicx.pc;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentCallbacks2;
@@ -9,9 +10,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
@@ -33,12 +32,10 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowManager;
-import android.view.accessibility.AccessibilityEvent;
-import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -49,12 +46,15 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.mundox.graphics.RenderResolution;
 
 /** A local, native Android frontend. It never substitutes a simulated desktop for guest output. */
 public final class MainActivity extends Activity {
@@ -88,8 +88,8 @@ public final class MainActivity extends Activity {
         return thread;
     });
 
-    // Only the single machine executor may read or write these fields or use the native handle.
-    private long machine;
+    // CPU mutations remain on its executor. GL reads immutable JNI snapshots under the native lock.
+    private volatile long machine;
     private long lastFrameAt;
     private long lastPssSampleAt = -1;
     private long processPssBytes = -1;
@@ -119,10 +119,13 @@ public final class MainActivity extends Activity {
     private TextView memoryView;
     private TextView messageView;
     private TextView imageView;
-    private TerminalView terminal;
+    private PcVideoView videoView;
+    private TextView videoInfoView;
+    private TextView emptyVideoView;
     private EditText keyboard;
     private Button demoButton;
     private Button longModeDemoButton;
+    private Button graphicsDemoButton;
     private Button openButton;
     private Button reopenButton;
     private Button runButton;
@@ -192,6 +195,9 @@ public final class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setPadding(0, dp(6), 0, dp(8));
         content.addView(title);
+        TextView version = text("Versión " + packageVersion(), 12, GREEN);
+        version.setContentDescription("pc-version");
+        content.addView(version);
         TextView scope = text(getString(R.string.scope_notice), 14, MUTED);
         scope.setLineSpacing(dp(2), 1f);
         content.addView(scope);
@@ -208,6 +214,19 @@ public final class MainActivity extends Activity {
         pair(sourceRow, demoButton, longModeDemoButton, 56);
         demoButton.setOnClickListener(v -> loadDemo());
         longModeDemoButton.setOnClickListener(v -> loadLongModeDemo());
+
+        graphicsDemoButton = button(getString(R.string.boot_graphics_demo), false);
+        LinearLayout.LayoutParams graphicsParams = new LinearLayout.LayoutParams(-1, dp(48));
+        graphicsParams.topMargin = dp(8);
+        source.addView(graphicsDemoButton, graphicsParams);
+        graphicsDemoButton.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle(R.string.graphics_demo_resolution)
+                .setItems(new String[]{"1280 × 720", "3840 × 2160 (4K)", "7680 × 4320 (8K)"},
+                        (dialog, choice) -> {
+                            int[] widths = {1280, 3840, 7680};
+                            int[] heights = {720, 2160, 4320};
+                            loadGraphicsDemo(widths[choice], heights[choice]);
+                        }).setNegativeButton(android.R.string.cancel, null).show());
 
         openButton = button(getString(R.string.open_image), false);
         LinearLayout.LayoutParams openParams = new LinearLayout.LayoutParams(-1, dp(48));
@@ -262,25 +281,84 @@ public final class MainActivity extends Activity {
         memoryHint.setPadding(0, dp(6), 0, 0);
         state.addView(memoryHint);
 
+        messageView = text(getString(R.string.start_hint), 13, MUTED);
+        messageView.setContentDescription("pc-diagnostic");
+        messageView.setLineSpacing(dp(2), 1f);
+        messageView.setPadding(0, dp(12), 0, 0);
+        content.addView(messageView);
+
         TextView screenTitle = section(getString(R.string.video_section));
         LinearLayout.LayoutParams screenTitleParams = new LinearLayout.LayoutParams(-1, -2);
         screenTitleParams.topMargin = dp(20);
         screenTitleParams.bottomMargin = dp(8);
         content.addView(screenTitle, screenTitleParams);
-        HorizontalScrollView screenScroll = new HorizontalScrollView(this);
-        screenScroll.setFillViewport(false);
-        screenScroll.setHorizontalScrollBarEnabled(true);
-        screenScroll.setBackground(rounded(Color.rgb(2, 8, 4), BORDER, 10));
-        terminal = new TerminalView(this);
-        screenScroll.addView(terminal, new HorizontalScrollView.LayoutParams(-2, -2));
-        content.addView(screenScroll, new LinearLayout.LayoutParams(-1, -2));
+        videoInfoView = text(getString(R.string.video_waiting), 12, GREEN);
+        videoInfoView.setContentDescription("pc-video-metrics");
+        videoInfoView.setPadding(0, 0, 0, dp(8));
+        content.addView(videoInfoView);
+        FrameLayout videoPanel = new FrameLayout(this);
+        videoPanel.setBackgroundColor(Color.BLACK);
+        videoView = new PcVideoView(this);
+        videoView.setContentDescription("pc-screen");
+        videoView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        videoView.setStatusListener(this::updateVideoStatus);
+        videoView.setFrameSource(new PcVideoRenderer.FrameSource() {
+            @Override public PcVideoRenderer.FrameInfo acquireFrame() {
+                long handle = machine;
+                if (handle == 0 || destroyed.get()) return null;
+                String raw = NativeMachine.acquireVideoFrame(handle);
+                if (raw == null) return null;
+                long revision = 0;
+                try {
+                    JSONObject info = new JSONObject(raw);
+                    revision = info.getLong("revision");
+                    return new PcVideoRenderer.FrameInfo(info.getInt("kind"), info.getInt("width"),
+                            info.getInt("height"), revision);
+                } catch (JSONException | RuntimeException error) {
+                    if (revision != 0) NativeMachine.releaseVideoFrame(revision);
+                    throw new IllegalStateException("Metadatos de vídeo inválidos", error);
+                }
+            }
+            @Override public int copyText(long revision, ByteBuffer target) {
+                return NativeMachine.copyVideoText(revision, target);
+            }
+            @Override public int copyRows(long revision, int first, int rows, ByteBuffer target) {
+                return NativeMachine.copyVideoRows(revision, first, rows, target);
+            }
+            @Override public void releaseFrame(long revision) { NativeMachine.releaseVideoFrame(revision); }
+        });
+        videoPanel.addView(videoView, new FrameLayout.LayoutParams(-1, -1));
+        emptyVideoView = text(getString(R.string.empty_video), 14, MUTED);
+        emptyVideoView.setGravity(Gravity.CENTER);
+        emptyVideoView.setPadding(dp(16), dp(8), dp(16), dp(8));
+        emptyVideoView.setContentDescription("pc-video-empty");
+        videoPanel.addView(emptyVideoView, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams videoParams = new LinearLayout.LayoutParams(-1, dp(250));
+        content.addView(videoPanel, videoParams);
+        videoPanel.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> {
+            int width = r - l;
+            int height = Math.max(dp(180), Math.round(width * 9f / 16f));
+            if (width > 0 && view.getLayoutParams().height != height) {
+                view.getLayoutParams().height = height;
+                view.requestLayout();
+            }
+        });
+        LinearLayout resolutionRow = row(content);
+        Button adaptive = button(getString(R.string.video_adaptive), false);
+        Button fourK = button("4K", false);
+        Button eightK = button("8K", false);
+        for (Button control : new Button[]{adaptive, fourK, eightK}) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(48), 1);
+            params.topMargin = dp(8);
+            params.rightMargin = dp(4);
+            resolutionRow.addView(control, params);
+        }
+        adaptive.setOnClickListener(v -> videoView.setOutputMode(RenderResolution.ADAPTIVE));
+        fourK.setOnClickListener(v -> videoView.setOutputMode(RenderResolution.UHD_4K));
+        eightK.setOnClickListener(v -> videoView.setOutputMode(RenderResolution.UHD_8K));
         TextView screenHint = text(getString(R.string.video_hint), 11, MUTED);
         screenHint.setPadding(0, dp(6), 0, dp(8));
         content.addView(screenHint);
-
-        messageView = text(getString(R.string.start_hint), 13, MUTED);
-        messageView.setLineSpacing(dp(2), 1f);
-        content.addView(messageView);
 
         LinearLayout inputCard = card(content, 16);
         inputCard.addView(section(getString(R.string.keyboard_section)));
@@ -339,6 +417,16 @@ public final class MainActivity extends Activity {
     private void loadLongModeDemo() {
         imageView.setText(R.string.x64_demo_selected);
         operate(() -> NativeMachine.bootLongModeDemo(machine));
+    }
+
+    private void loadGraphicsDemo(int width, int height) {
+        imageView.setText(getString(R.string.graphics_demo_selected, width, height));
+        operate(() -> NativeMachine.bootGraphicsDemo(machine, width, height));
+    }
+
+    private String packageVersion() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (android.content.pm.PackageManager.NameNotFoundException error) { return "—"; }
     }
 
     /** Loading, reset and stepping are serialized with CPU slices and never run on the UI thread. */
@@ -695,13 +783,29 @@ public final class MainActivity extends Activity {
         messageView.setText(message);
         messageView.setTextColor("fault".equals(nativeStatus) || memoryPressurePaused
                 || !frontendMessage.isEmpty() ? AMBER : MUTED);
-        terminal.setScreen(screen);
+        boolean graphics = "vbe32".equals(state.optString("video_kind"));
+        boolean emptyText = !graphics && (screen == null || screen.trim().isEmpty());
+        emptyVideoView.setVisibility(emptyText ? View.VISIBLE : View.GONE);
+        if (emptyText) emptyVideoView.setText("fault".equals(nativeStatus)
+                ? getString(R.string.empty_video_fault) : getString(R.string.empty_video));
+        videoView.setGuestText(graphics ? "" : screen);
+        videoView.refresh();
+        updateVideoStatus(videoView.getStatus());
         lastDiagnostic = diagnostic(state, screen);
         refreshControls();
     }
 
+    /** Called on the UI thread; reports allocated output dimensions, including any rejected mode. */
+    private void updateVideoStatus(PcVideoRenderer.Status status) {
+        if (destroyed.get() || videoInfoView == null) return;
+        videoInfoView.setText(status.summary());
+        videoInfoView.setTextColor(status.error.isEmpty() ? GREEN : AMBER);
+    }
+
     private String diagnostic(JSONObject state, String screen) {
-        StringBuilder result = new StringBuilder("COSMIC X PC\nMotor x86/x64 propio\nAndroid ")
+        StringBuilder result = new StringBuilder("COSMIC X PC ").append(packageVersion())
+                .append("\nMotor x86/x64 propio\nImagen: ").append(imageView.getText())
+                .append("\nVídeo: ").append(videoInfoView.getText()).append("\nAndroid ")
                 .append(Build.VERSION.RELEASE)
                 .append(" · SDK ").append(Build.VERSION.SDK_INT)
                 .append("\nDispositivo: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
@@ -753,7 +857,9 @@ public final class MainActivity extends Activity {
         } catch (JSONException ignored) {
             result.append("\n\nEstado del motor y medición Android JSON:\n").append(state);
         }
-        result.append("\n\nSalida real de vídeo 80x25:\n").append(screen == null ? "" : screen);
+        if ("text".equals(state.optString("video_kind"))) {
+            result.append("\n\nTexto real del invitado 80x25:\n").append(screen == null ? "" : screen);
+        }
         return result.toString();
     }
 
@@ -795,6 +901,7 @@ public final class MainActivity extends Activity {
         boolean usable = machineAvailable && !busy;
         enabled(demoButton, usable);
         enabled(longModeDemoButton, usable);
+        enabled(graphicsDemoButton, usable);
         enabled(openButton, usable);
         enabled(reopenButton, usable);
         enabled(runButton, usable && !running && canAdvanceCpu());
@@ -831,7 +938,14 @@ public final class MainActivity extends Activity {
     private void copyDiagnostic() {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard != null) {
-            clipboard.setPrimaryClip(ClipData.newPlainText("Diagnóstico COSMIC X PC", lastDiagnostic));
+            PcVideoRenderer.Status video = videoView.getStatus();
+            String presentation = "\n\nPresentación actual:\n" + video.summary()
+                    + "\nÁrea visible: " + video.screenWidth + "×" + video.screenHeight
+                    + "\nGPU: " + video.renderer
+                    + "\nLímite de textura: " + video.textureLimit
+                    + "\nTexturas GL asignadas: " + video.textureBytes + " bytes"
+                    + "\nCuadros presentados: " + video.frames + " · revisión: " + video.revision;
+            clipboard.setPrimaryClip(ClipData.newPlainText("Diagnóstico COSMIC X PC", lastDiagnostic + presentation));
             if (Build.VERSION.SDK_INT < 33) showMessage(getString(R.string.diagnostic_copied));
         }
     }
@@ -858,6 +972,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (videoView != null) videoView.onResume();
         foreground.set(true);
         // Native execution resumes only following an explicit user action.
         refreshControls();
@@ -874,6 +989,7 @@ public final class MainActivity extends Activity {
         main.removeCallbacks(idleMemoryRefresh);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         inspectInWorker();
+        if (videoView != null) videoView.onPause();
         super.onPause();
     }
 
@@ -1021,67 +1137,4 @@ public final class MainActivity extends Activity {
 
     private static final class UnseekableImageException extends IOException { }
 
-    /** A fixed 80x25 terminal surface; every cell comes from NativeMachine.screen(). */
-    private static final class TerminalView extends View {
-        private static final int COLUMNS = 80;
-        private static final int ROWS = 25;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final String[] lines = new String[ROWS];
-        private final float cellWidth;
-        private final float cellHeight;
-        private final float baseline;
-        private final int padding;
-        private String previous = "";
-
-        TerminalView(Context context) {
-            super(context);
-            float density = getResources().getDisplayMetrics().density;
-            float scaledDensity = getResources().getDisplayMetrics().scaledDensity;
-            padding = Math.round(10 * density);
-            paint.setTypeface(Typeface.MONOSPACE);
-            paint.setTextSize(11 * scaledDensity);
-            paint.setColor(GREEN);
-            cellWidth = paint.measureText("M");
-            Paint.FontMetrics metrics = paint.getFontMetrics();
-            cellHeight = (float) Math.ceil(metrics.descent - metrics.ascent + density);
-            baseline = -metrics.ascent;
-            setScreen("");
-            setFocusable(true);
-            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
-            setContentDescription("pc-screen");
-        }
-
-        void setScreen(String value) {
-            String screen = value == null ? "" : value;
-            if (screen.equals(previous) && lines[0] != null) return;
-            previous = screen;
-            String[] rows = screen.replace("\r", "").split("\n", -1);
-            for (int row = 0; row < ROWS; row++) {
-                String line = row < rows.length ? rows[row] : "";
-                lines[row] = line.substring(0, Math.min(COLUMNS, line.length()));
-            }
-            invalidate();
-            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
-        }
-
-        @Override
-        public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
-            super.onInitializeAccessibilityNodeInfo(info);
-            info.setText(previous.isEmpty() ? getResources().getString(R.string.empty_video) : previous);
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            setMeasuredDimension((int) Math.ceil(cellWidth * COLUMNS) + padding * 2,
-                    (int) Math.ceil(cellHeight * ROWS) + padding * 2);
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            for (int row = 0; row < ROWS; row++) {
-                canvas.drawText(lines[row], padding, padding + baseline + row * cellHeight, paint);
-            }
-        }
-    }
 }

@@ -1,6 +1,8 @@
 package com.cosmicx.pc;
 
-/** JNI boundary for the project's own x86/x64 machine. All calls are serialized by MainActivity. */
+import java.nio.ByteBuffer;
+
+/** JNI boundary for the project's own x86/x64 machine. Native state is protected by one lock. */
 public final class NativeMachine {
     static {
         System.loadLibrary("cosmic_pc");
@@ -14,6 +16,8 @@ public final class NativeMachine {
     public static native void destroy(long machine);
     public static native String bootDemo(long machine);
     public static native String bootLongModeDemo(long machine);
+    /** Boots original x86 guest code that selects VBE and writes actual framebuffer pixels. */
+    public static native String bootGraphicsDemo(long machine, int width, int height);
     /** The native implementation duplicates fd before returning. */
     public static native String mount(long machine, int fd, long size, String mode);
     public static native String run(long machine, int budget);
@@ -22,4 +26,11 @@ public final class NativeMachine {
     public static native void key(long machine, int ascii, int scan);
     /** Actual text VRAM, 80 columns by 25 rows. */
     public static native String screen(long machine);
+    /** Acquires immutable video bytes. Release the returned revision in a finally block. */
+    public static native String acquireVideoFrame(long machine);
+    /** Copies 4,000 VGA character/attribute bytes into a direct buffer. */
+    public static native int copyVideoText(long revision, ByteBuffer target);
+    /** Copies bounded rows of an immutable BGRX snapshot as RGBA8, top to bottom. */
+    public static native int copyVideoRows(long revision, int firstRow, int rows, ByteBuffer target);
+    public static native void releaseVideoFrame(long revision);
 }

@@ -19,7 +19,27 @@ PY
 "$adb_bin" start-server
 "$emulator_bin" -avd cosmic-pc-test -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048 > "$evidence_dir/emulator.log" 2>&1 &
 pc_emulator_pid=$!
-trap 'kill "$pc_emulator_pid" 2>/dev/null || true' EXIT
+pc_evidence_collected=false
+collect_evidence() {
+  timeout 20 "$adb_bin" logcat -d > "$evidence_dir/logcat.txt" 2>/dev/null || true
+  for pc_file in pc-screen.png pc-tests.json pc-x64-state.json pc-video-state.json pc-video-screen.png; do
+    if timeout 20 "$adb_bin" exec-out run-as com.cosmicx.pc cat "files/$pc_file" > "$evidence_dir/$pc_file.tmp" 2>/dev/null; then
+      mv "$evidence_dir/$pc_file.tmp" "$evidence_dir/$pc_file"
+    else
+      rm -f "$evidence_dir/$pc_file.tmp"
+    fi
+  done
+  pc_evidence_collected=true
+}
+finish() {
+  pc_exit_status=$?
+  trap - EXIT
+  set +e
+  if [[ "$pc_evidence_collected" != true ]]; then collect_evidence; fi
+  kill "$pc_emulator_pid" 2>/dev/null || true
+  exit "$pc_exit_status"
+}
+trap finish EXIT
 ready=false
 for i in $(seq 1 120); do
   if ! kill -0 "$pc_emulator_pid" 2>/dev/null; then cat "$evidence_dir/emulator.log"; exit 1; fi
@@ -31,20 +51,57 @@ done
 "$adb_bin" install -r pc-dist/COSMIC-X-PC.apk
 "$adb_bin" install -r pc-dist/COSMIC-X-PC-tests.apk
 "$adb_bin" logcat -c
-timeout 180 "$adb_bin" shell am instrument -w com.cosmicx.pc.test/com.cosmicx.pc.PcInstrumentation | tee "$evidence_dir/instrumentation.txt"
-"$adb_bin" logcat -d > "$evidence_dir/logcat.txt"
-"$adb_bin" exec-out run-as com.cosmicx.pc cat files/pc-screen.png > "$evidence_dir/pc-screen.png"
-"$adb_bin" exec-out run-as com.cosmicx.pc cat files/pc-tests.json > "$evidence_dir/pc-tests.json"
-"$adb_bin" exec-out run-as com.cosmicx.pc cat files/pc-x64-state.json > "$evidence_dir/pc-x64-state.json"
+timeout --kill-after=15 600 "$adb_bin" shell am instrument -w com.cosmicx.pc.test/com.cosmicx.pc.PcInstrumentation | tee "$evidence_dir/instrumentation.txt"
+collect_evidence
 python3 - <<'PY'
 import json
 from pathlib import Path
-assert 'COSMIC_PC_TESTS_PASSED tests=12 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
+assert 'COSMIC_PC_TESTS_PASSED tests=20 failures=0' in Path('pc-evidence/instrumentation.txt').read_text()
 v=json.loads(Path('pc-evidence/pc-tests.json').read_text())
-assert v['tests']==12 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
+assert v['tests']==20 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
+assert v['iso_shrd_verified'] and v['guest_8k_verified'] and v['output_8k_verified'] and v['video_tests']==8
 assert v['logical_ram_bytes']==2**31 and v['guest_payload_cap_bytes']==2**30
+assert 0<v['native_test_process_pss_bytes']<2**31
 assert 0<v['activity_process_pss_bytes']<2**31
 x=json.loads(Path('pc-evidence/pc-x64-state.json').read_text())
 assert x['cpu_mode']=='long64' and x['status']=='halted' and x['regs_hex'][0]=='2345678922222223'
-assert Path('pc-evidence/pc-screen.png').stat().st_size>1000
+video=json.loads(Path('pc-evidence/pc-video-state.json').read_text())
+assert video['status']=='passed' and video['windows_booted'] is False and video['virtual_3d_gpu'] is False
+iso=video['iso_shrd']
+assert iso['status']=='halted' and iso['boot_kind']=='iso' and iso['regs'][0]&65535==0x8123
+rgba=['FF4040FF','32E875FF','477BFFFF','F5F7FAFF','37D5FFFF']
+for key,width,height in [('native_720',1280,720),('native_8k',7680,4320)]:
+    sample=video[key]
+    state=sample['state']
+    assert state['video_kind']=='vbe32' and state['video_width']==width and state['video_height']==height,(key,state)
+    assert sample['rgba']==rgba,(key,sample['rgba'])
+assert video['native_720']['cache_reused'] is True
+native8k=video['native_8k']
+assert native8k['snapshot_bytes']==132710400 and native8k['snapshot_budget_bytes']==256*2**20
+assert native8k['stable_after_reset'] is True and native8k['stable_after_destroy'] is True
+assert native8k['state']['ram_allocated_bytes']<12*2**20
+assert video['native_snapshot_bytes_after_cleanup']==0
+assert video['jni_invalid_requests_rejected']==11 and video['jni_direct_slice_guards_preserved'] is True
+for key,width,height,mode,output in [('ui_4k',1280,720,1,[2160,3840]),('ui_8k',7680,4320,2,[4320,7680]),('pause_resume',7680,4320,2,[4320,7680])]:
+    sample=video[key]
+    assert sample['guest_width']==width and sample['guest_height']==height,(key,sample)
+    assert sorted([sample['output_width'],sample['output_height']])==output,(key,sample)
+    assert sample['active_mode']==mode and sample['requested_mode']==mode and sample['error']=='',(key,sample)
+    assert sample['rgba']==rgba and sample['frames']>0 and sample['revision']>0,(key,sample)
+    assert sample['uploaded_bytes']>=width*height*4 and sample['texture_limit']>=max(width,height,max(output)),(key,sample)
+    assert sample['renderer'] and sample['gl_texture_budget_bytes']==512*2**20
+    assert 0<sample['gl_texture_bytes']<=sample['gl_texture_budget_bytes']
+    assert 0<sample['process_pss_bytes']<2**31
+restored=video['pause_resume']
+assert restored['forced_context_loss'] is True and restored['same_guest_revision'] is True
+assert restored['revision']==video['ui_8k']['revision']
+assert restored['uploaded_bytes']>=video['ui_8k']['uploaded_bytes']+132710400
+assert restored['frames']>video['ui_8k']['frames']
+rollback=video['gpu_limit_rollback']
+assert rollback['injected_texture_limit']==4096 and rollback['requested_mode']==2 and rollback['active_mode']==1
+assert sorted([rollback['output_width'],rollback['output_height']])==[2160,3840]
+assert rollback['pixels_preserved'] is True and 'GL_MAX_TEXTURE_SIZE=4096' in rollback['error']
+for name in ['pc-screen.png','pc-video-screen.png']:
+    screenshot=Path('pc-evidence',name).read_bytes()
+    assert len(screenshot)>1000 and screenshot.startswith(b'\x89PNG\r\n\x1a\n'),name
 PY
