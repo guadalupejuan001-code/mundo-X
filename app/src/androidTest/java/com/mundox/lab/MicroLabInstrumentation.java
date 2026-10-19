@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.View;
@@ -17,9 +18,12 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /** Exercises the native bridge, rendered controls, reproducibility and lifecycle. */
 public final class MicroLabInstrumentation extends Instrumentation {
+    private static final long STATE_TIMEOUT_MS=20000;
     private MicroLabActivity activity;
     private int passed,failed;
     private final List<String> notes=new ArrayList<>();
@@ -48,10 +52,10 @@ public final class MicroLabInstrumentation extends Instrumentation {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);activity=(MicroLabActivity)startActivitySync(intent);
             await(s->s.optLong("ticks")>5);
             check("render_and_pause",()->{
-                click("micro_play");SystemClock.sleep(350);long ticks=state().getLong("ticks");SystemClock.sleep(250);
-                require(state().getLong("ticks")==ticks,"pause must freeze model");require(activity.lastError.isEmpty(),activity.lastError);screenshot("micro-particles.png");
+                click("micro_play");long ticks=frameState().getLong("ticks");SystemClock.sleep(250);
+                require(frameState().getLong("ticks")==ticks,"pause must freeze model");require(activity.lastError.isEmpty(),activity.lastError);screenshot("micro-particles.png");
             });
-            check("single_step",()->{long ticks=state().getLong("ticks");click("micro_step");await(s->s.optLong("ticks")==ticks+1);});
+            check("single_step",()->{long ticks=frameState().getLong("ticks");click("micro_step");await(s->s.optLong("ticks")==ticks+1);});
             check("particle_capacity",()->{click("micro_count");await(s->s.optInt("particles")==8192);click("micro_count");await(s->s.optInt("particles")==16384);});
             check("quantum_gates_and_bell_entropy",()->{
                 click("micro_mode_2");await(s->s.optInt("mode")==2);click("micro_preset_0");await(s->q(s,0,"p1")==0);
@@ -94,8 +98,27 @@ public final class MicroLabInstrumentation extends Instrumentation {
     }
     private double q(JSONObject s,int index,String key)throws Exception{return s.getJSONArray("qubits").getJSONObject(index).getDouble(key);}
     private JSONObject state()throws Exception{return new JSONObject(activity.latestSnapshot);}
+    private JSONObject frameState()throws Exception{
+        long end=SystemClock.uptimeMillis()+STATE_TIMEOUT_MS;
+        GLSurfaceView[] surface=new GLSurfaceView[1];CountDownLatch drained=new CountDownLatch(1);
+        runOnMainSync(()->{surface[0]=(GLSurfaceView)find("micro_surface");surface[0].queueEvent(drained::countDown);});
+        require(drained.await(Math.max(0,end-SystemClock.uptimeMillis()),TimeUnit.MILLISECONDS),"GL command queue timeout");
+        // Pause is queued on the GL thread. Drain it and its already-posted UI
+        // reports before requesting a fresh observation of the paused model.
+        waitForIdleSync();String previous=activity.latestSnapshot;
+        while(SystemClock.uptimeMillis()<end){
+            require(activity.lastError.isEmpty(),activity.lastError);
+            surface[0].requestRender();String current=activity.latestSnapshot;
+            // Native snapshots are new Strings even when JSON/ticks are equal.
+            // Request frames until the renderer's 250-ms reporting cadence
+            // publishes again; merely waiting on a paused view can stay stale.
+            if(current!=previous)return new JSONObject(current);
+            SystemClock.sleep(50);
+        }
+        throw new AssertionError("fresh frame snapshot timeout: "+activity.latestSnapshot);
+    }
     private void await(Condition condition)throws Exception{
-        long end=SystemClock.uptimeMillis()+20000;
+        long end=SystemClock.uptimeMillis()+STATE_TIMEOUT_MS;
         while(SystemClock.uptimeMillis()<end){require(activity.lastError.isEmpty(),activity.lastError);if(condition.ready(state()))return;SystemClock.sleep(50);}
         throw new AssertionError("state timeout: "+activity.latestSnapshot);
     }

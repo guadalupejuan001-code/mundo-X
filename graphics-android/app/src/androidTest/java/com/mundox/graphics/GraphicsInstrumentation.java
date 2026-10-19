@@ -773,12 +773,20 @@ public final class GraphicsInstrumentation extends Instrumentation {
             } finally {
                 activity.renderer.resolution(logical.resolutionLimit);
                 activity.renderer.setSynchronousTiming(false);
+                // resolution() schedules allocation. Complete it on this GL thread before
+                // the next queued capture checks the still-live framebuffer's RGBA budget.
+                activity.renderer.onDrawFrame(null);
             }
         });
         QuantumRenderer.FrameStats rendered = actual.get();
         expect(rendered != null && rendered.width == 7680 && rendered.height == 4320
                 && rendered.gpuSynchronized && rendered.objectCount == 1 && rendered.drawMs > 0,
                 "Native draw did not complete on a full 8K framebuffer");
+        QuantumRenderer.FrameStats adaptive = activity.renderer.frameStats();
+        expect(adaptive != null && adaptive.resolutionMode == QuantumRenderer.RESOLUTION_ADAPTIVE
+                && adaptive.width == before.width && adaptive.height == before.height
+                && adaptive.frameNumber > rendered.frameNumber,
+                "Adaptive framebuffer did not complete before RGBA capture");
         QuantumRenderer.Capture returned = frame(false);
         expect(before.changed(returned) == 0, "Returning from 8K did not preserve the original pixels");
         sameGraphics(logical, visualSnapshot(), "8K allocation changed the logical scene");
