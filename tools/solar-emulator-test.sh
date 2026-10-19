@@ -11,13 +11,22 @@ solar_serial=emulator-5554
 solar_apks="${SOLAR_APK_DIR:-solar-apks}"
 solar_evidence="${SOLAR_EVIDENCE_DIR:-solar-evidence}"
 solar_uhd="${SOLAR_UHD4K:-false}"
+solar_8k="${SOLAR_UHD8K:-false}"
 solar_package=com.cosmicx.solar
 solar_apk=COSMIC-X-Solar.apk
 solar_tests=COSMIC-X-Solar-tests.apk
 solar_instrument_timeout=1000
 solar_instrument_args=()
 solar_verify_args=()
-if [[ "$solar_uhd" == true ]]; then
+if [[ "$solar_8k" == true ]]; then
+  solar_uhd=true
+  solar_package=com.cosmicx.solar.ultra
+  solar_apk=COSMIC-X-Solar-8K.apk
+  solar_tests=COSMIC-X-Solar-8K-tests.apk
+  solar_instrument_timeout=2400
+  solar_instrument_args=(-e uhd4k true -e uhd8k true)
+  solar_verify_args=(--uhd8k)
+elif [[ "$solar_uhd" == true ]]; then
   solar_package=com.cosmicx.solar.uhd
   solar_apk=COSMIC-X-Solar-4K.apk
   solar_tests=COSMIC-X-Solar-4K-tests.apk
@@ -28,14 +37,16 @@ fi
 mkdir -p "$solar_evidence"
 solar_evidence="$(realpath "$solar_evidence")"
 
-python3 - "$solar_apks" "$solar_uhd" <<'PY'
+python3 - "$solar_apks" "$solar_uhd" "$solar_8k" <<'PY'
 import hashlib
 import subprocess
 import sys
 from pathlib import Path
 directory = Path(sys.argv[1])
 expected_names = {'COSMIC-X-Solar.apk', 'COSMIC-X-Solar-tests.apk'}
-if sys.argv[2] == 'true':
+if sys.argv[3] == 'true':
+    expected_names = {'COSMIC-X-Solar-8K.apk', 'COSMIC-X-Solar-8K-tests.apk', 'COSMIC-X-Solar-coexist.apk'}
+elif sys.argv[2] == 'true':
     expected_names = {'COSMIC-X-Solar-4K.apk', 'COSMIC-X-Solar-4K-tests.apk', 'COSMIC-X-Solar-coexist.apk'}
 found = set()
 for row in (directory / 'SHA256SUMS.txt').read_text().splitlines():
