@@ -14,9 +14,12 @@ import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.OpenableColumns;
 import android.util.Log;
+import android.view.Choreographer;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -134,7 +137,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         summary.putInt("tests_failed", failures);
         summary.putString("stream", "\nCOSMIC_UNIFIED_TESTS_" + (passed ? "PASSED" : "FAILED")
                 + " tests=" + results.size() + " failures=" + failures + "\n");
-        if (activity != null) runOnMainSync(() -> activity.finish());
+        if (activity != null) mainSync(() -> activity.finish());
         finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, summary);
     }
 
@@ -156,6 +159,10 @@ public final class CosmicInstrumentation extends Instrumentation {
             try { screen("failure-" + name + ".png"); } catch (Throwable ignored) { }
         }
         results.add(result(name, error == null, SystemClock.elapsedRealtime() - began, error));
+        // Keep completed proof if a later Android call stalls or its process is terminated.
+        // The verifier still requires the complete, exact 24-case inventory.
+        try { reports(); }
+        catch (Exception reporting) { throw new AssertionError("Could not checkpoint Android evidence", reporting); }
         sendStatus(error == null ? 0 : -2, status);
     }
 
@@ -202,6 +209,8 @@ public final class CosmicInstrumentation extends Instrumentation {
         sameNative(state, world(), "Initial frame mutated native state");
         saveFrame("cosmic-render-color.png", color);
         saveFrame("cosmic-render-ids.png", ids);
+        // ID captures are also blitted to the visible surface. Acknowledge its color repaint.
+        frame(false);
         screen("cosmic-motor.png");
         metrics.put("initialObjects", state.graphics.objectCount).put("initialVisiblePixels", visible)
                 .put("initialDistinctIds", objects.size()).put("initialResolutionLimit", state.graphics.resolutionLimit)
@@ -325,7 +334,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         World before = world();
         QuantumRenderer.Capture image = frame(false);
         AtomicReference<Boolean> moved = new AtomicReference<>(false);
-        runOnMainSync(() -> moved.set(activity.moveTaskToBack(true)));
+        mainSync(() -> moved.set(activity.moveTaskToBack(true)));
         require(Boolean.TRUE.equals(moved.get()), "Could not move the app to the real background");
         await(() -> !activity.resumed, "real onPause");
         getTargetContext().startActivity(new Intent(getTargetContext(), CosmicActivity.class)
@@ -356,7 +365,7 @@ public final class CosmicInstrumentation extends Instrumentation {
                 "Lifecycle fixture did not contain disabled negative coupling and hidden orbit state");
         QuantumRenderer.Capture image = frame(false);
         CosmicActivity original = activity;
-        runOnMainSync(original::recreate);
+        mainSync(original::recreate);
         await(() -> ownerMonitor.getLastActivity() instanceof CosmicActivity
                 && ownerMonitor.getLastActivity() != original, "new Activity instance");
         refreshOwner();
@@ -371,7 +380,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         // Finish/start uses the private on-disk session; no retained Activity object is available.
         CosmicActivity closing = activity;
         NativeCore closingOwner = activity.core;
-        runOnMainSync(closing::finish);
+        mainSync(closing::finish);
         await(closing::isDestroyed, "finished Activity destruction");
         activity = (CosmicActivity) startActivitySync(new Intent(getTargetContext(), CosmicActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
@@ -405,7 +414,7 @@ public final class CosmicInstrumentation extends Instrumentation {
             require(child != null && className.equals(child.getClass().getName()), "Card did not open its included experiment: " + id);
             final Activity opened = child;
             await(() -> onMainWindowReady(opened), "experiment window " + id);
-            waitForIdleSync();
+            afterUiTraversal();
             JSONObject details = new JSONObject().put("id", id).put("activity", className);
             if (id.equals("circuitos")) {
                 await(() -> onMainEnabled(opened, "run_circuit"), "circuit control");
@@ -453,7 +462,7 @@ public final class CosmicInstrumentation extends Instrumentation {
             experiments.put(details);
         } finally {
             removeMonitor(monitor);
-            if (child != null) { final Activity opened = child; runOnMainSync(opened::finish); }
+            if (child != null) { final Activity opened = child; mainSync(opened::finish); }
             refreshOwner();
         }
         click("nav_motor");
@@ -476,7 +485,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         documentAction("project_open", Intent.ACTION_OPEN_DOCUMENT, uri);
         await(() -> providerLong(uri, "reads") > reads, "invalid document read by production importer");
         SystemClock.sleep(500);
-        waitForIdleSync();
+        afterUiTraversal();
         require(activity.core == before.owner, "Invalid document replaced the active native session");
         sameWorld(before, world(), "Invalid document changed the active project");
         click("nav_motor");
@@ -523,7 +532,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         // This is the real control, so UI state and the animation scheduler agree.
         click("nav_motor");
         AtomicReference<String> title = new AtomicReference<>("");
-        runOnMainSync(() -> { View view = find(activity, "toggle_animation"); if (view instanceof TextView) title.set(((TextView) view).getText().toString()); });
+        mainSync(() -> { View view = find(activity, "toggle_animation"); if (view instanceof TextView) title.set(((TextView) view).getText().toString()); });
         String lower = title.get().toLowerCase(java.util.Locale.ROOT);
         if (lower.contains("paus") || lower.contains("detener")) click("toggle_animation");
     }
@@ -531,9 +540,12 @@ public final class CosmicInstrumentation extends Instrumentation {
         await(() -> {
             Activity candidate = ownerMonitor.getLastActivity();
             if (candidate instanceof CosmicActivity && ((CosmicActivity) candidate).resumed) activity = (CosmicActivity) candidate;
-            return activity != null && activity.resumed && activity.renderer != null && activity.renderer.hasFrame;
+            return activity != null && activity.resumed && activity.renderer != null;
         }, "return to CosmicActivity");
-        waitForIdleSync();
+        // A restored Labs tab deliberately pauses its hidden GLSurfaceView. Show Motor
+        // before asking that observer for a frame, including after a landscape lab.
+        click("nav_motor");
+        await(() -> activity.renderer.hasFrame, "returned Motor frame");
     }
     private World world() throws Exception {
         AtomicReference<World> result = new AtomicReference<>();
@@ -596,45 +608,76 @@ public final class CosmicInstrumentation extends Instrumentation {
         require(view != null, "Missing UI control: " + tag);
         return view;
     }
+    /** Animated Canvas experiments keep the queue busy; acknowledge commands, not global idleness. */
+    private void mainSync(Runnable command) {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        require(new Handler(Looper.getMainLooper()).post(() -> {
+            try { command.run(); }
+            catch (Throwable caught) { error.set(caught); }
+            finally { done.countDown(); }
+        }), "Android UI queue rejected an operation");
+        try {
+            if (!done.await(TIMEOUT, TimeUnit.MILLISECONDS)) throw new AssertionError("Android UI operation timed out; main stack: "
+                    + Arrays.toString(Looper.getMainLooper().getThread().getStackTrace()));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted Android UI operation", interrupted);
+        }
+        if (error.get() != null) throw new AssertionError("Android UI operation", error.get());
+    }
+    private void afterUiTraversal() {
+        CountDownLatch done = new CountDownLatch(1);
+        // Post back after the next vsync dispatch, which includes View traversal and
+        // SurfaceView resizing. Continuous animation may proceed without becoming idle.
+        mainSync(() -> Choreographer.getInstance().postFrameCallback(frameTime ->
+                new Handler(Looper.getMainLooper()).post(done::countDown)));
+        try {
+            require(done.await(TIMEOUT, TimeUnit.MILLISECONDS), "Android View traversal timed out");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted Android View traversal", interrupted);
+        }
+    }
     private void click(String tag) { click(activity, tag); }
     private void click(Activity target, String tag) {
-        runOnMainSync(() -> {
+        mainSync(() -> {
             View view = find(target, tag);
             view.requestRectangleOnScreen(new Rect(0, 0, view.getWidth(), view.getHeight()), true);
             require(view.isEnabled() && view.performClick(), "Control did not activate: " + tag);
         });
-        waitForIdleSync();
+        afterUiTraversal();
     }
     private boolean onMainVisible(Activity target, String tag) {
         AtomicReference<Boolean> result = new AtomicReference<>(false);
-        runOnMainSync(() -> result.set(find(target, tag).isShown()));
+        mainSync(() -> result.set(find(target, tag).isShown()));
         return result.get();
     }
     private boolean onMainEnabled(Activity target, String tag) {
         AtomicReference<Boolean> result = new AtomicReference<>(false);
-        runOnMainSync(() -> result.set(find(target, tag).isEnabled()));
+        mainSync(() -> result.set(find(target, tag).isEnabled()));
         return result.get();
     }
     private boolean onMainWindowReady(Activity target) {
         AtomicReference<Boolean> result = new AtomicReference<>(false);
-        runOnMainSync(() -> { View view = target.getWindow().getDecorView(); result.set(view.isShown() && view.getWidth() > 0 && view.getHeight() > 0); });
+        mainSync(() -> { View view = target.getWindow().getDecorView(); result.set(view.isShown() && view.getWidth() > 0 && view.getHeight() > 0); });
         return result.get();
     }
     private String text(Activity target, String tag) {
         AtomicReference<String> result = new AtomicReference<>("");
-        runOnMainSync(() -> result.set(((TextView) find(target, tag)).getText().toString()));
+        mainSync(() -> result.set(((TextView) find(target, tag)).getText().toString()));
         return result.get();
     }
     private String description(Activity target, String tag) {
         AtomicReference<String> result = new AtomicReference<>("");
-        runOnMainSync(() -> { CharSequence value = find(target, tag).getContentDescription(); result.set(value == null ? "" : value.toString()); });
+        mainSync(() -> { CharSequence value = find(target, tag).getContentDescription(); result.set(value == null ? "" : value.toString()); });
         return result.get();
     }
     private String privateString(Activity target, String name) throws Exception {
         Field field = target.getClass().getDeclaredField(name); field.setAccessible(true);
         AtomicReference<String> result = new AtomicReference<>("");
         AtomicReference<Throwable> error = new AtomicReference<>();
-        runOnMainSync(() -> {
+        mainSync(() -> {
             try { Object value = field.get(target); result.set(value == null ? "" : value.toString()); }
             catch (Throwable caught) { error.set(caught); }
         });
@@ -645,7 +688,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         Field field = target.getClass().getDeclaredField(name); field.setAccessible(true);
         AtomicReference<String> result = new AtomicReference<>("");
         AtomicReference<Throwable> error = new AtomicReference<>();
-        runOnMainSync(() -> {
+        mainSync(() -> {
             try { result.set(((TextView) field.get(target)).getText().toString()); }
             catch (Throwable caught) { error.set(caught); }
         });
@@ -653,7 +696,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         return result.get();
     }
     private void screen(String name) throws Exception {
-        waitForIdleSync();
+        afterUiTraversal();
         SystemClock.sleep(250);
         Bitmap bitmap = getUiAutomation().takeScreenshot();
         require(bitmap != null, "No actual Android screenshot");

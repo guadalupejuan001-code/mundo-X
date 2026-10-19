@@ -266,7 +266,7 @@ public final class CosmicActivity extends Activity {
         String[] ids={"motor","nucleo","labs","archivo"},names={"Motor","Núcleo","Laboratorios","Proyectos"};
         for(int j=0;j<4;j++){final int index=j;nav[j]=ui.column();nav[j].setGravity(Gravity.CENTER);nav[j].setPadding(0,ui.dp(8),0,ui.dp(7));nav[j].setTag("nav_"+ids[j]);nav[j].setContentDescription(names[j]);nav[j].setOnClickListener(v->selectTab(index,true));
             navIcons[j]=new CosmicUi.Glyph(this,ids[j],MUTED);nav[j].addView(navIcons[j],new LinearLayout.LayoutParams(ui.dp(24),ui.dp(24)));
-            navLabels[j]=ui.text(names[j],10,MUTED,true);navLabels[j].setPadding(0,ui.dp(5),0,0);nav[j].addView(navLabels[j]);row.addView(nav[j],new LinearLayout.LayoutParams(0,ui.dp(60),1));}
+            navLabels[j]=ui.text(names[j],10,MUTED,true);navLabels[j].setGravity(Gravity.CENTER);navLabels[j].setPadding(0,ui.dp(5),0,0);nav[j].addView(navLabels[j]);row.addView(nav[j],new LinearLayout.LayoutParams(0,ui.dp(60),1));}
         outer.addView(row);return outer;
     }
 
