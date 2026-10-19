@@ -911,6 +911,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
         glDeleteBuffers(1,new int[]{overlayVbo},0);glDeleteVertexArrays(2,new int[]{eyeVao,overlayVao},0);
         sceneProgram=overlayProgram=0;hasFrame=false;capture=null;
-        activeUhd=false;
+        activeResolutionMode=RenderResolution.ADAPTIVE;
     }
 }
