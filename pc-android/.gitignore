@@ -1,0 +1,10 @@
+.gradle/
+.cxx/
+local.properties
+build/
+app/build/
+artifacts/
+__pycache__/
+native/tests/*_test
+native/tests/*_test_ubsan
+native/tests/*_test_asan

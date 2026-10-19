@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /** Device-level smoke tests. Runs with the platform runner, without test libraries. */
 public final class XLabInstrumentation extends Instrumentation {
     private static final long DEADLINE_MS = 20_000L;
-    private Activity activity;
+    private volatile Activity activity;
     private boolean largeSceneOnly;
     private int passed;
     private int failed;
@@ -56,6 +56,18 @@ public final class XLabInstrumentation extends Instrumentation {
     @Override
     public void onStart() {
         new Thread(this::runChecks, "XLab-device-checks").start();
+    }
+
+    @Override
+    public void callActivityOnResume(Activity resumed) {
+        super.callActivityOnResume(resumed);
+        Activity previous = activity;
+        // First-boot theme overlays can recreate the current Activity after
+        // startActivitySync returns. Follow that replacement, while explicit
+        // navigation remains responsible for switching to another class.
+        if (previous != null && resumed.getClass() == previous.getClass()) {
+            activity = resumed;
+        }
     }
 
     private void runChecks() {
@@ -95,6 +107,18 @@ public final class XLabInstrumentation extends Instrumentation {
                         "Bell histogram contains an uncorrelated outcome");
                 require(total(counts) == 128, "Bell histogram lost shots");
                 screenshot("xlab-mesa.png");
+                String savedScript = text("script_editor");
+                recreateCurrentActivity();
+                awaitReady("circuit_status", "circuit_result");
+                JSONObject restored = requireNativeJson("circuit_result");
+                require(savedScript.equals(text("script_editor")),
+                        "Circuit source did not survive Activity recreation");
+                require(restored.getInt("step") == bell.getInt("step"),
+                        "Circuit step did not survive Activity recreation");
+                requireProbability(restored.getJSONArray("prob_one").getDouble(0), 0.5,
+                        "Restored Bell q0");
+                requireProbability(restored.getJSONArray("prob_one").getDouble(1), 0.5,
+                        "Restored Bell q1");
                 preset("preset_bell");
                 click("step_next");
                 awaitReady("circuit_status", "circuit_result");
@@ -662,14 +686,56 @@ public final class XLabInstrumentation extends Instrumentation {
     }
 
     private void click(String tag) {
-        main(() -> {
-            View view = find(tag);
-            if (!view.isShown()) throw new AssertionError("Hidden control: " + tag);
-            if (!view.isEnabled()) throw new AssertionError("Disabled control: " + tag);
-            if (!view.performClick()) throw new AssertionError("No click action: " + tag);
-            return null;
-        });
-        waitForIdleSync();
+        long deadline = SystemClock.uptimeMillis() + DEADLINE_MS;
+        while (SystemClock.uptimeMillis() < deadline) {
+            boolean clicked = main(() -> {
+                Activity current = activity;
+                if (current == null || current.isDestroyed() || current.isFinishing()
+                        || !current.getWindow().getDecorView().isShown()
+                        || !current.hasWindowFocus()) return false;
+                // Resolve the View only after the current window is ready.
+                // A View retained across relaunch belongs to the destroyed UI.
+                View view = find(tag);
+                if (!view.isShown()) throw new AssertionError("Hidden control: " + tag);
+                if (!view.isEnabled()) throw new AssertionError("Disabled control: " + tag);
+                if (!view.performClick()) throw new AssertionError("No click action: " + tag);
+                return true;
+            });
+            if (clicked) {
+                waitForIdleSync();
+                return;
+            }
+            SystemClock.sleep(50L);
+        }
+        throw new AssertionError("No resumed, visible window for control: " + tag);
+    }
+
+    private void recreateCurrentActivity() {
+        long deadline = SystemClock.uptimeMillis() + DEADLINE_MS;
+        Activity previous = null;
+        while (previous == null && SystemClock.uptimeMillis() < deadline) {
+            previous = main(() -> {
+                Activity current = activity;
+                if (current == null || current.isDestroyed() || current.isFinishing()
+                        || !current.getWindow().getDecorView().isShown()
+                        || !current.hasWindowFocus()) return null;
+                current.recreate();
+                return current;
+            });
+            if (previous == null) SystemClock.sleep(50L);
+        }
+        final Activity replaced = previous;
+        if (replaced == null) throw new AssertionError("No active window to recreate");
+        while (SystemClock.uptimeMillis() < deadline) {
+            boolean ready = main(() -> activity != replaced && !activity.isDestroyed()
+                    && activity.getWindow().getDecorView().isShown() && activity.hasWindowFocus());
+            if (ready) {
+                diagnosticNotes.add("Activity recreation resumed a new, visible test window.");
+                return;
+            }
+            SystemClock.sleep(50L);
+        }
+        throw new AssertionError("Activity recreation did not resume a new window");
     }
 
     private void preset(String tag) {

@@ -1,0 +1,29 @@
+{
+  "retrieved": "2026-10-19",
+  "assets": [
+    {
+      "asset": "textures/earth.png",
+      "source": "https://svs.gsfc.nasa.gov/2915/",
+      "download_url": "https://svs.gsfc.nasa.gov/vis/a000000/a002900/a002915/bluemarble-2048.png",
+      "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio; Blue Marble, Reto Stockli (NASA/GSFC) and NASA Earth Observatory.",
+      "sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+      "bytes": 1511379
+    },
+    {
+      "asset": "textures/moon.jpg",
+      "source": "https://svs.gsfc.nasa.gov/4720/",
+      "download_url": "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_2k.jpg",
+      "credit": "NASA Scientific Visualization Studio; LRO/LROC; Ernie Wright. Map optimized for aesthetics, with polar fill; not a measurement product.",
+      "sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+      "bytes": 457942
+    },
+    {
+      "asset": "textures/jupiter.jpg",
+      "source": "https://science.nasa.gov/photojournal/cassinis-best-maps-of-jupiter-cylindrical-map/",
+      "download_url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia07/pia07782/PIA07782.jpg",
+      "credit": "NASA/JPL/Space Science Institute; Cassini PIA07782, observations 2000-12-11 and 2000-12-12.",
+      "sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+      "bytes": 115028
+    }
+  ]
+}

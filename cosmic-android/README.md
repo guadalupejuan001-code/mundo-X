@@ -1,4 +1,4 @@
-# COSMIC X Engine · Android 0.3.0
+# COSMIC X Engine · Android 0.3.1
 
 Una app nueva para la computación cuántica de Mundo X: su núcleo, su motor gráfico integrado y sus experimentos originales de Android. La aplicación se instala como `com.mundox.cosmic`, junto a las aplicaciones anteriores.
 
@@ -6,7 +6,7 @@ Una app nueva para la computación cuántica de Mundo X: su núcleo, su motor gr
 
 ## La nueva interfaz
 
-- **Motor:** ciudad procedural con presentación COSMIC, fachadas iluminadas, cámara cercana, selección de IDs, edición, semilla, resolución y animación. Abre con 16.384 objetos, 20 qubits y una resolución máxima de 960 px. La cantidad puede subir hasta 1.048.576 objetos.
+- **Motor:** ciudad procedural con presentación COSMIC, fachadas iluminadas, cámara cercana, selección de IDs, edición, semilla, resolución y animación. Abre con 16.384 objetos, 1.000 qubits y una resolución máxima de 960 px. La cantidad puede subir hasta 1.048.576 objetos.
 - **Núcleo:** controles H, S, X, Z, Y, CX y CZ sobre el mismo `NativeCore` que observa el motor. Muestra expectativas X/Z y la probabilidad derivada P(1) del qubit seleccionado. La cámara y la selección no realizan una medición proyectiva.
 - **Laboratorios:** 14 experimentos originales dentro de esta APK, con sus modelos y controles existentes.
 - **Proyectos:** nueva escena, ejemplos Bell/GHZ, copias locales y archivos portables `.cosmic`. Importar un archivo inválido conserva el proyecto activo.

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cosmic_background">#070C0A</color>
+    <color name="cosmic_green">#87F0A4</color>
+    <color name="cosmic_white">#EDF7EF</color>
+</resources>

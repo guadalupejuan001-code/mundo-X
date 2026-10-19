@@ -1,147 +1,152 @@
-# COSMIC X Engine
+# COSMIC X Engine · Mundo X
 
-**Computación cuántica de Mundo X: núcleo cuántico y motor gráfico cuántico integrado.**
+**Núcleo cuántico propio, motor gráfico, laboratorios, explorador solar y PC x86/x64 en un mismo repositorio.**
 
-**COSMIC X Engine es el título del conjunto.** Dentro se conserva la computación cuántica de Mundo X, con sus núcleos propios y el motor gráfico que observa el estado compartido. El nombre no sustituye los componentes ni cambia su autoría. La evolución cuántica se ejecuta por software y la imagen se dibuja mediante OpenGL ES.
+COSMIC X Engine es el título del conjunto. Dentro se conserva la computación cuántica de Mundo X, sus representaciones originales y el motor gráfico que observa el estado compartido. La idea, creación y dirección del proyecto corresponden a **X, titular del repositorio**; el historial documenta el desarrollo con asistencia de IA. La simulación se ejecuta por software y el motor gráfico utiliza OpenGL ES.
 
-**Estado:** desarrollo activo · **Repositorio principal:** `main` · **Última revisión de esta documentación:** 19 de octubre de 2026.
+**Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 19 de octubre de 2026.
 
-**COSMIC X Engine 0.2.0 para Android:** [aplicación, controles y compilación](graphics-android/README.md). El núcleo cuántico y el motor gráfico comparten la sesión nativa. Permite crear, abrir y guardar proyectos `.cosmic`, operar sobre 1 a 256 qubits del perfil compacto, conservar los observables originales y editar hasta 1.048.576 cajas por ID. Incluye proyectos Bell y GHZ. El [visor de escritorio](graphics-desktop/README.md) compila el mismo puente y abre el mismo [formato de proyecto](graphics-desktop/PROJECT_FORMAT.md). [Integración y procedencia](docs/cosmic_x_engine.md).
+Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
 
-**Nueva línea: Motor X visual.** [Programar cálculo y escenas dentro del mismo
-runtime](docs/motor_x_visual.md), conservando reglas, IDs y cambios. Esta rama
-añade exportación compatible con XLab y una primera conexión explícita entre
-resultados del cálculo y estados visuales. La transferencia a Android se hace
-mediante **Restaurar escena**; no es una nueva versión publicada del APK.
+## Qué incluye el código integrado
 
-**XLab 0.3.2 para Android:** [descargar ZIP con APK firmado](https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.2/XLab-Objetos-0.3.2.zip).
-Descomprime el ZIP y abre el APK incluido. [Descarga alternativa](https://raw.githubusercontent.com/guadalupejuan001-code/mundo-X/6b206566022afa8b7b20b9e6dd3153ce8dad9182/dist/XLab-Objetos-0.3.2.zip).
-[Objetos 3D persistentes, comparación de imágenes GPU
-y escala progresiva de rendimiento](docs/xlab_0_3_objetos.md). Acceso directo
-desde **Objetos ↗**, hasta 1.048.576 instancias como límite de ensayo, con parada
-por cadencia, memoria, temperatura o tiempo y restauración de la escena.
-[Validación: 19 recorridos Android, ensayo de 1.048.576 objetos y dibujo bajo demanda](results/xlab_millon_2026-10-18.md).
+| Componente | Función y alcance | Código y documentación |
+| --- | --- | --- |
+| Núcleo y sesión de 1.000 qubits | Proyectos gráficos nuevos con índices `q0`–`q999`, 3.000 observables iniciales, puertas Clifford y estado portable. Ampliación de proyectos anteriores sin perder su mundo. | [Núcleo nativo](native/), [perfil de 1.000](docs/core_1000_qubits.md), [sesión compartida](docs/cosmic_x_engine.md) |
+| COSMIC X Engine Android | Paneles Motor, Núcleo y Proyectos, más 14 experimentos originales dentro de la misma instalación. | [App COSMIC](cosmic-android/README.md) |
+| Graphics Android 4K/8K | Escena procedural, selección y edición por ID, renderizado UHD, modo 8K sujeto a capacidades y exportación PNG por mosaicos. | [Graphics](graphics-android/README.md), [4K](graphics-android/docs/4k.md), [8K](graphics-android/docs/8k.md) |
+| Motor gráfico de escritorio | Compila el mismo puente nativo, observa la misma representación y abre/guarda archivos `.cosmic` compatibles con Android. | [Escritorio](graphics-desktop/README.md), [formato](graphics-desktop/PROJECT_FORMAT.md) |
+| COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y captura UHD. Su demostración conserva un circuito de ocho qubits. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
+| COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, BIOS de texto/teclado/disco y arranques de prueba hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
+| XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
+| Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
+| Bridge X y Transformer X | Codificación de bytes en modos y modelo PyTorch entrenable. Se conserva como línea independiente; todavía no alimenta CompactCore. | [Bridge X](src/bridge_x.py), [Transformer X](src/transformer_x.py), [entrenamiento](experiments/train_file_v0_1.py) |
 
-**Desarrollo gráfico en esta rama:** [planificación por regiones, malla indexada y
-lotes con IDs estables](docs/graphics_spatial.md). Este código añade una comparación
-contra el dibujo completo y contadores de trabajo enviado. Los enlaces de APK
-anteriores corresponden a la versión publicada 0.3.2.
+La APK principal `com.mundox.cosmic` reúne el motor, el núcleo y los laboratorios. **Solar y PC son aplicaciones separadas dentro del mismo código fuente.** La VM didáctica de 8 bits está incluida en COSMIC; el emulador x86/x64 de PC conserva su propio destino de compilación.
 
-También conserva la [mesa de circuitos, pruebas interactivas, protocolos
-de investigación y ensayos de memoria](docs/xlab_0_2.md). Interfaz nueva con
-gráficos de resultados nativos y perfiles de 64 a 2048 MiB sujetos a la RAM
-disponible. Se instala junto al laboratorio anterior.
-[Validación anterior de XLab 0.2](results/xlab_0_2_2026-10-18.md).
+## Empezar con 1.000 qubits
+
+Una sesión gráfica nueva utiliza **1.000 qubits completos**. En Android, **Ampliar a 1000** reproduce el historial de una sesión anterior en el registro mayor y agrega qubits en `|0>`. Conserva los observables originales, sus signos, la semilla, los objetos, las ediciones, la cámara y el tiempo. Los proyectos guardados conservan su dimensión al abrirse; los ejemplos Bell y GHZ pequeños mantienen su tamaño didáctico.
+
+El contrato comprueba entrelazamiento GHZ sobre los 1.000 qubits, correlaciones, medición, signos Pauli y operaciones sobre `q999`. La [documentación del perfil](docs/core_1000_qubits.md) distingue esas pruebas del oráculo denso pequeño y explica la compatibilidad de archivos.
+
+| Representación | Alcance que debe usarse al programar |
+| --- | --- |
+| Sesión gráfica / CompactCore | Perfil portable de 1 a 1.000 qubits; H, S, X, Y, Z, CX y CZ. Nuevas escenas de 1.000 con 3.000 observables. |
+| CompactCore nativo / XASM | Circuitos estabilizadores, entrelazamiento Clifford y medición Z reproducible; incluye `examples/ghz1000.x`. |
+| Reduced Exact T | Interfaz XASM de 1 a 63 qubits, 128 puertas T y 65.536 componentes como límites. El costo depende del crecimiento real de componentes. |
+| FactorizedCore | Mantiene factores independientes y bloques con presupuesto; el límite de bloque denso sigue siendo 20 qubits. |
+| Solar y laboratorios | Cada experimento conserva la dimensión que necesita su modelo; Solar usa ocho qubits para sus trazas visuales. |
+
+El tableau de 1.000 almacena **257.000 bytes** en sus buffers. Esa cifra no incluye observador, historial, Java, Android ni GPU. El perfil compacto corresponde a estados estabilizadores; los circuitos generales con muchas puertas T no adquieren por este cambio el mismo costo de memoria. [Fórmula, benchmark de 20/60/1.000 y límites](docs/core_1000_qubits.md#memoria-y-observación).
+
+### Compilar el conjunto nativo
+
+Desde Linux, con CMake y un compilador C++17:
+
+```sh
+git clone https://github.com/guadalupejuan001-code/mundo-X.git
+cd mundo-X
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+
+./build/mundo_x run examples/ghz1000.x
+./build/mundo_x run examples/t60.x
+./build/mundo_x run-mx examples/mx_layers.mx
+./build/mundo_x_phase examples/adder50.qx adaptive
+./build/mundo_x_vm --self-test
+./build/pc-android/cosmic_pc_cli --demo64 --ram-mib 2048 --resident-mib 1024
+```
+
+La compilación raíz incluye los contratos del núcleo, la VM y las ocho suites de PC. `BUILD_TESTING=OFF` permite construir los ejecutables sin los tests. Las instrucciones de PC ejecutan los arranques propios de demostración; no arrancan Windows.
+
+### Crear o ampliar un proyecto de escritorio
+
+```sh
+python -m pip install -r graphics-desktop/requirements.txt
+python graphics-desktop/demo.py --no-render --export-project mundo-1000.cosmic
+python graphics-desktop/demo.py --project mundo-anterior.cosmic \
+  --expand-qubits 1000 --gate X:999 --no-render \
+  --export-project mundo-ampliado.cosmic
+```
+
+Sustituye `mundo-anterior.cosmic` por tu archivo. La exportación sin render no necesita un contexto gráfico; para producir imágenes, el adaptador de escritorio necesita EGL/OpenGL ES y actualmente construye una biblioteca Linux `.so`. [Uso y ejemplos](graphics-desktop/README.md).
+
+## Aplicaciones Android y resoluciones
+
+Requisitos de construcción declarados: **Java 17, Gradle 8.9, AGP 8.7.3, SDK 35, NDK 27.2.12479018 y CMake 3.22.1**. Los proyectos no incluyen Gradle Wrapper. Los comandos siguientes se ejecutan desde la raíz con Gradle instalado; las aplicaciones nuevas admiten Android 8.0 o posterior y las ABI ARM64 y x86_64.
+
+| Destino | Identidad y versión | Compilar desde la raíz |
+| --- | --- | --- |
+| COSMIC unificado | `com.mundox.cosmic` · 0.3.1 | `gradle -p cosmic-android :app:assembleDebug` |
+| Graphics | `com.mundox.graphics` · 0.4.0 | `gradle -p graphics-android :app:assembleDebug` |
+| Graphics 4K | `com.mundox.graphics.uhd` · 0.4.0 | `gradle -p graphics-android -Pcosmic4kStandalone=true :app:assembleDebug` |
+| Graphics 8K | `com.mundox.graphics.ultra` · 0.4.0 | `gradle -p graphics-android -Pcosmic8kStandalone=true :app:assembleDebug` |
+| Solar | `com.cosmicx.solar` · 1.1.0 | `gradle -p solar-android :app:assembleDebug` |
+| Solar 4K | `com.cosmicx.solar.uhd` · 1.1.0 | `gradle -p solar-android -Psolar4kStandalone=true :app:assembleDebug` |
+| PC propia | `com.cosmicx.pc` · 0.2.0 | `gradle -p pc-android :app:assembleDebug` |
+| XLab original | Proyecto Android de la raíz | `gradle :app:assembleDebug` |
+
+Los indicadores de Graphics 4K y 8K son mutuamente excluyentes. Se puede añadir `:app:assembleDebugAndroidTest` para construir las pruebas instrumentales. GitHub Actions conserva APK, firma, SHA-256, revisión del código y evidencia; los artefactos corresponden a la ejecución seleccionada.
+
+### Qué hacen 4K y 8K
+
+Graphics conserva hasta **1.048.576 cajas** como límite del modelo, con IDs estables y edición individual. El modo UHD usa **3840 × 2160** o **2160 × 3840**. La ruta Ultra incorpora **7680 × 4320**, límites comprobados del dispositivo y exportación PNG por mosaicos, que evita mantener toda la imagen RGBA 8K en un único buffer de CPU. La preferencia de modo UHD pertenece al dispositivo y se preserva al ampliar una sesión; ese modo se omite del archivo `.cosmic` portable, mientras que el límite adaptativo `resolutionLimit` sí forma parte del proyecto. [Pruebas de 4K](graphics-android/docs/4k.md), [mosaicos y presupuesto 8K](graphics-android/docs/8k.md).
+
+Los paneles Motor y Núcleo de COSMIC comparten `NativeCore`. Observar, seleccionar o mover la cámara no añade puertas ni realiza una medición proyectiva. Las pruebas comparan imágenes y estado para comprobar esta relación. La cantidad de objetos y la resolución admitida no expresan una garantía de FPS en un teléfono.
+
+### Solar y PC
+
+Solar reutiliza el núcleo y la geometría de resolución compartidos, pero sus órbitas, escalas, tiempo y ambientes tienen modelos propios. Incluye **23 cuerpos**, descenso a 22 planetas/lunas, mapa interactivo, texturas incorporadas y representaciones magnéticas. Sus aproximaciones orbitales y visuales están delimitadas en [ciencia solar](solar-android/docs/solar-science.md) y [atmósferas y mapa](solar-android/docs/atmosphere-science.md); no constituyen una simulación climática completa.
+
+COSMIC X PC ejecuta un intérprete C++ propio. Su prueba x64 realiza la transición real → protegido → largo y verifica datos de 64 bits en registros y RAM. El perfil Android presenta **2 GiB de RAM virtual** con un límite de **1 GiB de páginas respaldadas**; el consumo total del proceso se informa por separado. **Todavía no instala ni ejecuta Windows completo o juegos de PC.** [ISA implementada, pruebas y límites](pc-android/README.md).
+
+### Windows x64
+
+Los ejecutables nativos también se construyen con MSVC:
+
+```powershell
+cmake -S . -B build -A x64 -DBUILD_TESTING=ON
+cmake --build build --config Release --parallel 2
+ctest --test-dir build -C Release --output-on-failure
+.\build\Release\mundo_x.exe run examples\ghz1000.x
+.\build\Release\mundo_x_vm.exe --self-test
+.\build\pc-android\Release\cosmic_pc_cli.exe --demo64
+```
+
+El workflow [Windows x64](.github/workflows/windows-x64.yml) conserva el paquete de ejecutables, ejemplos e instrucciones. Este destino ejecuta Mundo X **sobre Windows anfitrión**; la compatibilidad del emulador PC con un Windows invitado es un asunto distinto.
+
+## Verificación y procedencia de la integración
+
+Los workflows comprueban los cambios de código en solicitudes de integración a `main` y conservan los resultados del commit ejecutado. Las suites cubren ámbitos diferentes:
+
+| Ruta | Comprobaciones que conserva |
+| --- | --- |
+| [Contratos nativos y escritorio](.github/workflows/cosmic-contracts.yml) | Núcleos, GHZ de 1.000, qubit 999, presupuestos, restauración, proyectos `.cosmic`, VM, CPU/PC y relación causal entre núcleo e imagen. |
+| [COSMIC Android](.github/workflows/cosmic-android.yml) | 25 casos COSMIC, 18 Graphics y 8 MicroLab sobre las fuentes compartidas. |
+| [Graphics](.github/workflows/graphics-android.yml), [4K](.github/workflows/graphics-4k.yml), [8K](.github/workflows/graphics-8k.yml) | Inventarios de 18, 22 y 26 casos: registro de 1.000, ampliación, estado, framebuffer, selección, orientación y PNG. |
+| [Solar](.github/workflows/solar-android.yml) y [Solar 4K](.github/workflows/solar-4k.yml) | 511 comprobaciones analíticas; 13 casos Android del perfil normal y 19 del perfil UHD/ambientes. |
+| [PC propia](.github/workflows/own-pc-android.yml) | Ocho suites nativas y 12 casos Android, con arranque, memoria, lectura de medios y actividad operando la CPU. |
+| [Windows](.github/workflows/windows-x64.yml), [runtime visual](.github/workflows/visual-runtime.yml), [XLab](.github/workflows/android-apk.yml) | Compilación del conjunto en sus plataformas y regresiones de los experimentos conservados. |
+
+Los recuentos describen el inventario esperado; el resultado de cada ejecución está en [Actions](https://github.com/guadalupejuan001-code/mundo-X/actions). Una prueba que pasa demuestra las condiciones examinadas. Las pruebas GLES en Android virtual no sustituyen una medición de rendimiento en el teléfono físico.
+
+El auditor común [cosmic_source_provenance.py](tools/cosmic_source_provenance.py) compara los archivos compartidos byte a byte con las revisiones de referencia. Los informes 4K/8K/Solar declaran la actualización al núcleo de 1.000 y las diferencias reales respecto al núcleo 4K anterior; también comprueban firma, identidad y bibliotecas de sus APK.
+
+| Trabajo incorporado | Revisión de origen |
+| --- | --- |
+| Perfil completo de 1.000 y correcciones de entrada | [`ef46362`](https://github.com/guadalupejuan001-code/mundo-X/commit/ef4636240af73351a18710e988346791fbdc3b58) |
+| Graphics 8K, incluyendo la línea 4K y optimizaciones propias | [`9fd8fc7`](https://github.com/guadalupejuan001-code/mundo-X/commit/9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6) |
+| Solar 4K, mapa y atmósferas | [`b6a324f`](https://github.com/guadalupejuan001-code/mundo-X/commit/b6a324f7d9a13709771f4589c8c082883607b788) |
+| PC x86/x64 y RAM por demanda | [`155f954`](https://github.com/guadalupejuan001-code/mundo-X/commit/155f954a79027a1cb3f2b9c1a43e5da8661b3303) |
+| Consola original de la VM `.mxvm`, recuperada junto al motor ya integrado | [`9d095a8`](https://github.com/guadalupejuan001-code/mundo-X/commit/9d095a81b3820f4c50fc48fecd9c7ff08bd22b40) |
+
+## Principio y componentes del motor
 
 > **Principio de diseño:** representar y transformar lo necesario; no materializar todos los estados, ramas u objetos cuando su comportamiento puede obtenerse a partir de estructuras, relaciones y reglas de evolución.
 
-Mundo X **no nació como una app Android**. La aplicación móvil, el runtime de Windows y los experimentos gráficos sirven para probar la arquitectura en contextos distintos. El núcleo del proyecto es investigar **cómo representar información y calcular su evolución** sin depender, siempre, de una enumeración explícita de cada elemento posible.
-
-[Origen declarado y recorrido cuántico](docs/origen_y_recorrido_cuantico.md):
-el titular partió de cuestionar la representación de símbolos y cómo organizar
-señales como lenguaje utilizable. El registro distingue ese propósito de cada
-implementación, recoge el historial temprano y documenta una limitación
-concreta del puente de bytes a modos.
-La [revisión y validación de esta etapa](results/revision_origen_y_medicion_2026-10-18.md)
-recoge los hallazgos y las pruebas de medición programable.
-
-El software **funciona en los casos documentados**, está en desarrollo y no se presenta aquí como producto terminado. La rama actual contiene simuladores, un runtime programable, pruebas de circuitos, aplicaciones de demostración y una línea neuronal independiente.
-
-**Qué significa «motor»:** [nombres, funciones y origen de los núcleos](results/engine_map_2026-10-18.md).
-Mundo X es el proyecto; `CompactCore` y `ReducedExactTRepresentation` son sus
-núcleos originales. `FactorizedCore` es un prototipo posterior. Cada examen
-identifica el componente ejecutado.
-
-**Corrección de interpretación:** el titular usó «computasis» como analogía de
-homeostasis. El controlador experimental añadido después no fue una
-especificación suya ni define la arquitectura original. **Su implementación,
-comando, pruebas específicas y
-supervisor han sido eliminados del código activo**. Los bancos de pruebas usan
-los núcleos conservados. Las mediciones anteriores permanecen como registro
-histórico y no describen un componente disponible.
-
-Verificación de la retirada: compilación limpia, siete pruebas CTest,
-18 comprobaciones del CLI y 52 casos en los supervisores, incluido un rechazo
-de presupuesto esperado. Los seis headers de los núcleos conservados no cambian
-durante esta retirada.
-
-**Exámenes ampliados:** [núcleos originales, productos de 200 millones y costo del controlador](results/native_exams_2026-10-18.md).
-Esta fase conserva el código de los núcleos; registra también los timeouts,
-los fallos del criterio numérico anterior y las pasadas de recuperación vacías.
-
-**Escala del 18 de octubre:** [almacenamiento plano y ejecución en flujo](results/scale_exams_2026-10-18.md).
-Esta rama reduce las asignaciones por qubit independiente, conserva los circuitos
-en flujo y añade exámenes hasta cien millones de qubits producto. El informe
-separa RAM, amplitudes, consultas, criterios numéricos y límites del núcleo propio.
-
-**Registro del 17 de octubre:** [exámenes de factorización](results/factorized_exams_2026-10-17.md).
-FactorizedCore es un prototipo escrito en este trabajo para explorar
-la idea y la arquitectura originales del titular de Mundo X. La implementación
-experimental por factores independientes y bloques conserva exámenes
-reproducibles; su ejecución nativa no depende de simuladores externos.
-Pasó el oráculo independiente en los
-casos examinados y conservó productos de diez millones de qubits con unos
-2,02 GiB de RAM total, sin expansión global;
-el informe registra también límites, falsos negativos de separación y costos.
-El controlador incluido en aquel registro y su comando fueron retirados.
-
-**Estructura y estabilidad del 18 de octubre:** [corrección de uniones innecesarias y escala de factores](results/factorized_structure_2026-10-18.md).
-FactorizedCore reconoce destinos independientes que no se entrelazan bajo CX/CZ
-y equilibra separaciones verificadas mediante potencias de dos reversibles.
-Un circuito producto de 20 qubits pasa de 16 MiB a 640 bytes de amplitudes;
-el mismo patrón completa 100.000 qubits. La regresión que fallaba en la pareja
-1.074 completa 8.191 separaciones, comprobadas también reteniendo el otro lado.
-Estos resultados corresponden a las familias documentadas y no eliminan el
-crecimiento exponencial de los bloques generales. No se añaden filtros ni poda.
-
-## Índice
-
-- [Principio y arquitectura](#principio-y-arquitectura)
-- [Componentes y responsabilidades](#componentes-y-responsabilidades)
-- [Resultados medidos](#resultados-medidos)
-- [Aplicaciones y plataformas](#aplicaciones-y-plataformas)
-- [Cómo ejecutar las pruebas](#cómo-ejecutar-las-pruebas)
-- [Estructura del repositorio](#estructura-del-repositorio)
-- [Alcance, límites y próximos pasos](#alcance-límites-y-próximos-pasos)
-- [Registros técnicos y autoría](#registros-técnicos-y-autoría)
-
----
-
-## Principio y arquitectura
-
-### El problema que aborda
-
-Un simulador cuántico denso representa `n` qubits con **`2^n` amplitudes complejas**. Esa representación es útil y general para circuitos pequeños, pero su memoria crece exponencialmente.
-
-Mundo X desarrolla y prueba **otras formas de representar y transformar estados**. Cuando se conoce una estructura explotable, el programa puede:
-
-1. Conservar relaciones y generadores, en lugar de enumerar todas las amplitudes.
-2. Actualizar esa estructura al aplicar operaciones.
-3. Compartir información común entre estados relacionados.
-4. Fusionar equivalencias durante la evolución, antes de producir copias innecesarias.
-5. Reconstruir los resultados que se necesiten en la etapa de validación, visualización o consulta.
-
-Esto **no significa que la CPU deje de usar bits o ejecutar instrucciones convencionales**. Significa que el diseño del algoritmo evita, en los casos adecuados, representar explícitamente todos los objetos o estados que podría producir. El enfoque del proyecto no se limita a recorrer un vector denso como única manera de computar.
-
-### Vista general
-
-```mermaid
-flowchart TD
-    A["COSMIC X Engine · título"] --> B["Computación cuántica de Mundo X"]
-    B --> C["Núcleo cuántico"]
-    B --> D["Motor gráfico cuántico integrado"]
-    C -->|"Observables del estado compartido"| D
-```
-
-El núcleo conserva sus representaciones Compact, Reduced Exact T, Factorized y
-Adaptive Phase, con sus límites y herramientas respectivos. La sesión gráfica
-portable de esta versión conecta CompactCore con el observador de Graphics.
-Los módulos de aprendizaje, las aplicaciones de laboratorio y las utilidades
-conservan sus rutas e identidades dentro del repositorio.
-
-**Aclaración de integración:** Compact Core y Reduced Exact T pertenecen al motor nativo C++. Transformer X es un módulo PyTorch separado: **no está conectado actualmente al simulador compacto**. Las escenas GPU son gráficos clásicos que pueden recibir parámetros del estado simulado; no emplean una GPU cuántica.
-
-## Componentes y responsabilidades
+Mundo X nació como investigación sobre representación de información y cálculo de su evolución. Un vector de estado denso requiere `2^n` amplitudes; las representaciones del proyecto aprovechan la estructura cuando el circuito la permite. La CPU sigue ejecutando instrucciones convencionales. Cada núcleo conserva su alcance, presupuesto y referencia de corrección. [Origen y recorrido](docs/origen_y_recorrido_cuantico.md), [mapa de motores](results/engine_map_2026-10-18.md).
 
 ### 1. Quantum Core y Dense Core — referencia matemática
 
@@ -216,7 +221,7 @@ No transporta materia ni transmite un qubit físico: es una simulación matemát
 
 **Archivo:** [`native/include/mundo_x/xasm.hpp`](native/include/mundo_x/xasm.hpp).
 
-Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes`, comprobaciones `assert` y ahora `probz`, `measure` y `seed`.
+Formato de instrucciones `.x` con el que se ejecutan circuitos sobre Compact Core. Incluye `qubits`, `h`, `x`, `z`, `s`, `cx`, `show`, `bytes`, comprobaciones `assert` además de `probz`, `measure`, `seed` y consultas `expect`.
 
 `probz q` consulta las probabilidades de medición Z; `measure q` obtiene un
 resultado y proyecta el estado. `seed n` controla el muestreo seudoaleatorio
@@ -225,7 +230,7 @@ y [Bell](examples/measurement_bell.x) muestran fases y correlaciones.
 Estas instrucciones también están en `practice`; aún no hay controles Android
 para programarlas. Las consultas deterministas generales pueden requerir
 eliminación del tableau: [costos y alcance](docs/origen_y_recorrido_cuantico.md#recorrido-programable-añadido).
-**XASM v0.2** añade el modo experimental `backend reduced`, declarado antes de `qubits`, para programar circuitos Clifford+T con `t <q>`. Conserva Compact Core como modo predeterminado. El modo reducido permite de 1 a 12 qubits y hasta 128 puertas T; `assert fidelity` y `assert norm` activan explícitamente la validación densa. `show` informa componentes y puertas T, y `bytes` identifica la carga lógica estimada; esa cifra no mide la RAM total. Consulta [sintaxis, límites y ejemplos de XASM v0.2](docs/xasm_v0_2.md).
+**XASM v0.2** añade el modo experimental `backend reduced`, declarado antes de `qubits`, para programar circuitos Clifford+T con `t <q>`. Conserva Compact Core como modo predeterminado. El modo reducido permite de 1 a 63 qubits, hasta 128 puertas T y 65.536 componentes. `expect` y `assert expectation` consultan operadores Pauli; `assert norm` comprueba los componentes. `assert fidelity` activa la referencia densa y se limita a 12 qubits. `show` informa componentes y puertas T, y `bytes` identifica la carga lógica estimada; esa cifra no mide la RAM total. Consulta [sintaxis, límites y ejemplos de XASM v0.2](docs/xasm_v0_2.md).
 
 ~~~text
 qubits 2
@@ -275,7 +280,21 @@ estado estimado z + Δz
 
 El script de entrenamiento usa ventanas consecutivas de un archivo e informa error de validación frente a una predicción identidad. **No es un modelo conversacional ni está integrado todavía a Compact Core**; el repositorio tampoco incluye un checkpoint entrenado listo para usarse como modelo general. Su utilidad práctica deberá medirse contra alternativas equivalentes.
 
-## Resultados medidos
+### 8. FactorizedCore y fases generales
+
+[FactorizedCore](native/include/mundo_x/factorized_core.hpp) conserva factores independientes y bloques, evita determinadas uniones que no generan entrelazamiento y verifica separaciones. Los ensayos de escala describen familias producto; los bloques generales siguen teniendo crecimiento exponencial. [Estructura y estabilidad](results/factorized_structure_2026-10-18.md), [ejecución en flujo](results/scale_exams_2026-10-18.md).
+
+[AdaptivePhaseCore](native/include/mundo_x/adaptive_phase_core.hpp) ejecuta fases de ángulo general y transfiere el estado producto al motor reducido cuando aparece entrelazamiento. El ejecutable `mundo_x_phase` trabaja con `.qx`; la reproducción de la primera versión permanece como `adaptive-replay`. El ensayo de sumador de 50 qubits registró 1.600 bytes de carga lógica del motor producto, 393 ejecuciones de comparación y 16 entradas adicionales. Esta ruta nativa conserva sus límites y todavía no está conectada al panel gráfico Android. [Transferencia y evidencia](docs/state-transfer.md).
+
+### 9. VM, Ecos y runtime visual
+
+La VM didáctica utiliza CompactCore para cuatro registros de ocho bits y 16 bytes de RAM, con un intérprete clásico que contrasta cada instrucción. Su ejecutable restaurado `mundo_x_vm` permite ejecutar programas `.mxvm` desde terminal. [Sintaxis y comandos de la VM](docs/basis_vm_cli.md). Ecos conserva evolución, perturbación y reversión Clifford+T, con cancelación y presupuesto. [Código y modelos Android](android-experiments/README.md).
+
+El runtime visual conecta resultados de cálculo con reglas, IDs y cambios de una escena. Puede exportar a XLab mediante **Restaurar escena**. La planificación espacial, las mallas y los lotes gráficos permanecen integrados. [Motor visual](docs/motor_x_visual.md), [planificación por regiones](docs/graphics_spatial.md).
+
+## Resultados históricos medidos
+
+Las cifras de esta sección corresponden a los registros fechados enlazados. Se conservan como evidencia de esas revisiones, separadas de las ejecuciones de la integración actual.
 
 Las siguientes cifras proceden de ejecuciones registradas del proyecto y, donde corresponde, de capturas en hardware Android real. **No todas son benchmarks A/B controlados ni pruebas independientes de terceros.**
 
@@ -314,229 +333,46 @@ Para los detalles, resultados y limitaciones de cada medición:
 - [Capturas y mediciones visuales Android](results/visual_android_samsung_a16_5g_2026-10-14.md).
 - [Teletransportación cuántica simulada](results/compact_quantum_teleportation_2026-10-14.md).
 
-## Aplicaciones y plataformas
+## Otras herramientas y organización
 
-Estas aplicaciones son **usos y bancos de prueba del proyecto**. No constituyen el propósito completo de Mundo X ni demuestran por sí mismas una ventaja cuántica.
+| Ruta | Contenido |
+| --- | --- |
+| `native/` | Núcleos C++17, ABI compartida, lenguajes y contratos. |
+| `cosmic-android/` | App principal que consume fuentes compartidas de Graphics y laboratorios. |
+| `graphics-android/`, `graphics-desktop/` | Observador gráfico, resolución, proyectos `.cosmic` y validaciones. |
+| `solar-android/` | Explorador solar, catálogo, modelos, texturas y pruebas. |
+| `pc-android/` | Intérprete x86/x64 propio, memoria, medios, CLI y app. |
+| `app/`, `android-experiments/` | XLab, MicroLab, VM, Ecos y experimentos Android originales. |
+| `src/`, `experiments/`, `tests/` | Referencia Python, Bridge/Transformer y experimentos. |
+| `examples/`, `docs/`, `results/` | Programas, contratos, fuentes de datos y evidencia fechada. |
+| `tools/`, `.github/workflows/` | Auditores, benchmarks, compilación y verificación automatizada. |
 
-### Android: Mundo X Lab
+### Referencia Python y Transformer X
 
-Código en [`app/`](app/). Se comunica con el motor C++ mediante **JNI**; la aplicación requiere OpenGL ES 3.0 para sus funciones gráficas.
-
-La interfaz incluye:
-
-- `HELLO X`, GHZ, cluster 2D, teletransportación de estado y pruebas Exact T / Reduced Exact T.
-- Consola de práctica con operaciones sobre qubits simulados.
-- Comparadores visuales `CLASSIC`, `GENERATIVE`, `COMPACT → VISUAL` y renderizador GPU.
-- Una escena 3D procedural navegable; primero se exploró *ray marching* y después geometría rasterizada e instancing. La coherencia urbana todavía necesita desarrollo.
-- Sincronización por eventos/estado mínimo con opciones `HOST` y `JOIN`.
-- Un launcher HOME y un lanzador de aplicaciones con observación de RAM, batería y estado térmico.
-- Una opción de preparación y apertura de Wild Rift sin root y sin modificar el juego.
-
-Una demostración procedural temprana informó una APK de **~1.03 MiB**. Esa cifra corresponde a aquella compilación y **no es una promesa de tamaño para todas las versiones ni una ciudad AAA completa**.
-
-### Gráficos reconstruidos desde estado compacto
-
-~~~text
-Compact Core (32 qubits)
-   → métricas del estado y entradas del usuario
-   → parámetros / uniforms de OpenGL ES
-   → shaders en GPU
-   → elementos visuales generados localmente
-~~~
-
-Esta ruta conecta funcionalmente la simulación con una salida visual. La GPU continúa siendo convencional; la escena no es un vector de amplitudes renderizado directamente.
-
-### Red y sincronización
-
-- [`tools/mundox_relay.py`](tools/mundox_relay.py): servidor TCP simple con salas; puerto predeterminado `7777`.
-- `InternetSyncActivity`: pruebas de conectividad, cliente TCP y relay embebido.
-- `SyncedGpuActivity`: botones HOST/JOIN, envío de eventos táctiles y reconstrucción local.
-
-El objetivo es **transmitir cambios o eventos, no enviar una escena de miles de objetos completa**. La ruta cuenta con código y compilaciones; todavía falta una validación física completa y documentada entre dos dispositivos para afirmar fiabilidad extremo a extremo. **El protocolo actual no ofrece cifrado ni autenticación y no debe utilizarse para datos confidenciales ni exponerse sin protección.**
-
-### Windows y Linux
-
-El motor nativo está escrito en **C++17**, se construye con **CMake** y se valida mediante GitHub Actions en Linux y Windows x64. Su ejecutable `mundo_x` permite correr circuitos, tests de escalabilidad y experimentos de reducción sin utilizar Android.
-
-## Cómo ejecutar las pruebas
-
-### Motor nativo en Linux
-
-Requisitos: compilador C++17 y CMake.
-
-~~~bash
-git clone https://github.com/guadalupejuan001-code/mundo-X.git
-cd mundo-X
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j2
-ctest --test-dir build --output-on-failure
-
-./build/mundo_x hello
-./build/mundo_x run examples/bell.x
-./build/mundo_x run examples/measurement_interference.x
-./build/mundo_x run examples/measurement_bell.x
-./build/mundo_x run examples/magic_t.x
-./build/mundo_x run examples/clifford_t.x
-./build/mundo_x run-mx examples/mx_layers.mx
-./build/mundo_x compile examples/mx_bell.mx > bell_generated.x
-./build/mundo_x bench 24 --dense
-./build/mundo_x cluster 4 4 --dense
-./build/mundo_x cluster 32 32
-./build/mundo_x teleport
-./build/mundo_x t-experiment 4 8
-./build/mundo_x t-reduced-experiment 8 64
-./build/mundo_x magic-witness
-./build/mundo_x t-trace-variant 8 12
-~~~
-
-Los comandos devuelven salidas de comprobación; `PASS` significa que la condición implementada ha sido satisfecha, **no que se haya certificado universalmente el sistema**.
-
-### Windows x64
-
-Con MSVC, CMake y un entorno de compilación configurado:
-
-~~~powershell
-cmake -S . -B build -A x64
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
-.\build\Release\mundo_x.exe hello
-.\build\Release\mundo_x.exe run examples\magic_t.x
-.\build\Release\mundo_x.exe run-mx examples\mx_bell.mx
-.\build\Release\mundo_x.exe teleport
-.\build\Release\mundo_x.exe t-reduced-experiment 8 64
-~~~
-
-También puede recuperarse el ejecutable como **artefacto de una ejecución exitosa** del workflow [Build Mundo X Windows 10 x64](.github/workflows/windows-x64.yml).
-El ZIP incluye `INICIAR.cmd`, instrucciones y ejemplos; extrae todo y abre ese
-archivo para ver las demostraciones y entrar en práctica. El ejecutable x64
-enlaza estáticamente el runtime C++ de MSVC. No requiere reinstalar Windows ni
-instalar Python.
-
-### Android
-
-El workflow [Build Mundo X Lab APK](.github/workflows/android-apk.yml) compila las pruebas nativas y el APK de depuración. En GitHub: **Actions → Build Mundo X Lab APK → una ejecución exitosa → Artifacts → Mundo-X-Lab-APK**.
-
-Para construir localmente se necesitan el Android SDK, NDK, CMake, Java 17 y Gradle 8.9; las versiones concretas están definidas en el workflow. No se incluye `gradlew`, por lo que el comando local presupone Gradle instalado:
-
-~~~bash
-gradle --no-daemon :app:assembleDebug
-~~~
-
-La instalación y las mediciones sobre dispositivo físico requieren una ejecución aparte: **compilar no equivale a haber medido rendimiento real**.
-
-### Python: referencia y Transformer X
-
-Requisitos: Python 3.10+, PyTorch y, para tests Python, pytest.
-
-~~~bash
+```sh
 python -m pip install -r requirements.txt pytest
 python hello_mundo_x.py
 python -m pytest tests/test_quantum_core.py
 python src/transformer_x.py
 python experiments/train_file_v0_1.py ruta/a/un_archivo --epochs 20
-~~~
+```
 
-El entrenamiento utiliza el contenido binario del archivo que se le indique. Conviene utilizar datos propios o autorizados. El entrenamiento guarda un checkpoint local `transformer_x_v0_1.pt`: **ese archivo no viene publicado en el repositorio**.
+El entrenamiento usa ventanas del archivo indicado y guarda `transformer_x_v0_1.pt`. El repositorio conserva el programa de entrenamiento; no incluye un checkpoint general ya entrenado. [Implementación y medición](experiments/train_file_v0_1.py).
 
-### Relay local
+### Red experimental
 
-~~~bash
-python tools/mundox_relay.py
-~~~
+`python tools/mundox_relay.py` inicia el relay TCP de pruebas en el puerto 7777. Las actividades HOST/JOIN intercambian eventos para reconstruir el estado localmente. El protocolo actual carece de cifrado y autenticación; su uso documentado corresponde a una red de confianza. La verificación física completa entre dos dispositivos sigue pendiente. [Relay](tools/mundox_relay.py).
 
-Arranca un relay de pruebas que escucha en el puerto `7777`. Úsalo solo en una red de confianza o un entorno aislado.
+### Distribuciones y registros anteriores
 
-## Estructura del repositorio
+La publicación [XLab 0.3.2, ZIP con APK firmado](https://github.com/guadalupejuan001-code/mundo-X/releases/download/v0.3.2/XLab-Objetos-0.3.2.zip) se conserva como **distribución histórica de XLab**. [Descarga alternativa](https://raw.githubusercontent.com/guadalupejuan001-code/mundo-X/6b206566022afa8b7b20b9e6dd3153ce8dad9182/dist/XLab-Objetos-0.3.2.zip), [validación de objetos y millón de instancias](results/xlab_millon_2026-10-18.md). Esa APK corresponde a su revisión publicada; los proyectos integrados se construyen con los destinos y workflows anteriores.
 
-~~~text
-mundo-X/
-├── native/
-│   ├── include/mundo_x/
-│   │   ├── dense_core.hpp            # statevector de referencia
-│   │   ├── compact_core.hpp          # estados estabilizadores compactos
-│   │   ├── exact_t_experiment.hpp    # T, reducción y diagnósticos
-│   │   ├── teleport.hpp              # teletransportación simulada
-│   │   ├── xasm.hpp                  # intérprete .x
-│   │   └── mxlang.hpp                # compilador de alto nivel .mx → .x
-│   └── src/main.cpp                  # ejecutable y comandos
-├── src/
-│   ├── quantum_core.py               # referencia PyTorch
-│   ├── bridge_x.py                   # codificador de modos
-│   └── transformer_x.py              # modelo neuronal
-├── experiments/                      # scripts y entrenamiento
-├── tests/                            # pruebas Python
-├── examples/                         # programas XASM y fuente .mx
-├── app/                              # Android Lab: JNI, GPU, red, UI
-├── tools/mundox_relay.py             # relay TCP
-├── results/                           # resultados históricos
-├── docs/                              # explicaciones técnicas
-├── .github/workflows/                 # builds de Android y Windows
-├── CMakeLists.txt
-└── README.md
-~~~
+El titular usó «computasis» como analogía de homeostasis. El controlador añadido posteriormente no define la arquitectura original y fue retirado del código activo; algunos informes anteriores lo mencionan como parte de su historia. [Revisión de origen y medición](results/revision_origen_y_medicion_2026-10-18.md), [exámenes originales](results/native_exams_2026-10-18.md).
 
-## Alcance, límites y próximos pasos
+## Alcance y autoría
 
-### Qué está implementado y validado
+El proyecto conserva simulación compacta Clifford, experimentos no Clifford, lenguajes, aplicaciones y pruebas reproducibles. Quedan abiertos la escala de circuitos generales con T, la evaluación de Transformer X, la compatibilidad completa de PC y mediciones en dispositivos físicos. Los resultados disponibles no establecen una simulación eficiente de todos los estados arbitrarios ni una aceleración de hardware cuántico.
 
-- Simulación compacta de circuitos Clifford/estabilizadores dentro de los casos probados.
-- Ejecución de experimentos no-Clifford con puerta T y comparación de fidelidad frente a una referencia densa pequeña.
-- Reducción **durante** la evolución de componentes equivalentes para circuitos Clifford+T definidos.
-- Protocolo de teletransportación de estados simulados, pruebas GHZ/cluster y un intérprete XASM.
-- Compilaciones Android y Windows, demos gráficas e integración de un estado compacto con GPU.
+**Mundo X es un proyecto concebido y dirigido por el titular del repositorio.** El historial conserva implementaciones, revisiones y resultados, incluidos los negativos. [Estado histórico](PROJECT_STATUS_2026-10-14.md), [historial de `main`](https://github.com/guadalupejuan001-code/mundo-X/commits/main), [compilaciones y evidencia](https://github.com/guadalupejuan001-code/mundo-X/actions).
 
-### Qué no se ha demostrado todavía
-
-- Simulación eficiente de **todos** los estados cuánticos arbitrarios.
-- Eliminación general de la dependencia exponencial en el número de qubits.
-- Superioridad global frente a todos los simuladores cuánticos existentes.
-- Ventaja de **hardware cuántico**, uso de qubits físicos o una teoría física nueva.
-- Aceleración gráfica causada específicamente por efectos cuánticos.
-- Fiabilidad multi-dispositivo en red pública o un motor 3D de calidad comercial.
-- Una mejora medible de Compact Core gracias a Transformer X.
-
-### Próximas comprobaciones propuestas
-
-1. Crear circuitos Clifford+T adicionales, aleatorios y adversos; comparar resultados, tiempos y memoria con referencias independientes.
-2. Medir memoria **total del proceso**, carga lógica, número de componentes y costo de evolución por separado.
-3. Estudiar la estructura y el rango de los coeficientes cuando aumenta el número de qubits, sin asumir que siempre podrán factorizarse con bajo rango.
-4. Completar pruebas de dos dispositivos, corregir límites del generador urbano y seguir midiendo en hardware limitado.
-5. Entrenar y evaluar Transformer X con métricas reproducibles **antes** de decidir si debe integrarse al núcleo.
-6. Ampliar tests automatizados y detectar fallos con códigos de salida adecuados.
-
-La conclusión de cada prueba se conserva aunque el resultado sea negativo. Mundo X es **un proyecto de ingeniería y cálculo en evolución**: los componentes ya implementados no pierden su funcionalidad porque queden preguntas abiertas.
-
-## Registros técnicos y autoría
-
-- [Estado funcional más detallado — 2026-10-14](TESTED_FUNCTIONAL_STATUS_2026-10-14.md)
-- [Estado histórico preservado](PROJECT_STATUS_2026-10-14.md)
-- [Quantum Core v0.1 — fundamentos](docs/quantum_core_v0_1.md)
-- [Resultados cuánticos no-Clifford](results/exact_t_decomposition_2026-10-14.md)
-- [Historial de commits](../../commits/main)
-- [Compilaciones y resultados de CI](../../actions)
-
-**Mundo X es un proyecto concebido y dirigido por el titular del repositorio.** El historial Git documenta el desarrollo y las revisiones del código y de sus resultados.
-
-**Estado de distribución:** el código está visible en este repositorio, pero la presencia pública no significa que el proyecto se haya lanzado como producto terminado. En la raíz actual no se incluye un archivo `LICENSE`; no se declara aquí una licencia de reutilización ni se conceden permisos adicionales mediante este README.
-
----
-
-**Mundo X — representar, transformar, verificar.**
-
-
-## Fases generales y sumador de 50 qubits
-
-La ruta opcional `AdaptivePhaseCore` ejecuta fases de ángulo general, conserva
-estados producto y pasa al motor reducido cuando aparece entrelazamiento.
-La transición predeterminada transfiere el estado ya calculado, sin guardar
-ni repetir todas las puertas anteriores. La reproducción original sigue
-disponible mediante `adaptive-replay`.
-
-En el sumador de 50 qubits, la carga lógica del motor producto es ahora de
-1.600 bytes. Se verificaron 131 circuitos por las tres rutas (393 ejecuciones)
-y otras 16 entradas de 50 qubits. Esta funcionalidad nativa aún no está
-conectada a la interfaz Android.
-
-[Transferencia de estado, resultados y límites](docs/state-transfer.md).
-Los [resultados de la primera versión](docs/phase-engine.md) se conservan
-identificados por su revisión.
+El código está visible y continúa en desarrollo. La raíz no incluye un archivo `LICENSE`; este README no concede una licencia adicional de reutilización.

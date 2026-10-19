@@ -26,6 +26,25 @@ EXPECTED_EXPORTS = {
     "portable-ghz-android.cosmic": ("ghz-city.cosmic", True, 3),
     "portable-mutated-android.cosmic": ("bell-observer.cosmic", False, 2),
 }
+LEGACY_DEVICE_TESTS = {
+    "default_1000_qubit_world", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
+    "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
+    "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
+    "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration",
+    "pause_resume_preserves_state", "portable_codec_strict_validation",
+    "portable_desktop_fixtures_import", "portable_mutation_export_reimport",
+    "portable_invalid_import_preserves_session", "portable_activity_recreation",
+}
+UHD_DEVICE_TESTS = {
+    "uhd_real_framebuffer_and_legacy_return", "uhd_id_selection_and_letterbox",
+    "uhd_orientation_roundtrip", "uhd_lifecycle_snapshot_native_preserved",
+}
+ULTRA_DEVICE_TESTS = {
+    "ultra8k_real_framebuffer_and_budget_limits",
+    "ultra8k_tiles_match_monolithic_color_and_ids",
+    "ultra8k_streamed_png_dimensions_and_rows",
+    "ultra8k_failure_preserves_scene_and_native_state",
+}
 
 
 def require(condition, message):
@@ -174,7 +193,16 @@ def verify_native(bridge, document, proof):
 def verify_directory(directory):
     directory = Path(directory)
     report = evidence_json(directory / "report.json")
-    require(report["testsRun"] == 15 and report["testsFailed"] == 0, "Portable device tests did not all pass")
+    uhd = report.get("metrics", {}).get("uhd4kSuite", False)
+    ultra = report.get("metrics", {}).get("ultra8kSuite", False)
+    require(type(uhd) is bool and type(ultra) is bool and (not ultra or uhd), "Unknown Android test profile")
+    expected = LEGACY_DEVICE_TESTS | (UHD_DEVICE_TESTS if uhd else set()) | (ULTRA_DEVICE_TESTS if ultra else set())
+    tests = report["tests"]
+    require(report["testsRun"] == len(expected) and report["testsFailed"] == 0,
+            "Portable device tests did not all pass")
+    require(len(tests) == len(expected) and {test["name"] for test in tests} == expected
+            and all(test["passed"] is True for test in tests),
+            "Android test inventory does not match the declared legacy/UHD profile")
     exports = report["projectExports"]
     require(len(exports) == 3 and {item["file"] for item in exports} == set(EXPECTED_EXPORTS),
             "Unexpected Android export inventory")

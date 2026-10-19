@@ -4,6 +4,8 @@ precision highp int;
 // @COMMON@
 uniform mat4 uInvVp;
 uniform vec2 uResolution;
+// Global native pixel origin for streamed image tiles. Zero for a full framebuffer.
+uniform vec2 uPixelOrigin;
 uniform vec3 uCameraForward,uCameraRight,uCameraUp;
 uniform float uTanHalfFov,uAspect,uNear,uFar;
 out vec4 outColor;
@@ -34,14 +36,17 @@ vec3 cosmicSky(vec3 direction){
 // Debug IDs always retain the original black background and exact object hits.
 vec4 cosmicBackdrop(vec3 direction,vec3 ro,vec3 rd,float maximum){
   vec3 sky=cosmicSky(direction);
-  if(rd.y>=-1e-6)return vec4(sky,1.0);
-  float groundT=(-.025-ro.y)/rd.y;
-  if(groundT<0.0||groundT>maximum)return vec4(sky,1.0);
+  // Evaluate the footprint for every lane before any ray-dependent return.
+  // Derivatives after divergent returns are undefined and can change between
+  // a complete framebuffer and a tile, even with aligned global pixel quads.
+  // The finite denominator changes only rays that cannot hit the ground.
+  float groundT=(-.025-ro.y)/min(rd.y,-1e-6);
   vec3 point=ro+rd*groundT;
-  float extent=float(uSide)*1.1+2.2;
-  if(max(abs(point.x),abs(point.z))>extent)return vec4(sky,1.0);
   vec2 grid=(point.xz+float(uSide)*1.1)/2.2;
   vec2 aa=max(fwidth(grid),vec2(.0002));
+  float extent=float(uSide)*1.1+2.2;
+  if(rd.y>=-1e-6||groundT<0.0||groundT>maximum
+      ||max(abs(point.x),abs(point.z))>extent)return vec4(sky,1.0);
   vec2 line=1.0-smoothstep(aa*.55,aa*1.3,abs(fract(grid+.5)-.5));
   float thinGrid=max(line.x,line.y);
   // Fade fine lines before they become subpixel, preserving a calm distant field.
@@ -55,7 +60,7 @@ vec4 cosmicBackdrop(vec3 direction,vec3 ro,vec3 rd,float maximum){
 void main(){
   outColor=uDebug==1?vec4(0,0,0,1):vec4(.067,.086,.075,1);
   gl_FragDepth=1.0;
-  vec2 ndc=2.0*gl_FragCoord.xy/uResolution-1.0;
+  vec2 ndc=2.0*(gl_FragCoord.xy+uPixelOrigin)/uResolution-1.0;
   // Direct camera rays avoid cancellation in a far-plane matrix unprojection.
   vec3 direction=normalize(uCameraForward+ndc.x*uAspect*uTanHalfFov*uCameraRight+ndc.y*uTanHalfFov*uCameraUp);
   float viewCosine=dot(direction,uCameraForward);

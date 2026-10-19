@@ -21,7 +21,7 @@ import org.json.JSONObject;
 public final class CosmicProject {
     public static final String FORMAT="cosmic-x-engine-project";
     public static final int MAX_FILE_BYTES=16*1024*1024;
-    private static final int MAX_QUBITS=256,MAX_GATES=100_000,MAX_OBSERVABLES=4096,MAX_EDITS=100_000;
+    private static final int MAX_QUBITS=NativeCore.MAX_QUBITS,MAX_GATES=100_000,MAX_OBSERVABLES=4096,MAX_EDITS=100_000;
     private static final int MAX_OBJECTS=1_048_576;
     private static final long MAX_REVISION=9_007_199_254_740_991L;
     private static final String[] GATE_NAMES={"H","S","X","Z","CX","CZ","Y"};
@@ -80,6 +80,27 @@ public final class CosmicProject {
         byte[] result=(document.description.toString(2)+"\n").getBytes(StandardCharsets.UTF_8);
         if(result.length>MAX_FILE_BYTES)throw invalid("El proyecto supera el límite de 16 MiB");
         return result;
+    }
+
+    /** Append independent |0> qubits. Existing gates, revision and visual operators keep their meaning. */
+    public static Document expandQubits(Document source,int qubits) throws Exception {
+        // Detach the authoritative description, including precise imported JSON numbers.
+        Document copy=decode(encode(source));
+        if(qubits<=copy.core.qubits||qubits>MAX_QUBITS)
+            throw invalid("La ampliación requiere más qubits que el proyecto actual, hasta "+MAX_QUBITS);
+        char[] identities=new char[qubits-copy.core.qubits];Arrays.fill(identities,'I');
+        String suffix=new String(identities);
+        JSONArray observables=new JSONArray();
+        for(String pauli:copy.graphics.observables)observables.put(pauli+suffix);
+        copy.description.getJSONObject("core").put("qubits",qubits);
+        copy.description.getJSONObject("graphics").put("observables",observables);
+        return validate(copy.description);
+    }
+
+    /** Live expansion also preserves preferences intentionally absent from portable .cosmic files. */
+    public static Document expandQubits(String name,NativeCore.Snapshot core,QuantumRenderer.Snapshot graphics,int qubits) throws Exception {
+        Document expanded=expandQubits(fromSnapshots(name,core,graphics),qubits);
+        return new Document(expanded.name,expanded.core,new QuantumRenderer.Snapshot(graphics,expanded.graphics.observables),expanded.description);
     }
 
     public static Document fromSnapshots(String name,NativeCore.Snapshot core,QuantumRenderer.Snapshot graphics) throws Exception {

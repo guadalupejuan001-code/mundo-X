@@ -250,7 +250,7 @@ void test_parser_errors() {
       {"backend reduced\nqubits 1\nassert one\n", "line 3:"},
       {"backend reduced\nqubits 2\nassert ghz\n", "line 3:"},
       {"backend reduced extra\nqubits 1\n", "line 1:"},
-      {"backend reduced\nqubits 13\n", "line 2:"},
+      {"backend reduced\nqubits 64\n", "line 2:"},
       {"# comment\n\nh 0\n", "line 3:"},
       {"qubits 1\nunknown 0\n", "line 2:"},
       {"# no declaration\n", "qubits"},
@@ -263,9 +263,9 @@ void test_parser_errors() {
 }
 
 void test_limits_and_failed_assertions() {
-  const auto max_qubits = run("backend reduced\nqubits 12\nbytes\n");
-  require(max_qubits.qubits == 12 && max_qubits.components == 1,
-          "12-qubit reduced limit must be inclusive");
+  const auto max_qubits = run("backend reduced\nqubits 63\nbytes\n");
+  require(max_qubits.qubits == 63 && max_qubits.components == 1,
+          "63-qubit reduced limit must be inclusive");
   std::string program = "backend reduced\nqubits 1\n";
   for (std::size_t i = 0; i < 128; ++i) program += "t 0\n";
   const auto max_t = run(program + "assert fidelity\nassert norm\n");

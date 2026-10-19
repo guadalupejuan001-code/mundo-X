@@ -54,7 +54,7 @@ import org.json.JSONObject;
 
 /** Real Android/JNI/GLES integration checks for the new application, without an external test framework. */
 public final class CosmicInstrumentation extends Instrumentation {
-    private static final int EXPECTED_TESTS = 24;
+    private static final int EXPECTED_TESTS = 25;
     private static final long TIMEOUT = 45_000;
     private static final String[][] EXPERIMENTS = {
         {"circuitos", "com.mundox.lab.XLabActivity"},
@@ -122,6 +122,7 @@ public final class CosmicInstrumentation extends Instrumentation {
             check("gate_changes_coupled_image", this::coupled);
             check("gate_preserves_uncoupled_image", this::uncoupled);
             check("saf_export_and_reimport", this::documents);
+            check("legacy_project_expansion_preserves_world", this::expandLegacy);
             check("background_resume_preserves_world", this::background);
             check("activity_recreation_restores_project", this::recreate);
             for (String[] experiment : EXPERIMENTS) {
@@ -168,7 +169,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         }
         results.add(result(name, error == null, SystemClock.elapsedRealtime() - began, error));
         // Keep completed proof if a later Android call stalls or its process is terminated.
-        // The verifier still requires the complete, exact 24-case inventory.
+        // The verifier still requires the complete, exact 25-case inventory.
         try { reports(); }
         catch (Exception reporting) { throw new AssertionError("Could not checkpoint Android evidence", reporting); }
         sendStatus(error == null ? 0 : -2, status);
@@ -186,7 +187,7 @@ public final class CosmicInstrumentation extends Instrumentation {
     private void identity() throws Exception {
         require("com.mundox.cosmic".equals(getTargetContext().getPackageName()), "Wrong target application ID");
         PackageInfo info = getTargetContext().getPackageManager().getPackageInfo("com.mundox.cosmic", PackageManager.GET_ACTIVITIES);
-        require("0.3.0".equals(info.versionName) && info.getLongVersionCode() == 1, "Wrong new application version");
+        require("0.3.1".equals(info.versionName) && info.getLongVersionCode() == 2, "Wrong new application version");
         Set<String> names = new HashSet<>();
         for (ActivityInfo item : info.activities) {
             names.add(item.name);
@@ -206,6 +207,8 @@ public final class CosmicInstrumentation extends Instrumentation {
         click("nav_motor");
         require(activity.core.stateBytes() > 0, "New viewport has no authoritative native state");
         World state = world();
+        require(NativeCore.DEFAULT_QUBITS == 1000 && state.core.qubits == 1000
+                && state.graphics.observables.length == 3000, "New home did not use the complete 1000-qubit profile");
         QuantumRenderer.Capture color = frame(false), ids = frame(true);
         int visible = 0;
         Set<Integer> objects = new HashSet<>();
@@ -222,7 +225,7 @@ public final class CosmicInstrumentation extends Instrumentation {
         screen("cosmic-motor.png");
         metrics.put("initialObjects", state.graphics.objectCount).put("initialVisiblePixels", visible)
                 .put("initialDistinctIds", objects.size()).put("initialResolutionLimit", state.graphics.resolutionLimit)
-                .put("initialQubits", state.core.qubits);
+                .put("initialQubits", state.core.qubits).put("initialObservables", state.graphics.observables.length);
     }
 
     private void panels() throws Exception {
@@ -335,6 +338,48 @@ public final class CosmicInstrumentation extends Instrumentation {
         saveFrame("cosmic-saf-before.png", beforeImage); saveFrame("cosmic-saf-after.png", afterImage);
         metrics.put("safExportBytes", bytes.length).put("safRoundtripChangedPixels", 0)
                 .put("safExportQubits", exported.core.qubits).put("safUsedProductionCallbacks", true);
+    }
+
+    private void expandLegacy() throws Exception {
+        click("nav_motor"); pauseAnimation();
+        World before = world();
+        require(before.core.qubits == 2, "The legacy Bell project was silently resized on import");
+        CosmicProject.Document expected = CosmicProject.expandQubits("Validation", before.core, before.graphics, 1000);
+        QuantumRenderer.Capture image = frame(false);
+        click("nav_archivo");
+        mainSync(() -> {
+            require(find(activity, "project_expand_qubits").performClick(), "Missing production expansion action");
+            require(find(activity, "gate_h").performClick(), "Missing gate callback during expansion race check");
+            CountDownLatch checked = new CountDownLatch(1);
+            AtomicReference<Long> revision = new AtomicReference<>();
+            activity.surface.queueEvent(() -> { revision.set(before.owner.version()); checked.countDown(); });
+            try { require(checked.await(10, TimeUnit.SECONDS), "Pending expansion gate check timed out"); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new AssertionError(interrupted); }
+            require(revision.get() == before.core.version, "Gate callback mutated the source during pending expansion");
+        });
+        await(() -> activity.core != before.owner && activity.core.qubits == 1000 && activity.renderer.hasFrame,
+                "production 1000-qubit expansion");
+        click("nav_motor"); World after = world();
+        require(after.core.version == before.core.version && Arrays.equals(after.core.gateHistory, before.core.gateHistory)
+                && Arrays.equals(after.observations, before.observations), "Expanding a legacy project reset its native state");
+        require(Arrays.equals(CosmicProject.encode(expected), after.normalized)
+                && before.graphics.enabledQuantumStrength == after.graphics.enabledQuantumStrength
+                && before.graphics.yaw == after.graphics.yaw && before.graphics.pitch == after.graphics.pitch
+                && before.graphics.zoom == after.graphics.zoom && before.graphics.overview == after.graphics.overview,
+                "Expanding a legacy project changed its visual or hidden session preferences");
+        require(after.generators.length == 1000, "Expanded core does not expose all 1000 generators");
+        for (int q = 2; q < 1000; q++) {
+            char[] zero = new char[1000]; Arrays.fill(zero, 'I'); zero[q] = 'Z';
+            require(after.generators[q].equals("+" + new String(zero)), "Added qubit was not initialized to |0>: " + q);
+        }
+        QuantumRenderer.Capture expanded = frame(false);
+        require(image.changed(expanded) == 0, "Legacy expansion changed the frozen viewport");
+        saveFrame("cosmic-expansion-before.png", image); saveFrame("cosmic-expansion-after.png", expanded);
+        mainSync(() -> require(activity.getWindow().getDecorView().findViewWithTag("project_expand_qubits") == null,
+                "The expansion action is still available at the maximum profile"));
+        metrics.put("expandedFromQubits", 2).put("expandedToQubits", 1000).put("expansionChangedPixels", 0)
+                .put("expansionPreservedState", true).put("expansionAddedQubitsZero", true)
+                .put("expansionPreservedHiddenState", true).put("expansionBlockedConcurrentGate", true);
     }
 
     private void background() throws Exception {

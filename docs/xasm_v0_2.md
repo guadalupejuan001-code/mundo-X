@@ -33,7 +33,7 @@ assert norm
 
 Este circuito prepara el estado `( |0> + exp(iπ/4)|1> ) / √2`. La evolución reducida mantiene una base estabilizadora compartida, etiquetas Pauli y coeficientes; no materializa las ramas ingenuas `2^T`. El número de componentes todavía puede crecer como `2^n`.
 
-El modo reducido del intérprete está limitado a **1..12 qubits y 128 puertas T**, igual que el experimento reducido existente. La API C++ tiene otros límites; este intérprete mantiene un alcance experimental acotado. La directiva `backend` se declara como máximo una vez, antes de `qubits`.
+El modo reducido del intérprete admite **1..63 qubits, 128 puertas T y hasta 65.536 componentes**. El núcleo compacto admite el registro de 1.000 qubits. La ruta reducida conserva su límite de máscaras de 63 bits; no se presenta como un backend de 1.000 qubits. La directiva `backend` se declara como máximo una vez, antes de `qubits`.
 
 ## Instrucciones
 
@@ -41,22 +41,25 @@ Los índices de qubit empiezan en cero. Cada instrucción ocupa una línea; `#` 
 
 | Instrucción | Compact | Reduced | Función |
 |---|---|---|---|
-| `qubits n` | Sí | Sí, 1..12 | Inicializa el estado en cero; una declaración por programa |
+| `qubits n` | Sí | Sí, 1..63 | Inicializa el estado en cero; una declaración por programa |
 | `h q`, `x q`, `z q`, `s q` | Sí | Sí | Puertas de un qubit |
 | `cx c t`, `cz a b` | Sí | Sí | Puertas de dos qubits distintos |
 | `t q` | No | Sí | Puerta de fase T; hasta 128 por programa |
 | `show` | Generadores estabilizadores | Resumen de representación | Inspecciona el estado sin reconstrucción densa |
 | `bytes` | `STATE_BYTES` | `LOGICAL_PAYLOAD_BYTES` | Informa la memoria del tableau o la carga lógica estimada |
 | `assert one`, `assert ghz` | Sí | No | Comprobaciones estabilizadoras existentes |
-| `assert fidelity`, `assert norm` | No | Sí | Validación densa explícita del circuito reducido |
+| `expect PAULI` | Sí | Sí | Expectativa de una cadena I/X/Y/Z con signo opcional; sin vector denso |
+| `assert expectation PAULI VALOR` | Sí | Sí | Comprueba una expectativa con tolerancia absoluta `1e-10` |
+| `assert norm` | No | Sí | Comprueba la norma mediante componentes; sin vector denso |
+| `assert fidelity` | No | Solo hasta 12 qubits | Compara contra la referencia densa pequeña |
 
 `show` en modo reducido no muestra el tableau base como si representara el estado completo después de T. Informa el motor, los componentes, las puertas T y la carga lógica. La carga lógica incluye el tableau, etiquetas, coeficientes y registros de puertas; excluye la sobrecarga de contenedores, asignaciones y proceso.
 
 ## Validación y códigos de salida
 
-`assert fidelity` compara la reconstrucción de la representación reducida con una ejecución del circuito en Dense Core. `assert norm` comprueba la norma de la reconstrucción reducida. Ambas comprobaciones requieren un resultado finito y una diferencia respecto a 1 de hasta `3e-5`, de acuerdo con la tolerancia del experimento existente. La reconstrucción de referencia usa amplitudes `complex<float>`, por lo que no se exige igualdad numérica exacta.
+`assert fidelity` compara la reconstrucción de la representación reducida con una ejecución del circuito en Dense Core. `assert norm` comprueba la norma con `sparse_norm()`, sin reconstrucción densa. Ambas comprobaciones requieren un resultado finito y una diferencia respecto a 1 de hasta `3e-5`, de acuerdo con la tolerancia del experimento existente. La reconstrucción de referencia usa amplitudes `complex<float>`, por lo que no se exige igualdad numérica exacta.
 
-Estas instrucciones construyen vectores densos para validar circuitos pequeños. Las puertas y las consultas `show`/`bytes` no activan esa reconstrucción. Las comprobaciones se ejecutan sobre el estado en el punto donde aparece cada `assert`.
+`assert fidelity` construye vectores densos y rechaza registros mayores de 12 qubits antes de asignarlos. Las puertas, `expect`, `assert expectation`, `assert norm` y las consultas `show`/`bytes` no activan esa reconstrucción. Las expectativas del backend reducido se normalizan por su norma. Las comprobaciones se ejecutan sobre el estado en el punto donde aparece cada `assert`.
 
 El comando `run` devuelve `0` si todas las comprobaciones pasan y `1` si una falla, el archivo no existe o el programa contiene un error. Una comprobación fallida conserva `FAIL` en la salida aunque una comprobación posterior pase.
 

@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - 'native/**'
+      - 'pc-android/**'
+      - 'android-experiments/native/**'
+      - 'graphics-android/app/src/main/cpp/**'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
+      - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/**'
       - 'tests/**'
       - 'examples/**'
@@ -15,6 +21,12 @@ on:
     branches: [main]
     paths:
       - 'native/**'
+      - 'pc-android/**'
+      - 'android-experiments/native/**'
+      - 'graphics-android/app/src/main/cpp/**'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
+      - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/**'
       - 'tests/**'
       - 'examples/**'
@@ -39,6 +51,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -47,6 +60,7 @@ jobs:
         run: |
           mkdir -p cosmic-evidence/native
           git rev-parse HEAD > cosmic-evidence/native/source-commit.txt
+          python tools/cosmic_source_provenance.py > cosmic-evidence/native/source-provenance.json
       - name: Configure and compile the native core
         run: |
           cmake -S . -B cosmic-native-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
@@ -60,6 +74,9 @@ jobs:
         run: |
           python tools/visual/check_visual_cli.py --binary cosmic-native-build/mundo_x \
             | tee cosmic-evidence/native/visual-cli.log
+      - name: Record the actual cost of the 1,000-qubit register
+        run: |
+          cosmic-native-build/core_1000_benchmark > cosmic-evidence/native/core-1000-benchmark.json
       - name: Upload native evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -105,6 +122,11 @@ jobs:
           python graphics-desktop/validate_projects.py \
             --output cosmic-evidence/desktop/projects.json \
             | tee cosmic-evidence/desktop/projects.log
+      - name: Verify the full register and lossless expansion from previous projects
+        run: |
+          python graphics-desktop/check_core_profile.py \
+            --output cosmic-evidence/desktop/core-1000-projects.json \
+            | tee cosmic-evidence/desktop/core-1000-projects.log
       - name: Verify geometric queries, IDs and edits
         run: |
           python graphics-desktop/validate.py \
