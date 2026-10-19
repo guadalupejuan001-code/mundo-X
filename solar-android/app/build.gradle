@@ -1,5 +1,7 @@
 plugins { id 'com.android.application' }
 def solar4kStandalone = providers.gradleProperty('solar4kStandalone').map { it.toBoolean() }.getOrElse(false)
+def solar8kStandalone = providers.gradleProperty('solar8kStandalone').map { it.toBoolean() }.getOrElse(false)
+if (solar4kStandalone && solar8kStandalone) throw new GradleException('Choose either Solar 4K or Solar 8K standalone')
 
 android {
     namespace 'com.mundox.solar'
@@ -7,12 +9,12 @@ android {
     ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId solar4kStandalone ? 'com.cosmicx.solar.uhd' : 'com.cosmicx.solar'
+        applicationId solar8kStandalone ? 'com.cosmicx.solar.ultra' : (solar4kStandalone ? 'com.cosmicx.solar.uhd' : 'com.cosmicx.solar')
         minSdk 26
         targetSdk 35
-        versionCode 2
-        versionName '1.1.0'
-        manifestPlaceholders = [solarAppLabel: solar4kStandalone ? 'COSMIC X Solar 4K' : 'COSMIC X Solar']
+        versionCode 3
+        versionName '1.2.0'
+        manifestPlaceholders = [solarAppLabel: solar8kStandalone ? 'COSMIC X Solar 8K' : (solar4kStandalone ? 'COSMIC X Solar 4K' : 'COSMIC X Solar')]
         testInstrumentationRunner 'com.mundox.solar.SolarInstrumentation'
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
         externalNativeBuild { cmake { cppFlags '-std=c++17 -O3' } }
