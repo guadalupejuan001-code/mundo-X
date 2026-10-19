@@ -68,8 +68,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private int mapTexture,colorTexture,depthBuffer,framebuffer;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
-    private boolean requestedUhd;
-    private volatile boolean activeUhd;
+    private int requestedResolutionMode=RenderResolution.ADAPTIVE;
+    private volatile int activeResolutionMode=RenderResolution.ADAPTIVE;
     private volatile String resolutionMessage;
     private volatile RenderResolution.Fit display=RenderResolution.fit(1,1,new RenderResolution.Size(1,1));
     private volatile boolean entryMode,atmosphereEnabled=true;
@@ -153,7 +153,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
-        activeUhd=false;
+        activeResolutionMode=RenderResolution.ADAPTIVE;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
         try{
@@ -227,15 +227,17 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(int n=0;n<16&&glGetError()!=GL_NO_ERROR;n++){}
         throw new IllegalStateException(stage+": "+(error==GL_OUT_OF_MEMORY?"memoria gráfica insuficiente":"GLES 0x"+Integer.toHexString(error)));
     }
-    /** Same exact UHD/FIT geometry as the standalone COSMIC X 4K observer. */
+    /** Shared 4K/8K/FIT geometry from COSMIC X. */
     private RenderResolution.Limits resolutionLimits(){
         int[] caps=new int[4];glGetIntegerv(GL_MAX_TEXTURE_SIZE,caps,0);
         glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE,caps,1);glGetIntegerv(GL_MAX_VIEWPORT_DIMS,caps,2);
         check("Límites de resolución");return new RenderResolution.Limits(caps[0],caps[1],caps[2],caps[3]);
     }
     /** Candidate attachments are checked before any current GL name is replaced. */
-    private void installTarget(RenderResolution.Size size,boolean uhd,int limit){
+    private void installTarget(RenderResolution.Size size,int mode,int limit){
         RenderResolution.Fit fit=RenderResolution.fit(viewWidth,viewHeight,size);
+        RenderResolution.Size existing=framebuffer==0?null:new RenderResolution.Size(width,height);
+        RenderResolution.requireAllocation(size,existing);
         if(framebuffer==0||width!=size.width||height!=size.height){
             int color=0,depth=0,target=0;boolean accepted=false;
             try{
@@ -266,19 +268,24 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             }
         }
         display=fit;aspect=(float)width/height;quality=acceptedQuality=limit;
-        activeUhd=requestedUhd=uhd;framebufferDirty=false;
+        activeResolutionMode=requestedResolutionMode=mode;framebufferDirty=false;
     }
     private void sizeFramebuffer(){
-        RenderResolution.Limits caps=null;RenderResolution.Size uhd=RenderResolution.uhd(viewWidth,viewHeight);
-        boolean wantedUhd=requestedUhd;int wantedQuality=quality;
-        String request=wantedUhd?"UHD 4K "+uhd.width+"×"+uhd.height:wantedQuality+" px";
+        RenderResolution.Limits caps=null;
+        int wantedMode=requestedResolutionMode,wantedQuality=quality;
+        RenderResolution.Size fixed=wantedMode==RenderResolution.ADAPTIVE?null:
+                RenderResolution.fixed(wantedMode,viewWidth,viewHeight);
+        String request=fixed==null?wantedQuality+" px":
+                (wantedMode==RenderResolution.UHD_8K?"UHD 8K ":"UHD 4K ")+fixed.width+"×"+fixed.height;
         try{
-            caps=resolutionLimits();RenderResolution.Size size=wantedUhd?uhd:RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps);
-            caps.require(size);installTarget(size,wantedUhd,wantedQuality);resolutionMessage=null;
+            caps=resolutionLimits();
+            RenderResolution.Size size=fixed!=null?fixed:
+                    RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps);
+            caps.require(size);installTarget(size,wantedMode,wantedQuality);resolutionMessage=null;
         }catch(RuntimeException|OutOfMemoryError rejected){
             String reason=rejected.getMessage();if(reason==null)reason=rejected.getClass().getSimpleName();
             if(framebuffer!=0){
-                requestedUhd=activeUhd;quality=acceptedQuality;framebufferDirty=false;
+                requestedResolutionMode=activeResolutionMode;quality=acceptedQuality;framebufferDirty=false;
                 display=RenderResolution.fit(viewWidth,viewHeight,new RenderResolution.Size(width,height));
                 resolutionMessage="No se pudo activar "+request+": "+reason+". Se conserva "+width+"×"+height+".";return;
             }
@@ -286,7 +293,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             int fallback=wantedQuality;
             while(true){
                 try{
-                    installTarget(RenderResolution.adaptive(viewWidth,viewHeight,fallback,caps),false,fallback);
+                    installTarget(RenderResolution.adaptive(viewWidth,viewHeight,fallback,caps),
+                            RenderResolution.ADAPTIVE,fallback);
                     resolutionMessage="No se pudo activar "+request+": "+reason+". Se usa modo adaptado "+width+"×"+height+".";return;
                 }catch(RuntimeException|OutOfMemoryError unavailable){
                     if(fallback<=64)throw new IllegalStateException("No se pudo asignar un framebuffer mínimo",unavailable);
@@ -690,7 +698,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d%s",fps,width,height,isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
@@ -835,9 +843,16 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
-    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=false;resolutionMessage=null;framebufferDirty=true;}
-    public void setUhd4k(boolean enabled){requestedUhd=enabled;resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
-    public boolean isUhd4k(){return activeUhd&&framebuffer!=0&&((width==3840&&height==2160)||(width==2160&&height==3840));}
+    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedResolutionMode=RenderResolution.ADAPTIVE;resolutionMessage=null;framebufferDirty=true;}
+    public void setResolutionMode(int mode){
+        if(!RenderResolution.validMode(mode))throw new IllegalArgumentException("Modo de resolución inválido");
+        requestedResolutionMode=mode;resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;
+    }
+    public void setUhd4k(boolean enabled){setResolutionMode(enabled?RenderResolution.UHD_4K:RenderResolution.ADAPTIVE);}
+    public void setUhd8k(boolean enabled){setResolutionMode(enabled?RenderResolution.UHD_8K:RenderResolution.ADAPTIVE);}
+    public boolean isUhd4k(){return activeResolutionMode==RenderResolution.UHD_4K&&framebuffer!=0&&((width==3840&&height==2160)||(width==2160&&height==3840));}
+    public boolean isUhd8k(){return activeResolutionMode==RenderResolution.UHD_8K&&framebuffer!=0&&((width==7680&&height==4320)||(width==4320&&height==7680));}
+    public int resolutionMode(){return activeResolutionMode;}
     public int renderedWidth(){return width;}
     public int renderedHeight(){return height;}
     public int surfaceWidth(){return viewWidth;}
