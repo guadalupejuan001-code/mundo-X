@@ -1,0 +1,146 @@
+name: COSMIC X Engine native 4K APK and Android validation
+
+on:
+  push:
+    branches: [codex/cosmic-engine-4k-20261019]
+    paths:
+      - 'graphics-android/**'
+      - 'tools/graphics-*'
+      - '.github/workflows/graphics-4k.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cosmic-engine-4k-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the exact source and original core reference
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install pinned Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1'
+
+      - name: Compile the existing unified consumer against shared graphics sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p cosmic-android --no-daemon --stacktrace \
+            :app:compileDebugJavaWithJavac :app:compileDebugAndroidTestJavaWithJavac \
+            2>&1 | tee graphics-4k-consumer-build.log
+
+      - name: Build the normal graphics app for coinstallation validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p graphics-android --no-daemon --stacktrace :app:assembleDebug \
+            2>&1 | tee graphics-4k-companion-build.log
+          mkdir -p graphics-4k-dist
+          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk \
+            graphics-4k-dist/COSMIC-X-Engine-coexist.apk
+
+      - name: Build the independently installable 4K app and instrumented tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p graphics-android --no-daemon --stacktrace -Pcosmic4kStandalone=true \
+            :app:assembleDebug :app:assembleDebugAndroidTest 2>&1 | tee graphics-4k-build.log
+          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk \
+            graphics-4k-dist/COSMIC-X-Engine-4K.apk
+          cp graphics-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            graphics-4k-dist/COSMIC-X-Engine-4K-tests.apk
+
+      - name: Verify packaged identity, SDK, signatures, ABIs and unchanged native sources
+        run: python3 tools/graphics-stage-4k.py graphics-4k-dist
+
+      - name: Upload exact standalone APKs and build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Engine-4K-APK
+          path: graphics-4k-dist/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Engine-4K-Build-Logs
+          path: |
+            graphics-4k-*.log
+            graphics-4k-dist/*.txt
+            graphics-4k-dist/*.json
+            graphics-android/app/build/reports/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  android-validation:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout the exact validation code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download this build's exact APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: COSMIC-X-Engine-4K-APK
+          path: graphics-4k-apks
+
+      - name: Enable Android 15 emulator with 2 GB RAM
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+
+      - name: Verify 15 legacy and 4 UHD tests using actual JNI and SwiftShader
+        shell: bash
+        env:
+          GRAPHICS_UHD4K: 'true'
+          GRAPHICS_APK_DIR: graphics-4k-apks
+          GRAPHICS_EVIDENCE_DIR: graphics-4k-evidence
+        run: bash tools/graphics-emulator-test.sh
+
+      - name: Replay exported projects independently with the desktop codec
+        run: python3 tools/cosmic-verify-portability.py graphics-4k-evidence
+
+      - name: Upload actual UHD frames, comparisons, native evidence and Android logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Engine-4K-Android-Evidence
+          path: graphics-4k-evidence/**
+          if-no-files-found: warn
+          retention-days: 14

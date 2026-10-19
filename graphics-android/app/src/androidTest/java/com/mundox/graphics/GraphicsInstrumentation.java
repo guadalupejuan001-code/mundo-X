@@ -3,7 +3,9 @@ package com.mundox.graphics;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -21,6 +23,7 @@ import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,7 +40,7 @@ import org.json.JSONObject;
 /** Device tests use the shipping JNI core, shaders, GL thread and activity lifecycle. */
 public final class GraphicsInstrumentation extends Instrumentation {
     private static final String TAG = "MundoXGraphicsTests";
-    private static final int EXPECTED_TESTS = 15;
+    private static final int LEGACY_TESTS = 15;
     private static final long FRAME_TIMEOUT_MS = 45_000;
     private MainActivity activity;
     private File evidence;
@@ -45,6 +48,9 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private final JSONObject metrics = new JSONObject();
     private final JSONArray images = new JSONArray();
     private final JSONArray projectExports = new JSONArray();
+    private final JSONObject captureSamples = new JSONObject();
+    private boolean testUhd;
+    private int expectedTests = LEGACY_TESTS;
     private String portableName;
 
     private interface Checked { void run() throws Exception; }
@@ -82,6 +88,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        testUhd = arguments != null && "true".equals(arguments.getString("uhd4k"));
+        if (testUhd) expectedTests += 4;
         start();
     }
 
@@ -93,6 +101,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
             metrics.put("androidRelease", Build.VERSION.RELEASE);
             metrics.put("abis", new JSONArray(Arrays.asList(Build.SUPPORTED_ABIS)));
             metrics.put("performanceScope", "Software GLES emulator; not phone performance measurements");
+            metrics.put("uhd4kSuite", testUhd);
+            metrics.put("applicationId", getTargetContext().getPackageName());
 
             Intent launch = new Intent(getTargetContext(), MainActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -116,6 +126,13 @@ public final class GraphicsInstrumentation extends Instrumentation {
             metrics.put("qubits", activity.core.qubits);
             metrics.put("nativeStateBytes", activity.core.stateBytes());
             metrics.put("baselineMetricsScope", "Original ten tests, before portable project replacement");
+
+            if (testUhd) {
+                runCase("uhd_real_framebuffer_and_legacy_return", this::uhdAndReturn);
+                runCase("uhd_id_selection_and_letterbox", this::uhdPicking);
+                runCase("uhd_orientation_roundtrip", this::uhdOrientation);
+                runCase("uhd_lifecycle_snapshot_native_preserved", this::uhdLifecycle);
+            }
 
             runCase("portable_codec_strict_validation", this::portableCodec);
             runCase("portable_desktop_fixtures_import", this::portableFixtures);
@@ -142,7 +159,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
         }
         finish.putInt("tests_run", results.size());
         finish.putInt("tests_failed", failures);
-        boolean passed = failures == 0 && results.size() == EXPECTED_TESTS;
+        boolean passed = failures == 0 && results.size() == expectedTests;
         finish.putString("stream", "\nMUNDOX_GRAPHICS_TESTS_" + (passed ? "PASSED" : "FAILED")
                 + " tests=" + results.size() + " failures=" + failures + "\n");
         finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, finish);
@@ -152,7 +169,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
         Bundle status = new Bundle();
         status.putString("class", getClass().getName());
         status.putString("test", name);
-        status.putInt("numtests", EXPECTED_TESTS);
+        status.putInt("numtests", expectedTests);
         status.putInt("current", results.size() + 1);
         sendStatus(1, status);
         long start = SystemClock.elapsedRealtime();
@@ -387,6 +404,233 @@ public final class GraphicsInstrumentation extends Instrumentation {
         save("lifecycle-after.png", after);
         metrics.put("pauseResumeChangedPixels", before.changed(after));
         metrics.put("pauseResumeVersion", version);
+    }
+
+    private QuantumRenderer.Snapshot visualSnapshot() throws Exception {
+        AtomicReference<QuantumRenderer.Snapshot> value = new AtomicReference<>();
+        gl(() -> value.set(activity.renderer.snapshot()));
+        return value.get();
+    }
+
+    private void uhdAndReturn() throws Exception {
+        RenderResolution.Size portrait = RenderResolution.uhd(720, 1280);
+        RenderResolution.Size landscape = RenderResolution.uhd(1280, 720);
+        expect(portrait.width == 2160 && portrait.height == 3840
+                && landscape.width == 3840 && landscape.height == 2160,
+                "UHD request was reduced to the phone display size");
+        new RenderResolution.Limits(4096, 4096, 4096, 4096).require(landscape);
+        RenderResolution.Limits[] insufficient = {
+            new RenderResolution.Limits(2048, 4096, 4096, 4096),
+            new RenderResolution.Limits(4096, 2048, 4096, 4096),
+            new RenderResolution.Limits(4096, 4096, 2048, 4096),
+            new RenderResolution.Limits(4096, 4096, 4096, 2048),
+        };
+        int rejected = 0;
+        for (RenderResolution.Limits limits : insufficient) {
+            try { limits.require(landscape); }
+            catch (IllegalArgumentException expected) { rejected++; }
+        }
+        expect(rejected == insufficient.length, "A GPU texture, renderbuffer or viewport limit was ignored");
+        metrics.put("uhdRejectedInsufficientLimits", rejected);
+        orient(false);
+        scene(1_000_000);
+        gl(() -> activity.renderer.testCamera(new float[]{0, 6000, 0}, new float[]{0, 0, 0}));
+        QuantumRenderer.Capture baseline = frame(false);
+        save("uhd-legacy-before.png", baseline);
+        QuantumRenderer.Snapshot before = visualSnapshot();
+        NativeCore owner = activity.core;
+        NativeCore.Snapshot nativeBefore = owner.snapshot();
+        gl(() -> activity.renderer.uhd4k());
+        String fingerprint = saveUhd("uhd-million-portrait.png", false, false);
+        expect(activity.renderer.isUhd4k(), "The actual renderer did not enter UHD mode");
+        sameCore(nativeBefore, owner.snapshot(), "UHD drawing changed native history");
+        expect(owner == activity.core, "UHD allocation replaced the authoritative native owner");
+        metrics.put("uhdMillionObjectCount", activity.renderer.frameStats().objectCount);
+        metrics.put("uhdPortraitWidth", 2160);
+        metrics.put("uhdPortraitHeight", 3840);
+        metrics.put("uhdPixels", 8_294_400);
+        metrics.put("uhdMillionRgbaSha256", fingerprint);
+        gl(() -> activity.renderer.resolution(before.resolutionLimit));
+        QuantumRenderer.Capture returned = frame(false);
+        expect(!activity.renderer.isUhd4k(), "Resolution selection did not leave UHD mode");
+        expect(baseline.changed(returned) == 0, "UHD roundtrip changed the previous resolution's exact pixels");
+        sameGraphics(before, visualSnapshot(), "UHD roundtrip changed the logical world");
+        sameCore(nativeBefore, owner.snapshot(), "Returning from UHD altered the core");
+        save("uhd-legacy-after.png", returned);
+        metrics.put("uhdLegacyReturnChangedPixels", baseline.changed(returned));
+        metrics.put("uhdNativeOwnerPreserved", true);
+    }
+
+    private void uhdPicking() throws Exception {
+        scene(1);
+        NativeCore.Snapshot nativeBefore = activity.core.snapshot();
+        gl(() -> activity.renderer.uhd4k());
+        // Keep no 33 MB ID capture alive when requesting the next capture.
+        int[] chosen = saveUhdPick();
+        gl(() -> activity.renderer.pick(chosen[1], chosen[2]));
+        saveUhd("uhd-selection.png", false, false);
+        expect(activity.renderer.selectedId() == chosen[0], "UHD FIT mapping picked the wrong object ID");
+        metrics.put("uhdSelectedId", chosen[0]);
+        QuantumRenderer.FrameStats view = activity.renderer.frameStats();
+        QuantumRenderer.Snapshot beforeOutside = visualSnapshot();
+        int barX, barY;
+        if (view.displayLeft > 1) { barX = 0; barY = view.viewHeight / 2; }
+        else {
+            expect(view.displayTop > 1, "Fixture must expose a letterbox margin");
+            barX = view.viewWidth / 2; barY = 0;
+        }
+        final int outsideX = barX, outsideY = barY;
+        gl(() -> activity.renderer.pick(outsideX, outsideY));
+        // Drawing processes the queued pick; the capture is not retained.
+        saveUhd("uhd-letterbox-rejected.png", false, false);
+        expect(activity.renderer.selectedId() == chosen[0], "A letterbox tap changed the existing object selection");
+        sameGraphics(beforeOutside, visualSnapshot(), "A tap outside the scene changed the logical world");
+        sameCore(nativeBefore, activity.core.snapshot(), "4K selection mutated native state");
+        metrics.put("uhdLetterboxRejected", true);
+        metrics.put("uhdFitRect", new JSONObject().put("left", view.displayLeft).put("top", view.displayTop)
+                .put("width", view.displayWidth).put("height", view.displayHeight)
+                .put("surfaceWidth", view.viewWidth).put("surfaceHeight", view.viewHeight));
+    }
+
+    private int[] saveUhdPick() throws Exception {
+        QuantumRenderer.Capture ids = frame(true);
+        expect(ids.width == 2160 && ids.height == 3840, "UHD ID pass dimensions differ from the color pass");
+        save("uhd-portrait-ids.png", ids);
+        int x = -1, y = -1;
+        double nearest = Double.MAX_VALUE;
+        for (int py = 32; py < ids.height - 32; py += 16) for (int px = 32; px < ids.width - 32; px += 16) {
+            if (ids.idAt(px, py) != 0 || ids.idAt(px - 16, py) != 0 || ids.idAt(px + 16, py) != 0
+                    || ids.idAt(px, py - 16) != 0 || ids.idAt(px, py + 16) != 0) continue;
+            double distance = Math.pow(px - ids.width / 2.0, 2) + Math.pow(py - ids.height / 2.0, 2);
+            if (distance < nearest) { nearest = distance; x = px; y = py; }
+        }
+        expect(x >= 0, "UHD ID framebuffer contains no selectable object interior");
+        QuantumRenderer.FrameStats view = activity.renderer.frameStats();
+        double scale = Math.min((double) view.viewWidth / ids.width, (double) view.viewHeight / ids.height);
+        expect(Math.abs(view.displayWidth - ids.width * scale) <= 1
+                && Math.abs(view.displayHeight - ids.height * scale) <= 1, "UHD presentation distorts the image aspect ratio");
+        expect(view.displayLeft >= 0 && view.displayTop >= 0
+                && view.displayLeft + view.displayWidth <= view.viewWidth
+                && view.displayTop + view.displayHeight <= view.viewHeight, "FIT rectangle escapes the Android surface");
+        int screenX = view.displayLeft + (int) ((x + .5) * view.displayWidth / ids.width);
+        int screenY = view.displayTop + (int) ((y + .5) * view.displayHeight / ids.height);
+        return new int[]{0, screenX, screenY};
+    }
+
+    private void uhdOrientation() throws Exception {
+        scene(64);
+        gl(() -> activity.renderer.uhd4k());
+        String before = saveUhd("uhd-portrait-before-rotation.png", false, false);
+        QuantumRenderer.Snapshot logical = visualSnapshot();
+        NativeCore owner = activity.core;
+        NativeCore.Snapshot nativeBefore = owner.snapshot();
+        orient(true);
+        saveUhd("uhd-landscape.png", false, true);
+        saveScreen("uhd-activity-landscape.png");
+        sameGraphics(logical, visualSnapshot(), "Screen orientation changed the logical scene");
+        expect(activity.core == owner, "Screen rotation replaced the native owner");
+        orient(false);
+        String after = saveUhd("uhd-portrait-after-rotation.png", false, false);
+        expect(before.equals(after), "Orientation roundtrip did not restore exact UHD pixels");
+        sameGraphics(logical, visualSnapshot(), "Orientation roundtrip lost the UHD setting or scene");
+        sameCore(nativeBefore, owner.snapshot(), "Screen rotation changed native history");
+        saveScreen("uhd-activity-portrait.png");
+        metrics.put("uhdLandscapeWidth", 3840);
+        metrics.put("uhdLandscapeHeight", 2160);
+        metrics.put("uhdOrientationChangedPixels", 0);
+    }
+
+    private void uhdLifecycle() throws Exception {
+        gl(() -> {
+            activity.renderer.coupling(true);
+            activity.renderer.gate(NativeCore.Z, 0, 0);
+            activity.renderer.setTime(1.25f);
+        });
+        QuantumRenderer.Snapshot before = visualSnapshot();
+        NativeCore owner = activity.core;
+        NativeCore.Snapshot nativeBefore = owner.snapshot();
+        String[] generators = owner.generators(), program = owner.visualProgram();
+        float[] expectations = owner.query(program);
+        String pixels = saveUhd("uhd-lifecycle-before.png", false, false);
+        ByteArrayOutputStream snapshotBytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream stream = new ObjectOutputStream(snapshotBytes)) { stream.writeObject(before); }
+        try (ObjectInputStream stream = new ObjectInputStream(new ByteArrayInputStream(snapshotBytes.toByteArray()))) {
+            sameGraphics(before, (QuantumRenderer.Snapshot) stream.readObject(), "Serialized snapshot lost the UHD preference");
+        }
+        AtomicReference<Boolean> moved = new AtomicReference<>(false);
+        runOnMainSync(() -> moved.set(activity.moveTaskToBack(true)));
+        expect(Boolean.TRUE.equals(moved.get()), "Could not background the UHD activity");
+        try { waitUntil(() -> !activity.resumed, 15_000, "UHD activity did not pause"); }
+        finally {
+            Intent resume = new Intent(getTargetContext(), MainActivity.class);
+            resume.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            getTargetContext().startActivity(resume);
+        }
+        waitUntil(() -> activity.resumed, 15_000, "UHD activity did not resume");
+        waitForIdleSync();
+        expect(pixels.equals(saveUhd("uhd-after-resume.png", false, false)), "Pause/resume changed exact UHD pixels");
+        sameGraphics(before, visualSnapshot(), "Pause/resume lost the UHD logical snapshot");
+        expect(activity.core == owner, "Pause/resume replaced the UHD native owner");
+        MainActivity original = activity;
+        ActivityMonitor monitor = addMonitor(MainActivity.class.getName(), null, false);
+        try {
+            runOnMainSync(original::recreate);
+            Activity next = waitForMonitorWithTimeout(monitor, 25_000);
+            expect(next instanceof MainActivity && next != original, "UHD activity was not recreated");
+            activity = (MainActivity) next;
+            waitUntil(() -> activity.resumed, 15_000, "Recreated UHD activity did not resume");
+            waitForIdleSync();
+        } finally { removeMonitor(monitor); }
+        expect(activity.core != owner, "Recreated UHD activity did not reconstruct its native owner");
+        expect(pixels.equals(saveUhd("uhd-after-recreate.png", false, false)), "Activity recreation changed exact UHD pixels");
+        sameGraphics(before, visualSnapshot(), "Recreation lost the UHD snapshot");
+        sameCore(nativeBefore, activity.core.snapshot(), "UHD lifecycle changed native gate history");
+        expect(Arrays.equals(generators, activity.core.generators())
+                && Arrays.equals(expectations, activity.core.query(program)), "UHD lifecycle changed native observations");
+        metrics.put("uhdPauseResumeChangedPixels", 0);
+        metrics.put("uhdRecreateChangedPixels", 0);
+        metrics.put("uhdSnapshotSerialized", true);
+        metrics.put("uhdRecreatedNativeStatePreserved", true);
+        gl(() -> activity.renderer.resolution(320));
+    }
+
+    private String saveUhd(String name, boolean ids, boolean landscape) throws Exception {
+        QuantumRenderer.Capture image = frame(ids);
+        int width = landscape ? 3840 : 2160, height = landscape ? 2160 : 3840;
+        expect(image.width == width && image.height == height,
+                "Expected actual UHD " + width + "x" + height + ", got " + image.width + "x" + image.height);
+        expect(image.rgba.length == 33_177_600 && image.nonBackground() > 100,
+                "UHD framebuffer is missing its full pixel payload or visible scene");
+        expect(activity.renderer.isUhd4k(), "UHD request was rejected: " + activity.renderer.resolutionNotice());
+        save(name, image);
+        JSONArray frames = metrics.optJSONArray("uhdFrames");
+        if (frames == null) { frames = new JSONArray(); metrics.put("uhdFrames", frames); }
+        QuantumRenderer.FrameStats statistics = activity.renderer.frameStats();
+        frames.put(new JSONObject().put("file", name).put("width", image.width).put("height", image.height)
+                .put("drawMs", statistics.drawMs).put("objects", statistics.objectCount));
+        return sha256(image.rgba);
+    }
+
+    private void orient(boolean landscape) {
+        runOnMainSync(() -> activity.setRequestedOrientation(landscape
+                ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        waitUntil(() -> {
+            AtomicReference<Boolean> ready = new AtomicReference<>(false);
+            runOnMainSync(() -> ready.set(activity.surface.getWidth() > 0 && activity.surface.getHeight() > 0
+                    && !activity.surface.isLayoutRequested()
+                    && (landscape ? activity.surface.getWidth() > activity.surface.getHeight()
+                                  : activity.surface.getHeight() > activity.surface.getWidth())));
+            return Boolean.TRUE.equals(ready.get());
+        }, 20_000, "Android surface did not establish the requested orientation");
+        waitForIdleSync();
+    }
+
+    private static String sha256(byte[] bytes) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+        StringBuilder output = new StringBuilder(64);
+        for (byte value : digest) output.append(String.format(Locale.ROOT, "%02x", value & 255));
+        return output.toString();
     }
 
     private void portableCodec() throws Exception {
@@ -632,6 +876,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private static void sameGraphics(QuantumRenderer.Snapshot expected, QuantumRenderer.Snapshot actual, String reason) {
         boolean equal = expected.objectCount == actual.objectCount && expected.seed == actual.seed
                 && expected.selectedId == actual.selectedId && expected.resolutionLimit == actual.resolutionLimit
+                && expected.resolutionMode == actual.resolutionMode
                 && expected.time == actual.time && expected.quantumStrength == actual.quantumStrength
                 && expected.coupling == actual.coupling && Arrays.equals(expected.observables, actual.observables)
                 && Arrays.equals(expected.editIds, actual.editIds) && Arrays.equals(expected.editValues, actual.editValues);
@@ -739,7 +984,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private void await(CountDownLatch done, AtomicReference<Throwable> error, String operation) throws Exception {
-        long deadline = SystemClock.elapsedRealtime() + FRAME_TIMEOUT_MS;
+        long deadline = SystemClock.elapsedRealtime() + (testUhd ? 120_000 : FRAME_TIMEOUT_MS);
         while (!done.await(50, TimeUnit.MILLISECONDS)) {
             expect(activity.renderer.failure == null, "Renderer failed: " + activity.renderer.failure);
             expect(SystemClock.elapsedRealtime() < deadline, operation + " timed out");
@@ -803,14 +1048,38 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private void save(String name, QuantumRenderer.Capture capture) throws Exception {
-        int[] colors = new int[capture.width * capture.height];
-        for (int y = 0; y < capture.height; y++) for (int x = 0; x < capture.width; x++) {
-            int p = ((capture.height - 1 - y) * capture.width + x) * 4;
-            colors[y * capture.width + x] = 0xff000000 | ((capture.rgba[p] & 255) << 16)
-                    | ((capture.rgba[p + 1] & 255) << 8) | (capture.rgba[p + 2] & 255);
+        try (FileOutputStream out = new FileOutputStream(new File(evidence, name))) {
+            FramePng.write(capture, out);
         }
-        Bitmap bitmap = Bitmap.createBitmap(colors, capture.width, capture.height, Bitmap.Config.ARGB_8888);
-        try { saveBitmap(name, bitmap); } finally { bitmap.recycle(); }
+        JSONArray points = new JSONArray();
+        for (int row = 0; row < 5; row++) for (int column = 0; column < 5; column++) {
+            int x = (capture.width - 1) * column / 4, y = (capture.height - 1) * row / 4;
+            int offset = ((capture.height - 1 - y) * capture.width + x) * 4;
+            JSONArray rgba = new JSONArray();
+            for (int channel = 0; channel < 4; channel++) rgba.put(capture.rgba[offset + channel] & 255);
+            points.put(new JSONObject().put("x", x).put("y", y).put("rgba", rgba));
+        }
+        captureSamples.put(name, new JSONObject().put("width", capture.width).put("height", capture.height)
+                .put("rgbaSha256", sha256(capture.rgba)).put("points", points));
+        // Decode the shipping exporter output, checking channel order and the
+        // GL bottom-to-Android-top conversion at independently sampled pixels.
+        Bitmap decoded = BitmapFactory.decodeFile(new File(evidence, name).getAbsolutePath());
+        expect(decoded != null, "Exported PNG cannot be decoded: " + name);
+        try {
+            expect(decoded.getWidth() == capture.width && decoded.getHeight() == capture.height,
+                    "PNG export changed framebuffer dimensions");
+            for (int index = 0; index < points.length(); index++) {
+                JSONObject point = points.getJSONObject(index);
+                JSONArray rgba = point.getJSONArray("rgba");
+                int pixel = decoded.getPixel(point.getInt("x"), point.getInt("y"));
+                expect(((pixel >>> 24) & 255) == rgba.getInt(3)
+                        && ((pixel >>> 16) & 255) == rgba.getInt(0)
+                        && ((pixel >>> 8) & 255) == rgba.getInt(1) && (pixel & 255) == rgba.getInt(2),
+                        "PNG export changed RGBA channels or image orientation: " + name);
+            }
+        } finally { decoded.recycle(); }
+        captureSamples.getJSONObject(name).put("decodedPngSamplesVerified", true);
+        images.put(name);
     }
 
     private void saveScreen(String name) throws Exception {
@@ -848,7 +1117,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
         xml.append("</testsuite>\n");
         JSONObject report = new JSONObject().put("schemaVersion", 1).put("testsRun", results.size())
                 .put("testsFailed", failures()).put("tests", tests).put("metrics", metrics).put("images", images)
-                .put("projectExports", projectExports);
+                .put("projectExports", projectExports).put("captureSamples", captureSamples);
         write("report.json", report.toString(2) + "\n");
         write("junit.xml", xml.toString());
     }

@@ -1,4 +1,4 @@
-# COSMIC X Engine 0.2.0 · Android
+# COSMIC X Engine 0.3.0 · Android y UHD 4K
 
 **COSMIC X Engine es el título. Dentro está la computación cuántica de Mundo X,
 con su núcleo cuántico y su motor gráfico cuántico integrado.**
@@ -33,8 +33,17 @@ actual. El formato v1 admite el perfil `compact-clifford` y la escena
   La escena permanece quieta hasta recibir entradas al abrir.
 - **Objetos** cambia la población hasta 1.048.576 cajas. Las ediciones de IDs
   temporalmente fuera del rango reaparecen al ampliarlo.
-- **Calidad** controla la resolución interna: 480, 640 o 960 píxeles en el
-  lado mayor. Conserva la relación de aspecto y la cantidad de objetos.
+- **Calidad** conserva los límites de 480, 640 y 960 píxeles y añade 1280 y
+  1920, ajustados al tamaño de la vista. **4K UHD** renderiza exactamente
+  3840 × 2160 o 2160 × 3840, según el aspecto de la vista, incluso si la pantalla
+  tiene menos píxeles. La imagen se encaja sin deformarla. Los dispositivos
+  que no pueden asignar ese destino conservan el modo anterior e indican el motivo.
+- **Guardar PNG** exporta el framebuffer de color completo mediante el selector
+  de archivos de Android. El PNG conserva la resolución real indicada y no incluye
+  los controles. La codificación utiliza una fila temporal y se realiza fuera
+  del hilo gráfico. Cancelar la exportación conserva el mundo.
+- **Estilo** permite alternar entre la presentación original y la presentación
+  cósmica que ya forma parte del motor. Ambas conservan los mismos objetos e IDs.
 - **Qubit** elige el control; H, S, X, Y y Z actúan sobre él. CX y CZ conectan
   el control con el siguiente qubit, circularmente; requieren al menos dos.
 - **Acoplamiento** conecta o desconecta el efecto del núcleo en la imagen.
@@ -105,3 +114,17 @@ esos perfiles. El cómputo cuántico es por software y la imagen usa una GPU con
 El tiempo mostrado mide el dibujo de un fotograma sincronizado con `glFinish`.
 Las pruebas identifican el controlador utilizado. El rendimiento en un Samsung
 A16 se determina ejecutando la APK en ese dispositivo.
+
+## Entrega 4K separada
+
+La variante instalable **COSMIC X Engine 4K** usa el identificador
+`com.mundox.graphics.uhd` y se construye con `-Pcosmic4kStandalone=true`.
+Puede instalarse junto con Graphics, la aplicación unificada y el sistema solar.
+El build normal mantiene `com.mundox.graphics`.
+
+El desarrollo 4K parte de la versión unificada
+`e58e9805987ded53cefe454a1f66bc7ad778d16e` y conserva su núcleo nativo y sus shaders.
+El workflow dedicado **COSMIC X Engine 4K** compila la variante, conserva las
+pruebas gráficas anteriores y exige evidencia de los framebuffers UHD reales.
+
+[Alcance, memoria, compatibilidad y uso de 4K](docs/4k.md).

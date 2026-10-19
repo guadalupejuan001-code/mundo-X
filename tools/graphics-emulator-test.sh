@@ -10,6 +10,19 @@ graphics_emulator="$graphics_sdk/emulator/emulator"
 graphics_serial=emulator-5554
 graphics_apks="${GRAPHICS_APK_DIR:-graphics-apks}"
 graphics_evidence="${GRAPHICS_EVIDENCE_DIR:-graphics-evidence}"
+graphics_uhd="${GRAPHICS_UHD4K:-false}"
+graphics_package=com.mundox.graphics
+graphics_apk=COSMIC-X-Engine.apk
+graphics_tests=COSMIC-X-Engine-tests.apk
+graphics_instrument_args=()
+graphics_verify_args=()
+if [[ "$graphics_uhd" == true ]]; then
+  graphics_package=com.mundox.graphics.uhd
+  graphics_apk=COSMIC-X-Engine-4K.apk
+  graphics_tests=COSMIC-X-Engine-4K-tests.apk
+  graphics_instrument_args=(-e uhd4k true)
+  graphics_verify_args=(--uhd4k)
+fi
 mkdir -p "$graphics_evidence"
 graphics_evidence="$(realpath "$graphics_evidence")"
 
@@ -21,13 +34,15 @@ printf 'no\n' | "$graphics_avdmanager" create avd --force --name mundox-graphics
   --package 'system-images;android-35;google_apis;x86_64' --device pixel_2 \
   --path "$ANDROID_AVD_HOME/mundox-graphics.avd"
 
-python3 - "$graphics_apks" <<'PY'
+python3 - "$graphics_apks" "$graphics_uhd" <<'PY'
 import hashlib
 import sys
 from pathlib import Path
 directory = Path(sys.argv[1])
 rows = (directory / 'SHA256SUMS.txt').read_text().splitlines()
 expected_names = {'COSMIC-X-Engine.apk', 'COSMIC-X-Engine-tests.apk'}
+if sys.argv[2] == 'true':
+    expected_names = {'COSMIC-X-Engine-4K.apk', 'COSMIC-X-Engine-4K-tests.apk', 'COSMIC-X-Engine-coexist.apk'}
 found = set()
 for row in rows:
     expected, name = row.split()
@@ -38,10 +53,13 @@ for row in rows:
     found.add(name)
 if found != expected_names:
     raise SystemExit('Missing APK checksums')
-print('Both APKs match build checksums.')
+print('All APKs match build checksums.')
 PY
 cp "$graphics_apks/SHA256SUMS.txt" "$graphics_evidence/apk-SHA256SUMS.txt"
 cp "$graphics_apks/build-commit.txt" "$graphics_evidence/build-commit.txt"
+if [[ "$graphics_uhd" == true ]]; then
+  cp "$graphics_apks/build-provenance.json" "$graphics_evidence/build-provenance.json"
+fi
 
 "$graphics_emulator" -avd mundox-graphics -port 5554 -no-window -no-audio -no-boot-anim \
   -gpu swiftshader -no-snapshot -memory 2048 -cores 2 \
@@ -50,9 +68,9 @@ graphics_emulator_pid=$!
 
 graphics_collect() {
   timeout 15 "$graphics_adb" -s "$graphics_serial" logcat -d > "$graphics_evidence/logcat.txt" 2>&1 || true
-  timeout 15 "$graphics_adb" -s "$graphics_serial" shell dumpsys meminfo com.mundox.graphics \
+  timeout 15 "$graphics_adb" -s "$graphics_serial" shell dumpsys meminfo "$graphics_package" \
     > "$graphics_evidence/app-memory.txt" 2>&1 || true
-  if timeout 20 "$graphics_adb" -s "$graphics_serial" exec-out run-as com.mundox.graphics \
+  if timeout 60 "$graphics_adb" -s "$graphics_serial" exec-out run-as "$graphics_package" \
       tar -C files -cf - graphics-evidence > "$graphics_evidence/runtime-evidence.tar" \
       2> "$graphics_evidence/evidence-pull.log"; then
     tar -xf "$graphics_evidence/runtime-evidence.tar" -C "$graphics_evidence" --strip-components=1 || true
@@ -86,16 +104,25 @@ done
 "$graphics_adb" -s "$graphics_serial" shell settings put global window_animation_scale 0
 "$graphics_adb" -s "$graphics_serial" shell settings put global transition_animation_scale 0
 "$graphics_adb" -s "$graphics_serial" shell settings put global animator_duration_scale 0
-"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/COSMIC-X-Engine.apk"
-"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/COSMIC-X-Engine-tests.apk"
+"$graphics_adb" -s "$graphics_serial" shell settings put secure immersive_mode_confirmations confirmed
+if [[ "$graphics_uhd" == true ]]; then
+  "$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/COSMIC-X-Engine-coexist.apk"
+fi
+"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/$graphics_apk"
+"$graphics_adb" -s "$graphics_serial" install -r "$graphics_apks/$graphics_tests"
+if [[ "$graphics_uhd" == true ]]; then
+  "$graphics_adb" -s "$graphics_serial" shell pm list packages --user 0 com.mundox.graphics \
+    > "$graphics_evidence/coinstallation.txt"
+  [[ -s "$graphics_evidence/coinstallation.txt" ]] || { echo 'Coinstallation evidence is empty.' >&2; exit 1; }
+fi
 "$graphics_adb" -s "$graphics_serial" logcat -c
 
 set +e
-timeout 600 "$graphics_adb" -s "$graphics_serial" shell am instrument -w -r \
-  com.mundox.graphics.test/com.mundox.graphics.GraphicsInstrumentation \
+timeout 1000 "$graphics_adb" -s "$graphics_serial" shell am instrument -w -r "${graphics_instrument_args[@]}" \
+  "$graphics_package.test/com.mundox.graphics.GraphicsInstrumentation" \
   | tee "$graphics_evidence/instrumentation.txt"
 graphics_status=${PIPESTATUS[0]}
 set -e
 graphics_collect
 [[ "$graphics_status" == 0 ]] || { echo "Instrumentation process failed: $graphics_status" >&2; exit 1; }
-python3 tools/graphics-verify-evidence.py "$graphics_evidence"
+python3 tools/graphics-verify-evidence.py "$graphics_evidence" "${graphics_verify_args[@]}"
