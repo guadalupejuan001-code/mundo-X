@@ -8,6 +8,11 @@ COSMIC X Engine es el título del conjunto. Dentro se conserva la computación c
 
 Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
 
+**Desarrollo separado: InfiniteCore 0.1.** [Dominio de qubits por reglas y
+componentes activos finitos](docs/infinite_core.md), con ejecutable propio,
+ejemplos y pruebas de corrección. Esta rama desarrolla los fondos `zero` y `bell`
+y mantiene este módulo independiente de la sesión y las aplicaciones de 1.000 qubits.
+
 ## Qué incluye el código integrado
 
 | Componente | Función y alcance | Código y documentación |

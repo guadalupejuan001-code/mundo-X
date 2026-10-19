@@ -39,10 +39,19 @@ if (MSVC)
   set_property(TARGET mundo_x_vm PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
+# Isolated rules-based infinite domain; existing runners and APK defaults keep
+# their own finite-session contracts.
+add_executable(mundo_x_infinite native/src/infinite_runner.cpp)
+target_include_directories(mundo_x_infinite PRIVATE native/include)
+if (MSVC)
+  set_property(TARGET mundo_x_infinite PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(mundo_x PRIVATE -O3 -Wall -Wextra -Wpedantic)
   target_compile_options(mundo_x_phase PRIVATE -O3 -Wall -Wextra -Wpedantic)
   target_compile_options(mundo_x_vm PRIVATE -O3 -Wall -Wextra -Wpedantic)
+  target_compile_options(mundo_x_infinite PRIVATE -O3 -Wall -Wextra -Wpedantic)
 endif()
 
 include(CTest)
@@ -65,7 +74,7 @@ if (BUILD_TESTING)
   add_test(NAME existing_hello COMMAND mundo_x hello)
   add_test(NAME existing_teleport COMMAND mundo_x teleport)
   add_test(NAME existing_magic COMMAND mundo_x magic-witness)
-  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage factorized_structure micro_lab compact_measurement xasm_measurement visual_scene xasm_visual integrated_runtime engine_session lab_circuit lab_memory lab_protocols core_performance core_60 core_1000 xasm_60)
+  set(native_tests reduced_optimization boundaries dense_precision factorized_core factorized_storage factorized_structure micro_lab compact_measurement xasm_measurement visual_scene xasm_visual integrated_runtime engine_session lab_circuit lab_memory lab_protocols core_performance core_60 core_1000 xasm_60 infinite_address infinite_core infinite_tensor)
   foreach(test_name IN LISTS native_tests)
     add_executable(test_${test_name} native/tests/${test_name}.cpp)
     target_include_directories(test_${test_name} PRIVATE native/include)
@@ -92,6 +101,23 @@ if (BUILD_TESTING)
     target_compile_options(core_1000_benchmark PRIVATE -O3 -Wall -Wextra -Wpedantic)
   endif()
   target_link_libraries(test_lab_memory PRIVATE Threads::Threads)
+  add_executable(infinite_scale native/tests/infinite_scale.cpp)
+  target_include_directories(infinite_scale PRIVATE native/include)
+  if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(infinite_scale PRIVATE -O3 -Wall -Wextra -Wpedantic)
+  endif()
+  foreach(example zero bell)
+    add_test(NAME infinite_example_${example}
+      COMMAND mundo_x_infinite "${CMAKE_CURRENT_SOURCE_DIR}/examples/infinite_${example}.xi")
+    set_tests_properties(infinite_example_${example} PROPERTIES TIMEOUT 30)
+  endforeach()
+  find_package(Python3 QUIET COMPONENTS Interpreter)
+  if (Python3_Interpreter_FOUND)
+    add_test(NAME infinite_cli_contract
+      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_infinite_cli.py"
+        --binary "$<TARGET_FILE:mundo_x_infinite>")
+    set_tests_properties(infinite_cli_contract PROPERTIES TIMEOUT 60)
+  endif()
   # Original Android VM/Ecos experiments restored into the unified APK.
   foreach(experiment_test basis_vm quantum_echo sparse_observable)
     add_executable(test_${experiment_test}

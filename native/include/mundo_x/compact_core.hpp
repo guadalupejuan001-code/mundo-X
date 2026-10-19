@@ -43,6 +43,44 @@ class CompactCore {
     return (x_.size() + z_.size()) * sizeof(std::uint64_t) + phase_.size();
   }
 
+  // Concatenate two independent *current* stabilizer states. Left qubits keep
+  // indices [0,left.n), right qubits follow them. This copies the signed packed
+  // generators, including a right-hand word shifted across a 64-bit boundary;
+  // it does not replay gates, measure either input, or assume a basis state.
+  // As with every stabilizer tableau, an unobservable global state phase is
+  // not represented. All generator signs and physical correlations are kept.
+  static CompactCore tensor_product(const CompactCore& left,
+                                    const CompactCore& right) {
+    if (right.n_ > std::numeric_limits<std::size_t>::max() - left.n_)
+      throw std::length_error("tensor product qubit count overflows");
+    CompactCore result(left.n_ + right.n_); // Validates storage before allocation.
+    for (auto& word : result.z_) word = 0; // Remove the constructor's +Z_i rows.
+    auto append = [&result](const CompactCore& source, std::size_t qubit_offset) {
+      const std::size_t word_offset = qubit_offset / 64;
+      const unsigned shift = static_cast<unsigned>(qubit_offset % 64);
+      for (std::size_t row = 0; row < source.n_; ++row) {
+        const std::size_t output_row = (qubit_offset + row) * result.words_;
+        const std::size_t input_row = row * source.words_;
+        for (std::size_t word = 0; word < source.words_; ++word) {
+          const std::size_t destination = word_offset + word;
+          const auto x = source.x_[input_row + word];
+          const auto z = source.z_[input_row + word];
+          result.x_[output_row + destination] |= x << shift;
+          result.z_[output_row + destination] |= z << shift;
+          if (shift != 0 && destination + 1 < result.words_) {
+            result.x_[output_row + destination + 1] |= x >> (64 - shift);
+            result.z_[output_row + destination + 1] |= z >> (64 - shift);
+          }
+        }
+        result.phase_[qubit_offset + row] = source.phase_[row];
+      }
+    };
+    append(left, 0);
+    append(right, left.n_);
+    result.basis_canonical_ = left.basis_canonical_ && right.basis_canonical_;
+    return result;
+  }
+
   void hadamard(std::size_t q) {
     check(q);
     basis_canonical_ = false;
