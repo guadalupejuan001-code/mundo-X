@@ -166,6 +166,9 @@ def main():
         require(len(entries) == 22 and {item["body"] for item in entries} == set(range(1, 23))
                 and all(item["brightPixels"] > 80 for item in entries),
                 "Not all eight planets and fourteen moons produced local entry frames")
+        daylight_offsets = {11: -.25, 14: 6, 15: -.25, 16: -.25, 17: .125, 19: -1}
+        require(all(item["julianDate"] == 2461331.0 + daylight_offsets.get(item["body"], 0)
+                    for item in entries), "The local-terrain daylight fixtures were not preserved")
         require(all(item["gasGiant"] is (5 <= item["body"] <= 8)
                     and item["solidSurface"] is not item["gasGiant"] for item in entries),
                 "Rocky and gas-giant descent were not distinguished")

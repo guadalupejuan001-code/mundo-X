@@ -8,6 +8,7 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.opengl.GLES30;
+import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -50,6 +51,7 @@ public final class SolarInstrumentation extends Instrumentation {
     private final JSONArray images = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
     private boolean uhdSuite;
+    private volatile boolean onDemandFrames;
     private int expectedTests = LEGACY_TESTS;
 
     private interface Checked { void run() throws Exception; }
@@ -101,12 +103,22 @@ public final class SolarInstrumentation extends Instrumentation {
             runCase("background_resume_preserves_state", this::backgroundResume);
             runCase("recreation_and_orientation_preserve_state", this::recreationAndOrientation);
             if (uhdSuite) {
-                runCase("uhd_framebuffer_return_preserves_scene", this::uhdReturn);
-                runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
-                runCase("entry_all_planets_and_moons", this::entryCatalogue);
-                runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
-                runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
-                runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                // These six experiments freeze astronomical time. Draw each requested
+                // real frame once instead of continuously rerendering identical UHD
+                // pixels while assertions, PNG encoding and UI work use the CPU.
+                onDemandFrames = true;
+                main(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY));
+                try {
+                    runCase("uhd_framebuffer_return_preserves_scene", this::uhdReturn);
+                    runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
+                    runCase("entry_all_planets_and_moons", this::entryCatalogue);
+                    runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
+                    runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
+                    runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                } finally {
+                    runOnMainSync(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY));
+                    onDemandFrames = false;
+                }
             }
 
             gl(() -> {
@@ -534,9 +546,10 @@ public final class SolarInstrumentation extends Instrumentation {
         float[] coefficients = activity.bridge().verifyReadOnly();
         for (int id = 1; id < SolarData.BODIES.length; id++) {
             final int target = id;
+            final double date = entryFixtureDate(id);
             SolarEnvironment environment = SolarEnvironment.environment(id);
             prepare(id, false, false);
-            gl(() -> activity.renderer().setQuality(480));
+            gl(() -> { activity.renderer().setQuality(480); activity.renderer().setJulianDate(date); });
             main(() -> activity.enterSelectedBody());
             SolarRenderer.Capture entered = frame();
             expect(activity.renderer().isEntryMode() && activity.renderer().selectedBody() == id
@@ -554,11 +567,11 @@ public final class SolarInstrumentation extends Instrumentation {
             main(() -> activity.setEntryAltitude(environment.maxAltitudeKm + 1000));
             gl(() -> expect(activity.renderer().altitudeKm() == environment.maxAltitudeKm,
                     "Ascent passed the modeled upper altitude bound: " + target));
-            expect(Arrays.equals(SolarData.position(id, TEST_JD),
+            expect(activity.renderer().julianDate() == date && Arrays.equals(SolarData.position(id, date),
                     SolarData.position(id, activity.renderer().julianDate())), "Entry control changed the orbital date");
             entries.put(new JSONObject().put("body", id).put("gasGiant", environment.gasGiant)
                     .put("solidSurface", environment.solidSurface).put("hasAtmosphere", environment.hasAtmosphere)
-                    .put("altitudeKm", altitude).put("brightPixels", bright(entered))
+                    .put("julianDate", date).put("altitudeKm", altitude).put("brightPixels", bright(entered))
                     .put("rgbaSha256", sha256(entered.rgba)));
             main(() -> activity.exitEntry());
             gl(() -> expect(!activity.renderer().isEntryMode(), "Exit did not return to orbital navigation"));
@@ -567,6 +580,23 @@ public final class SolarInstrumentation extends Instrumentation {
                 && Arrays.equals(coefficients, activity.bridge().verifyReadOnly()),
                 "Local environment navigation mutated the native preparation");
         metrics.put("entryBodies", entries).put("entryNativePreparationPreserved", true);
+    }
+
+    /**
+     * Observe every local terrain in daylight for the unchanged brightness test.
+     * At TEST_JD Europa is eclipsed by Jupiter in the shipping model. These moon-only offsets
+     * place the subsolar surface outside every foreground body's full penumbra
+     * in the shipping model; the smallest clearance is 0.8372 Titan radii.
+     * Eclipse rendering stays enabled. Planets retain the original test date.
+     */
+    private static double entryFixtureDate(int body) {
+        switch (body) {
+            case 11: case 15: case 16: return TEST_JD - .25; // Europa, Enceladus, Triton
+            case 14: return TEST_JD + 6; // Titan
+            case 17: return TEST_JD + .125; // Phobos
+            case 19: return TEST_JD - 1; // Rhea
+            default: return TEST_JD;
+        }
     }
 
     private void entryLayers() throws Exception {
@@ -753,7 +783,7 @@ public final class SolarInstrumentation extends Instrumentation {
         waitUntil(() -> activity.renderer() != null && (activity.renderer().hasFrame || activity.renderer().failure != null),
                 timeout, "Solar renderer did not produce its first frame");
         expect(activity.renderer().failure == null, "Renderer initialization failed: " + activity.renderer().failure);
-        waitForIdleSync();
+        if (!onDemandFrames) waitForIdleSync();
     }
 
     private void recreate(Runnable change) throws Exception {
@@ -761,14 +791,21 @@ public final class SolarInstrumentation extends Instrumentation {
         ActivityMonitor monitor = addMonitor(SolarActivity.class.getName(), null, false);
         try {
             main(change);
-            Activity next = waitForMonitorWithTimeout(monitor, 30_000);
+            // The first software-UHD run measured 79 s from relaunch to drawing.
+            // This wait is a device-operation budget, not a performance assertion.
+            Activity next = waitForMonitorWithTimeout(monitor, onDemandFrames ? 150_000 : 30_000);
             expect(next instanceof SolarActivity && next != original, "Android did not recreate the solar Activity");
             activity = (SolarActivity) next;
-            ready(45_000);
+            if (onDemandFrames)
+                main(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY));
+            ready(onDemandFrames ? 150_000 : 45_000);
         } finally { removeMonitor(monitor); }
     }
 
-    private void main(Runnable action) { runOnMainSync(action); waitForIdleSync(); }
+    private void main(Runnable action) {
+        runOnMainSync(action);
+        if (!onDemandFrames) waitForIdleSync();
+    }
 
     private void gl(Runnable action) throws Exception {
         CountDownLatch done = new CountDownLatch(1);
@@ -777,7 +814,7 @@ public final class SolarInstrumentation extends Instrumentation {
             try { action.run(); } catch (Throwable caught) { error.set(caught); }
             finally { done.countDown(); }
         });
-        activity.surface().requestRender();
+        if (!onDemandFrames) activity.surface().requestRender();
         await(done, error, "GL command");
     }
 
@@ -786,7 +823,16 @@ public final class SolarInstrumentation extends Instrumentation {
         AtomicReference<Throwable> error = new AtomicReference<>();
         AtomicReference<SolarRenderer.Capture> result = new AtomicReference<>();
         activity.surface().queueEvent(() -> {
-            try { activity.renderer().requestCapture(image -> { result.set(image); done.countDown(); }); }
+            try { activity.renderer().requestCapture(image -> {
+                try {
+                    // This callback runs on the GL thread after readback and blit.
+                    // Check the same frame without queuing another UHD draw.
+                    if (onDemandFrames)
+                        expect(GLES30.glGetError() == GLES30.GL_NO_ERROR, "GLES reported an error after drawing");
+                    result.set(image);
+                } catch (Throwable caught) { error.set(caught); }
+                finally { done.countDown(); }
+            }); }
             catch (Throwable caught) { error.set(caught); done.countDown(); }
         });
         activity.surface().requestRender();
@@ -794,7 +840,8 @@ public final class SolarInstrumentation extends Instrumentation {
         SolarRenderer.Capture capture = result.get();
         expect(capture != null && capture.width > 0 && capture.height > 0
                 && capture.rgba.length == capture.width * capture.height * 4, "Invalid GLES framebuffer");
-        gl(() -> expect(GLES30.glGetError() == GLES30.GL_NO_ERROR, "GLES reported an error after drawing"));
+        if (!onDemandFrames)
+            gl(() -> expect(GLES30.glGetError() == GLES30.GL_NO_ERROR, "GLES reported an error after drawing"));
         return capture;
     }
 

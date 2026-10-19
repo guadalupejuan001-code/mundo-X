@@ -14,12 +14,14 @@ solar_uhd="${SOLAR_UHD4K:-false}"
 solar_package=com.cosmicx.solar
 solar_apk=COSMIC-X-Solar.apk
 solar_tests=COSMIC-X-Solar-tests.apk
+solar_instrument_timeout=1000
 solar_instrument_args=()
 solar_verify_args=()
 if [[ "$solar_uhd" == true ]]; then
   solar_package=com.cosmicx.solar.uhd
   solar_apk=COSMIC-X-Solar-4K.apk
   solar_tests=COSMIC-X-Solar-4K-tests.apk
+  solar_instrument_timeout=1800
   solar_instrument_args=(-e uhd4k true)
   solar_verify_args=(--uhd4k)
 fi
@@ -66,8 +68,13 @@ printf 'no\n' | "$solar_avdmanager" create avd --force --name cosmic-solar \
   -gpu swiftshader -no-snapshot -memory 2048 -cores 2 \
   > "$solar_evidence/emulator.log" 2>&1 &
 solar_emulator_pid=$!
+solar_collected=false
 
 solar_collect() {
+  # Keep the first evidence snapshot: a second EXIT collection can overwrite
+  # an already complete archive or screenshot after the app has terminated.
+  [[ "$solar_collected" == false ]] || return 0
+  solar_collected=true
   timeout 15 "$solar_adb" -s "$solar_serial" logcat -d > "$solar_evidence/logcat.txt" 2>&1 || true
   timeout 15 "$solar_adb" -s "$solar_serial" shell dumpsys meminfo "$solar_package" \
     > "$solar_evidence/app-memory.txt" 2>&1 || true
@@ -133,7 +140,7 @@ fi
 "$solar_adb" -s "$solar_serial" logcat -c
 
 set +e
-timeout 1000 "$solar_adb" -s "$solar_serial" shell am instrument -w -r "${solar_instrument_args[@]}" \
+timeout "$solar_instrument_timeout" "$solar_adb" -s "$solar_serial" shell am instrument -w -r "${solar_instrument_args[@]}" \
   "$solar_package.test/com.mundox.solar.SolarInstrumentation" \
   | tee "$solar_evidence/instrumentation.txt"
 solar_status=${PIPESTATUS[0]}

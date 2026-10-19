@@ -56,19 +56,19 @@ Todos los límites de la siguiente tabla son elecciones de navegación, en kiló
 |---:|---|---:|---:|---:|---:|
 | 0 | Sol (perfil API; sin botón Descender) | 700000 | 1000 | 20000 | 1500000 |
 | 1 | Mercurio | 0 | 0,5 | 150 | 2500 |
-| 2 | Venus | 180 | 0,5 | 50 | 1200 |
+| 2 | Venus | 180 | 0,5 | 140 | 1200 |
 | 3 | Tierra | 120 | 0,5 | 35 | 2000 |
 | 4 | Marte | 150 | 0,5 | 25 | 1500 |
-| 5 | Júpiter | 1500 | −200 | 120 | 12000 |
-| 6 | Saturno | 1800 | −200 | 180 | 12000 |
-| 7 | Urano | 1200 | −200 | 120 | 7000 |
-| 8 | Neptuno | 1200 | −200 | 120 | 7000 |
+| 5 | Júpiter | 1500 | −200 | 600 | 12000 |
+| 6 | Saturno | 1800 | −200 | 900 | 12000 |
+| 7 | Urano | 1200 | −200 | 500 | 7000 |
+| 8 | Neptuno | 1200 | −200 | 500 | 7000 |
 | 9 | Luna | 0 | 0,5 | 70 | 1500 |
 | 10 | Ío | 100 | 0,5 | 40 | 1500 |
 | 11 | Europa | 0 | 0,5 | 70 | 1200 |
 | 12 | Ganímedes | 0 | 0,5 | 80 | 2000 |
 | 13 | Calisto | 0 | 0,5 | 70 | 1800 |
-| 14 | Titán | 600 | 0,5 | 120 | 2500 |
+| 14 | Titán | 600 | 0,5 | 350 | 2500 |
 | 15 | Encélado | 0 | 0,5 | 30 | 500 |
 | 16 | Tritón | 300 | 0,5 | 40 | 1300 |
 | 17 | Fobos | 0 | 0,5 | 8 | 150 |
@@ -79,6 +79,8 @@ Todos los límites de la siguiente tabla son elecciones de navegación, en kiló
 | 22 | Miranda | 0 | 0,5 | 25 | 450 |
 
 Un valor cero en la columna de envoltura significa que no se dibuja una capa atmosférica global en este modo. No define el tamaño de una exosfera real.
+
+En Venus, los gigantes y Titán, la entrada inicial sitúa la cámara por encima de las capas visuales más opacas para mostrar la aproximación antes de bajar entre las nubes. Es una elección de cámara; no representa una frontera atmosférica física ni modifica los límites de descenso.
 
 ## Mapa orbital
 
