@@ -237,50 +237,8 @@ class InfiniteCore {
   // All input is validated before an early zero result is returned. Queries
   // create only temporary observer data and never materialize the background.
   double expectation(const std::vector<Term>& terms, int sign = 1) const {
-    if (sign != 1 && sign != -1)
-      throw std::invalid_argument("Pauli sign must be +1 or -1");
-    if (terms.size() > limits_.max_query_terms)
-      throw std::length_error("Pauli query term budget exceeded");
-    TermMap normalized;
-    for (const auto& term : terms) {
-      if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
-        throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
-      auto address = canonical(term.address);
-      if (!normalized.emplace(std::move(address), term.axis).second)
-        throw std::invalid_argument("duplicate canonical address in Pauli query");
-    }
-
-    std::map<std::size_t, mundo_x_bridge::Pauli> active;
-    double answer = static_cast<double>(sign);
-    for (const auto& term : normalized) {
-      const auto& address = term.first;
-      const char axis = term.second;
-      if (axis == 'I') continue;
-      const auto found = state_->locations.find(address);
-      if (found != state_->locations.end()) {
-        const auto location = found->second;
-        auto query = active.find(location.component);
-        if (query == active.end())
-          query = active.emplace(location.component,
-              identity_pauli(state_->components[location.component]->ids.size())).first;
-        set_axis(query->second, location.qubit, axis);
-      } else if (background_ == Background::Zero) {
-        if (axis != 'Z') return 0.0;
-      } else {
-        const auto partner = infinite_detail::partner_address(address);
-        const auto other = normalized.find(partner);
-        // A Bell pair has zero single-site X/Y/Z expectations. Its only
-        // nonidentity Pauli correlations are XX=+1, YY=-1 and ZZ=+1.
-        if (other == normalized.end() || other->second != axis) return 0.0;
-        if (!infinite_detail::is_odd(address) && axis == 'Y') answer = -answer;
-      }
-    }
-    for (auto& query : active) {
-      const mundo_x_bridge::PauliObserver observer(state_->components[query.first]->core);
-      answer *= observer.expectation(std::move(query.second));
-      if (answer == 0.0) return 0.0;
-    }
-    return answer;
+    ObserverCache observers;
+    return expectation_cached(terms, sign, observers);
   }
 
   // Fixed-size Z queries do not need a sparse-term allocation or the general
@@ -473,6 +431,9 @@ class InfiniteCore {
   };
   using LocationMap = std::map<std::string, Location, infinite_detail::AddressLess>;
   using TermMap = std::map<std::string, char, infinite_detail::AddressLess>;
+  using ObserverCache =
+      std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>>;
+  friend class InfiniteSession;
   struct State {
     std::vector<std::shared_ptr<Component>> components;
     LocationMap locations;
@@ -480,6 +441,58 @@ class InfiniteCore {
     std::uint64_t revision = 0;
     PortableRng rng;
   };
+
+  double expectation_cached(const std::vector<Term>& terms, int sign,
+                            ObserverCache& observers) const {
+    if (sign != 1 && sign != -1)
+      throw std::invalid_argument("Pauli sign must be +1 or -1");
+    if (terms.size() > limits_.max_query_terms)
+      throw std::length_error("Pauli query term budget exceeded");
+    TermMap normalized;
+    for (const auto& term : terms) {
+      if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
+        throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
+      auto address = canonical(term.address);
+      if (!normalized.emplace(std::move(address), term.axis).second)
+        throw std::invalid_argument("duplicate canonical address in Pauli query");
+    }
+
+    std::map<std::size_t, mundo_x_bridge::Pauli> active;
+    double answer = static_cast<double>(sign);
+    for (const auto& term : normalized) {
+      const auto& address = term.first;
+      const char axis = term.second;
+      if (axis == 'I') continue;
+      const auto found = state_->locations.find(address);
+      if (found != state_->locations.end()) {
+        const auto location = found->second;
+        auto query = active.find(location.component);
+        if (query == active.end())
+          query = active.emplace(location.component,
+              identity_pauli(state_->components[location.component]->ids.size())).first;
+        set_axis(query->second, location.qubit, axis);
+      } else if (background_ == Background::Zero) {
+        if (axis != 'Z') return 0.0;
+      } else {
+        const auto partner = infinite_detail::partner_address(address);
+        const auto other = normalized.find(partner);
+        if (other == normalized.end() || other->second != axis) return 0.0;
+        if (!infinite_detail::is_odd(address) && axis == 'Y') answer = -answer;
+      }
+    }
+    for (auto& query : active) {
+      auto observer = observers.find(query.first);
+      if (observer == observers.end()) {
+        observer = observers.emplace(
+            query.first,
+            std::make_unique<mundo_x_bridge::PauliObserver>(
+                state_->components[query.first]->core)).first;
+      }
+      answer *= observer->second->expectation(std::move(query.second));
+      if (answer == 0.0) return 0.0;
+    }
+    return answer;
+  }
 
   static std::size_t checked_add(std::size_t a, std::size_t b, const char* message) {
     if (b > std::numeric_limits<std::size_t>::max() - a)
