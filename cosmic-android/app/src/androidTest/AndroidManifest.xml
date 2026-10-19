@@ -6,6 +6,11 @@
             android:exported="true"
             android:grantUriPermissions="true" />
     </application>
+    <!-- AGP applies defaultConfig.testInstrumentationRunner to the first entry. -->
+    <instrumentation
+        android:name="com.mundox.cosmic.CosmicInstrumentation"
+        android:targetPackage="com.mundox.cosmic"
+        android:functionalTest="true" />
     <instrumentation
         android:name="com.mundox.graphics.GraphicsInstrumentation"
         android:targetPackage="com.mundox.cosmic"
