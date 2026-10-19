@@ -48,6 +48,7 @@ class InfiniteCore {
   // address. T and arbitrary phase operations are deliberately unsupported.
   struct Gate { char op; std::string first, second; };
   struct Term { std::string address; char axis; };
+  struct Query { std::vector<Term> terms; int sign = 1; };
   struct Stats {
     std::size_t active_qubits = 0;
     std::size_t components = 0;
@@ -236,51 +237,89 @@ class InfiniteCore {
   // rejected rather than silently interpreting noncommuting X/Y products.
   // All input is validated before an early zero result is returned. Queries
   // create only temporary observer data and never materialize the background.
-  double expectation(const std::vector<Term>& terms, int sign = 1) const {
-    if (sign != 1 && sign != -1)
-      throw std::invalid_argument("Pauli sign must be +1 or -1");
-    if (terms.size() > limits_.max_query_terms)
-      throw std::length_error("Pauli query term budget exceeded");
-    TermMap normalized;
-    for (const auto& term : terms) {
-      if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
-        throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
-      auto address = canonical(term.address);
-      if (!normalized.emplace(std::move(address), term.axis).second)
-        throw std::invalid_argument("duplicate canonical address in Pauli query");
+  std::vector<double> expectations(const std::vector<Query>& queries) const {
+    struct Prepared {
+      double answer = 1.0;
+      bool zero = false;
+      std::map<std::size_t, mundo_x_bridge::Pauli> active;
+    };
+
+    std::vector<Prepared> prepared;
+    prepared.reserve(queries.size());
+    for (const auto& source : queries) {
+      if (source.sign != 1 && source.sign != -1)
+        throw std::invalid_argument("Pauli sign must be +1 or -1");
+      if (source.terms.size() > limits_.max_query_terms)
+        throw std::length_error("Pauli query term budget exceeded");
+
+      TermMap normalized;
+      for (const auto& term : source.terms) {
+        if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
+          throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
+        auto address = canonical(term.address);
+        if (!normalized.emplace(std::move(address), term.axis).second)
+          throw std::invalid_argument("duplicate canonical address in Pauli query");
+      }
+
+      Prepared item;
+      item.answer = static_cast<double>(source.sign);
+      for (const auto& term : normalized) {
+        const auto& address = term.first;
+        const char axis = term.second;
+        if (axis == 'I') continue;
+        const auto found = state_->locations.find(address);
+        if (found != state_->locations.end()) {
+          const auto location = found->second;
+          auto query = item.active.find(location.component);
+          if (query == item.active.end())
+            query = item.active.emplace(location.component,
+                identity_pauli(state_->components[location.component]->ids.size())).first;
+          set_axis(query->second, location.qubit, axis);
+        } else if (background_ == Background::Zero) {
+          if (axis != 'Z') item.zero = true;
+        } else {
+          const auto partner = infinite_detail::partner_address(address);
+          const auto other = normalized.find(partner);
+          if (other == normalized.end() || other->second != axis) item.zero = true;
+          if (!infinite_detail::is_odd(address) && axis == 'Y') item.answer = -item.answer;
+        }
+      }
+      prepared.push_back(std::move(item));
     }
 
-    std::map<std::size_t, mundo_x_bridge::Pauli> active;
-    double answer = static_cast<double>(sign);
-    for (const auto& term : normalized) {
-      const auto& address = term.first;
-      const char axis = term.second;
-      if (axis == 'I') continue;
-      const auto found = state_->locations.find(address);
-      if (found != state_->locations.end()) {
-        const auto location = found->second;
-        auto query = active.find(location.component);
-        if (query == active.end())
-          query = active.emplace(location.component,
-              identity_pauli(state_->components[location.component]->ids.size())).first;
-        set_axis(query->second, location.qubit, axis);
-      } else if (background_ == Background::Zero) {
-        if (axis != 'Z') return 0.0;
-      } else {
-        const auto partner = infinite_detail::partner_address(address);
-        const auto other = normalized.find(partner);
-        // A Bell pair has zero single-site X/Y/Z expectations. Its only
-        // nonidentity Pauli correlations are XX=+1, YY=-1 and ZZ=+1.
-        if (other == normalized.end() || other->second != axis) return 0.0;
-        if (!infinite_detail::is_odd(address) && axis == 'Y') answer = -answer;
+    // A component's stabilizer elimination depends only on its current immutable
+    // CompactCore state. Build it once for the whole observation batch rather
+    // than once per observable.
+    std::map<std::size_t, std::unique_ptr<mundo_x_bridge::PauliObserver>> observers;
+    for (const auto& item : prepared) {
+      if (item.zero) continue;
+      for (const auto& query : item.active) {
+        if (observers.find(query.first) == observers.end())
+          observers.emplace(query.first, std::make_unique<mundo_x_bridge::PauliObserver>(
+              state_->components[query.first]->core));
       }
     }
-    for (auto& query : active) {
-      const mundo_x_bridge::PauliObserver observer(state_->components[query.first]->core);
-      answer *= observer.expectation(std::move(query.second));
-      if (answer == 0.0) return 0.0;
+
+    std::vector<double> results;
+    results.reserve(prepared.size());
+    for (auto& item : prepared) {
+      if (item.zero) {
+        results.push_back(0.0);
+        continue;
+      }
+      double answer = item.answer;
+      for (auto& query : item.active) {
+        answer *= observers.at(query.first)->expectation(std::move(query.second));
+        if (answer == 0.0) break;
+      }
+      results.push_back(answer);
     }
-    return answer;
+    return results;
+  }
+
+  double expectation(const std::vector<Term>& terms, int sign = 1) const {
+    Query query{terms, sign};
+    return expectations(std::vector<Query>{std::move(query)}).front();
   }
 
   // Fixed-size Z queries do not need a sparse-term allocation or the general
