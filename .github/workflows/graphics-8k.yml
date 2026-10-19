@@ -131,7 +131,7 @@ jobs:
             graphics-8k-dist/COSMIC-X-Engine-8K-tests.apk
 
       - name: Verify packaged identity, SDK, signatures, ABIs and declared native optimizations
-        run: python3 tools/graphics-stage-4k.py graphics-8k-dist
+        run: python3 tools/graphics-stage-8k.py graphics-8k-dist
 
       - name: Upload exact standalone APKs and build provenance
         uses: actions/upload-artifact@v4
