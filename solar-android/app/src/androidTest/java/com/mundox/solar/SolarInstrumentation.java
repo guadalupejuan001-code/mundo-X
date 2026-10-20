@@ -50,7 +50,7 @@ public final class SolarInstrumentation extends Instrumentation {
     private final JSONObject metrics = new JSONObject();
     private final JSONArray images = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
-    private boolean uhdSuite;
+    private boolean uhdSuite,ultraSuite;
     private volatile boolean onDemandFrames;
     private int expectedTests = LEGACY_TESTS;
 
@@ -66,8 +66,10 @@ public final class SolarInstrumentation extends Instrumentation {
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
-        uhdSuite = arguments != null && "true".equals(arguments.getString("uhd4k"));
-        if (uhdSuite) expectedTests += 6;
+        ultraSuite = arguments != null && "true".equals(arguments.getString("ultra8k"));
+        uhdSuite = ultraSuite || (arguments != null && "true".equals(arguments.getString("uhd4k")));
+        if (ultraSuite) expectedTests += 2;
+        else if (uhdSuite) expectedTests += 6;
         start();
     }
 
@@ -82,7 +84,8 @@ public final class SolarInstrumentation extends Instrumentation {
             metrics.put("abis", new JSONArray(Arrays.asList(Build.SUPPORTED_ABIS)));
             metrics.put("performanceScope", "Software GLES emulator; not Samsung A16 performance measurements");
             metrics.put("physicalScope", "JPL analytical orbits; illustrative moon phases and magnetic geometries");
-            metrics.put("uhd4kSuite", uhdSuite);
+            metrics.put("uhd4kSuite", uhdSuite && !ultraSuite);
+            metrics.put("ultra8kSuite", ultraSuite);
             metrics.put("applicationId", getTargetContext().getPackageName());
             Intent launch = new Intent(getTargetContext(), SolarActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -103,18 +106,21 @@ public final class SolarInstrumentation extends Instrumentation {
             runCase("background_resume_preserves_state", this::backgroundResume);
             runCase("recreation_and_orientation_preserve_state", this::recreationAndOrientation);
             if (uhdSuite) {
-                // These six experiments freeze astronomical time. Draw each requested
-                // real frame once instead of continuously rerendering identical UHD
-                // pixels while assertions, PNG encoding and UI work use the CPU.
+                // UHD tests draw on demand so software GLES does not rerender the
+                // same 4K/8K framebuffer while assertions run on the CPU.
                 onDemandFrames = true;
                 main(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY));
                 try {
-                    runCase("uhd_framebuffer_return_preserves_scene", this::uhdReturn);
-                    runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
-                    runCase("entry_all_planets_and_moons", this::entryCatalogue);
-                    runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
-                    runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
-                    runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                    runCase(ultraSuite?"ultra8k_framebuffer_return_preserves_scene":"uhd_framebuffer_return_preserves_scene", this::uhdReturn);
+                    if (ultraSuite) {
+                        runCase("ultra8k_earth_entry_atmosphere", this::ultraEntry);
+                    } else {
+                        runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
+                        runCase("entry_all_planets_and_moons", this::entryCatalogue);
+                        runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
+                        runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
+                        runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                    }
                 } finally {
                     runOnMainSync(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY));
                     onDemandFrames = false;
@@ -491,19 +497,19 @@ public final class SolarInstrumentation extends Instrumentation {
         long revision = activity.bridge().nativeRevision();
         QuantumSolarBridge owner = activity.bridge();
         float[] coefficients = owner.verifyReadOnly();
-        main(() -> activity.setUhdQuality(true));
-        saveUhd("uhd-earth-orbit.png", false);
-        expect(activity.renderer().isUhd4k(), "The renderer did not accept actual UHD mode");
-        main(() -> activity.setUhdQuality(false));
+        setUhdMode(true);
+        saveUhd(ultraSuite?"ultra8k-earth-orbit.png":"uhd-earth-orbit.png", false);
+        expect(ultraSuite?activity.renderer().isUhd8k():activity.renderer().isUhd4k(), "The renderer did not accept actual UHD mode");
+        setUhdMode(false);
         SolarRenderer.Capture after = frame();
         save("uhd-adaptive-after.png", after);
         expect(changed(before, after) == 0, "UHD roundtrip did not preserve the previous exact framebuffer");
-        expect(activity.renderer().qualityLimit() == TEST_QUALITY && !activity.renderer().isUhd4k(),
+        expect(activity.renderer().qualityLimit() == TEST_QUALITY && !activity.renderer().isUhd4k() && !activity.renderer().isUhd8k(),
                 "Returning from UHD lost the previous quality setting");
         expect(owner == activity.bridge() && date == activity.renderer().julianDate()
                 && revision == owner.nativeRevision() && Arrays.equals(coefficients, owner.verifyReadOnly()),
                 "UHD allocation changed the native preparation or astronomical time");
-        metrics.put("uhdPixels", 8_294_400).put("uhdReturnChangedPixels", 0)
+        metrics.put("uhdPixels", ultraSuite?33_177_600:8_294_400).put("uhdReturnChangedPixels", 0)
                 .put("uhdNativeOwnerPreserved", true);
     }
 
@@ -757,13 +763,38 @@ public final class SolarInstrumentation extends Instrumentation {
 
     private String saveUhd(String name, boolean landscape) throws Exception {
         SolarRenderer.Capture image = frame();
-        int width = landscape ? 3840 : 2160, height = landscape ? 2160 : 3840;
-        expect(image.width == width && image.height == height && image.rgba.length == 33_177_600,
+        int longEdge=ultraSuite?7680:3840,shortEdge=ultraSuite?4320:2160;
+        int width = landscape ? longEdge : shortEdge, height = landscape ? shortEdge : longEdge;
+        long expectedBytes=(long)width*height*4;
+        expect(image.width == width && image.height == height && image.rgba.length == expectedBytes,
                 "Expected actual UHD " + width + "x" + height + "; got " + image.width + "x" + image.height);
-        expect(activity.renderer().isUhd4k(), "The UHD request was rejected: " + activity.renderer().resolutionNotice());
-        substantial(image, "UHD observation");
+        expect(ultraSuite?activity.renderer().isUhd8k():activity.renderer().isUhd4k(),
+                "The UHD request was rejected: " + activity.renderer().resolutionNotice());
+        substantial(image, ultraSuite?"8K observation":"UHD observation");
         save(name, image);
         return sha256(image.rgba);
+    }
+
+    private void setUhdMode(boolean enabled) {
+        main(() -> { if(ultraSuite) activity.setUltraQuality(enabled); else activity.setUhdQuality(enabled); });
+    }
+
+    private void ultraEntry() throws Exception {
+        prepare(3,false,false);
+        main(() -> activity.enterSelectedBody());
+        main(() -> activity.setEntryAltitude(25));
+        setUhdMode(true);
+        SolarRenderer.Capture image=frame();
+        expect(image.width==4320&&image.height==7680&&activity.renderer().isUhd8k(),
+                "Earth entry did not use the real portrait 8K target");
+        substantial(image,"8K Earth atmospheric entry");
+        save("ultra8k-earth-entry.png",image);
+        expect(activity.renderer().atmosphereEnabled()&&activity.renderer().isEntryMode(),
+                "8K entry lost the local atmosphere");
+        metrics.put("ultra8kEntry",new JSONObject().put("width",image.width).put("height",image.height)
+                .put("altitudeKm",activity.renderer().altitudeKm()).put("brightPixels",bright(image)));
+        setUhdMode(false);
+        main(() -> activity.exitEntry());
     }
 
     private void prepare(int destination, boolean fields, boolean wind) throws Exception {
