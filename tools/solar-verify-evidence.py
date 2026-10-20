@@ -83,6 +83,10 @@ def main():
             for actual, expected in zip(bell, (0, 0, 0, 1, -1, 1, 1, 1)))
             and metrics["observationPreservedNativeRevision"] is True,
             "The original native core did not preserve Bell/read-only contracts")
+    ether = metrics["etherExpectations"]
+    require(ether == [1, 1, 0, 0, 0] and metrics["etherRules"] == 2
+            and metrics["etherObservationReadOnly"] is True,
+            "Solar did not execute the shared EtherCore symbolic cluster probe")
     require(metrics["deterministicPausedChangedPixels"] == 0 and metrics["coupledChangedPixels"] > 20
             and metrics["uncoupledChangedPixels"] == 0 and metrics["quantumPreparationOrbitalDeltaAU"] == 0,
             "Quantum visual coupling changed the wrong state or lacked causal pixel evidence")
