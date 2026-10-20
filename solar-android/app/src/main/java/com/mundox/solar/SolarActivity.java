@@ -63,7 +63,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     private Button fieldButton,pauseButton,scaleButton,flightButton,hideButton,qualityButton,entryButton,altitudeButton;
     private Joystick joystick;
     private boolean fields=false,wind=true,orbits=true,realScale=false,paused=false,freeFlight=false,cleanView=false,resumed;
-    private boolean uhd4k=false,entryActive=false,atmospheres=true,pngDestinationOpen;
+    private boolean uhd4k=false,uhd8k=false,entryActive=false,atmospheres=true,localPhysics=false,pngDestinationOpen;
     private volatile boolean destroyed;
     private double desiredEntryAltitude=35;
     private String resolutionMessage,pngToken;
@@ -93,7 +93,10 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         body=clamp(prefs.getInt("body",3),-1,SolarData.BODIES.length-1);
         speedIndex=clamp(prefs.getInt("speed",6),0,SPEEDS.length-1);
         quality=clamp(prefs.getInt("quality",960),480,1440);
-        uhd4k=prefs.getBoolean("uhd4k",false);atmospheres=prefs.getBoolean("atmospheres",true);
+        int defaultMode=BuildConfig.SOLAR_DEFAULT_MODE;
+        uhd4k=prefs.getBoolean("uhd4k",defaultMode==1);uhd8k=prefs.getBoolean("uhd8k",defaultMode==2);
+        if(uhd8k)uhd4k=false;
+        atmospheres=prefs.getBoolean("atmospheres",true);localPhysics=prefs.getBoolean("localPhysics",false);
         entryActive=prefs.getBoolean("entry",false);
         desiredEntryAltitude=Double.longBitsToDouble(prefs.getLong("entryAltitude",Double.doubleToLongBits(35)));
         double[] entryPose=readPose(prefs.getString("entryPose",null));
@@ -110,7 +113,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             speedIndex=clamp(saved.getInt("speed",speedIndex),0,SPEEDS.length-1);
             preparation=clamp(saved.getInt("preset",preparation),0,3);
             quality=clamp(saved.getInt("quality",quality),480,1440);
-            uhd4k=saved.getBoolean("uhd4k",uhd4k);atmospheres=saved.getBoolean("atmospheres",atmospheres);
+            uhd4k=saved.getBoolean("uhd4k",uhd4k);uhd8k=saved.getBoolean("uhd8k",uhd8k);if(uhd8k)uhd4k=false;
+            atmospheres=saved.getBoolean("atmospheres",atmospheres);localPhysics=saved.getBoolean("localPhysics",localPhysics);
             entryActive=saved.getBoolean("entry",entryActive);
             desiredEntryAltitude=saved.getDouble("entryAltitude",desiredEntryAltitude);
             if(saved.containsKey("entryPose"))entryPose=saved.getDoubleArray("entryPose");
@@ -125,7 +129,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             observer.setJulianDate(jd);observer.setSpeed(SPEEDS[speedIndex]);observer.setPaused(paused);
             observer.setFields(fields);observer.setWind(wind);observer.setOrbits(orbits);
             observer.setRealScale(realScale);observer.setQuality(quality);
-            observer.setUhd4k(uhd4k);observer.setAtmosphereEnabled(atmospheres);
+            if(uhd8k)observer.setUhd8k(true);else observer.setUhd4k(uhd4k);
+            observer.setAtmosphereEnabled(atmospheres);observer.setLocalPhysics(localPhysics);
             if(body<0)observer.overview();else observer.focus(body);
             if(entryActive&&body>0){
                 if(entryPose!=null)observer.restoreEntryState(entryPose);
@@ -178,11 +183,11 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         LinearLayout title=row();
         TextView brand=label("COSMIC X",24,TEXT,true);brand.setLetterSpacing(.13f);
         title.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        qualityButton=button(uhd4k?"4K UHD":"Calidad",0,this::qualityDialog);
-        qualityButton.setContentDescription("Elegir resolución, incluido 4K UHD");title.addView(qualityButton);
+        qualityButton=button(uhd8k?"8K UHD":uhd4k?"4K UHD":"Calidad",0,this::qualityDialog);
+        qualityButton.setContentDescription("Elegir resolución, incluidos 4K y 8K UHD");title.addView(qualityButton);
         hideButton=button("◌",48,()->toggleClean());hideButton.setTextSize(24);hideButton.setContentDescription("Ocultar o mostrar controles");title.addView(hideButton);
         header.addView(title);
-        TextView sub=label("S O L A R   E X P L O R E R   ·   4 K",10,GOLD,true);header.addView(sub);
+        TextView sub=label("S O L A R   E X P L O R E R   ·   C O S M I C",10,GOLD,true);header.addView(sub);
         dateLabel=label("",12,MUTED,false);dateLabel.setPadding(0,dp(10),0,0);dateLabel.setOnClickListener(v->timeDialog());header.addView(dateLabel);
         engineLabel=label("Núcleo X conectado",10,TEAL,false);engineLabel.setOnClickListener(v->coreDialog());header.addView(engineLabel);
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-1,-2,Gravity.TOP);root.addView(header,hp);
@@ -257,7 +262,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         joystick.setVisibility(freeFlight||entryActive?View.VISIBLE:View.GONE);
         entryButton.setText(entryActive?"↑  Regresar a órbita":"↓  Descender");entryButton.setEnabled(body>0);
         entryButton.setAlpha(body>0?1f:.5f);altitudeRow.setVisibility(entryActive?View.VISIBLE:View.GONE);
-        qualityButton.setText(uhd4k?"4K UHD":"Calidad");qualityButton.setTextColor(uhd4k?GOLD:TEXT);
+        qualityButton.setText(uhd8k?"8K UHD":uhd4k?"4K UHD":"Calidad");qualityButton.setTextColor(uhd4k||uhd8k?GOLD:TEXT);
         if(root!=null)root.requestApplyInsets();
     }
     private void updateBody(){
@@ -267,12 +272,12 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             statsLabel.setText("Sol · 8 planetas · "+(SolarData.BODIES.length-9)+" lunas para explorar");
         }else{
             SolarData.Body b=SolarData.BODIES[body];kindLabel.setText(b.type.toUpperCase(new Locale("es")));nameLabel.setText(b.name);
-            statsLabel.setText(String.format(new Locale("es"),"Radio  %,.0f km     ·     Giro  %s",b.radiusKm,periodText(b.rotationHours)));
+            statsLabel.setText(String.format(new Locale("es"),"Radio  %,.0f km · g  %.2f m/s² · escape  %.2f km/s",b.radiusKm,SolarData.gravityMs2(body,0),SolarData.escapeVelocityKmS(body,0)));
         }
         String scale=realScale?"PROPORCIONES REALES":"ESCALA DE EXPLORACIÓN";
         if(entryActive&&body>=0){
             SolarEnvironment e=SolarEnvironment.environment(body);
-            legendLabel.setText(e.label.toUpperCase(new Locale("es"))+"  ·  altura regulable");
+            legendLabel.setText(e.label.toUpperCase(new Locale("es"))+"  ·  "+(localPhysics?"GRAVEDAD LOCAL ACTIVA":"ALTURA MANUAL"));
         }else if(fields&&body>=0){SolarData.Body b=SolarData.BODIES[body];
             String field=b.fieldType==1?"CAMPO INTRÍNSECO":b.fieldType==2?"CAMPO INDUCIDO":b.fieldType==3?"INDUCIDO + CORTEZA":b.fieldType==4?"CAMPO SOLAR":"SIN MODELO LOCAL";
             legendLabel.setText(field+"  ·  líneas ilustrativas");
@@ -283,14 +288,14 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         double jd=observer.julianDate();
         boolean actualPause=observer.isPaused();if(paused!=actualPause){paused=actualPause;updateButtons();}
         dateLabel.setText(dateFormat.format(new Date((long)((jd-2440587.5)*86400000)))+"    "+(paused?"Pausa":SPEED_NAMES[speedIndex]));
-        engineLabel.setText(String.format(Locale.ROOT,"NÚCLEO X  ·  %d × %d  ·  %.0f fps",observer.renderedWidth(),observer.renderedHeight(),observer.fps));
+        engineLabel.setText(String.format(Locale.ROOT,"NÚCLEO X  ·  %d × %d  ·  %.0f fps%s",observer.renderedWidth(),observer.renderedHeight(),observer.fps,entryActive&&localPhysics?String.format(Locale.ROOT," · g %.2f m/s² · vr %.3f km/s",observer.localGravityMs2(),observer.radialVelocityKmS()):""));
         if(entryActive&&observer.isEntryMode()){
             desiredEntryAltitude=observer.altitudeKm();altitudeButton.setText(altitudeText(desiredEntryAltitude));
         }
         if(activeMap!=null)activeMap.setJulianDate(jd);
         String notice=observer.resolutionNotice();
         if(notice!=null&&!notice.equals(resolutionMessage)){
-            resolutionMessage=notice;uhd4k=observer.isUhd4k();updateButtons();message(notice);
+            resolutionMessage=notice;uhd4k=observer.isUhd4k();uhd8k=observer.isUhd8k();updateButtons();message(notice);
         }
     }
     @Override public void status(String status){latestStatus=status;}
@@ -384,18 +389,25 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Descenso · "+SolarData.BODIES[body].name).setView(content).setPositiveButton("Continuar",null).setNegativeButton("Volver a órbita",(dialog,which)->exitEntry()).create();showDialog(d);
     }
     private void qualityDialog(){
-        String[] options={"Ahorro · hasta 640 px","Equilibrada · hasta 960 px","Alta · hasta 1440 px","4K UHD · 8,3 millones de píxeles"};
-        int checked=uhd4k?3:quality<=640?0:quality<=960?1:2;
+        String[] options={"Ahorro · hasta 640 px","Equilibrada · hasta 960 px","Alta · hasta 1440 px",
+                "4K UHD · 8,3 millones de píxeles","8K UHD · 33,2 millones de píxeles"};
+        int checked=uhd8k?4:uhd4k?3:quality<=640?0:quality<=960?1:2;
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Calidad de imagen").setSingleChoiceItems(options,checked,(dialog,index)->{
-            if(index==3)setUhdQuality(true);else setAdaptiveQuality(new int[]{640,960,1440}[index]);dialog.dismiss();
+            if(index==4)setUltraQuality(true);else if(index==3)setUhdQuality(true);
+            else setAdaptiveQuality(new int[]{640,960,1440}[index]);dialog.dismiss();
         }).setNegativeButton("Cerrar",null).create();showDialog(d);
     }
     private void setAdaptiveQuality(int pixels){
-        quality=pixels;uhd4k=false;resolutionMessage=null;
-        runGL(()->{observer.setUhd4k(false);observer.setQuality(pixels);});updateButtons();
+        quality=pixels;uhd4k=uhd8k=false;resolutionMessage=null;
+        runGL(()->{observer.setUhd8k(false);observer.setUhd4k(false);observer.setQuality(pixels);});updateButtons();
     }
     void setUhdQuality(boolean enabled){
-        uhd4k=enabled;resolutionMessage=null;runGL(()->observer.setUhd4k(enabled));updateButtons();
+        uhd4k=enabled; if(enabled)uhd8k=false; resolutionMessage=null;
+        runGL(()->observer.setUhd4k(enabled));updateButtons();
+    }
+    void setUltraQuality(boolean enabled){
+        uhd8k=enabled; if(enabled)uhd4k=false; resolutionMessage=null;
+        runGL(()->observer.setUhd8k(enabled));updateButtons();
     }
     private void message(String text){handler.post(()->{if(!destroyed&&!isFinishing())Toast.makeText(this,text,Toast.LENGTH_LONG).show();});}
 
@@ -523,12 +535,14 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         addToggle(content,"Órbitas",orbits,b->{orbits=b;runGL(()->observer.setOrbits(b));});
         addToggle(content,"Atmósferas y bruma",atmospheres,b->{atmospheres=b;runGL(()->observer.setAtmosphereEnabled(b));});
         addToggle(content,"Proporciones reales",realScale,b->{realScale=b;freeFlight=false;runGL(()->observer.setRealScale(b));updateBody();updateButtons();});
+        addToggle(content,"Gravedad local durante descenso",localPhysics,b->{localPhysics=b;runGL(()->observer.setLocalPhysics(b));updateBody();});
         content.addView(label("Exploración amplía los cuerpos y comprime distancias para verlos juntos. Proporciones reales conserva sus tamaños y distancias; usa los destinos para acercarte.",12,MUTED,false));
         content.addView(section("CALIDAD DE IMAGEN"));
         LinearLayout qualities=row();int[] sizes={640,960,1440};String[] labels={"Ahorro","Equilibrada","Alta"};
         for(int i=0;i<sizes.length;i++){final int px=sizes[i];Button b=button(labels[i],0,()->setAdaptiveQuality(px));qualities.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));}content.addView(qualities);
         content.addView(button("4K UHD · 3840 × 2160 / vertical",0,()->setUhdQuality(true)));
-        content.addView(label("4K conserva la imagen completa al guardar PNG. Puedes reducir la calidad para navegar con menor carga.",12,MUTED,false));
+        content.addView(button("8K UHD · 7680 × 4320 / vertical",0,()->setUltraQuality(true)));
+        content.addView(label("4K/8K usan framebuffers reales cuando el dispositivo los admite. Si faltan límites o memoria, el renderer conserva la última resolución válida.",12,MUTED,false));
         content.addView(section("TU MOTOR"));content.addView(button("Núcleo X · estados y trazas",0,()->coreDialog()));
         content.addView(button("Modelo físico y fuentes",0,()->modelDialog()));
         content.addView(button("Cómo navegar",0,()->helpDialog()));
@@ -650,14 +664,14 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         getSharedPreferences("solar",MODE_PRIVATE).edit().putInt("body",body).putInt("speed",speedIndex)
                 .putInt("quality",quality).putInt("preset",quantum.preset()).putBoolean("fields",fields)
                 .putBoolean("wind",wind).putBoolean("orbits",orbits).putBoolean("realScale",realScale)
-                .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k).putBoolean("atmospheres",atmospheres)
+                .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k).putBoolean("uhd8k",uhd8k).putBoolean("atmospheres",atmospheres).putBoolean("localPhysics",localPhysics)
                 .putBoolean("entry",entryActive).putLong("entryAltitude",Double.doubleToLongBits(desiredEntryAltitude))
                 .putString("entryPose",poseText(pose)).apply();
     }
     @Override protected void onSaveInstanceState(Bundle state){
         super.onSaveInstanceState(state);state.putInt("body",body);state.putInt("speed",speedIndex);state.putBoolean("fields",fields);state.putBoolean("wind",wind);state.putBoolean("orbits",orbits);state.putBoolean("realScale",realScale);state.putBoolean("paused",paused);
         if(observer!=null)state.putDouble("jd",observer.julianDate());if(quantum!=null)state.putInt("preset",quantum.preset());
-        state.putInt("quality",quality);state.putBoolean("uhd4k",uhd4k);state.putBoolean("atmospheres",atmospheres);
+        state.putInt("quality",quality);state.putBoolean("uhd4k",uhd4k);state.putBoolean("uhd8k",uhd8k);state.putBoolean("atmospheres",atmospheres);state.putBoolean("localPhysics",localPhysics);
         state.putBoolean("entry",entryActive);state.putDouble("entryAltitude",desiredEntryAltitude);
         state.putDoubleArray("entryPose",observer==null?null:observer.entryState());
         if(pngDestinationOpen&&pngToken!=null){state.putBoolean("pngDestinationOpen",true);state.putString("pngToken",pngToken);}
