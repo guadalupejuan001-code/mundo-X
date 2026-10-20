@@ -62,7 +62,7 @@ public final class MainActivity extends Activity {
     private volatile SavedSession savedSession;
     private volatile boolean saveProtected;
     private TextView status;
-    private Button animateButton, viewButton, couplingButton, qubitButton, qualityButton, styleButton;
+    private Button animateButton, viewButton, couplingButton, qubitButton, qualityButton, styleButton, mirrorButton;
     private boolean animate, overview=true, coupled=true;
     private int qubit, quality=640;
     private volatile String addressA="0",addressB="1";
@@ -201,6 +201,16 @@ public final class MainActivity extends Activity {
             getSharedPreferences("graphics-ui",MODE_PRIVATE).edit().putInt("presentation",style).apply();
             action(()->renderer.setPresentation(style));
         });navigation.addView(styleButton);
+        mirrorButton=button("Espejos",()->new AlertDialog.Builder(this).setTitle("Reflejos del mismo mundo")
+            .setItems(new String[]{"Desactivados","Suelo reflectante","Ver espejos enfrentados","Presupuesto de rebotes"},(dialog,index)->{
+                if(index<3){action(()->{
+                    renderer.setReflections(index,renderer.mirrorBudget(),true,1f);
+                    if(index==QuantumRenderer.MIRRORS_PAIR)renderer.mirrorView();
+                });}
+                else new AlertDialog.Builder(this).setTitle("Trabajo por rayo · tramos vacíos se componen")
+                    .setItems(new String[]{"8 rebotes explícitos","16 rebotes explícitos","32 rebotes explícitos","64 rebotes explícitos"},
+                        (d,choice)->action(()->renderer.setReflections(renderer.mirrorMode(),new int[]{8,16,32,64}[choice],true,1f))).show();
+            }).show());mirrorButton.setTag("mirror_settings");navigation.addView(mirrorButton);
         navigation.addView(button("Objetos",()->new AlertDialog.Builder(this).setTitle("Objetos del mundo")
             .setItems(new String[]{"1.024","16.384","65.536","262.144","1.000.000","1.048.576"},(d,index)->{
                 int count=new int[]{1024,16384,65536,262144,1000000,1048576}[index];action(()->renderer.objectCount(count));
@@ -615,6 +625,8 @@ public final class MainActivity extends Activity {
                 surface.queueEvent(()->{if(!destroyed&&renderer==observed)captureSession();});
             }
         }
+        if(mirrorButton!=null)mirrorButton.setText(observed.mirrorMode()==QuantumRenderer.MIRRORS_OFF?"Espejos: no":
+            observed.mirrorMode()==QuantumRenderer.MIRRORS_FLOOR?"Espejos: suelo":"Espejos: pareja");
         if(styleButton!=null)styleButton.setText(observed.presentation()==QuantumRenderer.PRESENTATION_COSMIC?"Estilo: cósmico":"Estilo: original");
     });}
 

@@ -58,6 +58,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private final JSONObject captureSamples = new JSONObject();
     private boolean testUhd;
     private boolean testUltra;
+    private boolean testMirrors;
     private int expectedTests = LEGACY_TESTS + 2;
     private String portableName;
 
@@ -96,6 +97,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        testMirrors = arguments != null && "true".equals(arguments.getString("mirrors"));
+        if(testMirrors)expectedTests++;
         testUltra = arguments != null && "true".equals(arguments.getString("ultra8k"));
         testUhd = testUltra || (arguments != null && "true".equals(arguments.getString("uhd4k")));
         if (testUhd) expectedTests += 4;
@@ -113,6 +116,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             metrics.put("performanceScope", "Software GLES emulator; not phone performance measurements");
             metrics.put("uhd4kSuite", testUhd);
             metrics.put("ultra8kSuite", testUltra);
+            metrics.put("mirrorSuite", testMirrors);
             metrics.put("applicationId", getTargetContext().getPackageName());
 
             Intent launch = new Intent(getTargetContext(), MainActivity.class);
@@ -163,6 +167,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("portable_invalid_import_preserves_session", this::portableInvalidImport);
             runCase("portable_activity_recreation", this::portableRecreation);
             runCase("infinite_live_renderer_and_portability", this::infiniteRenderer);
+            if(testMirrors)runCase("mirrors_selection_snapshot_and_tiled_export", this::mirrorContracts);
 
             metrics.put("portableFinalQubits", activity.core.qubits);
             metrics.put("portableFinalStateBytes", activity.core.stateBytes());
@@ -1072,6 +1077,58 @@ public final class GraphicsInstrumentation extends Instrumentation {
         metrics.put("ultra8kNativePssKiB", pss[0]);
         metrics.put("ultra8kLegacyReturnChangedPixels", before.changed(returned));
         metrics.put("ultra8kPerformanceScope", "One-object scene on recorded GLES device; synchronized wall time, not FPS or phone results");
+    }
+
+    /** Opt in with -e mirrors true. Runs shipping GLES/JNI, never a host substitute. */
+    private void mirrorContracts() throws Exception {
+        scene(64);
+        gl(() -> {
+            activity.renderer.worldSeed(2026);activity.renderer.setPresentation(QuantumRenderer.PRESENTATION_COSMIC);
+            activity.renderer.testCamera(new float[]{0,3.8f,7},new float[]{11,1.2f,-2});
+            activity.renderer.setReflections(QuantumRenderer.MIRRORS_OFF,64,true,1f);
+        });
+        QuantumRenderer.Capture originalIds=frame(true),originalColor=frame(false);
+        NativeCore.Snapshot before=activity.core.snapshot();
+        try {
+            gl(() -> activity.renderer.setReflections(QuantumRenderer.MIRRORS_PAIR,64,true,1f));
+            QuantumRenderer.Capture ids=frame(true),color=frame(false);
+            expect(originalColor.changed(color)>0,"Mirrors did not change the image");
+            Pick reflected=null;
+            for(int y=2;y<ids.height-2&&reflected==null;y++)for(int x=2;x<ids.width-2;x++){
+                int id=ids.idAt(x,y);
+                if(originalIds.idAt(x,y)<0&&id>=0&&ids.idAt(x-1,y)==id&&ids.idAt(x+1,y)==id
+                        &&ids.idAt(x,y-1)==id&&ids.idAt(x,y+1)==id){reflected=new Pick(id,x,y,1);break;}
+            }
+            expect(reflected!=null,"No object outside the direct view was reflected");
+            select(reflected,ids);
+            gl(() -> activity.renderer.editSelected(-1));
+            expect(frame(true).idAt(reflected.x,reflected.y)!=reflected.id,"Hidden object remains in its reflection");
+            gl(() -> activity.renderer.editSelected(0));
+            expect(frame(true).changed(ids)==0,"Restoring source did not restore all reflected IDs");
+            QuantumRenderer.Snapshot optical=visualSnapshot();
+            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+            try(ObjectOutputStream output=new ObjectOutputStream(bytes)){output.writeObject(optical);}
+            QuantumRenderer.Snapshot restored;
+            try(ObjectInputStream input=new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))){
+                restored=(QuantumRenderer.Snapshot)input.readObject();
+            }
+            expect(restored.mirrorMode==2&&restored.mirrorBudget==64&&restored.mirrorFold
+                    &&restored.mirrorReflectance==1f,"Optical session settings were lost");
+            QuantumRenderer candidate=new QuantumRenderer(getTargetContext(),activity.core,text -> {},restored);
+            expect(candidate.mirrorMode()==2&&candidate.mirrorBudget()==64,"Optical snapshot did not restore");
+            QuantumRenderer.Capture reference=frame(false);
+            QuantumRenderer.ExportResult export=stream("mirror-tiled.png",new RenderResolution.Size(reference.width,reference.height),0,
+                    new QuantumRenderer.ExportControl(64,32,null));
+            int[] differences=comparePng(new File(evidence,"mirror-tiled.png"),reference,export.tileWidth,export.tileRows);
+            expect(differences[0]==0,"Mirror tiles differ from full framebuffer");
+            sameCore(before,activity.core.snapshot(),"Reflections mutated the native core");
+            metrics.put("mirrors",new JSONObject().put("reflectedPickId",reflected.id)
+                    .put("changedPixels",originalColor.changed(color)).put("snapshotRestored",true)
+                    .put("readOnly",true).put("tileDifferentPixels",differences[0]));
+        } finally {
+            gl(() -> activity.renderer.setReflections(QuantumRenderer.MIRRORS_OFF,16,true,1f));
+        }
+        expect(originalIds.changed(frame(true))==0,"Turning mirrors off changed original object IDs");
     }
 
     private void ultraDifferential() throws Exception {

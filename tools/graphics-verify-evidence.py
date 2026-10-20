@@ -20,9 +20,11 @@ def require(condition, message):
 
 def main():
     directory = Path(sys.argv[1] if len(sys.argv) > 1 else "graphics-evidence")
-    ultra = len(sys.argv) > 2 and sys.argv[2] == "--ultra8k"
-    uhd = ultra or (len(sys.argv) > 2 and sys.argv[2] == "--uhd4k")
-    require(len(sys.argv) <= 3 and (len(sys.argv) < 3 or uhd), "Unexpected verification arguments")
+    flags=set(sys.argv[2:])
+    require(len(flags)==len(sys.argv[2:]) and flags<={"--ultra8k","--uhd4k","--mirrors"}, "Unexpected verification arguments")
+    ultra = "--ultra8k" in flags
+    uhd = ultra or "--uhd4k" in flags
+    mirrors = "--mirrors" in flags
     output = (directory / "instrumentation.txt").read_text()
     require("MUNDOX_GRAPHICS_TESTS_PASSED" in output, "Instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Instrumentation did not finish successfully")
@@ -46,6 +48,7 @@ def main():
                          "ultra8k_tiles_match_monolithic_color_and_ids",
                          "ultra8k_streamed_png_dimensions_and_rows",
                          "ultra8k_failure_preserves_scene_and_native_state"})
+    if mirrors:expected.add("mirrors_selection_snapshot_and_tiled_export")
     report = json.loads((directory / "report.json").read_text())
     tests = report["tests"]
     require(report["schemaVersion"] == 1, "Unsupported report schema")
@@ -57,6 +60,12 @@ def main():
     require(int(xml.attrib["tests"]) == len(expected) and int(xml.attrib["failures"]) == 0,
             "JUnit report disagrees with JSON results")
     metrics = report["metrics"]
+    require(metrics.get("mirrorSuite",False) is mirrors,"Wrong mirror test profile")
+    if mirrors:
+        optical=metrics.get("mirrors",{})
+        require(optical.get("readOnly") is True and optical.get("snapshotRestored") is True
+                and optical.get("tileDifferentPixels")==0 and optical.get("changedPixels",0)>0
+                and 0<=optical.get("reflectedPickId",-1)<64,"Missing or invalid mirror evidence")
     infinite_device_evidence.verify_graphics_metrics(metrics, require)
     require(metrics.get("uhd4kSuite", False) is uhd, "Wrong UHD/legacy test profile")
     require(metrics.get("ultra8kSuite", False) is ultra, "Wrong 8K test profile")
