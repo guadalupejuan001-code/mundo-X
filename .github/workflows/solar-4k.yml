@@ -63,6 +63,8 @@ jobs:
           mkdir -p solar-science-classes
           javac -encoding UTF-8 -d solar-science-classes \
             solar-android/app/src/main/java/com/mundox/solar/SolarData.java \
+            solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java \
+            solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java \
             solar-android/tests/SolarDataChecks.java
           java -cp solar-science-classes com.mundox.solar.SolarDataChecks | tee solar-science.log
 
