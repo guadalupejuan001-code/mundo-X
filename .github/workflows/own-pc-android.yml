@@ -11,7 +11,7 @@ permissions:
   contents: read
 concurrency:
   group: own-pc-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   build-and-verify:
     runs-on: ubuntu-latest
