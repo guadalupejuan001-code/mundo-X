@@ -58,6 +58,8 @@ public final class NativeCore implements AutoCloseable {
     /** Finite size only; use isInfinite() and infiniteStats() for the infinite domain. */
     public final int qubits;
     private final boolean infinite;
+    private final EtherCoreNative ether = new EtherCoreNative();
+    private boolean etherPrepared;
     private long handle;
 
     public NativeCore(int qubits) {
@@ -105,6 +107,11 @@ public final class NativeCore implements AutoCloseable {
     private void requireFinite(){live();if(infinite)throw new IllegalStateException("Usa direcciones decimales para el núcleo infinito");}
     public boolean isInfinite(){return infinite;}
     public String domainLabel(){return infinite?"Infinito":qubits+" qubits";}
+    /** Shared symbolic infinite-domain sidecar. Preparation is idempotent per owner. */
+    public synchronized void prepareEtherCluster(){live();if(!etherPrepared){ether.prepareCluster();etherPrepared=true;}}
+    public synchronized float[] etherQuery(String[] paulis){live();prepareEtherCluster();return ether.query(paulis);}
+    public synchronized EtherCoreNative.Stats etherStats(){live();prepareEtherCluster();return ether.stats();}
+    public synchronized String[] etherVisualProgram(){live();prepareEtherCluster();return EtherCoreNative.visualProgram(InfiniteProgram.FAR_ADDRESS);}
     public synchronized InfiniteStats infiniteStats(){requireInfinite();return new InfiniteStats(nInfiniteStats(handle));}
     public synchronized long version() { live();return infinite?infiniteStats().revision:nVersion(handle); }
     public synchronized long epoch() { live();return infinite?infiniteStats().epoch:nEpoch(handle); }
@@ -180,6 +187,7 @@ public final class NativeCore implements AutoCloseable {
     }
     @Override public synchronized void close() {
         if(handle!=0){if(infinite)nInfiniteDestroy(handle);else nDestroy(handle);handle=0;}
+        ether.close();
     }
     private static native long nCreate(int n);
     private static native void nDestroy(long h);
