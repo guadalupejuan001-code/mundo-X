@@ -10,7 +10,7 @@ android {
     ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId (solar8kStandalone ? 'com.cosmicx.solar.ultra' : solar4kStandalone ? 'com.cosmicx.solar.uhd' : 'com.cosmicx.solar') + (solarReview ? '.review' : '')
+        applicationId = (solar8kStandalone ? 'com.cosmicx.solar.ultra' : solar4kStandalone ? 'com.cosmicx.solar.uhd' : 'com.cosmicx.solar') + (solarReview ? '.review' : '')
         minSdk 26
         targetSdk 35
         versionCode 4
