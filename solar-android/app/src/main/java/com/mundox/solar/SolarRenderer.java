@@ -75,6 +75,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private volatile boolean entryMode,atmosphereEnabled=true;
     private double entryLatitude,entryLongitude,entryHeading,entryLookPitch;
     private volatile double entryAltitude;
+    private boolean localPhysics;
+    private SolarFlightPhysics.State flightState=new SolarFlightPhysics.State(35,0);
     private volatile double[] publishedEntry;
     private double sceneScale=1;
     private boolean framebufferDirty=true,failed=false,initializedCamera=false;
@@ -669,6 +671,10 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             long now=System.nanoTime();double dt=previousNanos==0?0:Math.min(.1,Math.max(0,(now-previousNanos)*1e-9));previousNanos=now;
             if(!paused)clockSeconds+=dt;
             if(!paused){double next=jd+dt*speed;if(next<SolarData.MIN_JD||next>SolarData.MAX_JD){jd=Math.max(SolarData.MIN_JD,Math.min(SolarData.MAX_JD,next));paused=true;}else jd=next;}
+            if(entryMode&&localPhysics&&!paused&&dt>0){
+                SolarFlightPhysics.step(selected,SolarEnvironment.environment(selected),flightState,0,dt);
+                entryAltitude=flightState.altitudeKm;publishEntry();
+            }
             if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
             glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
             lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
@@ -705,7 +711,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         selected=body;entryMode=true;isOverview=false;freeFlight=false;
         for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();SolarEnvironment environment=SolarEnvironment.environment(body);
-        entryAltitude=environment.entryAltitudeKm;entryHeading=90;
+        entryAltitude=environment.entryAltitudeKm;flightState=new SolarFlightPhysics.State(entryAltitude,0);entryHeading=90;
         double depression=Math.toDegrees(Math.acos(Math.min(1.0,SolarData.BODIES[body].radiusKm/(SolarData.BODIES[body].radiusKm+Math.max(0,entryAltitude)))));
         entryLookPitch=-Math.min(78,Math.max(15,depression+7));
         double[] day=solarDirection(body),basis=poleBasis[body];
@@ -732,10 +738,22 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public void setEntryAltitudeKm(double altitude){
         if(!finite(altitude))throw new IllegalArgumentException("Altitud no finita");
         if(!entryMode)enterAtmosphere(selected);
-        entryAltitude=SolarEnvironment.environment(selected).clampAltitudeKm(altitude);publishEntry();
+        entryAltitude=SolarEnvironment.environment(selected).clampAltitudeKm(altitude);
+        flightState=new SolarFlightPhysics.State(entryAltitude,0);publishEntry();
     }
     public double altitudeKm(){return entryMode?entryAltitude:Double.NaN;}
     public boolean isEntryMode(){return entryMode;}
+    public void setLocalPhysics(boolean enabled){
+        localPhysics=enabled;
+        flightState=new SolarFlightPhysics.State(entryMode?entryAltitude:Math.max(.5,entryAltitude),0);
+    }
+    public boolean localPhysicsEnabled(){return localPhysics;}
+    public double radialVelocityKmS(){return entryMode?flightState.radialVelocityKmS:Double.NaN;}
+    public double localGravityMs2(){return entryMode?SolarData.gravityMs2(selected,entryAltitude):Double.NaN;}
+    public void radialImpulseKmS(double delta){
+        if(entryMode&&localPhysics&&finite(delta))
+            flightState.radialVelocityKmS=Math.max(-20,Math.min(20,flightState.radialVelocityKmS+delta));
+    }
     /** Immutable publication: [body, km, latitude°, longitude°, heading°, lookPitch°]. */
     public double[] entryState(){double[] state=publishedEntry;return state==null?null:state.clone();}
     public void restoreEntryState(double[] state){
@@ -745,19 +763,28 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         int body=(int)state[0];if(body!=state[0]||body<0||body>=SolarData.BODIES.length)throw new IllegalArgumentException("Cuerpo de entrada inválido");
         selected=body;entryMode=true;isOverview=false;freeFlight=false;syncWorld();
         entryAltitude=SolarEnvironment.environment(body).clampAltitudeKm(state[1]);
+        flightState=new SolarFlightPhysics.State(entryAltitude,0);
         entryLatitude=Math.max(-89.9,Math.min(89.9,state[2]));entryLongitude=state[3]%360;
         entryHeading=state[4]%360;entryLookPitch=Math.max(-85,Math.min(85,state[5]));
         for(int k=0;k<3;k++)panOffset[k]=0;publishEntry();listener.selected(body);
     }
     private void moveEntry(double northKm,double eastKm){
         double radius=SolarData.BODIES[selected].radiusKm+entryAltitude;
-        double lat=Math.toRadians(entryLatitude),lon=Math.toRadians(entryLongitude),sl=Math.sin(lat),cl=Math.cos(lat),sn=Math.sin(lon),cn=Math.cos(lon);
-        double x=cl*cn+(-sl*cn*northKm-sn*eastKm)/radius;
-        double y=sl+cl*northKm/radius;
-        double z=-cl*sn+(sl*sn*northKm-cn*eastKm)/radius;
-        double norm=Math.sqrt(x*x+y*y+z*z);
-        entryLatitude=Math.toDegrees(Math.asin(Math.max(-.999998,Math.min(.999998,y/norm))));
-        entryLongitude=-Math.toDegrees(Math.atan2(z,x));publishEntry();
+        double distance=Math.hypot(northKm,eastKm);
+        if(!(radius>0)||!finite(distance)||distance<1e-12)return;
+        // Exact great-circle destination from a local north/east displacement.
+        // This avoids the first-order tangent drift of the previous update.
+        double lat1=Math.toRadians(entryLatitude),lon1=Math.toRadians(entryLongitude);
+        double bearing=Math.atan2(eastKm,northKm),angular=distance/radius;
+        double sinLat1=Math.sin(lat1),cosLat1=Math.cos(lat1);
+        double sinAngular=Math.sin(angular),cosAngular=Math.cos(angular);
+        double lat2=Math.asin(Math.max(-1,Math.min(1,
+                sinLat1*cosAngular+cosLat1*sinAngular*Math.cos(bearing))));
+        double lon2=lon1+Math.atan2(Math.sin(bearing)*sinAngular*cosLat1,
+                cosAngular-sinLat1*Math.sin(lat2));
+        entryLatitude=Math.toDegrees(lat2);
+        entryLongitude=Math.toDegrees(Math.atan2(Math.sin(lon2),Math.cos(lon2)));
+        publishEntry();
     }
     public void focus(int body){
         if(body<0||body>=SolarData.BODIES.length)return;
