@@ -97,27 +97,55 @@ class PauliObserver {
       ++rank;
     }
     if (rank != n_) throw std::logic_error("Not a full-rank pure stabilizer");
+    // The rows are in echelon form. A residual's first set column either has
+    // one pivot or is already a proof that this Pauli is outside the span.
+    // Index the pivots once, instead of scanning every row for every query.
+    pivot_rows_.assign(2 * n_, n_);
+    for (std::size_t r = 0; r < n_; ++r) pivot_rows_[pivots_[r]] = r;
   }
 
   double expectation(Pauli p) const {
-    for (std::size_t r = 0; r < rows_.size(); ++r)
-      if (p.bit(pivots_[r], n_)) p.multiply_right(rows_[r]);
-    if (!p.identity_bits()) return 0.0;
+    const auto width = n_ / 64 + (n_ % 64 != 0);
+    if (p.x.size() != width || p.z.size() != width ||
+        (n_ % 64 && ((p.x.back() | p.z.back()) >> (n_ % 64))))
+      throw std::invalid_argument("Pauli packed dimensions");
+    // XOR with a pivot row cannot introduce a bit before that pivot. The
+    // cursor therefore only advances, including across the X/Z boundary.
+    for (unsigned axis = 0; axis < 2; ++axis) {
+      auto& words = axis == 0 ? p.x : p.z;
+      for (std::size_t w = 0; w < words.size(); ++w) {
+        while (words[w]) {
+          const auto column = axis * n_ + w * 64 + first_bit(words[w]);
+          const auto row = pivot_rows_[column];
+          if (row == n_) return 0.0;
+          p.multiply_right(rows_[row]);
+        }
+      }
+    }
     if (p.phase & 1) throw std::logic_error("Non-Hermitian residual");
     return p.phase == 0 ? 1.0 : -1.0;
   }
 
   std::size_t payload_bytes() const {
-    std::size_t count = pivots_.size() * sizeof(std::size_t);
+    std::size_t count = (pivots_.size() + pivot_rows_.size()) * sizeof(std::size_t);
     for (const auto& row : rows_)
       count += (row.x.size() + row.z.size()) * sizeof(std::uint64_t) + sizeof(row.phase);
     return count; // Excludes vector objects, spare capacities and allocator.
   }
 
  private:
+  static unsigned first_bit(std::uint64_t value) {
+#if defined(__GNUG__) || defined(__clang__)
+    return static_cast<unsigned>(__builtin_ctzll(value));
+#else
+    unsigned bit = 0;
+    while (!(value & 1)) { ++bit; value >>= 1; }
+    return bit;
+#endif
+  }
   std::size_t n_;
   std::vector<Pauli> rows_;
-  std::vector<std::size_t> pivots_;
+  std::vector<std::size_t> pivots_, pivot_rows_;
 };
 
 } // namespace mundo_x_bridge
