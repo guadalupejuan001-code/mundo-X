@@ -8,6 +8,7 @@ public final class SolarDataChecks {
         catalogue();
         orbitGeometryAndMotion();
         satelliteMotion();
+        localGravity();
         dipolePhysics();
         boundaries();
         System.out.println("SolarDataChecks PASS: " + checks + " checks; 23 bodies; Kepler, moon and dipole invariants.");
@@ -70,6 +71,23 @@ public final class SolarDataChecks {
         check(dot(titaniaH,SolarData.spinAxis(7))>0,"Titania follows Uranus spin direction");
         double lunarDistance=norm(relative(9,jd))*SolarData.AU_KM;
         check(lunarDistance>363000 && lunarDistance<406000,"Moon geocentric distance range");
+    }
+
+    private static void localGravity() {
+        // Values are computed from JPL GM and the same mean radii used by the catalogue.
+        near(SolarData.gravityMs2(3,0),9.82025,.003,"Earth mean-radius gravity");
+        near(SolarData.escapeVelocityKmS(3,0),11.1862,.003,"Earth escape speed");
+        near(SolarData.gravityMs2(9,0),1.6249,.003,"Moon mean-radius gravity");
+        near(SolarData.escapeVelocityKmS(9,0),2.375,.005,"Moon escape speed");
+        for(int id=0;id<SolarData.BODIES.length;id++) {
+            double g0=SolarData.gravityMs2(id,0);
+            double gHigh=SolarData.gravityMs2(id,Math.max(1,SolarData.BODIES[id].radiusKm));
+            check(g0>0&&gHigh>0&&gHigh<g0,"gravity decreases with radius");
+            near(SolarData.escapeVelocityKmS(id,0)/SolarData.circularVelocityKmS(id,0),
+                    Math.sqrt(2),1e-13,"escape/circular velocity ratio");
+        }
+        throwsArgument(() -> SolarData.gravityMs2(3,-SolarData.BODIES[3].radiusKm),
+                "reject gravity at singular radius");
     }
 
     private static void dipolePhysics() {
