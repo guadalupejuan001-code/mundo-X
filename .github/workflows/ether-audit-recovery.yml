@@ -2,31 +2,49 @@ name: Ether audit source recovery
 on:
   push:
     branches: [codex/ether-audit-stress-20261020]
-    paths: [.github/workflows/ether-audit-recovery.yml]
+    paths:
+      - '.github/workflows/ether-audit-recovery.yml'
+      - '.ether-recovery/**'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  pinned-source:
+  verify-transfer:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Export recoverable source without credentials
+      - name: Preserve transfer bytes and verify against local bundle
         shell: bash
         run: |
           set -euo pipefail
-          git cat-file -e 7b028db2344912b2ab86a0affa2a1fe56180922b^{commit}
-          mkdir -p recovery-output
+          mkdir -p recovery-output/transfer
+          cp .ether-recovery/*.b64 recovery-output/transfer/
           git rev-parse HEAD > recovery-output/export-head.txt
-          git bundle create recovery-output/mundo-X-source.bundle --all
-          git bundle verify recovery-output/mundo-X-source.bundle
-          sha256sum recovery-output/mundo-X-source.bundle > recovery-output/SHA256SUMS
+          python3 - <<'PY'
+          import base64, hashlib, pathlib
+          root = pathlib.Path('.ether-recovery')
+          text = ''
+          for i in range(1,17):
+              text += (root / f'part-{i:02d}.b64').read_text().strip()
+              if i == 15:
+                  for j in range(1,4):
+                      text += (root / f'part-15.{j}.b64').read_text().strip()
+          try:
+              data = base64.b64decode(text, validate=True)
+              digest = hashlib.sha256(data).hexdigest()
+          except ValueError as e:
+              digest = 'invalid transfer: ' + str(e)
+          pathlib.Path('recovery-output/digest.txt').write_text(digest+'\n')
+          print(digest)
+          assert digest == '80312a4eeab0624f9f4eb9949aa1665b22fa5a9550ec9e2e0191291862cbe776', 'Transfer checksum mismatch; no source imported'
+          PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: Ether-audit-recoverable-source
+          name: Ether-audit-transfer-verification
           path: recovery-output/
           retention-days: 7
