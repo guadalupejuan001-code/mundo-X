@@ -32,6 +32,8 @@ android {
                 include 'com/mundox/graphics/EtherCoreNative.java'
                 include 'com/mundox/graphics/InfiniteProgram.java'
                 include 'com/mundox/graphics/RenderResolution.java'
+                include 'com/mundox/graphics/StreamPng.java'
+                include 'com/mundox/graphics/TilePlan.java'
             }
         }
     }

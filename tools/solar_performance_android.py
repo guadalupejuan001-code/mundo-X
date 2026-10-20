@@ -11,10 +11,11 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--sdk',type=Path,required=True);p.add_argument('--baseline',type=Path,required=True);p.add_argument('--after',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True);p.add_argument('--boot-seconds',type=int,default=300);p.add_argument('--test-seconds',type=int,default=600)
+    p.add_argument('--system-image',default='system-images;android-35;google_apis;x86_64')
     p.add_argument('--no-accel',action='store_true');a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
     output=a.output.resolve();sdk=a.sdk.resolve();adb=str(sdk/'platform-tools/adb');serial='emulator-5580'
     env=dict(os.environ,ANDROID_HOME=str(sdk),ANDROID_SDK_ROOT=str(sdk))
-    report={'ram_mb':2048,'software_gles':'swiftshader','virtualization':'TCG' if a.no_accel else 'auto','status':'starting','cases':[]}
+    report={'ram_mb':2048,'software_gles':'swiftshader','virtualization':'TCG' if a.no_accel else 'auto','system_image':a.system_image,'status':'starting','cases':[]}
     def save(): (output/'runner.json').write_text(json.dumps(report,indent=2)+'\n')
     def command(args,**kwargs):return subprocess.run(args,env=env,check=True,**kwargs)
     def android(args,**kwargs):return command([adb,'-s',serial,*args],**kwargs)
@@ -22,7 +23,7 @@ def main():
         user=Path(temp);env['ANDROID_USER_HOME']=str(user);env['ANDROID_AVD_HOME']=str(user/'avd');(user/'avd').mkdir()
         emulator=None
         try:
-            command([str(sdk/'cmdline-tools/latest/bin/avdmanager'),'create','avd','--force','--name','solar-pair','--package','system-images;android-35;google_apis;x86_64','--device','pixel_2','--path',str(user/'solar-pair.avd')],input='no\n',text=True,timeout=90,capture_output=True)
+            command([str(sdk/'cmdline-tools/latest/bin/avdmanager'),'create','avd','--force','--name','solar-pair','--package',a.system_image,'--device','pixel_2','--path',str(user/'solar-pair.avd')],input='no\n',text=True,timeout=90,capture_output=True)
             command([adb,'start-server'],timeout=20)
             with open(output/'emulator.log','w') as log:
                 args=[str(sdk/'emulator/emulator'),'-avd','solar-pair','-port','5580','-no-window','-no-audio','-no-boot-anim','-no-snapshot','-gpu','swiftshader','-memory','2048','-cores','2','-feature','-Vulkan']

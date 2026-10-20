@@ -41,6 +41,13 @@ jobs:
           gradle -p ../solar-before/solar-android --no-daemon --max-workers=2 :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Build integrated original module
         run: gradle -p solar-android --no-daemon --max-workers=2 :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Independent lossless PNG decode
+        run: |
+          mkdir -p build/solar-png
+          solar_classes=solar-android/app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes
+          solar_android_jar="$ANDROID_HOME/platforms/android-35/android.jar"
+          javac -cp "$solar_classes:$solar_android_jar" -d build/solar-png solar-android/tests/SolarPngChecks.java
+          java -Xmx256m -cp "build/solar-png:$solar_classes:$solar_android_jar" com.mundox.solar.SolarPngChecks
       - name: Paired exact captures and completed Android frames
         run: |
           python tools/solar_performance_android.py --sdk "$ANDROID_HOME" \
