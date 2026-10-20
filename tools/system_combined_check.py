@@ -40,21 +40,24 @@ def child(root,library):
                     'rss_kib':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}
         finally:engine.close();scene.close();lib.mxw_destroy(work)
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--child',type=Path);p.add_argument('--library',type=Path);p.add_argument('--output',type=Path,default=ROOT/'results/ether-system-combined-2026-10-20.json');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--child',type=Path);p.add_argument('--library',type=Path);p.add_argument('--baseline',default=BASE);p.add_argument('--output',type=Path,default=ROOT/'results/ether-system-combined-2026-10-20.json');a=p.parse_args()
     if a.child:
         resource.setrlimit(resource.RLIMIT_AS,(2*1024**3,2*1024**3));resource.setrlimit(resource.RLIMIT_CPU,(55,56))
         os.sched_setaffinity(0,{min(os.sched_getaffinity(0))});print(json.dumps(child(a.child,a.library)));return
     env=dict(os.environ,OPENBLAS_NUM_THREADS='1',LP_NUM_THREADS='1',OMP_NUM_THREADS='1')
-    result={'baseline':BASE,'physics_baseline':PHYSICS,'ram_limit_bytes':2*1024**3,'wall_seconds':60,
+    baseline=subprocess.check_output(['git','rev-parse',a.baseline+'^{commit}'],cwd=ROOT,text=True).strip()
+    result={'baseline':baseline,'physics_baseline':PHYSICS,'ram_limit_bytes':2*1024**3,'wall_seconds':60,
       'scope':'Synthetic co-scheduled workload: PhysicsWorld 4096 + MicroLab 16384 + live Ether 256 sites/512 observables + 1M procedural boxes. PhysicsWorld is not yet wired to the 3D scene.',
       'repetitions':[]}
     with tempfile.TemporaryDirectory(prefix='mx-combined-') as tmp:
         before=Path(tmp)/'before';before.mkdir()
-        archive=subprocess.check_output(['git','archive',BASE,'native','graphics-desktop'],cwd=ROOT)
+        archive=subprocess.check_output(['git','archive',baseline,'native','graphics-desktop'],cwd=ROOT)
         with tarfile.open(fileobj=io.BytesIO(archive)) as tar:tar.extractall(before,filter='data')
-        (before/'native/include/mundo_x/physics_world.hpp').write_bytes(subprocess.check_output(['git','show',PHYSICS+':native/include/mundo_x/physics_world.hpp'],cwd=ROOT))
+        physics=before/'native/include/mundo_x/physics_world.hpp'
+        if physics.exists():result['physics_baseline']=baseline
+        else:physics.write_bytes(subprocess.check_output(['git','show',PHYSICS+':native/include/mundo_x/physics_world.hpp'],cwd=ROOT))
         libraries={}
-        paths=['native/include/mundo_x/'+x+'.hpp' for x in ('physics_world','micro_lab','pauli_observer')]+['graphics-desktop/engine.py','graphics-desktop/renderer.py','tools/system_workload.cpp','tools/system_combined_check.py']
+        paths=['native/include/mundo_x/'+x+'.hpp' for x in ('physics_world','micro_lab','pauli_observer')]+['graphics-desktop/engine.py','graphics-desktop/renderer.py','graphics-desktop/edit_pages.py','graphics-desktop/shaders/eye.frag','graphics-desktop/shaders/common.glsl','tools/system_workload.cpp','tools/system_combined_check.py']
         measured_hashes={f:hashlib.sha256((ROOT/f).read_bytes()).hexdigest() for f in paths}
         for label,root in [('before',before),('after',ROOT)]:
             libraries[label]=Path(tmp)/(label+'.so')
@@ -71,7 +74,6 @@ def main():
             for x,y in zip(pair['before']['records'],pair['after']['records']):
                 assert x['physical_checksum']==y['physical_checksum'] and x['image_sha256']==y['image_sha256'],(repeat,x,y)
             result['repetitions'].append(pair);print(json.dumps({'repeat':repeat,**{label:pair[label]['median_ms'] for label in pair}}),flush=True)
-        paths=['native/include/mundo_x/'+x+'.hpp' for x in ('physics_world','micro_lab','pauli_observer')]+['graphics-desktop/engine.py','graphics-desktop/renderer.py','tools/system_workload.cpp','tools/system_combined_check.py']
         result['sha256']={f:hashlib.sha256((ROOT/f).read_bytes()).hexdigest() for f in paths}
         assert result['sha256']==measured_hashes,'Sources changed during campaign'
         a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(result,indent=2)+'\n')

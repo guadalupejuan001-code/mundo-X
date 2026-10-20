@@ -27,12 +27,20 @@ def shader_check(root, baseline, width, height, count):
         (old/'eye.frag').read_text().replace('// @COMMON@', (old/'common.glsl').read_text()))
     programs = {'before': previous, 'after': r.programs['eye']}
     r.locations[previous] = {}
+    # The reference shader requires its original signed RG32I search list.
+    # New paged shaders use R32UI: comparing both against one texture is invalid.
+    from render_test_support import legacy_edit_texture
+    legacy_layout='uniform highp isampler2D uEdits;' in (old/'common.glsl').read_text()
+    current_texture=r.edits_texture
+    old_texture=r.gl.object('glGenTextures') if legacy_layout else current_texture
     samples = []
     try:
         for k in range(12):
             # Fresh seeds, exceptions, observations and camera rays. No frame cache.
             edits = {} if k < 6 else {int(i): int((i+k)%8) for i in np.linspace(0,count-1,min(300,count))}
+            r.edits_texture=current_texture
             r.scene(count, seed=(2026+k*1234567)&0xffffffff, edits=edits, prepare_explicit=False)
+            if legacy_layout:legacy_edit_texture(r,edits,old_texture)
             r.set_quantum([1,0,-1,.5], 0. if k%3==0 else .25)
             cam = street(width,height,k*.19) if k%3 else overview(r.side,width,height,k*.17)
             if k==4:
@@ -40,6 +48,7 @@ def shader_check(root, baseline, width, height, count):
             pair = {}
             for label in (['before','after'] if k%2==0 else ['after','before']):
                 r.programs['eye'] = programs[label]
+                r.edits_texture=old_texture if label=='before' else current_texture
                 metrics, frame = r.draw('eye',cam,t=k*.71,debug=int(k%4==2),
                                         presentation=k%2,read=True)
                 pair[label] = frame

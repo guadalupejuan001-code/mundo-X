@@ -439,8 +439,10 @@ def legacy_check():
             parsed=subprocess.run(['cpp','-P','-undef','-nostdinc'],input=text.replace('#version 300 es',''),
                                   text=True,capture_output=True,check=True).stdout
             tokens.append(''.join(parsed.split()))
-        assert tokens[0]==tokens[1],'Primary-only shader instructions changed'
-        return {'status':'passed','preprocessed_shader_identical':True,
+        # The edit-page optimization changes instructions and the GPU texture
+        # layout. Retain the exact old shader AND its old texture as the oracle.
+        # shader_check requires every output pixel to remain byte-identical.
+        return {'status':'passed','preprocessed_shader_identical':tokens[0]==tokens[1],
                 'comparisons':[shader_check(ROOT,baseline,*shape) for shape in ((320,180,1024),(960,540,1048576))]}
 
 

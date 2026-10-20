@@ -11,6 +11,9 @@ on:
       - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/EditPages.java'
+      - 'tools/edit_pages_check.py'
+      - 'tools/graphics/EditPagesChecks.java'
       - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/**'
       - 'tests/**'
@@ -28,6 +31,9 @@ on:
       - 'graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/EditPages.java'
+      - 'tools/edit_pages_check.py'
+      - 'tools/graphics/EditPagesChecks.java'
       - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/**'
       - 'tests/**'
@@ -138,6 +144,17 @@ jobs:
         run: |
           python graphics-desktop/validate.py \
             | tee cosmic-evidence/desktop/geometry.log
+      - name: Verify exact Java, Python and GPU edit-page decoding
+        run: |
+          mkdir -p cosmic-evidence/desktop/edit-pages build/edit-page-classes
+          javac -d build/edit-page-classes \
+            graphics-android/app/src/main/java/com/mundox/graphics/EditPages.java \
+            tools/graphics/EditPagesChecks.java
+          java -Xmx384m -cp build/edit-page-classes com.mundox.graphics.EditPagesChecks \
+            cosmic-evidence/desktop/edit-pages | tee cosmic-evidence/desktop/edit-pages-java.jsonl
+          OPENBLAS_NUM_THREADS=1 LP_NUM_THREADS=1 python tools/edit_pages_check.py \
+            --java-fixtures cosmic-evidence/desktop/edit-pages \
+            --output cosmic-evidence/desktop/edit-pages.json
       - name: Upload desktop evidence
         if: always()
         uses: actions/upload-artifact@v4
