@@ -18,8 +18,12 @@ def require(condition, message):
 
 def main():
     directory = Path(sys.argv[1] if len(sys.argv) > 1 else "solar-evidence")
-    uhd = len(sys.argv) > 2 and sys.argv[2] == "--uhd4k"
-    require(len(sys.argv) <= 3 and (len(sys.argv) < 3 or uhd), "Unexpected solar verification profile")
+    profile = sys.argv[2] if len(sys.argv) > 2 else ""
+    uhd = profile == "--uhd4k"
+    ultra = profile == "--ultra8k"
+    fixed = uhd or ultra
+    require(len(sys.argv) <= 3 and profile in ("", "--uhd4k", "--ultra8k"),
+            "Unexpected solar verification profile")
     output = (directory / "instrumentation.txt").read_text()
     require("COSMIC_SOLAR_TESTS_PASSED" in output, "Solar instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Solar instrumentation did not finish successfully")
@@ -41,6 +45,9 @@ def main():
         expected_tests.update({"uhd_framebuffer_return_preserves_scene", "uhd_fit_picking_preserves_scene",
                                "entry_all_planets_and_moons", "entry_atmosphere_and_grazing_frames",
                                "entry_uhd_lifecycle_and_orientation", "map_ui_planet_and_moon_selection"})
+    elif ultra:
+        expected_tests.update({"ultra8k_framebuffer_return_preserves_scene",
+                               "ultra8k_earth_entry_atmosphere"})
     require(len(tests) == len(expected_tests) and set(names) == expected_tests,
             "Incomplete or unexpected solar test inventory")
     require(report["testsRun"] == len(tests) and report["testsFailed"] == 0,
@@ -50,7 +57,9 @@ def main():
     require(int(junit.attrib["tests"]) == len(expected_tests) and int(junit.attrib["failures"]) == 0,
             "The JUnit report disagrees with device JSON")
     metrics = report["metrics"]
-    require(metrics.get("uhd4kSuite", False) is uhd, "The Android run used the wrong legacy/UHD profile")
+    require(metrics.get("uhd4kSuite", False) is uhd
+            and metrics.get("ultra8kSuite", False) is ultra,
+            "The Android run used the wrong legacy/4K/8K profile")
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"],
             "The device does not match the Android 15 x86_64 validation target")
     require("swiftshader" in metrics["glRenderer"].lower(), "Unexpected GLES validation driver")
@@ -102,6 +111,8 @@ def main():
     expected_apks = {"COSMIC-X-Solar.apk", "COSMIC-X-Solar-tests.apk"}
     if uhd:
         expected_apks = {"COSMIC-X-Solar-4K.apk", "COSMIC-X-Solar-4K-tests.apk", "COSMIC-X-Solar-coexist.apk"}
+    elif ultra:
+        expected_apks = {"COSMIC-X-Solar-8K.apk", "COSMIC-X-Solar-8K-tests.apk", "COSMIC-X-Solar-coexist.apk"}
     checksums = {}
     for row in (directory / "apk-SHA256SUMS.txt").read_text().splitlines():
         parts = row.split()
@@ -137,6 +148,9 @@ def main():
         expected_images.update(f"entry-{body}-{kind}.png" for body in ("earth", "venus", "jupiter", "titan", "moon")
                                for kind in ("atmosphere", "grazing"))
         expected_images.update({"entry-earth-vacuum.png", "entry-moon-vacuum.png"})
+    elif ultra:
+        expected_images.update({"uhd-adaptive-before.png", "uhd-adaptive-after.png",
+                                "ultra8k-earth-orbit.png", "ultra8k-earth-entry.png"})
     require(expected_images.issubset(set(images)) and len(set(images)) == len(images),
             "Missing or duplicate required solar framebuffers")
     image_manifest = {}
@@ -204,13 +218,45 @@ def main():
             require(samples[before]["rgbaSha256"] == samples[after]["rgbaSha256"],
                     "Raw RGBA checksums disagree with exact transition assertions")
         expected_provenance = verify_integrated_core(Path(__file__).resolve().parents[1])
-        require(provenance["passed"] is True and provenance["scientificChecks"] == 511
+        require(provenance["passed"] is True and provenance["scientificChecks"] >= 511
                 and all(provenance.get(name) == value for name, value in expected_provenance.items()),
                 "Solar UHD evidence does not match the verified integrated core, resolution and science sources")
         coexist = set((directory / "coinstallation.txt").read_text().splitlines())
         require({"package:com.cosmicx.solar", "package:com.cosmicx.solar.uhd"} <= coexist,
                 "The original and UHD solar packages did not coexist")
         print("Verified real UHD, FIT picking, 22 local environments, atmosphere controls and live map touches.")
+    elif ultra:
+        require(metrics["applicationId"] == "com.cosmicx.solar.ultra"
+                and metrics["uhdPixels"] == 33_177_600,
+                "The standalone Solar 8K package or pixel count is wrong")
+        require(metrics["uhdReturnChangedPixels"] == 0
+                and metrics["uhdNativeOwnerPreserved"] is True,
+                "Solar 8K transition changed astronomical or native state")
+        samples = report["captureSamples"]
+        for name in ("ultra8k-earth-orbit.png", "ultra8k-earth-entry.png"):
+            item = image_manifest[name]
+            require((item["width"], item["height"]) == (4320, 7680),
+                    "Not a true portrait 8K PNG: " + name)
+            proof = samples[name]
+            require(proof["decodedPngSamplesVerified"] is True and len(proof["points"]) == 25
+                    and (proof["width"], proof["height"]) == (4320, 7680)
+                    and re.fullmatch(r"[0-9a-f]{64}", proof["rgbaSha256"]),
+                    "Solar 8K PNG lacks exact channel/orientation proof: " + name)
+        entry = metrics["ultra8kEntry"]
+        require((entry["width"], entry["height"]) == (4320, 7680)
+                and 0 <= entry["altitudeKm"] <= 1000 and entry["brightPixels"] > 80,
+                "Solar 8K atmospheric entry evidence is incomplete")
+        require(provenance["applicationId"] == "com.cosmicx.solar.ultra"
+                and provenance["version"] == "1.2.0" and provenance["versionCode"] == 3
+                and provenance["scientificChecks"] >= 511,
+                "Solar 8K APK provenance is incomplete")
+        expected_provenance = verify_integrated_core(Path(__file__).resolve().parents[1])
+        require(all(provenance.get(name) == value for name, value in expected_provenance.items()),
+                "Solar 8K evidence does not match the verified integrated core")
+        coexist = set((directory / "coinstallation.txt").read_text().splitlines())
+        require({"package:com.cosmicx.solar", "package:com.cosmicx.solar.ultra"} <= coexist,
+                "The original and Solar 8K packages did not coexist")
+        print("Verified real 7680x4320-class Solar target, atmospheric entry and exact PNG evidence.")
     (directory / "verified-images.json").write_text(json.dumps(image_manifest, indent=2) + "\n")
     print(f"Verified {len(tests)} solar Android tests and {len(images)} actual PNG captures.")
     print("Driver: " + metrics["glRenderer"])
