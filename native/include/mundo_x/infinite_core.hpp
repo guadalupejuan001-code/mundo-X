@@ -192,14 +192,15 @@ class InfiniteCore {
       if (rules > limits.max_ether_rules)
         throw std::length_error("snapshot Ether rule budget exceeded");
       input.require(rules);
-      std::vector<EtherCore::Rule> decoded;
-      decoded.reserve(rules);
+      EtherCore::Rule first = EtherCore::Rule::HAll;
       for (std::size_t i = 0; i < rules; ++i) {
         const auto value = input.byte();
         if (value > 1) throw std::invalid_argument("unknown snapshot Ether rule");
-        decoded.push_back(static_cast<EtherCore::Rule>(value));
+        if (i == 0) first = static_cast<EtherCore::Rule>(value);
+        else if (value != (static_cast<unsigned>(first) ^ (i & 1U)))
+          throw std::invalid_argument("Ether snapshot contains uncancelled adjacent rules");
       }
-      state.ether.restore_rules(decoded, limits.max_ether_rules);
+      state.ether.restore_rule_run(first, rules, limits.max_ether_rules);
     }
     // Every component needs at least its count, one address length/digit,
     // and one 17-byte tableau. This check precedes metadata reservation.

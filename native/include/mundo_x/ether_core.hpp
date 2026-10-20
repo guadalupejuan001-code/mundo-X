@@ -1,7 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <set>
@@ -28,6 +30,59 @@ class EtherCore {
   struct Term { std::string address; char axis; };
   enum class Rule : std::uint8_t { HAll, CZNeighbors };
 
+  // With two involutions, cancellation of equal neighbours leaves an
+  // alternating word. Its first letter and length describe every rule
+  // exactly, without storing or copying a vector proportional to its depth.
+  struct RuleRun { Rule first = Rule::HAll; std::size_t count = 0; };
+  class RuleView {
+   public:
+    class iterator {
+     public:
+      using iterator_category = std::bidirectional_iterator_tag;
+      using value_type = Rule;
+      using difference_type = std::ptrdiff_t;
+      using pointer = void;
+      using reference = Rule;
+      iterator() = default;
+      Rule operator*() const { return at(first_, index_); }
+      iterator& operator++() { ++index_; return *this; }
+      iterator operator++(int) { auto old = *this; ++*this; return old; }
+      iterator& operator--() { --index_; return *this; }
+      iterator operator--(int) { auto old = *this; --*this; return old; }
+      bool operator==(const iterator& other) const {
+        return first_ == other.first_ && index_ == other.index_;
+      }
+      bool operator!=(const iterator& other) const { return !(*this == other); }
+     private:
+      friend class RuleView;
+      iterator(Rule first, std::size_t index) : first_(first), index_(index) {}
+      Rule first_ = Rule::HAll;
+      std::size_t index_ = 0;
+    };
+    std::size_t size() const noexcept { return run_.count; }
+    bool empty() const noexcept { return size() == 0; }
+    Rule operator[](std::size_t index) const { return at(run_.first, index); }
+    Rule front() const {
+      if (empty()) throw std::out_of_range("empty Ether rule sequence");
+      return run_.first;
+    }
+    Rule back() const {
+      if (empty()) throw std::out_of_range("empty Ether rule sequence");
+      return (*this)[size() - 1];
+    }
+    iterator begin() const { return iterator(run_.first, 0); }
+    iterator end() const { return iterator(run_.first, size()); }
+    std::reverse_iterator<iterator> rbegin() const { return std::make_reverse_iterator(end()); }
+    std::reverse_iterator<iterator> rend() const { return std::make_reverse_iterator(begin()); }
+   private:
+    friend class EtherCore;
+    explicit RuleView(RuleRun run) : run_(run) {}
+    static Rule at(Rule first, std::size_t index) {
+      return static_cast<Rule>(static_cast<unsigned>(first) ^ (index & 1U));
+    }
+    RuleRun run_;
+  };
+
   struct Stats {
     std::size_t rules = 0;
     std::size_t last_query_sites = 0;
@@ -52,9 +107,45 @@ class EtherCore {
   void h_all() { push_rule(Rule::HAll); }
   void cz_neighbors() { push_rule(Rule::CZNeighbors); }
 
-  std::size_t rule_count() const noexcept { return rules_.size(); }
-  const std::vector<Rule>& rules() const noexcept { return rules_; }
+  std::size_t rule_count() const noexcept { return run_.count; }
+  RuleRun rule_run() const noexcept { return run_; }
+  RuleView rules() const noexcept { return RuleView(run_); }
   Stats stats() const noexcept { return stats_; }
+
+  void restore_rule_run(Rule first, std::size_t count,
+                        std::size_t max_rules = std::numeric_limits<std::size_t>::max()) {
+    validate_rule(first);
+    if (count > max_rules) throw std::length_error("Ether rule budget exceeded");
+    run_ = {count ? first : Rule::HAll, count};
+    stats_ = Stats{};
+    stats_.rules = count;
+  }
+
+  // Compose another alternating word, including cancellation across the
+  // boundary. Check arithmetic and the resulting depth before changing state.
+  void append_alternating(Rule first, std::size_t count,
+                          std::size_t max_rules = std::numeric_limits<std::size_t>::max()) {
+    validate_rule(first);
+    auto candidate = run_;
+    if (candidate.count && count && rules().back() == first) {
+      const auto cancelled = std::min(candidate.count, count);
+      candidate.count -= cancelled;
+      count -= cancelled;
+      first = RuleView::at(first, cancelled);
+    }
+    if (count > std::numeric_limits<std::size_t>::max() - candidate.count)
+      throw std::overflow_error("Ether rule count overflow");
+    if (!candidate.count) candidate.first = count ? first : Rule::HAll;
+    candidate.count += count;
+    if (candidate.count > max_rules) throw std::length_error("Ether rule budget exceeded");
+    run_ = candidate;
+    stats_.rules = rule_count();
+  }
+
+  void restore_rules(RuleView rules,
+                     std::size_t max_rules = std::numeric_limits<std::size_t>::max()) {
+    restore_rule_run(rules.empty() ? Rule::HAll : rules.front(), rules.size(), max_rules);
+  }
 
   void restore_rules(const std::vector<Rule>& rules,
                      std::size_t max_rules = std::numeric_limits<std::size_t>::max()) {
@@ -66,10 +157,7 @@ class EtherCore {
       if (i && rules[i] == rules[i - 1])
         throw std::invalid_argument("Ether snapshot contains uncancelled adjacent rules");
     }
-    auto candidate = rules;
-    rules_.swap(candidate);
-    stats_ = Stats{};
-    stats_.rules = rules_.size();
+    restore_rule_run(rules.empty() ? Rule::HAll : rules.front(), rules.size(), max_rules);
   }
 
   double expectation(const std::vector<Term>& terms, int sign = 1) const {
@@ -115,8 +203,19 @@ class EtherCore {
       }
     }
 
+    // A single X or Z has an exact closed pullback on the half-line. Avoid
+    // replaying a deep alternating word (and rebuilding its cone each layer).
+    // Mixed/Y observables retain the signed general evaluator below.
+    if (rule_count() >= 8 && p.cells.size() == 1) {
+      const auto& cell = *p.cells.begin();
+      if (cell.second.x != cell.second.z)
+        return pullback_generator(cell.first, cell.second.x,
+                                  p.phase == 0 ? 1 : -1, address_bytes, limits);
+    }
+
     std::size_t peak = p.cells.size();
-    for (auto it = rules_.rbegin(); it != rules_.rend(); ++it) {
+    const auto sequence = rules();
+    for (auto it = sequence.rbegin(); !p.cells.empty() && it != sequence.rend(); ++it) {
       if (*it == Rule::HAll) conjugate_h_all(p);
       else conjugate_cz_neighbors(p, limits, peak);
       peak = std::max(peak, p.cells.size());
@@ -135,7 +234,7 @@ class EtherCore {
     if (residual & 1U)
       throw std::logic_error("non-Hermitian phase after Clifford propagation");
     out.sign = residual == 0 ? 1 : -1;
-    out.stats = {rules_.size(), p.cells.size(), peak, address_bytes};
+    out.stats = {rule_count(), p.cells.size(), peak, address_bytes};
     return out;
   }
 
@@ -150,13 +249,106 @@ class EtherCore {
   using CellMap = std::map<std::string, Bits, AddressLess>;
   struct Pauli { CellMap cells; int phase = 0; };
 
-  std::vector<Rule> rules_;
+  RuleRun run_;
   mutable Stats stats_;
 
+  static void validate_rule(Rule r) {
+    if (r != Rule::HAll && r != Rule::CZNeighbors)
+      throw std::invalid_argument("unknown Ether rule");
+  }
+
   void push_rule(Rule r) {
-    if (!rules_.empty() && rules_.back() == r) rules_.pop_back();
-    else rules_.push_back(r);
-    stats_.rules = rules_.size();
+    append_alternating(r, 1);
+  }
+
+  // F_0(A)=0, F_1(A)=I, F_(k+1)(A)=A F_k(A)+F_(k-1)(A), over GF(2),
+  // where A is adjacency of q0--q1--... . On a basis site q,
+  // F_(r+1)(A)e_q has support |q-r|, |q-r|+2, ..., q+r. The reflection
+  // at q0 cancels the missing negative half-line exactly. Each X/Z image
+  // has X and Z on opposite parities, hence no Y or intrinsic minus sign.
+  struct SupportRun { std::string next; std::size_t remaining = 0; };
+
+  static std::string add_offset(std::string address, std::size_t offset) {
+    for (std::size_t i = address.size(); i-- > 0 && offset;) {
+      const unsigned digit = static_cast<unsigned>(address[i] - '0') + offset % 10;
+      offset /= 10;
+      if (digit >= 10) ++offset;
+      address[i] = static_cast<char>('0' + digit % 10);
+    }
+    if (offset) address.insert(0, std::to_string(offset));
+    return address;
+  }
+
+  static std::string subtract_offset(std::string address, std::size_t offset) {
+    unsigned borrow = 0;
+    for (std::size_t i = address.size(); i-- > 0 && (offset || borrow);) {
+      int digit = (address[i] - '0') - static_cast<int>(offset % 10) - borrow;
+      offset /= 10;
+      borrow = digit < 0;
+      if (borrow) digit += 10;
+      address[i] = static_cast<char>('0' + digit);
+    }
+    if (offset || borrow) throw std::logic_error("negative Ether offset");
+    const auto first = address.find_first_not_of('0');
+    return first == std::string::npos ? std::string("0") : address.substr(first);
+  }
+
+  static SupportRun generator_support(const std::string& address, std::size_t order,
+                                      const QueryLimits& limits) {
+    if (order == 0) return {};
+    const auto radius = order - 1;
+    check_address(add_offset(address, radius), limits);
+    const auto r = std::to_string(radius);
+    if (!AddressLess{}(address, r))
+      return {subtract_offset(address, radius), radius + 1};
+    // address < radius, so conversion is bounded by size_t, irrespective of
+    // the length allowed for addresses in the rest of the register.
+    std::size_t q = 0;
+    for (const auto c : address) q = q * 10 + static_cast<unsigned>(c - '0');
+    return {std::to_string(radius - q), q + 1};
+  }
+
+  static void advance_two(std::string& address) {
+    unsigned carry = 2;
+    for (std::size_t i = address.size(); i-- > 0 && carry;) {
+      const unsigned digit = static_cast<unsigned>(address[i] - '0') + carry;
+      address[i] = static_cast<char>('0' + digit % 10);
+      carry = digit / 10;
+    }
+    if (carry) address.insert(address.begin(), '1');
+  }
+
+  Observable pullback_generator(const std::string& address, bool x, int sign,
+                                std::size_t address_bytes, const QueryLimits& limits) const {
+    auto depth = rule_count();
+    if (rules().back() == Rule::HAll) { x = !x; --depth; }
+    const auto pairs = depth / 2;
+    std::size_t x_order, z_order;
+    if (depth % 2) {
+      x_order = x ? pairs + 1 : pairs;
+      z_order = x_order + 1;
+    } else if (x) {
+      x_order = pairs + 1; z_order = pairs;
+    } else {
+      x_order = pairs; z_order = pairs ? pairs - 1 : 1;
+    }
+    auto xs = generator_support(address, x_order, limits);
+    auto zs = generator_support(address, z_order, limits);
+    if (xs.remaining > limits.max_sites || zs.remaining > limits.max_sites - xs.remaining)
+      throw std::length_error("Ether query cone site budget exceeded");
+    const auto count = xs.remaining + zs.remaining;
+    Observable out;
+    out.sign = sign;
+    out.stats = {rule_count(), count, count, address_bytes};
+    out.terms.reserve(count);
+    while (xs.remaining || zs.remaining) {
+      const bool take_x = !zs.remaining ||
+                         (xs.remaining && AddressLess{}(xs.next, zs.next));
+      auto& run = take_x ? xs : zs;
+      out.terms.push_back({run.next, take_x ? 'X' : 'Z'});
+      if (--run.remaining) advance_two(run.next);
+    }
+    return out;
   }
 
   static std::string canonical(const std::string& input) {
