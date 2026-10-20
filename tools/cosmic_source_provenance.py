@@ -22,11 +22,13 @@ RESOLUTION_REFERENCE = "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6"
 INFINITE_REFERENCE = "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
 INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
 ETHER_REFERENCE = "d351e83ca3be47fa63a14c462b358ac0cb5d65d7"
+ETHER_INTEGRATION_REFERENCE = "61917d9c00d90f384a7d98f4f83c5a81399576e8"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
     "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java",
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java",
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java",
 )
 ADDITIONAL_SOURCES = {
     "native/tests/core_performance_benchmark.cpp": RESOLUTION_REFERENCE,
@@ -48,12 +50,13 @@ ADDITIONAL_SOURCES = {
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": INTEGRATION_REFERENCE,
     "native/include/mundo_x/ether_core.hpp": ETHER_REFERENCE,
     "native/tests/ether_core.cpp": ETHER_REFERENCE,
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_INTEGRATION_REFERENCE,
 }
 REVISED_SOURCES = {
     "native/include/mundo_x/compact_core.hpp": INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/cpp/CMakeLists.txt": INTEGRATION_REFERENCE,
-    "graphics-android/app/src/main/cpp/graphics_jni.cpp": INTEGRATION_REFERENCE,
-    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": INTEGRATION_REFERENCE,
+    "graphics-android/app/src/main/cpp/graphics_jni.cpp": ETHER_INTEGRATION_REFERENCE,
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": ETHER_INTEGRATION_REFERENCE,
 }
 RESOLUTION_SOURCE = "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java"
 
