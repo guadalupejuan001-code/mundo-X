@@ -1,7 +1,7 @@
 name: COSMIC X PC own x86 engine
 on:
   push:
-    branches: ['main', 'codex/own-pc-x86-20261019']
+    branches: ['main', 'codex/own-pc-x86-20261019', 'codex/ether-fusion-pc-check-20261020']
     paths: ['pc-android/**', 'native/**', 'graphics-android/app/src/main/**', 'CMakeLists.txt', '.github/workflows/own-pc-android.yml']
   pull_request:
     branches: ['main']
