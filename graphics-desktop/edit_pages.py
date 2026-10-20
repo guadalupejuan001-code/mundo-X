@@ -5,6 +5,7 @@ An absent page means state zero. Only pages with nonzero edits are stored.
 Offsets are word indices, so texture row boundaries do not affect decoding.
 """
 import math
+from itertools import islice
 import numpy as np
 
 
@@ -26,8 +27,23 @@ def pack_edits(count, edits, max_texture):
     flat = data.ravel()
     for index, page in enumerate(pages):
         flat[page] = directory + index * 32
-    for i, state in edits.items():
-        if state:
-            word = int(flat[i >> 8]) + ((i & 255) >> 3)
-            flat[word] |= np.uint32(state << ((i & 7) * 4))
+    if len(edits) <= 256:
+        for i, state in edits.items():
+            if state:
+                word = int(flat[i >> 8]) + ((i & 255) >> 3)
+                flat[word] |= np.uint32(state << ((i & 7) * 4))
+    else:
+        # Vectorize bounded batches, not an array proportional to all IDs.
+        # Several states share a word: indexed |= would lose duplicate writes.
+        # bitwise_or.at applies every update exactly, including adjacent IDs.
+        items = iter(edits.items())
+        while True:
+            part = list(islice(items, 4096))
+            if not part:
+                break
+            values = np.asarray(part, dtype=np.uint32)
+            values = values[values[:, 1] != 0]
+            ids, states = values[:, 0], values[:, 1]
+            words = flat[ids >> 8] + ((ids & 255) >> 3)
+            np.bitwise_or.at(flat, words, states << ((ids & 7) * 4))
     return data
