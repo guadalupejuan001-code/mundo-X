@@ -22,6 +22,8 @@ uniform vec4 uEntry; // body (-1 outside entry), altitude km, mean radius km, ac
 uniform int uAtmosphereEnabled;
 uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
+uniform highp usampler2D uBodyTiles;
+uniform ivec2 uBodyTileGrid;
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
 out vec4 outColor;
@@ -326,13 +328,21 @@ void atmosphereVolume(vec3 rd,int id,float maximum,bool background,inout vec3 co
     if(background&&entering(id)&&!star)color*=1.0-daylight*smoothstep(.005,.12,1.0-transmission)*.998;
     color=color*transmission+accumulated;
 }
+uint visualCandidates(){
+    ivec2 grid=max(uBodyTileGrid,ivec2(1));
+    vec2 uv=clamp(gl_FragCoord.xy/uResolution,vec2(0.0),vec2(.999999));
+    ivec2 tile=clamp(ivec2(floor(uv*vec2(grid))),ivec2(0),grid-1);
+    return texelFetch(uBodyTiles,tile,0).r;
+}
 void main(){
     vec2 ndc=2.0*gl_FragCoord.xy/uResolution-1.0;
     vec3 rd=normalize(uForward+ndc.x*uAspect*uTanHalfFov*uRight+ndc.y*uTanHalfFov*uUp);
+    uint candidates=visualCandidates();
     vec3 color=vec3(0);
     float closest=uFar;int id=-1;
     for(int j=0;j<MAX_BODIES;j++){
         if(j>=uCount)break;
+        if((candidates&(1u<<uint(j)))==0u)continue;
         // A gas giant's reference radius is not a solid surface. During entry,
         // only its participating cloud/haze volume may occlude the view.
         if(entering(j)&&uAtmosphere[j].w==5.0)continue;
@@ -378,6 +388,7 @@ void main(){
     // Analytic rings avoid polygon seams and remain stable during close flybys.
     for(int j=1;j<MAX_BODIES;j++){
         if(j>=uCount)break;
+        if((candidates&(1u<<uint(j)))==0u)continue;
         if(uAppearance[j].w<=0.0)continue;
         vec3 axis=uAxes[j];
         float den=dot(rd,axis);if(abs(den)<.00001)continue;
@@ -415,6 +426,7 @@ void main(){
     if(uAtmosphereEnabled==1){
         for(int j=0;j<MAX_BODIES;j++){
             if(j>=uCount)break;
+            if((candidates&(1u<<uint(j)))==0u)continue;
             // Entry resolves the local medium; distant bodies keep their
             // orbital shading without paying for another local ray march.
             if(uEntry.w>.5&&!entering(j))continue;
