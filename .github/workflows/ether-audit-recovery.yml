@@ -1,0 +1,32 @@
+name: Ether audit source recovery
+on:
+  push:
+    branches: [codex/ether-audit-stress-20261020]
+    paths: [.github/workflows/ether-audit-recovery.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pinned-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export recoverable source without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e 7b028db2344912b2ab86a0affa2a1fe56180922b^{commit}
+          mkdir -p recovery-output
+          git rev-parse HEAD > recovery-output/export-head.txt
+          git bundle create recovery-output/mundo-X-source.bundle --all
+          git bundle verify recovery-output/mundo-X-source.bundle
+          sha256sum recovery-output/mundo-X-source.bundle > recovery-output/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ether-audit-recoverable-source
+          path: recovery-output/
+          retention-days: 7
