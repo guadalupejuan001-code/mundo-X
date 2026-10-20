@@ -246,11 +246,17 @@ public final class SolarInstrumentation extends Instrumentation {
             expect(Math.abs(expected[i] - actual[i]) < 1e-6, "Bell expectation failed at Pauli " + i);
         long revision = activity.bridge().nativeRevision();
         float[] cached = activity.bridge().coefficients().clone();
+        float[] ether = activity.bridge().verifyEtherReadOnly();
+        expect(Arrays.equals(ether,new float[]{1,1,0,0,0}) && activity.bridge().etherRules()==2,
+                "EtherCore symbolic cluster probe is not connected to Solar");
         frame(); frame();
         expect(activity.bridge().nativeRevision() == revision, "Drawing frames mutated the native gate revision");
         expect(Arrays.equals(cached, activity.bridge().verifyReadOnly()), "Native read-only observations drifted");
+        expect(Arrays.equals(ether,activity.bridge().verifyEtherReadOnly()),
+                "EtherCore read-only observations drifted");
         metrics.put("bellExpectations", floats(actual));
-        metrics.put("observationPreservedNativeRevision", true);
+        metrics.put("etherExpectations", floats(ether)).put("etherRules",activity.bridge().etherRules());
+        metrics.put("observationPreservedNativeRevision", true).put("etherObservationReadOnly",true);
     }
 
     private void quantumCoupling() throws Exception {
