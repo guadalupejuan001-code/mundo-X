@@ -55,22 +55,24 @@ def main():
     p.add_argument('--source',type=Path,default=Path(__file__).resolve().parents[1])
     p.add_argument('--output',type=Path)
     p.add_argument('--child',nargs=4,type=int)
+    p.add_argument('--case',nargs=4,type=int,action='append',help='width height objects moving_frames; repeatable')
+    p.add_argument('--seconds',type=int,default=45)
     args=p.parse_args()
     if args.child:return child(args.source.resolve(),*args.child)
     results={'scope':'host Mesa GLES, 2 GiB virtual address limit per process; no physical phone',
              'cases':[]}
-    cases=[(320,180,1024,20),(320,180,1048576,20),(1920,1080,1048576,5),
+    cases=args.case or [(320,180,1024,20),(320,180,1048576,20),(1920,1080,1048576,5),
            (3840,2160,1048576,3),(7680,4320,1048576,2)]
     env=dict(os.environ,OPENBLAS_NUM_THREADS='1',OMP_NUM_THREADS='1',LP_NUM_THREADS='2')
     for dims in cases:
         t=time.monotonic()
         command=[sys.executable,str(Path(__file__).resolve()),'--source',str(args.source.resolve()),'--child',*map(str,dims)]
         try:
-            done=subprocess.run(command,env=env,text=True,capture_output=True,timeout=45)
+            done=subprocess.run(command,env=env,text=True,capture_output=True,timeout=args.seconds)
             try:r=json.loads(done.stdout)
             except ValueError:r={'status':'failed','stderr':done.stderr[-4000:],'stdout':done.stdout[-1000:]}
             r['returncode']=done.returncode
-        except subprocess.TimeoutExpired:r={'status':'timeout','budget_seconds':45}
+        except subprocess.TimeoutExpired:r={'status':'timeout','budget_seconds':args.seconds}
         r.update(case=dims,wall_seconds=time.monotonic()-t);results['cases'].append(r)
         args.output.write_text(json.dumps(results,indent=2)+'\n')
         print(dims,r['status'],round(r['wall_seconds'],3),flush=True)
