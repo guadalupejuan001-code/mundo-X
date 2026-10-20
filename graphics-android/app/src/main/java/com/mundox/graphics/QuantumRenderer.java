@@ -502,6 +502,18 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private double draw(int debug){
         drawState(debug,width,height);return drawTarget(fbo,width,height,0,0,synchronousTiming);
     }
+    private int pickId(int x,int y){
+        // Keep the full projection and viewport: the selected fragment uses
+        // exactly the same ray as the full ID image, including mirror paths.
+        drawState(1,width,height);glEnable(GL_SCISSOR_TEST);glScissor(x,y,1,1);
+        try{
+            drawTarget(fbo,width,height,0,0,synchronousTiming);
+            ByteBuffer bytes=direct(4);glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bytes);
+            boolean incomplete=(bytes.get(0)&255)==255&&(bytes.get(1)&255)==0&&(bytes.get(2)&255)==255;
+            check("Selección");
+            return incomplete?-1:(bytes.get(0)&255)+((bytes.get(1)&255)<<8)+((bytes.get(2)&255)<<16)-1;
+        }finally{glDisable(GL_SCISSOR_TEST);}
+    }
     private Capture read(){
         // Keep the public RGBA capture, but avoid a second full UHD allocation for readback.
         int rowBytes=width*4,blockRows=Math.min(height,128);byte[] data=new byte[rowBytes*height];
@@ -520,11 +532,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             if(framebufferDirty)sizeFramebuffer();sync();camera();
             if(pickPending){
                 if(display.contains(pickX,pickY)){
-                    draw(1);int x=display.framebufferX(pickX),y=height-1-display.framebufferY(pickY);
-                    ByteBuffer bytes=direct(4);glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bytes);
-                    boolean incomplete=(bytes.get(0)&255)==255&&(bytes.get(1)&255)==0&&(bytes.get(2)&255)==255;
-                    selected=incomplete?-1:(bytes.get(0)&255)+((bytes.get(1)&255)<<8)+((bytes.get(2)&255)<<16)-1;
-                    check("Selección");
+                    int x=display.framebufferX(pickX),y=height-1-display.framebufferY(pickY);
+                    selected=pickId(x,y);
                     if(selected>=count)throw new IllegalStateException("El recorrido devolvió un ID inválido");
                 }
                 pickPending=false;pickX=-1;pickY=-1;

@@ -56,6 +56,7 @@ class GL:
           'glGenRenderbuffers':(None,[I,C.POINTER(U)]),'glBindRenderbuffer':(None,[U,U]),
           'glRenderbufferStorage':(None,[U,U,I,I]),'glFramebufferRenderbuffer':(None,[U,U,U,U]),
           'glViewport':(None,[I,I,I,I]),'glEnable':(None,[U]),'glDisable':(None,[U]),
+          'glScissor':(None,[I,I,I,I]),
           'glDepthFunc':(None,[U]),'glDepthMask':(None,[U]),'glClearColor':(None,[F,F,F,F]),
           'glClear':(None,[U]),'glDrawArrays':(None,[U,I,I]),'glDrawArraysInstanced':(None,[U,I,I,I]),
           'glFinish':(None,[]),'glReadPixels':(None,[I,I,I,I,U,U,P]),

@@ -156,12 +156,17 @@ class Renderer:
             raise ValueError('Mirror reflectance must be finite in [0,1]')
         self.mirror_settings=(mode,budget,fold,float(reflectance))
 
-    def draw(self,route,cam,t=0.,debug=0,selected=-1,read=False,presentation=0):
+    def draw(self,route,cam,t=0.,debug=0,selected=-1,read=False,presentation=0,*,pixel=None):
         if route not in ('eye','procedural','explicit'):raise ValueError(route)
         if presentation not in (0,1):raise ValueError('Unknown observer presentation')
         if self.mirror_settings[0] and route!='eye':raise ValueError('Reflections require the eye ray route')
         if route=='explicit' and not self.explicit_ready:raise ValueError('Explicit reference not prepared')
         if not math.isfinite(t):raise ValueError('Nonfinite time')
+        if pixel is not None:
+            if (route!='eye' or debug!=1 or not read or len(pixel)!=2 or
+                any(type(v) is not int for v in pixel) or
+                not (0<=pixel[0]<self.width and 0<=pixel[1]<self.height)):
+                raise ValueError('Picking requires one integer pixel inside the eye image')
         g=self.gl
         if self.mirror_settings[0] and 'mirrors' not in self.programs:
             fragment=source('eye.frag').replace('#version 300 es','#version 300 es\n#define MX_MIRRORS 1',1)
@@ -204,9 +209,14 @@ class Renderer:
         if g.timer:g.glGetIntegerv(0x8FBB,C.byref(disjoint))
         start=time.perf_counter_ns()
         if g.timer:g.glBeginQuery(0x88BF,self.query)
-        g.glClear(0x4000|0x0100)
-        if route=='eye':g.glDrawArrays(4,0,3)
-        else:g.glDrawArraysInstanced(4,0,36,self.count)
+        if pixel is not None:
+            g.glEnable(0x0C11);g.glScissor(pixel[0],self.height-1-pixel[1],1,1)
+        else:g.glDisable(0x0C11)
+        try:
+            g.glClear(0x4000|0x0100)
+            if route=='eye':g.glDrawArrays(4,0,3)
+            else:g.glDrawArraysInstanced(4,0,36,self.count)
+        finally:g.glDisable(0x0C11)
         if g.timer:g.glEndQuery(0x88BF)
         g.glFinish();wall_ms=(time.perf_counter_ns()-start)/1e6
         query_ms=None;raw_query_ms=None
@@ -220,9 +230,13 @@ class Renderer:
             if not disjoint.value and 0<=raw_query_ms<=wall_ms*2+1:query_ms=raw_query_ms
         rgba=None
         if read:
-            rgba=np.empty((self.height,self.width,4),dtype=np.uint8)
-            g.glReadPixels(0,0,self.width,self.height,0x1908,0x1401,rgba.ctypes.data)
-            rgba=np.flipud(rgba).copy()
+            if pixel is None:
+                rgba=np.empty((self.height,self.width,4),dtype=np.uint8)
+                g.glReadPixels(0,0,self.width,self.height,0x1908,0x1401,rgba.ctypes.data)
+                rgba=np.flipud(rgba).copy()
+            else:
+                rgba=np.empty((1,1,4),dtype=np.uint8)
+                g.glReadPixels(pixel[0],self.height-1-pixel[1],1,1,0x1908,0x1401,rgba.ctypes.data)
             if np.any(np.all(rgba==[255,0,255,255],axis=2)):
                 raise RuntimeError('Incomplete ray: grid traversal or explicit mirror budget exhausted')
         g.check('draw '+route)

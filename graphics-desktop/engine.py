@@ -312,9 +312,12 @@ class QuantumGraphicsEngine:
                        'total_ms':(time.perf_counter_ns()-started)/1e6}
 
     def pick(self,cam,x,y,t=0.):
-        if not 0<=x<self.renderer.width or not 0<=y<self.renderer.height:raise ValueError('Pixel outside image')
-        self._sync();_,rgba=self.renderer.draw('eye',cam,t,debug=1,read=True)
+        if type(x) is not int or type(y) is not int or not 0<=x<self.renderer.width or not 0<=y<self.renderer.height:
+            raise ValueError('Integer pixel outside image')
+        self._sync()
+        # A picking pass changes the framebuffer, including on failed readback.
         self._frame_key=None;self._frame=None
-        r,g,b=map(int,rgba[y,x,:3]);return r+(g<<8)+(b<<16)-1
+        _,rgba=self.renderer.draw('eye',cam,t,debug=1,read=True,pixel=(x,y))
+        r,g,b=map(int,rgba[0,0,:3]);return r+(g<<8)+(b<<16)-1
 
     def close(self):self.renderer.close()
