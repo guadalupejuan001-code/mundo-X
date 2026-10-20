@@ -71,6 +71,11 @@ def main():
             "Astronomical body inventory is incomplete")
     require(.98 < metrics["earthJ2000DistanceAU"] < 1.02 and 350_000 < metrics["earthMoonDistanceKm"] < 410_000,
             "Packaged astronomical geometry failed its independent scale checks")
+    require(9.81 < metrics["earthGravityMs2"] < 9.83
+            and 11.18 < metrics["earthEscapeKmS"] < 11.20
+            and metrics["oneSecondFallAltitudeKm"] < 100
+            and metrics["oneSecondFallVelocityKmS"] < 0,
+            "Packaged JPL-GM gravity or local free-fall integration failed")
     require(metrics["fieldTypes"] == {"earth": 1, "venus": 2, "mars": 3, "moon": 0, "ganymede": 1},
             "Intrinsic, induced and crustal magnetic environments were not distinguished")
     textures = metrics["packagedNasaTextures"]
