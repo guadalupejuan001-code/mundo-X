@@ -71,6 +71,7 @@ class Renderer:
         self.query=g.object('glGenQueries') if g.timer else None
         self.count=0;self.edits={};self.explicit_bytes=0
         self.quantum=np.zeros(1,dtype=np.float32);self.quantum_strength=0.
+        self.mirror_settings=(0,16,True,1.)
         self.set_quantum(self.quantum,0.)
         self.resize(width,height)
         g.glDisable(0x0BD0);g.glDisable(0x0BE2);g.glDisable(0x0B44)
@@ -141,18 +142,42 @@ class Renderer:
         g.glTexParameteri(0x0DE1,0x2802,0x812F);g.glTexParameteri(0x0DE1,0x2803,0x812F)
         g.glActiveTexture(0x84C0);g.check('quantum texture')
 
+    def set_reflections(self,mode=0,*,budget=16,fold=True,reflectance=1.):
+        """0 off, 1 floor mirror, 2 facing mirrors; one shared scene snapshot.
+
+        Budget counts explicit bounces, not algebraically composed crossings.
+        An unfinished ray is magenta and readback fails rather than hiding it.
+        These observer settings are separate from the portable .cosmic world.
+        """
+        if type(mode) is not int or mode not in (0,1,2):raise ValueError('Mirror mode must be 0, 1 or 2')
+        if type(budget) is not int or not 1<=budget<=64:raise ValueError('Explicit mirror budget must be 1..64')
+        if type(fold) is not bool:raise ValueError('Mirror folding must be boolean')
+        if type(reflectance) not in (float,int) or not math.isfinite(reflectance) or not 0<=reflectance<=1:
+            raise ValueError('Mirror reflectance must be finite in [0,1]')
+        self.mirror_settings=(mode,budget,fold,float(reflectance))
+
     def draw(self,route,cam,t=0.,debug=0,selected=-1,read=False,presentation=0):
         if route not in ('eye','procedural','explicit'):raise ValueError(route)
         if presentation not in (0,1):raise ValueError('Unknown observer presentation')
+        if self.mirror_settings[0] and route!='eye':raise ValueError('Reflections require the eye ray route')
         if route=='explicit' and not self.explicit_ready:raise ValueError('Explicit reference not prepared')
         if not math.isfinite(t):raise ValueError('Nonfinite time')
-        g=self.gl;p=self.programs['eye' if route=='eye' else 'raster']
+        g=self.gl
+        if self.mirror_settings[0] and 'mirrors' not in self.programs:
+            fragment=source('eye.frag').replace('#version 300 es','#version 300 es\n#define MX_MIRRORS 1',1)
+            p=g.program(source('eye.vert'),fragment)
+            self.programs['mirrors']=p;self.locations[p]={}
+        p=self.programs['mirrors' if self.mirror_settings[0] else 'eye' if route=='eye' else 'raster']
         g.glBindFramebuffer(0x8D40,self.fbo);g.glViewport(0,0,self.width,self.height)
         g.glUseProgram(p);g.glBindVertexArray(self.vao)
         for name,value in [('uCount',self.count),('uSide',self.side),('uEditCount',len(self.edits)),
                            ('uSelected',selected),('uDebug',debug),('uEdits',0),('uExplicit',int(route=='explicit')),
                            ('uQuantum',1),('uQuantumCount',len(self.quantum)),('uPresentation',presentation)]:
             g.glUniform1i(self.loc(p,name),value)
+        mode,budget,fold,reflectance=self.mirror_settings
+        for name,value in [('uMirrorMode',mode),('uMirrorBudget',budget),('uMirrorFold',int(fold))]:
+            g.glUniform1i(self.loc(p,name),value)
+        g.glUniform1f(self.loc(p,'uMirrorReflectance'),reflectance)
         for name,value in [('uTime',t),('uFogDistance',max(50,self.side*2.2)),('uQuantumStrength',self.quantum_strength),
                            ('uNear',cam['near']),('uFar',cam['far']),('uAspect',cam['aspect']),('uTanHalfFov',cam['tan_half_fov']),
                            ('uPixelAngle',2*cam['tan_half_fov']/self.height)]:
@@ -198,7 +223,8 @@ class Renderer:
             rgba=np.empty((self.height,self.width,4),dtype=np.uint8)
             g.glReadPixels(0,0,self.width,self.height,0x1908,0x1401,rgba.ctypes.data)
             rgba=np.flipud(rgba).copy()
-            if np.any(np.all(rgba==[255,0,255,255],axis=2)):raise RuntimeError('Traversal exhaustion sentinel')
+            if np.any(np.all(rgba==[255,0,255,255],axis=2)):
+                raise RuntimeError('Incomplete ray: grid traversal or explicit mirror budget exhausted')
         g.check('draw '+route)
         return {'wall_draw_finish_ms':wall_ms,'driver_elapsed_ms':query_ms,
                 'raw_driver_elapsed_ms':raw_query_ms,'timer_disjoint':bool(disjoint.value)},rgba

@@ -292,7 +292,7 @@ class QuantumGraphicsEngine:
     def resize(self,width,height):
         self.renderer.resize(width,height);self._frame_key=None;self._frame=None
 
-    def observe(self,cam,t=0.,read=True,selected=-1,force=False):
+    def observe(self,cam,t=0.,read=True,selected=-1,force=False,presentation=0):
         started=time.perf_counter_ns();snapshot,sync_ms=self._sync()
         # The ray shader consumes the basis and projection scalars directly;
         # callers may change them without replacing vp. Compare every camera
@@ -300,11 +300,12 @@ class QuantumGraphicsEngine:
         camera_key=tuple(np.asarray(cam[name],dtype=np.float32).tobytes()
                          for name in ('vp','inverse','eye','forward','right','up'))
         camera_key+=tuple(float(cam[name]) for name in ('near','far','aspect','tan_half_fov'))
-        key=(snapshot.signature,camera_key,float(t),int(selected),self.renderer.width,self.renderer.height)
+        key=(snapshot.signature,camera_key,float(t),int(selected),self.renderer.width,self.renderer.height,
+             presentation,self.renderer.mirror_settings)
         if not force and key==self._frame_key and (not read or self._frame is not None):
             self.reused_frames+=1
             return self._frame,{'reused':True,'sync_ms':sync_ms,'total_ms':(time.perf_counter_ns()-started)/1e6}
-        timing,pixels=self.renderer.draw('eye',cam,t,selected=selected,read=read)
+        timing,pixels=self.renderer.draw('eye',cam,t,selected=selected,read=read,presentation=presentation)
         if pixels is not None:pixels.flags.writeable=False
         self._frame_key=key;self._frame=pixels;self.draws+=1
         return pixels,{'reused':False,'sync_ms':sync_ms,**timing,
