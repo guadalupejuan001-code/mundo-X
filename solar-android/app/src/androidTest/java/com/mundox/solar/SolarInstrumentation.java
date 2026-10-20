@@ -51,6 +51,7 @@ public final class SolarInstrumentation extends Instrumentation {
     private final JSONArray images = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
     private boolean uhdSuite,ultraSuite;
+    private boolean performanceSuite;
     private volatile boolean onDemandFrames;
     private int expectedTests = LEGACY_TESTS;
 
@@ -66,6 +67,7 @@ public final class SolarInstrumentation extends Instrumentation {
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        performanceSuite=arguments!=null&&"true".equals(arguments.getString("performance"));
         ultraSuite = arguments != null && "true".equals(arguments.getString("ultra8k"));
         uhdSuite = ultraSuite || (arguments != null && "true".equals(arguments.getString("uhd4k")));
         if (ultraSuite) expectedTests += 2;
@@ -74,6 +76,7 @@ public final class SolarInstrumentation extends Instrumentation {
     }
 
     @Override public void onStart() {
+        if(performanceSuite){SolarPerformanceChecks.run(this);return;}
         try {
             evidence = new File(getTargetContext().getFilesDir(), "solar-evidence");
             expect(evidence.isDirectory() || evidence.mkdirs(), "Cannot create solar evidence directory");
