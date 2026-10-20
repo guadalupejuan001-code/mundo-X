@@ -56,7 +56,9 @@ public final class SolarPerformanceChecks {
                 final int k=index;
                 gl(a,()->{
                     SolarRenderer r=a.renderer();QuantumSolarBridge bridge=a.bridge();
-                    r.focus(bodies[k]);r.setRealScale(k==6);r.setJulianDate(2461331.0+k*13.125);r.setAnimationTimeForTest(7.25f);
+                    // Focus derives its initial angle from the current date.
+                    // Install the fixed date first, independent of launch time.
+                    r.setJulianDate(2461331.0+k*13.125);r.setRealScale(k==6);r.focus(bodies[k]);r.setAnimationTimeForTest(7.25f);
                     r.setFields(k==1);r.setWind(true);r.setOrbits(true);r.setAtmosphereEnabled(true);bridge.setPreset(k%4);
                     if(k==4||k==5)r.enterAtmosphere(bodies[k]);
                     // Every scene includes a distinct view; no image cache hits.
