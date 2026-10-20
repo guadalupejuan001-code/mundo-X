@@ -23,6 +23,7 @@ INFINITE_REFERENCE = "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
 INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
 ETHER_REFERENCE = "d351e83ca3be47fa63a14c462b358ac0cb5d65d7"
 ETHER_INTEGRATION_REFERENCE = "61917d9c00d90f384a7d98f4f83c5a81399576e8"
+QUANTUM_ALGORITHMS_REFERENCE = "ae1396ad792b7431b0f4fa22ccb0da6ab22455e7"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -50,6 +51,7 @@ ADDITIONAL_SOURCES = {
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": INTEGRATION_REFERENCE,
     "native/include/mundo_x/ether_core.hpp": ETHER_REFERENCE,
     "native/tests/ether_core.cpp": ETHER_REFERENCE,
+    "native/tests/quantum_algorithms.cpp": QUANTUM_ALGORITHMS_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_INTEGRATION_REFERENCE,
 }
 REVISED_SOURCES = {
