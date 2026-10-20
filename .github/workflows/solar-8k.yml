@@ -31,7 +31,7 @@ permissions:
 
 concurrency:
   group: cosmic-solar-8k-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
