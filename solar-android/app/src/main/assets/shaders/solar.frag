@@ -235,26 +235,18 @@ vec3 surface(vec3 n,int id,out float ocean,out float clouds){
     }
     return pow(max(c,vec3(0.0)),vec3(2.2));
 }
-// GLES 3.0 has integer shifts, but does not require findLSB. Enumerate the
-// candidate bits in ascending order to preserve eclipse multiplication order.
-int firstCandidate(uint mask){
-    int bit=0;
-    if((mask&65535u)==0u){mask>>=16;bit+=16;}
-    if((mask&255u)==0u){mask>>=8;bit+=8;}
-    if((mask&15u)==0u){mask>>=4;bit+=4;}
-    if((mask&3u)==0u){mask>>=2;bit+=2;}
-    if((mask&1u)==0u)bit++;
-    return bit;
-}
 float eclipse(vec3 point,int self){
     uint candidates=uEclipseMasks[self];
     if(candidates==0u)return 1.0;
     vec3 s=uBodies[0].xyz-point;
     float maximum=length(s);vec3 l=s/maximum;
     float result=1.0;
-    for(int candidate=0;candidate<MAX_BODIES;candidate++){
-        if(candidates==0u)break;
-        int j=firstCandidate(candidates);candidates&=candidates-1u;
+    // Keep uniform catalogue indexing: extracting each bit through a branch
+    // tree regressed some views on GLES software drivers. Empty masks return
+    // above; other masks skip geometry while preserving the original order.
+    for(int j=1;j<MAX_BODIES;j++){
+        if(j>=uCount)break;
+        if((candidates&(1u<<uint(j)))==0u)continue;
         vec3 c=uBodies[j].xyz-point;float along=dot(c,l);
         if(along<=0.0||along>=maximum)continue;
         float radial=length(c-l*along);
