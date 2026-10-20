@@ -1,0 +1,151 @@
+Test project /workspace/scratch/7def14e3f3d9/ether-build/release
+      Start 23: core_performance
+      Start 25: core_1000
+ 1/73 Test #25: core_1000 ........................   Passed    0.48 sec
+      Start 44: sparse_observable
+ 2/73 Test #23: core_performance .................   Passed    0.55 sec
+      Start 35: ether_rules
+ 3/73 Test #35: ether_rules ......................   Passed    0.30 sec
+      Start 72: pc_video
+ 4/73 Test #44: sparse_observable ................   Passed    0.43 sec
+      Start  3: state_transfer
+ 5/73 Test  #3: state_transfer ...................   Passed    0.40 sec
+      Start 34: ether_fusion
+ 6/73 Test #72: pc_video .........................   Passed    0.49 sec
+      Start 32: ether_core
+ 7/73 Test #34: ether_fusion .....................   Passed    0.32 sec
+      Start 24: core_60
+ 8/73 Test #32: ether_core .......................   Passed    0.34 sec
+      Start 37: ether_batch
+ 9/73 Test #37: ether_batch ......................   Passed    0.28 sec
+      Start 42: basis_vm
+10/73 Test #24: core_60 ..........................   Passed    0.34 sec
+      Start 43: quantum_echo
+11/73 Test #43: quantum_echo .....................   Passed    0.21 sec
+      Start 67: x86_enter_oracle
+12/73 Test #42: basis_vm .........................   Passed    0.24 sec
+      Start 30: infinite_session
+13/73 Test #67: x86_enter_oracle .................   Passed    0.25 sec
+      Start 28: infinite_core
+14/73 Test #30: infinite_session .................   Passed    0.25 sec
+      Start 41: infinite_cli_contract
+15/73 Test #28: infinite_core ....................   Passed    0.21 sec
+      Start 13: micro_lab
+16/73 Test #41: infinite_cli_contract ............   Passed    0.21 sec
+      Start 64: x86_cpu
+17/73 Test #64: x86_cpu ..........................   Passed    0.09 sec
+      Start 19: engine_session
+18/73 Test #13: micro_lab ........................   Passed    0.16 sec
+      Start 45: native_original_exams
+19/73 Test #19: engine_session ...................   Passed    0.07 sec
+      Start  7: reduced_optimization
+20/73 Test #45: native_original_exams ............   Passed    0.06 sec
+      Start 26: xasm_60
+21/73 Test  #7: reduced_optimization .............   Passed    0.05 sec
+      Start 47: native_core_and_xasm
+22/73 Test #26: xasm_60 ..........................   Passed    0.04 sec
+      Start 65: x86_long_mode
+23/73 Test #47: native_core_and_xasm .............   Passed    0.02 sec
+      Start 12: factorized_structure
+24/73 Test #65: x86_long_mode ....................   Passed    0.03 sec
+      Start 22: lab_protocols
+25/73 Test #12: factorized_structure .............   Passed    0.02 sec
+      Start 66: x86_alu64_oracle
+26/73 Test #22: lab_protocols ....................   Passed    0.01 sec
+      Start 58: mxlang_compiler
+27/73 Test #66: x86_alu64_oracle .................   Passed    0.02 sec
+      Start 10: factorized_core
+28/73 Test #58: mxlang_compiler ..................   Passed    0.02 sec
+      Start 36: quantum_algorithms
+29/73 Test #36: quantum_algorithms ...............   Passed    0.01 sec
+      Start 11: factorized_storage
+30/73 Test #10: factorized_core ..................   Passed    0.02 sec
+      Start 53: xasm_ghz1000
+31/73 Test #11: factorized_storage ...............   Passed    0.01 sec
+      Start 62: mxlang_cli_contract
+32/73 Test #53: xasm_ghz1000 .....................   Passed    0.01 sec
+      Start 70: pc_iso
+33/73 Test #62: mxlang_cli_contract ..............   Passed    0.01 sec
+      Start 17: xasm_visual
+34/73 Test #70: pc_iso ...........................   Passed    0.01 sec
+      Start 29: infinite_tensor
+35/73 Test #17: xasm_visual ......................   Passed    0.01 sec
+      Start 54: xasm_t60
+36/73 Test #29: infinite_tensor ..................   Passed    0.01 sec
+      Start 73: pc_quantum
+37/73 Test #54: xasm_t60 .........................   Passed    0.01 sec
+38/73 Test #73: pc_quantum .......................   Passed    0.00 sec
+      Start  1: basis_vm_cli_selftest
+      Start 21: lab_memory
+39/73 Test  #1: basis_vm_cli_selftest ............   Passed    0.01 sec
+      Start 16: visual_scene
+40/73 Test #21: lab_memory .......................   Passed    0.01 sec
+      Start 14: compact_measurement
+41/73 Test #16: visual_scene .....................   Passed    0.00 sec
+      Start 63: sparse_ram
+42/73 Test #14: compact_measurement ..............   Passed    0.00 sec
+      Start 20: lab_circuit
+43/73 Test #20: lab_circuit ......................   Passed    0.00 sec
+      Start  9: dense_precision
+44/73 Test #63: sparse_ram .......................   Passed    0.00 sec
+      Start 38: ether_example
+45/73 Test  #9: dense_precision ..................   Passed    0.00 sec
+      Start 68: boot_media
+46/73 Test #38: ether_example ....................   Passed    0.00 sec
+      Start 31: infinite_bridge
+47/73 Test #68: boot_media .......................   Passed    0.00 sec
+      Start 55: xasm_reduced_magic
+48/73 Test #31: infinite_bridge ..................   Passed    0.00 sec
+      Start  2: phase_core
+49/73 Test #55: xasm_reduced_magic ...............   Passed    0.00 sec
+      Start  8: boundaries
+50/73 Test  #2: phase_core .......................   Passed    0.00 sec
+      Start 69: pc_machine
+51/73 Test  #8: boundaries .......................   Passed    0.00 sec
+      Start 33: ether_frame
+52/73 Test #69: pc_machine .......................   Passed    0.00 sec
+      Start 46: factorized_diversity
+53/73 Test #33: ether_frame ......................   Passed    0.00 sec
+      Start 51: xasm_magic_t
+54/73 Test #46: factorized_diversity .............   Passed    0.00 sec
+      Start 52: xasm_clifford_t
+55/73 Test #51: xasm_magic_t .....................   Passed    0.00 sec
+      Start 27: infinite_address
+56/73 Test #52: xasm_clifford_t ..................   Passed    0.00 sec
+      Start 48: xasm_hello
+57/73 Test #27: infinite_address .................   Passed    0.00 sec
+      Start 59: mx_bell
+58/73 Test #48: xasm_hello .......................   Passed    0.00 sec
+      Start 71: pc_memory
+59/73 Test #59: mx_bell ..........................   Passed    0.00 sec
+      Start 60: mx_magic
+60/73 Test #60: mx_magic .........................   Passed    0.00 sec
+      Start  4: existing_hello
+61/73 Test #71: pc_memory ........................   Passed    0.00 sec
+      Start 56: xasm_failed_assert_exit
+62/73 Test  #4: existing_hello ...................   Passed    0.00 sec
+      Start 39: infinite_example_zero
+63/73 Test #56: xasm_failed_assert_exit ..........   Passed    0.00 sec
+      Start  6: existing_magic
+64/73 Test #39: infinite_example_zero ............   Passed    0.00 sec
+      Start 49: xasm_bell
+65/73 Test  #6: existing_magic ...................   Passed    0.00 sec
+      Start 61: mx_layers
+66/73 Test #49: xasm_bell ........................   Passed    0.00 sec
+      Start 40: infinite_example_bell
+67/73 Test #61: mx_layers ........................   Passed    0.00 sec
+      Start 57: xasm_invalid_program_exit
+68/73 Test #40: infinite_example_bell ............   Passed    0.00 sec
+      Start 18: integrated_runtime
+69/73 Test #57: xasm_invalid_program_exit ........   Passed    0.00 sec
+      Start 15: xasm_measurement
+70/73 Test #18: integrated_runtime ...............   Passed    0.00 sec
+      Start  5: existing_teleport
+71/73 Test #15: xasm_measurement .................   Passed    0.00 sec
+      Start 50: xasm_ghz4
+72/73 Test  #5: existing_teleport ................   Passed    0.00 sec
+73/73 Test #50: xasm_ghz4 ........................   Passed    0.00 sec
+
+100% tests passed out of 73
+
+Total Test time (real) =   3.05 sec

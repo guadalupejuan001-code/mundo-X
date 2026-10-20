@@ -44,6 +44,11 @@ La [compactación exacta de reglas](docs/ether-rule-compaction.md) guarda la
 secuencia global mediante una regla y su longitud. Incluye evaluación algebraica
 de consultas de Pauli y comparaciones reproducibles con la versión anterior.
 
+La [evaluación por intervalos y su recorrido gráfico](docs/ether-evaluation-render.md)
+extiende ese ahorro a productos mixtos y evita reconstrucciones que se cancelan.
+Incluye comparaciones de píxeles y del recorrido Ether–escena–imagen con un
+presupuesto de 2 GiB por proceso en el anfitrión.
+
 Los modelos orbitales, la CPU/RAM x86, la escena procedural y GLES mantienen sus
 algoritmos y recursos actuales. Su representación integral mediante Ether sigue
 siendo parte del objetivo de arquitectura. Los proyectos finitos y otros núcleos

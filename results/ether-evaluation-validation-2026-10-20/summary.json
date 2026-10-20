@@ -1,0 +1,33 @@
+{
+  "baseline": "f096930749a8945ebb85678ed61f8273e01a0ad7",
+  "native_commit": "6baf22bed1f8b964de2ba24bb702c6a9a3b789d4",
+  "graphics_commit": "767d95352cbf5f76c91ce0049d510cfeb96d9dc1",
+  "branch": "codex/ether-evaluation-render-20261020",
+  "ctest_passed": 73,
+  "ctest_total": 73,
+  "interval_checks": 799838,
+  "sanitizers": [
+    "ASan",
+    "UBSan"
+  ],
+  "leak_sanitizer_enabled": false,
+  "native_differential": {
+    "signed_pullbacks_compared": 4000,
+    "long_address_queries": 2000,
+    "mixed_queries": 1000,
+    "mismatches": 0,
+    "seed": 42,
+    "wait4_peak_rss_kib": 10516,
+    "wall_ms": 266.0675810002431
+  },
+  "independent_graphics_rays": 914,
+  "shader_pixels_compared": 31795200,
+  "shader_pixel_differences": 0,
+  "full_pipeline_frame_comparisons": 22,
+  "full_pipeline_states_equal": true,
+  "source_provenance_verified": true,
+  "apk_built": false,
+  "android_device_tested": false,
+  "pushed": false,
+  "merged": false
+}

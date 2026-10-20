@@ -26,6 +26,7 @@ ETHER_INTEGRATION_REFERENCE = "61917d9c00d90f384a7d98f4f83c5a81399576e8"
 ETHER_FUSION_REFERENCE = "d4b9893ddec9c6fbce3911f3db349b1011686538"
 AUDIT_REFERENCE = "46c78131db919e045c052987fd302c5919286560"
 RULE_COMPACTION_REFERENCE = "35a82f88c88e40e9c2fcba7453b33fc91f51ffca"
+INTERVAL_EVALUATION_REFERENCE = "6baf22bed1f8b964de2ba24bb702c6a9a3b789d4"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 SOURCE_SCOPES = (
     "native",
@@ -35,13 +36,13 @@ SOURCE_SCOPES = (
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java",
 )
 ADDITIONAL_SOURCES = {
-    "native/tests/ether_rules.cpp": RULE_COMPACTION_REFERENCE,
+    "native/tests/ether_rules.cpp": INTERVAL_EVALUATION_REFERENCE,
     "native/tests/ether_batch.cpp": AUDIT_REFERENCE,
     "native/tests/ether_stress.cpp": AUDIT_REFERENCE,
     "native/tests/core_performance_benchmark.cpp": RESOLUTION_REFERENCE,
     "native/src/basis_vm_main.cpp": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
     "native/include/mundo_x/infinite_address.hpp": INFINITE_REFERENCE,
-    "native/include/mundo_x/infinite_core.hpp": RULE_COMPACTION_REFERENCE,
+    "native/include/mundo_x/infinite_core.hpp": INTERVAL_EVALUATION_REFERENCE,
     "native/src/infinite_runner.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_address.cpp": INFINITE_REFERENCE,
     "native/tests/infinite_core.cpp": INFINITE_REFERENCE,
@@ -55,7 +56,7 @@ ADDITIONAL_SOURCES = {
     "native/tests/infinite_bridge.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_session.cpp": INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": ETHER_FUSION_REFERENCE,
-    "native/include/mundo_x/ether_core.hpp": RULE_COMPACTION_REFERENCE,
+    "native/include/mundo_x/ether_core.hpp": INTERVAL_EVALUATION_REFERENCE,
     "native/tests/ether_core.cpp": ETHER_REFERENCE,
     "native/tests/ether_frame.cpp": ETHER_FUSION_REFERENCE,
     "native/tests/ether_fusion.cpp": AUDIT_REFERENCE,
