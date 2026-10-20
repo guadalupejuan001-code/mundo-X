@@ -21,6 +21,7 @@ CORE_REFERENCE = "ef4636240af73351a18710e988346791fbdc3b58"
 RESOLUTION_REFERENCE = "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6"
 INFINITE_REFERENCE = "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
 INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
+ETHER_REFERENCE = "d351e83ca3be47fa63a14c462b358ac0cb5d65d7"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -45,6 +46,8 @@ ADDITIONAL_SOURCES = {
     "native/tests/infinite_bridge.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_session.cpp": INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": INTEGRATION_REFERENCE,
+    "native/include/mundo_x/ether_core.hpp": ETHER_REFERENCE,
+    "native/tests/ether_core.cpp": ETHER_REFERENCE,
 }
 REVISED_SOURCES = {
     "native/include/mundo_x/compact_core.hpp": INTEGRATION_REFERENCE,
