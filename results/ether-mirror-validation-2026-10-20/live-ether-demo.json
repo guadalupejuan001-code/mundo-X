@@ -1,0 +1,58 @@
+{
+  "title": "COSMIC X Engine",
+  "project": "Mundo X · Infinito",
+  "scene": {
+    "objects": 64,
+    "backend": "infinite-clifford",
+    "background": "zero",
+    "active_qubits": 0,
+    "components": 0,
+    "largest_component": 0,
+    "observables": 7,
+    "scene_revision": 0,
+    "core_revision": 2,
+    "program_revision": 0,
+    "independent_edits": 0,
+    "logical_rule_bytes": 32,
+    "core_tableau_bytes": 0,
+    "core_address_bytes": 0,
+    "coefficient_bytes": 28,
+    "scope": "Infinite rule background with finite Clifford components and a finite graphic program; payload byte counts exclude total RAM and GPU overhead"
+  },
+  "command_results": [
+    "",
+    ""
+  ],
+  "exported_project": "/workspace/scratch/7def14e3f3d9/mundo-X/results/ether-mirror-images-2026-10-20/mundo-espejos.cosmic",
+  "observer_optics": {
+    "mode": "pair",
+    "budget": 16,
+    "fold": true,
+    "reflectance": 1.0,
+    "saved_in_cosmic": false
+  },
+  "output": "/workspace/scratch/7def14e3f3d9/mundo-X/results/ether-mirror-images-2026-10-20/espejos-ether.png",
+  "resolution": [
+    960,
+    540
+  ],
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "frame": {
+    "reused": false,
+    "sync_ms": 0.178383,
+    "wall_draw_finish_ms": 56.670781,
+    "driver_elapsed_ms": null,
+    "raw_driver_elapsed_ms": 14178689.27906,
+    "timer_disjoint": false,
+    "total_ms": 84.902678
+  },
+  "observation_preserved_core": true,
+  "run_with_build_and_output_ms": 279.14776
+}

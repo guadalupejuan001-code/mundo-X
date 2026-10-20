@@ -1,0 +1,31 @@
+{
+  "status": "compiled",
+  "compiler": "Eclipse ECJ 3.39.0",
+  "java_source_target": "1.8",
+  "runtime": "OpenJDK 17",
+  "android_classpath": "Android API 35 revision 2",
+  "sources": {
+    "graphics-android/app/src/main/java/com/mundox/graphics/CosmicProject.java": "195ad1a89d0f46c796c59dea8bb94cc6f93f7a7f15b007d83ed74056bdc92e31",
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+    "graphics-android/app/src/main/java/com/mundox/graphics/FramePng.java": "acd7138ca33dfb9360436903a9e385c85e95ffa3590e23fb2bf0b0c7d0a6b31f",
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteControls.java": "684b43b3fad45f714af13acc16a889b462f385875453cc0826a1e52f5166dea7",
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+    "graphics-android/app/src/main/java/com/mundox/graphics/MainActivity.java": "08861b5cb75d41ff0176afb83208eb1e31e09413b8a0d476e9ddce074fdea36a",
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+    "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java": "cc2b2b8a4784424810c3bd3a33774566eacbf8d08a39b9a6f520a6b23307b894",
+    "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+    "graphics-android/app/src/main/java/com/mundox/graphics/StreamPng.java": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+    "graphics-android/app/src/main/java/com/mundox/graphics/TilePlan.java": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+    "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java": "74c3463cf8c676bfa25eb38800c87f21293071602c875961c42c67fceff853ae",
+    "graphics-android/app/src/androidTest/java/com/mundox/graphics/ProjectCodecChecks.java": "1858bea78863e42bb2b3b1ea2d5c0069bff78e9e3522381183e805e316fb0baf"
+  },
+  "dependencies": {
+    "ecj.jar": "01f5a92ac19bb2b3bf85e295a68f2c73c264369109158b566ce9b490af982948",
+    "android.jar": "4566663c3876e022b4fa4ced8c8697c4ab1688267f090114fd92d027b32e619b"
+  },
+  "command": "java -jar ecj.jar -1.8 -warn:none -classpath android.jar -d classes @java-sources.txt",
+  "apk_built": false,
+  "instrumentation_executed": false,
+  "device_test_pending": "GraphicsInstrumentation -e mirrors true",
+  "source_commit": "0c31c5ae19235a423cd1df4d71e1c3d0ecc6f292"
+}

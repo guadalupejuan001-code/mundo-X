@@ -175,3 +175,18 @@ EGL_PLATFORM=surfaceless LIBGL_ALWAYS_SOFTWARE=1 \
 
 El modelo y la conexión con el invitado PC se explican en
 [infinite_integration.md](../docs/infinite_integration.md).
+
+## Reflejos sobre el mismo mundo
+
+El observador admite suelo reflectante y dos espejos enfrentados. Mantiene los
+IDs de los objetos vistos por reflexión y compone los recorridos periódicos que
+cumplen las condiciones geométricas comprobadas. Para una vista inicial:
+
+```sh
+python graphics-desktop/demo.py --infinite zero --objects 64 \
+  --view mirror --mirrors pair --cosmic-style --output espejos.png
+```
+
+La configuración óptica se pasa al observador, por separado del archivo
+`.cosmic`. Arquitectura, límites, pruebas, RAM y procedimiento Android:
+[Espejos sobre el mismo mundo de reglas](../docs/ether-mirrors.md).
