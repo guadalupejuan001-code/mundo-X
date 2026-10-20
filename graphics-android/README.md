@@ -13,6 +13,11 @@ forma explícita y los proyectos existentes conservan su backend al abrirse.
 
 [Uso de 8K, memoria, mediciones y alcance](docs/8k.md).
 
+El renderizador compartido incorpora un [índice exacto de excepciones por páginas](../docs/ether-render-optimization.md).
+Conserva IDs, alturas, reflejos y archivos `.cosmic`; cambia la consulta interna
+de la GPU. Las fuentes Java y GLSL están actualizadas; la nueva revisión aún
+requiere construir y medir su APK en un dispositivo.
+
 **COSMIC X Engine es el título. Dentro está la computación cuántica de Mundo X,
 con su núcleo cuántico y su motor gráfico cuántico integrado.**
 

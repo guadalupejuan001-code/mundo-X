@@ -1,0 +1,76 @@
+{
+  "driver": "GLES 3 on llvmpipe; software",
+  "geometric_cases": [
+    {
+      "objects": 1024,
+      "time": 0.0,
+      "camera_angle": 0.0,
+      "raster_id_different_pixels": 3,
+      "pixels": 20736,
+      "independent_brute_force_rays": 300,
+      "eye_vs_brute_mismatches": 0,
+      "mismatches": []
+    },
+    {
+      "objects": 1024,
+      "time": 7.3,
+      "camera_angle": 0.6,
+      "raster_id_different_pixels": 6,
+      "pixels": 20736,
+      "independent_brute_force_rays": 306,
+      "eye_vs_brute_mismatches": 0,
+      "mismatches": []
+    },
+    {
+      "objects": 12345,
+      "time": 2.4,
+      "camera_angle": -0.35,
+      "raster_id_different_pixels": 11,
+      "pixels": 20736,
+      "independent_brute_force_rays": 308,
+      "eye_vs_brute_mismatches": 0,
+      "mismatches": []
+    }
+  ],
+  "brute_force_rays": 914,
+  "first_and_last_object_checks": [
+    {
+      "count": 1000000,
+      "queried_id": 0,
+      "observed_id": 0
+    },
+    {
+      "count": 1000000,
+      "queried_id": 999999,
+      "observed_id": 999999
+    },
+    {
+      "count": 1000003,
+      "queried_id": 0,
+      "observed_id": 0
+    },
+    {
+      "count": 1000003,
+      "queried_id": 1000002,
+      "observed_id": 1000002
+    },
+    {
+      "count": 1048576,
+      "queried_id": 0,
+      "observed_id": 0
+    },
+    {
+      "count": 1048576,
+      "queried_id": 1048575,
+      "observed_id": 1048575
+    }
+  ],
+  "engine": {
+    "cached_requests": 20,
+    "camera_does_not_requery_core": true,
+    "gate_changes_pixels": 458,
+    "pick_hide_restore": true,
+    "edit_preserves_core_revision": true,
+    "more_than_4096_edits": 5000
+  }
+}

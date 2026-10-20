@@ -190,3 +190,11 @@ python graphics-desktop/demo.py --infinite zero --objects 64 \
 La configuración óptica se pasa al observador, por separado del archivo
 `.cosmic`. Arquitectura, límites, pruebas, RAM y procedimiento Android:
 [Espejos sobre el mismo mundo de reglas](../docs/ether-mirrors.md).
+
+## Excepciones compactas en GPU
+
+Las ediciones se consultan mediante páginas exactas de 256 IDs. Se mantiene el
+mapa disperso del proyecto y se deriva una textura R32UI; los bloques sin cambios
+no tienen página de estados. Las consultas requieren una o dos lecturas, sin
+búsqueda binaria. Python empaqueta las ediciones grandes en lotes de 4.096 para
+acotar los temporales. [Medidas, compatibilidad y reproducción](../docs/ether-render-optimization.md).

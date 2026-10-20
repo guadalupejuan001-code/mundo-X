@@ -1,0 +1,8 @@
+{"case":0,"count":1,"width":1,"height":1,"bytes":4}
+{"case":1,"count":257,"width":256,"height":1,"bytes":1024}
+{"case":2,"count":257,"width":256,"height":1,"bytes":1024}
+{"case":3,"count":1048576,"width":256,"height":17,"bytes":17408}
+{"case":4,"count":1000003,"width":256,"height":388,"bytes":397312}
+{"case":5,"count":65536,"width":256,"height":33,"bytes":33792}
+{"case":6,"count":1048576,"width":256,"height":528,"bytes":540672}
+{"checks":3163227,"status":"passed"}

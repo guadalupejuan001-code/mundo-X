@@ -49,6 +49,13 @@ extiende ese ahorro a productos mixtos y evita reconstrucciones que se cancelan.
 Incluye comparaciones de píxeles y del recorrido Ether–escena–imagen con un
 presupuesto de 2 GiB por proceso en el anfitrión.
 
+La [optimización conjunta de Ether, física y selección](docs/ether-system-optimization.md)
+y el [índice compacto de excepciones del renderizador](docs/ether-render-optimization.md)
+conservan los resultados mediante comparaciones antes/después. El segundo evita
+buscar repetidamente todas las ediciones por cada candidato de un rayo y se
+comparte entre escritorio, Graphics Android, COSMIC y el visor de PC. Sus
+mediciones son del anfitrión; no certifican FPS de una APK en un teléfono.
+
 Los modelos orbitales, la CPU/RAM x86, la escena procedural y GLES mantienen sus
 algoritmos y recursos actuales. Su representación integral mediante Ether sigue
 siendo parte del objetivo de arquitectura. Los proyectos finitos y otros núcleos
