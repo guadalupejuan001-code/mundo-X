@@ -132,7 +132,7 @@ La raíz conserva exactamente `format`, `version`, `name`, `core`, `graphics`.
 
 El texto entre ángulos ilustra el lugar del contenido; un snapshot válido lo
 produce `mxi_snapshot` / `InfiniteCore.snapshot()`. Su contenido es ASCII con
-prefijo `MXI1:` y datos hexadecimales. Conserva fondo, revisión, direcciones
+prefijo `MXI1:` o `MXI2:` y datos hexadecimales. MXI2 incluye el marco global Ether. Conserva fondo, revisión, direcciones
 canónicas, componentes, bits X/Z, signos de los generadores y el estado completo
 del generador aleatorio MT19937-64. No contiene una lista histórica de puertas.
 No se duplican esos campos como números JSON.

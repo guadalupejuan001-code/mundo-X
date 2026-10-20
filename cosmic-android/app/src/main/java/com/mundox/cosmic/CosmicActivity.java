@@ -138,7 +138,7 @@ public final class CosmicActivity extends Activity {
         }
         try{
             if(core==null){
-                core=new NativeCore(NativeCore.DEFAULT_QUBITS);core.resetGraph();renderer=new QuantumRenderer(this,core,this::showStatus);
+                core=NativeCore.etherCluster();renderer=new QuantumRenderer(this,core,this::showStatus);
                 renderer.objectCount(16_384);renderer.scenicView();renderer.resolution(960);
             }
             renderer.setPresentation(QuantumRenderer.PRESENTATION_COSMIC);
@@ -441,7 +441,7 @@ public final class CosmicActivity extends Activity {
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{
             String title=name.getText().toString().trim();int n=mode.mode==0?Integer.parseInt(qubits.getText().toString()):0,count=Integer.parseInt(objects.getText().toString());long worldSeed=Long.parseLong(seed.getText().toString());
             if(title.isEmpty()||title.codePointCount(0,title.length())>128||(mode.mode==0&&(n<1||n>NativeCore.MAX_QUBITS))||count<1||count>QuantumRenderer.MAX_OBJECTS||worldSeed<0||worldSeed>0xffffffffL)throw new IllegalArgumentException("Revisa los rangos de tu proyecto.");
-            if(mode.mode==0)createScene(title,n,count,worldSeed);else createInfiniteScene(title,mode.background(),count,worldSeed);dialog.dismiss();
+            if(mode.mode==0)createScene(title,n,count,worldSeed);else createInfiniteScene(title,mode.background(),count,worldSeed,mode.mode==3);dialog.dismiss();
         }catch(Exception error){message(error.getMessage());}}));dialog.show();
     }
     private void expandProject(){
@@ -471,8 +471,9 @@ public final class CosmicActivity extends Activity {
         candidate.resetGraph();QuantumRenderer observer=new QuantumRenderer(this,candidate,s->{});observer.objectCount(count);observer.worldSeed(seed);observer.scenicView();observer.resolution(960);
         prepareProject(CosmicProject.fromSnapshots(name,candidate.snapshot(),observer.snapshot()),serial);
     }catch(Exception error){main.post(()->message("No se pudo crear: "+error.getMessage()));}});}
-    private void createInfiniteScene(String name,int background,int count,long seed){final long serial=++projectLoadSerial;storage.execute(()->{
-        try(NativeCore candidate=NativeCore.infinite(background)){
+    private void createInfiniteScene(String name,int background,int count,long seed){createInfiniteScene(name,background,count,seed,false);}
+    private void createInfiniteScene(String name,int background,int count,long seed,boolean ether){final long serial=++projectLoadSerial;storage.execute(()->{
+        try(NativeCore candidate=ether?NativeCore.etherCluster():NativeCore.infinite(background)){
             QuantumRenderer observer=new QuantumRenderer(this,candidate,s->{});observer.objectCount(count);observer.worldSeed(seed);observer.scenicView();observer.resolution(960);
             prepareProject(CosmicProject.fromSnapshots(name,candidate.snapshot(),observer.snapshot()),serial);
         }catch(Exception error){main.post(()->message("No se pudo crear: "+error.getMessage()));}

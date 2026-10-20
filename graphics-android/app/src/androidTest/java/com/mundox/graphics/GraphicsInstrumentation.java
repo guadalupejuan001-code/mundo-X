@@ -46,7 +46,7 @@ import org.json.JSONObject;
 /** Device tests use the shipping JNI core, shaders, GL thread and activity lifecycle. */
 public final class GraphicsInstrumentation extends Instrumentation {
     private static final String TAG = "MundoXGraphicsTests";
-    private static final int LEGACY_TESTS = 18;
+    private static final int LEGACY_TESTS = 19;
     private static final long FRAME_TIMEOUT_MS = 45_000;
     private MainActivity activity;
     private File evidence;
@@ -120,10 +120,11 @@ public final class GraphicsInstrumentation extends Instrumentation {
             activity = (MainActivity) startActivitySync(launch);
             waitUntil(() -> activity.resumed, 15_000, "Activity did not resume");
 
-            runCase("default_1000_qubit_world", this::defaultThousand);
+            runCase("default_ether_world_and_finite_compatibility", this::defaultEther);
             runCase("native_bell_invariants", this::nativeBell);
             runCase("native_1000_qubit_invariants", this::nativeThousand);
             runCase("native_infinite_contracts", this::nativeInfinite);
+            runCase("native_ether_contracts", this::nativeEther);
             runCase("renderer_borrows_native_state", this::borrowedState);
             runCase("gles_one_million_objects", () -> largeScene(1_000_000, "million"));
             runCase("gles_maximum_object_limit", () -> largeScene(1_048_576, "maximum"));
@@ -134,12 +135,12 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("edit_restoration", this::editRestoration);
             runCase("pause_resume_preserves_state", this::pauseResume);
 
-            // Record the active 1000-qubit profile before project migration tests
-            // deliberately replace it with legacy and pedagogical projects.
+            // The default Ether test explicitly installed a finite compatibility
+            // fixture for the established 1000-qubit rendering/migration suite.
             metrics.put("glRenderer", activity.renderer.device);
             metrics.put("qubits", activity.core.qubits);
             metrics.put("nativeStateBytes", activity.core.stateBytes());
-            metrics.put("baselineMetricsScope", "1000-qubit default, before portable project replacement");
+            metrics.put("baselineMetricsScope", "Explicit 1000-qubit compatibility fixture after validating the Ether default");
 
             if (testUhd) {
                 runCase("uhd_real_framebuffer_and_legacy_return", this::uhdAndReturn);
@@ -209,16 +210,33 @@ public final class GraphicsInstrumentation extends Instrumentation {
         sendStatus(failure == null ? 0 : -2, status);
     }
 
-    private void defaultThousand() throws Exception {
+    private void defaultEther() throws Exception {
         expect(NativeCore.DEFAULT_QUBITS == 1000 && NativeCore.MAX_QUBITS == 1000,
-                "The shipping profile and project limit must both be 1000");
-        expect(activity.core.qubits == 1000, "A fresh app did not start a 1000-qubit core");
+                "The finite compatibility profile and project limit must both remain 1000");
+        expect(activity.core.isInfinite() && activity.core.etherStats().rules==2,
+                "A fresh app did not start the fused Ether session");
+        String saved=activity.core.snapshot().infiniteSnapshot;
+        long epoch=activity.core.epoch();
+        expect(Arrays.equals(activity.core.query(activity.core.etherVisualProgram()),new float[]{1,1,0,0,0})
+                && activity.core.infiniteStats().activeQubits==0,
+                "The fresh Ether world has wrong observations or materialized its background");
         frame(false);
         QuantumRenderer.FrameStats stats = activity.renderer.frameStats();
-        expect(stats != null && stats.qubits == 1000 && stats.observables == 3000,
-                "The live renderer did not receive the complete 1000-qubit visual program");
+        expect(stats != null && stats.infinite && stats.observables == 5,
+                "The live renderer did not receive Ether's physical observables");
+        expect(saved.equals(activity.core.snapshot().infiniteSnapshot) && activity.core.epoch()==epoch,
+                "Opening the Ether viewport mutated its state or epoch");
         metrics.put("defaultQubits", activity.core.qubits);
         metrics.put("defaultObservables", stats.observables);
+        metrics.put("defaultDomain","ether").put("defaultEtherRules",activity.core.etherStats().rules)
+                .put("defaultActiveSites",activity.core.infiniteStats().activeQubits)
+                .put("defaultObservationReadOnly",true);
+        // Keep all previous finite regression and 1000-qubit capacity cases.
+        try(NativeCore finite=new NativeCore(NativeCore.DEFAULT_QUBITS)){
+            finite.resetGraph();
+            QuantumRenderer observer=new QuantumRenderer(getTargetContext(),finite,text->{});
+            install(CosmicProject.fromSnapshots("Finite compatibility",finite.snapshot(),observer.snapshot()));
+        }
     }
 
     private static String pauli(int qubits, char axis, int... positions) {
@@ -304,6 +322,119 @@ public final class GraphicsInstrumentation extends Instrumentation {
             expect(core.version() == version + 1, "Gate version must advance exactly once");
             expect(core.stateBytes() > 0, "Native state must report allocated bytes");
         }
+    }
+
+    private void nativeEther() throws Exception {
+        char[] zeroes=new char[1000];Arrays.fill(zeroes,'0');
+        String huge="1"+new String(zeroes);
+        try(EtherCoreNative ether=new EtherCoreNative()){
+            ether.prepareCluster();
+            String[] program=EtherCoreNative.visualProgram(huge);
+            float[] values=ether.query(program);
+            expect(Arrays.equals(values,new float[]{1,1,0,0,0}),
+                    "EtherCore JNI cluster observables are wrong");
+            EtherCoreNative.Stats stats=ether.stats();
+            expect(stats.rules==2&&stats.lastQueryPeakSites>0&&stats.lastQueryPeakSites<16,
+                    "EtherCore did not retain a compact local query cone");
+            metrics.put("etherNative",new JSONObject().put("domain","q0,q1,q2,...")
+                    .put("addressDigits",huge.length()).put("rules",stats.rules)
+                    .put("lastQueryPeakSites",stats.lastQueryPeakSites)
+                    .put("individualQubitCountStored",false));
+        }
+        try(NativeCore owner=NativeCore.infinite(NativeCore.ZERO)){
+            owner.prepareEtherCluster();
+            expect(Arrays.equals(owner.etherQuery(EtherCoreNative.visualProgram(InfiniteProgram.FAR_ADDRESS)),
+                    new float[]{1,1,0,0,0}),"NativeCore Ether state is not connected");
+            expect(owner.etherStats().rules==2,"NativeCore lost its global rules");
+            String[] boundary=EtherCoreNative.visualProgram("000");
+            expect(Arrays.equals(owner.query(boundary),new float[]{1,1,0,0,0}),"Ether q0 boundary is invalid");
+            long revision=owner.version(),epoch=owner.epoch();
+            owner.apply(NativeCore.Z,"0",null);
+            expect(owner.version()==revision+1 && owner.epoch()==epoch+1,"Local Ether mutation did not invalidate observations");
+            expect(owner.query(boundary)[0]==-1 && owner.etherQuery(boundary)[0]==-1,
+                    "Local gate and Ether still observe different states");
+            String saved=owner.snapshot().infiniteSnapshot;
+            expect(saved.startsWith("MXI2:"),"Ether rules are missing from the snapshot");
+            try(NativeCore restored=new NativeCore(owner.snapshot())){
+                expect(Arrays.equals(restored.query(boundary),owner.query(boundary)) && restored.etherStats().rules==2,
+                        "Ether state and local defect did not restore together");
+            }
+            owner.etherStats();owner.etherVisualProgram();owner.etherQuery(boundary);
+            expect(owner.snapshot().infiniteSnapshot.equals(saved),"Reading Ether prepared or mutated the state");
+            metrics.put("etherFused",new JSONObject().put("sharedLocalAndGlobalState",true)
+                    .put("boundaryQ0",true).put("snapshotRoundtrip",true).put("observationReadOnly",true));
+        }
+        etherRenderer();
+    }
+
+    private void etherRenderer() throws Exception {
+        CosmicProject.Document previous=liveProject().document;
+        String[] program=EtherCoreNative.visualProgram("0");
+        try {
+            CosmicProject.Document project;
+            try(NativeCore prepared=NativeCore.etherCluster()){
+                QuantumRenderer view=new QuantumRenderer(getTargetContext(),prepared,text->{});
+                // The single object consumes the first coefficient, K0=X0 Z1.
+                view.setObservables(program);view.objectCount(1);view.resolution(320);
+                view.coupling(true);view.setTime(0);
+                view.testCamera(new float[]{5,4,7},new float[]{0,1,0});
+                project=CosmicProject.fromSnapshots("Ether · local and global state",prepared.snapshot(),view.snapshot());
+            }
+            install(project);NativeCore owner=activity.core;
+            String pristine=owner.snapshot().infiniteSnapshot;
+            long revision=owner.version(),epoch=owner.epoch();
+            QuantumRenderer.Capture before=frame(false);frame(true);frame(false);
+            expect(owner.isInfinite() && owner.etherStats().rules==2
+                    && owner.infiniteStats().activeQubits==0 && owner.epoch()==epoch
+                    && pristine.equals(owner.snapshot().infiniteSnapshot),
+                    "Ether rendering mutated its frame, background or RNG");
+
+            gl(()->activity.renderer.gate(NativeCore.Z,"0","1"));
+            expect(activity.core==owner && owner.version()==revision+1 && owner.epoch()==epoch+1
+                    && owner.query(program)[0]==-1 && owner.etherQuery(program)[0]==-1
+                    && owner.etherStats().rules==2,
+                    "The local gate and Ether renderer do not share one authoritative state");
+            QuantumRenderer.Capture after=frame(false);int changed=before.changed(after);
+            expect(changed>20,"A local defect under the Ether frame did not change the coupled GLES image");
+            expect(Arrays.equals(program,visualSnapshot().observables),"A local gate replaced the Ether observer program");
+            QuantumRenderer.FrameStats stamp=activity.renderer.frameStats();
+            expect(stamp.infinite && stamp.coreRevision==owner.version() && stamp.coreEpoch==owner.epoch(),
+                    "The Ether frame metadata does not describe its atomic observation");
+            save("ether-coupled-before.png",before);save("ether-coupled-after.png",after);
+
+            // Cancelling the last global CZ layer acts on this same local defect.
+            gl(owner::etherCzNeighbors);
+            expect(owner.etherStats().rules==1 && owner.query(program)[0]==0,
+                    "A global Ether rule ignored the current finite correction");
+            QuantumRenderer.Capture global=frame(false);int globalChanged=after.changed(global);
+            expect(globalChanged>20,"A global rule did not invalidate the Ether coefficient texture");
+            save("ether-global-after.png",global);
+            gl(owner::etherCzNeighbors);
+            expect(owner.etherStats().rules==2 && owner.query(program)[0]==-1 && after.changed(frame(false))==0,
+                    "Repeating global CZ did not restore the exact Ether image");
+            gl(()->activity.renderer.gate(NativeCore.Z,"0","1"));
+            expect(before.changed(frame(false))==0,"Two local Z gates did not restore the exact Ether image");
+
+            gl(()->activity.renderer.coupling(false));QuantumRenderer.Capture off=frame(false);
+            gl(()->activity.renderer.gate(NativeCore.Z,"0","1"));
+            QuantumRenderer.Capture offChanged=frame(false);
+            expect(owner.query(program)[0]==-1 && off.changed(offChanged)==0,
+                    "Disabling visual coupling suppressed a native gate or changed Ether pixels");
+            save("ether-uncoupled-before.png",off);save("ether-uncoupled-after.png",offChanged);
+            gl(()->activity.renderer.coupling(true));
+
+            LiveProject saved=liveProject();QuantumRenderer.Capture savedPixels=frame(false);
+            install(CosmicProject.decode(CosmicProject.encode(saved.document)));
+            expect(activity.core!=owner && activity.core.etherStats().rules==2
+                    && saved.document.core.infiniteSnapshot.equals(activity.core.snapshot().infiniteSnapshot)
+                    && savedPixels.changed(frame(false))==0,
+                    "Portable Ether import lost the global frame, local defect or exact pixels");
+            metrics.put("etherRenderer",new JSONObject().put("sharedOwner",true).put("readOnlyDraw",true)
+                    .put("observable",program[0]).put("coupledChangedPixels",changed)
+                    .put("globalChangedPixels",globalChanged).put("globalRoundtripChangedPixels",0)
+                    .put("uncoupledChangedPixels",0).put("roundtripChangedPixels",0)
+                    .put("atomicFrameMetadata",true));
+        } finally {install(previous);frame(false);}
     }
 
     private void nativeInfinite() throws Exception {
@@ -1319,7 +1450,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
                 NativeCore.Snapshot core = activity.core.snapshot();
                 QuantumRenderer.Snapshot visual = activity.renderer.snapshot();
                 CosmicProject.Document document = CosmicProject.fromSnapshots(portableName, core, visual);
-                value.set(new LiveProject(document, activity.core.generators(),
+                value.set(new LiveProject(document, activity.core.isInfinite()?new String[0]:activity.core.generators(),
                         activity.core.query(visual.observables), activity.core.stateBytes()));
             } catch (Throwable caught) { error.set(caught); }
         });
@@ -1637,7 +1768,9 @@ public final class GraphicsInstrumentation extends Instrumentation {
     }
 
     private static void sameCore(NativeCore.Snapshot expected, NativeCore.Snapshot actual, String reason) {
-        expect(expected.qubits == actual.qubits && expected.version == actual.version
+        expect(expected.infinite==actual.infinite
+                && (!expected.infinite || expected.infiniteSnapshot.equals(actual.infiniteSnapshot))
+                && expected.qubits == actual.qubits && expected.version == actual.version
                 && Arrays.equals(expected.gateHistory, actual.gateHistory), reason);
     }
 

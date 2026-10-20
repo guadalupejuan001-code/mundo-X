@@ -1,0 +1,66 @@
+name: COSMIC X quantum algorithm experiments
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/quantum-algorithms.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/quantum-algorithms.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cosmic-quantum-algorithms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  algorithms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure native tests
+        run: cmake -S . -B quantum-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build algorithm experiment
+        run: cmake --build quantum-build --config Release --target test_quantum_algorithms -j 2
+
+      - name: Run algorithms
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./quantum-build/test_quantum_algorithms | tee quantum-algorithms.json
+          python3 - <<'PY'
+          import json, math
+          row=json.load(open("quantum-algorithms.json"))
+          assert row["ok"] is True
+          assert row["bv_input_qubits"] == 512
+          assert row["dj_input_qubits"] == 256
+          assert row["non_clifford"] == "H-T-H"
+          assert abs(row["non_clifford_expected_z"]-math.sqrt(.5)) < 1e-6
+          assert row["ether_address_digits"] == 1001
+          assert row["elapsed_ms"] > 0
+          print("Quantum algorithm evidence verified:", row)
+          PY
+
+      - name: Upload exact algorithm evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Quantum-Algorithms
+          path: quantum-algorithms.json
+          if-no-files-found: error
+          retention-days: 14

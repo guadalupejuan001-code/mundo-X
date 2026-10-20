@@ -8,6 +8,8 @@ public final class SolarDataChecks {
         catalogue();
         orbitGeometryAndMotion();
         satelliteMotion();
+        localGravity();
+        flightPhysics();
         dipolePhysics();
         boundaries();
         System.out.println("SolarDataChecks PASS: " + checks + " checks; 23 bodies; Kepler, moon and dipole invariants.");
@@ -70,6 +72,44 @@ public final class SolarDataChecks {
         check(dot(titaniaH,SolarData.spinAxis(7))>0,"Titania follows Uranus spin direction");
         double lunarDistance=norm(relative(9,jd))*SolarData.AU_KM;
         check(lunarDistance>363000 && lunarDistance<406000,"Moon geocentric distance range");
+    }
+
+    private static void localGravity() {
+        // Values are computed from JPL GM and the same mean radii used by the catalogue.
+        near(SolarData.gravityMs2(3,0),9.82025,.003,"Earth mean-radius gravity");
+        near(SolarData.escapeVelocityKmS(3,0),11.1862,.003,"Earth escape speed");
+        near(SolarData.gravityMs2(9,0),1.6249,.003,"Moon mean-radius gravity");
+        near(SolarData.escapeVelocityKmS(9,0),2.375,.005,"Moon escape speed");
+        for(int id=0;id<SolarData.BODIES.length;id++) {
+            double g0=SolarData.gravityMs2(id,0);
+            double gHigh=SolarData.gravityMs2(id,Math.max(1,SolarData.BODIES[id].radiusKm));
+            check(g0>0&&gHigh>0&&gHigh<g0,"gravity decreases with radius");
+            near(SolarData.escapeVelocityKmS(id,0)/SolarData.circularVelocityKmS(id,0),
+                    Math.sqrt(2),1e-13,"escape/circular velocity ratio");
+        }
+        throwsArgument(() -> SolarData.gravityMs2(3,-SolarData.BODIES[3].radiusKm),
+                "reject gravity at singular radius");
+    }
+
+    private static void flightPhysics() {
+        SolarEnvironment earth=SolarEnvironment.environment(3);
+        SolarFlightPhysics.State falling=new SolarFlightPhysics.State(100,0);
+        double before=SolarFlightPhysics.specificEnergy(3,falling);
+        for(int i=0;i<1000;i++)SolarFlightPhysics.step(3,earth,falling,0,.01);
+        check(falling.altitudeKm<100&&falling.radialVelocityKmS<0,
+                "free fall must lose altitude and gain downward speed");
+        double after=SolarFlightPhysics.specificEnergy(3,falling);
+        near(after,before,2e-5,"velocity-Verlet approximately conserves vacuum energy");
+
+        SolarFlightPhysics.State hover=new SolarFlightPhysics.State(10,0);
+        double g=SolarData.gravityMs2(3,10);
+        for(int i=0;i<1000;i++)SolarFlightPhysics.step(3,earth,hover,g,.01);
+        near(hover.altitudeKm,10,.002,"local gravity cancellation hover");
+
+        SolarFlightPhysics.State impact=new SolarFlightPhysics.State(1,-1);
+        for(int i=0;i<100;i++)SolarFlightPhysics.step(3,earth,impact,0,.01);
+        near(impact.altitudeKm,earth.minAltitudeKm,1e-12,"solid reference floor");
+        near(impact.radialVelocityKmS,0,0,"impact stops inward radial velocity");
     }
 
     private static void dipolePhysics() {

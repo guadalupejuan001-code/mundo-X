@@ -1,4 +1,4 @@
-name: InfiniteCore rules and finite components
+name: Ether shared state and finite components
 
 on:
   push:
@@ -7,8 +7,12 @@ on:
       - 'native/include/mundo_x/**'
       - 'native/src/infinite_*.cpp'
       - 'native/tests/infinite_*.cpp'
+      - 'native/tests/ether_*.cpp'
       - 'examples/infinite_*.xi'
+      - 'examples/ether_*.xi'
       - 'tools/validate_infinite_cli.py'
+      - 'tools/validate_ether_jni.py'
+      - 'tests/java/**'
       - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/native/PROVENANCE.json'
       - 'android-experiments/PROVENANCE.json'
@@ -20,8 +24,12 @@ on:
       - 'native/include/mundo_x/**'
       - 'native/src/infinite_*.cpp'
       - 'native/tests/infinite_*.cpp'
+      - 'native/tests/ether_*.cpp'
       - 'examples/infinite_*.xi'
+      - 'examples/ether_*.xi'
       - 'tools/validate_infinite_cli.py'
+      - 'tools/validate_ether_jni.py'
+      - 'tests/java/**'
       - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/native/PROVENANCE.json'
       - 'android-experiments/PROVENANCE.json'
@@ -68,15 +76,19 @@ jobs:
           cmake --build infinite-build --config Release --parallel 2 --target \
             mundo_x_infinite test_infinite_address test_infinite_core \
             test_infinite_tensor test_infinite_session test_infinite_bridge infinite_scale \
+            test_ether_core test_ether_frame test_ether_fusion \
             test_compact_measurement mundo_x_native_tests \
             test_core_1000 test_engine_session \
             2>&1 | tee infinite-evidence/build.log
       - name: Check exact operations, CLI and original CompactCore compatibility
         run: |
           ctest --test-dir infinite-build -C Release --output-on-failure \
-            -R '^(infinite_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
+            -R '^(infinite_|ether_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
             --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \
             | tee infinite-evidence/ctest.log
+      - name: Check the production Java and JNI shared session
+        if: runner.os == 'Linux'
+        run: python tools/validate_ether_jni.py --build-dir infinite-evidence/jni
       - name: Record measured scope and make the CLI available
         timeout-minutes: 2
         run: |

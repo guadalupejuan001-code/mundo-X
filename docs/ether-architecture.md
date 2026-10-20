@@ -6,7 +6,7 @@ Ether será la fuente común de estado y cálculo para los componentes de Mundo 
 Este documento recoge la dirección acordada con X, creador y titular del
 proyecto, y define cómo comprobar que una integración la cumple. Las
 obligaciones siguientes describen la arquitectura objetivo; el alcance del
-código v0.1 existente se identifica en [Estado de implementación](#5-estado-de-implementación).
+código integrado se identifica en [Estado de implementación](#5-estado-de-implementación).
 
 ## 1. Estado común, operaciones y observaciones
 
@@ -116,39 +116,36 @@ automáticamente una mejora de extremo a extremo.
 
 ## 5. Estado de implementación
 
-Referencia de implementación:
-[`e49125d`](https://github.com/guadalupejuan001-code/mundo-X/commit/e49125dcd1b6c784d005bfd41c8fe2b8e318281a),
-rama `codex/ether-core-v0-1-20261019`,
-[PR #23](https://github.com/guadalupejuan001-code/mundo-X/pull/23).
-El PR está en desarrollo en la fecha de este documento; esta publicación del
-contrato en `main` no integra automáticamente su código.
+La [fusión de estado implementada](ether-fusion.md) sustituye la conexión
+auxiliar de v0.1. EtherCore define un marco Clifford global `U`, e InfiniteCore
+conserva el estado base y sus modificaciones finitas `φ`; juntos representan
+**un estado físico `Ψ = Uφ`** dentro de `InfiniteSession`.
 
-- **Representación nativa.** EtherCore v0.1 conserva una secuencia de reglas
-  sobre la base `|0>^∞`. Implementa `HAll` y `CZNeighbors`, cancela capas
-  iguales adyacentes y responde expectativas Pauli de soporte finito mediante
-  propagación inversa. El trabajo depende de la profundidad restante, el soporte
-  temporal y la longitud de las direcciones.
-  [Código de EtherCore](https://github.com/guadalupejuan001-code/mundo-X/blob/e49125dcd1b6c784d005bfd41c8fe2b8e318281a/native/include/mundo_x/ether_core.hpp).
-- **Puente Android.** `NativeCore` posee un EtherCore auxiliar y expone
-  preparación, consultas y estadísticas. Las rutas ordinarias de CompactCore
-  e InfiniteCore siguen presentes; la propiedad del auxiliar no acredita una
-  migración completa del estado.
-  [Propiedad y acceso desde NativeCore](https://github.com/guadalupejuan001-code/mundo-X/blob/e49125dcd1b6c784d005bfd41c8fe2b8e318281a/graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java).
-- **Solar.** `QuantumSolarBridge` prepara y consulta el cluster de Ether y
-  expone sus coeficientes. Conserva también su circuito Compact de ocho
-  qubits. Este acoplamiento parcial debe distinguirse de una migración de sus
-  modelos orbitales o físicos.
-  [Puente Solar](https://github.com/guadalupejuan001-code/mundo-X/blob/e49125dcd1b6c784d005bfd41c8fe2b8e318281a/solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java).
+- Las puertas locales y las mediciones actúan sobre ese mismo estado mediante
+  conjugación exacta; las consultas son de solo lectura.
+- `NativeCore` ya no crea un EtherCore auxiliar. PC y su visor comparten la
+  instancia de sesión existente. Abrir el visor no prepara ni reinicia Ether.
+- Solar prepara ocho direcciones dentro de esa sesión y consulta sus trece
+  señales en una sola observación con revisión y época comunes.
+- Los snapshots `MXI2` conservan reglas, componentes finitos, fondo y RNG. Los
+  snapshots `MXI1` anteriores siguen siendo importables.
+- Graphics y COSMIC crean los nuevos mundos Android con Ether. Los proyectos
+  finitos conservan su ruta explícita y su formato; otros backends siguen
+  identificados por sus contratos.
 
-La documentación de v0.1 delimita sus
-[pruebas y capacidades v0.1](https://github.com/guadalupejuan001-code/mundo-X/blob/e49125dcd1b6c784d005bfd41c8fe2b8e318281a/docs/ether-core-v0-1.md).
-Los defectos locales persistentes, las mediciones que actualizan el estado,
-las reglas generales y los estados arbitrarios permanecen fuera de ese alcance.
+Esto implementa la autoridad cuántica común para los consumidores conectados.
+La física orbital de Solar, la escena y los recursos de GLES, y la CPU/RAM x86
+no se han convertido en una representación común de Ether. Su futura migración
+requiere definir las correspondencias y demostrar la equivalencia descrita en
+este contrato.
 
-Los resultados de [InfiniteCore](infinite_core.md) y de su
-[sesión compartida con PC y gráficos](infinite_integration.md) pertenecen a esa
-implementación. Los resultados de CompactCore, Reduced Exact T y otros motores
-también mantienen su propia atribución.
+La familia implementada sigue siendo Clifford. Las reglas generales, estados
+arbitrarios y una reducción garantizada del coste para cualquier tarea no están
+implementados. La profundidad del marco, su cono temporal, los componentes
+finitos y los buffers de cada aplicación tienen costes y presupuestos finitos.
+
+La [documentación v0.1](ether-core-v0-1.md) se conserva como referencia histórica;
+sus carencias describen aquella revisión, anterior a la fusión actual.
 
 ## 6. Orden de implementación y aceptación
 

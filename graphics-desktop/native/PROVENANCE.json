@@ -96,5 +96,11 @@
     "scope": "Validated packed state import preserves the exact post-measurement stabilizer state. The shared session and C/JNI bridge preserve the portable RNG and atomic observations across the emulator and renderer.",
     "canonical_header": "native/include/mundo_x/compact_core.hpp",
     "source_manifest": "tools/cosmic_source_provenance.py"
+  },
+  "ether_state_fusion": {
+    "source_commit": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "scope": "Ether global rules and finite CompactCore components describe one physical state. The shared session preserves signed local/global operations, measurements, MXI1/MXI2 snapshots and RNG. Each modified native/JNI source is pinned separately; unchanged canonical headers retain their hashes.",
+    "source_manifest": "tools/cosmic_source_provenance.py",
+    "validation_report": "results/ether_fusion_2026-10-20.json"
   }
 }

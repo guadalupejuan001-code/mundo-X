@@ -98,21 +98,24 @@ def main():
 
     core_provenance = verify_integrated_core(ROOT)
     science = (directory / "solar-science.log").read_text()
-    require("SolarDataChecks PASS: 511 checks;" in science, "The original 511 scientific checks did not pass")
+    match = re.search(r"SolarDataChecks PASS: ([0-9]+) checks;", science)
+    require(match is not None, "Solar scientific checks did not finish")
+    scientific_checks = int(match.group(1))
+    require(scientific_checks >= 511, "Solar scientific coverage regressed below the established baseline")
     commit = git("rev-parse", "HEAD").decode().strip()
     report = {"schemaVersion": 1, "passed": True, "commit": commit, "buildCommit": commit,
               "applicationId": "com.cosmicx.solar.uhd", "version": "1.1.0", "versionCode": 2,
               "minSdk": 26, "targetSdk": 35, "apks": checksums,
               "nativeLibraries": libraries, "signerCertificateSha256": signatures,
               "companionIsDelivery": False,
-              "scientificChecks": 511,
+              "scientificChecks": scientific_checks,
               "signing": "Android development key; v2 signature verified"}
     report.update(core_provenance)
     (directory / "build-provenance.json").write_text(json.dumps(report, indent=2) + "\n")
     (directory / "build-commit.txt").write_text(commit + "\n")
     (directory / "SHA256SUMS.txt").write_text("".join(value["sha256"] + "  " + name + "\n"
                                                       for name, value in checksums.items()))
-    print(f"Verified signed UHD APK, two 64-bit ABIs and {len(core_provenance['coreSourceHashes'])} integrated core source files.")
+    print(f"Verified signed Solar 4K APK, two 64-bit ABIs and {len(core_provenance['coreSourceHashes'])} integrated core source files.")
     print(f"Build commit: {commit}; Android 26–35; separate identity com.cosmicx.solar.uhd.")
 
 

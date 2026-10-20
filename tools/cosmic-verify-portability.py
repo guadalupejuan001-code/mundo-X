@@ -28,7 +28,8 @@ EXPECTED_EXPORTS = {
     "portable-mutated-android.cosmic": ("bell-observer.cosmic", False, 2),
 }
 LEGACY_DEVICE_TESTS = {
-    "default_1000_qubit_world", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
+    "default_ether_world_and_finite_compatibility", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
+    "native_ether_contracts",
     "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
     "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
     "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration",

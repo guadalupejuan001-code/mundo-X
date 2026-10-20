@@ -18,8 +18,12 @@ def require(condition, message):
 
 def main():
     directory = Path(sys.argv[1] if len(sys.argv) > 1 else "solar-evidence")
-    uhd = len(sys.argv) > 2 and sys.argv[2] == "--uhd4k"
-    require(len(sys.argv) <= 3 and (len(sys.argv) < 3 or uhd), "Unexpected solar verification profile")
+    profile = sys.argv[2] if len(sys.argv) > 2 else ""
+    uhd = profile == "--uhd4k"
+    ultra = profile == "--ultra8k"
+    fixed = uhd or ultra
+    require(len(sys.argv) <= 3 and profile in ("", "--uhd4k", "--ultra8k"),
+            "Unexpected solar verification profile")
     output = (directory / "instrumentation.txt").read_text()
     require("COSMIC_SOLAR_TESTS_PASSED" in output, "Solar instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Solar instrumentation did not finish successfully")
@@ -31,7 +35,7 @@ def main():
     names = [test["name"] for test in tests]
     expected_tests = {
         "native_gles_launch_and_textures", "astronomy_and_magnetic_classification",
-        "native_bell_and_readonly_observation", "quantum_coupled_and_uncoupled_frames",
+        "native_ether_fusion_and_readonly_observation", "quantum_coupled_and_uncoupled_frames",
         "intrinsic_and_induced_field_frames", "solar_wind_layer", "saturn_rings_and_moon_navigation",
         "forward_reverse_and_paused_time", "real_scale_earth_focus",
         "camera_rotation_zoom_pan_and_flight", "resolution_budget",
@@ -41,6 +45,9 @@ def main():
         expected_tests.update({"uhd_framebuffer_return_preserves_scene", "uhd_fit_picking_preserves_scene",
                                "entry_all_planets_and_moons", "entry_atmosphere_and_grazing_frames",
                                "entry_uhd_lifecycle_and_orientation", "map_ui_planet_and_moon_selection"})
+    elif ultra:
+        expected_tests.update({"ultra8k_framebuffer_return_preserves_scene",
+                               "ultra8k_earth_entry_atmosphere"})
     require(len(tests) == len(expected_tests) and set(names) == expected_tests,
             "Incomplete or unexpected solar test inventory")
     require(report["testsRun"] == len(tests) and report["testsFailed"] == 0,
@@ -50,18 +57,26 @@ def main():
     require(int(junit.attrib["tests"]) == len(expected_tests) and int(junit.attrib["failures"]) == 0,
             "The JUnit report disagrees with device JSON")
     metrics = report["metrics"]
-    require(metrics.get("uhd4kSuite", False) is uhd, "The Android run used the wrong legacy/UHD profile")
+    require(metrics.get("uhd4kSuite", False) is uhd
+            and metrics.get("ultra8kSuite", False) is ultra,
+            "The Android run used the wrong legacy/4K/8K profile")
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"],
             "The device does not match the Android 15 x86_64 validation target")
     require("swiftshader" in metrics["glRenderer"].lower(), "Unexpected GLES validation driver")
-    require(metrics["nativeQubits"] == 8 and metrics["nativeStateBytes"] > 0,
-            "The actual COSMIC native core was not observed on Android")
+    require(metrics["nativeDomain"] == "q0,q1,..." and metrics["nativePreparationSites"] == 8
+            and 0 <= metrics["nativeActiveSites"] <= 8 and metrics["nativeStateBytes"] >= 0,
+            "The Ether domain and finite Solar preparation were not distinguished")
     require(metrics["framesRendered"] > 0, "No actual GLES frames were rendered")
     require(metrics["initialWindowFocused"] is True, "The launched Activity did not receive input focus")
     require(metrics["bodyCount"] == 23 and metrics["planetCount"] == 8 and metrics["moonCount"] == 14,
             "Astronomical body inventory is incomplete")
     require(.98 < metrics["earthJ2000DistanceAU"] < 1.02 and 350_000 < metrics["earthMoonDistanceKm"] < 410_000,
             "Packaged astronomical geometry failed its independent scale checks")
+    require(9.81 < metrics["earthGravityMs2"] < 9.83
+            and 11.18 < metrics["earthEscapeKmS"] < 11.20
+            and metrics["oneSecondFallAltitudeKm"] < 100
+            and metrics["oneSecondFallVelocityKmS"] < 0,
+            "Packaged JPL-GM gravity or local free-fall integration failed")
     require(metrics["fieldTypes"] == {"earth": 1, "venus": 2, "mars": 3, "moon": 0, "ganymede": 1},
             "Intrinsic, induced and crustal magnetic environments were not distinguished")
     textures = metrics["packagedNasaTextures"]
@@ -69,13 +84,32 @@ def main():
             == {"textures/earth.png", "textures/moon.jpg", "textures/jupiter.jpg"}
             and all(entry["width"] >= 512 and entry["height"] >= 256 for entry in textures)
             and metrics["uploadedNasaTextures"] == 3, "Packaged NASA maps were not decoded and uploaded to GLES")
-    bell = metrics["bellExpectations"]
+    bell = metrics["framedBellExpectations"]
     require(len(bell) == 8 and all(abs(actual - expected) < 1e-6
-            for actual, expected in zip(bell, (0, 0, 0, 1, -1, 1, 1, 1)))
-            and metrics["observationPreservedNativeRevision"] is True,
-            "The original native core did not preserve Bell/read-only contracts")
+            for actual, expected in zip(bell, (0, 0, 0, 0, 0, 1, 0, 1)))
+            and metrics["observationPreservedNativeRevision"] is True
+            and metrics["observationPreservedNativeEpoch"] is True,
+            "The Bell preparation followed by Ether rules has incorrect or mutating observations")
+    ether = metrics["etherExpectations"]
+    require(ether == [0, 0, 0, 0, 0] and metrics["etherRules"] == 2
+            and metrics["etherObservationReadOnly"] is True,
+            "The Ether view does not match Solar's shared prepared state")
+    expected_preparations = (
+        ([0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 0, 0, 0]),
+        ([0, 0, 1, 0, 0, 1, 0, 1], [0, 0, 0, 1, 1]),
+        ([0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 0]),
+        ([0, -1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0]),
+    )
+    preparations = metrics["etherFusionPresets"]
+    require(len(preparations) == 4 and metrics["etherFusionSingleObservation"] is True
+            and all(entry["preset"] == preset and entry["local"] == expected[0]
+                    and entry["ether"] == expected[1] and entry["rules"] == 2
+                    and entry["activeSites"] == (0 if preset == 0 else 8)
+                    for preset, (entry, expected) in enumerate(zip(preparations, expected_preparations))),
+            "Solar local and Ether coefficients lack shared-state preparation evidence")
     require(metrics["deterministicPausedChangedPixels"] == 0 and metrics["coupledChangedPixels"] > 20
-            and metrics["uncoupledChangedPixels"] == 0 and metrics["quantumPreparationOrbitalDeltaAU"] == 0,
+            and metrics["uncoupledChangedPixels"] == 0 and metrics["coupledComparisonPresets"] == [0, 3]
+            and metrics["quantumPreparationOrbitalDeltaAU"] == 0,
             "Quantum visual coupling changed the wrong state or lacked causal pixel evidence")
     field_deltas = metrics["fieldToggleChangedPixels"]
     require(set(field_deltas) == {"earth", "venus", "mars"} and all(value > 20 for value in field_deltas.values())
@@ -102,6 +136,8 @@ def main():
     expected_apks = {"COSMIC-X-Solar.apk", "COSMIC-X-Solar-tests.apk"}
     if uhd:
         expected_apks = {"COSMIC-X-Solar-4K.apk", "COSMIC-X-Solar-4K-tests.apk", "COSMIC-X-Solar-coexist.apk"}
+    elif ultra:
+        expected_apks = {"COSMIC-X-Solar-8K.apk", "COSMIC-X-Solar-8K-tests.apk", "COSMIC-X-Solar-coexist.apk"}
     checksums = {}
     for row in (directory / "apk-SHA256SUMS.txt").read_text().splitlines():
         parts = row.split()
@@ -119,7 +155,7 @@ def main():
 
     images = report["images"]
     expected_images = {
-        "earth-surface.png", "earth-fields-base.png", "earth-fields-entangled.png",
+        "earth-surface.png", "earth-fields-base.png", "earth-fields-phase.png",
         "venus-magnetic-environment.png", "mars-magnetic-environment.png", "sun-solar-wind.png",
         "saturn-rings.png", "moon-surface.png", "solar-system-overview.png", "earth-real-scale.png",
         "activity-portrait.png", "activity-landscape.png",
@@ -137,6 +173,9 @@ def main():
         expected_images.update(f"entry-{body}-{kind}.png" for body in ("earth", "venus", "jupiter", "titan", "moon")
                                for kind in ("atmosphere", "grazing"))
         expected_images.update({"entry-earth-vacuum.png", "entry-moon-vacuum.png"})
+    elif ultra:
+        expected_images.update({"uhd-adaptive-before.png", "uhd-adaptive-after.png",
+                                "ultra8k-earth-orbit.png", "ultra8k-earth-entry.png"})
     require(expected_images.issubset(set(images)) and len(set(images)) == len(images),
             "Missing or duplicate required solar framebuffers")
     image_manifest = {}
@@ -204,17 +243,50 @@ def main():
             require(samples[before]["rgbaSha256"] == samples[after]["rgbaSha256"],
                     "Raw RGBA checksums disagree with exact transition assertions")
         expected_provenance = verify_integrated_core(Path(__file__).resolve().parents[1])
-        require(provenance["passed"] is True and provenance["scientificChecks"] == 511
+        require(provenance["passed"] is True and provenance["scientificChecks"] >= 511
                 and all(provenance.get(name) == value for name, value in expected_provenance.items()),
                 "Solar UHD evidence does not match the verified integrated core, resolution and science sources")
         coexist = set((directory / "coinstallation.txt").read_text().splitlines())
         require({"package:com.cosmicx.solar", "package:com.cosmicx.solar.uhd"} <= coexist,
                 "The original and UHD solar packages did not coexist")
         print("Verified real UHD, FIT picking, 22 local environments, atmosphere controls and live map touches.")
+    elif ultra:
+        require(metrics["applicationId"] == "com.cosmicx.solar.ultra"
+                and metrics["uhdPixels"] == 33_177_600,
+                "The standalone Solar 8K package or pixel count is wrong")
+        require(metrics["uhdReturnChangedPixels"] == 0
+                and metrics["uhdNativeOwnerPreserved"] is True,
+                "Solar 8K transition changed astronomical or native state")
+        samples = report["captureSamples"]
+        for name in ("ultra8k-earth-orbit.png", "ultra8k-earth-entry.png"):
+            item = image_manifest[name]
+            require((item["width"], item["height"]) == (4320, 7680),
+                    "Not a true portrait 8K PNG: " + name)
+            proof = samples[name]
+            require(proof["decodedPngSamplesVerified"] is True and len(proof["points"]) == 25
+                    and (proof["width"], proof["height"]) == (4320, 7680)
+                    and re.fullmatch(r"[0-9a-f]{64}", proof["rgbaSha256"]),
+                    "Solar 8K PNG lacks exact channel/orientation proof: " + name)
+        entry = metrics["ultra8kEntry"]
+        require((entry["width"], entry["height"]) == (4320, 7680)
+                and 0 <= entry["altitudeKm"] <= 1000 and entry["brightPixels"] > 80,
+                "Solar 8K atmospheric entry evidence is incomplete")
+        require(provenance["applicationId"] == "com.cosmicx.solar.ultra"
+                and provenance["version"] == "1.2.0" and provenance["versionCode"] == 3
+                and provenance["scientificChecks"] >= 511,
+                "Solar 8K APK provenance is incomplete")
+        expected_provenance = verify_integrated_core(Path(__file__).resolve().parents[1])
+        require(all(provenance.get(name) == value for name, value in expected_provenance.items()),
+                "Solar 8K evidence does not match the verified integrated core")
+        coexist = set((directory / "coinstallation.txt").read_text().splitlines())
+        require({"package:com.cosmicx.solar", "package:com.cosmicx.solar.ultra"} <= coexist,
+                "The original and Solar 8K packages did not coexist")
+        print("Verified real 7680x4320-class Solar target, atmospheric entry and exact PNG evidence.")
     (directory / "verified-images.json").write_text(json.dumps(image_manifest, indent=2) + "\n")
     print(f"Verified {len(tests)} solar Android tests and {len(images)} actual PNG captures.")
     print("Driver: " + metrics["glRenderer"])
-    print(f"Native state: {metrics['nativeQubits']} qubits; {metrics['nativeStateBytes']} bytes.")
+    print(f"Ether domain: {metrics['nativeDomain']}; {metrics['nativePreparationSites']} preparation sites; "
+          f"{metrics['nativeActiveSites']} active sites; {metrics['nativeStateBytes']} tableau payload bytes.")
     print("These are Android software-emulator correctness results, not Samsung A16 performance measurements.")
 
 

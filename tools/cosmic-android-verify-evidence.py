@@ -24,7 +24,8 @@ COSMIC_CASES = {
     "activity_recreation_restores_project", *("experiment_" + name + "_launch" for name in EXPERIMENTS),
 }
 GRAPHICS_CASES = {
-    "default_1000_qubit_world", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
+    "default_ether_world_and_finite_compatibility", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
+    "native_ether_contracts",
     "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
     "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
     "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration", "pause_resume_preserves_state",
@@ -80,12 +81,14 @@ def verify_cosmic(directory, output):
     infinite = infinite_device_evidence.verify_cosmic_metrics(m, require)
     require(m["applicationId"] == "com.mundox.cosmic" and m["version"] == "0.3.1"
             and m["activityCount"] == 16 and m["windowsActivityPresent"] is False, "Wrong new app inventory")
-    require(m["initialObjects"] == 16_384 and m["initialQubits"] == 1000 and m["initialObservables"] == 3000
+    require(m["initialObjects"] == 16_384 and m["initialQubits"] == 0 and m["initialObservables"] == 5
+            and m["initialDomain"] == "ether" and m["initialEtherRules"] == 2 and m["initialActiveSites"] == 0
             and m["initialVisiblePixels"] > 100 and m["initialDistinctIds"] > 0
             and m["initialResolutionLimit"] == 960, "New home did not display the real default world")
     require(m["panelCount"] == 4 and m["panelsPreservedOwner"] is True
             and m["cameraPreservedOwner"] is True and m["observationWasReadOnly"] is True, "Navigation/camera altered the native core")
-    require(m["coupledChangedPixels"] > 20 and m["uncoupledChangedPixels"] == 0 and m["gatePreservedOwner"] is True,
+    require(m["coupledChangedPixels"] > 20 and m["uncoupledChangedPixels"] == 0 and m["gatePreservedOwner"] is True
+            and m["coupledDomain"] == "ether" and m["coupledObservable"] == "X:0 Z:1",
             "The new viewport failed its native quantum/control image comparison")
     require(m["safExportBytes"] > 0 and m["safExportQubits"] == 2 and m["safUsedProductionCallbacks"] is True
             and m["safRoundtripChangedPixels"] == 0 and m["invalidImportChangedPixels"] == 0
@@ -175,9 +178,26 @@ def verify_cosmic(directory, output):
 def verify_graphics(directory, output):
     report, m = device_report(directory, GRAPHICS_CASES, "MUNDOX_GRAPHICS_TESTS_PASSED", output)
     infinite = infinite_device_evidence.verify_graphics_metrics(m, require)
-    require(m["qubits"] == 1000 and m["defaultQubits"] == 1000 and m["defaultObservables"] == 3000
+    require(m["qubits"] == 1000 and m["defaultQubits"] == 0 and m["defaultObservables"] == 5
+            and m["defaultDomain"] == "ether" and m["defaultEtherRules"] == 2
+            and m["defaultActiveSites"] == 0 and m["defaultObservationReadOnly"] is True
             and m["millionObjectCount"] == 1_000_000 and m["maximumObjectCount"] == 1_048_576,
             "1000-qubit graphics limits were not exercised in the new APK")
+    ether = m["etherNative"]
+    require(ether["domain"] == "q0,q1,q2,..." and ether["addressDigits"] == 1001
+            and ether["rules"] == 2 and 0 < ether["lastQueryPeakSites"] < 16
+            and ether["individualQubitCountStored"] is False,
+            "The shared Ether JNI path did not retain its rule-defined domain and local query cone")
+    require(all(m["etherFused"][name] is True for name in (
+                "sharedLocalAndGlobalState", "boundaryQ0", "snapshotRoundtrip", "observationReadOnly")),
+            "Local gates, Ether rules and snapshots do not share one native state")
+    ether_renderer = m["etherRenderer"]
+    require(ether_renderer["observable"] == "X:0 Z:1"
+            and ether_renderer["coupledChangedPixels"] > 20 and ether_renderer["globalChangedPixels"] > 20
+            and ether_renderer["uncoupledChangedPixels"] == 0
+            and ether_renderer["globalRoundtripChangedPixels"] == 0 and ether_renderer["roundtripChangedPixels"] == 0
+            and all(ether_renderer[name] is True for name in ("sharedOwner", "readOnlyDraw", "atomicFrameMetadata")),
+            "Ether local/global causal pixels, control or portable state restoration failed")
     native = m["native1000"]
     require(native["qubits"] == 1000 and native["highQubits"] == [32, 53, 59, 64, 511, 999]
             and native["ghzExpectations"] == [1, 1, 1, 1, 1, 0, 0, 0] and native["snapshotRoundtrip"] is True
@@ -214,6 +234,8 @@ def verify_graphics(directory, output):
             and m["portableRecreateRestoredCoupling"] == -.125 and m["portableFinalQubits"] == 3
             and m["portableFinalStateBytes"] > 0, "Original lifecycle lost a portable project")
     required = {
+        "ether-coupled-before.png", "ether-coupled-after.png", "ether-global-after.png",
+        "ether-uncoupled-before.png", "ether-uncoupled-after.png",
         "million-color.png", "million-ids.png", "maximum-color.png", "maximum-ids.png",
         "coupling-on-before.png", "coupling-on-after.png", "coupling-off-before.png", "coupling-off-after.png",
         "selection-before.png", "selection-highlight.png", "selection-taller.png", "selection-removed.png", "edit-restored.png",
@@ -230,7 +252,12 @@ def verify_graphics(directory, output):
         require(item["stateFile"] == item["file"] + ".state.json", "Unexpected native proof filename")
         for name in (item["file"], item["stateFile"]):
             require(0 < (directory / name).stat().st_size <= 16 * 1024 * 1024, "Missing or oversized portable evidence")
-    return {"tests": len(GRAPHICS_CASES), "images": image_manifest(directory, required),
+    manifest = image_manifest(directory, required)
+    require(manifest["ether-coupled-before.png"]["sha256"] != manifest["ether-coupled-after.png"]["sha256"]
+            and manifest["ether-coupled-after.png"]["sha256"] != manifest["ether-global-after.png"]["sha256"]
+            and manifest["ether-uncoupled-before.png"]["sha256"] == manifest["ether-uncoupled-after.png"]["sha256"],
+            "Independent Ether PNG comparisons disagree with the causal pixel metrics")
+    return {"tests": len(GRAPHICS_CASES), "images": manifest,
             "portableCodecChecks": codec["checks"], "infinite": infinite}
 
 

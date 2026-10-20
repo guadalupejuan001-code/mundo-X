@@ -79,6 +79,9 @@ class Cpu {
   bool halted = false;
   std::optional<Fault> fault;
   std::uint64_t instructions = 0;
+  // Diagnostic counter: one increment per actual IA-32e page-table walk.
+  // Used to prove that multi-byte accesses do not repeat the same walk.
+  std::uint64_t page_walks = 0;
 
   // true: the host BIOS handled INT, with EIP already past the instruction.
   // false: execute the guest IVT handler with a real interrupt stack frame.
@@ -102,7 +105,7 @@ class Cpu {
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
-    a20_enabled = false; halted = false; fault.reset(); instructions = 0;
+    a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
     transaction_ = false; journal_.clear(); decoded_.clear();
   }
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
@@ -323,20 +326,49 @@ class Cpu {
   }
   std::uint64_t translate(std::uint64_t address, Access access);
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
+    if (bytes == 0 || bytes > 8 || address > UINT64_MAX - (bytes - 1))
+      fail("invalid linear read width", FaultCode::InvalidInstruction);
     std::uint64_t result = 0;
-    for (unsigned i = 0; i < bytes; ++i) result |= std::uint64_t(read8(translate(address + i, access))) << (8 * i);
+    unsigned done = 0;
+    while (done < bytes) {
+      const auto linear = address + done;
+      // One page-table walk validates the whole contiguous remainder of this
+      // 4-KiB page. No persistent TLB is kept, so guest page-table writes
+      // cannot leave stale translations behind.
+      const auto physical = translate(linear, access);
+      const unsigned chunk = std::min<unsigned>(bytes - done, 0x1000U - unsigned(linear & 0xfffU));
+      for (unsigned i = 0; i < chunk; ++i)
+        result |= std::uint64_t(read8(physical + i)) << (8U * (done + i));
+      done += chunk;
+    }
     return result;
   }
   void write_linear(std::uint64_t address, unsigned bytes, std::uint64_t value) {
     std::array<std::uint64_t, 8> physical{};
-    if (bytes == 0 || bytes > physical.size()) fail("invalid write width", FaultCode::InvalidInstruction);
-    for (unsigned i = 0; i < bytes; ++i) { physical[i] = translate(address + i, Access::Write); (void)physical_index(physical[i]); }
+    if (bytes == 0 || bytes > physical.size() || address > UINT64_MAX - (bytes - 1))
+      fail("invalid write width", FaultCode::InvalidInstruction);
+    // Resolve one translation per touched page, then validate every physical
+    // byte before committing any guest write. This preserves the previous
+    // all-or-nothing preflight semantics across page boundaries.
+    unsigned done = 0;
+    while (done < bytes) {
+      const auto linear = address + done;
+      const auto first_physical = translate(linear, Access::Write);
+      const unsigned chunk = std::min<unsigned>(bytes - done, 0x1000U - unsigned(linear & 0xfffU));
+      for (unsigned i = 0; i < chunk; ++i) {
+        physical[done + i] = first_physical + i;
+        (void)physical_index(physical[done + i]);
+      }
+      done += chunk;
+    }
     bool contiguous = true;
     const auto first = physical_index(physical[0]);
-    for (unsigned i = 1; i < bytes; ++i) if (physical_index(physical[i]) != first + i) contiguous = false;
+    for (unsigned i = 1; i < bytes; ++i)
+      if (physical_index(physical[i]) != first + i) contiguous = false;
     if (contiguous) memory.prepare_write(first, bytes);
     else for (unsigned i = 0; i < bytes; ++i) memory.prepare_write(physical_index(physical[i]), 1);
-    for (unsigned i = 0; i < bytes; ++i) write8(physical[i], std::uint8_t(value >> (8 * i)));
+    for (unsigned i = 0; i < bytes; ++i)
+      write8(physical[i], std::uint8_t(value >> (8U * i)));
   }
   std::uint64_t read_segment(unsigned segment, std::uint64_t offset, unsigned bytes, Access access = Access::Read) {
     return read_linear(segment_linear(segment, offset, bytes, access), bytes, access);
@@ -715,6 +747,7 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
 
 inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
   if (!(cr0 & 0x80000000U)) return address;
+  ++page_walks;
   if (!(efer & 0x400) || !(cr4 & 0x20))
     fail("only four-level IA-32e paging is implemented", FaultCode::UnsupportedState);
   if (!canonical(address)) fail("non-canonical page-walk address", FaultCode::ProtectionFault);

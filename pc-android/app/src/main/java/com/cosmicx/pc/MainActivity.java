@@ -49,6 +49,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.mundox.graphics.NativeCore;
+import com.mundox.graphics.EtherCoreNative;
 import com.mundox.graphics.QuantumRenderer;
 
 import java.io.ByteArrayOutputStream;
@@ -465,7 +466,7 @@ public final class MainActivity extends Activity {
             final boolean enabled = quantumCoupled;
             renderAction(() -> quantumRenderer.coupling(enabled));
         });
-        panel.addView(text("El mundo usa observables de la misma sesión que el huésped. Arrastra para mover la cámara.", 11, MUTED));
+        panel.addView(text("Ether comparte el estado entre el huésped y el visor. Arrastra para mover la cámara.", 11, MUTED));
         LinearLayout addresses = row(panel);
         quantumFirst = quantumInput("Dirección A", "0", false);
         quantumSecond = quantumInput("Dirección B", "1000000000", false);
@@ -478,6 +479,7 @@ public final class MainActivity extends Activity {
             operate(() -> NativeMachine.quantumProbe(machine, first, second));
         });
         quantumProgram = quantumInput("Programa .xi", "h 0\ncx 0 1000000000\nexpect X:0 X:1000000000\nexpect Y:0 Y:1000000000\nstats", true);
+        panel.addView(text("Las reglas h_all y cz_neighbors actúan sobre el mismo núcleo que las puertas y las mediciones.", 11, MUTED));
         quantumProgram.setContentDescription("pc-quantum-program");
         panel.addView(quantumProgram, new LinearLayout.LayoutParams(-1, dp(140)));
         quantumRunButton = button("Aplicar programa", true);
@@ -1070,13 +1072,21 @@ public final class MainActivity extends Activity {
             if (i != 0) correlations.append(" · ");
             correlations.append(labels[i]).append('=').append(String.format(Locale.US, "%.0f", values.optDouble(i)));
         }
+        String etherLine="";
+        NativeCore owner=graphicsOwner.get();
+        if(owner!=null){
+            try{
+                EtherCoreNative.Stats ether=owner.etherStats();
+                etherLine="\nÉter ∞ · "+ether.rules+" reglas · cono local "+ether.lastQueryPeakSites;
+            }catch(RuntimeException ignored){ etherLine="\nÉter ∞ · no disponible"; }
+        }
         quantumStatsView.setText("Fondo " + quantum.optString("background")
                 + " · " + quantum.optLong("active_qubits") + "/" + quantum.optLong("max_active_qubits") + " activos"
                 + " · " + quantum.optLong("components") + " componentes\n"
                 + "Componente mayor: " + quantum.optLong("largest_component") + "/" + quantum.optLong("max_component_qubits")
                 + " · tableau " + memorySizeLabel(quantum.optLong("tableau_bytes"))
                 + " · revisión " + quantum.optLong("revision") + " / época " + quantum.optLong("epoch")
-                + "\n" + correlations);
+                + "\n" + correlations + etherLine);
         String error = quantum.optString("error");
         String output = quantum.optString("output").trim();
         if (quantum.optBoolean("output_truncated")) output += "\n[Vista de resultados limitada a 8192 bytes]";

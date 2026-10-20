@@ -2,6 +2,7 @@
 
 #include "mundo_x/infinite_address.hpp"
 #include "mundo_x/pauli_observer.hpp"
+#include "mundo_x/ether_core.hpp"
 
 #include <algorithm>
 #include <array>
@@ -27,8 +28,10 @@ namespace mundo_x {
 // join current states directly; no growing gate history, statevector, external
 // simulator, branch pruning, or numerical tolerance is used. "Exact" refers
 // to signed stabilizer algebra, which represents a pure state up to global
-// phase. This is not a backend for arbitrary non-Clifford or infinite-support
-// operations, and it does not claim infinite physical execution resources.
+// phase. A shared Ether frame defines |Psi> = U_Ether |phi>: components store
+// finite modifications of phi and physical operations are conjugated into
+// that frame. Only the supported global Clifford layers have infinite support;
+// this does not provide arbitrary non-Clifford states or infinite resources.
 class InfiniteCore {
  public:
   enum class Background { Zero, BellPairs };
@@ -42,6 +45,10 @@ class InfiniteCore {
     std::size_t max_state_bytes = std::size_t{64} * 1024 * 1024;
     std::size_t max_address_digits = 4096;
     std::size_t max_query_terms = 4096;
+    // Independent finite work budgets for the global frame and its local cone.
+    // Fixed-size probz/measurement bypass max_query_terms, but not these caps.
+    std::size_t max_ether_rules = 4096;
+    std::size_t max_ether_query_sites = 4096;
   };
 
   // C=CX, D=CZ. H/S/X/Y/Z are single-qubit operations with an empty second
@@ -57,19 +64,22 @@ class InfiniteCore {
     // the separate copies held by component/index containers and their RAM.
     std::size_t address_bytes = 0;
     std::uint64_t revision = 0;
+    std::size_t ether_rules = 0;
 
     bool operator==(const Stats& other) const {
       return active_qubits == other.active_qubits &&
              components == other.components &&
              largest_component == other.largest_component &&
              tableau_bytes == other.tableau_bytes &&
-             address_bytes == other.address_bytes && revision == other.revision;
+             address_bytes == other.address_bytes && revision == other.revision &&
+             ether_rules == other.ether_rules;
     }
     bool operator!=(const Stats& other) const { return !(*this == other); }
   };
 
-  // Snapshot text is an ASCII MXI1: envelope around a little-endian binary
-  // current state. This transport budget is separate from tableau payload.
+  // Snapshot text is an ASCII MXI1: (empty frame) or MXI2: (nonempty frame)
+  // envelope around a little-endian current state. MXI2 adds an Ether rule
+  // count and rule bytes after the portable RNG, before the components.
   // Limits are deliberately not imported: the receiving owner sets them.
   static constexpr std::size_t max_snapshot_bytes = std::size_t{16} * 1024 * 1024;
 
@@ -96,6 +106,14 @@ class InfiniteCore {
 
   Background background() const { return background_; }
   const Limits& limits() const { return limits_; }
+  std::size_t ether_rule_count() const noexcept { return state_->ether.rule_count(); }
+  EtherCore::Stats ether_stats() const {
+    auto out = ether_query_stats_;
+    out.rules = ether_rule_count();
+    return out;
+  }
+  void h_all() { apply_global_rule(EtherCore::Rule::HAll); }
+  void cz_neighbors() { apply_global_rule(EtherCore::Rule::CZNeighbors); }
 
   Stats stats() const {
     Stats out;
@@ -106,11 +124,17 @@ class InfiniteCore {
     out.tableau_bytes = state_->tableau_bytes;
     out.address_bytes = state_->address_bytes;
     out.revision = state_->revision;
+    out.ether_rules = state_->ether.rule_count();
     return out;
   }
 
   std::string snapshot() const {
     std::size_t bytes = 1 + 8 + 8 + 8 + PortableRng::word_count * 8;
+    const bool framed = ether_rule_count() != 0;
+    if (framed) {
+      bytes = checked_add(bytes, 8, "snapshot Ether dimensions overflow");
+      bytes = checked_add(bytes, ether_rule_count(), "snapshot Ether dimensions overflow");
+    }
     for (const auto& component : state_->components) {
       bytes = checked_add(bytes, 8, "snapshot dimensions overflow");
       for (const auto& id : component->ids) {
@@ -122,12 +146,16 @@ class InfiniteCore {
     }
     if (bytes > (max_snapshot_bytes - 5) / 2)
       throw std::length_error("snapshot exceeds 16 MiB transport budget");
-    HexWriter out(bytes);
+    HexWriter out(bytes, framed);
     out.byte(background_ == Background::Zero ? 0 : 1);
     out.u64(state_->revision);
     out.u64(state_->components.size());
     out.u64(state_->rng.position);
     for (const auto word : state_->rng.words) out.u64(word);
+    if (framed) {
+      out.u64(ether_rule_count());
+      for (const auto rule : state_->ether.rules()) out.byte(static_cast<std::uint8_t>(rule));
+    }
     for (const auto& component : state_->components) {
       out.u64(component->ids.size());
       for (const auto& id : component->ids) {
@@ -158,6 +186,21 @@ class InfiniteCore {
     state.rng.position = input.size();
     for (auto& word : state.rng.words) word = input.u64();
     state.rng.validate();
+    if (input.framed) {
+      const auto rules = input.size();
+      if (rules == 0) throw std::invalid_argument("MXI2 requires a nonempty Ether frame");
+      if (rules > limits.max_ether_rules)
+        throw std::length_error("snapshot Ether rule budget exceeded");
+      input.require(rules);
+      std::vector<EtherCore::Rule> decoded;
+      decoded.reserve(rules);
+      for (std::size_t i = 0; i < rules; ++i) {
+        const auto value = input.byte();
+        if (value > 1) throw std::invalid_argument("unknown snapshot Ether rule");
+        decoded.push_back(static_cast<EtherCore::Rule>(value));
+      }
+      state.ether.restore_rules(decoded, limits.max_ether_rules);
+    }
     // Every component needs at least its count, one address length/digit,
     // and one 17-byte tableau. This check precedes metadata reservation.
     if (count > input.remaining() / 34)
@@ -227,7 +270,7 @@ class InfiniteCore {
     const auto normalized = normalize_gates(gates);
     require_next_revision();
     auto candidate = std::make_shared<State>(*state_);
-    for (const auto& gate : normalized) apply_gate(*candidate, gate);
+    for (const auto& gate : normalized) apply_physical_gate(*candidate, gate);
     ++candidate->revision;
     state_.swap(candidate);
   }
@@ -250,47 +293,27 @@ class InfiniteCore {
         throw std::invalid_argument("duplicate canonical address in Pauli query");
     }
 
-    std::map<std::size_t, mundo_x_bridge::Pauli> active;
-    double answer = static_cast<double>(sign);
-    for (const auto& term : normalized) {
-      const auto& address = term.first;
-      const char axis = term.second;
-      if (axis == 'I') continue;
-      const auto found = state_->locations.find(address);
-      if (found != state_->locations.end()) {
-        const auto location = found->second;
-        auto query = active.find(location.component);
-        if (query == active.end())
-          query = active.emplace(location.component,
-              identity_pauli(state_->components[location.component]->ids.size())).first;
-        set_axis(query->second, location.qubit, axis);
-      } else if (background_ == Background::Zero) {
-        if (axis != 'Z') return 0.0;
-      } else {
-        const auto partner = infinite_detail::partner_address(address);
-        const auto other = normalized.find(partner);
-        // A Bell pair has zero single-site X/Y/Z expectations. Its only
-        // nonidentity Pauli correlations are XX=+1, YY=-1 and ZZ=+1.
-        if (other == normalized.end() || other->second != axis) return 0.0;
-        if (!infinite_detail::is_odd(address) && axis == 'Y') answer = -answer;
-      }
-    }
-    for (auto& query : active) {
-      const mundo_x_bridge::PauliObserver observer(state_->components[query.first]->core);
-      answer *= observer.expectation(std::move(query.second));
-      if (answer == 0.0) return 0.0;
-    }
+    if (ether_rule_count() == 0) return raw_expectation(*state_, normalized, sign);
+    const auto pulled = pull_pauli(*state_, terms, sign);
+    const auto answer = frame_expectation(*state_, pulled);
+    ether_query_stats_ = pulled.stats;
     return answer;
   }
 
-  // Fixed-size Z queries do not need a sparse-term allocation or the general
-  // max_query_terms budget. The address budget still applies.
+  // Fixed-size Z queries bypass max_query_terms. The empty-frame fast path
+  // avoids sparse-term allocation; a frame still enforces cone/address caps.
   double probability_one(const std::string& address) const {
-    return probability_one(*state_, canonical(address));
+    const auto id = canonical(address);
+    if (ether_rule_count() == 0) return probability_one(*state_, id);
+    const auto pulled = pull_pauli(*state_, {{id, 'Z'}});
+    const auto answer = (1.0 - frame_expectation(*state_, pulled)) * 0.5;
+    ether_query_stats_ = pulled.stats;
+    return answer;
   }
 
   CompactCore::ZMeasurement measure_z(const std::string& address) {
     const auto id = canonical(address);
+    if (ether_rule_count() != 0) return measure_framed(id, false, false);
     const double probability = probability_one(*state_, id);
     if (probability != 0.5)
       return {probability == 1.0, 1.0, false};
@@ -311,6 +334,7 @@ class InfiniteCore {
   // measurement consumes RNG output.
   double force_measure_z(const std::string& address, bool outcome_one) {
     const auto id = canonical(address);
+    if (ether_rule_count() != 0) return measure_framed(id, true, outcome_one).probability;
     const double one = probability_one(*state_, id);
     const double probability = outcome_one ? one : 1.0 - one;
     if (probability == 0.0)
@@ -408,8 +432,9 @@ class InfiniteCore {
   };
 
   struct HexWriter {
-    std::string text = "MXI1:";
-    explicit HexWriter(std::size_t bytes) { text.reserve(5 + 2 * bytes); }
+    std::string text;
+    explicit HexWriter(std::size_t bytes, bool framed)
+        : text(framed ? "MXI2:" : "MXI1:") { text.reserve(5 + 2 * bytes); }
     void byte(std::uint8_t value) {
       constexpr char digits[] = "0123456789abcdef";
       text.push_back(digits[value >> 4]); text.push_back(digits[value & 15]);
@@ -422,10 +447,13 @@ class InfiniteCore {
   struct HexReader {
     const std::string& text;
     std::size_t cursor = 5;
-    explicit HexReader(const std::string& value) : text(value) {
+    const bool framed;
+    explicit HexReader(const std::string& value)
+        : text(value), framed(value.compare(0, 5, "MXI2:") == 0) {
       if (value.size() > max_snapshot_bytes)
         throw std::length_error("snapshot exceeds 16 MiB transport budget");
-      if (value.size() < 5 || value.compare(0, 5, "MXI1:") != 0 || (value.size() - 5) % 2)
+      if (value.size() < 5 || (!framed && value.compare(0, 5, "MXI1:") != 0) ||
+          (value.size() - 5) % 2)
         throw std::invalid_argument("unsupported or malformed infinite snapshot");
     }
     std::size_t remaining() const { return (text.size() - cursor) / 2; }
@@ -479,6 +507,7 @@ class InfiniteCore {
     std::size_t tableau_bytes = 0, address_bytes = 0;
     std::uint64_t revision = 0;
     PortableRng rng;
+    EtherCore ether;
   };
 
   static std::size_t checked_add(std::size_t a, std::size_t b, const char* message) {
@@ -513,6 +542,20 @@ class InfiniteCore {
   void require_next_revision() const {
     if (state_->revision == std::numeric_limits<std::uint64_t>::max())
       throw std::overflow_error("infinite-register revision overflow");
+  }
+
+  void apply_global_rule(EtherCore::Rule rule) {
+    const auto& rules = state_->ether.rules();
+    const bool cancels = !rules.empty() && rules.back() == rule;
+    if (!cancels && rules.size() >= limits_.max_ether_rules)
+      throw std::length_error("Ether rule budget exceeded");
+    require_next_revision();
+    auto candidate = std::make_shared<State>(*state_);
+    if (rule == EtherCore::Rule::HAll) candidate->ether.h_all();
+    else candidate->ether.cz_neighbors();
+    ++candidate->revision;
+    state_.swap(candidate);
+    ether_query_stats_ = EtherCore::Stats{};
   }
 
   std::string canonical(const std::string& address) const {
@@ -555,6 +598,157 @@ class InfiniteCore {
     if (axis == 'X' || axis == 'Y') p.x[word] |= bit;
     if (axis == 'Z' || axis == 'Y') p.z[word] |= bit;
     if (axis == 'Y') p.phase = (p.phase + 1U) & 3U;
+  }
+
+  EtherCore::Observable pull_pauli(const State& state, const std::vector<Term>& terms,
+                                   int sign = 1) const {
+    std::vector<EtherCore::Term> physical;
+    physical.reserve(terms.size());
+    for (const auto& term : terms) physical.push_back({term.address, term.axis});
+    EtherCore::QueryLimits work;
+    work.max_sites = limits_.max_ether_query_sites;
+    work.max_address_digits = limits_.max_address_digits;
+    return state.ether.pullback(physical, sign, work);
+  }
+
+  double frame_expectation(const State& state, const EtherCore::Observable& pulled) const {
+    TermMap terms;
+    for (const auto& term : pulled.terms) terms.emplace(term.address, term.axis);
+    return raw_expectation(state, terms, pulled.sign);
+  }
+
+  // Evaluate a Pauli on phi, without applying U a second time. Untouched
+  // coordinates still use the original Zero/BellPairs analytic background.
+  double raw_expectation(const State& state, const TermMap& normalized, int sign) const {
+    std::map<std::size_t, mundo_x_bridge::Pauli> active;
+    double answer = static_cast<double>(sign);
+    for (const auto& term : normalized) {
+      const auto& address = term.first;
+      const char axis = term.second;
+      if (axis == 'I') continue;
+      const auto found = state.locations.find(address);
+      if (found != state.locations.end()) {
+        const auto location = found->second;
+        auto query = active.find(location.component);
+        if (query == active.end())
+          query = active.emplace(location.component,
+              identity_pauli(state.components[location.component]->ids.size())).first;
+        set_axis(query->second, location.qubit, axis);
+      } else if (background_ == Background::Zero) {
+        if (axis != 'Z') return 0.0;
+      } else {
+        const auto partner = infinite_detail::partner_address(address);
+        const auto other = normalized.find(partner);
+        if (other == normalized.end() || other->second != axis) return 0.0;
+        if (!infinite_detail::is_odd(address) && axis == 'Y') answer = -answer;
+      }
+    }
+    for (auto& query : active) {
+      const mundo_x_bridge::PauliObserver observer(state.components[query.first]->core);
+      answer *= observer.expectation(std::move(query.second));
+      if (answer == 0.0) return 0.0;
+    }
+    return answer;
+  }
+
+  // B maps the unsigned product P to Z on the first site. Y uses S^-1 then
+  // H; parity CNOTs collect all Z factors at the pivot. The inverse is exact,
+  // including Y phases, and leaves no history in the component state.
+  void parity_basis(State& state, const EtherCore::Observable& p, bool inverse) const {
+    if (p.terms.empty()) return;
+    const auto& pivot = p.terms.front().address;
+    if (!inverse) {
+      for (const auto& term : p.terms) {
+        if (term.axis == 'Y')
+          for (unsigned i = 0; i < 3; ++i) apply_gate(state, {'S', term.address, {}});
+        if (term.axis == 'X' || term.axis == 'Y')
+          apply_gate(state, {'H', term.address, {}});
+      }
+      for (std::size_t i = 1; i < p.terms.size(); ++i)
+        apply_gate(state, {'C', p.terms[i].address, pivot});
+    } else {
+      for (std::size_t i = p.terms.size(); i-- > 1;)
+        apply_gate(state, {'C', p.terms[i].address, pivot});
+      for (auto it = p.terms.rbegin(); it != p.terms.rend(); ++it) {
+        if (it->axis == 'X' || it->axis == 'Y')
+          apply_gate(state, {'H', it->address, {}});
+        if (it->axis == 'Y') apply_gate(state, {'S', it->address, {}});
+      }
+    }
+  }
+
+  // R_P(k*pi/2) = exp(-i*k*pi*P/4), up to unobservable global phase.
+  // Signed pullbacks reverse the quarter turn, not the observable's sites.
+  void rotate_pauli(State& state, const EtherCore::Observable& p, unsigned turns) const {
+    turns &= 3U;
+    if (p.sign < 0) turns = (4U - turns) & 3U;
+    if (turns == 0 || p.terms.empty()) return;
+    if (turns == 2) {
+      // A half turn is a product of local Paulis; do not merge components
+      // unnecessarily merely to apply this separable operation.
+      for (const auto& term : p.terms) apply_gate(state, {term.axis, term.address, {}});
+      return;
+    }
+    parity_basis(state, p, false);
+    const auto& pivot = p.terms.front().address;
+    for (unsigned i = 0; i < turns; ++i) apply_gate(state, {'S', pivot, {}});
+    parity_basis(state, p, true);
+  }
+
+  void apply_physical_gate(State& state, const Gate& gate) const {
+    if (state.ether.rule_count() == 0) { apply_gate(state, gate); return; }
+    const auto rotate = [&](std::vector<Term> terms, unsigned turns) {
+      rotate_pauli(state, pull_pauli(state, terms), turns);
+    };
+    switch (gate.op) {
+      case 'X': case 'Y': case 'Z': rotate({{gate.first, gate.op}}, 2); break;
+      case 'S': rotate({{gate.first, 'Z'}}, 1); break;
+      case 'H':
+        // H = R_Y(pi/2) Z up to a global phase: apply Z first.
+        rotate({{gate.first, 'Z'}}, 2);
+        rotate({{gate.first, 'Y'}}, 1);
+        break;
+      case 'D':
+        // CZ = R_Za(pi/2) R_Zb(pi/2) R_ZaZb(-pi/2), up to phase.
+        rotate({{gate.first, 'Z'}}, 1);
+        rotate({{gate.second, 'Z'}}, 1);
+        rotate({{gate.first, 'Z'}, {gate.second, 'Z'}}, 3);
+        break;
+      case 'C':
+        apply_physical_gate(state, {'H', gate.second, {}});
+        apply_physical_gate(state, {'D', gate.first, gate.second});
+        apply_physical_gate(state, {'H', gate.second, {}});
+        break;
+      default: throw std::logic_error("unvalidated physical gate");
+    }
+  }
+
+  CompactCore::ZMeasurement measure_framed(const std::string& id, bool forced,
+                                           bool requested) {
+    const auto p = pull_pauli(*state_, {{id, 'Z'}});
+    const double one = (1.0 - frame_expectation(*state_, p)) * 0.5;
+    if (one != 0.5) {
+      const bool outcome = one == 1.0;
+      if (forced && outcome != requested)
+        throw std::invalid_argument("requested Z measurement outcome is impossible");
+      ether_query_stats_ = p.stats;
+      return {outcome, 1.0, false};
+    }
+    if (p.terms.empty()) throw std::logic_error("random identity Pauli measurement");
+    require_next_revision();
+    auto candidate = std::make_shared<State>(*state_);
+    parity_basis(*candidate, p, false);
+    const auto location = materialize(*candidate, p.terms.front().address);
+    const bool physical_outcome = forced ? requested : (candidate->rng() & 1U) != 0;
+    const bool pivot_outcome = physical_outcome != (p.sign < 0);
+    auto& component = mutable_component(*candidate, location.component);
+    if (!component.core.measure_z_forced(location.qubit, pivot_outcome))
+      throw std::logic_error("pulled Pauli measurement lost its random branch");
+    parity_basis(*candidate, p, true);
+    ++candidate->revision;
+    state_.swap(candidate);
+    ether_query_stats_ = p.stats;
+    return {physical_outcome, 0.5, !forced};
   }
 
   double probability_one(const State& state, const std::string& id) const {
@@ -694,6 +888,9 @@ class InfiniteCore {
   Background background_;
   Limits limits_;
   std::shared_ptr<State> state_;
+  // Query diagnostics are per-owner, outside the immutable shared State.
+  // They never alter the quantum revision or a portable snapshot.
+  mutable EtherCore::Stats ether_query_stats_;
 };
 
 } // namespace mundo_x

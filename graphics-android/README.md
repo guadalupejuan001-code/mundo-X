@@ -6,7 +6,10 @@ núcleo compacto. La variante independiente se compila con
 `-Pcosmic8kStandalone=true` y se instala como `com.mundox.graphics.ultra`.
 **Calidad → 8K UHD** utiliza el framebuffer completo cuando el dispositivo lo
 admite; **PNG 8K** genera esa resolución desde cualquier calidad de vista.
-Las variantes normal, 4K y 8K comparten el perfil inicial de **1.000 qubits**.
+Desde la [fusión de estado Ether](../docs/ether-fusion.md), las variantes normal,
+4K y 8K crean mundos con un fondo definido por reglas y modificaciones locales
+en la misma sesión. El perfil finito de **1.000 qubits** sigue disponible de
+forma explícita y los proyectos existentes conservan su backend al abrirse.
 
 [Uso de 8K, memoria, mediciones y alcance](docs/8k.md).
 
@@ -21,7 +24,7 @@ creación y dirección corresponden a X, con asistencia de IA en el desarrollo.
 
 ## Proyectos `.cosmic`
 
-- **Nuevo** permite elegir núcleo **Finito**, **Infinito · pares Bell** o **Infinito · fondo cero**, además de nombre, objetos y semilla. El modo finito conserva su preparación de grafo y el rango de 1 a 1000 qubits.
+- **Nuevo** inicia en **Ether · cluster** y permite elegir también núcleo **Finito**, **Infinito · pares Bell** o **Infinito · fondo cero**, además de nombre, objetos y semilla. El modo finito conserva su preparación de grafo y el rango de 1 a 1000 qubits.
 - **Abrir .cosmic** importa un proyecto mediante el selector de Android.
 - **Ampliar a 1000 · añadir |0⟩** aparece en proyectos más pequeños. Conserva
   estado, historial, observables, cámara, ediciones y preferencias de resolución;
@@ -35,7 +38,7 @@ creación y dirección corresponden a X, con asistencia de IA en el desarrollo.
 El [formato](../graphics-desktop/PROJECT_FORMAT.md) está versionado. La
 importación valida el documento completo y prepara una sesión candidata antes
 de reemplazar el proyecto activo. Un archivo inválido conserva el proyecto
-actual. El formato v1 conserva el perfil `compact-clifford`. El v2 identifica `infinite-clifford` y guarda un snapshot nativo opaco `MXI1` con el fondo, los componentes activos, sus tableaus actuales y el generador aleatorio. Ambos usan la escena `opaque-grid-v1`. La validación estructural Java no interpreta el estado cuántico: la sesión candidata nativa valida el snapshot antes de adoptarlo.
+actual. El formato v1 conserva el perfil `compact-clifford`. El v2 identifica `infinite-clifford` y guarda un snapshot nativo opaco `MXI1` (marco vacío) o `MXI2` (con reglas Ether), con el fondo, los componentes activos, sus tableaus actuales y el generador aleatorio. Ambos usan la escena `opaque-grid-v1`. La validación estructural Java no interpreta el estado cuántico: la sesión candidata nativa valida el snapshot antes de adoptarlo.
 
 ## Controles
 

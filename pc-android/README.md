@@ -28,7 +28,7 @@ El visor usa los shaders, `QuantumRenderer` y el puente `mx_graphics` del motor 
 
 **Fondo cero/Bell** reinicia solo el núcleo y conserva la CPU, RAM, medio montado y canal de respuesta del huésped. **Reiniciar** y cargar un arranque válido restablecen el PC y su dispositivo a fondo cero. Una imagen inválida se valida antes de sustituir la máquina. Pausar y girar el teléfono conservan la sesión actual mediante el ciclo de vida de la Activity.
 
-**Guardar núcleo** exporta un archivo `.mxi` con el estado exacto MXI1 y el generador aleatorio; **Abrir núcleo** lo valida por completo antes de sustituir la sesión. Estos archivos guardan el núcleo, no una imagen de RAM/disco del PC ni el mundo gráfico completo. El selector Android concede acceso al archivo elegido. Los errores de lectura, formato o presupuesto conservan el estado previo.
+**Guardar núcleo** exporta un archivo `.mxi` con el estado exacto MXI1/MXI2, las reglas Ether presentes y el generador aleatorio; **Abrir núcleo** lo valida por completo antes de sustituir la sesión. Estos archivos guardan el núcleo, no una imagen de RAM/disco del PC ni el mundo gráfico completo. El selector Android concede acceso al archivo elegido. Los errores de lectura, formato o presupuesto conservan el estado previo.
 
 ### Contrato del dispositivo InfiniteCore
 
@@ -52,7 +52,7 @@ Presupuestos del perfil PC:
 | Qubits por componente | 1024 |
 | Payload del tableau | 16 MiB |
 | Dígitos por dirección de entrada | 4096 |
-| Snapshot MXI1 | 16 MiB |
+| Snapshot MXI1/MXI2 | 16 MiB |
 | Vista del último resultado en la app | 8192 bytes, con aviso si se recorta |
 
 Estos presupuestos son independientes del respaldo de RAM x86. El tableau, las direcciones, el transporte, el visor y Android añaden consumo al proceso, medido por PSS. El dominio formal de direcciones no implica recursos físicos infinitos, ejecución de Windows ni mejoras de FPS acreditadas.

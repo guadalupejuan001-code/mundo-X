@@ -10,6 +10,8 @@
 #include "mundo_x/infinite_bridge.h"
 #include "mundo_x/infinite_bridge.hpp"
 #include "mundo_x/infinite_session.hpp"
+#include "mundo_x/ether_core.hpp"
+#include "mundo_x/infinite_program.hpp"
 namespace {
 constexpr std::uint64_t max_project_revision=9007199254740991ULL;
 constexpr std::size_t max_project_gates=100000;
@@ -246,4 +248,22 @@ Java_com_mundox_graphics_NativeCore_nInfiniteStats(JNIEnv* e,jclass,jlong p){
         static_cast<jlong>(s.address_bytes),static_cast<jlong>(s.revision),static_cast<jlong>(s.epoch),
         static_cast<jlong>(s.background)};
     auto out=e->NewLongArray(8);if(out)e->SetLongArrayRegion(out,0,8,values);return out;
+}
+
+// This handle is the same shared InfiniteSession used by the guest, local
+// operations, snapshots and the renderer. There is no separate Ether owner.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_mundox_graphics_NativeCore_nEtherStats(JNIEnv* e,jclass,jlong p){
+    try{
+        const auto st=mundo_x::infinite_session_from_handle(handle(p))->ether_stats();
+        const jlong data[4]={
+            static_cast<jlong>(st.rules),
+            static_cast<jlong>(st.last_query_sites),
+            static_cast<jlong>(st.last_query_peak_sites),
+            static_cast<jlong>(st.last_query_address_bytes)
+        };
+        auto out=e->NewLongArray(4);
+        if(out)e->SetLongArrayRegion(out,0,4,data);
+        return out;
+    }catch(const std::exception& x){fail(e,x.what());return nullptr;}
 }

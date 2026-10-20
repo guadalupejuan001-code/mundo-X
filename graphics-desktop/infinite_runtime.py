@@ -98,6 +98,14 @@ class InfiniteCore:
         """Execute one bounded, atomic .xi request on the current session."""
         return self._string_result("execute", self._text(program))
 
+    def h_all(self):
+        """Apply an Ether Hadamard layer to this session's physical state."""
+        self.execute("h_all\n")
+
+    def cz_neighbors(self):
+        """Apply an Ether nearest-neighbor CZ layer to the same state."""
+        self.execute("cz_neighbors\n")
+
     def apply(self, gates):
         lines = []
         total = len("begin\nend\n")

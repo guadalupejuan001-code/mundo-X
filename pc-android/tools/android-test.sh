@@ -60,6 +60,13 @@ assert 'COSMIC_PC_TESTS_PASSED tests=29 failures=0' in Path('pc-evidence/instrum
 v=json.loads(Path('pc-evidence/pc-tests.json').read_text())
 assert v['tests']==29 and v['failures']==0 and not v['windows_booted'] and v['x64_guest_verified']
 assert v['infinite_guest_verified'] and v['shared_session_graphics_verified']
+assert v['graphics_bridge_read_only'] and v['graphics_open_read_only']
+ether=v['ether_fusion']
+assert ether['rules']==[0,2,0] and ether['same_owner'] and ether['render_read_only']
+assert ether['before']==[1,0,1,-1,1] and ether['framed']==[0,1,0,0,1] and ether['restored']==ether['before']
+assert ether['framed_revision']==ether['before_revision']+2 and ether['restored_revision']==ether['before_revision']+4
+assert ether['framed_epoch']==ether['before_epoch']+1 and ether['restored_epoch']==ether['before_epoch']+2
+assert ether['global_changed_pixels']>10 and ether['roundtrip_changed_pixels']==0
 assert v['coupled_changed_pixels']>10 and v['uncoupled_changed_pixels']==0
 assert v['iso_shrd_verified'] and v['guest_8k_verified'] and v['output_8k_verified'] and v['video_tests']==8
 assert v['logical_ram_bytes']==2**31 and v['guest_payload_cap_bytes']==2**30

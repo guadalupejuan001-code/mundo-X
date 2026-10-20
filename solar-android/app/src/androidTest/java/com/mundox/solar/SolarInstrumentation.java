@@ -37,7 +37,7 @@ import java.util.function.BooleanSupplier;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Tests the shipping Activity, native CompactCore, GL thread and real framebuffers. */
+/** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
     private static final int LEGACY_TESTS = 13;
@@ -50,7 +50,7 @@ public final class SolarInstrumentation extends Instrumentation {
     private final JSONObject metrics = new JSONObject();
     private final JSONArray images = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
-    private boolean uhdSuite;
+    private boolean uhdSuite,ultraSuite;
     private volatile boolean onDemandFrames;
     private int expectedTests = LEGACY_TESTS;
 
@@ -66,8 +66,10 @@ public final class SolarInstrumentation extends Instrumentation {
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
-        uhdSuite = arguments != null && "true".equals(arguments.getString("uhd4k"));
-        if (uhdSuite) expectedTests += 6;
+        ultraSuite = arguments != null && "true".equals(arguments.getString("ultra8k"));
+        uhdSuite = ultraSuite || (arguments != null && "true".equals(arguments.getString("uhd4k")));
+        if (ultraSuite) expectedTests += 2;
+        else if (uhdSuite) expectedTests += 6;
         start();
     }
 
@@ -81,8 +83,9 @@ public final class SolarInstrumentation extends Instrumentation {
             metrics.put("androidRelease", Build.VERSION.RELEASE);
             metrics.put("abis", new JSONArray(Arrays.asList(Build.SUPPORTED_ABIS)));
             metrics.put("performanceScope", "Software GLES emulator; not Samsung A16 performance measurements");
-            metrics.put("physicalScope", "JPL analytical orbits; illustrative moon phases and magnetic geometries");
-            metrics.put("uhd4kSuite", uhdSuite);
+            metrics.put("physicalScope", "JPL analytical orbits + JPL-GM local gravity; illustrative moon phases and magnetic geometries");
+            metrics.put("uhd4kSuite", uhdSuite && !ultraSuite);
+            metrics.put("ultra8kSuite", ultraSuite);
             metrics.put("applicationId", getTargetContext().getPackageName());
             Intent launch = new Intent(getTargetContext(), SolarActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -91,7 +94,7 @@ public final class SolarInstrumentation extends Instrumentation {
 
             runCase("native_gles_launch_and_textures", this::launchAndTextures);
             runCase("astronomy_and_magnetic_classification", this::astronomyAndMagnetism);
-            runCase("native_bell_and_readonly_observation", this::nativeBell);
+            runCase("native_ether_fusion_and_readonly_observation", this::nativeEtherFusion);
             runCase("quantum_coupled_and_uncoupled_frames", this::quantumCoupling);
             runCase("intrinsic_and_induced_field_frames", this::magneticLayers);
             runCase("solar_wind_layer", this::solarWind);
@@ -103,18 +106,21 @@ public final class SolarInstrumentation extends Instrumentation {
             runCase("background_resume_preserves_state", this::backgroundResume);
             runCase("recreation_and_orientation_preserve_state", this::recreationAndOrientation);
             if (uhdSuite) {
-                // These six experiments freeze astronomical time. Draw each requested
-                // real frame once instead of continuously rerendering identical UHD
-                // pixels while assertions, PNG encoding and UI work use the CPU.
+                // UHD tests draw on demand so software GLES does not rerender the
+                // same 4K/8K framebuffer while assertions run on the CPU.
                 onDemandFrames = true;
                 main(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY));
                 try {
-                    runCase("uhd_framebuffer_return_preserves_scene", this::uhdReturn);
-                    runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
-                    runCase("entry_all_planets_and_moons", this::entryCatalogue);
-                    runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
-                    runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
-                    runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                    runCase(ultraSuite?"ultra8k_framebuffer_return_preserves_scene":"uhd_framebuffer_return_preserves_scene", this::uhdReturn);
+                    if (ultraSuite) {
+                        runCase("ultra8k_earth_entry_atmosphere", this::ultraEntry);
+                    } else {
+                        runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
+                        runCase("entry_all_planets_and_moons", this::entryCatalogue);
+                        runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
+                        runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
+                        runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                    }
                 } finally {
                     runOnMainSync(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY));
                     onDemandFrames = false;
@@ -125,7 +131,9 @@ public final class SolarInstrumentation extends Instrumentation {
                 try {
                     metrics.put("glRenderer", GLES30.glGetString(GLES30.GL_RENDERER));
                     metrics.put("glVersion", GLES30.glGetString(GLES30.GL_VERSION));
-                    metrics.put("nativeQubits", QuantumSolarBridge.QUBITS);
+                    metrics.put("nativeDomain", "q0,q1,...");
+                    metrics.put("nativePreparationSites", QuantumSolarBridge.PREPARATION_SITES);
+                    metrics.put("nativeActiveSites", activity.bridge().activeSites());
                     metrics.put("nativeStateBytes", activity.bridge().stateBytes());
                     metrics.put("framesRendered", activity.renderer().frameCount);
                 } catch (Exception error) { throw new RuntimeException(error); }
@@ -154,7 +162,8 @@ public final class SolarInstrumentation extends Instrumentation {
         waitUntil(() -> activity.hasWindowFocus(), 15_000,
                 "Solar Activity is obscured by another window at launch");
         metrics.put("initialWindowFocused", true);
-        expect(activity.bridge().stateBytes() > 0, "CompactCore native state is absent");
+        expect(activity.bridge().stateBytes() > 0 && activity.bridge().etherRules() == 2,
+                "The default finite preparation and Ether frame are absent");
         prepare(3, false, false);
         awaitStableViewport();
         prepare(3, false, false);
@@ -226,25 +235,75 @@ public final class SolarInstrumentation extends Instrumentation {
         expect(SolarData.BODIES[4].fieldType == SolarData.FIELD_INDUCED_CRUSTAL, "Mars must distinguish crustal and induced fields");
         expect(SolarData.BODIES[9].fieldType == SolarData.FIELD_NONE, "Moon must not have an invented global dipole");
         expect(SolarData.BODIES[12].fieldType == SolarData.FIELD_INTRINSIC, "Ganymede intrinsic field is absent");
+        double earthGravity=SolarData.gravityMs2(3,0),earthEscape=SolarData.escapeVelocityKmS(3,0);
+        SolarFlightPhysics.State falling=new SolarFlightPhysics.State(100,0);
+        for(int step=0;step<100;step++)SolarFlightPhysics.step(3,SolarEnvironment.environment(3),falling,0,.01);
+        expect(earthGravity>9.81&&earthGravity<9.83&&earthEscape>11.18&&earthEscape<11.20,
+                "Packaged JPL-GM Earth gravity/escape model is wrong");
+        expect(falling.altitudeKm<100&&falling.radialVelocityKmS<0,
+                "Packaged local gravity integrator did not produce free fall");
         metrics.put("bodyCount", SolarData.BODIES.length).put("planetCount", 8).put("moonCount", 14);
         metrics.put("earthJ2000DistanceAU", earthAU).put("earthMoonDistanceKm", moonKm);
+        metrics.put("earthGravityMs2",earthGravity).put("earthEscapeKmS",earthEscape)
+                .put("oneSecondFallAltitudeKm",falling.altitudeKm)
+                .put("oneSecondFallVelocityKmS",falling.radialVelocityKmS);
         metrics.put("fieldTypes", new JSONObject().put("earth", 1).put("venus", 2).put("mars", 3).put("moon", 0).put("ganymede", 1));
     }
 
-    private void nativeBell() throws Exception {
+    private void nativeEtherFusion() throws Exception {
+        // Independent fixtures for local preparation followed by global H and
+        // nearest-neighbour CZ. These are physical observables after the frame,
+        // not the old isolated eight-qubit Bell expectations.
+        float[][] localExpected = {
+            {0,0,0,0,0,0,0,0},
+            {0,0,1,0,0,1,0,1},
+            {0,0,0,0,0,1,0,1},
+            {0,-1,0,0,0,0,0,0}
+        };
+        float[][] etherExpected = {
+            {1,1,0,0,0},
+            {0,0,0,1,1},
+            {0,0,0,0,0},
+            {0,0,0,0,0}
+        };
+        JSONArray preparations = new JSONArray();
+        for (int preset=0; preset<QuantumSolarBridge.PRESETS.length; preset++) {
+            final int selected = preset;
+            gl(() -> activity.bridge().setPreset(selected));
+            QuantumSolarBridge bridge = activity.bridge();
+            float[] actual = bridge.verifyReadOnly(), ether = bridge.verifyEtherReadOnly();
+            expect(Arrays.equals(actual,localExpected[preset]),
+                    "Framed preparation has wrong local observables for preset " + preset);
+            expect(Arrays.equals(ether,etherExpected[preset]),
+                    "Ether signals did not follow the local preparation for preset " + preset);
+            expect(Arrays.equals(actual,bridge.coefficients()) && Arrays.equals(ether,bridge.etherCoefficients()),
+                    "Renderer coefficients do not observe the same native state");
+            expect(bridge.etherRules()==2 && bridge.activeSites()==(preset==0?0:8),
+                    "Global rules materialized the background or lost the finite preparation");
+            expect(bridge.observationRevision()==bridge.nativeRevision()
+                    && bridge.observationEpoch()==bridge.nativeEpoch(),
+                    "The two visual coefficient groups do not share one atomic observation");
+            preparations.put(new JSONObject().put("preset",preset)
+                    .put("local",floats(actual)).put("ether",floats(ether))
+                    .put("activeSites",bridge.activeSites()).put("rules",bridge.etherRules())
+                    .put("revision",bridge.observationRevision()).put("epoch",bridge.observationEpoch()));
+        }
         gl(() -> activity.bridge().setPreset(2));
-        float[] expected = {0, 0, 0, 1, -1, 1, 1, 1};
         float[] actual = activity.bridge().verifyReadOnly();
-        expect(actual.length == expected.length, "The native Pauli program is incomplete");
-        for (int i = 0; i < expected.length; i++)
-            expect(Math.abs(expected[i] - actual[i]) < 1e-6, "Bell expectation failed at Pauli " + i);
-        long revision = activity.bridge().nativeRevision();
+        long revision = activity.bridge().nativeRevision(), epoch = activity.bridge().nativeEpoch();
         float[] cached = activity.bridge().coefficients().clone();
+        float[] ether = activity.bridge().verifyEtherReadOnly();
         frame(); frame();
-        expect(activity.bridge().nativeRevision() == revision, "Drawing frames mutated the native gate revision");
+        expect(activity.bridge().nativeRevision()==revision && activity.bridge().nativeEpoch()==epoch,
+                "Drawing frames mutated the native revision or epoch");
         expect(Arrays.equals(cached, activity.bridge().verifyReadOnly()), "Native read-only observations drifted");
-        metrics.put("bellExpectations", floats(actual));
-        metrics.put("observationPreservedNativeRevision", true);
+        expect(Arrays.equals(ether,activity.bridge().verifyEtherReadOnly()),
+                "EtherCore read-only observations drifted");
+        metrics.put("etherFusionPresets",preparations).put("etherFusionSingleObservation",true);
+        metrics.put("framedBellExpectations", floats(actual));
+        metrics.put("etherExpectations", floats(ether)).put("etherRules",activity.bridge().etherRules());
+        metrics.put("observationPreservedNativeRevision", true).put("observationPreservedNativeEpoch",true)
+                .put("etherObservationReadOnly",true);
     }
 
     private void quantumCoupling() throws Exception {
@@ -252,22 +311,25 @@ public final class SolarInstrumentation extends Instrumentation {
         gl(() -> activity.bridge().setPreset(0));
         double[] physicalBefore = SolarData.position(3, activity.renderer().julianDate());
         SolarRenderer.Capture baseline = frame();
-        gl(() -> activity.bridge().setPreset(2));
-        SolarRenderer.Capture entangled = frame();
-        int coupled = changed(baseline, entangled);
+        // After the Ether frame, the Fase preset has <Y0>=-1. This is a
+        // nonzero input to the existing magnetic-tracer phase at paused time.
+        gl(() -> activity.bridge().setPreset(3));
+        SolarRenderer.Capture phased = frame();
+        int coupled = changed(baseline, phased);
         expect(coupled > 20, "The native preparation does not change its visible field traces");
         double[] physicalAfter = SolarData.position(3, activity.renderer().julianDate());
         expect(Arrays.equals(physicalBefore, physicalAfter), "Visual core preparation changed astronomical coordinates");
         save("earth-fields-base.png", baseline);
-        save("earth-fields-entangled.png", entangled);
+        save("earth-fields-phase.png", phased);
         main(() -> activity.fieldsForTest(false));
         gl(() -> { activity.renderer().setWind(false); activity.bridge().setPreset(0); });
         SolarRenderer.Capture uncoupledA = frame();
-        gl(() -> activity.bridge().setPreset(2));
+        gl(() -> activity.bridge().setPreset(3));
         SolarRenderer.Capture uncoupledB = frame();
         int uncoupled = changed(uncoupledA, uncoupledB);
         expect(uncoupled == 0, "Core preparation changes surfaces when its visual layers are disabled");
         metrics.put("coupledChangedPixels", coupled).put("uncoupledChangedPixels", uncoupled);
+        metrics.put("coupledComparisonPresets",new JSONArray().put(0).put(3));
         metrics.put("quantumPreparationOrbitalDeltaAU", distance(physicalBefore, physicalAfter));
     }
 
@@ -437,7 +499,10 @@ public final class SolarInstrumentation extends Instrumentation {
 
     private void recreationAndOrientation() throws Exception {
         prepare(3, true, true);
-        main(() -> activity.scaleForTest(true));
+        // Persist the adaptive fixture in the Activity as well as the renderer:
+        // standalone APKs otherwise restore their original UHD mode on recreate.
+        main(() -> { activity.setUhdQuality(false); activity.setUltraQuality(false);
+            activity.scaleForTest(true); });
         gl(() -> { activity.renderer().setQuality(960); activity.renderer().setOrbits(true);
             activity.bridge().setPreset(3); activity.renderer().focus(3); });
         double date = activity.renderer().julianDate();
@@ -465,6 +530,7 @@ public final class SolarInstrumentation extends Instrumentation {
         metrics.put("recreationChangedPixels", changed(before, after));
         metrics.put("recreationPreservedPreset", activity.bridge().preset());
         metrics.put("recreationPreservedDate", date);
+        metrics.put("recreationPreservedAdaptiveMode", true);
         metrics.put("orientationRoundtripPassed", true);
     }
 
@@ -476,8 +542,9 @@ public final class SolarInstrumentation extends Instrumentation {
                 "Activity recreation lost its native preparation");
         gl(() -> expect(activity.renderer().isPaused() && activity.renderer().fieldsEnabled()
                 && activity.renderer().windEnabled() && activity.renderer().orbitsEnabled()
-                && activity.renderer().realScaleEnabled() && activity.renderer().qualityLimit() == 960,
-                "Activity recreation lost its live time, scale, layer or quality settings"));
+                && activity.renderer().realScaleEnabled() && activity.renderer().qualityLimit() == 960
+                && !activity.renderer().isUhd4k() && !activity.renderer().isUhd8k(),
+                "Activity recreation lost its live time, scale, layer or adaptive quality settings"));
         expectHeading("CAMPO INTRÍNSECO");
         frame(); frame();
         expect(activity.renderer().julianDate() == date, "Recreated paused scene advanced in time");
@@ -491,19 +558,19 @@ public final class SolarInstrumentation extends Instrumentation {
         long revision = activity.bridge().nativeRevision();
         QuantumSolarBridge owner = activity.bridge();
         float[] coefficients = owner.verifyReadOnly();
-        main(() -> activity.setUhdQuality(true));
-        saveUhd("uhd-earth-orbit.png", false);
-        expect(activity.renderer().isUhd4k(), "The renderer did not accept actual UHD mode");
-        main(() -> activity.setUhdQuality(false));
+        setUhdMode(true);
+        saveUhd(ultraSuite?"ultra8k-earth-orbit.png":"uhd-earth-orbit.png", false);
+        expect(ultraSuite?activity.renderer().isUhd8k():activity.renderer().isUhd4k(), "The renderer did not accept actual UHD mode");
+        setUhdMode(false);
         SolarRenderer.Capture after = frame();
         save("uhd-adaptive-after.png", after);
         expect(changed(before, after) == 0, "UHD roundtrip did not preserve the previous exact framebuffer");
-        expect(activity.renderer().qualityLimit() == TEST_QUALITY && !activity.renderer().isUhd4k(),
+        expect(activity.renderer().qualityLimit() == TEST_QUALITY && !activity.renderer().isUhd4k() && !activity.renderer().isUhd8k(),
                 "Returning from UHD lost the previous quality setting");
         expect(owner == activity.bridge() && date == activity.renderer().julianDate()
                 && revision == owner.nativeRevision() && Arrays.equals(coefficients, owner.verifyReadOnly()),
                 "UHD allocation changed the native preparation or astronomical time");
-        metrics.put("uhdPixels", 8_294_400).put("uhdReturnChangedPixels", 0)
+        metrics.put("uhdPixels", ultraSuite?33_177_600:8_294_400).put("uhdReturnChangedPixels", 0)
                 .put("uhdNativeOwnerPreserved", true);
     }
 
@@ -757,13 +824,38 @@ public final class SolarInstrumentation extends Instrumentation {
 
     private String saveUhd(String name, boolean landscape) throws Exception {
         SolarRenderer.Capture image = frame();
-        int width = landscape ? 3840 : 2160, height = landscape ? 2160 : 3840;
-        expect(image.width == width && image.height == height && image.rgba.length == 33_177_600,
+        int longEdge=ultraSuite?7680:3840,shortEdge=ultraSuite?4320:2160;
+        int width = landscape ? longEdge : shortEdge, height = landscape ? shortEdge : longEdge;
+        long expectedBytes=(long)width*height*4;
+        expect(image.width == width && image.height == height && image.rgba.length == expectedBytes,
                 "Expected actual UHD " + width + "x" + height + "; got " + image.width + "x" + image.height);
-        expect(activity.renderer().isUhd4k(), "The UHD request was rejected: " + activity.renderer().resolutionNotice());
-        substantial(image, "UHD observation");
+        expect(ultraSuite?activity.renderer().isUhd8k():activity.renderer().isUhd4k(),
+                "The UHD request was rejected: " + activity.renderer().resolutionNotice());
+        substantial(image, ultraSuite?"8K observation":"UHD observation");
         save(name, image);
         return sha256(image.rgba);
+    }
+
+    private void setUhdMode(boolean enabled) {
+        main(() -> { if(ultraSuite) activity.setUltraQuality(enabled); else activity.setUhdQuality(enabled); });
+    }
+
+    private void ultraEntry() throws Exception {
+        prepare(3,false,false);
+        main(() -> activity.enterSelectedBody());
+        main(() -> activity.setEntryAltitude(25));
+        setUhdMode(true);
+        SolarRenderer.Capture image=frame();
+        expect(image.width==4320&&image.height==7680&&activity.renderer().isUhd8k(),
+                "Earth entry did not use the real portrait 8K target");
+        substantial(image,"8K Earth atmospheric entry");
+        save("ultra8k-earth-entry.png",image);
+        expect(activity.renderer().atmosphereEnabled()&&activity.renderer().isEntryMode(),
+                "8K entry lost the local atmosphere");
+        metrics.put("ultra8kEntry",new JSONObject().put("width",image.width).put("height",image.height)
+                .put("altitudeKm",activity.renderer().altitudeKm()).put("brightPixels",bright(image)));
+        setUhdMode(false);
+        main(() -> activity.exitEntry());
     }
 
     private void prepare(int destination, boolean fields, boolean wind) throws Exception {

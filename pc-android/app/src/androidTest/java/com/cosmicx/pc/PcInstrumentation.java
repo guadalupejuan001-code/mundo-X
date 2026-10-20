@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.List;
 import java.util.Locale;
+import java.util.Arrays;
 
 import com.mundox.graphics.RenderResolution;
 
@@ -79,6 +80,10 @@ public final class PcInstrumentation extends Instrumentation {
         Field field=MainActivity.class.getDeclaredField("quantumRenderer");field.setAccessible(true);
         return (QuantumRenderer)field.get(a);
     }
+    private NativeCore graphicsOwner(Activity a)throws Exception{
+        Field field=MainActivity.class.getDeclaredField("graphicsOwner");field.setAccessible(true);
+        return (NativeCore)((AtomicReference<?>)field.get(a)).get();
+    }
     private void waitOrientation(Activity a,int orientation)throws Exception{
         for(int i=0;i<80;i++){
             boolean[] matches={false};runOnMainSync(()->matches[0]=a.getResources().getConfiguration().orientation==orientation);
@@ -110,6 +115,44 @@ public final class PcInstrumentation extends Instrumentation {
         return image.get();
     }
     private void waitMemoryMeasurement(Activity a)throws Exception{for(int i=0;i<80;i++){boolean[] measured={false};runOnMainSync(()->{View v=tagged(current(a).getWindow().getDecorView(),"pc-memory");if(v instanceof TextView)measured[0]=((TextView)v).getText().toString().matches("(?s).*PSS[^\\n]*[0-9][^\\n]*.*");});if(measured[0])return;Thread.sleep(100);}throw new AssertionError("UI must display a numeric PSS sample, not only a label");}
+
+    private JSONObject etherProgramRoundtrip(Activity a,NativeCore owner,QuantumRenderer.Capture baseline)throws Exception{
+        String[] observables={"Z:7","Z:6 X:7 Z:8","X:0 X:1000000000","Y:0 Y:1000000000","Z:0 Z:1000000000"};
+        NativeCore.Observation before=owner.observe(observables);
+        long active=owner.infiniteStats().activeQubits;
+        require(owner.etherStats().rules==0&&Arrays.equals(before.values,new float[]{1,0,1,-1,1}),
+                "The guest Bell state must exist before explicit global preparation");
+        runOnMainSync(()->((EditText)tagged(a.getWindow().getDecorView(),"pc-quantum-program")).setText(
+                "h_all\ncz_neighbors\nexpect Z:6 X:7 Z:8\nstats"));
+        click(a,"Aplicar programa");waitText(a,"Éter ∞ · 2 reglas");
+        NativeCore.Observation framed=owner.observe(observables);
+        require(graphicsOwner(a)==owner&&owner.etherStats().rules==2
+                &&framed.revision==before.revision+2&&framed.epoch==before.epoch+1,
+                "Explicit global commands must mutate the existing PC/graphics session atomically");
+        require(Arrays.equals(framed.values,new float[]{0,1,0,0,1})&&owner.infiniteStats().activeQubits==active,
+                "Global rules must transform observations while preserving the guest preparation");
+        String framedSnapshot=owner.snapshot().infiniteSnapshot;
+        int globalChanged=baseline.changed(frame(a,true));
+        require(globalChanged>10,"Explicit Ether rules must reach the same-session GLES framebuffer");
+        require(renderer(a).frameStats().coreRevision==framed.revision&&renderer(a).frameStats().coreEpoch==framed.epoch
+                &&owner.epoch()==framed.epoch&&framedSnapshot.equals(owner.snapshot().infiniteSnapshot),
+                "Rendering the framed state must observe its revision without resetting or preparing it");
+        runOnMainSync(()->((EditText)tagged(a.getWindow().getDecorView(),"pc-quantum-program")).setText(
+                "cz_neighbors\nh_all\nexpect X:0 X:1000000000"));
+        click(a,"Aplicar programa");waitText(a,"Éter ∞ · 0 reglas");waitText(a,"XX=1 · YY=-1 · ZZ=1");
+        NativeCore.Observation restored=owner.observe(observables);
+        require(graphicsOwner(a)==owner&&owner.etherStats().rules==0&&Arrays.equals(restored.values,before.values)
+                &&restored.revision==before.revision+4&&restored.epoch==before.epoch+2,
+                "Inverse global layers must preserve the same guest state and advance its history");
+        int restoredChanged=baseline.changed(frame(a,true));
+        require(restoredChanged==0,"Inverse Ether layers must restore the exact original coupled pixels");
+        return new JSONObject().put("rules",new JSONArray().put(0).put(2).put(0))
+                .put("before",new JSONArray(before.values)).put("framed",new JSONArray(framed.values))
+                .put("restored",new JSONArray(restored.values)).put("same_owner",true).put("render_read_only",true)
+                .put("before_revision",before.revision).put("framed_revision",framed.revision).put("restored_revision",restored.revision)
+                .put("before_epoch",before.epoch).put("framed_epoch",framed.epoch).put("restored_epoch",restored.epoch)
+                .put("global_changed_pixels",globalChanged).put("roundtrip_changed_pixels",restoredChanged);
+    }
 
     private interface Checked {void run()throws Exception;}
     private void rejected(Checked action,String reason)throws Exception{
@@ -340,8 +383,14 @@ public final class PcInstrumentation extends Instrumentation {
         require(NativeMachine.screen(h).contains("InfiniteCore guest Z: OK"),"guest confirms its Z computation");
         pass("guest Z changes the live InfiniteCore state");
         NativeCore.ensureLoaded();
+        String beforeGraphics=NativeMachine.quantumSnapshot(h);
+        JSONObject beforeGraphicsState=state(NativeMachine.inspect(h)).getJSONObject("quantum");
         try(NativeCore shared=NativeCore.adoptInfiniteHandle(NativeMachine.quantumGraphicsHandle(h))){
             require(shared.query(new String[]{"X:0 X:1000000000"})[0]==-1,"graphics wrapper observes PC session");
+            require(shared.etherStats().rules==0&&beforeGraphics.equals(shared.snapshot().infiniteSnapshot)
+                    &&beforeGraphics.equals(NativeMachine.quantumSnapshot(h))
+                    &&shared.version()==beforeGraphicsState.getLong("revision")&&shared.epoch()==beforeGraphicsState.getLong("epoch"),
+                    "Adopting and observing the graphics handle must preserve the complete guest state and epoch");
             NativeMachine.quantumCommand(h,"z 0");
             require(shared.query(new String[]{"X:0 X:1000000000"})[0]==1,"host edit reaches same graphics owner");
             NativeMachine.destroy(h);h=0;
@@ -375,15 +424,23 @@ public final class PcInstrumentation extends Instrumentation {
         pass("x64 reset reruns actual transition");
         testNativeVideo(h);h=0;
         Intent intent=new Intent(getTargetContext(),MainActivity.class);intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);Activity a=startActivitySync(intent);waitForIdleSync();
+        waitText(a,"Éter ∞ · 0 reglas");NativeCore activityCore=graphicsOwner(a);
+        require(activityCore!=null&&activityCore.isInfinite()&&activityCore.etherStats().rules==0
+                &&activityCore.version()==0&&activityCore.infiniteStats().activeQubits==0,
+                "Opening the viewport must leave the new PC zero background unprepared");
         click(a,"Arranque de prueba");click(a,"Ejecutar");waitText(a,"ALU + RAM + lectura de disco: OK");pass("Activity operates real CPU");
         click(a,"Prueba x64");click(a,"Ejecutar");waitText(a,"long64");waitText(a,"DETENIDO · HLT");waitText(a,"COSMIC PC x64: OK");waitMemoryMeasurement(a);
         Debug.getMemoryInfo(memoryInfo);long activityPssBytes=memoryInfo.getTotalPss()*1024L;
         require(activityPssBytes>0&&activityPssBytes<2147483648L,"Activity test process must remain within the 2 GiB smoke-test budget");
         pass("Activity operates x64 guest and displays measured memory");
-        click(a,"Prueba núcleo x86");click(a,"Ejecutar");waitText(a,"InfiniteCore x86: OK");waitText(a,"XX=1 · YY=-1 · ZZ=1");
+        click(a,"Prueba núcleo x86");click(a,"Ejecutar");waitText(a,"InfiniteCore x86: OK");waitText(a,"XX=1 · YY=-1 · ZZ=1");waitText(a,"Éter ∞ · 0 reglas");
+        require(graphicsOwner(a)==activityCore&&activityCore.etherStats().rules==0,"Guest execution must use the existing graphics owner");
+        String guestState=activityCore.snapshot().infiniteSnapshot;long guestEpoch=activityCore.epoch();
         QuantumRenderer.Capture coupledBefore=frame(a,true);
         require(coupledBefore.nonBackground()>100,"viewport contains rendered scene pixels");
         QuantumRenderer.Capture uncoupledBefore=frame(a,false);
+        require(guestState.equals(activityCore.snapshot().infiniteSnapshot)&&activityCore.epoch()==guestEpoch,
+                "Drawing coupled and uncoupled views must not prepare or reset the guest session");
         click(a,"Prueba Z del huésped");click(a,"Ejecutar");waitText(a,"InfiniteCore guest Z: OK");waitText(a,"XX=-1 · YY=1 · ZZ=1");
         QuantumRenderer.Capture coupledAfter=frame(a,true);
         int coupledChanged=coupledBefore.changed(coupledAfter);
@@ -395,6 +452,7 @@ public final class PcInstrumentation extends Instrumentation {
         runOnMainSync(()->((EditText)tagged(a.getWindow().getDecorView(),"pc-quantum-program")).setText("z 0\nexpect X:0 X:1000000000"));
         click(a,"Aplicar programa");waitText(a,"XX=1 · YY=-1 · ZZ=1");
         require(coupledBefore.changed(frame(a,true))==0,"UI Z inverse restores exact coupled pixels");
+        JSONObject etherContract=etherProgramRoundtrip(a,activityCore,coupledBefore);
         long unchangedEpoch=renderer(a).frameStats().coreEpoch;
         String oversized="x 0\n"+new String(new char[65533]).replace('\0',' ');
         runOnMainSync(()->{EditText editor=(EditText)tagged(a.getWindow().getDecorView(),"pc-quantum-program");editor.setText(oversized);require(editor.getText().length()==oversized.length(),"pasted program must not be silently truncated");});
@@ -411,6 +469,7 @@ public final class PcInstrumentation extends Instrumentation {
         runOnMainSync(()->current(a).finish());waitForIdleSync();
         String summary="COSMIC_PC_TESTS_PASSED tests="+passed+" failures=0\n";result.putString("stream",summary);result.putInt("passed",passed);
         JSONObject report=new JSONObject();report.put("tests",passed);report.put("failures",0);report.put("windows_booted",false);report.put("x64_guest_verified",true);report.put("native_test_process_pss_bytes",processPssBytes);report.put("activity_process_pss_bytes",activityPssBytes);report.put("logical_ram_bytes",2147483648L);report.put("guest_payload_cap_bytes",1073741824L);report.put("infinite_guest_verified",true);report.put("shared_session_graphics_verified",true);report.put("coupled_changed_pixels",coupledChanged);report.put("uncoupled_changed_pixels",uncoupledBefore.changed(uncoupledAfter));
+        report.put("graphics_bridge_read_only",true).put("graphics_open_read_only",true).put("ether_fusion",etherContract);
         report.put("iso_shrd_verified",true);report.put("guest_8k_verified",true);report.put("output_8k_verified",true);report.put("video_tests",8);
         try(FileOutputStream out=new FileOutputStream(new File(evidence,"pc-tests.json"))){out.write(report.toString(2).getBytes(StandardCharsets.UTF_8));}finish(Activity.RESULT_OK,result);
     }catch(Throwable e){if(h!=0)try{NativeMachine.destroy(h);}catch(Throwable ignored){}try{videoReport.put("status","failed");videoReport.put("passed_before_failure",passed);videoReport.put("failure",android.util.Log.getStackTraceString(e));writeJson("pc-video-state.json",videoReport);}catch(Throwable ignored){}result.putString("stream","COSMIC_PC_TESTS_FAILED passed="+passed+" "+android.util.Log.getStackTraceString(e));finish(Activity.RESULT_CANCELED,result);}}

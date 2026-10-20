@@ -56,7 +56,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final float[] axes=new float[MAX_BODIES*3];
     private final double[][] poleBasis=new double[MAX_BODIES][9];
     private final int[] layers=new int[MAX_BODIES];
-    private final float[] quantum=new float[8];
+    private final float[] quantum=new float[8],ether=new float[4];
     private final double[][] orbitCache=new double[MAX_BODIES][];
     private double orbitCacheDate=Double.NaN;
     private final double[] cameraEye={0,0,0},cameraTarget={0,0,0},panOffset={0,0,0};
@@ -65,16 +65,20 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final FloatBuffer lines=direct(MAX_OVERLAY_VERTICES*7*4).asFloatBuffer();
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
     private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
-    private int mapTexture,colorTexture,depthBuffer,framebuffer;
+    private int mapTexture,bodyMaskTexture,colorTexture,depthBuffer,framebuffer;
+    private int bodyMaskTilesX,bodyMaskTilesY;
+    private SolarVisualEther.Plan visualPlan;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
-    private boolean requestedUhd;
-    private volatile boolean activeUhd;
+    private boolean requestedUhd,requestedUltra;
+    private volatile boolean activeUhd,activeUltra;
     private volatile String resolutionMessage;
     private volatile RenderResolution.Fit display=RenderResolution.fit(1,1,new RenderResolution.Size(1,1));
     private volatile boolean entryMode,atmosphereEnabled=true;
     private double entryLatitude,entryLongitude,entryHeading,entryLookPitch;
     private volatile double entryAltitude;
+    private boolean localPhysics;
+    private SolarFlightPhysics.State flightState=new SolarFlightPhysics.State(35,0);
     private volatile double[] publishedEntry;
     private double sceneScale=1;
     private boolean framebufferDirty=true,failed=false,initializedCamera=false;
@@ -152,8 +156,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     @Override public void onSurfaceCreated(GL10 unused,EGLConfig config){
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
-        mapTexture=colorTexture=depthBuffer=framebuffer=0;
-        activeUhd=false;
+        mapTexture=bodyMaskTexture=colorTexture=depthBuffer=framebuffer=0;
+        bodyMaskTilesX=bodyMaskTilesY=0;visualPlan=null;
+        activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
         try{
@@ -167,6 +172,13 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             glEnableVertexAttribArray(1);glVertexAttribPointer(1,4,GL_FLOAT,false,7*4,3*4);
             glBindVertexArray(0);
             loadMaps();
+            bodyMaskTexture=newTexture();
+            glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+            glActiveTexture(GL_TEXTURE0);
             glDisable(GL_DITHER);glDisable(GL_CULL_FACE);glClearColor(0,0,0,1);
             framebufferDirty=true;device=glGetString(GL_RENDERER);check("Inicio del observador solar");
         }catch(Throwable e){error(e);}
@@ -234,9 +246,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         check("Límites de resolución");return new RenderResolution.Limits(caps[0],caps[1],caps[2],caps[3]);
     }
     /** Candidate attachments are checked before any current GL name is replaced. */
-    private void installTarget(RenderResolution.Size size,boolean uhd,int limit){
+    private void installTarget(RenderResolution.Size size,int mode,int limit){
         RenderResolution.Fit fit=RenderResolution.fit(viewWidth,viewHeight,size);
         if(framebuffer==0||width!=size.width||height!=size.height){
+            RenderResolution.Size existing=framebuffer==0?null:new RenderResolution.Size(width,height);
+            RenderResolution.requireAllocation(size,existing);
             int color=0,depth=0,target=0;boolean accepted=false;
             try{
                 color=newTexture();int[] name={0};glGenRenderbuffers(1,name,0);depth=name[0];
@@ -266,19 +280,29 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             }
         }
         display=fit;aspect=(float)width/height;quality=acceptedQuality=limit;
-        activeUhd=requestedUhd=uhd;framebufferDirty=false;
+        activeUhd=requestedUhd=mode==RenderResolution.UHD_4K;
+        activeUltra=requestedUltra=mode==RenderResolution.UHD_8K;
+        framebufferDirty=false;
     }
     private void sizeFramebuffer(){
-        RenderResolution.Limits caps=null;RenderResolution.Size uhd=RenderResolution.uhd(viewWidth,viewHeight);
-        boolean wantedUhd=requestedUhd;int wantedQuality=quality;
-        String request=wantedUhd?"UHD 4K "+uhd.width+"×"+uhd.height:wantedQuality+" px";
+        RenderResolution.Limits caps=null;
+        RenderResolution.Size uhd=RenderResolution.uhd(viewWidth,viewHeight);
+        RenderResolution.Size ultra=RenderResolution.uhd8k(viewWidth,viewHeight);
+        boolean wantedUltra=requestedUltra,wantedUhd=requestedUhd&&!wantedUltra;
+        int wantedQuality=quality;
+        int wantedMode=wantedUltra?RenderResolution.UHD_8K:wantedUhd?RenderResolution.UHD_4K:RenderResolution.ADAPTIVE;
+        RenderResolution.Size requested=wantedUltra?ultra:uhd;
+        String request=wantedUltra?"UHD 8K "+ultra.width+"×"+ultra.height
+                :wantedUhd?"UHD 4K "+uhd.width+"×"+uhd.height:wantedQuality+" px";
         try{
-            caps=resolutionLimits();RenderResolution.Size size=wantedUhd?uhd:RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps);
-            caps.require(size);installTarget(size,wantedUhd,wantedQuality);resolutionMessage=null;
+            caps=resolutionLimits();
+            RenderResolution.Size size=wantedMode==RenderResolution.ADAPTIVE
+                    ?RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps):requested;
+            caps.require(size);installTarget(size,wantedMode,wantedQuality);resolutionMessage=null;
         }catch(RuntimeException|OutOfMemoryError rejected){
             String reason=rejected.getMessage();if(reason==null)reason=rejected.getClass().getSimpleName();
             if(framebuffer!=0){
-                requestedUhd=activeUhd;quality=acceptedQuality;framebufferDirty=false;
+                requestedUhd=activeUhd;requestedUltra=activeUltra;quality=acceptedQuality;framebufferDirty=false;
                 display=RenderResolution.fit(viewWidth,viewHeight,new RenderResolution.Size(width,height));
                 resolutionMessage="No se pudo activar "+request+": "+reason+". Se conserva "+width+"×"+height+".";return;
             }
@@ -286,7 +310,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             int fallback=wantedQuality;
             while(true){
                 try{
-                    installTarget(RenderResolution.adaptive(viewWidth,viewHeight,fallback,caps),false,fallback);
+                    installTarget(RenderResolution.adaptive(viewWidth,viewHeight,fallback,caps),RenderResolution.ADAPTIVE,fallback);
                     resolutionMessage="No se pudo activar "+request+": "+reason+". Se usa modo adaptado "+width+"×"+height+".";return;
                 }catch(RuntimeException|OutOfMemoryError unavailable){
                     if(fallback<=64)throw new IllegalStateException("No se pudo asignar un framebuffer mínimo",unavailable);
@@ -344,8 +368,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     }
     private void syncQuantum(){
         long revision=bridge.revision();if(revision==uploadedRevision)return;
-        float[] coefficients=bridge.coefficients();
+        float[] coefficients=bridge.coefficients(),etherCoefficients=bridge.etherCoefficients();
         for(int i=0;i<8;i++)quantum[i]=i<coefficients.length&&finite(coefficients[i])?Math.max(-1,Math.min(1,coefficients[i])):0;
+        for(int i=0;i<4;i++)ether[i]=i<etherCoefficients.length&&finite(etherCoefficients[i])?Math.max(-1,Math.min(1,etherCoefficients[i])):0;
         uploadedRevision=revision;
     }
     private double defaultDistance(){
@@ -440,6 +465,22 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(SolarData.Body body:SolarData.BODIES){int p=body.id*4;for(int k=0;k<3;k++)packedBodies[p+k]=(float)((positions[body.id][k]-cameraEye[k])*sceneScale);packedBodies[p+3]=(float)(radii[body.id]*sceneScale);}
         initializedCamera=true;
     }
+    private void syncVisualEther(){
+        visualPlan=SolarVisualEther.plan(width,height,SolarVisualEther.DEFAULT_TILE,TAN_HALF_FOV,aspect,
+                forward,right,up,packedBodies,appearance,atmosphere,SolarData.BODIES.length);
+        ByteBuffer raw=direct(visualPlan.masks.length*4);
+        raw.asIntBuffer().put(visualPlan.masks);
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);
+        if(bodyMaskTilesX!=visualPlan.tilesX||bodyMaskTilesY!=visualPlan.tilesY){
+            glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,visualPlan.tilesX,visualPlan.tilesY,0,
+                    GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
+            bodyMaskTilesX=visualPlan.tilesX;bodyMaskTilesY=visualPlan.tilesY;
+        }else{
+            glTexSubImage2D(GL_TEXTURE_2D,0,0,0,visualPlan.tilesX,visualPlan.tilesY,
+                    GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
+        }
+        glActiveTexture(GL_TEXTURE0);check("Visual Ether");
+    }
     private void drawScene(){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
@@ -458,8 +499,12 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform1i(sceneLoc("uAtmosphereEnabled"),atmosphereEnabled?1:0);
         glUniform1iv(sceneLoc("uLayers[0]"),SolarData.BODIES.length,layers,0);
         glUniform4fv(sceneLoc("uQ0"),1,quantum,0);glUniform4fv(sceneLoc("uQ1"),1,quantum,4);
+        glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);glUniform1i(sceneLoc("uBodyTiles"),1);
+        glUniform2i(sceneLoc("uBodyTileGrid"),visualPlan.tilesX,visualPlan.tilesY);
+        glActiveTexture(GL_TEXTURE0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
 
@@ -669,7 +714,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             long now=System.nanoTime();double dt=previousNanos==0?0:Math.min(.1,Math.max(0,(now-previousNanos)*1e-9));previousNanos=now;
             if(!paused)clockSeconds+=dt;
             if(!paused){double next=jd+dt*speed;if(next<SolarData.MIN_JD||next>SolarData.MAX_JD){jd=Math.max(SolarData.MIN_JD,Math.min(SolarData.MAX_JD,next));paused=true;}else jd=next;}
-            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
+            if(entryMode&&localPhysics&&!paused&&dt>0){
+                SolarFlightPhysics.step(selected,SolarEnvironment.environment(selected),flightState,0,dt);
+                entryAltitude=flightState.altitudeKm;publishEntry();
+            }
+            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);syncVisualEther();
             glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
             lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
             check("Observación solar");
@@ -690,7 +739,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d%s",fps,width,height,isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · éter visual %.1f%%%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,visualPlan==null?100.0:visualPlan.referenceRatio()*100.0,resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
@@ -705,7 +754,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         selected=body;entryMode=true;isOverview=false;freeFlight=false;
         for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();SolarEnvironment environment=SolarEnvironment.environment(body);
-        entryAltitude=environment.entryAltitudeKm;entryHeading=90;
+        entryAltitude=environment.entryAltitudeKm;flightState=new SolarFlightPhysics.State(entryAltitude,0);entryHeading=90;
         double depression=Math.toDegrees(Math.acos(Math.min(1.0,SolarData.BODIES[body].radiusKm/(SolarData.BODIES[body].radiusKm+Math.max(0,entryAltitude)))));
         entryLookPitch=-Math.min(78,Math.max(15,depression+7));
         double[] day=solarDirection(body),basis=poleBasis[body];
@@ -732,10 +781,22 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public void setEntryAltitudeKm(double altitude){
         if(!finite(altitude))throw new IllegalArgumentException("Altitud no finita");
         if(!entryMode)enterAtmosphere(selected);
-        entryAltitude=SolarEnvironment.environment(selected).clampAltitudeKm(altitude);publishEntry();
+        entryAltitude=SolarEnvironment.environment(selected).clampAltitudeKm(altitude);
+        flightState=new SolarFlightPhysics.State(entryAltitude,0);publishEntry();
     }
     public double altitudeKm(){return entryMode?entryAltitude:Double.NaN;}
     public boolean isEntryMode(){return entryMode;}
+    public void setLocalPhysics(boolean enabled){
+        localPhysics=enabled;
+        flightState=new SolarFlightPhysics.State(entryMode?entryAltitude:Math.max(.5,entryAltitude),0);
+    }
+    public boolean localPhysicsEnabled(){return localPhysics;}
+    public double radialVelocityKmS(){return entryMode?flightState.radialVelocityKmS:Double.NaN;}
+    public double localGravityMs2(){return entryMode?SolarData.gravityMs2(selected,entryAltitude):Double.NaN;}
+    public void radialImpulseKmS(double delta){
+        if(entryMode&&localPhysics&&finite(delta))
+            flightState.radialVelocityKmS=Math.max(-20,Math.min(20,flightState.radialVelocityKmS+delta));
+    }
     /** Immutable publication: [body, km, latitude°, longitude°, heading°, lookPitch°]. */
     public double[] entryState(){double[] state=publishedEntry;return state==null?null:state.clone();}
     public void restoreEntryState(double[] state){
@@ -745,19 +806,28 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         int body=(int)state[0];if(body!=state[0]||body<0||body>=SolarData.BODIES.length)throw new IllegalArgumentException("Cuerpo de entrada inválido");
         selected=body;entryMode=true;isOverview=false;freeFlight=false;syncWorld();
         entryAltitude=SolarEnvironment.environment(body).clampAltitudeKm(state[1]);
+        flightState=new SolarFlightPhysics.State(entryAltitude,0);
         entryLatitude=Math.max(-89.9,Math.min(89.9,state[2]));entryLongitude=state[3]%360;
         entryHeading=state[4]%360;entryLookPitch=Math.max(-85,Math.min(85,state[5]));
         for(int k=0;k<3;k++)panOffset[k]=0;publishEntry();listener.selected(body);
     }
     private void moveEntry(double northKm,double eastKm){
         double radius=SolarData.BODIES[selected].radiusKm+entryAltitude;
-        double lat=Math.toRadians(entryLatitude),lon=Math.toRadians(entryLongitude),sl=Math.sin(lat),cl=Math.cos(lat),sn=Math.sin(lon),cn=Math.cos(lon);
-        double x=cl*cn+(-sl*cn*northKm-sn*eastKm)/radius;
-        double y=sl+cl*northKm/radius;
-        double z=-cl*sn+(sl*sn*northKm-cn*eastKm)/radius;
-        double norm=Math.sqrt(x*x+y*y+z*z);
-        entryLatitude=Math.toDegrees(Math.asin(Math.max(-.999998,Math.min(.999998,y/norm))));
-        entryLongitude=-Math.toDegrees(Math.atan2(z,x));publishEntry();
+        double distance=Math.hypot(northKm,eastKm);
+        if(!(radius>0)||!finite(distance)||distance<1e-12)return;
+        // Exact great-circle destination from a local north/east displacement.
+        // This avoids the first-order tangent drift of the previous update.
+        double lat1=Math.toRadians(entryLatitude),lon1=Math.toRadians(entryLongitude);
+        double bearing=Math.atan2(eastKm,northKm),angular=distance/radius;
+        double sinLat1=Math.sin(lat1),cosLat1=Math.cos(lat1);
+        double sinAngular=Math.sin(angular),cosAngular=Math.cos(angular);
+        double lat2=Math.asin(Math.max(-1,Math.min(1,
+                sinLat1*cosAngular+cosLat1*sinAngular*Math.cos(bearing))));
+        double lon2=lon1+Math.atan2(Math.sin(bearing)*sinAngular*cosLat1,
+                cosAngular-sinLat1*Math.sin(lat2));
+        entryLatitude=Math.toDegrees(lat2);
+        entryLongitude=Math.toDegrees(Math.atan2(Math.sin(lon2),Math.cos(lon2)));
+        publishEntry();
     }
     public void focus(int body){
         if(body<0||body>=SolarData.BODIES.length)return;
@@ -835,9 +905,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
-    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=false;resolutionMessage=null;framebufferDirty=true;}
-    public void setUhd4k(boolean enabled){requestedUhd=enabled;resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
+    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;}
+    public void setUhd4k(boolean enabled){requestedUhd=enabled; if(enabled)requestedUltra=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
+    public void setUhd8k(boolean enabled){requestedUltra=enabled; if(enabled)requestedUhd=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
     public boolean isUhd4k(){return activeUhd&&framebuffer!=0&&((width==3840&&height==2160)||(width==2160&&height==3840));}
+    public boolean isUhd8k(){return activeUltra&&framebuffer!=0&&((width==7680&&height==4320)||(width==4320&&height==7680));}
     public int renderedWidth(){return width;}
     public int renderedHeight(){return height;}
     public int surfaceWidth(){return viewWidth;}
@@ -896,6 +968,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
         glDeleteBuffers(1,new int[]{overlayVbo},0);glDeleteVertexArrays(2,new int[]{eyeVao,overlayVao},0);
         sceneProgram=overlayProgram=0;hasFrame=false;capture=null;
-        activeUhd=false;
+        activeUhd=activeUltra=false;
     }
 }
