@@ -83,7 +83,7 @@ public final class SolarInstrumentation extends Instrumentation {
             metrics.put("androidRelease", Build.VERSION.RELEASE);
             metrics.put("abis", new JSONArray(Arrays.asList(Build.SUPPORTED_ABIS)));
             metrics.put("performanceScope", "Software GLES emulator; not Samsung A16 performance measurements");
-            metrics.put("physicalScope", "JPL analytical orbits; illustrative moon phases and magnetic geometries");
+            metrics.put("physicalScope", "JPL analytical orbits + JPL-GM local gravity; illustrative moon phases and magnetic geometries");
             metrics.put("uhd4kSuite", uhdSuite && !ultraSuite);
             metrics.put("ultra8kSuite", ultraSuite);
             metrics.put("applicationId", getTargetContext().getPackageName());
@@ -232,8 +232,18 @@ public final class SolarInstrumentation extends Instrumentation {
         expect(SolarData.BODIES[4].fieldType == SolarData.FIELD_INDUCED_CRUSTAL, "Mars must distinguish crustal and induced fields");
         expect(SolarData.BODIES[9].fieldType == SolarData.FIELD_NONE, "Moon must not have an invented global dipole");
         expect(SolarData.BODIES[12].fieldType == SolarData.FIELD_INTRINSIC, "Ganymede intrinsic field is absent");
+        double earthGravity=SolarData.gravityMs2(3,0),earthEscape=SolarData.escapeVelocityKmS(3,0);
+        SolarFlightPhysics.State falling=new SolarFlightPhysics.State(100,0);
+        for(int step=0;step<100;step++)SolarFlightPhysics.step(3,SolarEnvironment.environment(3),falling,0,.01);
+        expect(earthGravity>9.81&&earthGravity<9.83&&earthEscape>11.18&&earthEscape<11.20,
+                "Packaged JPL-GM Earth gravity/escape model is wrong");
+        expect(falling.altitudeKm<100&&falling.radialVelocityKmS<0,
+                "Packaged local gravity integrator did not produce free fall");
         metrics.put("bodyCount", SolarData.BODIES.length).put("planetCount", 8).put("moonCount", 14);
         metrics.put("earthJ2000DistanceAU", earthAU).put("earthMoonDistanceKm", moonKm);
+        metrics.put("earthGravityMs2",earthGravity).put("earthEscapeKmS",earthEscape)
+                .put("oneSecondFallAltitudeKm",falling.altitudeKm)
+                .put("oneSecondFallVelocityKmS",falling.radialVelocityKmS);
         metrics.put("fieldTypes", new JSONObject().put("earth", 1).put("venus", 2).put("mars", 3).put("moon", 0).put("ganymede", 1));
     }
 
