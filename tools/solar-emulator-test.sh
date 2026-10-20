@@ -10,14 +10,26 @@ solar_emulator="$solar_sdk/emulator/emulator"
 solar_serial=emulator-5554
 solar_apks="${SOLAR_APK_DIR:-solar-apks}"
 solar_evidence="${SOLAR_EVIDENCE_DIR:-solar-evidence}"
-solar_uhd="${SOLAR_UHD4K:-false}"
+solar_4k="${SOLAR_UHD4K:-false}"
+solar_8k="${SOLAR_UHD8K:-false}"
+[[ "$solar_4k" != true || "$solar_8k" != true ]] || { echo 'Choose Solar 4K or 8K, not both.' >&2; exit 1; }
+solar_profile=normal
 solar_package=com.cosmicx.solar
 solar_apk=COSMIC-X-Solar.apk
 solar_tests=COSMIC-X-Solar-tests.apk
 solar_instrument_timeout=1000
 solar_instrument_args=()
 solar_verify_args=()
-if [[ "$solar_uhd" == true ]]; then
+if [[ "$solar_8k" == true ]]; then
+  solar_profile=8k
+  solar_package=com.cosmicx.solar.ultra
+  solar_apk=COSMIC-X-Solar-8K.apk
+  solar_tests=COSMIC-X-Solar-8K-tests.apk
+  solar_instrument_timeout=2400
+  solar_instrument_args=(-e ultra8k true)
+  solar_verify_args=(--ultra8k)
+elif [[ "$solar_4k" == true ]]; then
+  solar_profile=4k
   solar_package=com.cosmicx.solar.uhd
   solar_apk=COSMIC-X-Solar-4K.apk
   solar_tests=COSMIC-X-Solar-4K-tests.apk
@@ -28,15 +40,20 @@ fi
 mkdir -p "$solar_evidence"
 solar_evidence="$(realpath "$solar_evidence")"
 
-python3 - "$solar_apks" "$solar_uhd" <<'PY'
+python3 - "$solar_apks" "$solar_profile" <<'PY'
 import hashlib
 import subprocess
 import sys
 from pathlib import Path
 directory = Path(sys.argv[1])
 expected_names = {'COSMIC-X-Solar.apk', 'COSMIC-X-Solar-tests.apk'}
-if sys.argv[2] == 'true':
+profile = sys.argv[2]
+if profile == '4k':
     expected_names = {'COSMIC-X-Solar-4K.apk', 'COSMIC-X-Solar-4K-tests.apk', 'COSMIC-X-Solar-coexist.apk'}
+elif profile == '8k':
+    expected_names = {'COSMIC-X-Solar-8K.apk', 'COSMIC-X-Solar-8K-tests.apk', 'COSMIC-X-Solar-coexist.apk'}
+elif profile != 'normal':
+    raise SystemExit('Unexpected Solar profile: ' + profile)
 found = set()
 for row in (directory / 'SHA256SUMS.txt').read_text().splitlines():
     expected, name = row.split()
@@ -109,7 +126,7 @@ done
 [[ "$solar_booted" == true ]] || { echo 'Emulator did not boot within the limit.' >&2; exit 1; }
 
 "$solar_adb" -s "$solar_serial" shell input keyevent 82
-if [[ "$solar_uhd" == true ]]; then
+if [[ "$solar_profile" != normal ]]; then
   # A tall mobile display exercises FIT bands instead of accidentally matching UHD.
   "$solar_adb" -s "$solar_serial" shell wm size 960x1920
 else
@@ -126,12 +143,12 @@ fi
   | tr -d '\r' > "$solar_evidence/immersive-tutorial-setting.txt"
 [[ $(cat "$solar_evidence/immersive-tutorial-setting.txt") == confirmed ]] \
   || { echo 'Could not acknowledge the emulator full-screen tutorial.' >&2; exit 1; }
-if [[ "$solar_uhd" == true ]]; then
+if [[ "$solar_profile" != normal ]]; then
   "$solar_adb" -s "$solar_serial" install -r "$solar_apks/COSMIC-X-Solar-coexist.apk"
 fi
 "$solar_adb" -s "$solar_serial" install -r "$solar_apks/$solar_apk"
 "$solar_adb" -s "$solar_serial" install -r "$solar_apks/$solar_tests"
-if [[ "$solar_uhd" == true ]]; then
+if [[ "$solar_profile" != normal ]]; then
   "$solar_adb" -s "$solar_serial" shell pm list packages --user 0 com.cosmicx.solar \
     > "$solar_evidence/coinstallation.txt"
 fi
