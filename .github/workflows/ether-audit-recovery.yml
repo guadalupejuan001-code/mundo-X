@@ -5,46 +5,100 @@ on:
     paths:
       - '.github/workflows/ether-audit-recovery.yml'
       - '.ether-recovery/**'
-  workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: ether-audit-isolated-recovery
+  cancel-in-progress: false
 jobs:
-  verify-transfer:
+  restore-and-verify:
+    if: github.repository == 'guadalupejuan001-code/mundo-X' && github.ref == 'refs/heads/codex/ether-audit-stress-20261020'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Preserve transfer bytes and verify against local bundle
+      - name: Reconstruct exact bundle; reject any mismatched bytes
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p recovery-output/transfer
-          cp .ether-recovery/*.b64 recovery-output/transfer/
-          git rev-parse HEAD > recovery-output/export-head.txt
+          mkdir -p "$RUNNER_TEMP/ether-recovery-evidence"
           python3 - <<'PY'
-          import base64, hashlib, pathlib
+          import base64, hashlib, json, os, pathlib
           root = pathlib.Path('.ether-recovery')
+          pieces = {p.name:p.read_text().strip() for p in root.glob('*.b64')}
+          fixes = json.loads((root/'transport-fixes.json').read_text())
+          for name, item in fixes.items():
+              text = pieces[name]
+              assert hashlib.sha256(text.encode()).hexdigest() == item['sha256_before'], name
+              for edit in reversed(item['edits']):
+                  at, old, new = edit['offset'], edit['old'], edit['new']
+                  assert text[at:at+len(old)] == old, name
+                  text = text[:at] + new + text[at+len(old):]
+              assert hashlib.sha256(text.encode()).hexdigest() == item['sha256_after'], name
+              pieces[name] = text
           text = ''
           for i in range(1,17):
-              text += (root / f'part-{i:02d}.b64').read_text().strip()
+              text += pieces[f'part-{i:02d}.b64']
               if i == 15:
-                  for j in range(1,4):
-                      text += (root / f'part-15.{j}.b64').read_text().strip()
-          try:
-              data = base64.b64decode(text, validate=True)
-              digest = hashlib.sha256(data).hexdigest()
-          except ValueError as e:
-              digest = 'invalid transfer: ' + str(e)
-          pathlib.Path('recovery-output/digest.txt').write_text(digest+'\n')
-          print(digest)
-          assert digest == '80312a4eeab0624f9f4eb9949aa1665b22fa5a9550ec9e2e0191291862cbe776', 'Transfer checksum mismatch; no source imported'
+                  for j in range(1,4): text += pieces[f'part-15.{j}.b64']
+          data = base64.b64decode(text, validate=True)
+          digest = hashlib.sha256(data).hexdigest()
+          assert digest == '80312a4eeab0624f9f4eb9949aa1665b22fa5a9550ec9e2e0191291862cbe776', digest
+          out = pathlib.Path(os.environ['RUNNER_TEMP'])/'ether-recovery-evidence'
+          (out/'verified-audit.bundle').write_bytes(data)
+          (out/'transfer-sha256.txt').write_text(digest+'\n')
+          print('Exact original audit bundle verified:', digest)
           PY
+      - name: Restore original commits on the isolated branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/ether-recovery-evidence"
+          git bundle verify "$EVIDENCE/verified-audit.bundle"
+          git fetch "$EVIDENCE/verified-audit.bundle" refs/heads/recovered/code:refs/heads/recovered-audit-code
+          test "$(git rev-parse recovered-audit-code)" = b7f57afabc7d4d73b48790988799a8777b752ed4
+          git config user.name 'Ether audit recovery'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c verified-audit-restoration
+          git merge --no-ff recovered-audit-code -m 'Merge checksum-verified Ether audit commits without changing main'
+          git rm -r .ether-recovery .github/workflows/ether-audit-recovery.yml
+          git commit -m 'build(ether): remove temporary transport after exact history recovery'
+          git rev-parse HEAD > "$EVIDENCE/tested-commit.txt"
+          git log --format='%H %s' 7b028db2344912b2ab86a0affa2a1fe56180922b..HEAD > "$EVIDENCE/commits.txt"
+          git bundle create "$EVIDENCE/complete-recovered-source.bundle" HEAD
+      - name: Rebuild and validate recovered native sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/ether-recovery-evidence"
+          cmake -S . -B "$RUNNER_TEMP/ether-build" -DCMAKE_BUILD_TYPE=Release 2>&1 | tee "$EVIDENCE/configure.log"
+          cmake --build "$RUNNER_TEMP/ether-build" -j 2 2>&1 | tee "$EVIDENCE/build.log"
+          ctest --test-dir "$RUNNER_TEMP/ether-build" --output-on-failure --output-junit "$EVIDENCE/ctest.xml" 2>&1 | tee "$EVIDENCE/ctest.log"
+          "$RUNNER_TEMP/ether-build/test_ether_fusion" | tee "$EVIDENCE/independent-complex-oracle.json"
+          python3 tools/cosmic_source_provenance.py > "$EVIDENCE/provenance.json"
+          python3 tools/ether_reference_check.py | tee "$EVIDENCE/signed-pullbacks.json"
+          python3 tools/validate_ether_jni.py --build-dir "$RUNNER_TEMP/ether-jni" | tee "$EVIDENCE/jni.json"
+      - name: Publish only verified branch, without force
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH=codex/ether-audit-stress-20261020
+          CURRENT=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          test "$CURRENT" = "$EXPECTED_HEAD"
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w 0)
+          echo "::add-mask::$AUTH"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin "HEAD:refs/heads/$BRANCH"
+          git rev-parse HEAD > "$RUNNER_TEMP/ether-recovery-evidence/published-commit.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Ether-audit-transfer-verification
-          path: recovery-output/
-          retention-days: 7
+          name: Ether-audit-restoration-and-native-tests
+          path: ${{ runner.temp }}/ether-recovery-evidence/
+          retention-days: 14
