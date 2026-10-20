@@ -23,6 +23,7 @@ android {
             java.include 'com/cosmicx/pc/**', 'com/mundox/graphics/NativeCore.java',
                     'com/mundox/graphics/InfiniteProgram.java', 'com/mundox/graphics/EtherCoreNative.java',
                     'com/mundox/graphics/QuantumRenderer.java', 'com/mundox/graphics/RenderResolution.java',
+                    'com/mundox/graphics/EditPages.java',
                     'com/mundox/graphics/TilePlan.java', 'com/mundox/graphics/FramePng.java',
                     'com/mundox/graphics/StreamPng.java'
             assets.srcDirs = ['../../graphics-android/app/src/main/assets']
