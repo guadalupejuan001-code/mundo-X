@@ -226,13 +226,15 @@ class EtherCore {
 
   static void conjugate_cz_neighbors(Pauli& p, const QueryLimits& limits,
                                      std::size_t& peak) {
-    // CZ leaves every X bit invariant. Keep only the X support, then send its
-    // Z contribution to each neighbour. Each adjacent XX pair contributes its
-    // sign once, via the right neighbour. No edge tree or duplicated endpoints.
-    std::vector<std::string> xs;
-    xs.reserve(p.cells.size());
-    for (const auto& item : p.cells) if (item.second.x) xs.push_back(item.first);
-    for (const auto& q : xs) {
+    // CZ leaves every X bit invariant. A visited X cell therefore cannot be
+    // erased by toggle_z, and std::map insertion/erasure of other cells leaves
+    // this iterator valid. Newly inserted cells have X=0 and are skipped. Walk
+    // the invariant support directly: no copied addresses or temporary vector,
+    // including for all-Z queries. Each adjacent XX pair contributes its sign
+    // once, via the right neighbour.
+    for (auto it = p.cells.begin(); it != p.cells.end(); ++it) {
+      if (!it->second.x) continue;
+      const auto& q = it->first;
       auto next = successor(q);
       check_address(next, limits);
       if (get_bits(p,next).x) p.phase = (p.phase + 2) & 3;
