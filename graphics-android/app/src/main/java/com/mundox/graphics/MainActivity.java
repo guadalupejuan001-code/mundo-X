@@ -627,6 +627,9 @@ public final class MainActivity extends Activity {
         }
         if(mirrorButton!=null)mirrorButton.setText(observed.mirrorMode()==QuantumRenderer.MIRRORS_OFF?"Espejos: no":
             observed.mirrorMode()==QuantumRenderer.MIRRORS_FLOOR?"Espejos: suelo":"Espejos: pareja");
+        if(frame!=null&&savedSession!=null&&savedSession.visual.mirrorMode!=frame.mirrorMode&&surface!=null){
+            surface.queueEvent(()->{if(!destroyed&&renderer==observed)captureSession();});
+        }
         if(styleButton!=null)styleButton.setText(observed.presentation()==QuantumRenderer.PRESENTATION_COSMIC?"Estilo: cósmico":"Estilo: original");
     });}
 

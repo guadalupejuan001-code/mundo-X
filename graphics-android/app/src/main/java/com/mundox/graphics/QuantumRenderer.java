@@ -186,6 +186,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private volatile int mirrorMode=MIRRORS_OFF,mirrorBudget=16;
     private boolean mirrorFold=true;
     private float mirrorReflectance=1f;
+    private volatile String opticalMessage;
     private long seed=2026;
     private boolean framebufferDirty=true,editsDirty=true,failed=false;
     private boolean synchronousTiming=false,exporting=false;
@@ -459,6 +460,12 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                 int[] ok=new int[1];glGetProgramiv(candidate,GL_LINK_STATUS,ok,0);
                 if(ok[0]==0)throw new IllegalStateException("Reflejos: "+glGetProgramInfoLog(candidate));
                 mirrorProgram=candidate;candidate=0;
+            }catch(RuntimeException|OutOfMemoryError rejected){
+                // A mobile driver can reject this optional specialization.
+                // Keep the existing primary program and framebuffer usable.
+                mirrorMode=MIRRORS_OFF;
+                opticalMessage="No se pudieron activar los reflejos en este dispositivo: "+rejected.getMessage();
+                for(int j=0;j<16&&glGetError()!=GL_NO_ERROR;j++){}
             }finally{
                 if(vertex!=0)glDeleteShader(vertex);if(fragment!=0)glDeleteShader(fragment);
                 if(candidate!=0)glDeleteProgram(candidate);
@@ -534,6 +541,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             latestFrame=new FrameStats(this,elapsed);
             if(requested!=null)capture=null;
             listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %.1f ms %s\n%s · %d observables · estado %s%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",elapsed,synchronousTiming?"GPU completada":"CPU envío",core.domainLabel(),coefficients.length,Long.toUnsignedString(uploadedCore),selected>=0?" · ID "+selected:"",device,(resolutionMessage==null?"":"\n"+resolutionMessage)
+                +(opticalMessage==null?"":"\n"+opticalMessage)
                 +(mirrorMode==MIRRORS_OFF?"":"\n"+(mirrorMode==MIRRORS_FLOOR?"Suelo reflectante":"Espejos enfrentados")
                     +" · "+mirrorBudget+" rebotes explícitos · violeta = recorrido pendiente")));
             if(requested!=null)requested.captured(pixels);
@@ -590,6 +598,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         if(mode<MIRRORS_OFF||mode>MIRRORS_PAIR||budget<1||budget>64||!finite(reflectance)||reflectance<0f||reflectance>1f)
             throw new IllegalArgumentException("Espejos: modo 0..2, presupuesto 1..64 y reflectancia 0..1");
         mirrorMode=mode;mirrorBudget=budget;mirrorFold=fold;mirrorReflectance=reflectance;
+        opticalMessage=null;
     }
     public int mirrorMode(){return mirrorMode;}
     public int mirrorBudget(){return mirrorBudget;}
