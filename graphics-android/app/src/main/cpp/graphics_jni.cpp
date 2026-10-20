@@ -10,6 +10,8 @@
 #include "mundo_x/infinite_bridge.h"
 #include "mundo_x/infinite_bridge.hpp"
 #include "mundo_x/infinite_session.hpp"
+#include "mundo_x/ether_core.hpp"
+#include "mundo_x/infinite_program.hpp"
 namespace {
 constexpr std::uint64_t max_project_revision=9007199254740991ULL;
 constexpr std::size_t max_project_gates=100000;
@@ -246,4 +248,70 @@ Java_com_mundox_graphics_NativeCore_nInfiniteStats(JNIEnv* e,jclass,jlong p){
         static_cast<jlong>(s.address_bytes),static_cast<jlong>(s.revision),static_cast<jlong>(s.epoch),
         static_cast<jlong>(s.background)};
     auto out=e->NewLongArray(8);if(out)e->SetLongArrayRegion(out,0,8,values);return out;
+}
+
+namespace {
+mundo_x::EtherCore* ether_handle(jlong p){
+    return reinterpret_cast<mundo_x::EtherCore*>(static_cast<std::uintptr_t>(p));
+}
+}
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_mundox_graphics_EtherCoreNative_nCreate(JNIEnv* e,jclass){
+    try{
+        auto* core=new mundo_x::EtherCore();
+        return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(core));
+    }catch(const std::exception& x){fail(e,x.what());return 0;}
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_graphics_EtherCoreNative_nDestroy(JNIEnv*,jclass,jlong p){
+    delete ether_handle(p);
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_graphics_EtherCoreNative_nHAll(JNIEnv* e,jclass,jlong p){
+    try{if(!p){fail(e,"EtherCore cerrado");return;}ether_handle(p)->h_all();}
+    catch(const std::exception& x){fail(e,x.what());}
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_graphics_EtherCoreNative_nCzNeighbors(JNIEnv* e,jclass,jlong p){
+    try{if(!p){fail(e,"EtherCore cerrado");return;}ether_handle(p)->cz_neighbors();}
+    catch(const std::exception& x){fail(e,x.what());}
+}
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_mundox_graphics_EtherCoreNative_nQuery(JNIEnv* e,jclass,jlong p,jobjectArray strings){
+    try{
+        if(!p||!strings){fail(e,"EtherCore cerrado o consultas nulas");return nullptr;}
+        const auto count=e->GetArrayLength(strings);
+        std::vector<jfloat> values(static_cast<std::size_t>(count));
+        for(jsize i=0;i<count;++i){
+            auto raw=static_cast<jstring>(e->GetObjectArrayElement(strings,i));
+            if(!raw){fail(e,"Observable EtherCore nulo");return nullptr;}
+            UtfChars utf(e,raw);
+            if(!utf.chars)return nullptr;
+            const auto observable=mundo_x::parse_observable(utf.chars);
+            std::vector<mundo_x::EtherCore::Term> terms;
+            terms.reserve(observable.terms.size());
+            for(const auto& term:observable.terms)terms.push_back({term.address,term.axis});
+            values[static_cast<std::size_t>(i)]=static_cast<jfloat>(
+                ether_handle(p)->expectation(terms,observable.sign));
+        }
+        auto out=e->NewFloatArray(count);
+        if(out&&count)e->SetFloatArrayRegion(out,0,count,values.data());
+        return out;
+    }catch(const std::exception& x){fail(e,x.what());return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_mundox_graphics_EtherCoreNative_nStats(JNIEnv* e,jclass,jlong p){
+    try{
+        if(!p){fail(e,"EtherCore cerrado");return nullptr;}
+        const auto st=ether_handle(p)->stats();
+        const jlong data[4]={
+            static_cast<jlong>(st.rules),
+            static_cast<jlong>(st.last_query_sites),
+            static_cast<jlong>(st.last_query_peak_sites),
+            static_cast<jlong>(st.last_query_address_bytes)
+        };
+        auto out=e->NewLongArray(4);
+        if(out)e->SetLongArrayRegion(out,0,4,data);
+        return out;
+    }catch(const std::exception& x){fail(e,x.what());return nullptr;}
 }
