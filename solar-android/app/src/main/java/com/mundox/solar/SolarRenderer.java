@@ -65,7 +65,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final FloatBuffer lines=direct(MAX_OVERLAY_VERTICES*7*4).asFloatBuffer();
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
     private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
-    private int mapTexture,colorTexture,depthBuffer,framebuffer;
+    private int mapTexture,bodyMaskTexture,colorTexture,depthBuffer,framebuffer;
+    private int bodyMaskTilesX,bodyMaskTilesY;
+    private SolarVisualEther.Plan visualPlan;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -154,7 +156,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     @Override public void onSurfaceCreated(GL10 unused,EGLConfig config){
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
-        mapTexture=colorTexture=depthBuffer=framebuffer=0;
+        mapTexture=bodyMaskTexture=colorTexture=depthBuffer=framebuffer=0;
+        bodyMaskTilesX=bodyMaskTilesY=0;visualPlan=null;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -169,6 +172,13 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             glEnableVertexAttribArray(1);glVertexAttribPointer(1,4,GL_FLOAT,false,7*4,3*4);
             glBindVertexArray(0);
             loadMaps();
+            bodyMaskTexture=newTexture();
+            glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+            glActiveTexture(GL_TEXTURE0);
             glDisable(GL_DITHER);glDisable(GL_CULL_FACE);glClearColor(0,0,0,1);
             framebufferDirty=true;device=glGetString(GL_RENDERER);check("Inicio del observador solar");
         }catch(Throwable e){error(e);}
@@ -455,6 +465,22 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(SolarData.Body body:SolarData.BODIES){int p=body.id*4;for(int k=0;k<3;k++)packedBodies[p+k]=(float)((positions[body.id][k]-cameraEye[k])*sceneScale);packedBodies[p+3]=(float)(radii[body.id]*sceneScale);}
         initializedCamera=true;
     }
+    private void syncVisualEther(){
+        visualPlan=SolarVisualEther.plan(width,height,SolarVisualEther.DEFAULT_TILE,TAN_HALF_FOV,aspect,
+                forward,right,up,packedBodies,appearance,atmosphere,SolarData.BODIES.length);
+        ByteBuffer raw=direct(visualPlan.masks.length*4);
+        raw.asIntBuffer().put(visualPlan.masks);
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);
+        if(bodyMaskTilesX!=visualPlan.tilesX||bodyMaskTilesY!=visualPlan.tilesY){
+            glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,visualPlan.tilesX,visualPlan.tilesY,0,
+                    GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
+            bodyMaskTilesX=visualPlan.tilesX;bodyMaskTilesY=visualPlan.tilesY;
+        }else{
+            glTexSubImage2D(GL_TEXTURE_2D,0,0,0,visualPlan.tilesX,visualPlan.tilesY,
+                    GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
+        }
+        glActiveTexture(GL_TEXTURE0);check("Visual Ether");
+    }
     private void drawScene(){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
@@ -476,6 +502,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);glUniform1i(sceneLoc("uBodyTiles"),1);
+        glUniform2i(sceneLoc("uBodyTileGrid"),visualPlan.tilesX,visualPlan.tilesY);
+        glActiveTexture(GL_TEXTURE0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
 
@@ -689,7 +718,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 SolarFlightPhysics.step(selected,SolarEnvironment.environment(selected),flightState,0,dt);
                 entryAltitude=flightState.altitudeKm;publishEntry();
             }
-            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
+            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);syncVisualEther();
             glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
             lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
             check("Observación solar");
@@ -710,7 +739,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · éter visual %.1f%%%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,visualPlan==null?100.0:visualPlan.referenceRatio()*100.0,resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
