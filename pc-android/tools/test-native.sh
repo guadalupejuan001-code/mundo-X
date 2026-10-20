@@ -2,13 +2,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build/native
-for name in sparse_ram x86_cpu x86_long_mode x86_alu64_oracle boot_media pc_machine pc_iso pc_memory pc_video pc_quantum; do
+for name in sparse_ram x86_cpu x86_long_mode x86_alu64_oracle x86_enter_oracle boot_media pc_machine pc_iso pc_memory pc_video pc_quantum; do
   g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -I../native/include "native/tests/${name}_test.cpp" -o "build/native/${name}_test"
   if "build/native/${name}_test"; then
     :
   else
     pc_test_status=$?
-    if [[ "$name" != x86_alu64_oracle || "$pc_test_status" != 77 ]]; then exit "$pc_test_status"; fi
+    if [[ "$pc_test_status" != 77 || ( "$name" != x86_alu64_oracle && "$name" != x86_enter_oracle ) ]]; then exit "$pc_test_status"; fi
   fi
 done
 g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -I../native/include native/pc_cli.cpp -o build/native/cosmic_pc_cli

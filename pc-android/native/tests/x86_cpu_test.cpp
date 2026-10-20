@@ -158,6 +158,188 @@ void stack_control_tests() {
   }
 }
 
+void enter_leave_real_mode_tests() {
+  Cpu cpu;
+  constexpr auto flags = 2U | Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::IF | Cpu::DF | Cpu::OF;
+  // The screenshot identifies C8 at this address, but does not expose its
+  // immediates. Exercise a concrete nested frame there, not a claimed ISO boot.
+  cpu.reset(0x2000, 0x056c);
+  constexpr std::uint8_t regression[] = {0xc8, 0x10, 0x00, 0x02, 0xc9};
+  cpu.memory.write_block(0x2056c, regression, sizeof(regression));
+  cpu.regs[Cpu::ESP] = 0xabcd9000; cpu.regs[Cpu::EBP] = 0x12349100; cpu.eflags = flags;
+  cpu.write16(0x90fe, 0xa55a); one(cpu);
+  check(cpu.regs[Cpu::ESP] == 0xabcd8fea && cpu.regs[Cpu::EBP] == 0x12348ffe,
+        "ISO-address ENTER creates a nested real16 frame and reserves locals");
+  check(cpu.read16(0x8ffe) == 0x9100 && cpu.read16(0x8ffc) == 0xa55a && cpu.read16(0x8ffa) == 0x8ffe,
+        "ENTER saves old BP, copies the enclosing frame and pushes its new frame pointer");
+  check(cpu.eip == 0x0570 && cpu.segments[Cpu::CS] == 0x2000 && cpu.eflags == flags,
+        "ENTER consumes imm16 plus imm8 and leaves flags unchanged");
+  one(cpu);
+  check(cpu.regs[Cpu::ESP] == 0xabcd9000 && cpu.regs[Cpu::EBP] == 0x12349100 && cpu.eflags == flags,
+        "LEAVE releases the real16 frame and restores the original BP");
+
+  // All 256 immediate encodings, both operand sizes. Nonzero SS and CS override
+  // catch accidental DS/override accesses; 67 must not change the stack width.
+  for (const unsigned bytes : {2U, 4U}) for (unsigned raw = 0; raw < 256; ++raw) {
+    if (bytes == 2) load(cpu, {0x2e, 0x67, 0xc8, 0x23, 0x01, std::uint8_t(raw), 0x67, 0xc9});
+    else load(cpu, {0x2e, 0x67, 0x66, 0xc8, 0x23, 0x01, std::uint8_t(raw), 0x67, 0x66, 0xc9});
+    cpu.segments[Cpu::SS] = 0x2000; cpu.segments[Cpu::DS] = 0x3000;
+    cpu.regs[Cpu::ESP] = 0xabcd9000; cpu.regs[Cpu::EBP] = 0x12347000; cpu.eflags = flags;
+    const auto saved = cpu.regs;
+    for (unsigned i = 1; i < 32; ++i) {
+      if (bytes == 2) cpu.write16(0x27000 - i * bytes, std::uint16_t(0x5100 + i));
+      else cpu.write32(0x27000 - i * bytes, 0xabc05100 + i);
+    }
+    const unsigned level = raw & 31U, slots = level == 0 ? 1 : level + 1;
+    const auto frame = bytes == 2 ? 0x8ffeU : 0xabcd8ffcU;
+    const auto expected_bp = bytes == 2 ? 0x12348ffeU : frame;
+    const auto expected_sp = 0xabcd0000U | (0x9000U - slots * bytes - 0x123U);
+    cpu.memory[0x29000] = 0x5a; cpu.memory[0x20000 + (expected_sp & 0xffffU)] = 0xa5;
+    one(cpu);
+    check(cpu.regs[Cpu::EBP] == expected_bp && cpu.regs[Cpu::ESP] == expected_sp,
+          "ENTER masks the nesting level and separates operand size from the 16-bit stack address");
+    check((bytes == 2 ? cpu.read16(0x29000 - bytes) : cpu.read32(0x29000 - bytes)) ==
+          (bytes == 2 ? 0x7000U : 0x12347000U), "ENTER saves the original operand-sized frame pointer");
+    for (unsigned i = 1; i < level; ++i)
+      check((bytes == 2 ? cpu.read16(0x29000 - (i + 1) * bytes) : cpu.read32(0x29000 - (i + 1) * bytes)) ==
+            (bytes == 2 ? 0x5100U + i : 0xabc05100U + i), "ENTER copies every enclosing frame in order");
+    if (level != 0)
+      check((bytes == 2 ? cpu.read16(0x29000 - slots * bytes) : cpu.read32(0x29000 - slots * bytes)) == frame,
+            "ENTER appends the new frame pointer only at nonzero nesting levels");
+    check(cpu.memory[0x29000] == 0x5a && cpu.memory[0x20000 + (expected_sp & 0xffffU)] == 0xa5 && cpu.eflags == flags,
+          "ENTER does not overwrite locals or adjacent data, and never modifies flags");
+    one(cpu);
+    check(cpu.regs == saved && cpu.eflags == flags, "matching LEAVE restores registers after every real-mode ENTER level");
+  }
+
+  for (const unsigned allocation : {0U, 1U, 0x8000U, 0xffffU}) {
+    load(cpu, {0xc8, std::uint8_t(allocation), std::uint8_t(allocation >> 8), 0x00, 0xc9});
+    cpu.regs[Cpu::ESP] = 0xabcd9000; cpu.regs[Cpu::EBP] = 0x12348000;
+    one(cpu);
+    check(cpu.regs[Cpu::ESP] == (0xabcd0000U | ((0x8ffeU - allocation) & 0xffffU)),
+          "ENTER uses unsigned imm16 allocation and wraps only the 16-bit stack pointer");
+    one(cpu); check(cpu.regs[Cpu::ESP] == 0xabcd9000 && cpu.regs[Cpu::EBP] == 0x12348000,
+                    "LEAVE recovers the frame after maximal or wrapped local allocation");
+  }
+  load(cpu, {0xc8, 0x02, 0x00, 0x00, 0xc9});
+  cpu.regs[Cpu::ESP] = 0xabcd0000; cpu.regs[Cpu::EBP] = 0x12348000; one(cpu);
+  check(cpu.regs[Cpu::ESP] == 0xabcdfffc && cpu.read16(0xfffe) == 0x8000, "ENTER push wraps SP from zero");
+  one(cpu); check(cpu.regs[Cpu::ESP] == 0xabcd0000 && cpu.regs[Cpu::EBP] == 0x12348000,
+                  "LEAVE pop wraps SP while preserving the high half of ESP");
+  load(cpu, {0xc8, 0, 0, 2});
+  cpu.segments[Cpu::SS] = 0x2000; cpu.regs[Cpu::EBP] = 0x12340000; cpu.set_reg16(Cpu::ESP, 0x8000);
+  cpu.write16(0x2fffe, 0xbeef); one(cpu);
+  check(cpu.read16(0x27ffc) == 0xbeef && cpu.regs[Cpu::EBP] == 0x12347ffe,
+        "ENTER frame-chain address wraps at the stack address width, preserving original upper BP bits");
+  load(cpu, {0xc8, 0, 0, 3}); cpu.set_reg16(Cpu::ESP, 0x9000); cpu.set_reg16(Cpu::EBP, 0x9000); one(cpu);
+  check(cpu.read16(0x8ffe) == 0x9000 && cpu.read16(0x8ffc) == 0x9000 && cpu.read16(0x8ffa) == 0x9000 &&
+        cpu.read16(0x8ff8) == 0x8ffe, "overlapping ENTER chain reads observe earlier pushes in the same instruction");
+}
+
+void protected_stack_fixture(Cpu& cpu, bool code32, bool stack32,
+                             std::uint32_t limit = 0x7ffff, std::uint32_t base = 0x30000) {
+  load(cpu, {0x66, 0xea, 0x00, 0x20, 0x00, 0x00, 0x08, 0x00});
+  cpu.gdtr = {23, 0x600};
+  cpu.write64(0x600, 0);
+  cpu.write64(0x608, 0x00009b000000ffffULL | (code32 ? std::uint64_t{4} << 52 : 0));
+  const auto stack = std::uint64_t(limit & 0xffff) | (std::uint64_t(base & 0xffffff) << 16) |
+      (std::uint64_t(base & 0xff000000) << 32) | (std::uint64_t(limit & 0xf0000) << 32) |
+      (std::uint64_t{0x93} << 40) | (stack32 ? std::uint64_t{4} << 52 : 0);
+  cpu.write64(0x610, stack); cpu.cr0 |= 1; one(cpu);
+  check(std::string(cpu.mode_name()) == (code32 ? "protected32" : "protected16"), "test loads the requested code descriptor");
+  cpu.memory[0x2000] = 0x8e; cpu.memory[0x2001] = 0xd0; cpu.set_reg16(Cpu::EAX, 0x10); one(cpu);
+  check(cpu.segments[Cpu::SS] == 0x10, "test loads an independent stack descriptor");
+  cpu.eip = 0x2100;
+}
+
+void enter_leave_protected_mode_tests() {
+  Cpu cpu;
+  constexpr auto flags = 2U | Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::IF | Cpu::DF | Cpu::OF;
+  for (const bool code32 : {false, true}) for (const bool stack32 : {false, true})
+    for (const unsigned bytes : {2U, 4U}) for (const unsigned raw : {0U, 1U, 2U, 31U, 255U}) {
+      protected_stack_fixture(cpu, code32, stack32);
+      std::vector<std::uint8_t> code{0x2e, 0x67};
+      if ((bytes == 4) != code32) code.push_back(0x66);
+      code.insert(code.end(), {0xc8, 0x23, 0x01, std::uint8_t(raw), 0x2e, 0x67});
+      if ((bytes == 4) != code32) code.push_back(0x66);
+      code.push_back(0xc9); cpu.memory.write_block(0x2100, code.data(), code.size());
+      cpu.regs[Cpu::ESP] = stack32 ? 0x39000 : 0xabcd9000;
+      cpu.regs[Cpu::EBP] = stack32 ? 0x37000 : 0x12347000; cpu.eflags = flags;
+      const auto saved = cpu.regs;
+      const auto old_sp = stack32 ? 0x39000U : 0x9000U, old_bp = stack32 ? 0x37000U : 0x7000U;
+      for (unsigned i = 1; i < 32; ++i) {
+        if (bytes == 2) cpu.write16(0x30000 + old_bp - i * bytes, std::uint16_t(0x5200 + i));
+        else cpu.write32(0x30000 + old_bp - i * bytes, 0xdef05200 + i);
+      }
+      const unsigned level = raw & 31, slots = level == 0 ? 1 : level + 1;
+      const auto frame = bytes == 2 ? (old_sp - bytes) & 0xffffU
+          : stack32 ? old_sp - bytes : 0xabcd0000U | (old_sp - bytes);
+      const auto expected_bp = bytes == 2 ? (saved[Cpu::EBP] & ~std::uint64_t{0xffff}) | frame : frame;
+      const auto expected_sp = stack32 ? old_sp - slots * bytes - 0x123
+          : 0xabcd0000U | (old_sp - slots * bytes - 0x123);
+      one(cpu);
+      check(cpu.regs[Cpu::EBP] == expected_bp && cpu.regs[Cpu::ESP] == expected_sp && cpu.eflags == flags,
+            "protected ENTER honors independent CS.D, SS.B, operand override and ignored address/segment prefixes");
+      for (unsigned i = 1; i < level; ++i)
+        check((bytes == 2 ? cpu.read16(0x30000 + old_sp - (i + 1) * bytes) : cpu.read32(0x30000 + old_sp - (i + 1) * bytes)) ==
+              (bytes == 2 ? 0x5200U + i : 0xdef05200U + i), "protected ENTER reads the chain using SS.B and the SS base");
+      one(cpu); check(cpu.regs == saved && cpu.eflags == flags, "protected LEAVE uses SS.B independently of operand size");
+    }
+  protected_stack_fixture(cpu, true, true);
+  constexpr std::uint8_t borrow[] = {0x66, 0x67, 0xc8, 0x04, 0, 0, 0x66, 0x67, 0xc9};
+  cpu.memory.write_block(0x2100, borrow, sizeof(borrow));
+  cpu.regs[Cpu::ESP] = 0x10004; cpu.regs[Cpu::EBP] = 0x18000; one(cpu);
+  check(cpu.regs[Cpu::ESP] == 0xfffe && cpu.regs[Cpu::EBP] == 0x10002,
+        "16-bit ENTER on a 32-bit stack borrows across 64KiB in ESP, preserving upper EBP");
+  one(cpu); check(cpu.regs[Cpu::ESP] == 0x10004 && cpu.regs[Cpu::EBP] == 0x18000,
+                  "16-bit LEAVE still restores a full 32-bit stack pointer");
+}
+
+void enter_leave_fault_tests() {
+  Cpu cpu;
+  const auto rollback_check = [&](const std::array<std::uint64_t, 16>& saved, std::uint64_t ip,
+                                  std::uint64_t retired, std::uint32_t flags) {
+    check(cpu.regs == saved && cpu.eip == ip && cpu.instructions == retired && cpu.eflags == flags,
+          "faulting ENTER/LEAVE restores every register, instruction count, flags and instruction start");
+  };
+  load(cpu, {0xc8, 0, 0}, 0xfffd); cpu.write16(0xeffe, 0xbeef);
+  auto saved = cpu.regs;
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit && cpu.fault->bytes.size() == 3,
+        "ENTER fetches both complete immediates before it pushes anything");
+  rollback_check(saved, 0xfffd, 0, 2); check(cpu.read16(0xeffe) == 0xbeef, "truncated ENTER did not write the stack");
+  load(cpu, {0xc8, 0, 0, 1}); cpu.set_reg16(Cpu::ESP, 3); cpu.set_reg16(Cpu::EBP, 0x8000);
+  cpu.write16(1, 0xbeef); saved = cpu.regs;
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit,
+        "ENTER faults when a later push straddles the stack segment limit");
+  rollback_check(saved, 0x1000, 0, 2); check(cpu.read16(1) == 0xbeef, "a late ENTER push fault rolls back earlier successful pushes");
+  load(cpu, {0x66, 0xc8, 0, 0, 2}); cpu.regs[Cpu::EBP] = 1; cpu.write32(0xeffc, 0xdeadbeef); saved = cpu.regs;
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit,
+        "operand32 ENTER detects a frame-chain read crossing a 16-bit stack segment");
+  rollback_check(saved, 0x1000, 0, 2); check(cpu.read32(0xeffc) == 0xdeadbeef, "chain-read failure rolls back the saved EBP");
+  load(cpu, {0xc8, 0xff, 0x7f, 0}); cpu.set_reg16(Cpu::ESP, 0x8000); cpu.write16(0x7ffe, 0xbeef); saved = cpu.regs;
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit,
+        "ENTER probes a full operand-width slot at final SP, including the segment end");
+  rollback_check(saved, 0x1000, 0, 2); check(cpu.read16(0x7ffe) == 0xbeef, "final stack probe failure rolls back the initial push");
+  protected_stack_fixture(cpu, true, false, 0x8000);
+  constexpr std::uint8_t reserve[] = {0x66, 0xc8, 0x00, 0x80, 0};
+  cpu.memory.write_block(0x2100, reserve, sizeof(reserve)); cpu.set_reg16(Cpu::ESP, 0x8000);
+  cpu.write16(0x37ffe, 0xbeef); saved = cpu.regs; const auto retired = cpu.instructions;
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit,
+        "ENTER checks reserved locals against the loaded protected stack limit");
+  rollback_check(saved, 0x2100, retired, 2); check(cpu.read16(0x37ffe) == 0xbeef, "protected allocation failure rolls back the saved frame");
+  load(cpu, {0x67, 0xc9}); cpu.regs[Cpu::ESP] = 0xabcd8000; cpu.regs[Cpu::EBP] = 0x1234ffff; saved = cpu.regs;
+  check(cpu.step() == StepResult::Faulted && cpu.fault->code == FaultCode::SegmentLimit, "LEAVE validates its operand-sized stack read");
+  rollback_check(saved, 0x1000, 0, 2);
+
+  Cpu limited(0x20000, 8192);
+  load(limited, {0xc8, 0, 0, 1}); limited.write16(0x3000, 0xbeef);
+  limited.set_reg16(Cpu::ESP, 0x3002); limited.set_reg16(Cpu::EBP, 0x7000); const auto limited_saved = limited.regs;
+  check(limited.step() == StepResult::Faulted && limited.fault->code == FaultCode::MemoryBudget,
+        "ENTER respects the resident RAM limit during a later push");
+  check(limited.regs == limited_saved && limited.read16(0x3000) == 0xbeef && limited.eip == 0x1000 && limited.instructions == 0,
+        "resident-budget failure rolls back previous ENTER stores and registers");
+}
+
 void string_tests() {
   Cpu cpu;
   load(cpu, {0xf3, 0xa4, 0xf4});
@@ -459,7 +641,8 @@ void hooks_and_fault_tests() {
 int main() {
   try {
     arithmetic_exhaustive(); register_and_decode_tests(); memory_address_tests();
-    stack_control_tests(); string_tests(); real_mode_control_boundaries();
+    stack_control_tests(); enter_leave_real_mode_tests(); enter_leave_protected_mode_tests(); enter_leave_fault_tests();
+    string_tests(); real_mode_control_boundaries();
     shifts_multiply_divide_tests(); double_shift_tests(); signed_multiply_boundaries(); hooks_and_fault_tests();
     std::cout << "PASS x86 CPU: " << checks << " checks, including 655360 exhaustive 8-bit ALU executions\n";
     return 0;
