@@ -380,7 +380,7 @@ public final class PcInstrumentation extends Instrumentation {
         Debug.getMemoryInfo(memoryInfo);long activityPssBytes=memoryInfo.getTotalPss()*1024L;
         require(activityPssBytes>0&&activityPssBytes<2147483648L,"Activity test process must remain within the 2 GiB smoke-test budget");
         pass("Activity operates x64 guest and displays measured memory");
-        click(a,"Prueba núcleo x86");click(a,"Ejecutar");waitText(a,"InfiniteCore x86: OK");waitText(a,"XX=1 · YY=-1 · ZZ=1");
+        click(a,"Prueba núcleo x86");click(a,"Ejecutar");waitText(a,"InfiniteCore x86: OK");waitText(a,"XX=1 · YY=-1 · ZZ=1");waitText(a,"Éter ∞ · 2 reglas");
         QuantumRenderer.Capture coupledBefore=frame(a,true);
         require(coupledBefore.nonBackground()>100,"viewport contains rendered scene pixels");
         QuantumRenderer.Capture uncoupledBefore=frame(a,false);
