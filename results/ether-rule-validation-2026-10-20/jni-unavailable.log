@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/7def14e3f3d9/mundo-X/tools/validate_ether_jni.py", line 69, in <module>
+    main()
+  File "/workspace/scratch/7def14e3f3d9/mundo-X/tools/validate_ether_jni.py", line 35, in main
+    raise RuntimeError("Install JDK 17 headers or provide --jni-include")
+RuntimeError: Install JDK 17 headers or provide --jni-include

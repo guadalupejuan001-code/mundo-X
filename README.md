@@ -40,6 +40,10 @@ mismo estado; el huésped PC y su visor conservan la misma sesión. El
 [contrato técnico y sus pruebas](docs/ether-fusion.md) detalla la representación
 `Ψ = U_Ether φ`, las migraciones y los límites comprobados.
 
+La [compactación exacta de reglas](docs/ether-rule-compaction.md) guarda la
+secuencia global mediante una regla y su longitud. Incluye evaluación algebraica
+de consultas de Pauli y comparaciones reproducibles con la versión anterior.
+
 Los modelos orbitales, la CPU/RAM x86, la escena procedural y GLES mantienen sus
 algoritmos y recursos actuales. Su representación integral mediante Ether sigue
 siendo parte del objetivo de arquitectura. Los proyectos finitos y otros núcleos
