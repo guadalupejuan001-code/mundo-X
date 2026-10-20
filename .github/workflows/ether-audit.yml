@@ -1,0 +1,37 @@
+name: Ether bounded stress and independent regression
+on:
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'tools/ether_*'
+      - '.github/workflows/ether-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host-campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build identical campaign against pinned base and candidate
+        run: |
+          mkdir -p audit-evidence
+          git rev-parse HEAD > audit-evidence/source-commit.txt
+          git worktree add --detach /tmp/ether-base 7b028db2344912b2ab86a0affa2a1fe56180922b
+          g++ -std=c++17 -O3 -pthread -I /tmp/ether-base/native/include native/tests/ether_stress.cpp -o /tmp/ether-before
+          g++ -std=c++17 -O3 -pthread -I native/include native/tests/ether_stress.cpp -o /tmp/ether-after
+      - name: Independent signed pullbacks and 2 GiB host campaigns
+        run: |
+          python3 tools/ether_reference_check.py | tee audit-evidence/frame-equivalence.json
+          python3 tools/ether_stress_campaign.py --binary /tmp/ether-before --output audit-evidence/stress-before.json
+          python3 tools/ether_stress_campaign.py --binary /tmp/ether-after --output audit-evidence/stress-after.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Ether-bounded-stress
+          path: audit-evidence/

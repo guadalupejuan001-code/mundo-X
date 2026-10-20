@@ -226,20 +226,18 @@ class EtherCore {
 
   static void conjugate_cz_neighbors(Pauli& p, const QueryLimits& limits,
                                      std::size_t& peak) {
-    std::set<std::pair<std::string,std::string>> edges;
-    for (const auto& item : p.cells) if (item.second.x) {
-      const auto& q = item.first;
-      if (q != "0") edges.emplace(predecessor(q), q);
+    // CZ leaves every X bit invariant. Keep only the X support, then send its
+    // Z contribution to each neighbour. Each adjacent XX pair contributes its
+    // sign once, via the right neighbour. No edge tree or duplicated endpoints.
+    std::vector<std::string> xs;
+    xs.reserve(p.cells.size());
+    for (const auto& item : p.cells) if (item.second.x) xs.push_back(item.first);
+    for (const auto& q : xs) {
       auto next = successor(q);
       check_address(next, limits);
-      edges.emplace(q, std::move(next));
-    }
-    for (const auto& edge : edges) {
-      const bool xa = get_bits(p,edge.first).x;
-      const bool xb = get_bits(p,edge.second).x;
-      if (xa && xb) p.phase = (p.phase + 2) & 3;
-      if (xb) toggle_z(p,edge.first,limits,peak);
-      if (xa) toggle_z(p,edge.second,limits,peak);
+      if (get_bits(p,next).x) p.phase = (p.phase + 2) & 3;
+      if (q != "0") toggle_z(p,predecessor(q),limits,peak);
+      toggle_z(p,next,limits,peak);
     }
   }
 };
