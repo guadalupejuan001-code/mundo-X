@@ -12,10 +12,11 @@ def main():
     p.add_argument('--sdk',type=Path,required=True);p.add_argument('--baseline',type=Path,required=True);p.add_argument('--after',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True);p.add_argument('--boot-seconds',type=int,default=300);p.add_argument('--test-seconds',type=int,default=600)
     p.add_argument('--system-image',default='system-images;android-35;google_apis;x86_64')
+    p.add_argument('--aot',action='store_true',help='Compile both packages with ART speed before running; record separately from ordinary installation')
     p.add_argument('--no-accel',action='store_true');a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
     output=a.output.resolve();sdk=a.sdk.resolve();adb=str(sdk/'platform-tools/adb');serial='emulator-5580'
     env=dict(os.environ,ANDROID_HOME=str(sdk),ANDROID_SDK_ROOT=str(sdk))
-    report={'ram_mb':2048,'software_gles':'swiftshader','virtualization':'TCG' if a.no_accel else 'auto','system_image':a.system_image,'status':'starting','cases':[]}
+    report={'ram_mb':2048,'software_gles':'swiftshader','virtualization':'TCG' if a.no_accel else 'auto','system_image':a.system_image,'art_compile':'speed' if a.aot else 'default','status':'starting','cases':[]}
     def save(): (output/'runner.json').write_text(json.dumps(report,indent=2)+'\n')
     def command(args,**kwargs):return subprocess.run(args,env=env,check=True,**kwargs)
     def android(args,**kwargs):return command([adb,'-s',serial,*args],**kwargs)
@@ -44,6 +45,10 @@ def main():
                     hashes={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in apks}
                     for f in apks:android(['install','-r',str(f.resolve())],timeout=120)
                     android(['shell','pm','clear','com.cosmicx.solar'],timeout=30)
+                    if a.aot:
+                        with open(target/'art-compile.txt','w') as f:
+                            for package in ['com.cosmicx.solar','com.cosmicx.solar.test']:
+                                android(['shell','cmd','package','compile','-m','speed','-f',package],stdout=f,stderr=subprocess.STDOUT,timeout=120)
                     android(['logcat','-c'],timeout=15)
                     with open(target/'instrumentation.txt','w') as f:
                         android(['shell','am','instrument','-w','-r','-e','performance','true','com.cosmicx.solar.test/com.mundox.solar.SolarInstrumentation'],stdout=f,stderr=subprocess.STDOUT,timeout=a.test_seconds)
@@ -52,10 +57,12 @@ def main():
                     with open(target/'evidence.tar','wb') as f:android(['exec-out','run-as','com.cosmicx.solar','tar','-C','files','-cf','-','solar-performance'],stdout=f,timeout=60)
                     with tarfile.open(target/'evidence.tar') as tar:tar.extractall(target,filter='data')
                     result=json.loads((target/'solar-performance/results.json').read_text());report['cases'].append({'version':label,'apks':hashes,'result':result});save()
-                    if result['status']!='passed':raise RuntimeError('Instrumentation failed for '+label)
+                    if result['status']!='passed' and len(result.get('cases',[]))!=8:raise RuntimeError('Incomplete instrumentation for '+label)
                     android(['shell','am','force-stop','com.cosmicx.solar'],timeout=20)
                 old,new=[case['result']['cases'] for case in report['cases']]
                 report['exact_capture_matches']=sum(x['rgbaSha256']==y['rgbaSha256'] for x,y in zip(old,new))
+                report['instrumentation_failures']=[c['version'] for c in report['cases'] if c['result']['status']!='passed']
+                if report['instrumentation_failures']:raise AssertionError('Instrumentation failed: '+', '.join(report['instrumentation_failures']))
                 if len(old)!=8 or len(new)!=8 or report['exact_capture_matches']!=8:raise AssertionError('Before/after capture changed')
                 report['status']='passed'
         except Exception as error:

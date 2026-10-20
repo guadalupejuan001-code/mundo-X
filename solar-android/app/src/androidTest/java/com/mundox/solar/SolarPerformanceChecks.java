@@ -12,6 +12,7 @@ import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.nio.FloatBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
@@ -55,14 +56,15 @@ public final class SolarPerformanceChecks {
     }
     private static void bits(Object value,StringBuilder out){
         if(value==null){out.append("null;");return;}
-        if(value.getClass().isArray()){out.append('[');for(int i=0;i<Array.getLength(value);i++)bits(Array.get(value,i),out);out.append(']');}
+        if(value instanceof FloatBuffer){FloatBuffer b=(FloatBuffer)value;for(int i=0;i<b.limit();i++)bits(b.get(i),out);}
+        else if(value.getClass().isArray()){out.append('[');for(int i=0;i<Array.getLength(value);i++)bits(Array.get(value,i),out);out.append(']');}
         else if(value instanceof Float)out.append(Integer.toHexString(Float.floatToIntBits((Float)value))).append(';');
         else if(value instanceof Double)out.append(Long.toHexString(Double.doubleToLongBits((Double)value))).append(';');
         else out.append(value).append(';');
     }
     private static JSONObject inputs(SolarRenderer r)throws Exception{
         JSONObject inputs=new JSONObject();
-        for(String name:new String[]{"packedBodies","appearance","colors","axes","poleBasis","atmosphere","atmosphereColors","layers","quantum","ether","forward","right","up","vp","orbitCache","cameraEye","jd","clockSeconds","entryAltitude","near","far","aspect"}){
+        for(String name:new String[]{"packedBodies","appearance","colors","axes","poleBasis","atmosphere","atmosphereColors","layers","quantum","ether","forward","right","up","vp","orbitCache","cameraEye","jd","clockSeconds","entryAltitude","near","far","aspect","lines","points","paused","fields","wind","orbits","entryMode"}){
             StringBuilder data=new StringBuilder();bits(field(r,name),data);inputs.put(name,hash(data.toString().getBytes(StandardCharsets.UTF_8)));
         }
         return inputs;
@@ -85,7 +87,7 @@ public final class SolarPerformanceChecks {
                 SolarRenderer r=a.renderer();r.setPaused(true);r.setQuality(360);fixedMoonPoles(r);
                 result.put("moonPoleFixtureJulianDate",2461331.0);
             });
-            int[] bodies={3,3,6,0,3,5,9,7};
+            int[] bodies={3,3,6,0,3,5,9,7},repeatFailures={0};
             for(int index=0;index<bodies.length;index++){
                 final int k=index;
                 gl(a,()->{
@@ -113,8 +115,10 @@ public final class SolarPerformanceChecks {
                     c.put("rgbaSha256",hash(frame.rgba));write(new File(dir,"case-"+k+".rgba"),frame.rgba);
                     c.put("inputSha256",inputs(r));
                     capture.set(null);r.requestCapture(capture::set);r.onDrawFrame(null);GLES30.glFinish();
-                    if(capture.get()==null||!Arrays.equals(frame.rgba,capture.get().rgba))throw new AssertionError("Repeated fixed scene changed");
-                    c.put("repeatCaptureExact",true);
+                    if(capture.get()==null)throw new AssertionError("Repeated capture missing");
+                    boolean repeated=Arrays.equals(frame.rgba,capture.get().rgba);if(!repeated)repeatFailures[0]++;
+                    c.put("repeatCaptureExact",repeated);c.put("repeatInputSha256",inputs(r));
+                    c.put("repeatRgbaSha256",hash(capture.get().rgba));write(new File(dir,"case-"+k+"-repeat.rgba"),capture.get().rgba);
                     c.put("nativeHeapBytes",Debug.getNativeHeapAllocatedSize());c.put("javaUsedBytes",Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory());
                     cases.put(c);
                 });
@@ -125,6 +129,8 @@ public final class SolarPerformanceChecks {
                 }
                 result.put("sessionLifetimes",128);result.put("frames",a.renderer().frameCount);
             });
+            result.put("repeatCaptureFailures",repeatFailures[0]);
+            if(repeatFailures[0]>0)throw new AssertionError("Repeated fixed scene changed in "+repeatFailures[0]+" cases; inputs and both frames saved");
             result.put("status","passed");end.putString("stream","Solar performance: 8 scenes, 40 completed frames, 128 core lifetimes passed\n");
         }catch(Throwable e){status=0;try{result.put("status","failed");result.put("error",android.util.Log.getStackTraceString(e));}catch(Exception ignored){}end.putString("stream",e.toString());}
         try{write(new File(dir,"results.json"),result.toString(2).getBytes(StandardCharsets.UTF_8));}
