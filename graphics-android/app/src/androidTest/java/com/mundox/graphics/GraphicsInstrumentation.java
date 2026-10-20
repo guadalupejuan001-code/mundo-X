@@ -46,7 +46,7 @@ import org.json.JSONObject;
 /** Device tests use the shipping JNI core, shaders, GL thread and activity lifecycle. */
 public final class GraphicsInstrumentation extends Instrumentation {
     private static final String TAG = "MundoXGraphicsTests";
-    private static final int LEGACY_TESTS = 18;
+    private static final int LEGACY_TESTS = 19;
     private static final long FRAME_TIMEOUT_MS = 45_000;
     private MainActivity activity;
     private File evidence;
@@ -124,6 +124,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("native_bell_invariants", this::nativeBell);
             runCase("native_1000_qubit_invariants", this::nativeThousand);
             runCase("native_infinite_contracts", this::nativeInfinite);
+            runCase("native_ether_contracts", this::nativeEther);
             runCase("renderer_borrows_native_state", this::borrowedState);
             runCase("gles_one_million_objects", () -> largeScene(1_000_000, "million"));
             runCase("gles_maximum_object_limit", () -> largeScene(1_048_576, "maximum"));
@@ -303,6 +304,31 @@ public final class GraphicsInstrumentation extends Instrumentation {
                     "Native Z gate did not reverse Bell phase correlation");
             expect(core.version() == version + 1, "Gate version must advance exactly once");
             expect(core.stateBytes() > 0, "Native state must report allocated bytes");
+        }
+    }
+
+    private void nativeEther() throws Exception {
+        char[] zeroes=new char[1000];Arrays.fill(zeroes,'0');
+        String huge="1"+new String(zeroes);
+        try(EtherCoreNative ether=new EtherCoreNative()){
+            ether.prepareCluster();
+            String[] program=EtherCoreNative.visualProgram(huge);
+            float[] values=ether.query(program);
+            expect(Arrays.equals(values,new float[]{1,1,0,0,0}),
+                    "EtherCore JNI cluster observables are wrong");
+            EtherCoreNative.Stats stats=ether.stats();
+            expect(stats.rules==2&&stats.lastQueryPeakSites>0&&stats.lastQueryPeakSites<16,
+                    "EtherCore did not retain a compact local query cone");
+            metrics.put("etherNative",new JSONObject().put("domain","q0,q1,q2,...")
+                    .put("addressDigits",huge.length()).put("rules",stats.rules)
+                    .put("lastQueryPeakSites",stats.lastQueryPeakSites)
+                    .put("individualQubitCountStored",false));
+        }
+        try(NativeCore owner=new NativeCore(2)){
+            owner.prepareEtherCluster();
+            expect(Arrays.equals(owner.etherQuery(EtherCoreNative.visualProgram(InfiniteProgram.FAR_ADDRESS)),
+                    new float[]{1,1,0,0,0}),"NativeCore Ether sidecar is not connected");
+            expect(owner.etherStats().rules==2,"NativeCore Ether sidecar lost its global rules");
         }
     }
 
