@@ -154,6 +154,73 @@ public final class SolarData {
             "Inmersa en el campo de Urano; no se calcula un campo local.","",FIELD_NONE,0,0,rgba(.67f,.66f,.63f))
     };
 
+    /**
+     * Current JPL gravitational parameters (km^3/s^2) for the bodies in this
+     * catalogue. Planet values use DE/planetary satellite solutions and moon
+     * values use the corresponding satellite ephemerides. These parameters
+     * drive local gravity only; the existing JPL analytical orbit model stays
+     * unchanged.
+     */
+    private static final double[] GM_KM3_S2 = {
+        132712440041.279419, // Sun
+        22031.868551,        // Mercury
+        324858.592000,       // Venus
+        398600.436,          // Earth, DE440
+        42828.37362,         // Mars, MAR097
+        126686531.9,         // Jupiter, JUP365
+        37931206.23,         // Saturn, SAT441
+        5793951.3,           // Uranus, URA111
+        6835099.97,          // Neptune, NEP097
+        4902.800,            // Moon, DE440
+        5959.91547,          // Io, JUP365
+        3202.71210,          // Europa, JUP365
+        9887.83275,          // Ganymede, JUP365
+        7179.28340,          // Callisto, JUP365
+        8978.13710,          // Titan, SAT441
+        7.21037,             // Enceladus, SAT441
+        1428.49546,          // Triton, NEP097
+        .0007087,            // Phobos, MAR097
+        .0000962,            // Deimos, MAR097
+        153.94175,           // Rhea, SAT441
+        226.9,               // Titania, URA111
+        205.3,               // Oberon, URA111
+        4.3                  // Miranda, URA111
+    };
+
+    /** Gravitational parameter of the selected body, km^3/s^2. */
+    public static double gmKm3S2(int id) {
+        checkId(id);
+        return GM_KM3_S2[id];
+    }
+
+    /**
+     * Spherical two-body local gravity at altitude above the catalogue mean
+     * radius. Returns m/s^2. Rotation, J2, tides and terrain are deliberately
+     * outside this local model.
+     */
+    public static double gravityMs2(int id, double altitudeKm) {
+        checkId(id); requireFinite(altitudeKm,"altitude");
+        final double radius = BODIES[id].radiusKm + altitudeKm;
+        if (!(radius > 0)) throw new IllegalArgumentException("altitude reaches the body centre");
+        return GM_KM3_S2[id] / (radius * radius) * 1000.0;
+    }
+
+    /** Two-body escape speed at the same spherical radius, km/s. */
+    public static double escapeVelocityKmS(int id, double altitudeKm) {
+        checkId(id); requireFinite(altitudeKm,"altitude");
+        final double radius = BODIES[id].radiusKm + altitudeKm;
+        if (!(radius > 0)) throw new IllegalArgumentException("altitude reaches the body centre");
+        return Math.sqrt(2.0 * GM_KM3_S2[id] / radius);
+    }
+
+    /** Circular-orbit speed around an isolated spherical body, km/s. */
+    public static double circularVelocityKmS(int id, double altitudeKm) {
+        checkId(id); requireFinite(altitudeKm,"altitude");
+        final double radius = BODIES[id].radiusKm + altitudeKm;
+        if (!(radius > 0)) throw new IllegalArgumentException("altitude reaches the body centre");
+        return Math.sqrt(GM_KM3_S2[id] / radius);
+    }
+
     // JPL Table 1: a,e,I,L,longitude of perihelion,longitude of ascending node.
     // First row is J2000; second row is change per Julian century.
     private static final double[][][] ELEMENTS = {
