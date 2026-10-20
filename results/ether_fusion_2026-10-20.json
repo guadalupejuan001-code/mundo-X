@@ -1,15 +1,14 @@
 {
   "schemaVersion": 1,
-  "recordedAtUtc": "2026-10-20T05:24:08.401664+00:00",
+  "recordedAtUtc": "2026-10-20T05:47:05.048821+00:00",
   "repository": "https://github.com/guadalupejuan001-code/mundo-X",
-  "sourceCommit": "d4b9893ddec9c6fbce3911f3db349b1011686538",
-  "sourceTree": "264546dfb2f2c2ee1d25be608ff849dd7e9628ca",
+  "sourceCommit": "9b3e17d3b50e3fc13de7818cc18a329628a1e0e9",
+  "sourceTree": "fd1b5f862471a17f32cce756ebf9a4e07b06cf48",
   "sourceParents": [
-    "e49125dcd1b6c784d005bfd41c8fe2b8e318281a",
-    "4d31c0620111b9e2f0f0b759e5032c55ee371e37"
+    "3867db6efcfad3e4c2b2f8ae561e23a9ce7a6f8a"
   ],
   "scope": "Fused exact Clifford state U_Ether phi, shared session consumers, snapshots and native/host-JVM contracts. Android Java compilation is recorded separately from Android execution.",
-  "status": "local_native_and_host_jvm_contracts_passed_android_execution_pending",
+  "status": "native_and_all_android_profiles_verified_with_identical_production_sources",
   "ctest": {
     "passed": 19,
     "failed": 0,
@@ -133,7 +132,8 @@
     "cmakeVersion": "4.4.4",
     "configuration": "Release",
     "junitSha256": "72cea6943cfe2d4bc5a44f598123a9b15171eb256255c2c106b7c161cf254d58",
-    "buildLogSha256": "9f5603047f4938f867b76e0eebe47a1ecf4cf034117a2fd64bd88853f3dcf8da"
+    "buildLogSha256": "9f5603047f4938f867b76e0eebe47a1ecf4cf034117a2fd64bd88853f3dcf8da",
+    "testedProductionSourceCommit": "d4b9893ddec9c6fbce3911f3db349b1011686538"
   },
   "independentOracle": {
     "suite": "ether_fusion",
@@ -165,7 +165,8 @@
     "xcheckJni": true,
     "warnings": 0,
     "command": "python tools/validate_ether_jni.py --build-dir /tmp/ether-fusion-jni",
-    "runtimeLogSha256": "57a1342eddf49670585ea724389f85b37452a24816d6f339f832bf440896eec1"
+    "runtimeLogSha256": "57a1342eddf49670585ea724389f85b37452a24816d6f339f832bf440896eec1",
+    "testedProductionSourceCommit": "d4b9893ddec9c6fbce3911f3db349b1011686538"
   },
   "androidJavaCompilation": {
     "scope": "Actual app Java and instrumentation compilation only; javac --release 8 or 17 uses JDK Java APIs with official Android API35 android.jar on classpath. Generated R/BuildConfig are compile-only symbols. No Android core-library/desugaring validation, Gradle, aapt, DEX, APK packaging, emulator or GLES execution.",
@@ -215,8 +216,8 @@
       {
         "name": "pc",
         "passed": true,
-        "run": "run-20261020T050946Z",
-        "runSummarySha256": "3ab756e5482a451b9906435ea7136980b79c51c26ac035dbf5b3acc590c41c8d",
+        "run": "run-20261020T053343Z",
+        "runSummarySha256": "aab4d860cdac263899ee5946538f33e94b40b9f28db4944e4ddcc12a2c576bb3",
         "javaRelease": "17",
         "mainSourceFiles": 12,
         "instrumentationSourceFiles": 1,
@@ -347,7 +348,7 @@
       "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
       "graphics-android/app/src/main/java/com/mundox/graphics/StreamPng.java": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
       "graphics-android/app/src/main/java/com/mundox/graphics/TilePlan.java": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
-      "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java": "bf83794a254769f70f5ca928818bd8f28047805e52721f0f733bc241abcc5cc9",
+      "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java": "081d23639f05f12d1822c6980be14d22d4470faa5fbb77fdbd9634c37cebf97d",
       "pc-android/app/src/main/java/com/cosmicx/pc/MainActivity.java": "6ee680d739624b3761d3221f1969c4e689b92e80372b60fc6ced087f8e45bcc7",
       "pc-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java": "9ab6361ae6e463c2fbe5258fd0d3de37b8f0992855620b0b186e7a35c6e814d1",
       "pc-android/app/src/main/java/com/cosmicx/pc/PcVideoRenderer.java": "80011ef58ad5e8e8c640f7f4cf6b4c3b4430cc0ff290deac6c52f9037b54f9e5",
@@ -374,7 +375,7 @@
       "contains_java_object": true,
       "source_properties": "Pkg.Desc=Android SDK Platform 15\nPkg.UserSrc=false\nPlatform.Version=15\nPlatform.CodeName=\nPkg.Revision=2\nAndroidVersion.ApiLevel=35\nAndroidVersion.ExtensionLevel=13\nAndroidVersion.IsBaseSdk=true\nLayoutlib.Api=15\nLayoutlib.Revision=1\nPlatform.MinToolsRev=22\n"
     },
-    "note": "Graphics/COSMIC/PC retain their exact verified original compilation. Solar variants were recompiled after correcting recreation test preparation. These are not Android execution results."
+    "note": "Graphics/COSMIC retain their exact original compilation; Solar variants were recompiled after correcting recreation preparation; PC was recompiled after updating the explicit Ether mutation contract. No compilation is counted as Android execution."
   },
   "sourceProvenance": {
     "passed": true,
@@ -425,7 +426,9 @@
     "tools/graphics-verify-evidence.py": "d5e45060086d2c3fda012c1cbbe117e3fc466f3b9325ade5f050f6899b577d19",
     "tools/graphics-verify-ultra.py": "54cc089431c0c3e73856d265fbeb8ea3f688a08af2c0e1cb9478e2be1ebb9639",
     "tools/solar-verify-evidence.py": "557a9ad4890b3257606353329c4e9f6b86e567f1ab28302ebcf641a851431213",
-    "tools/validate_ether_jni.py": "5c2e093cbc1cd8f8c6e3934ebd21ac074aea2b7a0624931fc13466270b58eff9"
+    "tools/validate_ether_jni.py": "5c2e093cbc1cd8f8c6e3934ebd21ac074aea2b7a0624931fc13466270b58eff9",
+    "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java": "081d23639f05f12d1822c6980be14d22d4470faa5fbb77fdbd9634c37cebf97d",
+    "pc-android/tools/android-test.sh": "205acd5c31a0526b4028bb5f93476605255c9518faf5d0a7030bd706510bead4"
   },
   "priorRemoteCi": {
     "sourceCommit": "e49125dcd1b6c784d005bfd41c8fe2b8e318281a",
@@ -436,14 +439,160 @@
       "Graphics validators omitted native_ether_contracts from exact inventories. Corrected in this revision, including ultra and desktop portability gates.",
       "Solar recreation test changed renderer quality without updating Activity UHD flags, comparing different resolutions after recreation. Preparation corrected without changing dedicated UHD tests or exact pixel checks.",
       "Solar8K deliberate Earth entry capture timed out. That earlier failure is not resolved or attributed to the new fusion by this report."
-    ]
+    ],
+    "followUp": "The earlier Solar4K/8K failing cases passed on 3867db6e. The stricter PC contract passed on f2528050, with production unchanged and tests identical to the delivered source commit."
   },
   "limitations": [
-    "No Android APK, emulator, phone or GLES execution of this revision is claimed by these local results; use the GitHub Actions run for the published head.",
+    "Android/GLES results use the CI emulator/SwiftShader and are scoped to the exact commits/profiles in publishedCi and pcContractFollowUp. The delivery source is byte-identical in production to 3867db6e, and its PC tests/verifier are byte-identical to f2528050. These runs do not establish performance on a physical phone.",
     "Exact Clifford state only. Arbitrary non-Clifford states, physical quantum hardware and quantum advantage are not established.",
     "CPU/RAM x86, scene identities, GLES geometry and astronomical physics retain their own implementations.",
     "The unbounded address domain does not provide unlimited physical RAM or work. Local conjugated support and components obey finite budgets.",
     "No performance superiority is inferred from correctness tests or the standalone Ether query timing.",
     "Separate application processes have separate sessions unless an explicit shared owner exists."
-  ]
+  ],
+  "implementationCommit": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+  "pcContractFollowUp": {
+    "sourceCommit": "9b3e17d3b50e3fc13de7818cc18a329628a1e0e9",
+    "productionSourcesChanged": false,
+    "reason": "The prior UI test expected two auxiliary rules on viewport creation. The fused session must retain the real guest state and only mutate rules on an explicit command.",
+    "rulesRequired": [
+      0,
+      2,
+      0
+    ],
+    "requiresSameOwner": true,
+    "requiresUnchangedSnapshotAndEpochDuringAdoptionAndObservation": true,
+    "requiresGlobalPixelCausalityAndExactInversePixels": true,
+    "androidTestsRequired": 29,
+    "localJavaCompilationPassed": true,
+    "jniFixture": {
+      "ok": true,
+      "before": [
+        1.0,
+        0.0,
+        1.0,
+        -1.0,
+        1.0
+      ],
+      "framed": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "restored": [
+        1.0,
+        0.0,
+        1.0,
+        -1.0,
+        1.0
+      ],
+      "before_revision": 2,
+      "framed_revision": 4,
+      "restored_revision": 6,
+      "before_epoch": 1,
+      "framed_epoch": 2,
+      "restored_epoch": 3
+    },
+    "jniFixtureScope": "Linux JVM plus existing real mx_graphics JNI; verifies observables, finite payload and mutation stamps for the PC Bell/global-rule roundtrip. No Android UI or GLES execution.",
+    "androidExecutionAtReportTime": "passed",
+    "validationCommit": "f2528050d86a3c251e763f918062cf7138a3bd2a",
+    "validationWorkflowDelta": "Only the isolated branch name was added to the existing push trigger. All build and verification steps are identical; the trigger change is not part of the delivered source commit.",
+    "androidTestsPassed": 29,
+    "androidTestsFailed": 0,
+    "runUrl": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39376224889",
+    "jobUrl": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39376224889/job/118474864876",
+    "verifiedOutputs": [
+      "same shared owner and read-only adoption/view",
+      "global rules 0 -> 2 -> 0",
+      "signed observables and exact revision/epoch increments",
+      "changed coupled pixels and exact inverse pixels",
+      "guest and output 8K video",
+      "29 tests and strengthened evidence verifier passed"
+    ]
+  },
+  "publishedCi": {
+    "sourceCommit": "3867db6efcfad3e4c2b2f8ae561e23a9ce7a6f8a",
+    "scope": "Production code is byte-identical to the follow-up; only the PC test and verifier changed. These are completed results for this source SHA, not claims about unexecuted later tests.",
+    "completed": [
+      {
+        "profile": "Ether Linux and Windows",
+        "result": "success",
+        "ctestPerOs": 16,
+        "jniLinuxChecks": 59,
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785983"
+      },
+      {
+        "profile": "Native and desktop contracts",
+        "result": "success",
+        "nativeCtest": 70,
+        "visualCliChecks": 69,
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785861"
+      },
+      {
+        "profile": "Graphics Android",
+        "result": "success",
+        "androidTests": 21,
+        "pngs": 32,
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785800"
+      },
+      {
+        "profile": "Graphics4K Android",
+        "result": "success",
+        "androidTests": 25,
+        "pngs": 46,
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785660"
+      },
+      {
+        "profile": "Graphics8K Android",
+        "result": "success",
+        "androidTests": 29,
+        "nativeFramebuffer": [
+          7680,
+          4320
+        ],
+        "exactDifferentialCases": 4,
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785663"
+      },
+      {
+        "profile": "COSMIC Android",
+        "result": "success",
+        "cosmicSuiteTests": 26,
+        "cosmicSuitePngs": 37,
+        "microAndGraphicsSuites": "success",
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785709"
+      },
+      {
+        "profile": "Solar Android",
+        "result": "success",
+        "androidTests": 13,
+        "pngs": 12,
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785671"
+      },
+      {
+        "profile": "Solar8K Android",
+        "result": "success",
+        "androidTests": 15,
+        "pngs": 16,
+        "nativeFramebuffer": [
+          7680,
+          4320
+        ],
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785817"
+      },
+      {
+        "profile": "Solar4K Android",
+        "result": "success",
+        "androidTests": 19,
+        "pngs": 62,
+        "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785650"
+      }
+    ],
+    "pcPriorContractFailure": {
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39374785774",
+      "reason": "Obsolete expectation of two automatically prepared auxiliary rules; replaced by the stricter explicit-mutation contract."
+    },
+    "latestPullRequestChecks": "https://github.com/guadalupejuan001-code/mundo-X/pull/24/checks"
+  }
 }
