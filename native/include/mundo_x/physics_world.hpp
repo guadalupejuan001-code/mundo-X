@@ -90,7 +90,9 @@ class PhysicsWorld {
     for(const auto& b:work_) validate(b);
     next.scratch_bytes=work_.capacity()*sizeof(PhysicsBody)+nodes_.capacity()*sizeof(Node)
         +(order_.capacity()+leaves_.capacity()+candidates_.capacity())*sizeof(std::size_t);
-    bodies.swap(work_);stats_=next;
+    // Commit without replacing public vector storage: existing references to
+    // bodies remain valid across step(), as in the original implementation.
+    std::copy(work_.begin(),work_.end(),bodies.begin());stats_=next;
   }
 
  private:

@@ -77,7 +77,8 @@ int main() {
     for(unsigned i=0;i<600;++i)spatial.bodies.push_back({double(i)*3+100,20,0,0,1,.5,false});
     spatial.bodies.front()={0,20,1,0,1,.5,false};
     spatial.bodies.back()={1,20,-1,0,1,.5,false};
-    spatial.step(.01);
+    const auto* storage=spatial.bodies.data();spatial.step(.01);
+    require(spatial.bodies.data()==storage,"step invalidated public body references");
     require(spatial.bodies.front().vx==-1&&spatial.bodies.back().vx==1,"spatial contact lost");
     require(spatial.step_stats().pair_tests<16,"sparse index tested unrelated pairs");
     std::reverse(spatial.bodies.begin(),spatial.bodies.end());
