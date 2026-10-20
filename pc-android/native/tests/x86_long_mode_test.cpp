@@ -273,9 +273,17 @@ void paging_and_fault_tests() {
   for (unsigned i = 0; i < 512; ++i) cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
   cpu.write64(0x3000, 0x4003); cpu.write64(0x4000 + 11 * 8, 0xd003);
   cpu.write64(0xb000, 0x1111111111111111ULL); cpu.write64(0xd000, 0x876543219abcdef0ULL);
-  program(cpu, {0x48,0x8b,0x03,0xf4}); cpu.regs[Cpu::EBX] = 0xb000; run(cpu);
+  program(cpu, {0x48,0x8b,0x03,0xf4}); cpu.regs[Cpu::EBX] = 0xb000;
+  cpu.page_walks=0; one(cpu);
   check(cpu.regs[Cpu::EAX] == 0x876543219abcdef0ULL, "four-level4KiB translation reads remapped data");
-  program(cpu, {0x48,0x89,0x03,0xf4}); cpu.regs[Cpu::EAX] = 0xfedcba9876543210ULL; run(cpu);
+  check(cpu.page_walks==4,
+        "MOV r64,[mem] must walk three instruction bytes plus one data page, not eight data bytes");
+  one(cpu);
+  program(cpu, {0x48,0x89,0x03,0xf4}); cpu.regs[Cpu::EAX] = 0xfedcba9876543210ULL;
+  cpu.page_walks=0; one(cpu);
+  check(cpu.page_walks==4,
+        "MOV [mem],r64 must walk three instruction bytes plus one writable data page");
+  one(cpu);
   check(cpu.read64(0xd000) == 0xfedcba9876543210ULL && cpu.read64(0xb000) == 0x1111111111111111ULL,
         "four-level4KiB translation writes the remapped physical frame");
   check((cpu.read64(0x4000 + 11 * 8) & 0x60) == 0x60, "PTE A/D bits");
