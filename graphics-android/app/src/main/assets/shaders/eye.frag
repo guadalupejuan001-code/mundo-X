@@ -24,6 +24,22 @@ bool boxHit(vec3 ro,vec3 rd,vec3 lower,vec3 upper,out float entry,out float leav
   }
   return leave>=max(entry,0.0);
 }
+// A rule-defined column can only affect rays that cross its XZ footprint.
+// Test that necessary condition before evaluating hash, edits, animation or
+// Ether coefficients. The full box test still decides the hit and normal.
+bool columnMayHit(vec3 ro,vec3 rd,vec2 center){
+  float entry=-1e30,leave=1e30;
+  for(int j=0;j<2;j++){
+    int axis=j==0?0:2;
+    float lower=center[j]-.38,upper=center[j]+.38;
+    if(abs(rd[axis])<1e-12){if(ro[axis]<lower||ro[axis]>upper)return false;}
+    else{
+      float a=(lower-ro[axis])/rd[axis],b=(upper-ro[axis])/rd[axis];
+      entry=max(entry,min(a,b));leave=min(leave,max(a,b));
+    }
+  }
+  return leave>=max(entry,0.0);
+}
 vec3 cosmicSky(vec3 direction){
   float horizon=pow(1.0-clamp(abs(direction.y),0.0,1.0),5.0);
   vec3 sky=mix(vec3(.025,.041,.085),vec3(.075,.065,.17),smoothstep(-.1,.7,direction.y));
@@ -74,7 +90,10 @@ void main(){
     gl_FragDepth=.999999;
   }
   float halfGrid=float(uSide)*1.1;
-  float maxHeight=5.18*(1.0+abs(uQuantumStrength));
+  // With no exceptions, the exact law is bounded by
+  // (.7 + 255/128) * 1.08 = 2.9075625. Round upward; edited columns
+  // retain the full bound. Nothing below either bound is discarded.
+  float maxHeight=(uEditCount==0?2.908:5.18)*(1.0+abs(uQuantumStrength));
   float entry,leave;vec3 normal;
   if(!boxHit(ro,rd,vec3(-halfGrid,0,-halfGrid),vec3(halfGrid,maxHeight,halfGrid),entry,leave,normal))return;
   entry=max(entry,0.0);leave=min(leave,maximum);
@@ -97,16 +116,19 @@ void main(){
     if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(uSide)))||entry>leave)return;
     int id=cell.y*uSide+cell.x;
     if(id<uCount){
-      vec2 center;float height,tone;objectData(id,center,height,tone);
-      float hitT,exitT;vec3 hitNormal;
-      if(height>0.0 && boxHit(ro,rd,vec3(center.x-.38,0,center.y-.38),
-                             vec3(center.x+.38,height,center.y+.38),hitT,exitT,hitNormal)){
-        if(hitT>=max(entry-.001,0.0) && hitT<=min(leave,min(nextT.x,nextT.y))+.001){
-          vec3 world=rot*(ro+rd*hitT);
-          vec4 clip=uVp*vec4(world,1);
-          gl_FragDepth=(clip.z/clip.w)*.5+.5;
-          outColor=shade(rot*hitNormal,world,tone,id);
-          return;
+      vec2 center=(vec2(id%uSide,id/uSide)-float(uSide-1)*.5)*2.2;
+      if(columnMayHit(ro,rd,center)){
+        float height,tone;objectData(id,center,height,tone);
+        float hitT,exitT;vec3 hitNormal;
+        if(height>0.0 && boxHit(ro,rd,vec3(center.x-.38,0,center.y-.38),
+                               vec3(center.x+.38,height,center.y+.38),hitT,exitT,hitNormal)){
+          if(hitT>=max(entry-.001,0.0) && hitT<=min(leave,min(nextT.x,nextT.y))+.001){
+            vec3 world=rot*(ro+rd*hitT);
+            vec4 clip=uVp*vec4(world,1);
+            gl_FragDepth=(clip.z/clip.w)*.5+.5;
+            outColor=shade(rot*hitNormal,world,tone,id);
+            return;
+          }
         }
       }
     }
