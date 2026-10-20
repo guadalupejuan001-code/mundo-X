@@ -1,0 +1,192 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    1920,
+    1080
+  ],
+  "results": [
+    {
+      "scene": 0,
+      "selected": 0,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          375.10588,
+          378.334901,
+          379.535101
+        ],
+        "before": [
+          349.679718,
+          367.902475,
+          414.185974
+        ]
+      },
+      "fresh_ms": {
+        "after": 1418.76767,
+        "before": 397.031831
+      },
+      "median_ms": {
+        "after": 378.334901,
+        "before": 367.902475
+      },
+      "eclipse_candidates": 38
+    },
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          400.424844,
+          409.023506,
+          379.739649
+        ],
+        "before": [
+          393.389706,
+          406.902498,
+          386.042532
+        ]
+      },
+      "fresh_ms": {
+        "after": 445.404042,
+        "before": 416.193503
+      },
+      "median_ms": {
+        "after": 400.424844,
+        "before": 393.389706
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 7,
+      "selected": 6,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          392.677356,
+          379.662947,
+          392.765015
+        ],
+        "after": [
+          382.632786,
+          400.155861,
+          397.359398
+        ]
+      },
+      "fresh_ms": {
+        "before": 403.478751,
+        "after": 385.148805
+      },
+      "median_ms": {
+        "before": 392.677356,
+        "after": 397.359398
+      },
+      "eclipse_candidates": 27
+    },
+    {
+      "scene": 24,
+      "selected": 3,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          667.585643,
+          723.817549,
+          747.236133
+        ],
+        "before": [
+          822.18104,
+          790.921644,
+          784.581197
+        ]
+      },
+      "fresh_ms": {
+        "after": 677.768945,
+        "before": 834.610741
+      },
+      "median_ms": {
+        "after": 723.817549,
+        "before": 790.921644
+      },
+      "eclipse_candidates": 22
+    },
+    {
+      "scene": 26,
+      "selected": 5,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          236.955907,
+          240.199465,
+          235.161892
+        ],
+        "before": [
+          239.470664,
+          238.752625,
+          244.158376
+        ]
+      },
+      "fresh_ms": {
+        "after": 239.366912,
+        "before": 231.829257
+      },
+      "median_ms": {
+        "after": 236.955907,
+        "before": 239.470664
+      },
+      "eclipse_candidates": 23
+    },
+    {
+      "scene": 29,
+      "selected": 14,
+      "entry": true,
+      "samples_ms": {
+        "before": [
+          597.467691,
+          589.204939,
+          586.365422
+        ],
+        "after": [
+          588.551145,
+          637.658948,
+          606.073439
+        ]
+      },
+      "fresh_ms": {
+        "before": 592.12202,
+        "after": 587.131071
+      },
+      "median_ms": {
+        "before": 589.204939,
+        "after": 606.073439
+      },
+      "eclipse_candidates": 20
+    }
+  ],
+  "compared_pixels": 37324800,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 393.033531,
+    "after": 398.892121
+  },
+  "rss_peak_kib": 251832,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "d9032f059372f31aae2164133e24872d54ed5e2e",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": false,
+  "shader_sha256": "b4b21c0f8d9c771f2841d489f628ac93bc0072837bcbc9de4f2501da5cd9bdbb",
+  "fixtures_sha256": "05bc848a0a44d0c0047635932f41f5d401785f54214f117dc7c0dd36ef702cbb"
+}

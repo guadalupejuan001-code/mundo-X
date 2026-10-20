@@ -1,0 +1,84 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    3840,
+    2160
+  ],
+  "results": [
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          1709.45809,
+          1563.578692
+        ],
+        "before": [
+          1484.630482,
+          1439.833385
+        ]
+      },
+      "fresh_ms": {
+        "after": 1512.577875,
+        "before": 1542.712647
+      },
+      "median_ms": {
+        "after": 1636.518391,
+        "before": 1462.2319335
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 24,
+      "selected": 3,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          2764.961771,
+          2704.158861
+        ],
+        "before": [
+          3053.843879,
+          3084.088409
+        ]
+      },
+      "fresh_ms": {
+        "after": 2897.609622,
+        "before": 3358.393823
+      },
+      "median_ms": {
+        "after": 2734.560316,
+        "before": 3068.966144
+      },
+      "eclipse_candidates": 22
+    }
+  ],
+  "compared_pixels": 49766400,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 2265.59903875,
+    "after": 2185.5393535000003
+  },
+  "rss_peak_kib": 387096,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "d9032f059372f31aae2164133e24872d54ed5e2e",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": false,
+  "shader_sha256": "b4b21c0f8d9c771f2841d489f628ac93bc0072837bcbc9de4f2501da5cd9bdbb",
+  "fixtures_sha256": "e1bcc4e4be0dfe5af2ee7f60e5969172cf5830f0dbc77a42d822847013553a76"
+}

@@ -1,0 +1,2 @@
+SolarPngChecks PASS: 553061 exact independently decoded pixels; output failure preserved
+{"width":7680,"height":4320,"ms":472.982881,"extraJavaAllocatedBytes":64104,"inputBytes":132710400}

@@ -1,0 +1,12 @@
+{
+  "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/25",
+  "number": 25,
+  "state": "open",
+  "merged": false,
+  "draft": true,
+  "base": "main",
+  "base_sha": "7b028db2344912b2ab86a0affa2a1fe56180922b",
+  "head": "codex/ether-audit-stress-20261020",
+  "head_sha": "aab0930378796ebfd42f9629e2575108ca94fcff",
+  "updated_at": "2026-10-20T15:34:13Z"
+}

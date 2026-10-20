@@ -1,0 +1,186 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    1920,
+    1080
+  ],
+  "results": [
+    {
+      "scene": 0,
+      "selected": 0,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          340.05579,
+          330.014436,
+          356.792602,
+          336.706839,
+          364.441827
+        ],
+        "before": [
+          353.019745,
+          336.401384,
+          327.731232,
+          347.553564,
+          336.020597
+        ]
+      },
+      "fresh_ms": {
+        "after": 1398.640436,
+        "before": 339.045339
+      },
+      "median_ms": {
+        "after": 340.05579,
+        "before": 336.401384
+      },
+      "eclipse_candidates": 38
+    },
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          396.223966,
+          412.364058,
+          401.903037,
+          390.858439,
+          403.268767
+        ],
+        "before": [
+          416.305068,
+          403.032577,
+          415.712337,
+          381.906249,
+          388.657325
+        ]
+      },
+      "fresh_ms": {
+        "after": 436.602832,
+        "before": 396.151863
+      },
+      "median_ms": {
+        "after": 401.903037,
+        "before": 403.032577
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 17,
+      "selected": 16,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          412.311321,
+          417.664487,
+          416.723519,
+          402.575438,
+          383.218326
+        ],
+        "after": [
+          385.441226,
+          411.736453,
+          406.91408,
+          385.49294,
+          439.677498
+        ]
+      },
+      "fresh_ms": {
+        "before": 414.87687,
+        "after": 381.420156
+      },
+      "median_ms": {
+        "before": 412.311321,
+        "after": 406.91408
+      },
+      "eclipse_candidates": 29
+    },
+    {
+      "scene": 24,
+      "selected": 3,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          717.606278,
+          667.842131,
+          676.092221,
+          676.021246,
+          671.894952
+        ],
+        "before": [
+          760.228976,
+          768.810079,
+          763.448721,
+          765.150692,
+          836.108209
+        ]
+      },
+      "fresh_ms": {
+        "after": 787.653656,
+        "before": 773.73386
+      },
+      "median_ms": {
+        "after": 676.021246,
+        "before": 765.150692
+      },
+      "eclipse_candidates": 22
+    },
+    {
+      "scene": 29,
+      "selected": 14,
+      "entry": true,
+      "samples_ms": {
+        "before": [
+          683.894834,
+          612.478949,
+          595.271758,
+          582.733923,
+          588.390777
+        ],
+        "after": [
+          581.826675,
+          588.220846,
+          592.283438,
+          602.808612,
+          598.512887
+        ]
+      },
+      "fresh_ms": {
+        "before": 589.407778,
+        "after": 586.560357
+      },
+      "median_ms": {
+        "before": 595.271758,
+        "after": 592.283438
+      },
+      "eclipse_candidates": 20
+    }
+  ],
+  "compared_pixels": 31104000,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 412.311321,
+    "after": 406.91408
+  },
+  "rss_peak_kib": 269860,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "d9032f059372f31aae2164133e24872d54ed5e2e",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": true,
+  "shader_sha256": "3070c79335879ceb539a65024eff6819804c09adfe2ae79aefcf1169374f31d8",
+  "fixtures_sha256": "05bc848a0a44d0c0047635932f41f5d401785f54214f117dc7c0dd36ef702cbb"
+}

@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "decoder": "Pillow",
+  "pixels": 33177600,
+  "different_channels": 0,
+  "rgba_sha256_top_first": "ce941de8a76142868e7c656470a10d4bf9e97ef1265781c58d95dacab8e4d7ee",
+  "png_bytes": 9922945,
+  "png_sha256": "80082ff9df9476fc5e17d3cba31627bde01fb902500cddd2486793db702202ec",
+  "rss_peak_kib": 165104,
+  "as_budget_bytes": 2147483648
+}

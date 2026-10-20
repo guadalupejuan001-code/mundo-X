@@ -1,0 +1,57 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    7680,
+    4320
+  ],
+  "results": [
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          5964.55767
+        ],
+        "before": [
+          5848.910723
+        ]
+      },
+      "fresh_ms": {
+        "after": 6463.32313,
+        "before": 5878.042866
+      },
+      "median_ms": {
+        "after": 5964.55767,
+        "before": 5848.910723
+      },
+      "eclipse_candidates": 32
+    }
+  ],
+  "compared_pixels": 99532800,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 5848.910723,
+    "after": 5964.55767
+  },
+  "rss_peak_kib": 1083776,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "b647940e3faa01e17fdb63b304efd7b0db8b32ba",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; production shader, catalogue fixtures; not Android FPS",
+  "shader_sha256": "6628945f9a06de759ac0f56a96c0a6ecb7ac9457b6960eed2e1ccb6243cc9d61",
+  "fixtures_sha256": "ab774ec76c5a88838d65638fff2f5b5ccc31f6f6b006a7bbeaee1c0840ccb280"
+}

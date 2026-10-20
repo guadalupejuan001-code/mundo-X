@@ -1,0 +1,10 @@
+{
+  "ram_mb": 2048,
+  "software_gles": "swiftshader",
+  "virtualization": "TCG",
+  "system_image": "system-images;android-29;default;x86_64",
+  "art_compile": "speed",
+  "status": "blocked_or_failed",
+  "cases": [],
+  "error": "CalledProcessError: Command '['/workspace/scratch/7def14e3f3d9/solar-build/sdk/platform-tools/adb', 'start-server']' returned non-zero exit status 255."
+}

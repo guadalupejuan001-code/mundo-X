@@ -1,0 +1,109 @@
+{
+  "source_commit": "ce001aa336bdde72bdc6536ec26cf4ea1601b723",
+  "source_sha256": {
+    "solar-android/app/src/main/assets/shaders/solar.frag": "6628945f9a06de759ac0f56a96c0a6ecb7ac9457b6960eed2e1ccb6243cc9d61",
+    "solar-android/app/src/main/java/com/mundox/solar/SolarData.java": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+    "solar-android/app/src/main/java/com/mundox/solar/SolarOcclusion.java": "cb545c121162c90470fdf976cf4f9b518c7c3924f90f6e66c9bcbbcf3a88024a",
+    "solar-android/tests/SolarRenderFixtures.java": "7210572be1938d9ace7ae6a0fd9a6962b77899ba3c668600fa26c4402ef56873",
+    "tools/solar_shader_check.py": "20439c1fda852e7ddd700b443809a19ec96a875db5c3aba5f7086d85a98e8f44",
+    "tools/solar_campaign.py": "69f1e4370dcad841b02bc8ea9de73d3e19f795d3ae4056ddb4fd3291578faac0"
+  },
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "affinity_cpu": 0,
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "wall_budget_seconds": 210,
+  "sequential": true,
+  "cases": [
+    {
+      "resolution": [
+        320,
+        180
+      ],
+      "repeats": 5,
+      "scenes": "all 32",
+      "fixture": {
+        "returncode": 0,
+        "wall_seconds": 0.2656814710026083
+      },
+      "returncode": 0,
+      "wall_seconds": 5.530998618000012
+    },
+    {
+      "resolution": [
+        961,
+        541
+      ],
+      "repeats": 3,
+      "scenes": "all 32",
+      "fixture": {
+        "returncode": 0,
+        "wall_seconds": 0.26567770700057736
+      },
+      "returncode": 0,
+      "wall_seconds": 31.8616901839996
+    },
+    {
+      "resolution": [
+        1920,
+        1080
+      ],
+      "repeats": 3,
+      "scenes": [
+        0,
+        4,
+        7,
+        24,
+        26,
+        29
+      ],
+      "fixture": {
+        "returncode": 0,
+        "wall_seconds": 0.21573665299729328
+      },
+      "returncode": 0,
+      "wall_seconds": 27.75301638000019
+    },
+    {
+      "resolution": [
+        3840,
+        2160
+      ],
+      "repeats": 2,
+      "scenes": [
+        4,
+        24
+      ],
+      "fixture": {
+        "returncode": 0,
+        "wall_seconds": 0.2164259929995751
+      },
+      "returncode": 0,
+      "wall_seconds": 32.1224374630001
+    },
+    {
+      "resolution": [
+        7680,
+        4320
+      ],
+      "repeats": 1,
+      "scenes": [
+        4
+      ],
+      "fixture": {
+        "returncode": 0,
+        "wall_seconds": 0.3162443319997692
+      },
+      "returncode": 0,
+      "wall_seconds": 32.77166060300078
+    }
+  ],
+  "ephemeris": {
+    "returncode": 0,
+    "wall_seconds": 1.5690956489997916
+  },
+  "elapsed_seconds": 132.89293733199884,
+  "sources_unchanged": true,
+  "passed": true
+}

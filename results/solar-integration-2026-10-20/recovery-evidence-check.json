@@ -1,0 +1,21 @@
+{
+  "production_source_commit": "c2c0c5f727f56c2491c26fea074109e6eae50df2",
+  "recovered_campaign_reexecuted": false,
+  "recorded_source_hashes_checked_against_recovered_files": {
+    "solar-android/app/src/main/assets/shaders/solar.frag": true,
+    "solar-android/app/src/main/java/com/mundox/solar/SolarData.java": true,
+    "solar-android/tests/SolarOcclusion.java": true,
+    "solar-android/tests/SolarRenderFixtures.java": true,
+    "tools/solar_shader_check.py": true,
+    "tools/solar_campaign.py": true
+  },
+  "recounted_color_pixels": 80688032,
+  "recounted_differences": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "recounted_max_rss_kib": 1083660,
+  "complete_campaign_passed": true,
+  "scope": "Audit of the recovered shipping evidence and its source hashes; Android resumed separately."
+}

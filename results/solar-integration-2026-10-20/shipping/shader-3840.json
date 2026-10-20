@@ -1,0 +1,84 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    3840,
+    2160
+  ],
+  "results": [
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          1625.065072,
+          1665.553699
+        ],
+        "before": [
+          1616.382247,
+          1597.738903
+        ]
+      },
+      "fresh_ms": {
+        "after": 1588.680747,
+        "before": 1554.974178
+      },
+      "median_ms": {
+        "after": 1645.3093855000002,
+        "before": 1607.060575
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 24,
+      "selected": 3,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          3019.54962,
+          2986.24475
+        ],
+        "before": [
+          3355.006944,
+          3188.222217
+        ]
+      },
+      "fresh_ms": {
+        "after": 2938.068688,
+        "before": 3391.842959
+      },
+      "median_ms": {
+        "after": 3002.897185,
+        "before": 3271.6145805
+      },
+      "eclipse_candidates": 22
+    }
+  ],
+  "compared_pixels": 49766400,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 2439.33757775,
+    "after": 2324.10328525
+  },
+  "rss_peak_kib": 386960,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "c2c0c5f727f56c2491c26fea074109e6eae50df2",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": false,
+  "shader_sha256": "3070c79335879ceb539a65024eff6819804c09adfe2ae79aefcf1169374f31d8",
+  "fixtures_sha256": "e1bcc4e4be0dfe5af2ee7f60e5969172cf5830f0dbc77a42d822847013553a76"
+}

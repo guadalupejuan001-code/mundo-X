@@ -1,0 +1,109 @@
+{
+  "production_source_commit": "c2c0c5f727f56c2491c26fea074109e6eae50df2",
+  "ephemeris": {
+    "False": {
+      "median_ms": 126.753456,
+      "allocated_bytes": 41856000
+    },
+    "True": {
+      "median_ms": 85.06299200000001,
+      "allocated_bytes": 23424000.0
+    }
+  },
+  "ephemeris_latency_reduction_percent": 32.890987997991935,
+  "ephemeris_allocation_reduction_percent": 44.03669724770643,
+  "render": [
+    {
+      "resolution": [
+        320,
+        180
+      ],
+      "scenes": 32,
+      "median_ms": {
+        "before": 11.540685,
+        "after": 11.5251325
+      },
+      "different_pixels": {
+        "color": 0,
+        "id": 0,
+        "depth": 0
+      },
+      "compared_color_pixels": 1843200,
+      "rss_peak_kib": 195300
+    },
+    {
+      "resolution": [
+        961,
+        541
+      ],
+      "scenes": 32,
+      "median_ms": {
+        "before": 106.34978749999999,
+        "after": 108.689514
+      },
+      "different_pixels": {
+        "color": 0,
+        "id": 0,
+        "depth": 0
+      },
+      "compared_color_pixels": 16636832,
+      "rss_peak_kib": 200956
+    },
+    {
+      "resolution": [
+        1920,
+        1080
+      ],
+      "scenes": 6,
+      "median_ms": {
+        "before": 464.574319,
+        "after": 417.553187
+      },
+      "different_pixels": {
+        "color": 0,
+        "id": 0,
+        "depth": 0
+      },
+      "compared_color_pixels": 12441600,
+      "rss_peak_kib": 209088
+    },
+    {
+      "resolution": [
+        3840,
+        2160
+      ],
+      "scenes": 2,
+      "median_ms": {
+        "before": 2439.33757775,
+        "after": 2324.10328525
+      },
+      "different_pixels": {
+        "color": 0,
+        "id": 0,
+        "depth": 0
+      },
+      "compared_color_pixels": 16588800,
+      "rss_peak_kib": 386960
+    },
+    {
+      "resolution": [
+        7680,
+        4320
+      ],
+      "scenes": 1,
+      "median_ms": {
+        "before": 6451.316669,
+        "after": 6238.654715
+      },
+      "different_pixels": {
+        "color": 0,
+        "id": 0,
+        "depth": 0
+      },
+      "compared_color_pixels": 33177600,
+      "rss_peak_kib": 1083660
+    }
+  ],
+  "color_pixels": 80688032,
+  "note": "Only shipping/ is the delivered shader. Other campaigns document retired eclipse variants. Timings are software-host measurements; all paths force full draws."
+}

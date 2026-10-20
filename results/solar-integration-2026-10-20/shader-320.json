@@ -1,0 +1,995 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    320,
+    180
+  ],
+  "results": [
+    {
+      "scene": 0,
+      "selected": 0,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          12.536498,
+          11.217403,
+          11.010699,
+          11.013423,
+          10.921556
+        ],
+        "before": [
+          10.855028,
+          10.945382,
+          10.80834,
+          10.719028,
+          10.663606
+        ]
+      },
+      "fresh_ms": {
+        "after": 18.599299,
+        "before": 14.100945
+      },
+      "median_ms": {
+        "after": 11.013423,
+        "before": 10.80834
+      },
+      "eclipse_candidates": 38
+    },
+    {
+      "scene": 1,
+      "selected": 0,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          11.937966,
+          11.888313,
+          12.081798,
+          12.160264,
+          12.602606
+        ],
+        "after": [
+          11.940459,
+          11.98877,
+          11.873551,
+          12.016341,
+          11.965246
+        ]
+      },
+      "fresh_ms": {
+        "before": 12.170819,
+        "after": 12.180803
+      },
+      "median_ms": {
+        "before": 12.081798,
+        "after": 11.965246
+      },
+      "eclipse_candidates": 29
+    },
+    {
+      "scene": 2,
+      "selected": 1,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          7.112379,
+          7.741287,
+          8.36782,
+          7.149775,
+          7.325343
+        ],
+        "before": [
+          7.402577,
+          7.207189,
+          7.444789,
+          7.265355,
+          7.688098
+        ]
+      },
+      "fresh_ms": {
+        "after": 7.169113,
+        "before": 7.563013
+      },
+      "median_ms": {
+        "after": 7.325343,
+        "before": 7.402577
+      },
+      "eclipse_candidates": 43
+    },
+    {
+      "scene": 3,
+      "selected": 2,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          11.013192,
+          10.606422,
+          10.624028,
+          10.550609,
+          10.666811
+        ],
+        "after": [
+          10.174115,
+          10.085914,
+          10.236947,
+          10.215515,
+          10.500746
+        ]
+      },
+      "fresh_ms": {
+        "before": 10.713099,
+        "after": 10.365977
+      },
+      "median_ms": {
+        "before": 10.624028,
+        "after": 10.215515
+      },
+      "eclipse_candidates": 38
+    },
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          10.31331,
+          10.762211,
+          13.966267,
+          10.536739,
+          10.296976
+        ],
+        "before": [
+          10.742582,
+          10.969407,
+          10.530531,
+          10.911321,
+          10.588426
+        ]
+      },
+      "fresh_ms": {
+        "after": 10.517881,
+        "before": 10.736664
+      },
+      "median_ms": {
+        "after": 10.536739,
+        "before": 10.742582
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 5,
+      "selected": 4,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          11.254147,
+          10.596407,
+          11.144025,
+          11.019421,
+          10.572772
+        ],
+        "after": [
+          12.494727,
+          10.003263,
+          10.343674,
+          13.111156,
+          10.314021
+        ]
+      },
+      "fresh_ms": {
+        "before": 10.799937,
+        "after": 11.198085
+      },
+      "median_ms": {
+        "before": 11.019421,
+        "after": 10.343674
+      },
+      "eclipse_candidates": 33
+    },
+    {
+      "scene": 6,
+      "selected": 5,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          6.86222,
+          6.834179,
+          7.050698,
+          7.069516,
+          6.739579
+        ],
+        "before": [
+          6.765357,
+          8.004304,
+          7.805562,
+          6.934176,
+          7.049767
+        ]
+      },
+      "fresh_ms": {
+        "after": 7.235902,
+        "before": 6.786949
+      },
+      "median_ms": {
+        "after": 6.86222,
+        "before": 7.049767
+      },
+      "eclipse_candidates": 34
+    },
+    {
+      "scene": 7,
+      "selected": 6,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          12.203017,
+          12.092894,
+          12.114896,
+          12.058964,
+          12.679118
+        ],
+        "after": [
+          12.247913,
+          12.501877,
+          11.674838,
+          11.919679,
+          11.4602
+        ]
+      },
+      "fresh_ms": {
+        "before": 13.003066,
+        "after": 12.836942
+      },
+      "median_ms": {
+        "before": 12.114896,
+        "after": 11.919679
+      },
+      "eclipse_candidates": 27
+    },
+    {
+      "scene": 8,
+      "selected": 7,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          10.982967,
+          10.927846,
+          10.954495,
+          10.200854,
+          10.706239
+        ],
+        "before": [
+          10.833326,
+          10.789802,
+          11.661738,
+          10.410723,
+          10.651769
+        ]
+      },
+      "fresh_ms": {
+        "after": 10.549658,
+        "before": 10.146594
+      },
+      "median_ms": {
+        "after": 10.927846,
+        "before": 10.789802
+      },
+      "eclipse_candidates": 45
+    },
+    {
+      "scene": 9,
+      "selected": 8,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          12.392576,
+          12.328652,
+          12.885794,
+          12.561305,
+          12.453746
+        ],
+        "after": [
+          12.555136,
+          12.065554,
+          12.600293,
+          12.509308,
+          13.088312
+        ]
+      },
+      "fresh_ms": {
+        "before": 12.732026,
+        "after": 12.82212
+      },
+      "median_ms": {
+        "before": 12.453746,
+        "after": 12.555136
+      },
+      "eclipse_candidates": 51
+    },
+    {
+      "scene": 10,
+      "selected": 9,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          7.6755,
+          7.265355,
+          7.568412,
+          7.019242,
+          6.925233
+        ],
+        "before": [
+          7.83805,
+          7.770079,
+          7.64825,
+          7.345933,
+          7.520341
+        ]
+      },
+      "fresh_ms": {
+        "after": 7.409768,
+        "before": 7.510265
+      },
+      "median_ms": {
+        "after": 7.265355,
+        "before": 7.64825
+      },
+      "eclipse_candidates": 41
+    },
+    {
+      "scene": 11,
+      "selected": 10,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          9.853992,
+          9.871909,
+          10.005296,
+          9.983003,
+          10.006698
+        ],
+        "after": [
+          9.753384,
+          9.983023,
+          9.795757,
+          10.014239,
+          9.657132
+        ]
+      },
+      "fresh_ms": {
+        "before": 10.095649,
+        "after": 9.959618
+      },
+      "median_ms": {
+        "before": 9.983003,
+        "after": 9.795757
+      },
+      "eclipse_candidates": 20
+    },
+    {
+      "scene": 12,
+      "selected": 11,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          9.071608,
+          9.258254,
+          9.547471,
+          9.432471,
+          9.096645
+        ],
+        "before": [
+          9.295319,
+          9.287096,
+          9.219037,
+          9.26931,
+          9.339494
+        ]
+      },
+      "fresh_ms": {
+        "after": 9.178276,
+        "before": 9.826733
+      },
+      "median_ms": {
+        "after": 9.258254,
+        "before": 9.287096
+      },
+      "eclipse_candidates": 29
+    },
+    {
+      "scene": 13,
+      "selected": 12,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          9.085479,
+          9.200769,
+          9.060743,
+          9.217504,
+          9.093451
+        ],
+        "after": [
+          9.018871,
+          9.5616,
+          9.356479,
+          9.188321,
+          9.455675
+        ]
+      },
+      "fresh_ms": {
+        "before": 9.480361,
+        "after": 9.178916
+      },
+      "median_ms": {
+        "before": 9.093451,
+        "after": 9.356479
+      },
+      "eclipse_candidates": 16
+    },
+    {
+      "scene": 14,
+      "selected": 13,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          7.413022,
+          6.844103,
+          6.742824,
+          6.667904,
+          7.553089
+        ],
+        "before": [
+          6.9776,
+          7.425071,
+          7.304242,
+          6.867638,
+          7.441364
+        ]
+      },
+      "fresh_ms": {
+        "after": 7.723099,
+        "before": 7.128072
+      },
+      "median_ms": {
+        "after": 6.844103,
+        "before": 7.304242
+      },
+      "eclipse_candidates": 22
+    },
+    {
+      "scene": 15,
+      "selected": 14,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          12.387399,
+          12.122377,
+          12.290375,
+          11.775947,
+          11.672074
+        ],
+        "after": [
+          12.489549,
+          12.010583,
+          11.477296,
+          12.040807,
+          11.355026
+        ]
+      },
+      "fresh_ms": {
+        "before": 12.119513,
+        "after": 11.966267
+      },
+      "median_ms": {
+        "before": 12.122377,
+        "after": 12.010583
+      },
+      "eclipse_candidates": 20
+    },
+    {
+      "scene": 16,
+      "selected": 15,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          12.473685,
+          12.018304,
+          13.278432,
+          12.4223,
+          14.564489
+        ],
+        "before": [
+          15.625954,
+          17.048723,
+          14.723294,
+          14.161375,
+          13.002986
+        ]
+      },
+      "fresh_ms": {
+        "after": 11.299554,
+        "before": 13.687886
+      },
+      "median_ms": {
+        "after": 12.473685,
+        "before": 14.723294
+      },
+      "eclipse_candidates": 26
+    },
+    {
+      "scene": 17,
+      "selected": 16,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          14.048558,
+          13.87377,
+          16.307259,
+          13.983572,
+          13.18216
+        ],
+        "after": [
+          13.50056,
+          12.643867,
+          14.098361,
+          12.797843,
+          13.255018
+        ]
+      },
+      "fresh_ms": {
+        "before": 14.039134,
+        "after": 13.73115
+      },
+      "median_ms": {
+        "before": 13.983572,
+        "after": 13.255018
+      },
+      "eclipse_candidates": 29
+    },
+    {
+      "scene": 18,
+      "selected": 17,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          7.636181,
+          7.677112,
+          7.434083,
+          7.290572,
+          7.343329
+        ],
+        "before": [
+          7.407925,
+          7.30297,
+          7.1396,
+          7.470237,
+          7.340906
+        ]
+      },
+      "fresh_ms": {
+        "after": 7.720756,
+        "before": 7.734647
+      },
+      "median_ms": {
+        "after": 7.434083,
+        "before": 7.340906
+      },
+      "eclipse_candidates": 24
+    },
+    {
+      "scene": 19,
+      "selected": 18,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          9.839481,
+          9.937096,
+          9.702218,
+          9.238965,
+          9.575152
+        ],
+        "after": [
+          9.672835,
+          9.55339,
+          10.060336,
+          9.537035,
+          10.031795
+        ]
+      },
+      "fresh_ms": {
+        "before": 10.117781,
+        "after": 9.222691
+      },
+      "median_ms": {
+        "before": 9.702218,
+        "after": 9.672835
+      },
+      "eclipse_candidates": 24
+    },
+    {
+      "scene": 20,
+      "selected": 19,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          10.923679,
+          11.558466,
+          10.95053,
+          12.313449,
+          11.168491
+        ],
+        "before": [
+          11.403668,
+          11.566398,
+          11.359042,
+          11.375386,
+          11.635539
+        ]
+      },
+      "fresh_ms": {
+        "after": 11.002827,
+        "before": 11.071918
+      },
+      "median_ms": {
+        "after": 11.168491,
+        "before": 11.403668
+      },
+      "eclipse_candidates": 20
+    },
+    {
+      "scene": 21,
+      "selected": 20,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          11.234307,
+          11.257903,
+          10.996468,
+          11.330149,
+          10.927375
+        ],
+        "after": [
+          10.565381,
+          11.180239,
+          11.251533,
+          11.912659,
+          10.978291
+        ]
+      },
+      "fresh_ms": {
+        "before": 11.624002,
+        "after": 11.068603
+      },
+      "median_ms": {
+        "before": 11.234307,
+        "after": 11.180239
+      },
+      "eclipse_candidates": 29
+    },
+    {
+      "scene": 22,
+      "selected": 21,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          8.481438,
+          7.977686,
+          7.812761,
+          7.768817,
+          8.31264
+        ],
+        "before": [
+          8.51678,
+          8.062199,
+          8.527026,
+          9.067392,
+          8.457132
+        ]
+      },
+      "fresh_ms": {
+        "after": 10.861959,
+        "before": 8.613192
+      },
+      "median_ms": {
+        "after": 7.977686,
+        "before": 8.51678
+      },
+      "eclipse_candidates": 18
+    },
+    {
+      "scene": 23,
+      "selected": 22,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          10.893304,
+          11.18846,
+          11.596282,
+          10.849881,
+          11.037237
+        ],
+        "after": [
+          10.509699,
+          10.566493,
+          10.724336,
+          10.869019,
+          11.281096
+        ]
+      },
+      "fresh_ms": {
+        "before": 11.067291,
+        "after": 11.17432
+      },
+      "median_ms": {
+        "before": 11.037237,
+        "after": 10.724336
+      },
+      "eclipse_candidates": 30
+    },
+    {
+      "scene": 24,
+      "selected": 3,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          17.525907,
+          18.60659,
+          23.395702,
+          21.320903,
+          18.658386
+        ],
+        "before": [
+          23.273042,
+          25.016533,
+          24.488975,
+          22.916006,
+          22.859502
+        ]
+      },
+      "fresh_ms": {
+        "after": 18.496558,
+        "before": 23.610911
+      },
+      "median_ms": {
+        "after": 18.658386,
+        "before": 23.273042
+      },
+      "eclipse_candidates": 22
+    },
+    {
+      "scene": 25,
+      "selected": 2,
+      "entry": true,
+      "samples_ms": {
+        "before": [
+          20.355389,
+          22.585719,
+          25.027114,
+          26.250173,
+          22.089797
+        ],
+        "after": [
+          21.559765,
+          19.880073,
+          19.582128,
+          16.719427,
+          17.572425
+        ]
+      },
+      "fresh_ms": {
+        "before": 20.24751,
+        "after": 22.962324
+      },
+      "median_ms": {
+        "before": 22.585719,
+        "after": 19.582128
+      },
+      "eclipse_candidates": 21
+    },
+    {
+      "scene": 26,
+      "selected": 5,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          8.423402,
+          7.591105,
+          8.630037,
+          8.493075,
+          8.496401
+        ],
+        "before": [
+          8.382382,
+          8.439005,
+          8.511722,
+          7.18095,
+          6.715823
+        ]
+      },
+      "fresh_ms": {
+        "after": 7.292284,
+        "before": 8.466896
+      },
+      "median_ms": {
+        "after": 8.493075,
+        "before": 8.382382
+      },
+      "eclipse_candidates": 23
+    },
+    {
+      "scene": 27,
+      "selected": 6,
+      "entry": true,
+      "samples_ms": {
+        "before": [
+          16.86044,
+          15.609781,
+          15.738019,
+          17.657921,
+          16.959972
+        ],
+        "after": [
+          16.149696,
+          16.698801,
+          16.580332,
+          17.856223,
+          19.371648
+        ]
+      },
+      "fresh_ms": {
+        "before": 18.70174,
+        "after": 26.280146
+      },
+      "median_ms": {
+        "before": 16.86044,
+        "after": 16.698801
+      },
+      "eclipse_candidates": 26
+    },
+    {
+      "scene": 28,
+      "selected": 9,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          11.486039,
+          11.868723,
+          11.383548,
+          11.442986,
+          12.441348
+        ],
+        "before": [
+          12.604058,
+          13.183733,
+          12.306609,
+          14.204237,
+          14.410292
+        ]
+      },
+      "fresh_ms": {
+        "after": 16.325566,
+        "before": 12.206311
+      },
+      "median_ms": {
+        "after": 11.486039,
+        "before": 13.183733
+      },
+      "eclipse_candidates": 34
+    },
+    {
+      "scene": 29,
+      "selected": 14,
+      "entry": true,
+      "samples_ms": {
+        "before": [
+          18.033585,
+          17.421593,
+          17.573817,
+          16.997157,
+          17.337518
+        ],
+        "after": [
+          16.758024,
+          17.105967,
+          16.9117,
+          17.918045,
+          22.710762
+        ]
+      },
+      "fresh_ms": {
+        "before": 18.94551,
+        "after": 17.005078
+      },
+      "median_ms": {
+        "before": 17.421593,
+        "after": 17.105967
+      },
+      "eclipse_candidates": 20
+    },
+    {
+      "scene": 30,
+      "selected": 7,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          6.441931,
+          6.542658,
+          6.346629,
+          7.253888,
+          6.572032
+        ],
+        "before": [
+          6.667011,
+          6.595407,
+          6.792437,
+          6.272169,
+          6.541196
+        ]
+      },
+      "fresh_ms": {
+        "after": 6.664178,
+        "before": 6.325899
+      },
+      "median_ms": {
+        "after": 6.542658,
+        "before": 6.595407
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 31,
+      "selected": 8,
+      "entry": true,
+      "samples_ms": {
+        "before": [
+          16.012494,
+          16.134694,
+          16.594913,
+          17.56876,
+          16.359836
+        ],
+        "after": [
+          16.867375,
+          16.677074,
+          17.488041,
+          16.962465,
+          16.197958
+        ]
+      },
+      "fresh_ms": {
+        "before": 16.425564,
+        "after": 17.001033
+      },
+      "median_ms": {
+        "before": 16.359836,
+        "after": 16.867375
+      },
+      "eclipse_candidates": 21
+    }
+  ],
+  "compared_pixels": 5529600,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 10.9138805,
+    "after": 10.826091
+  },
+  "rss_peak_kib": 174624,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "ce001aa336bdde72bdc6536ec26cf4ea1601b723",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; production shader, catalogue fixtures; not Android FPS",
+  "shader_sha256": "6628945f9a06de759ac0f56a96c0a6ecb7ac9457b6960eed2e1ccb6243cc9d61",
+  "fixtures_sha256": "e34e642655d489f09e08a86dbbfb8af4043ee956a5e79ebf306d876606b1c408"
+}

@@ -1,0 +1,10 @@
+{
+  "production_source_commit": "c2c0c5f727f56c2491c26fea074109e6eae50df2",
+  "after_apk_checks": {
+    "app-debug.apk": true,
+    "app-debug-androidTest.apk": true
+  },
+  "android_exact_image_gate": "blocked_or_failed",
+  "review_apk_runtime_tested": false,
+  "review_apk_static_provenance": "APK-PROVENANCE.json"
+}
