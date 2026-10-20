@@ -1,12 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <limits>
 #include <map>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -19,8 +19,9 @@ namespace mundo_x {
 //
 // The core never owns one record per qubit. A global layer is one rule that
 // applies to every site (or every nearest-neighbour edge), and a finite Pauli
-// query is propagated backwards through those rules. Work scales with rule
-// depth and the query light cone, not with a stored qubit count.
+// query is propagated backwards through those rules. Deep words compose
+// signed interval images before expanding the required finite output;
+// short words retain direct propagation. No total qubit array is stored.
 //
 // This is an infinite mathematical domain, not infinite physical memory or
 // throughput. v0.1 supports |0>^infinity as the base state plus global H and
@@ -188,31 +189,41 @@ class EtherCore {
 
     Pauli p;
     p.phase = sign == 1 ? 0 : 2;
-    std::set<std::string, AddressLess> seen;
-    std::size_t address_bytes = 0;
+    std::size_t address_bytes = 0, active_sites = 0;
     for (const auto& term : terms) {
       check_address(term.address, limits);
       const auto address = canonical(term.address);
-      if (!seen.insert(address).second)
+      // Retain identity entries until validation finishes, so they also catch
+      // aliases without a second tree of every address. Erase them below.
+      auto inserted = p.cells.emplace(address, Bits{});
+      if (!inserted.second)
         throw std::invalid_argument("duplicate canonical address in Pauli query");
       if (address.size() > std::numeric_limits<std::size_t>::max() - address_bytes)
         throw std::length_error("Pauli address text overflows");
       address_bytes += address.size();
+      auto& bits = inserted.first->second;
       switch (term.axis) {
         case 'I': break;
-        case 'X': set_bits(p, address, true, false, limits); break;
-        case 'Z': set_bits(p, address, false, true, limits); break;
+        case 'X': bits = {true, false}; break;
+        case 'Z': bits = {false, true}; break;
         case 'Y':
           p.phase = (p.phase + 1) & 3;
-          set_bits(p, address, true, true, limits);
+          bits = {true, true};
           break;
         default: throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
       }
+      if (bits.x || bits.z) {
+        if (active_sites == limits.max_sites)
+          throw std::length_error("Ether query cone site budget exceeded");
+        ++active_sites;
+      }
     }
+    for (auto it = p.cells.begin(); it != p.cells.end();)
+      if (!it->second.x && !it->second.z) it = p.cells.erase(it); else ++it;
 
     // A single X or Z has an exact closed pullback on the half-line. Avoid
     // replaying a deep alternating word (and rebuilding its cone each layer).
-    // Sparse mixed/Y observables can compose these generator images below.
+    // Mixed/Y observables compose symbolic intervals below.
     if (rule_count() >= 8 && p.cells.size() == 1) {
       const auto& cell = *p.cells.begin();
       if (cell.second.x != cell.second.z)
@@ -221,7 +232,7 @@ class EtherCore {
     }
 
     std::size_t peak = p.cells.size();
-    if (!p.cells.empty() && rule_count() && !pullback_sparse(p, limits, peak)) {
+    if (!p.cells.empty() && rule_count() && !pullback_intervals(p, limits, peak)) {
       auto left = rule_count();
       if (last_rule_ == Rule::HAll) { conjugate_h_all(p); --left; }
       // The remaining word starts with CZ in pullback order. H cannot grow
@@ -346,7 +357,8 @@ class EtherCore {
   }
 
   std::pair<SupportRun, SupportRun> generator_runs(const std::string& address, bool x,
-                                                  const QueryLimits& limits) const {
+                                                  const QueryLimits& limits,
+                                                  bool explicit_support = true) const {
     auto depth = rule_count();
     if (last_rule_ == Rule::HAll) { x = !x; --depth; }
     const auto pairs = depth / 2;
@@ -361,7 +373,8 @@ class EtherCore {
     }
     auto xs = generator_support(address, x_order, limits);
     auto zs = generator_support(address, z_order, limits);
-    if (xs.remaining > limits.max_sites || zs.remaining > limits.max_sites - xs.remaining)
+    if (explicit_support &&
+        (xs.remaining > limits.max_sites || zs.remaining > limits.max_sites - xs.remaining))
       throw std::length_error("Ether query cone site budget exceeded");
     return {std::move(xs), std::move(zs)};
   }
@@ -386,49 +399,103 @@ class EtherCore {
     return out;
   }
 
-  bool pullback_sparse(Pauli& source, const QueryLimits& limits, std::size_t& peak) const {
-    // A bounded sparse composition avoids layer replay for mixed observables.
-    // The conservative bound includes every uncombined generator image. If
-    // it does not fit, use the original layer evaluator; never reject a query
-    // merely because this optional evaluation order needs more scratch.
-    if (rule_count() < 32 || source.cells.size() > 16 ||
-        rule_count() > std::numeric_limits<std::size_t>::max() - 2) return false;
-    std::size_t generators = 0;
-    for (const auto& item : source.cells) generators += item.second.x + item.second.z;
-    if (generators > limits.max_sites / (rule_count() + 2)) return false;
-    Pauli result;
-    result.phase = source.phase;
-    std::size_t generated_peak = 0;
-    try {
-      // Canonical input is i^phase (product X) (product Z). Multiplication
-      // contributes (-1)^(current Z dot incoming X), preserving every Y sign.
-      for (const bool x : {true, false}) {
-        for (const auto& item : source.cells) {
-          if (!(x ? item.second.x : item.second.z)) continue;
-          auto runs = generator_runs(item.first, x, limits);
-          // Stream the two parity runs; no vector of reconstructed image
-          // terms is needed. X and Z supports of one image are disjoint.
-          for (const bool image_x : {true, false}) {
-            auto& run = image_x ? runs.first : runs.second;
-            while (run.remaining) {
-              auto bits = get_bits(result, run.next);
-              if (image_x) {
-                if (bits.z) result.phase = (result.phase + 2) & 3;
-                bits.x = !bits.x;
-              } else bits.z = !bits.z;
-              set_bits(result, run.next, bits.x, bits.z, limits);
-              generated_peak = std::max(generated_peak, result.cells.size());
-              if (--run.remaining) advance_two(run.next);
-            }
-          }
+  // Half-open intervals on either the even or odd sublattice. Their interior
+  // is never enumerated until all generator images have cancelled exactly.
+  struct Interval { std::string begin, end; };
+  static Interval interval(SupportRun run) {
+    if (!run.remaining) return {};
+    // Two additions avoid overflowing size_t at 2 * remaining. The exclusive
+    // endpoint may need one more decimal digit than every physical site.
+    auto end = add_offset(add_offset(run.next, run.remaining - 1), run.remaining - 1);
+    return {std::move(run.next), add_offset(std::move(end), 2)};
+  }
+  static unsigned sublattice(const std::string& address) {
+    return static_cast<unsigned>(address.back() - '0') & 1U;
+  }
+  static unsigned half_parity(const std::string& address) {
+    unsigned last = static_cast<unsigned>(address.back() - '0');
+    if (address.size() > 1) last += 10U * static_cast<unsigned>(address[address.size() - 2] - '0');
+    return (last >> 1U) & 1U;
+  }
+  struct IntervalIndex {
+    std::vector<std::string> points;
+    std::vector<unsigned char> events, prefix;
+    void prepare() {
+      std::sort(points.begin(), points.end(), AddressLess{});
+      points.erase(std::unique(points.begin(), points.end()), points.end());
+      events.assign(points.size(), 0);
+      prefix.assign(points.size() + 1, 0);
+    }
+    std::size_t find(const std::string& address) const {
+      return static_cast<std::size_t>(std::lower_bound(points.begin(), points.end(), address,
+                                                       AddressLess{}) - points.begin());
+    }
+    void toggle_z(std::size_t at) {
+      const unsigned delta = 1U | (half_parity(points[at]) << 1U);
+      // Fenwick XOR tree: prefix count parity and endpoint-coordinate parity.
+      for (auto i = at + 1; i < prefix.size(); i += i & (~i + 1)) prefix[i] ^= delta;
+    }
+    unsigned integral(std::size_t at) const {
+      unsigned value = 0;
+      for (auto i = at; i; i &= i - 1) value ^= prefix[i];
+      // XOR_e<t (t-e mod 2), with t=(address-parity)/2. This is the parity
+      // of covered sites before t; no integer address conversion is needed.
+      return ((value & 1U) & half_parity(points[at])) ^ (value >> 1U);
+    }
+  };
+
+  bool pullback_intervals(Pauli& source, const QueryLimits& limits, std::size_t& peak) const {
+    // Short words need less scratch with direct propagation. Reserve the
+    // interval index for depths where avoiding layer replay pays for it.
+    if (rule_count() < 32) return false;
+    std::vector<std::pair<Interval, Interval>> images;
+    std::array<IntervalIndex, 2> index;
+    // Symbolic endpoints are not materialized Pauli sites. Validate digits and
+    // support on the combined output, allowing cancelled images to stay implicit.
+    const QueryLimits symbolic;
+    for (const bool x : {true, false}) {
+      for (const auto& item : source.cells) {
+        if (!(x ? item.second.x : item.second.z)) continue;
+        auto runs = generator_runs(item.first, x, symbolic, false);
+        images.emplace_back(interval(std::move(runs.first)), interval(std::move(runs.second)));
+        for (const auto* run : {&images.back().first, &images.back().second}) {
+          if (run->begin.empty()) continue;
+          auto& points = index[sublattice(run->begin)].points;
+          points.push_back(run->begin); points.push_back(run->end);
         }
       }
-    } catch (const std::length_error&) {
-      // A generator may cross the address-digit cap even when cancellations
-      // in the combined observable avoid it. Preserve the general contract.
-      return false;
     }
-    peak = std::max(peak, generated_peak);
+    for (auto& table : index) table.prepare();
+    Pauli result;
+    result.phase = source.phase;
+    // Canonical input is i^phase (product X) (product Z). Preserve the order
+    // and add 2 * (current Z dot incoming X) mod 4 at each multiplication.
+    for (const auto& image : images) {
+      for (const bool x : {true, false}) {
+        const auto& run = x ? image.first : image.second;
+        if (run.begin.empty()) continue;
+        auto& table = index[sublattice(run.begin)];
+        const auto a = table.find(run.begin), b = table.find(run.end);
+        if (x) result.phase = (result.phase + 2 * (table.integral(a) ^ table.integral(b))) & 3;
+        else { table.toggle_z(a); table.toggle_z(b); }
+        table.events[a] ^= x ? 1U : 2U;
+        table.events[b] ^= x ? 1U : 2U;
+      }
+    }
+    for (const auto& table : index) {
+      unsigned bits = 0;
+      for (std::size_t i = 0; i + 1 < table.points.size(); ++i) {
+        bits ^= table.events[i];
+        if (!bits) continue;
+        const auto left = limits.max_sites - result.cells.size();
+        const auto bound = add_offset(add_offset(table.points[i], left), left);
+        if (AddressLess{}(bound, table.points[i + 1]))
+          throw std::length_error("Ether query cone site budget exceeded");
+        for (auto address = table.points[i]; address != table.points[i + 1]; advance_two(address))
+          set_bits(result, address, bits & 1U, bits & 2U, limits);
+      }
+    }
+    peak = std::max(peak, result.cells.size());
     source = std::move(result);
     return true;
   }

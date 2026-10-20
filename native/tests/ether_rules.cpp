@@ -135,6 +135,60 @@ int main() {
       frame.restore_rule_run(first, depth);
       same(frame.pullback(terms, sign), reference(first, depth, terms, sign));
     }
+    // Products larger than the former 16-site sparse route, including mixed
+    // Y phases, disconnected intervals and both sides of decimal carries.
+    for (unsigned trial = 0; trial < 320; ++trial) {
+      const auto first = rng() & 1 ? R::HAll : R::CZNeighbors;
+      const auto depth = 32 + rng() % 481;
+      const auto count = 17 + rng() % 112;
+      const auto offset = rng() % 128;
+      std::vector<E::Term> terms;
+      for (std::size_t j = 0; j < count; ++j)
+        terms.push_back({std::to_string(offset + j * (trial % 3 + 1)), "IXYZ"[rng() % 4]});
+      const int sign = rng() & 1 ? -1 : 1;
+      frame.restore_rule_run(first, depth);
+      same(frame.pullback(terms, sign), reference(first, depth, terms, sign));
+    }
+    // This self-inverse frame maps a two-site string through enormously large
+    // intermediate generator images. Cancellation must precede expansion.
+    // Increasing logical depth must not enumerate those intervals.
+    for (std::size_t depth : {199ULL, 1000000000001ULL}) {
+      frame.restore_rule_run(R::HAll, depth);
+      const auto image = frame.pullback({{"0", 'Z'}});
+      E::QueryLimits small; small.max_sites = 2;
+      const auto restored = frame.pullback(image.terms, image.sign, small);
+      same(restored, reference(R::HAll, 0, {{"0", 'Z'}}, 1));
+      require(restored.stats.last_query_peak_sites <= 2,
+              "cancelled symbolic interior was materialized");
+    }
+    frame.restore_rule_run(R::CZNeighbors, 512);
+    std::vector<E::Term> bounded_terms;
+    for (unsigned q = 0; q < 64; ++q)
+      bounded_terms.push_back({std::to_string(1000 + q), "XYZ"[q % 3]});
+    const auto bounded_result = frame.pullback(bounded_terms, -1);
+    E::QueryLimits exact_budget; exact_budget.max_sites = bounded_result.terms.size();
+    same(frame.pullback(bounded_terms, -1, exact_budget), bounded_result);
+    --exact_budget.max_sites;
+    rejects([&] { frame.pullback(bounded_terms, -1, exact_budget); },
+            "mixed interval output exceeded explicit support budget");
+    // High decimal addresses share long prefixes but remain independent.
+    // Translation away from q0 commutes with the finite cone evolution.
+    for (unsigned trial = 0; trial < 40; ++trial) {
+      const auto first = rng() & 1 ? R::HAll : R::CZNeighbors;
+      const std::size_t depth = 32 + rng() % 97;
+      const std::string prefix = "1" + std::string(trial % 2 ? 4090 : 122, '0');
+      std::vector<E::Term> small, large;
+      for (unsigned j = 0; j < 24; ++j) {
+        auto id = std::to_string(2000 + j * 3);
+        const auto axis = "XYZ"[rng() % 3];
+        small.push_back({id, axis}); large.push_back({prefix + id, axis});
+      }
+      auto expected = reference(first, depth, small, -1);
+      // All result addresses are four digits in this deliberately bounded cone.
+      for (auto& term : expected.terms) term.address = prefix + term.address;
+      frame.restore_rule_run(first, depth);
+      same(frame.pullback(large, -1), expected);
+    }
     // An odd alternating word is its own inverse. The combined observable
     // moves left from q98/q99, while separate generator images would reach
     // three-digit addresses. The optional sparse path must fall back exactly.

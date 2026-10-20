@@ -299,6 +299,14 @@ class InfiniteCore {
       throw std::invalid_argument("Pauli sign must be +1 or -1");
     if (terms.size() > limits_.max_query_terms)
       throw std::length_error("Pauli query term budget exceeded");
+    if (ether_rule_count() != 0) {
+      // Ether validates every axis/address/alias before evaluation. Do not
+      // allocate a second normalized input tree that this route never reads.
+      const auto pulled = pull_pauli(*state_, terms, sign);
+      const auto answer = frame_expectation(*state_, pulled, observers);
+      ether_query_stats_ = pulled.stats;
+      return answer;
+    }
     TermMap normalized;
     for (const auto& term : terms) {
       if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
@@ -308,11 +316,7 @@ class InfiniteCore {
         throw std::invalid_argument("duplicate canonical address in Pauli query");
     }
 
-    if (ether_rule_count() == 0) return raw_expectation(*state_, normalized, sign, observers);
-    const auto pulled = pull_pauli(*state_, terms, sign);
-    const auto answer = frame_expectation(*state_, pulled, observers);
-    ether_query_stats_ = pulled.stats;
-    return answer;
+    return raw_expectation(*state_, normalized, sign, observers);
   }
 
  public:
