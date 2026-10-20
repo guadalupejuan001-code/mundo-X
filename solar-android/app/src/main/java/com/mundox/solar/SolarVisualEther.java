@@ -12,6 +12,23 @@ public final class SolarVisualEther {
     public static final int DEFAULT_TILE=128;
     private SolarVisualEther(){}
 
+    /** GL-thread scratch. Returned masks remain valid until the next update.
+     * The ordinary plan() API continues to return independently owned masks. */
+    public static final class Workspace {
+        private int[] masks=new int[0];
+        public Plan update(int width,int height,int tileSize,float tanHalfFov,float aspect,
+                           float[] forward,float[] right,float[] up,float[] bodies,
+                           float[] appearance,float[] atmosphere,int count) {
+            if(width<1||height<1||tileSize<16||tileSize>1024)
+                throw new IllegalArgumentException("Visual Ether dimensions invalid");
+            int length=Math.multiplyExact(1+(width-1)/tileSize,1+(height-1)/tileSize);
+            if(masks.length!=length)masks=new int[length];
+            else java.util.Arrays.fill(masks,0);
+            return build(width,height,tileSize,tanHalfFov,aspect,forward,right,up,
+                    bodies,appearance,atmosphere,count,masks);
+        }
+    }
+
     public static final class Plan {
         public final int tilesX,tilesY,tileSize;
         public final int[] masks;
@@ -30,6 +47,12 @@ public final class SolarVisualEther {
     public static Plan plan(int width,int height,int tileSize,float tanHalfFov,float aspect,
                             float[] forward,float[] right,float[] up,
                             float[] bodies,float[] appearance,float[] atmosphere,int count){
+        return build(width,height,tileSize,tanHalfFov,aspect,forward,right,up,
+                bodies,appearance,atmosphere,count,null);
+    }
+    private static Plan build(int width,int height,int tileSize,float tanHalfFov,float aspect,
+                            float[] forward,float[] right,float[] up,
+                            float[] bodies,float[] appearance,float[] atmosphere,int count,int[] storage){
         if(width<1||height<1||tileSize<16||tileSize>1024||!(tanHalfFov>0)||!(aspect>0)
                 ||forward==null||right==null||up==null||forward.length<3||right.length<3||up.length<3
                 ||bodies==null||appearance==null||atmosphere==null||count<0||count>24
@@ -46,7 +69,7 @@ public final class SolarVisualEther {
             if(Math.abs(norm-1)>1e-4)throw new IllegalArgumentException("Visual Ether camera axes must be unit vectors");
         }
         int tx=1+(width-1)/tileSize,ty=1+(height-1)/tileSize;
-        int[] masks=new int[Math.multiplyExact(tx,ty)];
+        int[] masks=storage==null?new int[Math.multiplyExact(tx,ty)]:storage;
         for(int id=0;id<count;id++){
             int p=id*4;
             double cx=bodies[p],cy=bodies[p+1],cz=bodies[p+2],base=bodies[p+3];

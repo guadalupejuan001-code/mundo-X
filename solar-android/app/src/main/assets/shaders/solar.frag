@@ -24,6 +24,8 @@ uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
 uniform highp usampler2D uBodyTiles;
 uniform ivec2 uBodyTileGrid;
+uniform int uBodyTileSize;
+uniform highp uint uEclipseMasks[MAX_BODIES];
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
 out vec4 outColor;
@@ -164,7 +166,10 @@ vec3 surface(vec3 n,int id,out float ocean,out float clouds){
     ocean=0.0;clouds=0.0;
     vec3 c=uColors[id].rgb;
     if(uLayers[id]>=0)c=texture(uMaps,vec3(uv,float(uLayers[id]))).rgb;
-    float f=fbm(p*5.8);
+    // Textured bodies, Venus and the Sun do not consume this material field.
+    // Keep each used expression unchanged; avoid evaluating unused octaves.
+    bool needsField=id==1||id==7||id==8||((id==3||id==4||id==5||id==6||id>=9)&&uLayers[id]<0);
+    float f=needsField?fbm(p*5.8):0.0;
     if(id==0){
         float granule=fbm(p*90.0+vec3(uTime*.018,0,0));
         float cells=noise(p*270.0);
@@ -179,9 +184,11 @@ vec3 surface(vec3 n,int id,out float ocean,out float clouds){
             c=mix(c,vec3(.88,.94,1.0),smoothstep(.83,.98,abs(latitude)+f*.13));
         }
         ocean=1.0-smoothstep(-.025,.08,c.r-c.b*.63);
-        vec3 cp=rotY(p,uTime*.00035);
-        float cloudNoise=fbm(cp*8.4+vec3(0,noise(cp*4.0)*2.0,0));
-        clouds=atmosphereFor(id)&&!entering(id)?smoothstep(.51,.69,cloudNoise)*.73:0.0;
+        if(atmosphereFor(id)&&!entering(id)){
+            vec3 cp=rotY(p,uTime*.00035);
+            float cloudNoise=fbm(cp*8.4+vec3(0,noise(cp*4.0)*2.0,0));
+            clouds=smoothstep(.51,.69,cloudNoise)*.73;
+        }
         c=mix(c,vec3(.95,.98,1.0),clouds);
     }else if(id==2){
         float swirls=fbm(vec3(p.x*4.0,latitude*15.0+sin(lon*3.0)*.9,p.z*4.0));
@@ -228,13 +235,26 @@ vec3 surface(vec3 n,int id,out float ocean,out float clouds){
     }
     return pow(max(c,vec3(0.0)),vec3(2.2));
 }
+// GLES 3.0 has integer shifts, but does not require findLSB. Enumerate the
+// candidate bits in ascending order to preserve eclipse multiplication order.
+int firstCandidate(uint mask){
+    int bit=0;
+    if((mask&65535u)==0u){mask>>=16;bit+=16;}
+    if((mask&255u)==0u){mask>>=8;bit+=8;}
+    if((mask&15u)==0u){mask>>=4;bit+=4;}
+    if((mask&3u)==0u){mask>>=2;bit+=2;}
+    if((mask&1u)==0u)bit++;
+    return bit;
+}
 float eclipse(vec3 point,int self){
+    uint candidates=uEclipseMasks[self];
+    if(candidates==0u)return 1.0;
     vec3 s=uBodies[0].xyz-point;
     float maximum=length(s);vec3 l=s/maximum;
     float result=1.0;
-    for(int j=1;j<MAX_BODIES;j++){
-        if(j>=uCount)break;
-        if(j==self)continue;
+    for(int candidate=0;candidate<MAX_BODIES;candidate++){
+        if(candidates==0u)break;
+        int j=firstCandidate(candidates);candidates&=candidates-1u;
         vec3 c=uBodies[j].xyz-point;float along=dot(c,l);
         if(along<=0.0||along>=maximum)continue;
         float radial=length(c-l*along);
@@ -330,8 +350,7 @@ void atmosphereVolume(vec3 rd,int id,float maximum,bool background,inout vec3 co
 }
 uint visualCandidates(){
     ivec2 grid=max(uBodyTileGrid,ivec2(1));
-    vec2 uv=clamp(gl_FragCoord.xy/uResolution,vec2(0.0),vec2(.999999));
-    ivec2 tile=clamp(ivec2(floor(uv*vec2(grid))),ivec2(0),grid-1);
+    ivec2 tile=clamp(ivec2(gl_FragCoord.xy)/max(uBodyTileSize,1),ivec2(0),grid-1);
     return texelFetch(uBodyTiles,tile,0).r;
 }
 void main(){

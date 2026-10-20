@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import javax.microedition.khronos.egl.EGLConfig;
@@ -49,6 +50,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final HashMap<String,Integer> overlayLocations=new HashMap<>();
     private final double[][] positions=new double[MAX_BODIES][3];
     private final double[][] physical=new double[MAX_BODIES][3];
+    private final SolarData.Ephemeris ephemeris=new SolarData.Ephemeris();
+    private double worldDate=Double.NaN;
+    private boolean worldRealScale;
     private final double[] radii=new double[MAX_BODIES];
     private final float[] packedBodies=new float[MAX_BODIES*4];
     private final float[] appearance=new float[MAX_BODIES*4],colors=new float[MAX_BODIES*4];
@@ -68,6 +72,10 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private int mapTexture,bodyMaskTexture,colorTexture,depthBuffer,framebuffer;
     private int bodyMaskTilesX,bodyMaskTilesY;
     private SolarVisualEther.Plan visualPlan;
+    private final SolarVisualEther.Workspace visualWorkspace=new SolarVisualEther.Workspace();
+    private ByteBuffer bodyMaskBytes;
+    private int[] uploadedBodyMasks;
+    private final int[] eclipseMasks=new int[MAX_BODIES];
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -157,7 +165,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=bodyMaskTexture=colorTexture=depthBuffer=framebuffer=0;
-        bodyMaskTilesX=bodyMaskTilesY=0;visualPlan=null;
+        bodyMaskTilesX=bodyMaskTilesY=0;visualPlan=null;uploadedBodyMasks=null;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -342,8 +350,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         return display/Math.max(1e-12,body.semiMajorAU);
     }
     private void syncWorld(){
+        if(jd==worldDate&&realScale==worldRealScale)return;
+        ephemeris.positions(jd,physical);
         for(SolarData.Body body:SolarData.BODIES){
-            double[] p=SolarData.position(body.id,jd);System.arraycopy(p,0,physical[body.id],0,3);
             radii[body.id]=displayRadius(body);
         }
         for(SolarData.Body body:SolarData.BODIES){
@@ -361,17 +370,19 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             atmosphere[p+2]=environment.opacity;atmosphere[p+3]=environment.type;
             for(int k=0;k<3;k++)atmosphereColors[body.id*3+k]=environment.color[k];
         }
+        worldDate=jd;worldRealScale=realScale;
     }
     private float spin(SolarData.Body body){
         double period=Math.abs(body.rotationHours)/24.0;
         return period>1e-10?(float)(((jd-SolarData.J2000)%period)/period*TAU):0f;
     }
     private void syncQuantum(){
-        long revision=bridge.revision();if(revision==uploadedRevision)return;
-        float[] coefficients=bridge.coefficients(),etherCoefficients=bridge.etherCoefficients();
-        for(int i=0;i<8;i++)quantum[i]=i<coefficients.length&&finite(coefficients[i])?Math.max(-1,Math.min(1,coefficients[i])):0;
-        for(int i=0;i<4;i++)ether[i]=i<etherCoefficients.length&&finite(etherCoefficients[i])?Math.max(-1,Math.min(1,etherCoefficients[i])):0;
-        uploadedRevision=revision;
+        QuantumSolarBridge.Observation observation=bridge.observation();
+        if(observation.revision==uploadedRevision)return;
+        observation.copyCoefficients(quantum,ether);
+        for(int i=0;i<8;i++)quantum[i]=Math.max(-1,Math.min(1,quantum[i]));
+        for(int i=0;i<4;i++)ether[i]=Math.max(-1,Math.min(1,ether[i]));
+        uploadedRevision=observation.revision;
     }
     private double defaultDistance(){
         if(isOverview){
@@ -466,12 +477,16 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         initializedCamera=true;
     }
     private void syncVisualEther(){
-        visualPlan=SolarVisualEther.plan(width,height,SolarVisualEther.DEFAULT_TILE,TAN_HALF_FOV,aspect,
+        SolarOcclusion.masks(packedBodies,SolarData.BODIES.length,eclipseMasks);
+        visualPlan=visualWorkspace.update(width,height,SolarVisualEther.DEFAULT_TILE,TAN_HALF_FOV,aspect,
                 forward,right,up,packedBodies,appearance,atmosphere,SolarData.BODIES.length);
-        ByteBuffer raw=direct(visualPlan.masks.length*4);
-        raw.asIntBuffer().put(visualPlan.masks);
+        boolean resize=bodyMaskTilesX!=visualPlan.tilesX||bodyMaskTilesY!=visualPlan.tilesY;
+        if(!resize&&Arrays.equals(uploadedBodyMasks,visualPlan.masks))return;
+        int bytes=visualPlan.masks.length*4;
+        if(bodyMaskBytes==null||bodyMaskBytes.capacity()!=bytes)bodyMaskBytes=direct(bytes);
+        ByteBuffer raw=bodyMaskBytes;raw.clear();raw.asIntBuffer().put(visualPlan.masks);
         glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);
-        if(bodyMaskTilesX!=visualPlan.tilesX||bodyMaskTilesY!=visualPlan.tilesY){
+        if(resize){
             glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,visualPlan.tilesX,visualPlan.tilesY,0,
                     GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
             bodyMaskTilesX=visualPlan.tilesX;bodyMaskTilesY=visualPlan.tilesY;
@@ -480,6 +495,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                     GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
         }
         glActiveTexture(GL_TEXTURE0);check("Visual Ether");
+        if(uploadedBodyMasks==null||uploadedBodyMasks.length!=visualPlan.masks.length)
+            uploadedBodyMasks=new int[visualPlan.masks.length];
+        System.arraycopy(visualPlan.masks,0,uploadedBodyMasks,0,visualPlan.masks.length);
     }
     private void drawScene(){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
@@ -504,6 +522,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
         glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);glUniform1i(sceneLoc("uBodyTiles"),1);
         glUniform2i(sceneLoc("uBodyTileGrid"),visualPlan.tilesX,visualPlan.tilesY);
+        glUniform1i(sceneLoc("uBodyTileSize"),visualPlan.tileSize);
+        glUniform1uiv(sceneLoc("uEclipseMasks[0]"),SolarData.BODIES.length,eclipseMasks,0);
         glActiveTexture(GL_TEXTURE0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -964,10 +984,13 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     /** Delete GPU resources while the GL context is current; the core is borrowed. */
     public void release(){
         if(sceneProgram!=0)glDeleteProgram(sceneProgram);if(overlayProgram!=0)glDeleteProgram(overlayProgram);
-        glDeleteTextures(2,new int[]{mapTexture,colorTexture},0);
+        glDeleteTextures(3,new int[]{mapTexture,bodyMaskTexture,colorTexture},0);
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
         glDeleteBuffers(1,new int[]{overlayVbo},0);glDeleteVertexArrays(2,new int[]{eyeVao,overlayVao},0);
-        sceneProgram=overlayProgram=0;hasFrame=false;capture=null;
+        sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
+        mapTexture=bodyMaskTexture=colorTexture=depthBuffer=framebuffer=0;
+        bodyMaskTilesX=bodyMaskTilesY=0;uploadedBodyMasks=null;
+        hasFrame=false;capture=null;
         activeUhd=activeUltra=false;
     }
 }
