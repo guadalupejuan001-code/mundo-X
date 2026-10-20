@@ -5,13 +5,21 @@
   "files": [
     {
       "path": "native/include/mundo_x/compact_core.hpp",
-      "git_blob_sha1": "7a303f23c0837ceec5e620118645f4b353d1aa95",
-      "sha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c"
+      "source_commit": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "git_blob_sha1": "3239af9186ab9ea306eac6fc99cd72eea145f1c2",
+      "sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb"
     },
     {
       "path": "native/include/mundo_x/dense_core.hpp",
+      "source_commit": "ef4636240af73351a18710e988346791fbdc3b58",
       "git_blob_sha1": "551150407bd498e28fabb938300b7024ffe2687c",
       "sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f"
+    },
+    {
+      "path": "native/include/mundo_x/pauli_observer.hpp",
+      "source_commit": "00e2f014186d9db9d2d87b3f7aabee3338d2b2a5",
+      "git_blob_sha1": "b7fed757d36ee31d0f0a6faad7c37b7c7611fd4c",
+      "sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d"
     }
   ],
   "historical_graphics_baseline": {
@@ -52,5 +60,26 @@
     "DenseCore includes the author repository phase branch and preserves current Real/FP64 precision.",
     "ReducedExactTRepresentation combines the original Ecos additions with the current optimized Clifford/T updates, arbitrary phases and product-state transfers; its current hashes are recorded in android-experiments/PROVENANCE.json.",
     "The shared observer and state/session bridge live under native/include/mundo_x and native/src. They are adapters over these original cores."
-  ]
+  ],
+  "previous_header_manifest": {
+    "recorded_before": "render optimization 2026-10-20",
+    "files": [
+      {
+        "path": "native/include/mundo_x/compact_core.hpp",
+        "git_blob_sha1": "7a303f23c0837ceec5e620118645f4b353d1aa95",
+        "sha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c"
+      },
+      {
+        "path": "native/include/mundo_x/dense_core.hpp",
+        "git_blob_sha1": "551150407bd498e28fabb938300b7024ffe2687c",
+        "sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f"
+      }
+    ]
+  },
+  "observer_pivot_optimization": {
+    "source_commit": "00e2f014186d9db9d2d87b3f7aabee3338d2b2a5",
+    "scope": "Exact pivot support reduction already integrated; no native algorithm changes in this rendering revision.",
+    "validation_report": "results/ether-system-optimization-2026-10-20.json",
+    "source_manifest": "tools/cosmic_source_provenance.py"
+  }
 }
