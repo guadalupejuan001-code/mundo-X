@@ -19,6 +19,7 @@ BENCH = r'''
 #include "mundo_x/infinite_core.hpp"
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <new>
@@ -69,7 +70,7 @@ int main(int argc,char**argv){
  std::uint64_t checksum=1469598103934665603ULL;std::size_t terms=0;
  auto hash=[&](unsigned char v){checksum^=v;checksum*=1099511628211ULL;};
  const auto start=Clock::now();
- if(mode=="storage")prepare(e,depth);
+ if(mode=="storage")for(std::size_t i=0;i<count;++i){E next;prepare(next,depth);e=std::move(next);}
  else if(mode=="owner")prepare(owner,depth);
  else if(mode=="copy")for(std::size_t i=0;i<count;++i){auto copy=e;sink=copy.rule_count();}
  else if(mode=="query"||mode=="mixed")for(std::size_t i=0;i<count;++i){
@@ -78,11 +79,18 @@ int main(int argc,char**argv){
   for(const auto&t:result.terms){for(unsigned char c:t.address)hash(c);hash(t.axis);}
  }else return 5;
  const double ms=std::chrono::duration<double,std::milli>(Clock::now()-start).count();
+ const auto logical_rules=mode=="owner"?owner.ether_rule_count():e.rule_count();
+ checksum^=logical_rules;
  const auto used_calls=allocation::calls-calls,used_bytes=allocation::bytes-bytes;
  const auto peak=allocation::peak-live,retained=allocation::live-live;
+ std::size_t process_peak_rss=0;
+ {std::ifstream status("/proc/self/status");std::string line;while(std::getline(status,line))
+  if(line.compare(0,6,"VmHWM:")==0)process_peak_rss=std::stoull(line.substr(6));}
  std::cout<<std::setprecision(12)<<"{\"ms\":"<<ms<<",\"new_calls\":"<<used_calls
  <<",\"new_bytes\":"<<used_bytes<<",\"peak_new_bytes\":"<<peak<<",\"retained_new_bytes\":"<<retained
- <<",\"frame_object_bytes\":"<<sizeof(E)<<",\"checksum\":"<<checksum<<",\"terms\":"<<terms<<"}\n";
+ <<",\"frame_object_bytes\":"<<sizeof(E)<<",\"frame_without_stats_bytes\":"<<(sizeof(E)-sizeof(E::Stats))
+ <<",\"process_peak_rss_kib\":"<<process_peak_rss<<",\"logical_rules\":"<<logical_rules
+ <<",\"checksum\":"<<checksum<<",\"terms\":"<<terms<<"}\n";
 }
 '''
 DIFFERENTIAL = r'''
@@ -101,12 +109,18 @@ int main(){
   if(trial%4==0)id=std::string(4096,'9');
   else if(trial%4==1)id="1"+std::string(127,'0');
   char axis="XYZ"[rng()%3];int sign=(rng()&1)?-1:1;
-  auto a=old.pullback({{id,axis}},sign);auto b=now.pullback({{id,axis}},sign);
+  std::vector<Old::Term> qa{{id,axis}};std::vector<Now::Term> qb{{id,axis}};
+  if(trial%4==3){
+   qa.clear();qb.clear();
+   for(std::size_t j=0;j<8;++j){auto at=std::to_string(q+2*j);char a="IXYZ"[rng()%4];qa.push_back({at,a});qb.push_back({at,a});}
+  }
+  auto a=old.pullback(qa,sign);auto b=now.pullback(qb,sign);
   if(a.sign!=b.sign||a.terms.size()!=b.terms.size())return 1;
   for(std::size_t i=0;i<a.terms.size();++i)if(a.terms[i].address!=b.terms[i].address||a.terms[i].axis!=b.terms[i].axis)return 2;
   ++comparisons;
  }
- std::cout<<"{\"long_address_comparisons\":"<<comparisons<<",\"mismatches\":0,\"seed\":42}\n";
+ std::cout<<"{\"signed_pullbacks_compared\":"<<comparisons
+ <<",\"long_address_queries\":2000,\"mixed_queries\":1000,\"mismatches\":0,\"seed\":42}\n";
 }
 '''
 
@@ -119,6 +133,7 @@ def run_bounded(binary, arguments, directory, wall_seconds=30):
     pid = os.fork()
     if pid == 0:
         try:
+            os.sched_setaffinity(0, {min(os.sched_getaffinity(0))})
             resource.setrlimit(resource.RLIMIT_AS, (2 * 1024**3, 2 * 1024**3))
             resource.setrlimit(resource.RLIMIT_CPU, (28, 29))
             with out.open('wb') as stdout, err.open('wb') as stderr:
@@ -140,7 +155,7 @@ def run_bounded(binary, arguments, directory, wall_seconds=30):
         time.sleep(.005)
     if status:
         raise RuntimeError(f'child failed: {arguments}, status={status}, timeout={expired}, {err.read_text()}')
-    return out.read_text(), {'peak_rss_kib': usage.ru_maxrss, 'wall_ms': (time.monotonic()-start)*1000}
+    return out.read_text(), {'wait4_peak_rss_kib': usage.ru_maxrss, 'wall_ms': (time.monotonic()-start)*1000}
 
 
 def main():
@@ -153,6 +168,7 @@ def main():
         p.error('--repeats must be positive')
     root = Path(__file__).resolve().parents[1]
     evidence = {'baseline': BASE, 'seed': 42, 'repeats': args.repeats,
+                'cpu_affinity': [min(os.sched_getaffinity(0))],
                 'memory_budget': '2 GiB RLIMIT_AS; not a phone measurement',
                 'compiler': subprocess.check_output([args.cxx, '--version'], text=True).splitlines()[0],
                 'flags': ['-std=c++17', '-O3', '-DNDEBUG'],
@@ -183,7 +199,7 @@ def main():
                 raise AssertionError(f'full snapshot/measurement output differs at depth {depth}')
             evidence['contracts'].append({'depth': depth, 'identical_bytes': len(outputs[0]),
                                           'sha256': hashlib.sha256(outputs[0].encode()).hexdigest()})
-        cases = [('storage', 4096, 1, 0, 1), ('copy', 4096, 10000, 0, 1),
+        cases = [('storage', 4096, 1000, 0, 1), ('copy', 4096, 10000, 0, 1),
                  ('owner', 4096, 1, 0, 1), ('query', 4096, 10, 0, 1),
                  ('query', 1024, 3, 10000, 4096), ('mixed', 128, 10, 100, 3)]
         for case in cases:
@@ -194,7 +210,7 @@ def main():
                     value = {**json.loads(output), **metrics}
                     values[label] = value
                     evidence['samples'].append({'case': case, 'repeat': repeat, 'version': label, **value})
-                for field in ['checksum', 'terms']:
+                for field in ['checksum', 'terms', 'logical_rules']:
                     if values['before'][field] != values['after'][field]:
                         raise AssertionError(f'{case}: {field} differs')
             medians = {label: statistics.median(s['ms'] for s in evidence['samples'] if s['case']==case and s['version']==label) for label in binaries}

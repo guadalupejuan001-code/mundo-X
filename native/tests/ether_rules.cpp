@@ -32,11 +32,17 @@ static void compare_word(const E& frame, const std::vector<R>& stack) {
 
 // Independent finite-window oracle: visit every site/edge at every layer.
 // Its right edge is beyond the causal cone; q0 is the actual left boundary.
-static E::Observable reference(R first, std::size_t depth, std::size_t address, char axis, int sign) {
-  const std::size_t width = address + depth + 3;
+static E::Observable reference(R first, std::size_t depth, const std::vector<E::Term>& terms, int sign) {
+  std::size_t width = depth + 3;
+  for (const auto& term : terms) width = std::max(width, std::size_t(std::stoull(term.address)) + depth + 3);
   std::vector<unsigned> x(width), z(width);
-  x[address] = axis != 'Z'; z[address] = axis != 'X';
-  unsigned phase = (sign == -1 ? 2 : 0) + (axis == 'Y');
+  unsigned phase = sign == -1 ? 2 : 0;
+  for (const auto& term : terms) {
+    const auto q = std::stoull(term.address);
+    x[q] = term.axis == 'X' || term.axis == 'Y';
+    z[q] = term.axis == 'Z' || term.axis == 'Y';
+    phase += term.axis == 'Y';
+  }
   for (std::size_t n = depth; n-- > 0;) {
     const auto rule = (n & 1) ? flip(first) : first;
     if (rule == R::HAll) {
@@ -112,11 +118,32 @@ int main() {
         for (std::size_t q = 0; q < 20; ++q) {
           for (const auto axis : {'X', 'Y', 'Z'}) {
             for (const int sign : {-1, 1})
-              same(frame.pullback({{std::to_string(q), axis}}, sign), reference(first, depth, q, axis, sign));
+              same(frame.pullback({{std::to_string(q), axis}}, sign),
+                   reference(first, depth, {{std::to_string(q), axis}}, sign));
           }
         }
       }
     }
+    for (unsigned trial = 0; trial < 1000; ++trial) {
+      const auto first = rng() & 1 ? R::HAll : R::CZNeighbors;
+      const auto depth = 32 + rng() % 129;
+      const auto offset = rng() % 32;
+      const int sign = rng() & 1 ? -1 : 1;
+      std::vector<E::Term> terms;
+      for (unsigned j = 0; j < 8; ++j)
+        terms.push_back({std::to_string(offset + j), "IXYZ"[rng() % 4]});
+      frame.restore_rule_run(first, depth);
+      same(frame.pullback(terms, sign), reference(first, depth, terms, sign));
+    }
+    // An odd alternating word is its own inverse. The combined observable
+    // moves left from q98/q99, while separate generator images would reach
+    // three-digit addresses. The optional sparse path must fall back exactly.
+    frame.restore_rule_run(R::HAll, 199);
+    const auto prepared = frame.pullback({{"0", 'Z'}});
+    E::QueryLimits fallback; fallback.max_address_digits = 2;
+    same(frame.pullback(prepared.terms, prepared.sign, fallback), reference(R::HAll, 0, {{"0", 'Z'}}, 1));
+    fallback.max_address_digits = 4096; fallback.max_sites = 4;
+    same(frame.pullback(prepared.terms, prepared.sign, fallback), reference(R::HAll, 0, {{"0", 'Z'}}, 1));
     frame.restore_rule_run(R::HAll, 4096);
     E::QueryLimits tiny; tiny.max_sites = 2;
     const auto boundary = frame.pullback({{"0", 'X'}}, 1, tiny);
@@ -138,6 +165,9 @@ int main() {
     require(frame.pullback({{"0", 'Z'}}).terms.size() <= 2, "huge boundary query failed");
     frame.append_alternating(tail, maximum);
     require(frame.rule_count() == 0, "maximum-length inverse failed");
+    frame.restore_rule_run(R::CZNeighbors, maximum);
+    rejects([&] { frame.pullback({{std::to_string(maximum) + "0", 'X'}}); },
+            "closed support size overflow accepted");
     std::cout << "ether_rules: " << checks << " checks passed; seed=42\n";
   } catch (const std::exception& e) {
     std::cerr << "ether_rules: " << e.what() << '\n'; return 1;

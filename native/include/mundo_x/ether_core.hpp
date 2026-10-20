@@ -38,26 +38,29 @@ class EtherCore {
    public:
     class iterator {
      public:
-      using iterator_category = std::bidirectional_iterator_tag;
+      // Values are generated, not references into contiguous rule storage.
+      using iterator_category = std::input_iterator_tag;
       using value_type = Rule;
       using difference_type = std::ptrdiff_t;
       using pointer = void;
       using reference = Rule;
       iterator() = default;
-      Rule operator*() const { return at(first_, index_); }
-      iterator& operator++() { ++index_; return *this; }
+      Rule operator*() const { return at(first_, reverse_ ? index_ - 1 : index_); }
+      iterator& operator++() { reverse_ ? --index_ : ++index_; return *this; }
       iterator operator++(int) { auto old = *this; ++*this; return old; }
-      iterator& operator--() { --index_; return *this; }
+      iterator& operator--() { reverse_ ? ++index_ : --index_; return *this; }
       iterator operator--(int) { auto old = *this; --*this; return old; }
       bool operator==(const iterator& other) const {
-        return first_ == other.first_ && index_ == other.index_;
+        return first_ == other.first_ && index_ == other.index_ && reverse_ == other.reverse_;
       }
       bool operator!=(const iterator& other) const { return !(*this == other); }
      private:
       friend class RuleView;
-      iterator(Rule first, std::size_t index) : first_(first), index_(index) {}
+      iterator(Rule first, std::size_t index, bool reverse = false)
+          : first_(first), index_(index), reverse_(reverse) {}
       Rule first_ = Rule::HAll;
       std::size_t index_ = 0;
+      bool reverse_ = false;
     };
     std::size_t size() const noexcept { return run_.count; }
     bool empty() const noexcept { return size() == 0; }
@@ -72,8 +75,8 @@ class EtherCore {
     }
     iterator begin() const { return iterator(run_.first, 0); }
     iterator end() const { return iterator(run_.first, size()); }
-    std::reverse_iterator<iterator> rbegin() const { return std::make_reverse_iterator(end()); }
-    std::reverse_iterator<iterator> rend() const { return std::make_reverse_iterator(begin()); }
+    iterator rbegin() const { return iterator(run_.first, size(), true); }
+    iterator rend() const { return iterator(run_.first, 0, true); }
    private:
     friend class EtherCore;
     explicit RuleView(RuleRun run) : run_(run) {}
@@ -107,16 +110,19 @@ class EtherCore {
   void h_all() { push_rule(Rule::HAll); }
   void cz_neighbors() { push_rule(Rule::CZNeighbors); }
 
-  std::size_t rule_count() const noexcept { return run_.count; }
-  RuleRun rule_run() const noexcept { return run_; }
-  RuleView rules() const noexcept { return RuleView(run_); }
+  std::size_t rule_count() const noexcept { return rule_count_; }
+  RuleRun rule_run() const noexcept {
+    return {rule_count_ ? RuleView::at(last_rule_, rule_count_ - 1) : Rule::HAll, rule_count_};
+  }
+  RuleView rules() const noexcept { return RuleView(rule_run()); }
   Stats stats() const noexcept { return stats_; }
 
   void restore_rule_run(Rule first, std::size_t count,
                         std::size_t max_rules = std::numeric_limits<std::size_t>::max()) {
     validate_rule(first);
     if (count > max_rules) throw std::length_error("Ether rule budget exceeded");
-    run_ = {count ? first : Rule::HAll, count};
+    rule_count_ = count;
+    last_rule_ = count ? RuleView::at(first, count - 1) : Rule::HAll;
     stats_ = Stats{};
     stats_.rules = count;
   }
@@ -126,8 +132,8 @@ class EtherCore {
   void append_alternating(Rule first, std::size_t count,
                           std::size_t max_rules = std::numeric_limits<std::size_t>::max()) {
     validate_rule(first);
-    auto candidate = run_;
-    if (candidate.count && count && rules().back() == first) {
+    auto candidate = rule_run();
+    if (candidate.count && count && last_rule_ == first) {
       const auto cancelled = std::min(candidate.count, count);
       candidate.count -= cancelled;
       count -= cancelled;
@@ -138,7 +144,8 @@ class EtherCore {
     if (!candidate.count) candidate.first = count ? first : Rule::HAll;
     candidate.count += count;
     if (candidate.count > max_rules) throw std::length_error("Ether rule budget exceeded");
-    run_ = candidate;
+    rule_count_ = candidate.count;
+    last_rule_ = candidate.count ? RuleView::at(candidate.first, candidate.count - 1) : Rule::HAll;
     stats_.rules = rule_count();
   }
 
@@ -205,7 +212,7 @@ class EtherCore {
 
     // A single X or Z has an exact closed pullback on the half-line. Avoid
     // replaying a deep alternating word (and rebuilding its cone each layer).
-    // Mixed/Y observables retain the signed general evaluator below.
+    // Sparse mixed/Y observables can compose these generator images below.
     if (rule_count() >= 8 && p.cells.size() == 1) {
       const auto& cell = *p.cells.begin();
       if (cell.second.x != cell.second.z)
@@ -214,11 +221,18 @@ class EtherCore {
     }
 
     std::size_t peak = p.cells.size();
-    const auto sequence = rules();
-    for (auto it = sequence.rbegin(); !p.cells.empty() && it != sequence.rend(); ++it) {
-      if (*it == Rule::HAll) conjugate_h_all(p);
-      else conjugate_cz_neighbors(p, limits, peak);
-      peak = std::max(peak, p.cells.size());
+    if (!p.cells.empty() && rule_count() && !pullback_sparse(p, limits, peak)) {
+      auto left = rule_count();
+      if (last_rule_ == Rule::HAll) { conjugate_h_all(p); --left; }
+      // The remaining word starts with CZ in pullback order. H cannot grow
+      // support; CZ already records every transient peak, including sites
+      // which disappear again within that same layer.
+      while (left >= 2) {
+        conjugate_cz_neighbors(p, limits, peak);
+        conjugate_h_all(p);
+        left -= 2;
+      }
+      if (left) conjugate_cz_neighbors(p, limits, peak);
     }
 
     Observable out;
@@ -249,7 +263,10 @@ class EtherCore {
   using CellMap = std::map<std::string, Bits, AddressLess>;
   struct Pauli { CellMap cells; int phase = 0; };
 
-  RuleRun run_;
+  // Keep the tail internally so the frequent one-rule update compares a
+  // stored enum directly. The public first/count descriptor is derived in O(1).
+  std::size_t rule_count_ = 0;
+  Rule last_rule_ = Rule::HAll;
   mutable Stats stats_;
 
   static void validate_rule(Rule r) {
@@ -258,7 +275,17 @@ class EtherCore {
   }
 
   void push_rule(Rule r) {
-    append_alternating(r, 1);
+    // Fixed one-letter entry points need neither bulk composition nor rule
+    // validation: their callers supply one of the two known enum constants.
+    if (rule_count_ && last_rule_ == r) {
+      last_rule_ = --rule_count_ ? RuleView::at(last_rule_, 1) : Rule::HAll;
+    } else {
+      if (rule_count_ == std::numeric_limits<std::size_t>::max())
+        throw std::overflow_error("Ether rule count overflow");
+      last_rule_ = r;
+      ++rule_count_;
+    }
+    stats_.rules = rule_count();
   }
 
   // F_0(A)=0, F_1(A)=I, F_(k+1)(A)=A F_k(A)+F_(k-1)(A), over GF(2),
@@ -318,10 +345,10 @@ class EtherCore {
     if (carry) address.insert(address.begin(), '1');
   }
 
-  Observable pullback_generator(const std::string& address, bool x, int sign,
-                                std::size_t address_bytes, const QueryLimits& limits) const {
+  std::pair<SupportRun, SupportRun> generator_runs(const std::string& address, bool x,
+                                                  const QueryLimits& limits) const {
     auto depth = rule_count();
-    if (rules().back() == Rule::HAll) { x = !x; --depth; }
+    if (last_rule_ == Rule::HAll) { x = !x; --depth; }
     const auto pairs = depth / 2;
     std::size_t x_order, z_order;
     if (depth % 2) {
@@ -336,6 +363,14 @@ class EtherCore {
     auto zs = generator_support(address, z_order, limits);
     if (xs.remaining > limits.max_sites || zs.remaining > limits.max_sites - xs.remaining)
       throw std::length_error("Ether query cone site budget exceeded");
+    return {std::move(xs), std::move(zs)};
+  }
+
+  Observable pullback_generator(const std::string& address, bool x, int sign,
+                                std::size_t address_bytes, const QueryLimits& limits) const {
+    auto runs = generator_runs(address, x, limits);
+    auto& xs = runs.first;
+    auto& zs = runs.second;
     const auto count = xs.remaining + zs.remaining;
     Observable out;
     out.sign = sign;
@@ -349,6 +384,53 @@ class EtherCore {
       if (--run.remaining) advance_two(run.next);
     }
     return out;
+  }
+
+  bool pullback_sparse(Pauli& source, const QueryLimits& limits, std::size_t& peak) const {
+    // A bounded sparse composition avoids layer replay for mixed observables.
+    // The conservative bound includes every uncombined generator image. If
+    // it does not fit, use the original layer evaluator; never reject a query
+    // merely because this optional evaluation order needs more scratch.
+    if (rule_count() < 32 || source.cells.size() > 16 ||
+        rule_count() > std::numeric_limits<std::size_t>::max() - 2) return false;
+    std::size_t generators = 0;
+    for (const auto& item : source.cells) generators += item.second.x + item.second.z;
+    if (generators > limits.max_sites / (rule_count() + 2)) return false;
+    Pauli result;
+    result.phase = source.phase;
+    std::size_t generated_peak = 0;
+    try {
+      // Canonical input is i^phase (product X) (product Z). Multiplication
+      // contributes (-1)^(current Z dot incoming X), preserving every Y sign.
+      for (const bool x : {true, false}) {
+        for (const auto& item : source.cells) {
+          if (!(x ? item.second.x : item.second.z)) continue;
+          auto runs = generator_runs(item.first, x, limits);
+          // Stream the two parity runs; no vector of reconstructed image
+          // terms is needed. X and Z supports of one image are disjoint.
+          for (const bool image_x : {true, false}) {
+            auto& run = image_x ? runs.first : runs.second;
+            while (run.remaining) {
+              auto bits = get_bits(result, run.next);
+              if (image_x) {
+                if (bits.z) result.phase = (result.phase + 2) & 3;
+                bits.x = !bits.x;
+              } else bits.z = !bits.z;
+              set_bits(result, run.next, bits.x, bits.z, limits);
+              generated_peak = std::max(generated_peak, result.cells.size());
+              if (--run.remaining) advance_two(run.next);
+            }
+          }
+        }
+      }
+    } catch (const std::length_error&) {
+      // A generator may cross the address-digit cap even when cancellations
+      // in the combined observable avoid it. Preserve the general contract.
+      return false;
+    }
+    peak = std::max(peak, generated_peak);
+    source = std::move(result);
+    return true;
   }
 
   static std::string canonical(const std::string& input) {
