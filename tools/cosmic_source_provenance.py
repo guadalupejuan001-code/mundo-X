@@ -24,6 +24,7 @@ INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
 ETHER_REFERENCE = "d351e83ca3be47fa63a14c462b358ac0cb5d65d7"
 ETHER_INTEGRATION_REFERENCE = "61917d9c00d90f384a7d98f4f83c5a81399576e8"
 ETHER_FUSION_REFERENCE = "d4b9893ddec9c6fbce3911f3db349b1011686538"
+AUDIT_REFERENCE = "0d6e8b18d55529393574200f021fb40858d988f8"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 SOURCE_SCOPES = (
     "native",
@@ -33,10 +34,12 @@ SOURCE_SCOPES = (
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java",
 )
 ADDITIONAL_SOURCES = {
+    "native/tests/ether_batch.cpp": AUDIT_REFERENCE,
+    "native/tests/ether_stress.cpp": AUDIT_REFERENCE,
     "native/tests/core_performance_benchmark.cpp": RESOLUTION_REFERENCE,
     "native/src/basis_vm_main.cpp": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
     "native/include/mundo_x/infinite_address.hpp": INFINITE_REFERENCE,
-    "native/include/mundo_x/infinite_core.hpp": ETHER_FUSION_REFERENCE,
+    "native/include/mundo_x/infinite_core.hpp": AUDIT_REFERENCE,
     "native/src/infinite_runner.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_address.cpp": INFINITE_REFERENCE,
     "native/tests/infinite_core.cpp": INFINITE_REFERENCE,
@@ -45,15 +48,15 @@ ADDITIONAL_SOURCES = {
     "native/include/mundo_x/infinite_bridge.h": INTEGRATION_REFERENCE,
     "native/include/mundo_x/infinite_bridge.hpp": INTEGRATION_REFERENCE,
     "native/include/mundo_x/infinite_program.hpp": ETHER_FUSION_REFERENCE,
-    "native/include/mundo_x/infinite_session.hpp": ETHER_FUSION_REFERENCE,
+    "native/include/mundo_x/infinite_session.hpp": AUDIT_REFERENCE,
     "native/src/infinite_bridge.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_bridge.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_session.cpp": INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": ETHER_FUSION_REFERENCE,
-    "native/include/mundo_x/ether_core.hpp": ETHER_FUSION_REFERENCE,
+    "native/include/mundo_x/ether_core.hpp": AUDIT_REFERENCE,
     "native/tests/ether_core.cpp": ETHER_REFERENCE,
     "native/tests/ether_frame.cpp": ETHER_FUSION_REFERENCE,
-    "native/tests/ether_fusion.cpp": ETHER_FUSION_REFERENCE,
+    "native/tests/ether_fusion.cpp": AUDIT_REFERENCE,
     "native/tests/quantum_algorithms.cpp": QUANTUM_ALGORITHMS_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_FUSION_REFERENCE,
 }
