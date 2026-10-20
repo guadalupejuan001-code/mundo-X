@@ -2,9 +2,9 @@ name: Solar exact integration and paired Android performance
 on:
   push:
     branches: [main, codex/solar-integration-20261020]
-    paths: ['solar-android/**', 'native/**', 'graphics-android/**', 'tools/solar_*', '.github/workflows/solar-performance.yml']
+    paths: ['solar-android/**', 'native/**', 'graphics-android/**', 'tools/solar_*', 'tools/test_solar_performance_runner.py', '.github/workflows/solar-performance.yml']
   pull_request:
-    paths: ['solar-android/**', 'native/**', 'graphics-android/**', 'tools/solar_*', '.github/workflows/solar-performance.yml']
+    paths: ['solar-android/**', 'native/**', 'graphics-android/**', 'tools/solar_*', 'tools/test_solar_performance_runner.py', '.github/workflows/solar-performance.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +15,9 @@ jobs:
   exact-solar:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,6 +28,8 @@ jobs:
         with: {distribution: temurin, java-version: '17'}
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
+      - name: Runner timeout regression checks
+        run: python3 tools/test_solar_performance_runner.py
       - name: Exact Java geometry, physics and shared native JNI
         run: bash tools/solar_host_checks.sh | tee solar-host.log
       - name: Android toolchain and 2 GB emulator
