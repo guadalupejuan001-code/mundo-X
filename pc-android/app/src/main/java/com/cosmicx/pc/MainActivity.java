@@ -49,6 +49,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.mundox.graphics.NativeCore;
+import com.mundox.graphics.EtherCoreNative;
 import com.mundox.graphics.QuantumRenderer;
 
 import java.io.ByteArrayOutputStream;
@@ -543,6 +544,7 @@ public final class MainActivity extends Activity {
         try {
             NativeCore.ensureLoaded();
             prepared = NativeCore.adoptInfiniteHandle(NativeMachine.quantumGraphicsHandle(machine));
+            prepared.prepareEtherCluster();
             if (destroyed.get()) { prepared.close(); return; }
             graphicsOwner.set(prepared);
             if (destroyed.get()) {
@@ -1070,13 +1072,22 @@ public final class MainActivity extends Activity {
             if (i != 0) correlations.append(" · ");
             correlations.append(labels[i]).append('=').append(String.format(Locale.US, "%.0f", values.optDouble(i)));
         }
+        String etherLine="";
+        NativeCore owner=graphicsOwner.get();
+        if(owner!=null){
+            try{
+                owner.prepareEtherCluster();
+                EtherCoreNative.Stats ether=owner.etherStats();
+                etherLine="\nÉter ∞ · "+ether.rules+" reglas · cono local "+ether.lastQueryPeakSites;
+            }catch(RuntimeException ignored){ etherLine="\nÉter ∞ · no disponible"; }
+        }
         quantumStatsView.setText("Fondo " + quantum.optString("background")
                 + " · " + quantum.optLong("active_qubits") + "/" + quantum.optLong("max_active_qubits") + " activos"
                 + " · " + quantum.optLong("components") + " componentes\n"
                 + "Componente mayor: " + quantum.optLong("largest_component") + "/" + quantum.optLong("max_component_qubits")
                 + " · tableau " + memorySizeLabel(quantum.optLong("tableau_bytes"))
                 + " · revisión " + quantum.optLong("revision") + " / época " + quantum.optLong("epoch")
-                + "\n" + correlations);
+                + "\n" + correlations + etherLine);
         String error = quantum.optString("error");
         String output = quantum.optString("output").trim();
         if (quantum.optBoolean("output_truncated")) output += "\n[Vista de resultados limitada a 8192 bytes]";
