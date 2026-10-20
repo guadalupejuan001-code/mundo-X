@@ -57,7 +57,7 @@ def run(fixtures,repeats,select):
         g.glUniform2i(loc('uBodyTileGrid'),f['tilesX'],f['tilesY'])
         for name,key,components in [('uBodies[0]','bodies',4),('uAppearance[0]','appearance',4),('uColors[0]','colors',4),('uAxes[0]','axes',3),('uAtmosphere[0]','atmosphere',4),('uAtmosphereColors[0]','atmoColors',3)]:
             a=np.array(f[key],dtype=np.float32);getattr(g,'glUniform%dfv'%components)(loc(name),23,a.ctypes.data)
-        for name,value in [('uEntry',[f['selected'] if f['entry'] else -1,f['altitude'],f['radiusKm'],int(f['entry'])]),('uQ0',[1,0,-1,1]),('uQ1',[0,1,0,1]),('uEther',[0,0,0,1])]:
+        for name,value in [('uEntry',[f['selected'] if f['entry'] else -1,f['altitude'],f['radiusKm'],int(f['entry'])]),('uQ0',f['quantum'][:4]),('uQ1',f['quantum'][4:]),('uEther',f['ether'][:4])]:
             a=np.array(value,dtype=np.float32);g.glUniform4fv(loc(name),1,a.ctypes.data)
         a=np.array(f['layers'],dtype=np.int32);g.glUniform1iv(loc('uLayers[0]'),23,a.ctypes.data)
         a=np.array(f['eclipses'],dtype=np.uint32);g.glUniform1uiv(loc('uEclipseMasks[0]'),23,a.ctypes.data)

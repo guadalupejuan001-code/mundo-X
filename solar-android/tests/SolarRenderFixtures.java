@@ -60,10 +60,18 @@ public final class SolarRenderFixtures {
             }
             for(int i=0;i<n;i++){for(int k=0;k<3;k++)bodies[i*4+k]=(float)((positions[i][k]-eye[k])*scale);bodies[i*4+3]=(float)(radii[i]*scale);}
             float tan=(float)Math.tan(Math.toRadians(47/2.0)),aspect=(float)width/height;
+            float[] quantum,ether;long nativeRevision,nativeEpoch,activeSites;
+            try(QuantumSolarBridge bridge=new QuantumSolarBridge(scene%4)){
+                quantum=bridge.coefficients();ether=bridge.etherCoefficients();
+                if(!java.util.Arrays.equals(quantum,bridge.verifyReadOnly())
+                        ||!java.util.Arrays.equals(ether,bridge.verifyEtherReadOnly()))throw new AssertionError("Native observation mismatch");
+                nativeRevision=bridge.nativeRevision();nativeEpoch=bridge.nativeEpoch();activeSites=bridge.activeSites();
+            }
             SolarVisualEther.Plan plan=SolarVisualEther.plan(width,height,128,tan,aspect,f,r,up,bodies,appearance,atmosphere,n);
             int[] masks=new int[n];SolarOcclusion.masks(bodies,n,masks);
             out.printf(Locale.ROOT,"{\"scene\":%d,\"selected\":%d,\"width\":%d,\"height\":%d,\"near\":%s,\"far\":%s,\"aspect\":%s,\"tan\":%s,\"entry\":%s,\"altitude\":%s,\"radiusKm\":%s,\"tilesX\":%d,\"tilesY\":%d,",scene,selected,width,height,near,far,aspect,tan,entry,altitude,SolarData.BODIES[selected].radiusKm,plan.tilesX,plan.tilesY);
-            floats(out,"bodies",bodies);out.print(',');floats(out,"appearance",appearance);out.print(',');floats(out,"colors",colors);out.print(',');floats(out,"axes",axes);out.print(',');floats(out,"atmosphere",atmosphere);out.print(',');floats(out,"atmoColors",atmoColors);out.print(',');floats(out,"forward",f);out.print(',');floats(out,"right",r);out.print(',');floats(out,"up",up);out.print(',');ints(out,"layers",layers);out.print(',');ints(out,"tiles",plan.masks);out.print(',');ints(out,"eclipses",masks);out.print('}');
+            floats(out,"bodies",bodies);out.print(',');floats(out,"appearance",appearance);out.print(',');floats(out,"colors",colors);out.print(',');floats(out,"axes",axes);out.print(',');floats(out,"atmosphere",atmosphere);out.print(',');floats(out,"atmoColors",atmoColors);out.print(',');floats(out,"forward",f);out.print(',');floats(out,"right",r);out.print(',');floats(out,"up",up);out.print(',');ints(out,"layers",layers);out.print(',');ints(out,"tiles",plan.masks);out.print(',');ints(out,"eclipses",masks);out.print(',');floats(out,"quantum",quantum);out.print(',');floats(out,"ether",ether);
+            out.printf(Locale.ROOT,",\"nativeRevision\":%d,\"nativeEpoch\":%d,\"activeSites\":%d}",nativeRevision,nativeEpoch,activeSites);
         }
         out.println("]");out.close();
     }
