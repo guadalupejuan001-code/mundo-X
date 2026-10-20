@@ -9,7 +9,7 @@ BASE='af0b1797573b55a739dcaef7b784eb98825ff07c'
 os.environ.setdefault('LP_NUM_THREADS','1');os.environ.setdefault('OPENBLAS_NUM_THREADS','1')
 sys.path.insert(0,str(ROOT/'graphics-desktop'))
 
-def run(fixtures,repeats,select):
+def run(fixtures,repeats,select,candidate_shader=None):
     import numpy as np
     from PIL import Image
     from egl_runtime import GL,I,U,F,P
@@ -21,7 +21,7 @@ def run(fixtures,repeats,select):
         setattr(g,name,C.CFUNCTYPE(ret,*args)(g.egl.eglGetProcAddress(name.encode())))
     assets=ROOT/'solar-android/app/src/main/assets'
     old=subprocess.check_output(['git','show',BASE+':solar-android/app/src/main/assets/shaders/solar.frag'],cwd=ROOT,text=True)
-    new=(assets/'shaders/solar.frag').read_text();vertex=(assets/'shaders/solar.vert').read_text()
+    new=(candidate_shader or assets/'shaders/solar.frag').read_text();vertex=(assets/'shaders/solar.vert').read_text()
     programs={k:g.program(vertex,v) for k,v in [('before',old),('after',new)]}
     # Separate untimed depth/identity checks. No production debug branch.
     for kind in ['id','depth']:
@@ -94,9 +94,10 @@ def run(fixtures,repeats,select):
     finally:g.close()
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--fixtures',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--repeats',type=int,default=3);p.add_argument('--scenes',type=int,nargs='*');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--fixtures',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--repeats',type=int,default=3);p.add_argument('--scenes',type=int,nargs='*');p.add_argument('--candidate-shader',type=Path);a=p.parse_args()
     resource.setrlimit(resource.RLIMIT_AS,(2*1024**3,2*1024**3));resource.setrlimit(resource.RLIMIT_CPU,(180,181));os.sched_setaffinity(0,{min(os.sched_getaffinity(0))})
-    result=run(json.loads(a.fixtures.read_text()),a.repeats,a.scenes)
-    result.update(baseline=BASE,source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),ram_budget_bytes=2*1024**3,cpu_budget_seconds=180,scope='Host software GLES; production shader, catalogue fixtures; not Android FPS',shader_sha256=hashlib.sha256((ROOT/'solar-android/app/src/main/assets/shaders/solar.frag').read_bytes()).hexdigest(),fixtures_sha256=hashlib.sha256(a.fixtures.read_bytes()).hexdigest())
+    result=run(json.loads(a.fixtures.read_text()),a.repeats,a.scenes,a.candidate_shader)
+    candidate=a.candidate_shader or ROOT/'solar-android/app/src/main/assets/shaders/solar.frag'
+    result.update(baseline=BASE,source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),ram_budget_bytes=2*1024**3,cpu_budget_seconds=180,scope='Host software GLES; catalogue fixtures; not Android FPS',experimental_candidate=a.candidate_shader is not None,shader_sha256=hashlib.sha256(candidate.read_bytes()).hexdigest(),fixtures_sha256=hashlib.sha256(a.fixtures.read_bytes()).hexdigest())
     a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps({k:result[k] for k in ['median_ms','different_pixels','max_color_channel_delta','rss_peak_kib']}))
     if any(result['different_pixels'].values()):sys.exit(1)
