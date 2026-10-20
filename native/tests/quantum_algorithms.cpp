@@ -1,6 +1,7 @@
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/ether_core.hpp"
 #include "mundo_x/exact_t_experiment.hpp"
+#include "mundo_x/pauli_observer.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -14,6 +15,14 @@
 namespace {
 std::size_t checks=0;
 void require(bool ok,const char* message){++checks;if(!ok)throw std::runtime_error(message);}
+
+double local_z(const mundo_x_bridge::PauliObserver& observer,std::size_t n,std::size_t q){
+  mundo_x_bridge::Pauli p;
+  const std::size_t words=n/64+(n%64!=0);
+  p.x.assign(words,0);p.z.assign(words,0);
+  p.z[q/64]|=std::uint64_t{1}<<(q%64);
+  return observer.expectation(std::move(p));
+}
 
 std::vector<bool> secret(std::size_t n){
   std::vector<bool> out(n);
@@ -31,9 +40,10 @@ double bernstein_vazirani(std::size_t input_qubits){
   for(std::size_t q=0;q<=ancilla;++q)core.hadamard(q);
   for(std::size_t q=0;q<input_qubits;++q)if(wanted[q])core.cnot(q,ancilla);
   for(std::size_t q=0;q<input_qubits;++q)core.hadamard(q);
+  const mundo_x_bridge::PauliObserver observer(core);
   for(std::size_t q=0;q<input_qubits;++q){
-    const double p=core.probability_one_z(q);
-    require(p==(wanted[q]?1.0:0.0),"Bernstein-Vazirani secret bit mismatch");
+    const double z=local_z(observer,core.qubits(),q);
+    require(z==(wanted[q]?-1.0:1.0),"Bernstein-Vazirani secret bit mismatch");
   }
   return static_cast<double>(core.state_bytes());
 }
@@ -54,11 +64,12 @@ void deutsch_jozsa(std::size_t n,bool balanced){
     core.pauli_x(anc);
   }
   for(std::size_t q=0;q<n;++q)core.hadamard(q);
+  const mundo_x_bridge::PauliObserver observer(core);
   bool any_one=false;
   for(std::size_t q=0;q<n;++q){
-    const double p=core.probability_one_z(q);
-    require(p==0.0||p==1.0,"Deutsch-Jozsa output is not deterministic");
-    any_one|=p==1.0;
+    const double z=local_z(observer,core.qubits(),q);
+    require(z==1.0||z==-1.0,"Deutsch-Jozsa output is not deterministic");
+    any_one|=z==-1.0;
   }
   require(any_one==balanced,"Deutsch-Jozsa classification mismatch");
 }
