@@ -294,7 +294,13 @@ class QuantumGraphicsEngine:
 
     def observe(self,cam,t=0.,read=True,selected=-1,force=False):
         started=time.perf_counter_ns();snapshot,sync_ms=self._sync()
-        key=(snapshot.signature,cam['vp'].tobytes(),float(t),int(selected),self.renderer.width,self.renderer.height)
+        # The ray shader consumes the basis and projection scalars directly;
+        # callers may change them without replacing vp. Compare every camera
+        # uniform exactly instead of treating one matrix as their authority.
+        camera_key=tuple(np.asarray(cam[name],dtype=np.float32).tobytes()
+                         for name in ('vp','inverse','eye','forward','right','up'))
+        camera_key+=tuple(float(cam[name]) for name in ('near','far','aspect','tan_half_fov'))
+        key=(snapshot.signature,camera_key,float(t),int(selected),self.renderer.width,self.renderer.height)
         if not force and key==self._frame_key and (not read or self._frame is not None):
             self.reused_frames+=1
             return self._frame,{'reused':True,'sync_ms':sync_ms,'total_ms':(time.perf_counter_ns()-started)/1e6}
