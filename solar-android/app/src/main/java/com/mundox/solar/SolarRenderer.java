@@ -56,7 +56,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final float[] axes=new float[MAX_BODIES*3];
     private final double[][] poleBasis=new double[MAX_BODIES][9];
     private final int[] layers=new int[MAX_BODIES];
-    private final float[] quantum=new float[8];
+    private final float[] quantum=new float[8],ether=new float[4];
     private final double[][] orbitCache=new double[MAX_BODIES][];
     private double orbitCacheDate=Double.NaN;
     private final double[] cameraEye={0,0,0},cameraTarget={0,0,0},panOffset={0,0,0};
@@ -358,8 +358,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     }
     private void syncQuantum(){
         long revision=bridge.revision();if(revision==uploadedRevision)return;
-        float[] coefficients=bridge.coefficients();
+        float[] coefficients=bridge.coefficients(),etherCoefficients=bridge.etherCoefficients();
         for(int i=0;i<8;i++)quantum[i]=i<coefficients.length&&finite(coefficients[i])?Math.max(-1,Math.min(1,coefficients[i])):0;
+        for(int i=0;i<4;i++)ether[i]=i<etherCoefficients.length&&finite(etherCoefficients[i])?Math.max(-1,Math.min(1,etherCoefficients[i])):0;
         uploadedRevision=revision;
     }
     private double defaultDistance(){
@@ -472,6 +473,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform1i(sceneLoc("uAtmosphereEnabled"),atmosphereEnabled?1:0);
         glUniform1iv(sceneLoc("uLayers[0]"),SolarData.BODIES.length,layers,0);
         glUniform4fv(sceneLoc("uQ0"),1,quantum,0);glUniform4fv(sceneLoc("uQ1"),1,quantum,4);
+        glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
