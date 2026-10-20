@@ -226,20 +226,20 @@ class EtherCore {
 
   static void conjugate_cz_neighbors(Pauli& p, const QueryLimits& limits,
                                      std::size_t& peak) {
-    std::set<std::pair<std::string,std::string>> edges;
-    for (const auto& item : p.cells) if (item.second.x) {
-      const auto& q = item.first;
-      if (q != "0") edges.emplace(predecessor(q), q);
+    // CZ leaves every X bit invariant. A visited X cell therefore cannot be
+    // erased by toggle_z, and std::map insertion/erasure of other cells leaves
+    // this iterator valid. Newly inserted cells have X=0 and are skipped. Walk
+    // the invariant support directly: no copied addresses or temporary vector,
+    // including for all-Z queries. Each adjacent XX pair contributes its sign
+    // once, via the right neighbour.
+    for (auto it = p.cells.begin(); it != p.cells.end(); ++it) {
+      if (!it->second.x) continue;
+      const auto& q = it->first;
       auto next = successor(q);
       check_address(next, limits);
-      edges.emplace(q, std::move(next));
-    }
-    for (const auto& edge : edges) {
-      const bool xa = get_bits(p,edge.first).x;
-      const bool xb = get_bits(p,edge.second).x;
-      if (xa && xb) p.phase = (p.phase + 2) & 3;
-      if (xb) toggle_z(p,edge.first,limits,peak);
-      if (xa) toggle_z(p,edge.second,limits,peak);
+      if (get_bits(p,next).x) p.phase = (p.phase + 2) & 3;
+      if (q != "0") toggle_z(p,predecessor(q),limits,peak);
+      toggle_z(p,next,limits,peak);
     }
   }
 };

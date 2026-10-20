@@ -35,7 +35,17 @@ public final class SolarVisualEther {
                 ||bodies==null||appearance==null||atmosphere==null||count<0||count>24
                 ||bodies.length<count*4||appearance.length<count*4||atmosphere.length<count*4)
             throw new IllegalArgumentException("Visual Ether input invalid");
-        int tx=(width+tileSize-1)/tileSize,ty=(height+tileSize-1)/tileSize;
+        if(!Float.isFinite(tanHalfFov)||!Float.isFinite(aspect))
+            throw new IllegalArgumentException("Visual Ether projection must be finite");
+        for(float[] axis:new float[][]{forward,right,up}){
+            double norm=0;
+            for(int i=0;i<3;i++){
+                if(!Float.isFinite(axis[i]))throw new IllegalArgumentException("Visual Ether camera must be finite");
+                norm+=(double)axis[i]*axis[i];
+            }
+            if(Math.abs(norm-1)>1e-4)throw new IllegalArgumentException("Visual Ether camera axes must be unit vectors");
+        }
+        int tx=1+(width-1)/tileSize,ty=1+(height-1)/tileSize;
         int[] masks=new int[Math.multiplyExact(tx,ty)];
         for(int id=0;id<count;id++){
             int p=id*4;
@@ -55,16 +65,20 @@ public final class SolarVisualEther {
                 fill(masks,tx,ty,id,0,tx-1,0,ty-1);
                 continue;
             }
-            double denom=Math.max(1e-9,z-radius);
-            double centerX=x/(z*tanHalfFov*aspect);
-            double centerY=y/(z*tanHalfFov);
-            double radiusX=radius/(denom*tanHalfFov*aspect);
-            double radiusY=radius/(denom*tanHalfFov);
-            // One tile of safety in NDC. This is intentionally conservative.
-            radiusX+=2.0*tileSize/width;
-            radiusY+=2.0*tileSize/height;
-            double left=centerX-radiusX,rightNdc=centerX+radiusX;
-            double bottom=centerY-radiusY,top=centerY+radiusY;
+            // Project the enclosing camera-space box using interval division.
+            // center +/- r/(z-r) misses the displacement of an off-axis center
+            // with depth. All four ratios bound every point of the sphere.
+            double near=z-radius,far=z+radius;
+            double x0n=(x-radius)/near,x0f=(x-radius)/far;
+            double x1n=(x+radius)/near,x1f=(x+radius)/far;
+            double y0n=(y-radius)/near,y0f=(y-radius)/far;
+            double y1n=(y+radius)/near,y1f=(y+radius)/far;
+            double sx=(double)tanHalfFov*aspect,sy=tanHalfFov;
+            double marginX=2.0*tileSize/width,marginY=2.0*tileSize/height;
+            double left=Math.min(Math.min(x0n,x0f),Math.min(x1n,x1f))/sx-marginX;
+            double rightNdc=Math.max(Math.max(x0n,x0f),Math.max(x1n,x1f))/sx+marginX;
+            double bottom=Math.min(Math.min(y0n,y0f),Math.min(y1n,y1f))/sy-marginY;
+            double top=Math.max(Math.max(y0n,y0f),Math.max(y1n,y1f))/sy+marginY;
             if(rightNdc<-1||left>1||top<-1||bottom>1)continue;
             int x0=tileFloor((Math.max(-1,left)*.5+.5)*width,tileSize,tx);
             int x1=tileFloor((Math.min(1,rightNdc)*.5+.5)*Math.max(0,width-1),tileSize,tx);

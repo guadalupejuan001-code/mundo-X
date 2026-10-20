@@ -444,14 +444,26 @@ void budgets_and_transactions() {
 
   for (unsigned budget = 0; budget < 3; ++budget) {
     Core::Limits limits;
-    if (budget == 0) limits.max_active_qubits = 2;
-    if (budget == 1) limits.max_component_qubits = 2;
-    if (budget == 2) limits.max_state_bytes = 34;
+    // An identity control on an implicit |0> neighbour remains symbolic.
+    // This parity circuit now needs two sites; test below that actual need.
+    if (budget == 0) limits.max_active_qubits = 1;
+    if (budget == 1) limits.max_component_qubits = 1;
+    if (budget == 2) limits.max_state_bytes = 33;
     Core small(Core::Background::Zero, limits);
     small.seed(811); small.h_all(); small.cz_neighbors(); small.h_all();
     close(small.probability_one("2"), 0.5, "query was incorrectly charged as materialization");
     rollback(small, [&] { (void)small.measure_z("2"); }, "measurement materialization budget");
     rollback(small, [&] { (void)small.force_measure_z("2", true); }, "postselection materialization budget");
+  }
+  {
+    Core::Limits limits;
+    limits.max_active_qubits = limits.max_component_qubits = 2;
+    limits.max_state_bytes = 34;
+    Core small(Core::Background::Zero, limits);
+    small.h_all(); small.cz_neighbors(); small.h_all();
+    close(small.force_measure_z("2", true), 0.5, "symbolic-neighbour projection probability");
+    close(small.probability_one("2"), 1, "symbolic-neighbour projection result");
+    require(small.stats().active_qubits == 2, "projection materialized identity neighbour");
   }
   Core::Limits digits; digits.max_address_digits = 1;
   Core end(Core::Background::Zero, digits); end.h_all(); end.cz_neighbors();

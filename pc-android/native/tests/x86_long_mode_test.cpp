@@ -6,6 +6,7 @@
 #include <iostream>
 #include <set>
 #include <string>
+#include <vector>
 
 using cosmic_pc::Cpu;
 using cosmic_pc::FaultCode;
@@ -137,6 +138,116 @@ void addressing_stack_and_alu_tests() {
   check(cpu.regs[Cpu::EAX] == 0xfffffffd00000000ULL && !cpu.flag(Cpu::OF), "two-operand64 IMUL signed immediate");
   program(cpu, {0x48,0x6b,0xc0,0x02,0xf4}); cpu.regs[Cpu::EAX] = 0x4000000000000000ULL; run(cpu);
   check(cpu.regs[Cpu::EAX] == 0x8000000000000000ULL && cpu.flag(Cpu::OF) && cpu.flag(Cpu::CF), "IMUL64 overflow uses defined host arithmetic");
+}
+
+void enter_leave_long_mode_tests() {
+  Cpu cpu; boot(cpu);
+  // A high canonical alias of the identity mapping detects accidental 32-bit
+  // truncation by 67, and tests full RSP/RBP values beyond physical RAM size.
+  constexpr auto high = 0xffff800000000000ULL;
+  cpu.write64(0x1000 + 256 * 8, 0x2003);
+  cpu.fs_base = 0x100000; cpu.gs_base = 0x120000;
+  constexpr auto flags = 2U | Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::IF | Cpu::DF | Cpu::OF;
+  struct Encoding { std::vector<std::uint8_t> prefix; unsigned bytes; };
+  const Encoding encodings[] = {
+    {{}, 8}, {{0x67}, 8}, {{0x66}, 2}, {{0x66, 0x67}, 2},
+    {{0x66, 0x48}, 8}, {{0x48, 0x66}, 2}, {{0x64}, 8}, {{0x65, 0x67, 0x66}, 2}, {{0x4f}, 8}
+  };
+  for (const auto& encoding : encodings) for (unsigned raw = 0; raw < 256; ++raw) {
+    const auto bytes = encoding.bytes;
+    auto code = encoding.prefix;
+    code.insert(code.end(), {0xc8, 0x23, 0x01, std::uint8_t(raw)});
+    code.insert(code.end(), encoding.prefix.begin(), encoding.prefix.end()); code.push_back(0xc9);
+    cpu.memory.write_block(0xa000, code.data(), code.size()); cpu.eip = 0xa000; cpu.halted = false;
+    cpu.regs[Cpu::ESP] = high + 0x190800; cpu.regs[Cpu::EBP] = high + 0x191000;
+    cpu.regs[Cpu::R13] = 0x123456789abcdef0ULL; cpu.eflags = flags; const auto saved = cpu.regs;
+    for (unsigned i = 1; i < 32; ++i) {
+      if (bytes == 2) cpu.write16(0x191000 - i * bytes, std::uint16_t(0x5300 + i));
+      else cpu.write64(0x191000 - i * bytes, 0xabcdef0198765300ULL + i);
+    }
+    const auto level = raw & 31U, slots = level == 0 ? 1 : level + 1;
+    const auto frame = bytes == 2 ? 0x7feULL : high + 0x1907f8;
+    const auto expected_bp = bytes == 2 ? high + 0x1907fe : frame;
+    const auto expected_sp = high + 0x190800 - slots * bytes - 0x123;
+    cpu.memory[expected_sp - high] = 0xa5; cpu.memory[0x190800] = 0x5a; one(cpu);
+    check(cpu.regs[Cpu::EBP] == expected_bp && cpu.regs[Cpu::ESP] == expected_sp && cpu.eflags == flags,
+          "long-mode ENTER uses operand-sized frame slots and full64 stack addressing independent of 67/FS/GS");
+    check((bytes == 2 ? cpu.read16(0x190800 - bytes) : cpu.read64(0x190800 - bytes)) ==
+          (bytes == 2 ? 0x1000ULL : high + 0x191000), "long-mode ENTER saves precisely BP or RBP");
+    for (unsigned i = 1; i < level; ++i)
+      check((bytes == 2 ? cpu.read16(0x190800 - (i + 1) * bytes) : cpu.read64(0x190800 - (i + 1) * bytes)) ==
+            (bytes == 2 ? 0x5300ULL + i : 0xabcdef0198765300ULL + i), "long-mode ENTER copies each enclosing frame via translated SS addresses");
+    if (level != 0)
+      check((bytes == 2 ? cpu.read16(0x190800 - slots * bytes) : cpu.read64(0x190800 - slots * bytes)) == frame,
+            "long-mode ENTER pushes the correct operand-sized FrameTemp at every nesting level");
+    check(cpu.memory[expected_sp - high] == 0xa5 && cpu.memory[0x190800] == 0x5a,
+          "long-mode ENTER probes local storage without overwriting it or neighboring data");
+    one(cpu); check(cpu.regs == saved && cpu.eflags == flags,
+                    "matching long-mode LEAVE restores full RSP and the operand-sized frame pointer without altering flags");
+  }
+
+  // Confirmed against native x86-64: the chain walker is full RBP even for
+  // 66 ENTER; its borrow must not modify the high bits preserved by BP output.
+  program(cpu, {0x66, 0x67, 0xc8, 0, 0, 2});
+  cpu.regs[Cpu::ESP] = high + 0x180800; cpu.regs[Cpu::EBP] = high + 0x190000;
+  cpu.write16(0x18fffe, 0xbeef); one(cpu);
+  check(cpu.read16(0x1807fc) == 0xbeef && cpu.regs[Cpu::EBP] == high + 0x1907fe,
+        "66 ENTER chain crossing 64KiB preserves the original high RBP bits and reads with all64 address bits");
+  program(cpu, {0x66, 0xc8, 4, 0, 0, 0x66, 0xc9});
+  cpu.regs[Cpu::ESP] = high + 0x180004; cpu.regs[Cpu::EBP] = high + 0x181000; one(cpu);
+  check(cpu.regs[Cpu::ESP] == high + 0x17fffe && cpu.regs[Cpu::EBP] == high + 0x180002,
+        "66 ENTER local allocation borrows across 64KiB using full RSP");
+  one(cpu); check(cpu.regs[Cpu::ESP] == high + 0x180004 && cpu.regs[Cpu::EBP] == high + 0x181000,
+                  "66 LEAVE restores a64-bit stack pointer even when locals crossed64KiB");
+}
+
+void enter_leave_paging_fault_tests() {
+  Cpu cpu; boot(cpu);
+  for (unsigned i = 0; i < 512; ++i) cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
+  cpu.write64(0x3000, 0x4003);
+  constexpr auto flags = 2U | Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::IF | Cpu::DF | Cpu::OF;
+  const auto expect_rollback = [&](std::initializer_list<std::uint8_t> code, std::uint64_t sp, std::uint64_t bp,
+                                   FaultCode fault, std::uint64_t address, std::uint32_t error,
+                                   std::uint64_t saved_slot) {
+    program(cpu, code); cpu.regs[Cpu::ESP] = sp; cpu.regs[Cpu::EBP] = bp; cpu.eflags = flags;
+    cpu.write64(saved_slot, 0x123456789abcdef0ULL);
+    const auto saved = cpu.regs; const auto retired = cpu.instructions;
+    expect_fault(cpu, fault, "ENTER/LEAVE reports the architectural stack access fault");
+    check(cpu.regs == saved && cpu.eflags == flags && cpu.instructions == retired &&
+          cpu.read64(saved_slot) == 0x123456789abcdef0ULL,
+          "ENTER/LEAVE fault rolls back registers, flags, retired count and all earlier frame stores");
+    if (fault == FaultCode::PageFault)
+      check(cpu.cr2 == address && cpu.fault->linear_address == address && cpu.fault->error_code == error,
+            "stack page fault records the exact linear address and read/write/present error bits");
+  };
+
+  // Stack page C000 is physically E000; page B000 is the reserved-local page.
+  cpu.write64(0x4000 + 12 * 8, 0xe003);
+  cpu.write64(0x4000 + 11 * 8, 0);
+  expect_rollback({0xc8, 0x00, 0x10, 0}, 0xc010, 0x9000, FaultCode::PageFault, 0xb008, 2, 0xe008);
+  cpu.write64(0x4000 + 11 * 8, 0xd001);
+  expect_rollback({0xc8, 0x00, 0x10, 0}, 0xc010, 0x9000, FaultCode::PageFault, 0xb008, 3, 0xe008);
+  cpu.write64(0x4000 + 11 * 8, 0);
+  expect_rollback({0xc8, 0, 0, 2}, 0xc010, 0xb008, FaultCode::PageFault, 0xb000, 0, 0xe008);
+  expect_rollback({0xc8, 0, 0, 1}, 0xc008, 0x9000, FaultCode::PageFault, 0xbff8, 2, 0xe000);
+  expect_rollback({0x66, 0x67, 0xc9}, 0xc010, 0xb000, FaultCode::PageFault, 0xb000, 0, 0xe008);
+
+  // The final probe checks a complete slot, even when only its trailing bytes
+  // cross into an absent page. Both64-bit and66 forms are native-confirmed.
+  cpu.write64(0x4000 + 11 * 8, 0xd003); cpu.write64(0x4000 + 12 * 8, 0);
+  expect_rollback({0xc8, 0x0c, 0x20, 0}, 0xe010, 0x9000, FaultCode::PageFault, 0xc000, 2, 0xe008);
+  expect_rollback({0x66, 0xc8, 0x0f, 0x20, 0}, 0xe010, 0x9000, FaultCode::PageFault, 0xc000, 2, 0xe00e);
+
+  // A high canonical stack with a one-byte reservation enters the address gap.
+  cpu.write64(0x1000 + 256 * 8, 0x2003);
+  expect_rollback({0xc8, 1, 0, 0}, 0xffff800000000008ULL, 0x9000, FaultCode::ProtectionFault, 0, 0, 0);
+
+  cpu.write64(0x4000 + 11 * 8, 0);
+  program(cpu, {0xc8, 0, 0}, 0xaffd); cpu.regs[Cpu::ESP] = 0xe010;
+  const auto saved = cpu.regs; cpu.write64(0xe008, 0xabcdef1234567890ULL);
+  expect_fault(cpu, FaultCode::PageFault, "ENTER immediate fetch crossing an absent code page");
+  check(cpu.regs == saved && cpu.cr2 == 0xb000 && cpu.fault->error_code == 16 && cpu.fault->bytes.size() == 3 &&
+        cpu.read64(0xe008) == 0xabcdef1234567890ULL, "ENTER finishes decoding before performing any stack access");
 }
 
 void double_shift_long_mode_tests() {
@@ -329,7 +440,8 @@ void paging_and_fault_tests() {
 
 int main() {
   try {
-    boot_and_register_tests(); addressing_stack_and_alu_tests(); double_shift_long_mode_tests();
+    boot_and_register_tests(); addressing_stack_and_alu_tests(); enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
+    double_shift_long_mode_tests();
     signed_multiply_boundaries(); paging_and_fault_tests();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;
