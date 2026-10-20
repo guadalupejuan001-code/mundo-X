@@ -3,46 +3,40 @@ package com.mundox.graphics;
 import java.util.Arrays;
 
 /**
- * Java owner for the symbolic EtherCore backend.
- * The native domain has no finite qubit count. This wrapper is deliberately
- * read-only with respect to individual qubits: v0.1 mutates only global rules.
+ * Convenience owner over the same fused session used by NativeCore.
+ * It does not allocate an independent native Ether state alongside that core.
  */
 public final class EtherCoreNative implements AutoCloseable {
-    static { System.loadLibrary("mx_graphics"); }
-    private long handle;
+    private final NativeCore core;
 
     public static final class Stats {
         public final long rules,lastQuerySites,lastQueryPeakSites,lastQueryAddressBytes;
-        private Stats(long[] v){
+        Stats(long[] v){
             if(v==null||v.length!=4)throw new IllegalStateException("Estadísticas EtherCore inválidas");
             rules=v[0];lastQuerySites=v[1];lastQueryPeakSites=v[2];lastQueryAddressBytes=v[3];
         }
     }
 
-    public EtherCoreNative(){
-        handle=nCreate();
-        if(handle==0)throw new IllegalStateException("No se pudo crear EtherCore");
-    }
-    private void live(){if(handle==0)throw new IllegalStateException("EtherCore cerrado");}
-    public synchronized void hAll(){live();nHAll(handle);}
-    public synchronized void czNeighbors(){live();nCzNeighbors(handle);}
-    public synchronized void prepareCluster(){live();nHAll(handle);nCzNeighbors(handle);}
+    public EtherCoreNative(){core=NativeCore.infinite(NativeCore.ZERO);}
+    public synchronized void hAll(){core.etherHAll();}
+    public synchronized void czNeighbors(){core.etherCzNeighbors();}
+    public synchronized void prepareCluster(){core.prepareEtherCluster();}
     public synchronized float[] query(String[] observables){
-        live();
         if(observables==null||observables.length<1||observables.length>4096)
             throw new IllegalArgumentException("Se requieren de 1 a 4096 observables");
         String[] copy=observables.clone();
         for(String p:copy)InfiniteProgram.validate(p);
-        float[] out=nQuery(handle,copy);
+        float[] out=core.etherQuery(copy);
         if(out==null||out.length!=copy.length)throw new IllegalStateException("Respuesta EtherCore incompleta");
         return out;
     }
-    public synchronized Stats stats(){live();return new Stats(nStats(handle));}
+    public synchronized Stats stats(){return core.etherStats();}
     public synchronized long ruleCount(){return stats().rules;}
 
     /** Five exact observables useful as a visual/read-only probe. */
     public static String[] visualProgram(String center){
         String q=InfiniteProgram.address(center);
+        if(q.equals("0"))return new String[]{"X:0 Z:1","Z:0 X:1 Z:2","X:0","Z:0","Z:1"};
         String prev=previous(q),next=next(q);
         return new String[]{
             "Z:"+prev+" X:"+q+" Z:"+next,
@@ -71,11 +65,5 @@ public final class EtherCoreNative implements AutoCloseable {
         int start=0;while(start+1<d.length&&d[start]=='0')start++;
         return new String(Arrays.copyOfRange(d,start,d.length));
     }
-    @Override public synchronized void close(){if(handle!=0){nDestroy(handle);handle=0;}}
-    private static native long nCreate();
-    private static native void nDestroy(long h);
-    private static native void nHAll(long h);
-    private static native void nCzNeighbors(long h);
-    private static native float[] nQuery(long h,String[] observables);
-    private static native long[] nStats(long h);
+    @Override public synchronized void close(){core.close();}
 }

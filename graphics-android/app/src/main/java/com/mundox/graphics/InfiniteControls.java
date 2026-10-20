@@ -18,14 +18,15 @@ public final class InfiniteControls {
     private InfiniteControls(){}
 
     public static final class ModeChoice {
-        /** 0 finite; 1 infinite Bell; 2 infinite zero. */
-        public int mode;
+        /** 0 legacy finite; 1 Bell; 2 zero; 3 Ether cluster. */
+        public int mode=3;
         public final Button button;
         public ModeChoice(Activity activity,EditText finiteQubits){
-            button=new Button(activity);button.setAllCaps(false);button.setText("Núcleo: finito ▾");button.setTag("new_project_backend");
+            button=new Button(activity);button.setAllCaps(false);button.setText("Núcleo: Ether ▾");button.setTag("new_project_backend");
+            finiteQubits.setEnabled(false);finiteQubits.setAlpha(.4f);
             button.setOnClickListener(v->new AlertDialog.Builder(activity).setTitle("Núcleo del nuevo mundo")
-                .setSingleChoiceItems(new String[]{"Finito · cantidad de qubits","Infinito · pares Bell","Infinito · fondo cero"},mode,(dialog,which)->{
-                    mode=which;button.setText(new String[]{"Núcleo: finito ▾","Núcleo: Infinito · Bell ▾","Núcleo: Infinito · cero ▾"}[which]);
+                .setSingleChoiceItems(new String[]{"Finito · cantidad de qubits","Infinito · pares Bell","Infinito · fondo cero","Ether · fondo entrelazado"},mode,(dialog,which)->{
+                    mode=which;button.setText(new String[]{"Núcleo: finito ▾","Núcleo: Infinito · Bell ▾","Núcleo: Infinito · cero ▾","Núcleo: Ether ▾"}[which]);
                     finiteQubits.setEnabled(mode==0);finiteQubits.setAlpha(mode==0?1f:.4f);dialog.dismiss();
                 }).show());
         }
@@ -74,7 +75,7 @@ public final class InfiniteControls {
                             s.activeQubits+" qubits activos · "+s.components+" componentes\n"+
                             "Componente mayor: "+s.largestComponent+" qubits\n"+
                             "Tableau activo: "+s.tableauBytes+" bytes\nTexto de direcciones: "+s.addressBytes+" bytes\n"+
-                            "Revisión: "+Long.toUnsignedString(s.revision)+"\n\n"+
+                            "Reglas Ether: "+core.etherStats().rules+"\nRevisión: "+Long.toUnsignedString(s.revision)+"\n\n"+
                             "Estos bytes describen los datos lógicos; la aplicación también necesita memoria para índices, copias y gráficos. " +
                             "Esta sesión admite hasta 4096 qubits activos, 1024 por componente y 4096 dígitos por dirección.")
                         .setPositiveButton("Cerrar",null).show();
@@ -88,7 +89,7 @@ public final class InfiniteControls {
     }
     private static void program(Activity activity,String address,Command command){
         LinearLayout form=column(activity);TextView help=new TextView(activity);
-        help.setText("Una instrucción por línea: h, s, x, y, z, cx, cz, expect, probz, measure, compact. La petición completa se aplica de forma atómica.");form.addView(help);
+        help.setText("Una instrucción por línea: h, s, x, y, z, cx, cz, h_all, cz_neighbors, expect, probz, measure, compact. Las reglas globales y las puertas locales actúan sobre el mismo estado. La petición completa se aplica de forma atómica.");form.addView(help);
         EditText input=new EditText(activity);input.setTypeface(Typeface.MONOSPACE);input.setMinLines(4);input.setTag("infinite_script");
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setText("expect X:"+address+" X:"+InfiniteProgram.partner(address)+"\n");form.addView(input);

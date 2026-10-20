@@ -37,7 +37,7 @@ import java.util.function.BooleanSupplier;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Tests the shipping Activity, native CompactCore, GL thread and real framebuffers. */
+/** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
     private static final int LEGACY_TESTS = 13;
@@ -94,7 +94,7 @@ public final class SolarInstrumentation extends Instrumentation {
 
             runCase("native_gles_launch_and_textures", this::launchAndTextures);
             runCase("astronomy_and_magnetic_classification", this::astronomyAndMagnetism);
-            runCase("native_bell_and_readonly_observation", this::nativeBell);
+            runCase("native_ether_fusion_and_readonly_observation", this::nativeEtherFusion);
             runCase("quantum_coupled_and_uncoupled_frames", this::quantumCoupling);
             runCase("intrinsic_and_induced_field_frames", this::magneticLayers);
             runCase("solar_wind_layer", this::solarWind);
@@ -131,7 +131,9 @@ public final class SolarInstrumentation extends Instrumentation {
                 try {
                     metrics.put("glRenderer", GLES30.glGetString(GLES30.GL_RENDERER));
                     metrics.put("glVersion", GLES30.glGetString(GLES30.GL_VERSION));
-                    metrics.put("nativeQubits", QuantumSolarBridge.QUBITS);
+                    metrics.put("nativeDomain", "q0,q1,...");
+                    metrics.put("nativePreparationSites", QuantumSolarBridge.PREPARATION_SITES);
+                    metrics.put("nativeActiveSites", activity.bridge().activeSites());
                     metrics.put("nativeStateBytes", activity.bridge().stateBytes());
                     metrics.put("framesRendered", activity.renderer().frameCount);
                 } catch (Exception error) { throw new RuntimeException(error); }
@@ -160,7 +162,8 @@ public final class SolarInstrumentation extends Instrumentation {
         waitUntil(() -> activity.hasWindowFocus(), 15_000,
                 "Solar Activity is obscured by another window at launch");
         metrics.put("initialWindowFocused", true);
-        expect(activity.bridge().stateBytes() > 0, "CompactCore native state is absent");
+        expect(activity.bridge().stateBytes() > 0 && activity.bridge().etherRules() == 2,
+                "The default finite preparation and Ether frame are absent");
         prepare(3, false, false);
         awaitStableViewport();
         prepare(3, false, false);
@@ -247,26 +250,60 @@ public final class SolarInstrumentation extends Instrumentation {
         metrics.put("fieldTypes", new JSONObject().put("earth", 1).put("venus", 2).put("mars", 3).put("moon", 0).put("ganymede", 1));
     }
 
-    private void nativeBell() throws Exception {
+    private void nativeEtherFusion() throws Exception {
+        // Independent fixtures for local preparation followed by global H and
+        // nearest-neighbour CZ. These are physical observables after the frame,
+        // not the old isolated eight-qubit Bell expectations.
+        float[][] localExpected = {
+            {0,0,0,0,0,0,0,0},
+            {0,0,1,0,0,1,0,1},
+            {0,0,0,0,0,1,0,1},
+            {0,-1,0,0,0,0,0,0}
+        };
+        float[][] etherExpected = {
+            {1,1,0,0,0},
+            {0,0,0,1,1},
+            {0,0,0,0,0},
+            {0,0,0,0,0}
+        };
+        JSONArray preparations = new JSONArray();
+        for (int preset=0; preset<QuantumSolarBridge.PRESETS.length; preset++) {
+            final int selected = preset;
+            gl(() -> activity.bridge().setPreset(selected));
+            QuantumSolarBridge bridge = activity.bridge();
+            float[] actual = bridge.verifyReadOnly(), ether = bridge.verifyEtherReadOnly();
+            expect(Arrays.equals(actual,localExpected[preset]),
+                    "Framed preparation has wrong local observables for preset " + preset);
+            expect(Arrays.equals(ether,etherExpected[preset]),
+                    "Ether signals did not follow the local preparation for preset " + preset);
+            expect(Arrays.equals(actual,bridge.coefficients()) && Arrays.equals(ether,bridge.etherCoefficients()),
+                    "Renderer coefficients do not observe the same native state");
+            expect(bridge.etherRules()==2 && bridge.activeSites()==(preset==0?0:8),
+                    "Global rules materialized the background or lost the finite preparation");
+            expect(bridge.observationRevision()==bridge.nativeRevision()
+                    && bridge.observationEpoch()==bridge.nativeEpoch(),
+                    "The two visual coefficient groups do not share one atomic observation");
+            preparations.put(new JSONObject().put("preset",preset)
+                    .put("local",floats(actual)).put("ether",floats(ether))
+                    .put("activeSites",bridge.activeSites()).put("rules",bridge.etherRules())
+                    .put("revision",bridge.observationRevision()).put("epoch",bridge.observationEpoch()));
+        }
         gl(() -> activity.bridge().setPreset(2));
-        float[] expected = {0, 0, 0, 1, -1, 1, 1, 1};
         float[] actual = activity.bridge().verifyReadOnly();
-        expect(actual.length == expected.length, "The native Pauli program is incomplete");
-        for (int i = 0; i < expected.length; i++)
-            expect(Math.abs(expected[i] - actual[i]) < 1e-6, "Bell expectation failed at Pauli " + i);
-        long revision = activity.bridge().nativeRevision();
+        long revision = activity.bridge().nativeRevision(), epoch = activity.bridge().nativeEpoch();
         float[] cached = activity.bridge().coefficients().clone();
         float[] ether = activity.bridge().verifyEtherReadOnly();
-        expect(Arrays.equals(ether,new float[]{1,1,0,0,0}) && activity.bridge().etherRules()==2,
-                "EtherCore symbolic cluster probe is not connected to Solar");
         frame(); frame();
-        expect(activity.bridge().nativeRevision() == revision, "Drawing frames mutated the native gate revision");
+        expect(activity.bridge().nativeRevision()==revision && activity.bridge().nativeEpoch()==epoch,
+                "Drawing frames mutated the native revision or epoch");
         expect(Arrays.equals(cached, activity.bridge().verifyReadOnly()), "Native read-only observations drifted");
         expect(Arrays.equals(ether,activity.bridge().verifyEtherReadOnly()),
                 "EtherCore read-only observations drifted");
-        metrics.put("bellExpectations", floats(actual));
+        metrics.put("etherFusionPresets",preparations).put("etherFusionSingleObservation",true);
+        metrics.put("framedBellExpectations", floats(actual));
         metrics.put("etherExpectations", floats(ether)).put("etherRules",activity.bridge().etherRules());
-        metrics.put("observationPreservedNativeRevision", true).put("etherObservationReadOnly",true);
+        metrics.put("observationPreservedNativeRevision", true).put("observationPreservedNativeEpoch",true)
+                .put("etherObservationReadOnly",true);
     }
 
     private void quantumCoupling() throws Exception {
@@ -274,22 +311,25 @@ public final class SolarInstrumentation extends Instrumentation {
         gl(() -> activity.bridge().setPreset(0));
         double[] physicalBefore = SolarData.position(3, activity.renderer().julianDate());
         SolarRenderer.Capture baseline = frame();
-        gl(() -> activity.bridge().setPreset(2));
-        SolarRenderer.Capture entangled = frame();
-        int coupled = changed(baseline, entangled);
+        // After the Ether frame, the Fase preset has <Y0>=-1. This is a
+        // nonzero input to the existing magnetic-tracer phase at paused time.
+        gl(() -> activity.bridge().setPreset(3));
+        SolarRenderer.Capture phased = frame();
+        int coupled = changed(baseline, phased);
         expect(coupled > 20, "The native preparation does not change its visible field traces");
         double[] physicalAfter = SolarData.position(3, activity.renderer().julianDate());
         expect(Arrays.equals(physicalBefore, physicalAfter), "Visual core preparation changed astronomical coordinates");
         save("earth-fields-base.png", baseline);
-        save("earth-fields-entangled.png", entangled);
+        save("earth-fields-phase.png", phased);
         main(() -> activity.fieldsForTest(false));
         gl(() -> { activity.renderer().setWind(false); activity.bridge().setPreset(0); });
         SolarRenderer.Capture uncoupledA = frame();
-        gl(() -> activity.bridge().setPreset(2));
+        gl(() -> activity.bridge().setPreset(3));
         SolarRenderer.Capture uncoupledB = frame();
         int uncoupled = changed(uncoupledA, uncoupledB);
         expect(uncoupled == 0, "Core preparation changes surfaces when its visual layers are disabled");
         metrics.put("coupledChangedPixels", coupled).put("uncoupledChangedPixels", uncoupled);
+        metrics.put("coupledComparisonPresets",new JSONArray().put(0).put(3));
         metrics.put("quantumPreparationOrbitalDeltaAU", distance(physicalBefore, physicalAfter));
     }
 
@@ -459,7 +499,10 @@ public final class SolarInstrumentation extends Instrumentation {
 
     private void recreationAndOrientation() throws Exception {
         prepare(3, true, true);
-        main(() -> activity.scaleForTest(true));
+        // Persist the adaptive fixture in the Activity as well as the renderer:
+        // standalone APKs otherwise restore their original UHD mode on recreate.
+        main(() -> { activity.setUhdQuality(false); activity.setUltraQuality(false);
+            activity.scaleForTest(true); });
         gl(() -> { activity.renderer().setQuality(960); activity.renderer().setOrbits(true);
             activity.bridge().setPreset(3); activity.renderer().focus(3); });
         double date = activity.renderer().julianDate();
@@ -487,6 +530,7 @@ public final class SolarInstrumentation extends Instrumentation {
         metrics.put("recreationChangedPixels", changed(before, after));
         metrics.put("recreationPreservedPreset", activity.bridge().preset());
         metrics.put("recreationPreservedDate", date);
+        metrics.put("recreationPreservedAdaptiveMode", true);
         metrics.put("orientationRoundtripPassed", true);
     }
 
@@ -498,8 +542,9 @@ public final class SolarInstrumentation extends Instrumentation {
                 "Activity recreation lost its native preparation");
         gl(() -> expect(activity.renderer().isPaused() && activity.renderer().fieldsEnabled()
                 && activity.renderer().windEnabled() && activity.renderer().orbitsEnabled()
-                && activity.renderer().realScaleEnabled() && activity.renderer().qualityLimit() == 960,
-                "Activity recreation lost its live time, scale, layer or quality settings"));
+                && activity.renderer().realScaleEnabled() && activity.renderer().qualityLimit() == 960
+                && !activity.renderer().isUhd4k() && !activity.renderer().isUhd8k(),
+                "Activity recreation lost its live time, scale, layer or adaptive quality settings"));
         expectHeading("CAMPO INTRÍNSECO");
         frame(); frame();
         expect(activity.renderer().julianDate() == date, "Recreated paused scene advanced in time");

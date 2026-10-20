@@ -137,7 +137,7 @@ public final class ProjectCodecChecks {
             JSONObject copy=new JSONObject(infiniteJson.toString());copy.getJSONObject("graphics").put("observables",new JSONArray().put(bad));
             reject(copy.toString(),"invalid sparse observable");
         }
-        for(String bad:new String[]{"","MXI2:00","MXI1:0","MXI1:0z"}){
+        for(String bad:new String[]{"","MXI3:00","MXI1:0","MXI1:0z"}){
             JSONObject copy=new JSONObject(infiniteJson.toString());copy.getJSONObject("core").put("snapshot",bad);reject(copy.toString(),"invalid v2 snapshot envelope");
         }
         JSONObject extra=new JSONObject(infiniteJson.toString());extra.getJSONObject("core").put("qubits",2);reject(extra.toString(),"v2 duplicated finite metadata");

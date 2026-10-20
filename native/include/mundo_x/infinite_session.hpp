@@ -47,6 +47,24 @@ class InfiniteSession {
     return {core_.stats(), core_.background(), epoch_};
   }
 
+  // Ether rules and finite modifications belong to this same state. A global
+  // layer is a writer operation; reading a viewport never prepares a layer.
+  void h_all() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto candidate = core_;
+    candidate.h_all();
+    commit_if_changed(std::move(candidate), false);
+  }
+  void cz_neighbors() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto candidate = core_;
+    candidate.cz_neighbors();
+    commit_if_changed(std::move(candidate), false);
+  }
+  EtherCore::Stats ether_stats() const {
+    std::lock_guard<std::mutex> lock(mutex_); return core_.ether_stats();
+  }
+
   void apply(const std::vector<Gate>& gates) {
     validate_gate_transport(gates);
     std::lock_guard<std::mutex> lock(mutex_);

@@ -120,13 +120,13 @@ public final class MainActivity extends Activity {
                 animationTime=previous.visual.time;savedSession=previous;
                 renderer=new QuantumRenderer(this,core,this::showStatus,previous.visual);
             }else{
-                core=new NativeCore(NativeCore.DEFAULT_QUBITS);core.resetGraph();
+                core=NativeCore.etherCluster();
                 renderer=new QuantumRenderer(this,core,this::showStatus);
             }
         }catch(Throwable error){
             if(core!=null)core.close();
             saveProtected=true;restoreMessage="No se pudo recuperar la sesión. Tu archivo se conserva; Restablecer permite empezar otra.";
-            try{core=new NativeCore(NativeCore.DEFAULT_QUBITS);core.resetGraph();renderer=new QuantumRenderer(this,core,this::showStatus);}
+            try{core=NativeCore.etherCluster();renderer=new QuantumRenderer(this,core,this::showStatus);}
             catch(Throwable nativeError){
                 TextView text=label("No se pudo iniciar COSMIC X Engine.\n"+nativeError,16,PAPER);
                 text.setPadding(dp(24),dp(64),dp(24),dp(24));text.setBackgroundColor(INK);setContentView(text);return;
@@ -298,7 +298,7 @@ public final class MainActivity extends Activity {
                 final long serial=++projectLoadSerial;
                 dialog.dismiss();
                 storage.execute(()->{
-                    try(NativeCore prepared=backend==0?new NativeCore(n):NativeCore.infinite(background)){
+                    try(NativeCore prepared=backend==0?new NativeCore(n):backend==3?NativeCore.etherCluster():NativeCore.infinite(background)){
                         if(backend==0)prepared.resetGraph();QuantumRenderer observer=new QuantumRenderer(this,prepared,this::showStatus);
                         observer.objectCount(count);observer.worldSeed(worldSeed);
                         prepareProject(CosmicProject.fromSnapshots(title,prepared.snapshot(),observer.snapshot()),serial);

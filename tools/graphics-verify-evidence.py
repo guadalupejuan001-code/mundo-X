@@ -27,7 +27,8 @@ def main():
     require("MUNDOX_GRAPHICS_TESTS_PASSED" in output, "Instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Instrumentation did not finish successfully")
     expected = {
-        "default_1000_qubit_world", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
+        "default_ether_world_and_finite_compatibility", "native_1000_qubit_invariants", "portable_1000_and_legacy_expansion",
+        "native_ether_contracts",
         "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
         "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
         "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration",
@@ -62,7 +63,25 @@ def main():
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"], "Wrong emulator API or ABI")
     require("swiftshader" in metrics["glRenderer"].lower(), "GLES driver is not SwiftShader")
     require(metrics["qubits"] == 1000 and metrics["nativeStateBytes"] > 0
-            and metrics["defaultQubits"] == 1000 and metrics["defaultObservables"] == 3000, "Missing live 1000-qubit state")
+            and metrics["defaultQubits"] == 0 and metrics["defaultObservables"] == 5
+            and metrics["defaultDomain"] == "ether" and metrics["defaultEtherRules"] == 2
+            and metrics["defaultActiveSites"] == 0 and metrics["defaultObservationReadOnly"] is True,
+            "Missing the Ether default or explicit 1000-qubit compatibility fixture")
+    ether = metrics["etherNative"]
+    require(ether["domain"] == "q0,q1,q2,..." and ether["addressDigits"] == 1001
+            and ether["rules"] == 2 and 0 < ether["lastQueryPeakSites"] < 16
+            and ether["individualQubitCountStored"] is False,
+            "The shared Ether JNI path did not retain its rule-defined domain and local query cone")
+    require(all(metrics["etherFused"][name] is True for name in (
+                "sharedLocalAndGlobalState", "boundaryQ0", "snapshotRoundtrip", "observationReadOnly")),
+            "Local gates, Ether rules and snapshots do not share one native state")
+    ether_renderer = metrics["etherRenderer"]
+    require(ether_renderer["observable"] == "X:0 Z:1"
+            and ether_renderer["coupledChangedPixels"] > 20 and ether_renderer["globalChangedPixels"] > 20
+            and ether_renderer["uncoupledChangedPixels"] == 0
+            and ether_renderer["globalRoundtripChangedPixels"] == 0 and ether_renderer["roundtripChangedPixels"] == 0
+            and all(ether_renderer[name] is True for name in ("sharedOwner", "readOnlyDraw", "atomicFrameMetadata")),
+            "Ether local/global causal pixels, control or portable state restoration failed")
     native = metrics["native1000"]
     require(native["qubits"] == 1000 and native["highQubits"] == [32, 53, 59, 64, 511, 999]
             and native["ghzExpectations"] == [1, 1, 1, 1, 1, 0, 0, 0] and native["snapshotRoundtrip"] is True
@@ -120,6 +139,8 @@ def main():
         checksums[name] = checksum
     require(set(checksums) == expected_apks, "Missing COSMIC APK checksums")
     required_images = {
+        "ether-coupled-before.png", "ether-coupled-after.png", "ether-global-after.png",
+        "ether-uncoupled-before.png", "ether-uncoupled-after.png",
         "infinite-coupled-before.png", "infinite-coupled-after.png", "infinite-activity.png",
         "million-color.png", "million-ids.png", "maximum-color.png", "maximum-ids.png",
         "coupling-on-before.png", "coupling-on-after.png", "coupling-off-before.png",
@@ -146,6 +167,10 @@ def main():
         width, height = struct.unpack(">II", data[16:24])
         require(width > 0 and height > 0, f"Empty image: {name}")
         manifest[name] = {"width": width, "height": height, "sha256": hashlib.sha256(data).hexdigest()}
+    require(manifest["ether-coupled-before.png"]["sha256"] != manifest["ether-coupled-after.png"]["sha256"]
+            and manifest["ether-coupled-after.png"]["sha256"] != manifest["ether-global-after.png"]["sha256"]
+            and manifest["ether-uncoupled-before.png"]["sha256"] == manifest["ether-uncoupled-after.png"]["sha256"],
+            "Independent Ether PNG comparisons disagree with the causal pixel metrics")
     (directory / "verified-images.json").write_text(json.dumps(manifest, indent=2) + "\n")
     if uhd:
         expected_package = "com.mundox.graphics.ultra" if ultra else "com.mundox.graphics.uhd"

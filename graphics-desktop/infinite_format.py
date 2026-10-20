@@ -42,10 +42,10 @@ def validate_observable(value):
 
 
 def validate_snapshot(value):
-    if (type(value) is not str or not value.startswith("MXI1:")
+    if (type(value) is not str or not value.startswith(("MXI1:", "MXI2:"))
             or not 5 < len(value) <= MAX_TEXT_BYTES or (len(value) - 5) % 2
             or any(c not in "0123456789abcdefABCDEF" for c in value[5:])):
-        raise ValueError("An MXI1 native snapshot with bounded hexadecimal text is required")
+        raise ValueError("An MXI1/MXI2 native snapshot with bounded hexadecimal text is required")
     return value
 
 

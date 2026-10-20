@@ -4,7 +4,7 @@
 
 COSMIC X Engine es el título del conjunto. Dentro se conserva la computación cuántica de Mundo X, sus representaciones originales y el motor gráfico que observa el estado compartido. La idea, creación y dirección del proyecto corresponden a **X, titular del repositorio**; el historial documenta el desarrollo con asistencia de IA. La simulación se ejecuta por software y el motor gráfico utiliza OpenGL ES.
 
-**Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 19 de octubre de 2026.
+**Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 20 de octubre de 2026.
 
 Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
 
@@ -14,15 +14,46 @@ El invitado x86/x64 envía programas al núcleo por puertos IN/OUT; el viewport 
 observa esa misma sesión. Los proyectos Infinite guardan su estado actual y RNG
 en `.cosmic` v2, y el perfil finito de 1.000 qubits conserva `.cosmic` v1.
 
+## Ether Core · arquitectura común
+
+**Ether será la fuente común de estado y cálculo de Mundo X.** La dirección del
+proyecto es que memoria lógica, ejecución, gráficos, física y demás sistemas
+trabajen sobre la misma estructura dentro de cada sesión. Cada componente debe
+definir qué consulta y qué transforma en Ether, conservando las identidades,
+relaciones y cambios que permiten recuperar el estado.
+
+El dominio se describe mediante reglas; las operaciones y observaciones deben
+obtener respuestas con trabajo finito. La representación del estado y la forma
+de calcular sobre él se diseñan juntas. Las vistas y expansiones temporales
+tienen un coste que también debe medirse: ahorrar en el núcleo no acredita por
+sí solo un ahorro en la aplicación completa.
+
+El [contrato de arquitectura Ether](docs/ether-architecture.md) fija las
+responsabilidades por componente, la conservación del estado, la coherencia de
+las observaciones y los criterios de integración y rendimiento.
+
+**Fusión implementada:** Ether y los componentes finitos ahora describen un
+único estado cuántico por sesión. Las reglas globales, puertas locales,
+mediciones, consultas y snapshots usan esa misma autoridad. Graphics y COSMIC
+inician mundos nuevos con Ether; Solar obtiene sus dos grupos de señales del
+mismo estado; el huésped PC y su visor conservan la misma sesión. El
+[contrato técnico y sus pruebas](docs/ether-fusion.md) detalla la representación
+`Ψ = U_Ether φ`, las migraciones y los límites comprobados.
+
+Los modelos orbitales, la CPU/RAM x86, la escena procedural y GLES mantienen sus
+algoritmos y recursos actuales. Su representación integral mediante Ether sigue
+siendo parte del objetivo de arquitectura. Los proyectos finitos y otros núcleos
+conservan sus contratos propios y no reciben un Ether auxiliar oculto.
+
 ## Qué incluye el código integrado
 
 | Componente | Función y alcance | Código y documentación |
 | --- | --- | --- |
-| Núcleo y sesión de 1.000 qubits | Proyectos gráficos nuevos con índices `q0`–`q999`, 3.000 observables iniciales, puertas Clifford y estado portable. Ampliación de proyectos anteriores sin perder su mundo. | [Núcleo nativo](native/), [perfil de 1.000](docs/core_1000_qubits.md), [sesión compartida](docs/cosmic_x_engine.md) |
+| Ether y perfil finito compatible | Nuevos mundos Android con reglas globales y modificaciones locales en el mismo estado; perfil finito explícito `q0`–`q999`, puertas Clifford y ampliación de proyectos anteriores. | [Núcleo nativo](native/), [perfil de 1.000](docs/core_1000_qubits.md), [sesión compartida](docs/cosmic_x_engine.md) |
 | COSMIC X Engine Android | Paneles Motor, Núcleo y Proyectos, más 14 experimentos originales dentro de la misma instalación. | [App COSMIC](cosmic-android/README.md) |
 | Graphics Android 4K/8K | Escena procedural, selección y edición por ID, renderizado UHD, modo 8K sujeto a capacidades y exportación PNG por mosaicos. | [Graphics](graphics-android/README.md), [4K](graphics-android/docs/4k.md), [8K](graphics-android/docs/8k.md) |
 | Motor gráfico de escritorio | Compila el mismo puente nativo, observa la misma representación y abre/guarda archivos `.cosmic` compatibles con Android. | [Escritorio](graphics-desktop/README.md), [formato](graphics-desktop/PROJECT_FORMAT.md) |
-| COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y captura UHD. Su demostración conserva un circuito de ocho qubits. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
+| COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y captura UHD. Su preparación actúa sobre ocho direcciones del mismo dominio Ether que alimenta sus señales visuales. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
 | COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3; dispositivo InfiniteCore y viewport sobre la sesión cuántica compartida. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
 | Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
@@ -30,19 +61,20 @@ en `.cosmic` v2, y el perfil finito de 1.000 qubits conserva `.cosmic` v1.
 
 La APK principal `com.mundox.cosmic` reúne el motor, el núcleo y los laboratorios. **Solar y PC son aplicaciones separadas dentro del mismo código fuente.** La VM didáctica de 8 bits está incluida en COSMIC; el emulador x86/x64 de PC conserva su propio destino de compilación.
 
-## Empezar con 1.000 qubits
+## Ether y compatibilidad con 1.000 qubits
 
-Una sesión gráfica nueva utiliza **1.000 qubits completos**. En Android, **Ampliar a 1000** reproduce el historial de una sesión anterior en el registro mayor y agrega qubits en `|0>`. Conserva los observables originales, sus signos, la semilla, los objetos, las ediciones, la cámara y el tiempo. Los proyectos guardados conservan su dimensión al abrirse; los ejemplos Bell y GHZ pequeños mantienen su tamaño didáctico.
+Una sesión gráfica nueva en Android utiliza **Ether**, con fondo entrelazado definido por dos reglas y sin un tamaño total de registro. El selector de nuevo proyecto permite elegir un registro finito de **1 a 1.000 qubits**. En Android, **Ampliar a 1000** reproduce el historial de una sesión anterior en el registro mayor y agrega qubits en `|0>`. Conserva los observables originales, sus signos, la semilla, los objetos, las ediciones, la cámara y el tiempo. Los proyectos guardados conservan su dimensión al abrirse; los ejemplos Bell y GHZ pequeños mantienen su tamaño didáctico.
 
 El contrato comprueba entrelazamiento GHZ sobre los 1.000 qubits, correlaciones, medición, signos Pauli y operaciones sobre `q999`. La [documentación del perfil](docs/core_1000_qubits.md) distingue esas pruebas del oráculo denso pequeño y explica la compatibilidad de archivos.
 
 | Representación | Alcance que debe usarse al programar |
 | --- | --- |
-| Sesión gráfica / CompactCore | Perfil portable de 1 a 1.000 qubits; H, S, X, Y, Z, CX y CZ. Nuevas escenas de 1.000 con 3.000 observables. |
+| Sesión gráfica / CompactCore | Perfil portable de 1 a 1.000 qubits; H, S, X, Y, Z, CX y CZ. El perfil finito de 1.000 conserva 3.000 observables iniciales. |
 | CompactCore nativo / XASM | Circuitos estabilizadores, entrelazamiento Clifford y medición Z reproducible; incluye `examples/ghz1000.x`. |
 | Reduced Exact T | Interfaz XASM de 1 a 63 qubits, 128 puertas T y 65.536 componentes como límites. El costo depende del crecimiento real de componentes. |
 | FactorizedCore | Mantiene factores independientes y bloques con presupuesto; el límite de bloque denso sigue siendo 20 qubits. |
-| Solar y laboratorios | Cada experimento conserva la dimensión que necesita su modelo; Solar usa ocho qubits para sus trazas visuales. |
+| Solar | Prepara ocho direcciones y observa trece señales de una única sesión Ether; esas direcciones no limitan el dominio total. |
+| Laboratorios | Cada experimento conserva la representación que requiere su modelo; no se sustituyen silenciosamente sus backends. |
 
 El tableau de 1.000 almacena **257.000 bytes** en sus buffers. Esa cifra no incluye observador, historial, Java, Android ni GPU. El perfil compacto corresponde a estados estabilizadores; los circuitos generales con muchas puertas T no adquieren por este cambio el mismo costo de memoria. [Fórmula, benchmark de 20/60/1.000 y límites](docs/core_1000_qubits.md#memoria-y-observación).
 
@@ -57,6 +89,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure
 
+./build/mundo_x_infinite examples/ether_fusion.xi
 ./build/mundo_x run examples/ghz1000.x
 ./build/mundo_x run examples/t60.x
 ./build/mundo_x run-mx examples/mx_layers.mx

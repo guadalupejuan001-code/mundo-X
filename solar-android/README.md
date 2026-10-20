@@ -101,16 +101,36 @@ Se compilan directamente, sin una copia divergente:
 
 La cadena activa es:
 
-`SolarActivity → QuantumSolarBridge → NativeCore → JNI → EngineSession / CompactCore`.
+`SolarActivity → QuantumSolarBridge → NativeCore → JNI → InfiniteSession → InfiniteCore`.
 
-El núcleo compartido admite registros de hasta **1.000 qubits** en Android.
-`QuantumSolarBridge` utiliza una preparación solar de **ocho qubits** mediante puertas
-originales y consulta ocho observables de Pauli. Los modos Base, Superposición,
-Entrelazado y Fase cambian ese estado. El observador consume sus resultados
-para el muestreo y la animación de trazas. Consultar el estado no añade puertas
-ni colapsa el registro. La estructura nativa ocupa una cantidad pequeña de
-memoria; la cifra mostrada cuenta únicamente esa estructura, **no la RAM total
-de la aplicación**.
+La sesión contiene **un único estado**: las reglas globales de Ether y una
+preparación finita almacenada mediante los componentes originales de
+`CompactCore`. Su dominio es `q0, q1, q2, …`; los **ocho sitios de preparación**
+son las direcciones `0` a `7`, no el tamaño total del dominio. Una capa global
+se conserva como regla y no crea un registro por cada dirección.
+
+Al elegir un modo, Solar crea explícitamente una nueva sesión con fondo cero.
+Base conserva ese fondo; Superposición aplica H en los ocho sitios;
+Entrelazado prepara cuatro pares Bell; Fase añade S al primer miembro de cada
+par. **Después de esa preparación se aplican H global y CZ entre vecinos al
+mismo estado.** Por tanto, los valores visibles corresponden al estado después
+de las reglas, y no a ocho qubits Bell aislados. Por ejemplo, en Entrelazado se
+observa `⟨Z₀Z₁⟩ = 1`, pero `⟨X₀X₁⟩ = ⟨Y₀Y₁⟩ = 0`; en Fase,
+`⟨Y₀⟩ = −1`.
+
+Las ocho señales locales y las cinco señales del vecindario Ether se consultan
+en **un solo lote con la misma revisión y época de sesión**. Entre estas últimas
+están `⟨Z₀X₁Z₂⟩` y `⟨X₀Z₁⟩`: ambas valen 1 en Base y cambian a 0 en las demás
+preparaciones. Esas señales proceden del mismo estado que las puertas locales;
+no existe un segundo cluster independiente para alimentar al observador.
+Consultar, dibujar o cambiar la cámara no añade reglas ni mide el estado.
+
+Base conserva cero sitios materializados y dos reglas globales; las otras
+preparaciones materializan ocho sitios. El dominio implícito no hace infinita
+la memoria física: puertas, observaciones y componentes usan recursos finitos
+y están sujetos a sus presupuestos. La cifra de bytes mostrada cuenta el
+**payload del tableau finito**; excluye metadatos de reglas y direcciones,
+memoria temporal, framebuffers y la RAM total de la aplicación.
 
 El observador solar amplía el enfoque de rayos de cámara de `QuantumRenderer`
 y `eye.frag`: intersecciones analíticas con esferas y anillos, texturas,
@@ -158,7 +178,8 @@ sus dependencias compartidas.
 
 La evidencia Android registra pruebas, capturas de los framebuffers reales,
 logcat, memoria de proceso y el commit exacto del APK. Las pruebas comprueban
-el arranque nativo, las órbitas, los observables, el cambio visual por campos y
+el arranque nativo, las órbitas, las cuatro preparaciones bajo el marco Ether,
+la observación común y sin mutaciones, el cambio visual por campos y
 por estado del núcleo, navegación, tiempo, proporciones, ciclo de vida y
 límites de resolución. El perfil ampliado mantiene los trece casos solares
 originales y añade seis de UHD, ajuste a pantalla, entrada en los 22 destinos,

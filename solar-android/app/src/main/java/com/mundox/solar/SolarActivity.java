@@ -43,7 +43,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONArray;
 
-/** A separate solar explorer app, backed by the original COSMIC X engine session. */
+/** A solar explorer backed by one Ether/InfiniteSession through COSMIC X. */
 public final class SolarActivity extends Activity implements SolarRenderer.Listener {
     private static final int BG=0xff050913, PANEL=0xeb0a1222, TEXT=0xffeff4fb;
     private static final int MUTED=0xffa2b0c3, GOLD=0xfff5c47a, TEAL=0xff69dbdf;
@@ -555,7 +555,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     }
     private void coreDialog(){
         LinearLayout content=dialogColumn();
-        content.addView(label("Tu CompactCore original calcula observables de un registro de 8 qubits. El observador gráfico usa esos resultados para distribuir y animar las trazas del viento solar y del campo.",15,TEXT,false));
+        content.addView(label("Ether Core combina reglas globales y una preparación en 8 direcciones del mismo estado. El observador gráfico consulta ese estado para distribuir y animar las trazas del viento solar y del campo.",15,TEXT,false));
         TextView live=label(coreReadout(),13,TEAL,false);live.setPadding(0,dp(14),0,dp(14));content.addView(live);
         for(int i=0;i<QuantumSolarBridge.PRESETS.length;i++){final int preset=i;
             content.addView(button(QuantumSolarBridge.PRESETS[i],0,()->runGL(()->{
@@ -563,12 +563,12 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
                 catch(Throwable e){handler.post(()->showRenderError(e.getMessage()));}
             })));
         }
-        content.addView(label("Activa Campos o Viento solar para observar el acoplamiento. Cambiar el registro modifica las trazas visuales; las órbitas y los valores físicos permanecen definidos por los modelos astronómicos. Este acoplamiento no demuestra aceleración cuántica ni reproduce la dinámica cuántica de un planeta.",12,MUTED,false));
+        content.addView(label("Activa Campos o Viento solar para observar el acoplamiento. Cambiar la preparación modifica las trazas visuales; las órbitas y los valores físicos permanecen definidos por los modelos astronómicos. Este acoplamiento no demuestra aceleración cuántica ni reproduce la dinámica cuántica de un planeta.",12,MUTED,false));
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Núcleo X conectado").setView(scroll(content)).setPositiveButton("Listo",null).create();showDialog(d);
     }
     private String coreReadout(){
         float[] c=quantum.coefficients();
-        return String.format(Locale.ROOT,"%s\n⟨X₀⟩ %.1f   ⟨Y₀⟩ %.1f   ⟨Z₀⟩ %.1f\n⟨X₀X₁⟩ %.1f   ⟨Y₀Y₁⟩ %.1f   ⟨Z₀Z₁⟩ %.1f\nEstado nativo: %d bytes (solo su estructura)",quantum.status(),c[0],c[1],c[2],c[3],c[4],c[5],quantum.stateBytes());
+        return String.format(Locale.ROOT,"%s\n⟨X₀⟩ %.1f   ⟨Y₀⟩ %.1f   ⟨Z₀⟩ %.1f\n⟨X₀X₁⟩ %.1f   ⟨Y₀Y₁⟩ %.1f   ⟨Z₀Z₁⟩ %.1f\nComponentes finitos: %d bytes de tableau",quantum.status(),c[0],c[1],c[2],c[3],c[4],c[5],quantum.stateBytes());
     }
     private void probeDialog(int id){
         SolarData.Body b=SolarData.BODIES[id];LinearLayout content=dialogColumn();

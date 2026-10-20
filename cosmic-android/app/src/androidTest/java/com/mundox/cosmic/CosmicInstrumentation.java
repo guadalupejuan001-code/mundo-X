@@ -208,10 +208,14 @@ public final class CosmicInstrumentation extends Instrumentation {
 
     private void firstFrame() throws Exception {
         click("nav_motor");
-        require(activity.core.stateBytes() > 0, "New viewport has no authoritative native state");
+        require(activity.core.isInfinite() && activity.core.etherStats().rules==2,
+                "New viewport has no authoritative Ether state");
         World state = world();
-        require(NativeCore.DEFAULT_QUBITS == 1000 && state.core.qubits == 1000
-                && state.graphics.observables.length == 3000, "New home did not use the complete 1000-qubit profile");
+        require(state.core.infinite && state.core.qubits==0 && state.graphics.observables.length==5,
+                "New home did not observe the fused Ether session");
+        require(Arrays.equals(state.observations,new float[]{1,1,0,0,0})
+                && activity.core.infiniteStats().activeQubits==0,
+                "The default Ether frame has wrong physical observations or materialized its background");
         QuantumRenderer.Capture color = frame(false), ids = frame(true);
         int visible = 0;
         Set<Integer> objects = new HashSet<>();
@@ -228,18 +232,25 @@ public final class CosmicInstrumentation extends Instrumentation {
         screen("cosmic-motor.png");
         metrics.put("initialObjects", state.graphics.objectCount).put("initialVisiblePixels", visible)
                 .put("initialDistinctIds", objects.size()).put("initialResolutionLimit", state.graphics.resolutionLimit)
-                .put("initialQubits", state.core.qubits).put("initialObservables", state.graphics.observables.length);
+                .put("initialQubits", state.core.qubits).put("initialObservables", state.graphics.observables.length)
+                .put("initialDomain","ether").put("initialEtherRules",activity.core.etherStats().rules)
+                .put("initialActiveSites",activity.core.infiniteStats().activeQubits);
     }
 
     private void panels() throws Exception {
         World before = world();
         QuantumRenderer observer = activity.renderer;
+        long epoch = before.owner.epoch();
         for (String section : new String[]{"nucleo", "labs", "archivo", "motor"}) {
             click("nav_" + section);
             require(onMainVisible(activity, "panel_" + section), "Selected panel is not visible: " + section);
             require(activity.core == before.owner && activity.renderer == observer, "Panel navigation replaced the core or observer");
-            require(Arrays.equals(before.core.gateHistory, activity.core.snapshot().gateHistory)
-                    && before.core.version == activity.core.version(), "Panel navigation changed native history");
+            NativeCore.Snapshot current = activity.core.snapshot();
+            require(before.core.infinite==current.infinite && activity.core.epoch()==epoch
+                    && (current.infinite ? before.core.infiniteSnapshot.equals(current.infiniteSnapshot)
+                        : Arrays.equals(before.core.gateHistory,current.gateHistory)
+                            && before.core.version==current.version),
+                    "Panel navigation changed the native state or epoch");
             if (!section.equals("motor")) screen("cosmic-" + section + ".png");
         }
         sameNative(before, world(), "Navigation changed native observables");
@@ -256,10 +267,20 @@ public final class CosmicInstrumentation extends Instrumentation {
     }
 
     private void unitScene(boolean coupled) throws Exception {
+        unitScene(coupled,true);
+    }
+
+    private void unitScene(boolean coupled,boolean ether) throws Exception {
         click("nav_motor");
         pauseAnimation();
         gl(() -> {
             activity.renderer.reset();
+            if(ether && activity.core.isInfinite()){
+                activity.core.prepareEtherCluster();
+                // Object zero consumes coefficient zero; observe the same
+                // boundary generator changed by the UI's Z gate at address 0.
+                activity.renderer.setObservables(new String[]{"X:0 Z:1"});
+            }
             activity.renderer.objectCount(1);
             activity.renderer.resolution(320);
             activity.renderer.coupling(coupled);
@@ -271,7 +292,9 @@ public final class CosmicInstrumentation extends Instrumentation {
     private void coupled() throws Exception {
         unitScene(true);
         NativeCore owner = activity.core;
-        String observable = owner.generators()[0];
+        require(owner.isInfinite() && owner.etherStats().rules==2,
+                "The new-home coupling fixture is not the shared Ether state");
+        String observable = owner.isInfinite()?"X:0 Z:1":owner.generators()[0];
         long version = owner.version();
         require(owner.query(new String[]{observable})[0] == 1, "Prepared generator is not stabilized");
         QuantumRenderer.Capture before = frame(false);
@@ -283,13 +306,14 @@ public final class CosmicInstrumentation extends Instrumentation {
         int changed = before.changed(after);
         require(changed > 20, "A native gate did not change the coupled new viewport");
         saveFrame("cosmic-coupled-before.png", before); saveFrame("cosmic-coupled-after.png", after);
-        metrics.put("coupledChangedPixels", changed).put("gatePreservedOwner", true);
+        metrics.put("coupledChangedPixels", changed).put("gatePreservedOwner", true)
+                .put("coupledDomain","ether").put("coupledObservable",observable);
     }
 
     private void uncoupled() throws Exception {
         unitScene(false);
         NativeCore owner = activity.core;
-        String observable = owner.generators()[0];
+        String observable = owner.isInfinite()?"X:0 Z:1":owner.generators()[0];
         long version = owner.version();
         QuantumRenderer.Capture before = frame(false);
         click("nav_nucleo"); click("gate_z");
@@ -329,7 +353,10 @@ public final class CosmicInstrumentation extends Instrumentation {
         try{
             click("nav_archivo");NativeCore oldOwner=activity.core;click("example_infinite");
             await(()->activity.core!=oldOwner&&activity.core.isInfinite()&&activity.renderer.hasFrame,"infinite world created from project controls");
-            unitScene(true);NativeCore owner=activity.core;
+            // This existing regression intentionally retains the independent
+            // Bell-pair background, with no extra global Ether layers.
+            unitScene(true,false);NativeCore owner=activity.core;
+            require(owner.etherStats().rules==0,"Bell regression acquired an unrequested global frame");
             String pristine=owner.snapshot().infiniteSnapshot;long epoch=owner.epoch();
             click("nav_nucleo");click("select_qubit");
             clickWindowText("Ir a 10¹⁰⁰ y su pareja");clickWindowText("Observar");

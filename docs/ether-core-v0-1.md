@@ -1,5 +1,9 @@
 # EtherCore v0.1 — dominio infinito por estructura
 
+> Referencia histórica de la versión inicial. La integración actual se describe
+> en [Ether: un estado compartido](ether-fusion.md). Las limitaciones de esta
+> página corresponden a v0.1.
+
 ## Hipótesis
 
 No aumentar un registro finito hasta llamarlo infinito. El dominio lógico es

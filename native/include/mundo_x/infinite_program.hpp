@@ -128,12 +128,15 @@ inline void write_stats(std::ostream& out, const InfiniteCore& core) {
       << ",\"largest_component\":" << stats.largest_component
       << ",\"tableau_bytes\":" << stats.tableau_bytes
       << ",\"address_bytes\":" << stats.address_bytes
+      << ",\"ether_rules\":" << stats.ether_rules
       << ",\"revision\":" << stats.revision
       << ",\"limits\":{\"max_active_qubits\":" << limits.max_active_qubits
       << ",\"max_component_qubits\":" << limits.max_component_qubits
       << ",\"max_state_bytes\":" << limits.max_state_bytes
       << ",\"max_address_digits\":" << limits.max_address_digits
-      << ",\"max_query_terms\":" << limits.max_query_terms << "}}\n";
+      << ",\"max_query_terms\":" << limits.max_query_terms
+      << ",\"max_ether_rules\":" << limits.max_ether_rules
+      << ",\"max_ether_query_sites\":" << limits.max_ether_query_sites << "}}\n";
 }
 
 struct ProgramResult { std::string output; bool explicit_mutation = false; };
@@ -142,6 +145,11 @@ inline void execute_line(const std::vector<std::string>& words, InfiniteCore& co
                          std::ostream& out, bool& explicit_mutation) {
   const auto command = lower_ascii(words.front());
   if (is_gate(command)) { core.apply({parse_gate(words)}); return; }
+  if (command == "h_all" || command == "cz_neighbors") {
+    require_count(words, 1);
+    if (command == "h_all") core.h_all(); else core.cz_neighbors();
+    return;
+  }
   if (command == "stats") { require_count(words, 1); write_stats(out, core); return; }
   if (command == "seed") {
     require_count(words, 2);

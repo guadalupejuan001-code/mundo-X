@@ -69,7 +69,7 @@ los qubits activos se contabilizan por separado.
 
 ## Guardado exacto
 
-`.cosmic` v2 contiene un snapshot `MXI1:` del estado actual. Conserva mediciones,
+`.cosmic` v2 contiene un snapshot `MXI1:` sin marco, o `MXI2:` con reglas Ether, del estado actual. Conserva mediciones,
 componentes, signos, direcciones y RNG; v1 conserva su historial finito. El
 formato exacto de intercambio está en
 [PROJECT_FORMAT.md](../graphics-desktop/PROJECT_FORMAT.md).

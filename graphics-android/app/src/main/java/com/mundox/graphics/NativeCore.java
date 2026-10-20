@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /** Owner of one native session; UI operations and renderers borrow this same object. */
 public final class NativeCore implements AutoCloseable {
-    /** New worlds use this profile; imported and saved projects retain their size. */
+    /** Compatibility profile for explicitly finite worlds and legacy imports. */
     public static final int DEFAULT_QUBITS=1000, MAX_QUBITS=1000;
     public static final int H=0, S=1, X=2, Z=3, CX=4, CZ=5, Y=6;
     public static final int ZERO=0,BELL_PAIRS=1;
@@ -58,8 +58,6 @@ public final class NativeCore implements AutoCloseable {
     /** Finite size only; use isInfinite() and infiniteStats() for the infinite domain. */
     public final int qubits;
     private final boolean infinite;
-    private final EtherCoreNative ether = new EtherCoreNative();
-    private boolean etherPrepared;
     private long handle;
 
     public NativeCore(int qubits) {
@@ -73,6 +71,12 @@ public final class NativeCore implements AutoCloseable {
         if(handle==0)throw new IllegalStateException("No se pudo crear el núcleo infinito");
     }
     public static NativeCore infinite(int background){return new NativeCore(background,true);}
+    /** Explicit preparation for a new Ether world, with one authoritative session. */
+    public static NativeCore etherCluster(){
+        NativeCore core=infinite(ZERO);
+        try{core.prepareEtherCluster();return core;}
+        catch(RuntimeException|Error error){core.close();throw error;}
+    }
     private NativeCore(long ownedHandle){
         qubits=0;infinite=true;handle=ownedHandle;
         if(handle==0)throw new IllegalArgumentException("Falta el propietario infinito compartido");
@@ -106,12 +110,15 @@ public final class NativeCore implements AutoCloseable {
     private void requireInfinite(){live();if(!infinite)throw new IllegalStateException("Esta operación requiere un núcleo infinito");}
     private void requireFinite(){live();if(infinite)throw new IllegalStateException("Usa direcciones decimales para el núcleo infinito");}
     public boolean isInfinite(){return infinite;}
-    public String domainLabel(){return infinite?"Infinito":qubits+" qubits";}
-    /** Shared symbolic infinite-domain sidecar. Preparation is idempotent per owner. */
-    public synchronized void prepareEtherCluster(){live();if(!etherPrepared){ether.prepareCluster();etherPrepared=true;}}
-    public synchronized float[] etherQuery(String[] paulis){live();prepareEtherCluster();return ether.query(paulis);}
-    public synchronized EtherCoreNative.Stats etherStats(){live();prepareEtherCluster();return ether.stats();}
-    public synchronized String[] etherVisualProgram(){live();prepareEtherCluster();return EtherCoreNative.visualProgram(InfiniteProgram.FAR_ADDRESS);}
+    public String domainLabel(){return infinite?"Ether ∞":qubits+" qubits";}
+    /** Apply two global layers to the current state; this is an explicit mutation. */
+    public synchronized void prepareEtherCluster(){requireInfinite();nInfiniteExecute(handle,"h_all\ncz_neighbors\n");}
+    public synchronized void etherHAll(){requireInfinite();nInfiniteExecute(handle,"h_all\n");}
+    public synchronized void etherCzNeighbors(){requireInfinite();nInfiniteExecute(handle,"cz_neighbors\n");}
+    /** Alias over the same session used by local gates, measurements and the renderer. */
+    public synchronized float[] etherQuery(String[] paulis){requireInfinite();return observe(paulis).values;}
+    public synchronized EtherCoreNative.Stats etherStats(){requireInfinite();return new EtherCoreNative.Stats(nEtherStats(handle));}
+    public synchronized String[] etherVisualProgram(){requireInfinite();return EtherCoreNative.visualProgram("1");}
     public synchronized InfiniteStats infiniteStats(){requireInfinite();return new InfiniteStats(nInfiniteStats(handle));}
     public synchronized long version() { live();return infinite?infiniteStats().revision:nVersion(handle); }
     public synchronized long epoch() { live();return infinite?infiniteStats().epoch:nEpoch(handle); }
@@ -152,7 +159,7 @@ public final class NativeCore implements AutoCloseable {
         return out;
     }
     public synchronized String[] visualProgram() {
-        live();if(infinite)return InfiniteProgram.pair("0","1");
+        live();if(infinite)return etherStats().rules==0?InfiniteProgram.pair("0","1"):etherVisualProgram();
         String[] out=new String[qubits*3];String[] generators=generators();
         System.arraycopy(generators,0,out,0,qubits);
         for(int axis=0;axis<2;axis++)for(int q=0;q<qubits;q++) {
@@ -187,7 +194,6 @@ public final class NativeCore implements AutoCloseable {
     }
     @Override public synchronized void close() {
         if(handle!=0){if(infinite)nInfiniteDestroy(handle);else nDestroy(handle);handle=0;}
-        ether.close();
     }
     private static native long nCreate(int n);
     private static native void nDestroy(long h);
@@ -208,4 +214,5 @@ public final class NativeCore implements AutoCloseable {
     private static native void nInfiniteReset(long h,int background);
     private static native float[] nInfiniteQuery(long h,String[] sparse,long[] stamp);
     private static native long[] nInfiniteStats(long h);
+    private static native long[] nEtherStats(long h);
 }

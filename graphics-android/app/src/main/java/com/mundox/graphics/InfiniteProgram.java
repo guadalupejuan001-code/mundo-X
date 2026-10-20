@@ -67,8 +67,8 @@ public final class InfiniteProgram {
         return new String[]{a,b==null?partner(a):b};
     }
     static void snapshot(String text){
-        if(text==null||!text.startsWith("MXI1:")||text.length()<=5||text.length()>16*1024*1024
-                ||(text.length()-5)%2!=0)throw new IllegalArgumentException("Snapshot infinito MXI1 inválido");
+        if(text==null||!(text.startsWith("MXI1:")||text.startsWith("MXI2:"))||text.length()<=5||text.length()>16*1024*1024
+                ||(text.length()-5)%2!=0)throw new IllegalArgumentException("Snapshot Ether MXI1/MXI2 inválido");
         for(int i=5;i<text.length();i++){
             char c=text.charAt(i);
             if(!((c>='0'&&c<='9')||(c>='a'&&c<='f')||(c>='A'&&c<='F')))

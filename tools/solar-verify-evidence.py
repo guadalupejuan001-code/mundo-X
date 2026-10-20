@@ -35,7 +35,7 @@ def main():
     names = [test["name"] for test in tests]
     expected_tests = {
         "native_gles_launch_and_textures", "astronomy_and_magnetic_classification",
-        "native_bell_and_readonly_observation", "quantum_coupled_and_uncoupled_frames",
+        "native_ether_fusion_and_readonly_observation", "quantum_coupled_and_uncoupled_frames",
         "intrinsic_and_induced_field_frames", "solar_wind_layer", "saturn_rings_and_moon_navigation",
         "forward_reverse_and_paused_time", "real_scale_earth_focus",
         "camera_rotation_zoom_pan_and_flight", "resolution_budget",
@@ -63,8 +63,9 @@ def main():
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"],
             "The device does not match the Android 15 x86_64 validation target")
     require("swiftshader" in metrics["glRenderer"].lower(), "Unexpected GLES validation driver")
-    require(metrics["nativeQubits"] == 8 and metrics["nativeStateBytes"] > 0,
-            "The actual COSMIC native core was not observed on Android")
+    require(metrics["nativeDomain"] == "q0,q1,..." and metrics["nativePreparationSites"] == 8
+            and 0 <= metrics["nativeActiveSites"] <= 8 and metrics["nativeStateBytes"] >= 0,
+            "The Ether domain and finite Solar preparation were not distinguished")
     require(metrics["framesRendered"] > 0, "No actual GLES frames were rendered")
     require(metrics["initialWindowFocused"] is True, "The launched Activity did not receive input focus")
     require(metrics["bodyCount"] == 23 and metrics["planetCount"] == 8 and metrics["moonCount"] == 14,
@@ -83,17 +84,32 @@ def main():
             == {"textures/earth.png", "textures/moon.jpg", "textures/jupiter.jpg"}
             and all(entry["width"] >= 512 and entry["height"] >= 256 for entry in textures)
             and metrics["uploadedNasaTextures"] == 3, "Packaged NASA maps were not decoded and uploaded to GLES")
-    bell = metrics["bellExpectations"]
+    bell = metrics["framedBellExpectations"]
     require(len(bell) == 8 and all(abs(actual - expected) < 1e-6
-            for actual, expected in zip(bell, (0, 0, 0, 1, -1, 1, 1, 1)))
-            and metrics["observationPreservedNativeRevision"] is True,
-            "The original native core did not preserve Bell/read-only contracts")
+            for actual, expected in zip(bell, (0, 0, 0, 0, 0, 1, 0, 1)))
+            and metrics["observationPreservedNativeRevision"] is True
+            and metrics["observationPreservedNativeEpoch"] is True,
+            "The Bell preparation followed by Ether rules has incorrect or mutating observations")
     ether = metrics["etherExpectations"]
-    require(ether == [1, 1, 0, 0, 0] and metrics["etherRules"] == 2
+    require(ether == [0, 0, 0, 0, 0] and metrics["etherRules"] == 2
             and metrics["etherObservationReadOnly"] is True,
-            "Solar did not execute the shared EtherCore symbolic cluster probe")
+            "The Ether view does not match Solar's shared prepared state")
+    expected_preparations = (
+        ([0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 0, 0, 0]),
+        ([0, 0, 1, 0, 0, 1, 0, 1], [0, 0, 0, 1, 1]),
+        ([0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 0]),
+        ([0, -1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0]),
+    )
+    preparations = metrics["etherFusionPresets"]
+    require(len(preparations) == 4 and metrics["etherFusionSingleObservation"] is True
+            and all(entry["preset"] == preset and entry["local"] == expected[0]
+                    and entry["ether"] == expected[1] and entry["rules"] == 2
+                    and entry["activeSites"] == (0 if preset == 0 else 8)
+                    for preset, (entry, expected) in enumerate(zip(preparations, expected_preparations))),
+            "Solar local and Ether coefficients lack shared-state preparation evidence")
     require(metrics["deterministicPausedChangedPixels"] == 0 and metrics["coupledChangedPixels"] > 20
-            and metrics["uncoupledChangedPixels"] == 0 and metrics["quantumPreparationOrbitalDeltaAU"] == 0,
+            and metrics["uncoupledChangedPixels"] == 0 and metrics["coupledComparisonPresets"] == [0, 3]
+            and metrics["quantumPreparationOrbitalDeltaAU"] == 0,
             "Quantum visual coupling changed the wrong state or lacked causal pixel evidence")
     field_deltas = metrics["fieldToggleChangedPixels"]
     require(set(field_deltas) == {"earth", "venus", "mars"} and all(value > 20 for value in field_deltas.values())
@@ -139,7 +155,7 @@ def main():
 
     images = report["images"]
     expected_images = {
-        "earth-surface.png", "earth-fields-base.png", "earth-fields-entangled.png",
+        "earth-surface.png", "earth-fields-base.png", "earth-fields-phase.png",
         "venus-magnetic-environment.png", "mars-magnetic-environment.png", "sun-solar-wind.png",
         "saturn-rings.png", "moon-surface.png", "solar-system-overview.png", "earth-real-scale.png",
         "activity-portrait.png", "activity-landscape.png",
@@ -269,7 +285,8 @@ def main():
     (directory / "verified-images.json").write_text(json.dumps(image_manifest, indent=2) + "\n")
     print(f"Verified {len(tests)} solar Android tests and {len(images)} actual PNG captures.")
     print("Driver: " + metrics["glRenderer"])
-    print(f"Native state: {metrics['nativeQubits']} qubits; {metrics['nativeStateBytes']} bytes.")
+    print(f"Ether domain: {metrics['nativeDomain']}; {metrics['nativePreparationSites']} preparation sites; "
+          f"{metrics['nativeActiveSites']} active sites; {metrics['nativeStateBytes']} tableau payload bytes.")
     print("These are Android software-emulator correctness results, not Samsung A16 performance measurements.")
 
 

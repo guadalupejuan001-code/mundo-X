@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -34,6 +35,20 @@ class EtherCore {
     std::size_t last_query_address_bytes = 0;
   };
 
+  struct QueryLimits {
+    std::size_t max_sites = std::numeric_limits<std::size_t>::max();
+    std::size_t max_address_digits = std::numeric_limits<std::size_t>::max();
+  };
+
+  // A signed Hermitian Pauli, including the exact phase after conjugation.
+  // Diagnostics belong to this result; pullback itself never mutates a shared
+  // frame. InfiniteCore can therefore share committed frames across copies.
+  struct Observable {
+    std::vector<Term> terms;
+    int sign = 1;
+    Stats stats;
+  };
+
   void h_all() { push_rule(Rule::HAll); }
   void cz_neighbors() { push_rule(Rule::CZNeighbors); }
 
@@ -41,7 +56,38 @@ class EtherCore {
   const std::vector<Rule>& rules() const noexcept { return rules_; }
   Stats stats() const noexcept { return stats_; }
 
+  void restore_rules(const std::vector<Rule>& rules,
+                     std::size_t max_rules = std::numeric_limits<std::size_t>::max()) {
+    if (rules.size() > max_rules)
+      throw std::length_error("Ether rule budget exceeded");
+    for (std::size_t i = 0; i < rules.size(); ++i) {
+      if (rules[i] != Rule::HAll && rules[i] != Rule::CZNeighbors)
+        throw std::invalid_argument("unknown Ether rule");
+      if (i && rules[i] == rules[i - 1])
+        throw std::invalid_argument("Ether snapshot contains uncancelled adjacent rules");
+    }
+    auto candidate = rules;
+    rules_.swap(candidate);
+    stats_ = Stats{};
+    stats_.rules = rules_.size();
+  }
+
   double expectation(const std::vector<Term>& terms, int sign = 1) const {
+    const auto observable = pullback(terms, sign);
+    stats_ = observable.stats;
+    for (const auto& term : observable.terms)
+      if (term.axis == 'X' || term.axis == 'Y') return 0.0;
+    return static_cast<double>(observable.sign);
+  }
+
+  Observable pullback(const std::vector<Term>& terms, int sign = 1) const {
+    return pullback(terms, sign, QueryLimits{});
+  }
+
+  // Return U^dagger P U. This is valid for any input state beneath the frame,
+  // not only the zero background used by the standalone expectation helper.
+  Observable pullback(const std::vector<Term>& terms, int sign,
+                      const QueryLimits& limits) const {
     if (sign != 1 && sign != -1)
       throw std::invalid_argument("Pauli sign must be +1 or -1");
 
@@ -50,17 +96,20 @@ class EtherCore {
     std::set<std::string, AddressLess> seen;
     std::size_t address_bytes = 0;
     for (const auto& term : terms) {
+      check_address(term.address, limits);
       const auto address = canonical(term.address);
       if (!seen.insert(address).second)
         throw std::invalid_argument("duplicate canonical address in Pauli query");
+      if (address.size() > std::numeric_limits<std::size_t>::max() - address_bytes)
+        throw std::length_error("Pauli address text overflows");
       address_bytes += address.size();
       switch (term.axis) {
         case 'I': break;
-        case 'X': set_bits(p, address, true, false); break;
-        case 'Z': set_bits(p, address, false, true); break;
+        case 'X': set_bits(p, address, true, false, limits); break;
+        case 'Z': set_bits(p, address, false, true, limits); break;
         case 'Y':
           p.phase = (p.phase + 1) & 3;
-          set_bits(p, address, true, true);
+          set_bits(p, address, true, true, limits);
           break;
         default: throw std::invalid_argument("Pauli axis must be I, X, Y or Z");
       }
@@ -69,19 +118,25 @@ class EtherCore {
     std::size_t peak = p.cells.size();
     for (auto it = rules_.rbegin(); it != rules_.rend(); ++it) {
       if (*it == Rule::HAll) conjugate_h_all(p);
-      else conjugate_cz_neighbors(p);
+      else conjugate_cz_neighbors(p, limits, peak);
       peak = std::max(peak, p.cells.size());
     }
 
-    for (const auto& item : p.cells)
-      if (item.second.x) {
-        update_stats(p.cells.size(), peak, address_bytes);
-        return 0.0;
-      }
-    if (p.phase & 1)
+    Observable out;
+    out.terms.reserve(p.cells.size());
+    unsigned y_count = 0;
+    for (const auto& item : p.cells) {
+      const auto bits = item.second;
+      const char axis = bits.x ? (bits.z ? 'Y' : 'X') : 'Z';
+      if (axis == 'Y') y_count = (y_count + 1U) & 3U;
+      out.terms.push_back({item.first, axis});
+    }
+    const unsigned residual = (static_cast<unsigned>(p.phase) + 4U - y_count) & 3U;
+    if (residual & 1U)
       throw std::logic_error("non-Hermitian phase after Clifford propagation");
-    update_stats(p.cells.size(), peak, address_bytes);
-    return p.phase == 0 ? 1.0 : -1.0;
+    out.sign = residual == 0 ? 1 : -1;
+    out.stats = {rules_.size(), p.cells.size(), peak, address_bytes};
+    return out;
   }
 
  private:
@@ -139,15 +194,26 @@ class EtherCore {
     return it == p.cells.end() ? Bits{} : it->second;
   }
 
-  static void set_bits(Pauli& p, const std::string& address, bool x, bool z) {
+  static void check_address(const std::string& address, const QueryLimits& limits) {
+    if (address.size() > limits.max_address_digits)
+      throw std::length_error("Ether query address digit budget exceeded");
+  }
+
+  static void set_bits(Pauli& p, const std::string& address, bool x, bool z,
+                       const QueryLimits& limits) {
     if (!x && !z) { p.cells.erase(address); return; }
+    check_address(address, limits);
+    if (p.cells.find(address) == p.cells.end() && p.cells.size() >= limits.max_sites)
+      throw std::length_error("Ether query cone site budget exceeded");
     p.cells[address] = Bits{x,z};
   }
 
-  static void toggle_z(Pauli& p, const std::string& address) {
+  static void toggle_z(Pauli& p, const std::string& address,
+                       const QueryLimits& limits, std::size_t& peak) {
     auto bits = get_bits(p,address);
     bits.z = !bits.z;
-    set_bits(p,address,bits.x,bits.z);
+    set_bits(p,address,bits.x,bits.z,limits);
+    peak = std::max(peak, p.cells.size());
   }
 
   static void conjugate_h_all(Pauli& p) {
@@ -158,28 +224,23 @@ class EtherCore {
     }
   }
 
-  static void conjugate_cz_neighbors(Pauli& p) {
+  static void conjugate_cz_neighbors(Pauli& p, const QueryLimits& limits,
+                                     std::size_t& peak) {
     std::set<std::pair<std::string,std::string>> edges;
     for (const auto& item : p.cells) if (item.second.x) {
       const auto& q = item.first;
       if (q != "0") edges.emplace(predecessor(q), q);
-      edges.emplace(q, successor(q));
+      auto next = successor(q);
+      check_address(next, limits);
+      edges.emplace(q, std::move(next));
     }
     for (const auto& edge : edges) {
       const bool xa = get_bits(p,edge.first).x;
       const bool xb = get_bits(p,edge.second).x;
       if (xa && xb) p.phase = (p.phase + 2) & 3;
-      if (xb) toggle_z(p,edge.first);
-      if (xa) toggle_z(p,edge.second);
+      if (xb) toggle_z(p,edge.first,limits,peak);
+      if (xa) toggle_z(p,edge.second,limits,peak);
     }
-  }
-
-  void update_stats(std::size_t sites, std::size_t peak,
-                    std::size_t address_bytes) const {
-    stats_.rules = rules_.size();
-    stats_.last_query_sites = sites;
-    stats_.last_query_peak_sites = peak;
-    stats_.last_query_address_bytes = address_bytes;
   }
 };
 
