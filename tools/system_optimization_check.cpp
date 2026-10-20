@@ -136,7 +136,7 @@ void micro() {
    if(k%3==0){a.inject(2,.2f,-.4f);b.inject(2,.2f,-.4f);a.gate(1,2);b.gate(1,2);}
    double p,q;if(k%2){q=ms([&]{a.advance(6);});p=ms([&]{b.advance(6);});}
    else{p=ms([&]{b.advance(6);});q=ms([&]{a.advance(6);});}
-   for(int mode=0;mode<3;++mode){auto av=vertices(a,mode),bv=vertices(b,mode);floats+=av.size();require(av==bv,"micro vertices differ");}
+   for(int mode=0;mode<3;++mode){auto av=vertices(a,mode),bv=vertices(b,mode);floats+=av.size();require(av.size()==bv.size()&&std::memcmp(av.data(),bv.data(),av.size()*sizeof(float))==0,"micro vertex bits differ");}
    require(a.json()==b.json(),"micro state differs");if(k){before.push_back(p);after.push_back(q);}
   }
   if(comma)std::cout<<',';
