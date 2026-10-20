@@ -4,7 +4,7 @@
 
 COSMIC X Engine es el título del conjunto. Dentro se conserva la computación cuántica de Mundo X, sus representaciones originales y el motor gráfico que observa el estado compartido. La idea, creación y dirección del proyecto corresponden a **X, titular del repositorio**; el historial documenta el desarrollo con asistencia de IA. La simulación se ejecuta por software y el motor gráfico utiliza OpenGL ES.
 
-**Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 19 de octubre de 2026.
+**Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 20 de octubre de 2026.
 
 Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
 
@@ -13,6 +13,31 @@ dispone de una [sesión compartida con el emulador y el motor gráfico](docs/inf
 El invitado x86/x64 envía programas al núcleo por puertos IN/OUT; el viewport del PC
 observa esa misma sesión. Los proyectos Infinite guardan su estado actual y RNG
 en `.cosmic` v2, y el perfil finito de 1.000 qubits conserva `.cosmic` v1.
+
+## Ether Core · arquitectura común
+
+**Ether será la fuente común de estado y cálculo de Mundo X.** La dirección del
+proyecto es que memoria lógica, ejecución, gráficos, física y demás sistemas
+trabajen sobre la misma estructura dentro de cada sesión. Cada componente debe
+definir qué consulta y qué transforma en Ether, conservando las identidades,
+relaciones y cambios que permiten recuperar el estado.
+
+El dominio se describe mediante reglas; las operaciones y observaciones deben
+obtener respuestas con trabajo finito. La representación del estado y la forma
+de calcular sobre él se diseñan juntas. Las vistas y expansiones temporales
+tienen un coste que también debe medirse: ahorrar en el núcleo no acredita por
+sí solo un ahorro en la aplicación completa.
+
+El [contrato de arquitectura Ether](docs/ether-architecture.md) fija las
+responsabilidades por componente, la conservación del estado, la coherencia de
+las observaciones y los criterios de integración y rendimiento.
+
+**Estado de implementación:** la implementación EtherCore v0.1 se desarrolla en el
+[PR #23](https://github.com/guadalupejuan001-code/mundo-X/pull/23). Representa una
+cadena lógica sin `qubit_count`, con reglas globales H/CZ y consultas Pauli
+locales. La conexión Android es parcial; la migración integral de los
+componentes sigue siendo trabajo de implementación. El contrato distingue esa
+dirección arquitectónica del código ya comprobado.
 
 ## Qué incluye el código integrado
 
