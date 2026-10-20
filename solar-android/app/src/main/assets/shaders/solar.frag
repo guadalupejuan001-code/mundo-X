@@ -22,7 +22,7 @@ uniform vec4 uEntry; // body (-1 outside entry), altitude km, mean radius km, ac
 uniform int uAtmosphereEnabled;
 uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
-uniform vec4 uQ0,uQ1;
+uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
 out vec4 outColor;
 
@@ -405,7 +405,8 @@ void main(){
         vec3 off=rd*along-sun;float radius=length(off)/uBodies[0].w;
         if(radius>1.0&&radius<10.0){
             float angle=atan(dot(off,uUp),dot(off,uRight));
-            float qPhase=(dot(uQ0,vec4(.19,.31,.47,.71))+dot(uQ1,vec4(.23,.41,.61,.83)))*uCoupling;
+            float qPhase=(dot(uQ0,vec4(.19,.31,.47,.71))+dot(uQ1,vec4(.23,.41,.61,.83))
+                    +dot(uEther,vec4(.17,.29,.43,.67)))*uCoupling;
             float rays=.6+.22*sin(angle*15.0+qPhase*3.0)+.16*sin(angle*39.0-uTime*.03+uQ1.x*uCoupling*2.0);
             float halo=exp(-(radius-1.0)*3.5)*.20+exp(-(radius-1.0)*.8)*.006*rays;
             color+=vec3(1.0,.36,.055)*halo;
