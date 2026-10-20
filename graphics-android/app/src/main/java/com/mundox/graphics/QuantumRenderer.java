@@ -405,12 +405,9 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private int maxTexture(){int[] n=new int[1];glGetIntegerv(GL_MAX_TEXTURE_SIZE,n,0);return n[0];}
     private void sync(){
         if(editsDirty){
-            int max=maxTexture(),w=Math.min(Math.min(4096,max),Math.max(1,edits.size())),h=Math.max(1,(edits.size()+w-1)/w);
-            if(h>max)throw new IllegalStateException("Las ediciones exceden la textura de este dispositivo");
-            ByteBuffer bytes=direct(w*h*8);for(int j=0;j<w*h;j++){bytes.putInt(-1);bytes.putInt(-1);}bytes.rewind();
-            for(Map.Entry<Integer,Integer> e:edits.entrySet()){bytes.putInt(e.getKey());bytes.putInt(e.getValue());}bytes.rewind();
+            EditPages index=EditPages.encode(count,edits,maxTexture());
             glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);
-            glTexImage2D(GL_TEXTURE_2D,0,GL_RG32I,w,h,0,GL_RG_INTEGER,GL_INT,bytes);sampling();check("Ediciones");editsDirty=false;
+            glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,index.width,index.height,0,GL_RED_INTEGER,GL_UNSIGNED_INT,index.bytes);sampling();check("Ediciones");editsDirty=false;
         }
         NativeCore.Observation observation=null;
         synchronized(core){

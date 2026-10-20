@@ -1,7 +1,7 @@
 // ObjectSceneModel rules, with an optional explicitly bounded quantum control.
 uniform int uCount,uSide,uEditCount,uSelected,uDebug,uPresentation;
 uniform highp uvec4 uSeedBytes;
-uniform highp isampler2D uEdits;
+uniform highp usampler2D uEdits;
 uniform float uTime,uFogDistance,uQuantumStrength,uPixelAngle;
 uniform highp sampler2D uQuantum;
 uniform int uQuantumCount;
@@ -23,11 +23,15 @@ highp uvec4 mxHashBytes(highp int id,highp uvec4 seed){
   x=mxMulBytes(x,uvec4(139u,166u,108u,132u));return x^uvec4(x.z,x.w,0u,0u);
 }
 int editState(int id){
-  int lo=0,hi=uEditCount-1,width=textureSize(uEdits,0).x;
-  for(int j=0;j<21;j++){if(lo>hi)break;int mid=(lo+hi)/2;
-    ivec2 item=texelFetch(uEdits,ivec2(mid%width,mid/width),0).rg;
-    if(item.x==id)return item.y;if(item.x<id)lo=mid+1;else hi=mid-1;}
-  return 0;
+  // One directory lookup rejects untouched blocks; a second reads the exact
+  // 4-bit state. No search loop and no materialized transforms or frame cache.
+  // The private GPU format has 256-word rows (desktop and Android encoders).
+  int page=id>>8;
+  uint offset=texelFetch(uEdits,ivec2(page&255,page>>8),0).r;
+  if(offset==0u)return 0;
+  int word=int(offset)+((id&255)>>3);
+  uint states=texelFetch(uEdits,ivec2(word&255,word>>8),0).r;
+  return int((states>>uint((id&7)*4))&7u);
 }
 void objectData(int id,out vec2 center,out float height,out float tone){
   uvec4 h=mxHashBytes(id,uSeedBytes);

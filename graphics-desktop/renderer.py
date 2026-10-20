@@ -3,6 +3,7 @@ import ctypes as C
 import math,time
 import numpy as np
 from egl_runtime import GL,U,I,F,P
+from edit_pages import pack_edits
 
 ROOT=Path(__file__).resolve().parent
 
@@ -104,12 +105,9 @@ class Renderer:
         self.count=count;self.seed=seed;self.side=math.ceil(math.sqrt(count));self.edits=edits
         g=self.gl
         maximum=I();g.glGetIntegerv(0x0D33,C.byref(maximum))
-        width=min(4096,maximum.value,max(1,len(edits)));height=max(1,math.ceil(len(edits)/width))
-        if height>maximum.value:raise ValueError('Edit texture exceeds this device capability')
-        data=np.full((height,width,2),-1,dtype=np.int32)
-        for i,(id,state) in enumerate(sorted(edits.items())):data.reshape(-1,2)[i]=(id,state)
+        data=pack_edits(count,edits,maximum.value);height,width=data.shape
         g.glActiveTexture(0x84C0);g.glBindTexture(0x0DE1,self.edits_texture)
-        g.glTexImage2D(0x0DE1,0,0x823B,width,height,0,0x8228,0x1404,data.ctypes.data)
+        g.glTexImage2D(0x0DE1,0,0x8236,width,height,0,0x8D94,0x1405,data.ctypes.data)
         g.glTexParameteri(0x0DE1,0x2801,0x2600);g.glTexParameteri(0x0DE1,0x2800,0x2600)
         g.glTexParameteri(0x0DE1,0x2802,0x812F);g.glTexParameteri(0x0DE1,0x2803,0x812F)
         g.glFinish();compact_ms=(time.perf_counter_ns()-start)/1e6
