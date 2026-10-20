@@ -15,6 +15,8 @@ public final class QuantumSolarBridge implements AutoCloseable {
     };
     private NativeCore core;
     private volatile float[] values = new float[8];
+    private volatile float[] etherValues = new float[5];
+    private volatile long etherRules;
     private volatile int preset;
     private volatile long revision, bytes;
     private boolean closed;
@@ -37,29 +39,44 @@ public final class QuantumSolarBridge implements AutoCloseable {
                 if (value==3) for (int q=0; q<QUBITS; q+=2) candidate.apply(NativeCore.S,q,0);
             }
             float[] result = candidate.query(OBSERVABLES);
+            candidate.prepareEtherCluster();
+            float[] ether = candidate.etherQuery(candidate.etherVisualProgram());
+            long rules = candidate.etherStats().rules;
             long actualBytes = candidate.stateBytes();
-            if (result.length != 8 || actualBytes <= 0) throw new IllegalStateException("Respuesta incompleta del núcleo");
+            if (result.length != 8 || ether.length != 5 || rules != 2 || actualBytes <= 0)
+                throw new IllegalStateException("Respuesta incompleta del núcleo");
             for (float n: result) if (!Float.isFinite(n) || Math.abs(n)>1.00001f)
                 throw new IllegalStateException("Observable fuera de rango");
             NativeCore previous = core;
             core = candidate; candidate = null;
-            values = result; preset = value; bytes = actualBytes; revision++;
+            values = result; etherValues = ether; etherRules = rules;
+            preset = value; bytes = actualBytes; revision++;
             if (previous != null) previous.close();
         } finally { if (candidate != null) candidate.close(); }
     }
 
     /** Immutable cached view; callers must not write into this array. */
     public float[] coefficients() { return values; }
+    /** Read-only symbolic EtherCore observations; never ephemeris inputs. */
+    public float[] etherCoefficients() { return etherValues; }
+    public long etherRules() { return etherRules; }
     public long revision() { return revision; }
     /** Native state payload only, never the process RAM. */
     public long stateBytes() { return bytes; }
     public int preset() { return preset; }
-    public String status() { return "Núcleo X · 8 qubits · " + PRESETS[preset]; }
+    public String status() { return "Núcleo X · 8 qubits + Éter ∞ · " + PRESETS[preset]; }
     public synchronized long nativeRevision() { return core.version(); }
     public synchronized float[] verifyReadOnly() {
         long before = core.version();
         float[] out = core.query(OBSERVABLES);
         if (core.version()!=before) throw new IllegalStateException("La observación modificó el núcleo");
+        return out;
+    }
+    public synchronized float[] verifyEtherReadOnly() {
+        long before = core.version(), rules = core.etherStats().rules;
+        float[] out = core.etherQuery(core.etherVisualProgram());
+        if(core.version()!=before || core.etherStats().rules!=rules)
+            throw new IllegalStateException("La observación Ether modificó el núcleo");
         return out;
     }
     @Override public synchronized void close() {
