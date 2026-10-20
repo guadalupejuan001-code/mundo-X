@@ -72,6 +72,30 @@ int main() {
     for(std::size_t i=0;i<a.bodies.size();++i)
       require(same(a.bodies[i],b.bodies[i]),"fixed-step simulation is not deterministic");
 
+    // A contact between distant IDs must survive spatial ordering and refit.
+    mundo_x::PhysicsWorld spatial;spatial.gravity_y=0;spatial.restitution=1;
+    for(unsigned i=0;i<600;++i)spatial.bodies.push_back({double(i)*3+100,20,0,0,1,.5,false});
+    spatial.bodies.front()={0,20,1,0,1,.5,false};
+    spatial.bodies.back()={1,20,-1,0,1,.5,false};
+    spatial.step(.01);
+    require(spatial.bodies.front().vx==-1&&spatial.bodies.back().vx==1,"spatial contact lost");
+    require(spatial.step_stats().pair_tests<16,"sparse index tested unrelated pairs");
+    std::reverse(spatial.bodies.begin(),spatial.bodies.end());
+    spatial.step(.01);
+    require(spatial.bodies.front().vx==1&&spatial.bodies.back().vx==-1,"refit assumed unchanged public ordering");
+    spatial.bodies.resize(10);spatial.step(.01);
+    require(spatial.bodies.size()==10,"shrinking body set failed");
+
+    mundo_x::PhysicsWorld dense;dense.gravity_y=0;
+    dense.bodies.assign(600,{0,20,0,0,1,.5,true});dense.step(.01);
+    require(dense.step_stats().dense_fallback,"dense contact cloud missed bounded fallback");
+    require(dense.step_stats().pair_tests==600*599/2,"dense fallback changed pair order/count");
+
+    before=spatial.bodies;spatial.restitution=std::numeric_limits<double>::quiet_NaN();
+    rejected=false;try{spatial.step(.01);}catch(const std::invalid_argument&){rejected=true;}
+    require(rejected,"non-finite material accepted");
+    for(std::size_t i=0;i<before.size();++i)require(same(before[i],spatial.bodies[i]),"invalid material mutated world");
+
     std::cout << "{\"ok\":true,\"checks\":" << checks << "}\n";
     return 0;
   } catch(const std::exception& error) {
