@@ -27,6 +27,9 @@ ETHER_FUSION_REFERENCE = "d4b9893ddec9c6fbce3911f3db349b1011686538"
 AUDIT_REFERENCE = "46c78131db919e045c052987fd302c5919286560"
 RULE_COMPACTION_REFERENCE = "35a82f88c88e40e9c2fcba7453b33fc91f51ffca"
 INTERVAL_EVALUATION_REFERENCE = "6baf22bed1f8b964de2ba24bb702c6a9a3b789d4"
+OBSERVER_PIVOT_REFERENCE = "00e2f014186d9db9d2d87b3f7aabee3338d2b2a5"
+MICRO_BOUNDS_REFERENCE = "201388f2c98ed64a5260abcdafa1957a125468e7"
+PHYSICS_SPATIAL_REFERENCE = "59916f0ae34196d43914ce069a042ee80782287d"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 SOURCE_SCOPES = (
     "native",
@@ -36,6 +39,8 @@ SOURCE_SCOPES = (
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java",
 )
 ADDITIONAL_SOURCES = {
+    "native/include/mundo_x/physics_world.hpp": PHYSICS_SPATIAL_REFERENCE,
+    "native/tests/physics_world.cpp": PHYSICS_SPATIAL_REFERENCE,
     "native/tests/ether_rules.cpp": INTERVAL_EVALUATION_REFERENCE,
     "native/tests/ether_batch.cpp": AUDIT_REFERENCE,
     "native/tests/ether_stress.cpp": AUDIT_REFERENCE,
@@ -64,6 +69,9 @@ ADDITIONAL_SOURCES = {
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_FUSION_REFERENCE,
 }
 REVISED_SOURCES = {
+    "native/include/mundo_x/pauli_observer.hpp": OBSERVER_PIVOT_REFERENCE,
+    "native/tests/core_1000.cpp": OBSERVER_PIVOT_REFERENCE,
+    "native/include/mundo_x/micro_lab.hpp": MICRO_BOUNDS_REFERENCE,
     "native/include/mundo_x/compact_core.hpp": INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/cpp/CMakeLists.txt": INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/cpp/graphics_jni.cpp": ETHER_FUSION_REFERENCE,
