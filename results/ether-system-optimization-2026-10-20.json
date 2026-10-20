@@ -1,0 +1,207 @@
+{
+  "baseline": "c13e78f91887b45d735c5fe3d8a07a000bd03d34",
+  "physics_baseline": "c7e78948ea95080d0603608696da221f02bf4584",
+  "head": "f50be37a15fc106a3dcc0dc27ad1bf7edc9ece64",
+  "ram_limit_bytes": 2147483648,
+  "cpu_seconds_per_case": 55,
+  "wall_seconds_per_case": 60,
+  "cases": {
+    "physics": {
+      "checks": 576001,
+      "contacts": 2098395,
+      "dense_fallbacks": 48,
+      "benchmarks": [
+        {
+          "bodies": 256,
+          "before_ms": 0.030685,
+          "after_ms": 0.031426,
+          "possible_pairs": 32640,
+          "tested_pairs": 32640,
+          "node_tests": 0,
+          "scratch_bytes": 14336
+        },
+        {
+          "bodies": 4096,
+          "before_ms": 10.0305,
+          "after_ms": 0.516983,
+          "possible_pairs": 8386560,
+          "tested_pairs": 0,
+          "node_tests": 94209,
+          "scratch_bytes": 884664
+        },
+        {
+          "bodies": 16384,
+          "before_ms": 153.824,
+          "after_ms": 3.41662,
+          "possible_pairs": 134209536,
+          "tested_pairs": 0,
+          "node_tests": 442495,
+          "scratch_bytes": 3538872
+        },
+        {
+          "bodies": 32768,
+          "before_ms": 646.871,
+          "after_ms": 7.74008,
+          "possible_pairs": 536854528,
+          "tested_pairs": 0,
+          "node_tests": 950681,
+          "scratch_bytes": 7077816
+        }
+      ],
+      "large_target": {
+        "bodies": 100000,
+        "ms": 49.735,
+        "scratch_bytes": 21599928
+      },
+      "rss_kib": 28692,
+      "wall_s": 6.881284603001404
+    },
+    "observer": {
+      "benchmarks": [
+        {
+          "qubits": 64,
+          "kind": 0,
+          "queries": 2048,
+          "before_ms": 0.240465,
+          "after_ms": 0.056994,
+          "before_payload": 1792,
+          "after_payload": 2816
+        },
+        {
+          "qubits": 64,
+          "kind": 1,
+          "queries": 2048,
+          "before_ms": 0.333162,
+          "after_ms": 0.080448,
+          "before_payload": 1792,
+          "after_payload": 2816
+        },
+        {
+          "qubits": 64,
+          "kind": 2,
+          "queries": 2048,
+          "before_ms": 0.578083,
+          "after_ms": 0.431726,
+          "before_payload": 1792,
+          "after_payload": 2816
+        },
+        {
+          "qubits": 256,
+          "kind": 0,
+          "queries": 2048,
+          "before_ms": 0.86865,
+          "after_ms": 0.078175,
+          "before_payload": 19456,
+          "after_payload": 23552
+        },
+        {
+          "qubits": 256,
+          "kind": 1,
+          "queries": 2048,
+          "before_ms": 2.6545,
+          "after_ms": 0.233514,
+          "before_payload": 19456,
+          "after_payload": 23552
+        },
+        {
+          "qubits": 256,
+          "kind": 2,
+          "queries": 2048,
+          "before_ms": 3.64534,
+          "after_ms": 2.28254,
+          "before_payload": 19456,
+          "after_payload": 23552
+        },
+        {
+          "qubits": 1000,
+          "kind": 0,
+          "queries": 2048,
+          "before_ms": 4.5065,
+          "after_ms": 0.109983,
+          "before_payload": 268000,
+          "after_payload": 284000
+        },
+        {
+          "qubits": 1000,
+          "kind": 1,
+          "queries": 2048,
+          "before_ms": 22.2722,
+          "after_ms": 1.40931,
+          "before_payload": 268000,
+          "after_payload": 284000
+        },
+        {
+          "qubits": 1000,
+          "kind": 2,
+          "queries": 2048,
+          "before_ms": 26.7692,
+          "after_ms": 23.3104,
+          "before_payload": 268000,
+          "after_payload": 284000
+        }
+      ],
+      "checks": 18435,
+      "checksum": 7380,
+      "rss_kib": 8008,
+      "wall_s": 1.093299730000581
+    },
+    "micro": {
+      "benchmarks": [
+        {
+          "particles": 256,
+          "coupled": false,
+          "steps_per_sample": 6,
+          "before_ms": 0.186325,
+          "after_ms": 0.166846
+        },
+        {
+          "particles": 256,
+          "coupled": true,
+          "steps_per_sample": 6,
+          "before_ms": 0.202058,
+          "after_ms": 0.170501
+        },
+        {
+          "particles": 4096,
+          "coupled": false,
+          "steps_per_sample": 6,
+          "before_ms": 2.59105,
+          "after_ms": 2.40494
+        },
+        {
+          "particles": 4096,
+          "coupled": true,
+          "steps_per_sample": 6,
+          "before_ms": 2.63507,
+          "after_ms": 2.30205
+        },
+        {
+          "particles": 16384,
+          "coupled": false,
+          "steps_per_sample": 6,
+          "before_ms": 10.3437,
+          "after_ms": 9.40104
+        },
+        {
+          "particles": 16384,
+          "coupled": true,
+          "steps_per_sample": 6,
+          "before_ms": 10.0885,
+          "after_ms": 9.12052
+        }
+      ],
+      "checks": 288,
+      "compared_floats": 6014277,
+      "rss_kib": 8012,
+      "wall_s": 0.688503628000035
+    }
+  },
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+  "sha256": {
+    "native/include/mundo_x/physics_world.hpp": "8c0186252730b92fa7a916b5de5565509eab303c2ab9104ace4af6e46e50f5f9",
+    "native/include/mundo_x/micro_lab.hpp": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+    "native/include/mundo_x/pauli_observer.hpp": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+    "tools/system_optimization_check.cpp": "5991b7afce61bce458f397c88e89953e856f7fe44cabe5316900a028c1c9612e",
+    "tools/system_optimization_check.py": "5bc49a9247c2a09179e9a7a6ca2cff396719a72dacc6c83f0a94f9ed7b17de74"
+  }
+}
