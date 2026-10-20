@@ -7,9 +7,9 @@ mkdir -p "$solar_work/classes" "$solar_work/jni" "$solar_work/reference"
 git show af0b1797573b55a739dcaef7b784eb98825ff07c:solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java \
   | sed 's/SolarFlightPhysics/LegacySolarFlightPhysics/g' > "$solar_work/reference/LegacySolarFlightPhysics.java"
 "$solar_java/bin/javac" -encoding UTF-8 -d "$solar_work/classes" \
-  solar-android/app/src/main/java/com/mundox/solar/{SolarData,SolarEnvironment,SolarFlightPhysics,SolarVisualEther,SolarOcclusion,QuantumSolarBridge}.java \
+  solar-android/app/src/main/java/com/mundox/solar/{SolarData,SolarEnvironment,SolarFlightPhysics,SolarVisualEther,QuantumSolarBridge}.java \
   graphics-android/app/src/main/java/com/mundox/graphics/{NativeCore,EtherCoreNative,InfiniteProgram}.java \
-  solar-android/tests/{SolarDataChecks,SolarVisualEtherChecks,SolarOptimizationChecks,SolarBridgeChecks,SolarPhysicsComparison,SolarRenderFixtures}.java \
+  solar-android/tests/{SolarDataChecks,SolarVisualEtherChecks,SolarOptimizationChecks,SolarBridgeChecks,SolarPhysicsComparison,SolarRenderFixtures,SolarOcclusion}.java \
   "$solar_work/reference/LegacySolarFlightPhysics.java"
 "${CXX:-g++}" -std=c++17 -O3 -shared -fPIC -pthread -I native/include \
   -I "$solar_java/include" -I "$solar_java/include/linux" \

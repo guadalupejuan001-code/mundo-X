@@ -75,7 +75,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final SolarVisualEther.Workspace visualWorkspace=new SolarVisualEther.Workspace();
     private ByteBuffer bodyMaskBytes;
     private int[] uploadedBodyMasks;
-    private final int[] eclipseMasks=new int[MAX_BODIES];
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -477,7 +476,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         initializedCamera=true;
     }
     private void syncVisualEther(){
-        SolarOcclusion.masks(packedBodies,SolarData.BODIES.length,eclipseMasks);
         visualPlan=visualWorkspace.update(width,height,SolarVisualEther.DEFAULT_TILE,TAN_HALF_FOV,aspect,
                 forward,right,up,packedBodies,appearance,atmosphere,SolarData.BODIES.length);
         boolean resize=bodyMaskTilesX!=visualPlan.tilesX||bodyMaskTilesY!=visualPlan.tilesY;
@@ -523,7 +521,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);glUniform1i(sceneLoc("uBodyTiles"),1);
         glUniform2i(sceneLoc("uBodyTileGrid"),visualPlan.tilesX,visualPlan.tilesY);
         glUniform1i(sceneLoc("uBodyTileSize"),visualPlan.tileSize);
-        glUniform1uiv(sceneLoc("uEclipseMasks[0]"),SolarData.BODIES.length,eclipseMasks,0);
         glActiveTexture(GL_TEXTURE0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }

@@ -40,7 +40,7 @@ def main():
               '-cp', str(args.classes.resolve())]
     paths = ['solar-android/app/src/main/assets/shaders/solar.frag',
              'solar-android/app/src/main/java/com/mundox/solar/SolarData.java',
-             'solar-android/app/src/main/java/com/mundox/solar/SolarOcclusion.java',
+             'solar-android/tests/SolarOcclusion.java',
              'solar-android/tests/SolarRenderFixtures.java',
              'tools/solar_shader_check.py', 'tools/solar_campaign.py']
     hashes = lambda: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths}

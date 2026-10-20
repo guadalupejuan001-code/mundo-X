@@ -1,6 +1,8 @@
 package com.mundox.solar;
 
-/** Conservative broad phase for the existing soft eclipse function.
+/** Experimental host-only broad phase; not enabled in the shipping APK after
+ * paired GLES measurements failed to establish a consistent speed benefit.
+ * Conservative broad phase for the existing soft eclipse function.
  * Every surface-to-Sun segment lies in a capsule around the body-centre-to-Sun
  * segment. Inflate that capsule by the surface, occluder and Sun radii. Only
  * bodies outside it can be removed. The fragment shader still evaluates the

@@ -25,7 +25,6 @@ uniform sampler2DArray uMaps;
 uniform highp usampler2D uBodyTiles;
 uniform ivec2 uBodyTileGrid;
 uniform int uBodyTileSize;
-uniform highp uint uEclipseMasks[MAX_BODIES];
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
 out vec4 outColor;
@@ -236,17 +235,12 @@ vec3 surface(vec3 n,int id,out float ocean,out float clouds){
     return pow(max(c,vec3(0.0)),vec3(2.2));
 }
 float eclipse(vec3 point,int self){
-    uint candidates=uEclipseMasks[self];
-    if(candidates==0u)return 1.0;
     vec3 s=uBodies[0].xyz-point;
     float maximum=length(s);vec3 l=s/maximum;
     float result=1.0;
-    // Keep uniform catalogue indexing: extracting each bit through a branch
-    // tree regressed some views on GLES software drivers. Empty masks return
-    // above; other masks skip geometry while preserving the original order.
     for(int j=1;j<MAX_BODIES;j++){
         if(j>=uCount)break;
-        if((candidates&(1u<<uint(j)))==0u)continue;
+        if(j==self)continue;
         vec3 c=uBodies[j].xyz-point;float along=dot(c,l);
         if(along<=0.0||along>=maximum)continue;
         float radial=length(c-l*along);
