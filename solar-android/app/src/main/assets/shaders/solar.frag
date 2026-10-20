@@ -49,6 +49,54 @@ float detailNoise(vec3 p){
                mix(mix(detailHash(i+vec3(0,0,1)),detailHash(i+vec3(1,0,1)),f.x),mix(detailHash(i+vec3(0,1,1)),detailHash(i+vec3(1,1,1)),f.x),f.y),f.z);
 }
 float detailFbm(vec3 p){return detailNoise(p)*.57+detailNoise(p*2.03+7.1)*.28+detailNoise(p*4.11+19.7)*.15;}
+
+// Microfacet BRDF: GGX distribution, Smith masking and Schlick Fresnel.
+// Surface maps remain albedo inputs; this replaces the previous ad-hoc
+// Phong ocean highlight with one energy-aware lighting path.
+float distributionGGX(float noH,float roughness){
+    float a=max(.025,roughness*roughness),a2=a*a;
+    float d=noH*noH*(a2-1.0)+1.0;
+    return a2/max(1e-5,PI*d*d);
+}
+float geometrySchlickGGX(float noV,float roughness){
+    float r=roughness+1.0,k=r*r*.125;
+    return noV/max(1e-5,noV*(1.0-k)+k);
+}
+float geometrySmith(float noV,float noL,float roughness){
+    return geometrySchlickGGX(noV,roughness)*geometrySchlickGGX(noL,roughness);
+}
+vec3 fresnelSchlick(float voH,vec3 f0){
+    return f0+(1.0-f0)*pow(1.0-clamp(voH,0.0,1.0),5.0);
+}
+float materialRoughness(int id,float ocean,float clouds){
+    if(id==3)return mix(.62,.075,ocean*(1.0-clouds))+.22*clouds;
+    if(id==2||id==5||id==6||id==7||id==8||id==14)return .86;
+    if(id==9||id==11||id==12||id==13||id==15||id>=19)return .56;
+    return .68;
+}
+vec3 pbrDirect(vec3 albedo,vec3 n,vec3 viewDir,vec3 lightDir,
+               float roughness,float metallic){
+    float noL=max(dot(n,lightDir),0.0),noV=max(dot(n,viewDir),0.0);
+    if(noL<=0.0||noV<=0.0)return vec3(0);
+    vec3 h=normalize(viewDir+lightDir);
+    float noH=max(dot(n,h),0.0),voH=max(dot(viewDir,h),0.0);
+    vec3 f0=mix(vec3(.04),albedo,metallic);
+    vec3 F=fresnelSchlick(voH,f0);
+    float D=distributionGGX(noH,roughness);
+    float G=geometrySmith(noV,noL,roughness);
+    vec3 specular=D*G*F/max(1e-5,4.0*noV*noL);
+    vec3 kd=(1.0-F)*(1.0-metallic);
+    return (kd*albedo/PI+specular)*noL;
+}
+float rayleighPhase(float mu){return 3.0/(16.0*PI)*(1.0+mu*mu);}
+float miePhase(float mu,float g){
+    float gg=g*g;
+    return (1.0-gg)/(4.0*PI*pow(max(.001,1.0+gg-2.0*g*mu),1.5));
+}
+vec3 acesFilm(vec3 x){
+    const float a=2.51,b=.03,c=2.43,d=.59,e=.14;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.0,1.0);
+}
 bool entering(int id){return uEntry.w>.5&&int(uEntry.x+.5)==id;}
 bool atmosphereFor(int id){return uAtmosphereEnabled==1||(uEntry.w>.5&&!entering(id));}
 vec3 rotZ(vec3 p,float a){float c=cos(a),s=sin(a);return vec3(c*p.x-s*p.y,s*p.x+c*p.y,p.z);}
@@ -246,8 +294,11 @@ void atmosphereVolume(vec3 rd,int id,float maximum,bool background,inout vec3 co
     }
     bool star=env.w==6.0;
     vec3 light=star?vec3(1,0,0):normalize(uBodies[0].xyz-uBodies[id].xyz);
-    float angle=max(0.0,dot(rd,light));
-    float cosine=dot(rd,light);float phase=.65+.45*cosine*cosine+pow(angle,24.0)*.4;
+    float cosine=clamp(dot(rd,light),-1.0,1.0);
+    // Rayleigh + forward Mie phase functions. Multiplication by 4π keeps the
+    // existing artistic exposure scale while giving the angular response a
+    // physically motivated shape.
+    float phase=4.0*PI*(rayleighPhase(cosine)*.68+miePhase(cosine,.76)*.32);
     vec3 accumulated=vec3(0);float transmission=1.0,daylight=0.0;
     int steps=entering(id)?10:6;
     for(int sampleIndex=0;sampleIndex<10;sampleIndex++){
@@ -299,15 +350,13 @@ void main(){
             color=albedo*(.61+.39*limb);
         }else{
             normal=terrainNormal(normal,id,ocean);
-            vec3 light=normalize(uBodies[0].xyz-point);
+            vec3 light=normalize(uBodies[0].xyz-point),viewDir=normalize(-rd);
             float nl=dot(normal,light),visibility=eclipse(point,id);
-            float diffuse=max(nl,0.0)*visibility;
-            vec3 ambient=albedo*.012;
-            color=albedo*(diffuse*1.2)+ambient;
-            if(id==3){
-                vec3 halfVector=normalize(light-rd);
-                color+=vec3(.91,.95,1.0)*pow(max(0.0,dot(normal,halfVector)),105.0)*ocean*(1.0-clouds)*diffuse*.75;
-            }
+            float roughness=clamp(materialRoughness(id,ocean,clouds),.045,.98);
+            // Bodies in this catalogue are treated as dielectrics; exposed
+            // metal fractions are not invented from unavailable material maps.
+            color=pbrDirect(albedo,normal,viewDir,light,roughness,0.0)*3.35*visibility;
+            color+=albedo*.008;
             float rim=pow(1.0-max(0.0,dot(normal,-rd)),3.5);
             if(!entering(id))color+=atmosphereColor(id)*rim*(.10+.35*smoothstep(-.22,.55,nl))*visibility;
             // A planet casts its shadow onto its own rings, and rings dim its day side.
@@ -371,7 +420,9 @@ void main(){
             atmosphereVolume(rd,j,closest,id<0,color);
         }
     }
-    color=vec3(1.0)-exp(-max(color,vec3(0.0))*1.3);
+    // Filmic highlight compression preserves solar/atmospheric dynamic range
+    // more naturally than the previous exponential clamp.
+    color=acesFilm(max(color,vec3(0.0))*1.08);
     color=pow(color,vec3(1.0/2.2));
     float vignette=1.0-.14*pow(length(ndc*.59),2.0);
     outColor=vec4(color*vignette,1.0);
