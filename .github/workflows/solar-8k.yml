@@ -86,7 +86,7 @@ jobs:
           cp solar-android/app/build/outputs/apk/debug/app-debug.apk \
             solar-8k-dist/COSMIC-X-Solar-coexist.apk
 
-      - name: Build the independently installable 4K app and instrumented tests
+      - name: Build the independently installable 8K app and instrumented tests
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           cp solar-science.log solar-8k-dist/solar-science.log
-          python3 tools/solar-stage-4k.py solar-8k-dist
+          python3 tools/solar-stage-8k.py solar-8k-dist
 
       - name: Upload exact standalone APKs and build provenance
         uses: actions/upload-artifact@v4
