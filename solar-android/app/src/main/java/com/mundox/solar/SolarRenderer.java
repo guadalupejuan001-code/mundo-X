@@ -68,8 +68,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private int mapTexture,colorTexture,depthBuffer,framebuffer;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
-    private boolean requestedUhd;
-    private volatile boolean activeUhd;
+    private boolean requestedUhd,requestedUltra;
+    private volatile boolean activeUhd,activeUltra;
     private volatile String resolutionMessage;
     private volatile RenderResolution.Fit display=RenderResolution.fit(1,1,new RenderResolution.Size(1,1));
     private volatile boolean entryMode,atmosphereEnabled=true;
@@ -155,7 +155,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
-        activeUhd=false;
+        activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
         try{
@@ -236,9 +236,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         check("Límites de resolución");return new RenderResolution.Limits(caps[0],caps[1],caps[2],caps[3]);
     }
     /** Candidate attachments are checked before any current GL name is replaced. */
-    private void installTarget(RenderResolution.Size size,boolean uhd,int limit){
+    private void installTarget(RenderResolution.Size size,int mode,int limit){
         RenderResolution.Fit fit=RenderResolution.fit(viewWidth,viewHeight,size);
         if(framebuffer==0||width!=size.width||height!=size.height){
+            RenderResolution.Size existing=framebuffer==0?null:new RenderResolution.Size(width,height);
+            RenderResolution.requireAllocation(size,existing);
             int color=0,depth=0,target=0;boolean accepted=false;
             try{
                 color=newTexture();int[] name={0};glGenRenderbuffers(1,name,0);depth=name[0];
@@ -268,19 +270,29 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             }
         }
         display=fit;aspect=(float)width/height;quality=acceptedQuality=limit;
-        activeUhd=requestedUhd=uhd;framebufferDirty=false;
+        activeUhd=requestedUhd=mode==RenderResolution.UHD_4K;
+        activeUltra=requestedUltra=mode==RenderResolution.UHD_8K;
+        framebufferDirty=false;
     }
     private void sizeFramebuffer(){
-        RenderResolution.Limits caps=null;RenderResolution.Size uhd=RenderResolution.uhd(viewWidth,viewHeight);
-        boolean wantedUhd=requestedUhd;int wantedQuality=quality;
-        String request=wantedUhd?"UHD 4K "+uhd.width+"×"+uhd.height:wantedQuality+" px";
+        RenderResolution.Limits caps=null;
+        RenderResolution.Size uhd=RenderResolution.uhd(viewWidth,viewHeight);
+        RenderResolution.Size ultra=RenderResolution.uhd8k(viewWidth,viewHeight);
+        boolean wantedUltra=requestedUltra,wantedUhd=requestedUhd&&!wantedUltra;
+        int wantedQuality=quality;
+        int wantedMode=wantedUltra?RenderResolution.UHD_8K:wantedUhd?RenderResolution.UHD_4K:RenderResolution.ADAPTIVE;
+        RenderResolution.Size requested=wantedUltra?ultra:uhd;
+        String request=wantedUltra?"UHD 8K "+ultra.width+"×"+ultra.height
+                :wantedUhd?"UHD 4K "+uhd.width+"×"+uhd.height:wantedQuality+" px";
         try{
-            caps=resolutionLimits();RenderResolution.Size size=wantedUhd?uhd:RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps);
-            caps.require(size);installTarget(size,wantedUhd,wantedQuality);resolutionMessage=null;
+            caps=resolutionLimits();
+            RenderResolution.Size size=wantedMode==RenderResolution.ADAPTIVE
+                    ?RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps):requested;
+            caps.require(size);installTarget(size,wantedMode,wantedQuality);resolutionMessage=null;
         }catch(RuntimeException|OutOfMemoryError rejected){
             String reason=rejected.getMessage();if(reason==null)reason=rejected.getClass().getSimpleName();
             if(framebuffer!=0){
-                requestedUhd=activeUhd;quality=acceptedQuality;framebufferDirty=false;
+                requestedUhd=activeUhd;requestedUltra=activeUltra;quality=acceptedQuality;framebufferDirty=false;
                 display=RenderResolution.fit(viewWidth,viewHeight,new RenderResolution.Size(width,height));
                 resolutionMessage="No se pudo activar "+request+": "+reason+". Se conserva "+width+"×"+height+".";return;
             }
@@ -288,7 +300,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             int fallback=wantedQuality;
             while(true){
                 try{
-                    installTarget(RenderResolution.adaptive(viewWidth,viewHeight,fallback,caps),false,fallback);
+                    installTarget(RenderResolution.adaptive(viewWidth,viewHeight,fallback,caps),RenderResolution.ADAPTIVE,fallback);
                     resolutionMessage="No se pudo activar "+request+": "+reason+". Se usa modo adaptado "+width+"×"+height+".";return;
                 }catch(RuntimeException|OutOfMemoryError unavailable){
                     if(fallback<=64)throw new IllegalStateException("No se pudo asignar un framebuffer mínimo",unavailable);
@@ -696,7 +708,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d%s",fps,width,height,isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
@@ -862,9 +874,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
-    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=false;resolutionMessage=null;framebufferDirty=true;}
-    public void setUhd4k(boolean enabled){requestedUhd=enabled;resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
+    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;}
+    public void setUhd4k(boolean enabled){requestedUhd=enabled; if(enabled)requestedUltra=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
+    public void setUhd8k(boolean enabled){requestedUltra=enabled; if(enabled)requestedUhd=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
     public boolean isUhd4k(){return activeUhd&&framebuffer!=0&&((width==3840&&height==2160)||(width==2160&&height==3840));}
+    public boolean isUhd8k(){return activeUltra&&framebuffer!=0&&((width==7680&&height==4320)||(width==4320&&height==7680));}
     public int renderedWidth(){return width;}
     public int renderedHeight(){return height;}
     public int surfaceWidth(){return viewWidth;}
@@ -923,6 +937,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
         glDeleteBuffers(1,new int[]{overlayVbo},0);glDeleteVertexArrays(2,new int[]{eyeVao,overlayVao},0);
         sceneProgram=overlayProgram=0;hasFrame=false;capture=null;
-        activeUhd=false;
+        activeUhd=activeUltra=false;
     }
 }
