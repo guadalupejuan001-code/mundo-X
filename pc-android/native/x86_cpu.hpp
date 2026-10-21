@@ -210,7 +210,7 @@ class Cpu {
       rollback(before);
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
-    } catch (const SparseRam::BudgetExceeded& e) {
+    } catch (const MemoryFabric::BudgetExceeded& e) {
       rollback(before);
       fault = Fault{FaultCode::MemoryBudget, start_cs_, start_ip_, opcode_, decoded_, e.what()};
     } catch (const std::exception& e) {
