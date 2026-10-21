@@ -73,7 +73,8 @@ jobs:
               assert not Path('pc-android/app/src/main/java/com/mundox/graphics/'+name).exists(),name
           bridge_sources=[
               'pc-android/native/x86_cpu.hpp','pc-android/native/sparse_ram.hpp',
-              'pc-android/native/pc_machine.hpp','pc-android/native/pc_video.hpp','pc-android/native/graphics_demo.hpp',
+              'pc-android/native/memory_fabric.hpp','pc-android/native/pc_machine.hpp',
+              'pc-android/native/pc_video.hpp','pc-android/native/graphics_demo.hpp',
               'pc-android/app/src/main/cpp/pc_jni.cpp',
               'pc-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java',
               'pc-android/app/src/main/java/com/cosmicx/pc/MainActivity.java',
