@@ -1,6 +1,11 @@
 # Ether Memory v0.2 — MemoryFabric x86 directo
 
-**Estado:** integración experimental sobre la misma `InfiniteSession` de COSMIC X PC.
+**Estado:** compatibilidad experimental del PC; **sustituido como arquitectura
+principal de memoria cuántica** por
+[Inverse Ether Memory](inverse-ether-memory.md).
+
+La ventana x86 continúa disponible para validar integración clásica, pero
+`quantum-runtime/` no compila MemoryFabric, SparseRam, x86, VBE ni GLES.
 
 ## Objetivo
 
