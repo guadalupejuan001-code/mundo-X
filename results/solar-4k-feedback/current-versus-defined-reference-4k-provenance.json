@@ -1,0 +1,36 @@
+{
+  "command": [
+    "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+    "/workspace/scratch/d0e1d0a0e3a1/mundo-X/tools/solar_shader_check.py",
+    "--fixtures",
+    "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/solar-integration-2026-10-20/shipping/fixtures-native-3840.json",
+    "--scenes",
+    "4",
+    "24",
+    "--warmup-frames",
+    "2",
+    "--repeats",
+    "5",
+    "--baseline-shader",
+    "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/tests/fixtures/solar-defined-reference.frag",
+    "--output",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/solar-4k-feedback/current-versus-defined-reference-4k.json"
+  ],
+  "source_commit": "34432b69ad6c64b87bb8076951cd34e3a22093f7",
+  "sha256": {
+    "results/solar-integration-2026-10-20/shipping/fixtures-native-3840.json": "e1bcc4e4be0dfe5af2ee7f60e5969172cf5830f0dbc77a42d822847013553a76",
+    "solar-android/tests/fixtures/solar-defined-reference.frag": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+    "solar-android/app/src/main/assets/shaders/solar.frag": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+    "tools/solar_shader_check.py": "56ab4a67a4ff1cac5ede2bb05f23b10567de5fdc9381ca8d157f2ea05973026b"
+  },
+  "scope": "One host software GLES pair at 3840x2160, two scenes, five warmed samples each; not physical-device FPS.",
+  "returncode": 0,
+  "wall_seconds": 78.31462018199818,
+  "sha256_after": {
+    "results/solar-integration-2026-10-20/shipping/fixtures-native-3840.json": "e1bcc4e4be0dfe5af2ee7f60e5969172cf5830f0dbc77a42d822847013553a76",
+    "solar-android/tests/fixtures/solar-defined-reference.frag": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+    "solar-android/app/src/main/assets/shaders/solar.frag": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+    "tools/solar_shader_check.py": "56ab4a67a4ff1cac5ede2bb05f23b10567de5fdc9381ca8d157f2ea05973026b"
+  },
+  "inputs_unchanged": true
+}

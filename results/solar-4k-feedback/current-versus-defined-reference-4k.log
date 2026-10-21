@@ -1,0 +1,5 @@
+{"stage": "draw", "scene": 4, "program": "after", "memory": {"VmPeak": "750776 kB", "VmSize": "734392 kB", "VmHWM": "291184 kB", "VmRSS": "274984 kB"}}
+{"stage": "draw", "scene": 4, "program": "before", "memory": {"VmPeak": "856408 kB", "VmSize": "780536 kB", "VmHWM": "396144 kB", "VmRSS": "320788 kB"}}
+{"stage": "draw", "scene": 24, "program": "after", "memory": {"VmPeak": "918072 kB", "VmSize": "918072 kB", "VmHWM": "458668 kB", "VmRSS": "458668 kB"}}
+{"stage": "draw", "scene": 24, "program": "before", "memory": {"VmPeak": "926172 kB", "VmSize": "926172 kB", "VmHWM": "466768 kB", "VmRSS": "466768 kB"}}
+{"median_ms": {"before": 2444.782336, "after": 2278.2956034999997}, "different_pixels": {"color": 0, "id": 0, "depth": 0}, "max_color_channel_delta": 0, "rss_peak_kib": 499004}
