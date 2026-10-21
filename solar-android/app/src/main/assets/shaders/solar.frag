@@ -22,9 +22,6 @@ uniform vec4 uEntry; // body (-1 outside entry), altitude km, mean radius km, ac
 uniform int uAtmosphereEnabled;
 uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
-uniform highp usampler2D uBodyTiles;
-uniform ivec2 uBodyTileGrid;
-uniform int uBodyTileSize;
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
 out vec4 outColor;
