@@ -32,6 +32,10 @@ El [contrato de arquitectura Ether](docs/ether-architecture.md) fija las
 responsabilidades por componente, la conservación del estado, la coherencia de
 las observaciones y los criterios de integración y rendimiento.
 
+La primera capa de [Ether Memory](docs/ether-memory-v0-1.md) añade bytes lógicos
+`qload8/qstore8` sobre el mismo dominio, sin presentar la RAM física clásica
+del teléfono como qRAM de hardware.
+
 **Fusión implementada:** Ether y los componentes finitos ahora describen un
 único estado cuántico por sesión. Las reglas globales, puertas locales,
 mediciones, consultas y snapshots usan esa misma autoridad. Graphics y COSMIC

@@ -43,6 +43,20 @@ El huésped vacía el canal, envía los bytes del programa y escribe `2` al puer
 
 Se acepta la gramática del núcleo: `h/s/x/y/z`, `cx/cz`, `expect`, `probz`, `measure`, `postselect`, `seed`, `compact`, `stats`, `begin/end` y `assert expect/probz`. `background zero|bell`, como primer comando de una petición, reinicia explícitamente su fondo. No se admiten NUL, direcciones no decimales ni comandos arbitrarios de anfitrión. Un error de programa, un ancho de puerto incorrecto o un desbordamiento se informa en el dispositivo; no se convierte en un fallo de CPU. Tras desbordamiento hay que vaciar el canal: nunca se ejecuta el prefijo truncado.
 
+### Ether Memory v0.1
+
+El mismo canal acepta `qload8 DIRECCION` y `qstore8 DIRECCION VALOR`. Un byte
+lógico se representa mediante ocho qubits consecutivos `q(8a)..q(8a+7)`.
+`qload8` no mide: si un bit no tiene un valor Z determinista, rechaza la
+lectura. `qstore8` tampoco colapsa estados cuánticos; solo modifica bytes que
+ya son clásicos y aplica los X necesarios como un batch atómico. En fondo cero,
+un byte intacto no materializa qubits. [Contrato y límites](../docs/ether-memory-v0-1.md).
+
+Esta capa es experimental y **no reemplaza aún la RAM x86 general**. La CPU sigue
+usando `SparseRam`; el huésped accede a Ether Memory mediante el dispositivo
+cuántico existente. Una futura ventana de memoria x86 deberá reservarse
+explícitamente y mantener la semántica de cargas/almacenamientos.
+
 Presupuestos del perfil PC:
 
 | Recurso | Límite |
