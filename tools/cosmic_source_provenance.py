@@ -34,6 +34,7 @@ RECOVERED_PHYSICS_REFERENCE = "02e69b81f18329e38d5f0e32a5a082be27bffa3c"
 GRAPHICS_MANIFEST_REFERENCE = "4f04322eed3b698e4f20081921c5ed1da2c4b721"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 ETHER_MEMORY_REFERENCE = "729994e1e044ad5a4d4ffd4c43dcea2ad638608f"
+ETHER_MEMORY_FABRIC_REFERENCE = "8b9d5d40319ff093ea019156b8b476754ed6d504"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -64,7 +65,7 @@ ADDITIONAL_SOURCES = {
     "native/include/mundo_x/infinite_bridge.h": INTEGRATION_REFERENCE,
     "native/include/mundo_x/infinite_bridge.hpp": INTEGRATION_REFERENCE,
     "native/include/mundo_x/infinite_program.hpp": ETHER_MEMORY_REFERENCE,
-    "native/include/mundo_x/infinite_session.hpp": AUDIT_REFERENCE,
+    "native/include/mundo_x/infinite_session.hpp": ETHER_MEMORY_FABRIC_REFERENCE,
     "native/src/infinite_bridge.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_bridge.cpp": INTEGRATION_REFERENCE,
     "native/tests/infinite_session.cpp": INTEGRATION_REFERENCE,

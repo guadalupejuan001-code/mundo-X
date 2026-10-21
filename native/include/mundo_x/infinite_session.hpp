@@ -96,6 +96,21 @@ class InfiniteSession {
     std::lock_guard<std::mutex> lock(mutex_); return core_.probability_one(address);
   }
 
+  // Direct deterministic byte view used by the PC MemoryFabric. These calls
+  // share the same lock/state as the Infinite language qload8/qstore8 commands.
+  // qload8 never measures; qstore8 commits the complete byte as one candidate.
+  std::uint8_t qload8(const std::string& byte_address) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return infinite_program_detail::qload8(core_, byte_address);
+  }
+
+  void qstore8(const std::string& byte_address, std::uint8_t value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto candidate = core_;
+    infinite_program_detail::qstore8(candidate, byte_address, value);
+    commit_if_changed(std::move(candidate), false);
+  }
+
   CompactCore::ZMeasurement measure_z(const std::string& address) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto candidate = core_;
