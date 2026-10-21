@@ -52,6 +52,18 @@ public final class SolarOptimizationChecks {
         }
         System.out.println("eclipse_omission_checks="+omitted);
     }
+    static void catalogSpecialization(){
+        int[] rings={5,6,7,8};
+        int[] volumes={0,2,3,4,5,6,7,8,10,14,16};
+        for(int id=0;id<SolarData.BODIES.length;id++){
+            boolean expectedRing=false;for(int value:rings)if(value==id)expectedRing=true;
+            check((SolarData.BODIES[id].ringOuter>0)==expectedRing,"ring specialization ids changed");
+            SolarEnvironment e=SolarEnvironment.environment(id);
+            boolean expectedVolume=false;for(int value:volumes)if(value==id)expectedVolume=true;
+            boolean actual=e.atmosphereTopKm>0&&e.scaleHeightKm>0&&e.opacity>0;
+            check(actual==expectedVolume,"atmosphere specialization ids changed");
+        }
+    }
     static void physics(){
         SolarFlightPhysics.State state=new SolarFlightPhysics.State(35,0);double altitude=state.altitudeKm;
         boolean rejected=false;try{SolarFlightPhysics.step(3,SolarEnvironment.environment(2),state,0,.1);}catch(IllegalArgumentException e){rejected=true;}
@@ -76,6 +88,6 @@ public final class SolarOptimizationChecks {
     }
     public static void main(String[] args){
         if(args.length>0&&args[0].equals("bench")){bench();return;}
-        positions();visibility();eclipses();physics();System.out.println("SolarOptimizationChecks PASS: "+checks);
+        positions();visibility();eclipses();catalogSpecialization();physics();System.out.println("SolarOptimizationChecks PASS: "+checks);
     }
 }
