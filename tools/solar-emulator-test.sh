@@ -14,6 +14,9 @@ solar_4k="${SOLAR_UHD4K:-false}"
 solar_8k="${SOLAR_UHD8K:-false}"
 [[ "$solar_4k" != true || "$solar_8k" != true ]] || { echo 'Choose Solar 4K or 8K, not both.' >&2; exit 1; }
 solar_profile=normal
+solar_system_image='system-images;android-35;google_apis;x86_64'
+solar_requested_ram_mib=2048
+solar_requested_cores=2
 solar_package=com.cosmicx.solar
 solar_apk=COSMIC-X-Solar.apk
 solar_tests=COSMIC-X-Solar-tests.apk
@@ -22,6 +25,10 @@ solar_instrument_args=()
 solar_verify_args=()
 if [[ "$solar_8k" == true ]]; then
   solar_profile=8k
+  # Match XLab's AOSP fixture: Solar has no Google Play dependency. The
+  # Google APIs image hit memory pressure and system-service crashes before
+  # the focused 8K tests. Keep that environment separate from app assertions.
+  solar_system_image='system-images;android-35;default;x86_64'
   solar_package=com.cosmicx.solar.ultra
   solar_apk=COSMIC-X-Solar-8K.apk
   solar_tests=COSMIC-X-Solar-8K-tests.apk
@@ -39,6 +46,7 @@ elif [[ "$solar_4k" == true ]]; then
 fi
 mkdir -p "$solar_evidence"
 solar_evidence="$(realpath "$solar_evidence")"
+printf '%s\n' "$solar_system_image" > "$solar_evidence/system-image.txt"
 
 python3 - "$solar_apks" "$solar_profile" <<'PY'
 import hashlib
@@ -78,11 +86,11 @@ export ANDROID_USER_HOME="${RUNNER_TEMP:-/tmp}/cosmic-solar-android"
 export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
 mkdir -p "$ANDROID_AVD_HOME"
 printf 'no\n' | "$solar_avdmanager" create avd --force --name cosmic-solar \
-  --package 'system-images;android-35;google_apis;x86_64' --device pixel_2 \
+  --package "$solar_system_image" --device pixel_2 \
   --path "$ANDROID_AVD_HOME/cosmic-solar.avd"
 
 "$solar_emulator" -avd cosmic-solar -port 5554 -no-window -no-audio -no-boot-anim \
-  -gpu swiftshader -no-snapshot -memory 2048 -cores 2 \
+  -gpu swiftshader -no-snapshot -memory "$solar_requested_ram_mib" -cores "$solar_requested_cores" \
   > "$solar_evidence/emulator.log" 2>&1 &
 solar_emulator_pid=$!
 solar_collected=false
@@ -197,6 +205,61 @@ if [[ "$solar_profile" != normal ]]; then
 fi
 "$solar_adb" -s "$solar_serial" shell svc wifi disable
 "$solar_adb" -s "$solar_serial" shell svc data disable
+# Record actual resources before launching Solar. Recent emulator versions may
+# raise -memory 2048 to 2560 MiB; the requested value is not a measured guest cap.
+cat /proc/meminfo > "$solar_evidence/host-meminfo-before.txt"
+if [[ -r /proc/pressure/memory ]]; then
+  cat /proc/pressure/memory > "$solar_evidence/host-memory-pressure-before.txt"
+fi
+cat "/proc/$solar_emulator_pid/status" > "$solar_evidence/emulator-process-before.txt"
+tr '\0' ' ' < "/proc/$solar_emulator_pid/cmdline" > "$solar_evidence/emulator-command-line.txt"
+cp "$ANDROID_AVD_HOME/cosmic-solar.avd/config.ini" "$solar_evidence/avd-config.ini"
+if [[ -f "$ANDROID_AVD_HOME/cosmic-solar.avd/hardware-qemu.ini" ]]; then
+  cp "$ANDROID_AVD_HOME/cosmic-solar.avd/hardware-qemu.ini" "$solar_evidence/avd-effective-hardware.ini"
+fi
+timeout 15 "$solar_adb" -s "$solar_serial" shell cat /proc/meminfo \
+  > "$solar_evidence/guest-meminfo-before.txt"
+timeout 15 "$solar_adb" -s "$solar_serial" shell getprop ro.build.fingerprint \
+  > "$solar_evidence/build-fingerprint.txt"
+timeout 15 "$solar_adb" -s "$solar_serial" shell getprop ro.build.version.sdk \
+  > "$solar_evidence/android-sdk.txt"
+python3 - "$solar_evidence" "$solar_requested_ram_mib" "$solar_requested_cores" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+directory = Path(sys.argv[1])
+def memory(name):
+    return {key: int(value) for key, value in re.findall(
+        r'^(MemTotal|MemAvailable|SwapTotal|SwapFree):\s+(\d+)\s+kB',
+        (directory / name).read_text(), re.MULTILINE)}
+guest = memory('guest-meminfo-before.txt')
+if guest.get('MemTotal', 0) <= 0:
+    raise SystemExit('Guest MemTotal was not observed before instrumentation')
+sdk = int((directory / 'android-sdk.txt').read_text().strip())
+if sdk != 35:
+    raise SystemExit('Expected the Android 15 (API 35) test image')
+emulator_log = (directory / 'emulator.log').read_text(errors='replace')
+ram_changes = re.findall(r'(?:Increasing RAM size to |Physical RAM size: )(\d+)\s*MB', emulator_log)
+process = (directory / 'emulator-process-before.txt').read_text()
+result = {
+    'systemImage': (directory / 'system-image.txt').read_text().strip(),
+    'androidSdk': sdk,
+    'buildFingerprint': (directory / 'build-fingerprint.txt').read_text().strip(),
+    'requestedRamMiB': int(sys.argv[2]),
+    'requestedCores': int(sys.argv[3]),
+    'emulatorRamMiBFromLog': int(ram_changes[-1]) if ram_changes else None,
+    'guestBeforeKiB': guest,
+    'hostBeforeKiB': memory('host-meminfo-before.txt'),
+    'emulatorBefore': {key: int(value) for key, value in re.findall(
+        r'^(VmPeak|VmHWM|VmRSS|Threads):\s+(\d+)', process, re.MULTILINE)},
+    'scope': 'Pre-instrumentation snapshots; requested RAM is not an effective memory cap or a process peak.'
+}
+(directory / 'resource-provenance.json').write_text(json.dumps(result, indent=2) + '\n')
+print('Recorded actual host/guest resources before Solar instrumentation.')
+PY
+timeout 15 "$solar_adb" -s "$solar_serial" logcat -d \
+  > "$solar_evidence/logcat-before-instrumentation.txt" 2>&1
 "$solar_adb" -s "$solar_serial" logcat -c
 
 set +e

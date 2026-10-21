@@ -147,13 +147,13 @@ jobs:
           name: COSMIC-X-Solar-8K-APK
           path: solar-8k-apks
 
-      - name: Enable Android 15 emulator with 2 GB RAM
+      - name: Enable Android 15 AOSP emulator and record actual memory
         shell: bash
         run: |
           set -euo pipefail
           sudo chmod 666 /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+            'platform-tools' 'emulator' 'system-images;android-35;default;x86_64'
 
       - name: Verify 13 legacy and 2 focused 8K/entry tests on real Android
         shell: bash
