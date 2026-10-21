@@ -21,7 +21,7 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "sparse_ram.hpp"
+#include "memory_fabric.hpp"
 
 namespace cosmic_pc {
 
@@ -74,7 +74,7 @@ class Cpu {
   std::uint64_t eip = 0x7c00, cr2 = 0, cr3 = 0, efer = 0, fs_base = 0, gs_base = 0;
   std::uint32_t eflags = 2, cr0 = 0x10, cr4 = 0;
   DescriptorTable gdtr{0, 0}, idtr{0x3ff, 0};
-  SparseRam memory;
+  MemoryFabric memory;
   bool a20_enabled = false;
   bool halted = false;
   std::optional<Fault> fault;
@@ -91,7 +91,7 @@ class Cpu {
   std::function<bool(std::uint16_t, unsigned, std::uint32_t)> out_hook;
 
   explicit Cpu(std::size_t ram_bytes = 2 * 1024 * 1024)
-      : Cpu(ram_bytes, SparseRam::default_budget(ram_bytes)) {}
+      : Cpu(ram_bytes, MemoryFabric::default_budget(ram_bytes)) {}
   Cpu(std::size_t ram_bytes, std::size_t resident_budget_bytes)
       : memory(ram_bytes, resident_budget_bytes) {
     if (ram_bytes == 0) throw std::invalid_argument("RAM must not be empty");
