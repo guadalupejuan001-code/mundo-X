@@ -13,6 +13,8 @@ on:
       - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/EditPages.java'
       - 'tools/edit_pages_check.py'
+      - 'tools/ether_mirror_check.py'
+      - 'tools/ether_render_evaluation_check.py'
       - 'tools/graphics/EditPagesChecks.java'
       - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/**'
@@ -33,6 +35,8 @@ on:
       - 'graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java'
       - 'graphics-android/app/src/main/java/com/mundox/graphics/EditPages.java'
       - 'tools/edit_pages_check.py'
+      - 'tools/ether_mirror_check.py'
+      - 'tools/ether_render_evaluation_check.py'
       - 'tools/graphics/EditPagesChecks.java'
       - 'tools/cosmic_source_provenance.py'
       - 'graphics-desktop/**'
@@ -164,4 +168,40 @@ jobs:
             cosmic-evidence/desktop/
             graphics-desktop/contract-validation.json
             graphics-desktop/validation.json
+          if-no-files-found: warn
+
+  mirror-contracts:
+    name: Mirror geometry, shared Ether and bounded work
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EGL_PLATFORM: surfaceless
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: graphics-desktop/requirements.txt
+      - name: Prepare headless GLES
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++ libegl1 libegl-mesa0 libgles2 libgl1-mesa-dri
+          python -m pip install -r graphics-desktop/requirements.txt
+      - name: Compare mirrors with an independent optical oracle under 2 GiB
+        run: |
+          python tools/ether_mirror_check.py \
+            --output cosmic-evidence/mirrors/report.json \
+            --images cosmic-evidence/mirrors/images
+      - name: Upload optical and resource evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Mirror-Contracts
+          path: cosmic-evidence/mirrors/
           if-no-files-found: warn

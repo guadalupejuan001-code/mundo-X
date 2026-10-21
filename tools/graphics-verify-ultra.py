@@ -185,9 +185,11 @@ def main():
     metrics = report["metrics"]
     require(metrics["ultra8kSuite"] is True and metrics["uhd4kSuite"] is True, "Missing 8K/UHD instrumentation profile")
     inventory = {test["name"]: test for test in report["tests"]}
-    require(report["testsRun"] == 29 and report["testsFailed"] == 0
-            and len(report["tests"]) == len(inventory) == 29
+    expected_count = 30 + int(metrics.get("mirrorSuite", False))
+    require(report["testsRun"] == expected_count and report["testsFailed"] == 0
+            and len(report["tests"]) == len(inventory) == expected_count
             and "native_ether_contracts" in inventory
+            and "frame_reuse_exact_inputs_and_invalidation" in inventory
             and all(test["passed"] is True for test in inventory.values()),
             "Missing shared Ether, 1000-qubit, UHD or 8K cases")
     require(ULTRA_TESTS <= inventory.keys() and all(inventory[name]["passed"] for name in ULTRA_TESTS),

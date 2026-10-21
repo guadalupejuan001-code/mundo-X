@@ -12,6 +12,7 @@ graphics_apks="${GRAPHICS_APK_DIR:-graphics-apks}"
 graphics_evidence="${GRAPHICS_EVIDENCE_DIR:-graphics-evidence}"
 graphics_uhd="${GRAPHICS_UHD4K:-false}"
 graphics_ultra="${GRAPHICS_ULTRA8K:-false}"
+graphics_mirrors="${GRAPHICS_MIRRORS:-false}"
 graphics_package=com.mundox.graphics
 graphics_apk=COSMIC-X-Engine.apk
 graphics_tests=COSMIC-X-Engine-tests.apk
@@ -31,6 +32,10 @@ if [[ "$graphics_ultra" == true ]]; then
   graphics_tests=COSMIC-X-Engine-8K-tests.apk
   graphics_instrument_args=(-e uhd4k true -e ultra8k true)
   graphics_verify_args=(--ultra8k)
+fi
+if [[ "$graphics_mirrors" == true ]]; then
+  graphics_instrument_args+=(-e mirrors true)
+  graphics_verify_args+=(--mirrors)
 fi
 mkdir -p "$graphics_evidence"
 graphics_evidence="$(realpath "$graphics_evidence")"

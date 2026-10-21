@@ -337,8 +337,16 @@ public final class CosmicActivity extends Activity {
     private void toggleCoupling(){coupled=!coupled;couplingButton.setText(coupled?"Campo conectado":"Campo apagado");final boolean enabled=coupled;action(()->renderer.coupling(enabled));}
     private void toggleAnimation(){animate=!animate;playButton.setText(animate?"Pausar":"Animar");lastTick=0;main.removeCallbacks(tick);if(animate&&resumed&&tab<2)main.post(tick);}
 
-    private void sceneMenu(){new AlertDialog.Builder(this).setTitle("Tu escena").setItems(new String[]{"Cámara de presentación","Cantidad de objetos","Calidad del renderizado","Semilla del mundo","Editar el objeto seleccionado","Detalle del motor"},(d,which)->{
-        if(which==0)action(()->renderer.scenicView());else if(which==1)chooseObjects();else if(which==2)chooseQuality();else if(which==3)chooseSeed();else if(which==4)editMenu();else showInfo();}).show();}
+    private void sceneMenu(){new AlertDialog.Builder(this).setTitle("Tu escena").setItems(new String[]{"Cámara de presentación","Cantidad de objetos","Calidad del renderizado","Semilla del mundo","Editar el objeto seleccionado","Detalle del motor","Espejos del mismo mundo"},(d,which)->{
+        if(which==0)action(()->renderer.scenicView());else if(which==1)chooseObjects();else if(which==2)chooseQuality();else if(which==3)chooseSeed();else if(which==4)editMenu();else if(which==6)chooseMirrors();else showInfo();}).show();}
+    private void chooseMirrors(){new AlertDialog.Builder(this).setTitle("Reflejos del mismo mundo")
+        .setItems(new String[]{"Desactivados","Suelo reflectante","Ver espejos enfrentados","Detalle de reflejos"},(dialog,index)->{
+            if(index<3)action(()->{renderer.setReflections(index,renderer.mirrorBudget(),true,1f);
+                if(index==QuantumRenderer.MIRRORS_PAIR)renderer.mirrorView();});
+            else new AlertDialog.Builder(this).setTitle("Límite de rebotes explícitos")
+                .setItems(new String[]{"8","16","32","64"},(d,choice)->action(()->
+                    renderer.setReflections(renderer.mirrorMode(),new int[]{8,16,32,64}[choice],true,1f))).show();
+        }).show();}
     private void chooseObjects(){int[] counts={1_024,4_096,16_384,65_536,262_144,1_000_000,1_048_576};String[] labels={"1.024","4.096","16.384","65.536","262.144","1.000.000","1.048.576"};new AlertDialog.Builder(this).setTitle("Objetos del mundo").setItems(labels,(d,i)->action(()->renderer.objectCount(counts[i]))).show();}
     private void chooseQuality(){int[] pixels={480,640,960,1280};new AlertDialog.Builder(this).setTitle("Detalle de la imagen").setItems(new String[]{"480 px · ligero","640 px · equilibrado","960 px · detallado","1.280 px · máximo detalle"},(d,i)->action(()->renderer.resolution(pixels[i]))).show();}
     private void chooseSeed(){EditText input=field("Semilla de 0 a 4.294.967.295",String.valueOf(savedSession==null?2026:savedSession.visual.seed),true);AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Semilla del mundo").setView(input).setNegativeButton("Cancelar",null).setPositiveButton("Aplicar",null).create();dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{long seed=Long.parseLong(input.getText().toString());if(seed<0||seed>0xffffffffL)throw new IllegalArgumentException("Semilla fuera de rango");action(()->renderer.worldSeed(seed));dialog.dismiss();}catch(Exception error){input.setError(error.getMessage());}}));dialog.show();}
@@ -507,7 +515,9 @@ public final class CosmicActivity extends Activity {
     }
 
     private void showInfo(){
-        QuantumRenderer.FrameStats s=renderer.frameStats();String details=s==null?statusText:String.format(Locale.US,"%,d objetos · %d × %d px\n%.1f ms por dibujo · %d observables\n%s",s.objectCount,s.width,s.height,s.drawMs,s.observables,s.device);
+        QuantumRenderer.FrameStats s=renderer.frameStats();
+        String timing=s==null?"":s.frameReused?"Imagen conservada":String.format(Locale.US,"Envío del dibujo: %.1f ms",s.drawMs);
+        String details=s==null?statusText:String.format(Locale.US,"%,d objetos · %d × %d px\n%s · %d observables\n%s",s.objectCount,s.width,s.height,timing,s.observables,s.device);
         new AlertDialog.Builder(this).setTitle("COSMIC X Engine · 0.3.1").setMessage("Computación cuántica de Mundo X\nNúcleo cuántico + motor gráfico cuántico integrado\n\n"+details+"\n\nLa escena observa el núcleo activo. Las puertas cambian ese estado; mover la cámara y elegir objetos lo conservan. Los valores del núcleo son expectativas de Pauli calculadas en software.\n\nTus 14 experimentos originales están dentro de esta app. Cada laboratorio conserva su modelo y controles.\n\nLos archivos .cosmic guardan las operaciones, observables, semilla, objetos y cámara. La nueva iluminación es una presentación del mismo motor.\n\nIdea, creación y dirección: X. Desarrollo sobre el código de Mundo X con asistencia de IA.").setPositiveButton("Continuar",null).show();
     }
 

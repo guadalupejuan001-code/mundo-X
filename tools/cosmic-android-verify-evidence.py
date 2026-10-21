@@ -29,6 +29,7 @@ GRAPHICS_CASES = {
     "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
     "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
     "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration", "pause_resume_preserves_state",
+    "frame_reuse_exact_inputs_and_invalidation",
     "portable_codec_strict_validation", "portable_desktop_fixtures_import", "portable_mutation_export_reimport",
     "portable_invalid_import_preserves_session", "portable_activity_recreation",
 }
