@@ -22,6 +22,13 @@ namespace cosmic_pc {
 class PcMachine {
  public:
   using Reader=std::function<bool(std::uint64_t,std::uint8_t*,std::size_t)>;
+  // One page at the unused tail of the reserved 128-MiB VBE aperture stays
+  // outside normal guest RAM. Its first 256 bytes are backed by Ether Memory.
+  // The maximum 8K framebuffer ends 1,507,328 bytes before this page.
+  static constexpr std::uint64_t kEtherMemoryPhysicalBase =
+      PcVideo::kFramebufferAddress + PcVideo::kApertureBytes - 4096;
+  static constexpr std::size_t kEtherMemoryBytes = 256;
+  static constexpr std::uint64_t kEtherMemoryLogicalByteBase = 1000000000000ULL;
   Cpu cpu;
   const std::shared_ptr<mundo_x::InfiniteSession> quantum_session;
   PcQuantumDevice quantum_device;
@@ -52,6 +59,15 @@ class PcMachine {
     cpu.interrupt_hook=[this](Cpu&,std::uint8_t n){return bios(n);};
     cpu.in_hook=[this](std::uint16_t port,unsigned width){return input(port,width);};
     cpu.out_hook=[this](std::uint16_t port,unsigned width,std::uint32_t v){return output(port,width,v);};
+    cpu.memory.attach_window(
+        kEtherMemoryPhysicalBase,kEtherMemoryBytes,
+        [this](std::uint64_t offset){
+          return quantum_session->qload8(std::to_string(kEtherMemoryLogicalByteBase+offset));
+        },
+        [this](std::uint64_t offset,std::uint8_t value){
+          quantum_session->qstore8(std::to_string(kEtherMemoryLogicalByteBase+offset),value);
+          quantum_cache_valid_=false;
+        });
     clear_screen();
     video_.reset(cpu.memory);
   }
@@ -216,12 +232,15 @@ class PcMachine {
      <<",\"disk_reads\":"<<disk_reads<<",\"ram_bytes\":"<<cpu.memory.size()
      <<",\"ram_allocated_bytes\":"<<cpu.memory.allocated_bytes()<<",\"ram_budget_bytes\":"<<cpu.memory.budget_bytes()
      <<",\"ram_metadata_bytes\":"<<cpu.memory.metadata_bytes()<<",\"ram_allocated_pages\":"<<cpu.memory.allocated_pages()
+     <<",\"ether_memory_physical_base\":"<<kEtherMemoryPhysicalBase
+     <<",\"ether_memory_bytes\":"<<kEtherMemoryBytes
+     <<",\"ether_memory_logical_byte_base\":"<<kEtherMemoryLogicalByteBase
      <<",\"video_kind\":"<<quote(video.graphics?"vbe32":"text")<<",\"video_mode\":"<<video.mode
      <<",\"video_width\":"<<video.width<<",\"video_height\":"<<video.height<<",\"video_pitch\":"<<video.pitch
      <<",\"video_bytes\":"<<video.byte_size<<",\"video_address\":"<<video.physical_address
      <<",\"video_format\":"<<quote(video.graphics?"BGRX8888":"VGA-char-attribute")
      <<",\"video_aperture_bytes\":"<<(PcVideo::available(cpu.memory)?PcVideo::kApertureBytes:0)
-     <<",\"ram_policy\":\"zero-pages-on-demand\",\"engine\":\"cosmic-pc-own-x86\",\"windows_ready\":false,\"graphics_3d_ready\":false,\"quantum\":"<<quantum_json()<<"}";
+     <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\",\"engine\":\"cosmic-pc-own-x86\",\"windows_ready\":false,\"graphics_3d_ready\":false,\"quantum\":"<<quantum_json()<<"}";
     return o.str();
   }
   static std::string hex64(std::uint64_t value){std::ostringstream o;o<<std::hex<<std::uppercase<<std::setfill('0')<<std::setw(16)<<value;return o.str();}
