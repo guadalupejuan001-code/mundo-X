@@ -259,6 +259,8 @@ inline void execute_line(const std::vector<std::string>& words, InfiniteCore& co
     return;
   }
   if (command == "qload8") {
+    if (memory)
+      throw std::invalid_argument("qload8 is legacy MemoryFabric syntax; use mem_read");
     require_count(words, 2);
     const auto address = canonical(core, words[1]);
     const auto value = qload8(core, address);
@@ -267,6 +269,8 @@ inline void execute_line(const std::vector<std::string>& words, InfiniteCore& co
     return;
   }
   if (command == "qstore8") {
+    if (memory)
+      throw std::invalid_argument("qstore8 is legacy MemoryFabric syntax; use mem_store/mem_bind");
     require_count(words, 3);
     const auto address = canonical(core, words[1]);
     const auto parsed = decimal<unsigned>(words[2], "qstore8 value");
