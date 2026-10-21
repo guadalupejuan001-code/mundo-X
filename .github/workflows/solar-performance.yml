@@ -1,4 +1,4 @@
-name: Solar exact integration and paired Android performance
+name: Solar defined filtering and exact Android integration
 on:
   push:
     branches: [main, codex/solar-integration-20261020]
@@ -32,20 +32,32 @@ jobs:
         run: python3 tools/test_solar_performance_runner.py
       - name: Exact Java geometry, physics and shared native JNI
         run: bash tools/solar_host_checks.sh | tee solar-host.log
+      - name: Independent gradient oracle and exact defined-reference GLES
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libgl1-mesa-dri python3-numpy python3-pil strace
+          export OPENBLAS_NUM_THREADS=1 LP_NUM_THREADS=1
+          /usr/bin/python3 tools/solar_gradients_check.py --output solar-gradients.json
+          /usr/bin/python3 tools/solar_shader_check.py \
+            --fixtures results/solar-integration-2026-10-20/shipping/fixtures-native-320.json \
+            --baseline-shader solar-android/tests/fixtures/solar-defined-reference.frag \
+            --warmup-frames 2 --repeats 3 --output solar-defined-host.json
       - name: Android toolchain and 2 GB emulator
         run: |
           sudo chmod 666 /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' \
             'cmake;3.22.1' 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
-      - name: Build original source with identical instrumentation
+      - name: Build full-evaluation reference with the same defined filtering
         run: |
           git worktree add --detach ../solar-before af0b1797573b55a739dcaef7b784eb98825ff07c
+          cp solar-android/tests/fixtures/solar-defined-reference.frag \
+            ../solar-before/solar-android/app/src/main/assets/shaders/solar.frag
           cp solar-android/app/src/androidTest/java/com/mundox/solar/{SolarInstrumentation,SolarPerformanceChecks}.java \
             ../solar-before/solar-android/app/src/androidTest/java/com/mundox/solar/
-          gradle -p ../solar-before/solar-android --no-daemon --max-workers=2 :app:assembleDebug :app:assembleDebugAndroidTest
+          gradle -p ../solar-before/solar-android --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1g :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Build integrated original module
-        run: gradle -p solar-android --no-daemon --max-workers=2 :app:assembleDebug :app:assembleDebugAndroidTest
+        run: gradle -p solar-android --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1g :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Independent lossless PNG decode
         run: |
           mkdir -p build/solar-png
@@ -53,11 +65,12 @@ jobs:
           solar_android_jar="$ANDROID_HOME/platforms/android-35/android.jar"
           javac -cp "$solar_classes:$solar_android_jar" -d build/solar-png solar-android/tests/SolarPngChecks.java
           java -Xmx256m -cp "build/solar-png:$solar_classes:$solar_android_jar" com.mundox.solar.SolarPngChecks
-      - name: Paired exact captures and completed Android frames
+      - name: Paired exact captures in the declared deterministic software driver
         run: |
           python tools/solar_performance_android.py --sdk "$ANDROID_HOME" \
             --baseline ../solar-before/solar-android/app/build/outputs/apk \
-            --after solar-android/app/build/outputs/apk --output solar-performance-evidence
+            --after solar-android/app/build/outputs/apk --output solar-performance-evidence \
+            --swiftshader-threads 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -65,6 +78,9 @@ jobs:
           path: |
             solar-performance-evidence/**
             solar-host.log
+            solar-gradients.json
+            solar-defined-host.json
+            solar-android/tests/fixtures/solar-defined-reference.frag
             solar-android/app/build/outputs/apk/debug/*.apk
             solar-android/app/build/outputs/apk/androidTest/debug/*.apk
           if-no-files-found: warn

@@ -4,8 +4,36 @@ Pass identical instrumentation builds for both production versions. The emulator
 and adb run in one process tree, with bounded boot/test times and teardown.
 This script never installs anything on a physical phone.
 """
-import argparse,hashlib,json,os,subprocess,tarfile,tempfile,time
+import argparse,hashlib,json,os,re,shutil,subprocess,tarfile,tempfile,time
 from pathlib import Path
+
+def verify_driver_config(trace,report):
+    """Require evidence that the emulator opened the exact isolated config file.
+
+    strace is filtered to that one path when the process is started; it records
+    open calls, never file contents. A written but unread setting is not proof.
+    """
+    data=trace.read_text(errors='replace') if trace.exists() else ''
+    observed=bool(re.search(r'SwiftShader\.ini".*O_RDONLY.*\)\s*=\s*\d+',data))
+    report['driver_config_read_observed']=observed
+    report['driver_config_trace_sha256']=hashlib.sha256(data.encode()).hexdigest()
+    if not observed:raise RuntimeError('The emulator did not observably read the requested SwiftShader.ini; refusing to claim that worker configuration')
+
+def driver_processes(emulator):
+    """Inspect only the launched emulator/strace process tree, not other apps."""
+    pending=[emulator.pid];seen=set();result=[]
+    while pending:
+        pid=pending.pop()
+        if pid in seen:continue
+        seen.add(pid);root=Path('/proc')/str(pid)
+        try:
+            children=(root/'task'/str(pid)/'children').read_text().split()
+            pending.extend(map(int,children))
+            maps=[line for line in (root/'maps').read_text().splitlines() if 'swiftshader' in line.lower() or 'libGLES' in line or 'libEGL' in line]
+            names=[p.read_text().strip() for p in (root/'task').glob('*/comm')]
+            result.append({'pid':pid,'name':(root/'comm').read_text().strip(),'threads':len(names),'thread_names':names,'driver_mappings':maps})
+        except (OSError,ValueError):continue
+    return result
 
 def wait_for_boot(emulator,adb,serial,env,budget_seconds,report,save):
     """Retry slow ADB polls without extending the original boot deadline."""
@@ -83,7 +111,10 @@ def main():
     p.add_argument('--output',type=Path,required=True);p.add_argument('--boot-seconds',type=int,default=300);p.add_argument('--test-seconds',type=int,default=600)
     p.add_argument('--system-image',default='system-images;android-35;google_apis;x86_64')
     p.add_argument('--aot',action='store_true',help='Compile both packages with ART speed before running; record separately from ordinary installation')
-    p.add_argument('--no-accel',action='store_true');a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
+    p.add_argument('--swiftshader-threads',type=int,help='Use an isolated official SwiftShader worker configuration; require a traced config-file read (strace)')
+    p.add_argument('--no-accel',action='store_true');a=p.parse_args()
+    if a.swiftshader_threads is not None and a.swiftshader_threads<0:p.error('--swiftshader-threads must be nonnegative')
+    a.output.mkdir(parents=True,exist_ok=True)
     output=a.output.resolve();sdk=a.sdk.resolve();adb=str(sdk/'platform-tools/adb');serial='emulator-5580'
     env=dict(os.environ,ANDROID_HOME=str(sdk),ANDROID_SDK_ROOT=str(sdk))
     report={'ram_mb':2048,'software_gles':'swiftshader','virtualization':'TCG' if a.no_accel else 'auto','system_image':a.system_image,'art_compile':'speed' if a.aot else 'default','status':'starting','stage':'initializing','cases':[]}
@@ -98,6 +129,12 @@ def main():
         user=Path(temp);env['ANDROID_USER_HOME']=str(user);env['ANDROID_AVD_HOME']=str(user/'avd');(user/'avd').mkdir()
         emulator=None
         try:
+            if a.swiftshader_threads is not None:
+                config=f'[Processor]\nThreadCount={a.swiftshader_threads}\n[Testing]\nDisableServer=1\n'
+                (user/'SwiftShader.ini').write_text(config);(output/'SwiftShader.ini').write_text(config)
+                report.update(swiftshader_threads=a.swiftshader_threads,driver_configuration=config,driver_configuration_sha256=hashlib.sha256(config.encode()).hexdigest())
+                tracer=shutil.which('strace')
+                if not tracer:raise RuntimeError('strace is required to verify the requested emulator SwiftShader configuration')
             stage('creating_avd')
             command([str(sdk/'cmdline-tools/latest/bin/avdmanager'),'create','avd','--force','--name','solar-pair','--package',a.system_image,'--device','pixel_2','--path',str(user/'solar-pair.avd')],input='no\n',text=True,timeout=90,capture_output=True)
             stage('starting_adb')
@@ -105,9 +142,15 @@ def main():
             with open(output/'emulator.log','w') as log:
                 args=[str(sdk/'emulator/emulator'),'-avd','solar-pair','-port','5580','-no-window','-no-audio','-no-boot-anim','-no-snapshot','-gpu','swiftshader','-memory','2048','-cores','2','-feature','-Vulkan']
                 if a.no_accel:args+=['-accel','off']
+                if a.swiftshader_threads is not None:
+                    args=[tracer,'-f','-qq','-e','trace=open,openat','-P',str(user/'SwiftShader.ini'),'-o',str(output/'driver-config-open.log'),*args]
                 stage('booting_emulator')
-                emulator=subprocess.Popen(args,env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+                emulator=subprocess.Popen(args,env=env,cwd=user,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
                 wait_for_boot(emulator,adb,serial,env,a.boot_seconds,report,save)
+                if a.swiftshader_threads is not None:
+                    stage('verifying_driver_configuration')
+                    report['emulator_processes']=driver_processes(emulator)
+                    verify_driver_config(output/'driver-config-open.log',report);save()
                 report['status']='running';stage('configuring_display')
                 for cmd in [['shell','wm','size','640x360'],['shell','wm','density','160'],['shell','input','keyevent','82'],['shell','settings','put','secure','immersive_mode_confirmations','confirmed']]:android(cmd,timeout=30)
                 for label,root in [('before',a.baseline),('after',a.after)]:

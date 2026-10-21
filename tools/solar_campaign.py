@@ -39,6 +39,7 @@ def main():
               '-XX:ReservedCodeCacheSize=64m', '-Djava.library.path=' + str(args.jni.resolve()),
               '-cp', str(args.classes.resolve())]
     paths = ['solar-android/app/src/main/assets/shaders/solar.frag',
+             'solar-android/tests/fixtures/solar-defined-reference.frag',
              'solar-android/app/src/main/java/com/mundox/solar/SolarData.java',
              'solar-android/tests/SolarOcclusion.java',
              'solar-android/tests/SolarRenderFixtures.java',

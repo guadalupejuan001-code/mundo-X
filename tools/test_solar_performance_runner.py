@@ -2,13 +2,32 @@
 """Regression checks for slow boot polls and cleanup, without Android or ADB."""
 import copy
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import solar_performance_android as runner
 
 
 class RunnerTimeoutChecks(unittest.TestCase):
+    def test_worker_config_must_be_read_successfully(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'driver-config-open.log'
+            for trace,expected in [
+                ('',False),
+                ('openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = -1 ENOENT\n',False),
+                ('openat(AT_FDCWD, "SwiftShader.ini", O_WRONLY|O_CREAT, 0666) = 7\n',False),
+                ('18 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 7\n',True),
+            ]:
+                with self.subTest(trace=trace):
+                    path.write_text(trace);report={}
+                    if expected:runner.verify_driver_config(path,report)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError,'did not observably read'):
+                            runner.verify_driver_config(path,report)
+                    self.assertEqual(report['driver_config_read_observed'],expected)
+
     def test_slow_boot_poll_retries_without_extending_budget(self):
         for budget,boot_expected in [(12,True),(3,False)]:
             with self.subTest(budget=budget):

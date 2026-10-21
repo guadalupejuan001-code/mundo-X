@@ -1,0 +1,25 @@
+[
+  {
+    "attempt": "original full color plus ID/depth, two programs per output",
+    "exit_code": 139,
+    "conclusion": "Legacy SwiftShader crash; no passing result produced."
+  },
+  {
+    "attempt": "analytic albedo trace, two programs",
+    "exit_code": 139,
+    "log": "swiftshader-trace-albedo.log",
+    "conclusion": "Legacy SwiftShader crash; no passing result produced."
+  },
+  {
+    "attempt": "defined reference/candidate, two programs, 32-scene campaign",
+    "exit_code": 139,
+    "log": "swiftshader-defined-pair-32.log",
+    "captured_frames_before_failure": 5,
+    "conclusion": "Did not complete. Independent processes subsequently completed and compared exactly."
+  },
+  {
+    "attempt": "Mesa gradient oracle without bounded worker setup",
+    "exit_code": 134,
+    "conclusion": "LLVM allocation failed under 1GiB address-space cap. Added one-core affinity and one llvmpipe worker; rerun passed within the same cap."
+  }
+]

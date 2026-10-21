@@ -1,0 +1,54 @@
+{
+  "variant": "candidate-review",
+  "verified_utc": "2026-10-21T00:36:40.737250+00:00",
+  "source_commit": "02e69b81f18329e38d5f0e32a5a082be27bffa3c",
+  "source_snapshot": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-review",
+  "source_manifest_sha256": "6f6b199284fb3a0a3da9fbe37e522167e293a4dbcff9f8e2cdac48069b9bbfb7",
+  "scope": "Fresh Gradle builds; package, signatures, alignment, ABI and assets verified. No device execution in this report.",
+  "apks": {
+    "debug": {
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-review/solar-android/app/build/outputs/apk/debug/app-debug.apk",
+      "sha256": "5e1512ec4374c500b2a61ae73f1fe69adffad2eff5ed5fceddd1c7c6bdd03efb",
+      "bytes": 4620511,
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "package": "com.cosmicx.solar.review",
+      "version_name": "1.3.0",
+      "version_code": "4",
+      "application_label": "COSMIC X Solar Pruebas",
+      "min_sdk": "26",
+      "target_sdk": "35",
+      "signature_verified": true,
+      "alignment_16k_verified": true,
+      "verification_logs": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-review-verification",
+      "assets_sha256": {
+        "assets/science-assets.json": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+        "assets/textures/earth.png": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+        "assets/textures/jupiter.jpg": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+        "assets/textures/moon.jpg": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+        "assets/shaders/overlay.frag": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+        "assets/shaders/solar.vert": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+        "assets/shaders/solar.frag": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+        "assets/shaders/overlay.vert": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0"
+      },
+      "native_libraries": {
+        "arm64-v8a": {
+          "entry": "lib/arm64-v8a/libmx_graphics.so",
+          "sha256": "9d66f0b8b602fd959b8fc8e44057083f0a5bef7695d8b1aea32a2b93d2f26f9a",
+          "bytes": 1196104,
+          "elf_machine": 183
+        },
+        "x86_64": {
+          "entry": "lib/x86_64/libmx_graphics.so",
+          "sha256": "92cd158c5731f64d3684d60ed58f98d926df0acd15dfe617a24540260b9efd06",
+          "bytes": 1173032,
+          "elf_machine": 62
+        }
+      },
+      "shader_matches_source": true
+    }
+  },
+  "all_sources_identical_to_candidate": true,
+  "certificate_matches_candidate": true,
+  "android_test_built": false,
+  "all_checks_passed": true
+}

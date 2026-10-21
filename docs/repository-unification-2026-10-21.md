@@ -120,6 +120,26 @@ No cambia la cobertura de píxeles ni las tolerancias, ni el comportamiento de
 animación de la aplicación. El log anterior y el inventario de workflows se
 conservan en los resultados de esta revisión.
 
+### Solar: filtrado definido y una referencia explícita
+
+El shader utilizaba derivadas implícitas dentro de ramas que no ejecutan todos
+los fragmentos vecinos. La corrección calcula los gradientes del rayo, de la
+superficie y de los anillos de forma explícita, y suministra esos gradientes al
+muestreo de texturas. También define los casos límite de polos y tangencias.
+
+La referencia histórica recibe exclusivamente esa corrección de filtrado y sus
+guardas numéricas; mantiene la evaluación completa de materiales y capas. Frente
+a esa referencia definida, el candidato conserva sus optimizaciones y supera
+32 escenas exactas en Mesa y SwiftShader. Es una prueba de equivalencia después
+de corregir el filtrado; no afirma igualdad con el color indefinido anterior.
+
+SwiftShader necesitó un trabajador y calentamiento simétrico para las repeticiones
+exactas. Los fallos previos, los transitorios y la sensibilidad al controlador
+permanecen registrados. La [revisión Solar](solar-shader-determinism-2026-10-21.md)
+incluye el parche de referencia, sus hashes, un oráculo independiente de gradientes
+y las condiciones precisas de cada campaña. La ejecución Android es un gate
+separado; compilar los APK o pasar GLES en host no lo sustituye.
+
 ## Evidencia local nueva
 
 | Campaña | Resultado observado | Alcance |
@@ -134,6 +154,10 @@ conservan en los resultados de esta revisión.
 | XLab Java | 23 fuentes, 84 clases | Incluye ambas instrumentaciones. |
 | COSMIC Java | 46 fuentes, 170 clases | Incluye el menú de espejos, el renderer y las instrumentaciones compartidas. |
 | Procedencia nativa | 83 fuentes verificadas byte por byte | Las fuentes revisadas tienen un pin nuevo; las no modificadas conservan su referencia. |
+| Solar GLES, Mesa | 32/32 escenas; color, identidad y profundidad exactos | 5.529.600 píxeles entre las tres salidas; 241.412 KiB RSS máximo. |
+| Solar GLES, SwiftShader | 32/32 escenas; 1.843.200 píxeles RGBA, cero diferencias | Un trabajador, procesos separados y repeticiones exactas tras calentamiento simétrico; candidato 723.444 KiB RSS máximo. |
+| Gradientes Solar | 896 componentes por controlador, cero fallos | Diferencias finitas independientes; máximo error absoluto observado 2,06 × 10⁻⁸. |
+| APK Solar | Candidato, referencia definida, instrumentación y variante coexistente compilados | JDK17, Gradle8.9, un trabajador, JVM de 1 GiB; firma, fuentes, assets, ABI y alineación verificados. |
 
 Fuentes: [campaña nativa](../results/repository-unification-2026-10-21/core/gate-status.json),
 [revisión de física](repository-core-review-2026-10-21.md),
@@ -141,7 +165,9 @@ Fuentes: [campaña nativa](../results/repository-unification-2026-10-21/core/gat
 [PC](../results/repository-unification-2026-10-21/pc-java-compile.json),
 [XLab](../results/repository-unification-2026-10-21/xlab-java-compile.json) y
 [COSMIC](../results/repository-unification-2026-10-21/cosmic-java-compile.json), además de los
-[pins](../results/repository-unification-2026-10-21/core/integrated-source-provenance.json).
+[pins](../results/repository-unification-2026-10-21/core/integrated-source-provenance.json),
+la [campaña Solar](solar-shader-determinism-2026-10-21.md) y su
+[procedencia de APK](../results/repository-unification-2026-10-21/solar/android-builds/solar-apk-builds.json).
 
 CTest tuvo un problema local de permiso ejecutable en `infinite_tensor`. Se
 conservan los intentos iniciales y el hash del binario; corregir sólo su modo de
@@ -149,10 +175,10 @@ ejecución permitió completar el gate sin cambiar las fuentes ni sus bytes.
 Los manifiestos comprueban 144 entradas antes y después de las pruebas.
 
 Los resultados Android posteriores deben consultarse en los checks de PR25,
-vinculados a su propio commit y APK. La exactitud de Solar se investiga por
-separado: la comparación antigua de dos compilaciones del mismo shader ya
-presenta diferencias de color. La compilación o la coincidencia de identidades
-no bastan para declarar resuelta esa diferencia de sombreado.
+vinculados a su propio commit y APK. La campaña local Android del shader
+corregido está pendiente en este corte. Su runner exige observar que el emulador
+leyó la configuración de SwiftShader antes de atribuirle el número de trabajadores
+solicitado; después exige ocho escenas y todas sus repeticiones exactas.
 
 ## Qué demuestra la estructura y qué falta para valorarla
 

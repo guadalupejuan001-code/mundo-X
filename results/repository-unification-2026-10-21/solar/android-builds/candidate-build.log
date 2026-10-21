@@ -1,0 +1,197 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugBuildConfig
+> Task :app:javaPreCompileDebug
+> Task :app:checkDebugAarMetadata
+> Task :app:generateDebugResValues
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:mergeDebugResources
+> Task :app:packageDebugResources
+> Task :app:parseDebugLocalResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+
+> Task :app:compileDebugJavaWithJavac
+Note: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:processDebugJavaRes NO-SOURCE
+> Task :app:mergeDebugJavaResource
+> Task :app:checkDebugDuplicateClasses
+> Task :app:desugarDebugFileDependencies
+> Task :app:mergeExtDexDebug
+> Task :app:mergeLibDexDebug
+> Task :app:dexBuilderDebug
+> Task :app:mergeProjectDexDebug
+> Task :app:configureCMakeDebug[arm64-v8a]
+
+> Task :app:buildCMakeDebug[arm64-v8a]
+C/C++: ninja: Entering directory `/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/solar-android/app/.cxx/Debug/731l5m6n/arm64-v8a'
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/src/graphics_core_bridge.cpp:1:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/engine_session.hpp:5:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/pauli_observer.hpp:6:
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+C/C++:       |                         ^~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+C/C++:       |                                                     ~
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |                                  ^                      
+C/C++:       |             (                                           )
+C/C++: 2 warnings generated.
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/graphics-android/app/src/main/cpp/graphics_jni.cpp:12:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_session.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_program.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_core.hpp:4:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/pauli_observer.hpp:6:
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+C/C++:       |                         ^~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+C/C++:       |                                                     ~
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |                                  ^                      
+C/C++:       |             (                                           )
+C/C++: 2 warnings generated.
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/src/infinite_bridge.cpp:2:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_session.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_program.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_core.hpp:4:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/pauli_observer.hpp:6:
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+C/C++:       |                         ^~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+C/C++:       |                                                     ~
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |                                  ^                      
+C/C++:       |             (                                           )
+C/C++: 2 warnings generated.
+
+> Task :app:configureCMakeDebug[x86_64]
+
+> Task :app:buildCMakeDebug[x86_64]
+C/C++: ninja: Entering directory `/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/solar-android/app/.cxx/Debug/731l5m6n/x86_64'
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/src/graphics_core_bridge.cpp:1:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/engine_session.hpp:5:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/pauli_observer.hpp:6:
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+C/C++:       |                         ^~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+C/C++:       |                                                     ~
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |                                  ^                      
+C/C++:       |             (                                           )
+C/C++: 2 warnings generated.
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/graphics-android/app/src/main/cpp/graphics_jni.cpp:12:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_session.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_program.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_core.hpp:4:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/pauli_observer.hpp:6:
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+C/C++:       |                         ^~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+C/C++:       |                                                     ~
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |                                  ^                      
+C/C++:       |             (                                           )
+C/C++: 2 warnings generated.
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/src/infinite_bridge.cpp:2:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_session.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_program.hpp:3:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/infinite_core.hpp:4:
+C/C++: In file included from /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/pauli_observer.hpp:6:
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+C/C++:       |                         ^~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+C/C++:       |                                                     ~
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+C/C++: /workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+C/C++:       |                                  ^                      
+C/C++:       |             (                                           )
+C/C++: 2 warnings generated.
+
+> Task :app:mergeDebugJniLibFolders
+> Task :app:mergeDebugNativeLibs
+> Task :app:stripDebugDebugSymbols
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:processDebugAndroidTestManifest
+> Task :app:generateDebugAndroidTestBuildConfig
+> Task :app:javaPreCompileDebugAndroidTest
+> Task :app:checkDebugAndroidTestAarMetadata
+> Task :app:generateDebugAndroidTestResValues
+> Task :app:mapDebugAndroidTestSourceSetPaths
+> Task :app:generateDebugAndroidTestResources
+> Task :app:mergeDebugAndroidTestResources
+> Task :app:processDebugAndroidTestResources
+> Task :app:compileDebugAndroidTestJavaWithJavac
+> Task :app:mergeDebugAndroidTestShaders
+> Task :app:compileDebugAndroidTestShaders NO-SOURCE
+> Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :app:mergeDebugAndroidTestAssets
+> Task :app:compressDebugAndroidTestAssets
+> Task :app:processDebugAndroidTestJavaRes NO-SOURCE
+> Task :app:mergeDebugAndroidTestJavaResource
+> Task :app:checkDebugAndroidTestDuplicateClasses
+> Task :app:desugarDebugAndroidTestFileDependencies
+> Task :app:mergeExtDexDebugAndroidTest
+> Task :app:mergeLibDexDebugAndroidTest
+> Task :app:dexBuilderDebugAndroidTest
+> Task :app:mergeProjectDexDebugAndroidTest
+> Task :app:mergeDebugAndroidTestJniLibFolders
+> Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :app:validateSigningDebugAndroidTest
+> Task :app:writeDebugAndroidTestSigningConfigVersions
+> Task :app:packageDebugAndroidTest
+> Task :app:createDebugAndroidTestApkListingFileRedirect
+> Task :app:assembleDebugAndroidTest
+
+BUILD SUCCESSFUL in 30s
+64 actionable tasks: 64 executed

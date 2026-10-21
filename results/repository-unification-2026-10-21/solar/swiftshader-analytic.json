@@ -1,0 +1,192 @@
+{
+  "driver": {
+    "vendor": "Google Inc.",
+    "renderer": "Google SwiftShader",
+    "version": "OpenGL ES 3.0 SwiftShader 4.0.0.1",
+    "glsl": "OpenGL ES GLSL ES 3.00 SwiftShader 4.0.0.1",
+    "hardware_gpu_available": false,
+    "timer_query_supported": false
+  },
+  "resolution": [
+    320,
+    180
+  ],
+  "results": [
+    {
+      "scene": 0,
+      "selected": 0,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          211.199796,
+          216.645906,
+          213.179712
+        ],
+        "before": [
+          207.270138,
+          227.369805,
+          230.466185
+        ]
+      },
+      "fresh_ms": {
+        "after": 14597.112869,
+        "before": 14810.984387
+      },
+      "repeat_different_pixels": {
+        "after": [
+          1,
+          7,
+          7
+        ],
+        "before": [
+          8,
+          8,
+          8
+        ]
+      },
+      "median_ms": {
+        "after": 213.179712,
+        "before": 227.369805
+      },
+      "eclipse_candidates": 38
+    },
+    {
+      "scene": 5,
+      "selected": 4,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          267.216226,
+          258.610458,
+          231.744554
+        ],
+        "after": [
+          232.173938,
+          251.428561,
+          233.682804
+        ]
+      },
+      "fresh_ms": {
+        "before": 246.348318,
+        "after": 228.606554
+      },
+      "repeat_different_pixels": {
+        "before": [
+          19,
+          22,
+          20
+        ],
+        "after": [
+          15,
+          19,
+          18
+        ]
+      },
+      "median_ms": {
+        "before": 258.610458,
+        "after": 233.682804
+      },
+      "eclipse_candidates": 33
+    },
+    {
+      "scene": 7,
+      "selected": 6,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          228.592694,
+          229.706328,
+          222.610951
+        ],
+        "after": [
+          223.36309,
+          227.853675,
+          222.677138
+        ]
+      },
+      "fresh_ms": {
+        "before": 248.485189,
+        "after": 222.790134
+      },
+      "repeat_different_pixels": {
+        "before": [
+          4,
+          3,
+          4
+        ],
+        "after": [
+          3,
+          1,
+          1
+        ]
+      },
+      "median_ms": {
+        "before": 228.592694,
+        "after": 223.36309
+      },
+      "eclipse_candidates": 27
+    },
+    {
+      "scene": 11,
+      "selected": 10,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          220.303066,
+          223.30166,
+          225.358505
+        ],
+        "after": [
+          217.169694,
+          223.516246,
+          229.380375
+        ]
+      },
+      "fresh_ms": {
+        "before": 228.350278,
+        "after": 217.931558
+      },
+      "repeat_different_pixels": {
+        "before": [
+          13,
+          0,
+          0
+        ],
+        "after": [
+          0,
+          0,
+          0
+        ]
+      },
+      "median_ms": {
+        "before": 223.30166,
+        "after": 223.516246
+      },
+      "eclipse_candidates": 20
+    }
+  ],
+  "compared_pixels": 230400,
+  "different_pixels": {
+    "color": 22
+  },
+  "max_color_channel_delta": 138,
+  "repeat_different_pixels": {
+    "before": 109,
+    "after": 72
+  },
+  "median_ms": {
+    "before": 227.9812495,
+    "after": 223.43966799999998
+  },
+  "rss_peak_kib": 841252,
+  "baseline": "solar-android/app/src/main/assets/shaders/solar.frag",
+  "source_commit": "52150dfa928c088a32e69ce32f53c1e5a3b558c3",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": false,
+  "shader_sha256": "795e111afbd5e8c6dd6f740e2937f5dcb8abe7ed32eb2cabcdeea7cc927e21bb",
+  "fixtures_sha256": "e34e642655d489f09e08a86dbbfb8af4043ee956a5e79ebf306d876606b1c408",
+  "baseline_shader_sha256": "795e111afbd5e8c6dd6f740e2937f5dcb8abe7ed32eb2cabcdeea7cc927e21bb",
+  "egl_library": "/workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libEGL.so"
+}
