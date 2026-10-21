@@ -35,7 +35,7 @@ class PcVideo {
     {0x146, 3840, 2160}, {0x147, 7680, 4320}
   }};
 
-  static bool available(const SparseRam& ram) noexcept {
+  static bool available(const MemoryFabric& ram) noexcept {
     return ram.size() >= kFramebufferAddress + kApertureBytes;
   }
   static const PcVideoMode* find_mode(std::uint16_t id) noexcept {
@@ -54,7 +54,7 @@ class PcVideo {
     info_.mode = mode;
     current_vbe_mode_ = mode | (preserve ? 0x8000 : 0);
   }
-  void reset(SparseRam& ram) {
+  void reset(MemoryFabric& ram) {
     text_mode(3);
     if (!available(ram)) return;
     std::array<std::uint8_t, 256> tables{};
@@ -158,14 +158,14 @@ class PcVideo {
     failure(cpu);
   }
 
-  void copy_bgrx(const SparseRam& ram, std::uint8_t* destination,
+  void copy_bgrx(const MemoryFabric& ram, std::uint8_t* destination,
                  std::size_t capacity) const {
     if (!info_.graphics) throw std::logic_error("El dispositivo de vídeo está en modo texto");
     if (!destination || info_.byte_size > capacity)
       throw std::invalid_argument("Buffer BGRX insuficiente");
     ram.read_block(info_.physical_address, destination, static_cast<std::size_t>(info_.byte_size));
   }
-  void copy_rgba(const SparseRam& ram, std::uint32_t x, std::uint32_t y,
+  void copy_rgba(const MemoryFabric& ram, std::uint32_t x, std::uint32_t y,
                  std::uint32_t width, std::uint32_t height,
                  std::uint8_t* destination, std::size_t capacity,
                  std::size_t stride = 0) const {
