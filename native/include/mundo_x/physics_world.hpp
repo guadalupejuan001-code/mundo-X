@@ -47,10 +47,14 @@ class PhysicsWorld {
     bool indexed=work_.size()>512;
     if(indexed) {
       if(work_.size()>nodes_.max_size()/2) throw std::length_error("physics index size");
-      if(order_.size()!=work_.size()||stats_.node_tests/work_.size()>64) {
+      if(!index_ready_||order_.size()!=work_.size()||stats_.node_tests/work_.size()>64) {
+        // A failed resize/reserve must not make a partial index reusable on
+        // the next step merely because order_ already has the desired size.
+        index_ready_=false;
         order_.resize(work_.size());std::iota(order_.begin(),order_.end(),std::size_t{0});
         leaves_.resize(work_.size());nodes_.clear();nodes_.reserve(work_.size()*2-1);
         build(0,work_.size(),none);
+        index_ready_=true;
       } else {
         // Refit after movement instead of sorting and allocating every tick.
         // Public edits/reordering are safe: each leaf reads its current body.
@@ -102,6 +106,7 @@ class PhysicsWorld {
   std::vector<PhysicsBody> work_;
   std::vector<Node> nodes_;
   std::vector<std::size_t> order_,leaves_,candidates_;
+  bool index_ready_=false;
   StepStats stats_;
   static void validate(const PhysicsBody& b) {
     if(!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.vx)||

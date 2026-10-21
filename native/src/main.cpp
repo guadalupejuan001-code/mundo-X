@@ -24,6 +24,7 @@
 #include "mundo_x/teleport.hpp"
 #include "mundo_x/exact_t_experiment.hpp"
 #include "mundo_x/mxlang.hpp"
+#include "mundo_x/rule_physics.hpp"
 
 using mundo_x::CompactCore;
 using mundo_x::DenseCore;
@@ -42,6 +43,40 @@ static std::size_t read_qubit(std::istringstream& input) {
   std::string token;
   if (!(input >> token)) throw std::invalid_argument("missing qubit index");
   return parse_count(token);
+}
+
+// A concrete native consumer for the recovered finite 3D physics model. This
+// diagnostic advances every body and emits bounded output; it does not claim
+// that these positions have become Ether qubits or Solar orbital ephemerides.
+static int physics3d(std::size_t count,std::size_t steps) {
+  using Physics=mundo_x::RulePhysics;
+  Physics world;
+  if(count==0||count>world.rules().max_bodies||steps==0||steps>4096)
+    throw std::invalid_argument("physics3d expects 1..65536 bodies and 1..4096 steps");
+  for(std::size_t i=0;i<count;++i){
+    Physics::Body body;
+    body.position={3.*double(i%64),10.+3.*double(i/64%64),3.*double(i/4096)};
+    body.radius=.5;body.restitution=1;
+    if(i==0){body.position.x=-.49;body.velocity.x=1;}
+    if(i==1){body.position.x=.49;body.velocity.x=-1;}
+    world.add(body);
+  }
+  std::size_t contacts=0;
+  for(std::size_t i=0;i<steps;++i){world.step(1./120.);contacts+=world.step_stats().contacts;}
+  double checksum=0;
+  for(const auto& body:world.bodies())checksum+=body.position.x+body.position.y+body.position.z+body.velocity.y;
+  std::cout<<std::setprecision(17)<<"{\"engine\":\"rule-physics-3d\",\"body_state\":\"explicit_finite\",\"bodies\":"<<count
+           <<",\"steps\":"<<steps<<",\"dt_seconds\":"<<1./120.
+           <<",\"revision\":"<<world.revision()<<",\"contacts\":"<<contacts
+           <<",\"body_payload_bytes\":"<<world.body_payload_bytes()
+           <<",\"scratch_capacity_bytes\":"<<world.step_stats().scratch_bytes
+           <<",\"checksum\":"<<checksum<<",\"first_positions\":[";
+  for(std::size_t i=0;i<std::min<std::size_t>(8,count);++i){
+    const auto& p=world.bodies()[i].position;
+    if(i)std::cout<<',';
+    std::cout<<'['<<p.x<<','<<p.y<<','<<p.z<<']';
+  }
+  std::cout<<"]}\n";return 0;
 }
 
 static double mib(std::size_t bytes) {
@@ -470,11 +505,17 @@ static int run_cli(int argc, char** argv) {
            "t-trace-variant <qubits> <t_gates> | "
            "bench <qubits> [--dense] | "
            "cluster <rows> <cols> [--dense] | practice <qubits> | "
-           "run <program.x> [--scene-stdout] | compile <program.mx> | run-mx <program.mx>\n";
+           "run <program.x> [--scene-stdout] | compile <program.mx> | run-mx <program.mx> | "
+           "physics3d [bodies] [steps]\n";
     return 2;
   }
 
   const std::string cmd = argv[1];
+
+  if(cmd=="physics3d") {
+    if(argc>4)return 2;
+    return physics3d(argc>2?parse_count(argv[2]):256,argc>3?parse_count(argv[3]):120);
+  }
 
   if (cmd == "compile" || cmd == "run-mx") {
     if (argc != 3) return 2;
