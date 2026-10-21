@@ -2,10 +2,12 @@
 
 #include "mundo_x/infinite_core.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <iomanip>
 #include <limits>
+#include <locale>
 #include <map>
 #include <sstream>
 #include <stdexcept>
