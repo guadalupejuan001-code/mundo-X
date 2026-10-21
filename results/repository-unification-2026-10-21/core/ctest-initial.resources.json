@@ -1,0 +1,8 @@
+{
+  "max_rss_kib": 141504,
+  "user_cpu_seconds": 6.235427,
+  "system_cpu_seconds": 0.335985,
+  "rlimit_as_bytes": 2147483648,
+  "rlimit_cpu_seconds": null,
+  "measurement": "Linux wait4 rusage: peak RSS includes child process usage; build and tests run sequentially."
+}

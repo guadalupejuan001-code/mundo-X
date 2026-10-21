@@ -1,0 +1,1 @@
+{"suite":"infinite_extreme","ok":true,"checks":4399,"ghz_qubits":1024,"batch_observables":256,"remote_observables":4096,"remote_address_digits":1001,"remote_active_after":0,"stress_gates":65536}

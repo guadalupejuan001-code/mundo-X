@@ -1,0 +1,447 @@
+{
+  "originalReferenceCommit": "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac",
+  "originalSourcesUnchanged": false,
+  "coreReferenceCommit": "ef4636240af73351a18710e988346791fbdc3b58",
+  "coreSourcesVerified": true,
+  "coreSourceHashes": {
+    "graphics-android/app/src/main/cpp/CMakeLists.txt": "f4f66dbcd02dc7208bd4f2e5feb0faa21edaadba8ac25eff6279b78fe9f1002f",
+    "graphics-android/app/src/main/cpp/PROVENANCE.json": "0b252065e142afc8a2ff4d218f2e94d1e98218cb9af5ae0108838cf69aa016fe",
+    "graphics-android/app/src/main/cpp/graphics_jni.cpp": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+    "native/include/mundo_x/adaptive_phase_core.hpp": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+    "native/include/mundo_x/compact_core.hpp": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+    "native/include/mundo_x/dense_core.hpp": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+    "native/include/mundo_x/engine_session.hpp": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+    "native/include/mundo_x/ether_core.hpp": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+    "native/include/mundo_x/exact_t_experiment.hpp": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+    "native/include/mundo_x/factorized_core.hpp": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+    "native/include/mundo_x/graphics_core_bridge.h": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+    "native/include/mundo_x/infinite_address.hpp": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+    "native/include/mundo_x/infinite_bridge.h": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+    "native/include/mundo_x/infinite_bridge.hpp": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+    "native/include/mundo_x/infinite_core.hpp": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+    "native/include/mundo_x/infinite_program.hpp": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+    "native/include/mundo_x/infinite_session.hpp": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+    "native/include/mundo_x/lab_circuit.hpp": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+    "native/include/mundo_x/lab_memory.hpp": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+    "native/include/mundo_x/lab_protocols.hpp": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+    "native/include/mundo_x/micro_lab.hpp": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+    "native/include/mundo_x/mxlang.hpp": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+    "native/include/mundo_x/pauli_observer.hpp": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+    "native/include/mundo_x/physics_world.hpp": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+    "native/include/mundo_x/rule_physics.hpp": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+    "native/include/mundo_x/teleport.hpp": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+    "native/include/mundo_x/visual_scene.hpp": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+    "native/include/mundo_x/xasm.hpp": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+    "native/src/basis_vm_main.cpp": "5b07139fd292e4f3393fc07c1c3e2bad593e1d30ab56ad8c12db369696cacc54",
+    "native/src/graphics_core_bridge.cpp": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+    "native/src/infinite_bridge.cpp": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+    "native/src/infinite_runner.cpp": "263ca82ff0c8ba2669e8d4ec095744bdd901fb8e081f5488df22d0c21f79cb63",
+    "native/src/main.cpp": "b0448963d9b0b4b912f4756d26b26dd3d43efe849ed2177a638eb09b50ac3e06",
+    "native/src/phase_runner.cpp": "319b781847dfdff49c09878279e3fdcaa9f81e54a84fbfcfb6f2934b8d136ba9",
+    "native/tests/boundaries.cpp": "72a8dc292f98a1264467117d3db78c7bf8f76dd22393750c436b91196c2f33bd",
+    "native/tests/compact_measurement.cpp": "be6196f9de45f6827b47c578baa9dd0ad8a5383e7097bf6003ba6a8a74330564",
+    "native/tests/core_1000.cpp": "c41f2cb60ad522abc779b8c0c38d94734329037daef597fc2f658de138224323",
+    "native/tests/core_1000_benchmark.cpp": "7851e6fa28791703b66313250bce7659eff296b38b18c30151d021828e8ac13b",
+    "native/tests/core_60.cpp": "7c5083cdb7dee0001dfa60d278ff6b8a4abdc58ea1a2c70647bfcfc9c573dad4",
+    "native/tests/core_performance.cpp": "e85af55abf3d098b7ec33791434d660ea991f61f23449b750a6a55f7a2a50fa6",
+    "native/tests/core_performance_benchmark.cpp": "dbe0f8b603c98ad064c5188d92630525e3330cdf16a45410e49ed3f6defe3527",
+    "native/tests/dense_precision.cpp": "1726e083dbad38c034f490b29987467c73c0a241506f287a1b387fe273df01b6",
+    "native/tests/engine_session.cpp": "ebaec77b3498a2f0155cf5c0a56e0afe5649ea488be9a169df532309d5b9bf84",
+    "native/tests/ether_batch.cpp": "60473e205bc627cb8efcda5fc2620ab10d9f0139b9e075d260da76711ac0ec2d",
+    "native/tests/ether_core.cpp": "144d20b7803d9e261cf06192dedecdca411ee6bc4516e6779aa2bf9234bac9c6",
+    "native/tests/ether_frame.cpp": "31c2a2b6da3e78e1bb9dcf8ddd97d2d52fed701a38d88b85e0d17e8f53343797",
+    "native/tests/ether_fusion.cpp": "5bbcfba885a8aa585f984a81f2fc5e011025aa56b6ad0a891bc321ba5c2d0eea",
+    "native/tests/ether_rules.cpp": "a7b16b56eb83515815b1c8ad4520b644f92405bb1825708c4d76a8e40574a6e3",
+    "native/tests/ether_stress.cpp": "e2265235be1c8cff672986860e9672d9ac2e5fdffac4e6dd491a922cc17582c3",
+    "native/tests/factorized_benchmark.cpp": "6ce3b643101d9d5b77662d0877c8b94554493a29f02d81e681b522dc27efc3bb",
+    "native/tests/factorized_core.cpp": "5637b6e61354fc0d7e927909259b7c5adf73d5b81dc7b77269122b61d52c5a2e",
+    "native/tests/factorized_diversity.cpp": "72027d9b090c6d91e2ae3709b60dd9e483af1bf9f3a21ccb499b80bbc3180fe6",
+    "native/tests/factorized_oracle_runner.cpp": "b0156cd022ce2ea08497f83e1447b8a1148ca51c77acd9c2a23107601e0d8f5f",
+    "native/tests/factorized_storage.cpp": "5de5ef6783f3994e75cef82974c86fed902d6e6559115cfbfadff31a0257a74e",
+    "native/tests/factorized_stream_benchmark.cpp": "2ec0dede8235e2ec86bbc8be4e3d3f0958412ddf964f2de8797b29e0bee46f6e",
+    "native/tests/factorized_structure.cpp": "252978f7019abdf68c0ab5441036555b12ceee426d58beee0566601504bfac68",
+    "native/tests/factorized_structure_probe.cpp": "ca14a4b9cc48503a16f6cb969aad5fc0ab4f8cf1645eb90c9a58a330b7aa0e3f",
+    "native/tests/infinite_address.cpp": "7cd34dc3722ade0329510b79b6ef73f0fa6d40dfc11d2cb77ddba9bbc58d6969",
+    "native/tests/infinite_bridge.cpp": "6e13c4121485a1cda5a854472e4cf100ec8e2111c60ce86fd5d191a760aceff0",
+    "native/tests/infinite_core.cpp": "81838a8c8f1e4805866b3da5aa2c18cf8310ccf8c85be098149e4501f4e22865",
+    "native/tests/infinite_extreme.cpp": "83da541739bde66cc6a765bada0722e3400b28751cebfb002bcfd260f4f85a37",
+    "native/tests/infinite_scale.cpp": "48927e5e0a8e0c6622f21e275aba573682bd89abffc63f80baeeacb6a764cfd5",
+    "native/tests/infinite_session.cpp": "d7e5d787373d45bc8e8ae019231448ce97018f683f3ecb109faa48305d306c43",
+    "native/tests/infinite_tensor.cpp": "c243a2fdc14ceed62b5c1f032b8acd8286d02b4400e0cebcad3055ebc42a083f",
+    "native/tests/integrated_runtime.cpp": "c2cd1fbc28133a38dbdf5eb1b23c50ec9c5511b50b5d1ae1e16a2546da9f824c",
+    "native/tests/lab_circuit.cpp": "2a70b0fb520d0a80cfc60f65f1717b97731b5df22ab3827772ef88852603f9dd",
+    "native/tests/lab_memory.cpp": "7b9a2d551e13fcead9cd5b40a4583d01ce0391bfe4f919e85a728c3fd0882b01",
+    "native/tests/lab_protocols.cpp": "fcf9c21f03405323d5051bfdea2c9431690c6a64516ce6f9d7da73841fa3a254",
+    "native/tests/micro_lab.cpp": "44fc82588796843b1781799bfc6f0860f92b1cc19539a30dc183f792dc7d5a21",
+    "native/tests/native_original_exams.cpp": "2414e29db137f79143713c9610c46034f3d33dd6b910ef0e41a3debbfb2d29cb",
+    "native/tests/physics_allocation.cpp": "d4abc599762c37b418b8f2797f87117fd889418a509c0f7ed6b9e4892a78ac11",
+    "native/tests/physics_world.cpp": "302245529d6aaa3e20f50356d9af11f44cf215a47a9e7d966f7ebc226dfa5bc3",
+    "native/tests/quantum_algorithms.cpp": "49209b1a951bee47fb4c94a6ebe7fb2e98eec6cb94cc89d220a2869971c2fd8e",
+    "native/tests/reduced_optimization.cpp": "1936fcc281754815c837119b27aa9b0745c8254c2b1ae16dea2fce1292d93f08",
+    "native/tests/rule_physics.cpp": "dac17e91cfedde75f538ee4fc2385ad47717176d8c35af48637234f56bcb6555",
+    "native/tests/stress_driver.cpp": "6c04d55811210253b33c4773513067832728dc96729f7bf26c4a553514b8c0b7",
+    "native/tests/visual_scene.cpp": "e74109e3d4251a11e4afae86f0e88b3091a3ac110b723cd8580c594eb097d410",
+    "native/tests/xasm_60.cpp": "c54a50d4a1a1d3296a2f1975a2dda5cadf7fc26ed050a435ce506eff5b59c2cd",
+    "native/tests/xasm_measurement.cpp": "d1a344651058654c99fb9963ee56de6f06baefb2b558db424d2830cbf49eb9da",
+    "native/tests/xasm_visual.cpp": "8fde89c2c3e34641ef237bca3f786e7f1e14e49ea75387c1cf3b770c1141abdf"
+  },
+  "coreSourceReferenceCommits": {
+    "graphics-android/app/src/main/cpp/CMakeLists.txt": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "graphics-android/app/src/main/cpp/PROVENANCE.json": "4f04322eed3b698e4f20081921c5ed1da2c4b721",
+    "graphics-android/app/src/main/cpp/graphics_jni.cpp": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "native/include/mundo_x/adaptive_phase_core.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/compact_core.hpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "native/include/mundo_x/dense_core.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/engine_session.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/ether_core.hpp": "6baf22bed1f8b964de2ba24bb702c6a9a3b789d4",
+    "native/include/mundo_x/exact_t_experiment.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/factorized_core.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/graphics_core_bridge.h": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/infinite_address.hpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+    "native/include/mundo_x/infinite_bridge.h": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "native/include/mundo_x/infinite_bridge.hpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "native/include/mundo_x/infinite_core.hpp": "6baf22bed1f8b964de2ba24bb702c6a9a3b789d4",
+    "native/include/mundo_x/infinite_program.hpp": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "native/include/mundo_x/infinite_session.hpp": "46c78131db919e045c052987fd302c5919286560",
+    "native/include/mundo_x/lab_circuit.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/lab_memory.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/lab_protocols.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/micro_lab.hpp": "201388f2c98ed64a5260abcdafa1957a125468e7",
+    "native/include/mundo_x/mxlang.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/pauli_observer.hpp": "00e2f014186d9db9d2d87b3f7aabee3338d2b2a5",
+    "native/include/mundo_x/physics_world.hpp": "02e69b81f18329e38d5f0e32a5a082be27bffa3c",
+    "native/include/mundo_x/rule_physics.hpp": "02e69b81f18329e38d5f0e32a5a082be27bffa3c",
+    "native/include/mundo_x/teleport.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/visual_scene.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/include/mundo_x/xasm.hpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/src/basis_vm_main.cpp": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
+    "native/src/graphics_core_bridge.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/src/infinite_bridge.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "native/src/infinite_runner.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "native/src/main.cpp": "02e69b81f18329e38d5f0e32a5a082be27bffa3c",
+    "native/src/phase_runner.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/boundaries.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/compact_measurement.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/core_1000.cpp": "00e2f014186d9db9d2d87b3f7aabee3338d2b2a5",
+    "native/tests/core_1000_benchmark.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/core_60.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/core_performance.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/core_performance_benchmark.cpp": "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6",
+    "native/tests/dense_precision.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/engine_session.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/ether_batch.cpp": "46c78131db919e045c052987fd302c5919286560",
+    "native/tests/ether_core.cpp": "d351e83ca3be47fa63a14c462b358ac0cb5d65d7",
+    "native/tests/ether_frame.cpp": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "native/tests/ether_fusion.cpp": "46c78131db919e045c052987fd302c5919286560",
+    "native/tests/ether_rules.cpp": "6baf22bed1f8b964de2ba24bb702c6a9a3b789d4",
+    "native/tests/ether_stress.cpp": "46c78131db919e045c052987fd302c5919286560",
+    "native/tests/factorized_benchmark.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/factorized_core.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/factorized_diversity.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/factorized_oracle_runner.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/factorized_storage.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/factorized_stream_benchmark.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/factorized_structure.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/factorized_structure_probe.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/infinite_address.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+    "native/tests/infinite_bridge.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "native/tests/infinite_core.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+    "native/tests/infinite_extreme.cpp": "02e69b81f18329e38d5f0e32a5a082be27bffa3c",
+    "native/tests/infinite_scale.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+    "native/tests/infinite_session.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "native/tests/infinite_tensor.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+    "native/tests/integrated_runtime.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/lab_circuit.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/lab_memory.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/lab_protocols.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/micro_lab.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/native_original_exams.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/physics_allocation.cpp": "02e69b81f18329e38d5f0e32a5a082be27bffa3c",
+    "native/tests/physics_world.cpp": "59916f0ae34196d43914ce069a042ee80782287d",
+    "native/tests/quantum_algorithms.cpp": "9ce470f30383d3fd673a45bf09c5e4265fb1ad26",
+    "native/tests/reduced_optimization.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/rule_physics.cpp": "02e69b81f18329e38d5f0e32a5a082be27bffa3c",
+    "native/tests/stress_driver.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/visual_scene.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/xasm_60.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/xasm_measurement.cpp": "ef4636240af73351a18710e988346791fbdc3b58",
+    "native/tests/xasm_visual.cpp": "ef4636240af73351a18710e988346791fbdc3b58"
+  },
+  "infiniteCoreExtension": {
+    "referenceCommit": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+    "scope": "Initial independent InfiniteCore reference. Unchanged sources retain these pins; session and graphics deltas are declared separately.",
+    "sourceReferenceCommits": {
+      "native/include/mundo_x/infinite_address.hpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+      "native/tests/infinite_address.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+      "native/tests/infinite_core.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+      "native/tests/infinite_scale.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471",
+      "native/tests/infinite_tensor.cpp": "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
+    }
+  },
+  "infiniteSessionIntegration": {
+    "referenceCommit": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+    "scope": "Live shared session, exact portable state and RNG, bounded C/JNI transport, packed stabilizer import and sparse Java input validation.",
+    "sourceReferenceCommits": {
+      "graphics-android/app/src/main/cpp/CMakeLists.txt": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "native/include/mundo_x/compact_core.hpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "native/include/mundo_x/infinite_bridge.h": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "native/include/mundo_x/infinite_bridge.hpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "native/src/infinite_bridge.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "native/src/infinite_runner.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "native/tests/infinite_bridge.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32",
+      "native/tests/infinite_session.cpp": "d53adc3dc834b4d8400a66230d24d646d9dafb32"
+    }
+  },
+  "etherStateFusion": {
+    "referenceCommit": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+    "scope": "One physical state U_Ether phi, with signed global/local operations, physical measurements, transactional shared owners, MXI1/MXI2 and RNG. Independent complex oracle and production Java/JNI contracts.",
+    "sourceReferenceCommits": {
+      "graphics-android/app/src/main/cpp/graphics_jni.cpp": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+      "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+      "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+      "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+      "native/include/mundo_x/infinite_program.hpp": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+      "native/tests/ether_frame.cpp": "d4b9893ddec9c6fbce3911f3db349b1011686538"
+    }
+  },
+  "sourceChangesFromOriginal": {
+    "graphics-android/app/src/main/cpp/CMakeLists.txt": {
+      "baselineSha256": "60c2926ada097e8726e1d10b9b326fc3522543a466cd4f4b7437ebaf8730daa7",
+      "sha256": "f4f66dbcd02dc7208bd4f2e5feb0faa21edaadba8ac25eff6279b78fe9f1002f",
+      "status": "modified"
+    },
+    "graphics-android/app/src/main/cpp/PROVENANCE.json": {
+      "baselineSha256": "552ad89bb23fa06cde67f0fd132c099a4c33d727a5ddff114f588a1707cad273",
+      "sha256": "0b252065e142afc8a2ff4d218f2e94d1e98218cb9af5ae0108838cf69aa016fe",
+      "status": "modified"
+    },
+    "graphics-android/app/src/main/cpp/graphics_jni.cpp": {
+      "baselineSha256": "1a717d858a215031b415dc00c0df142c4190aef445b16cafe59610461e54c1dd",
+      "sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+      "status": "modified"
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": {
+      "baselineSha256": null,
+      "sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+      "status": "added"
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": {
+      "baselineSha256": null,
+      "sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+      "status": "added"
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": {
+      "baselineSha256": "8fe746ed6a344b6fa8d4357d082e8a164b1495a729b802f54eb2b02e6ca8b0c5",
+      "sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+      "status": "modified"
+    },
+    "native/include/mundo_x/compact_core.hpp": {
+      "baselineSha256": "fe3e497c23fbeec6b8dc8513f58d91e07b4fb3551d70d4df53232dfe84b0583c",
+      "sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+      "status": "modified"
+    },
+    "native/include/mundo_x/ether_core.hpp": {
+      "baselineSha256": null,
+      "sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+      "status": "added"
+    },
+    "native/include/mundo_x/infinite_address.hpp": {
+      "baselineSha256": null,
+      "sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+      "status": "added"
+    },
+    "native/include/mundo_x/infinite_bridge.h": {
+      "baselineSha256": null,
+      "sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+      "status": "added"
+    },
+    "native/include/mundo_x/infinite_bridge.hpp": {
+      "baselineSha256": null,
+      "sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+      "status": "added"
+    },
+    "native/include/mundo_x/infinite_core.hpp": {
+      "baselineSha256": null,
+      "sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+      "status": "added"
+    },
+    "native/include/mundo_x/infinite_program.hpp": {
+      "baselineSha256": null,
+      "sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+      "status": "added"
+    },
+    "native/include/mundo_x/infinite_session.hpp": {
+      "baselineSha256": null,
+      "sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+      "status": "added"
+    },
+    "native/include/mundo_x/micro_lab.hpp": {
+      "baselineSha256": "bdb853badf6915af1864e01a70a7d9421c1a38b111b2faa5fc8466751caa8975",
+      "sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+      "status": "modified"
+    },
+    "native/include/mundo_x/pauli_observer.hpp": {
+      "baselineSha256": "82365223e25e59dd235e89ed841b136b7ca0ce2fdd10c2aebf669b759c121c6c",
+      "sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+      "status": "modified"
+    },
+    "native/include/mundo_x/physics_world.hpp": {
+      "baselineSha256": null,
+      "sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+      "status": "added"
+    },
+    "native/include/mundo_x/rule_physics.hpp": {
+      "baselineSha256": null,
+      "sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+      "status": "added"
+    },
+    "native/include/mundo_x/xasm.hpp": {
+      "baselineSha256": "badf2bbdfac6a096007f3b0d097a8fa8fbe4e2c9c1d280e9593b13b196470ce2",
+      "sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+      "status": "modified"
+    },
+    "native/src/basis_vm_main.cpp": {
+      "baselineSha256": null,
+      "sha256": "5b07139fd292e4f3393fc07c1c3e2bad593e1d30ab56ad8c12db369696cacc54",
+      "status": "added"
+    },
+    "native/src/infinite_bridge.cpp": {
+      "baselineSha256": null,
+      "sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+      "status": "added"
+    },
+    "native/src/infinite_runner.cpp": {
+      "baselineSha256": null,
+      "sha256": "263ca82ff0c8ba2669e8d4ec095744bdd901fb8e081f5488df22d0c21f79cb63",
+      "status": "added"
+    },
+    "native/src/main.cpp": {
+      "baselineSha256": "72a0316d29fa471ec47c8b3372af157dae6bf6accd93675d5a84922a582397fd",
+      "sha256": "b0448963d9b0b4b912f4756d26b26dd3d43efe849ed2177a638eb09b50ac3e06",
+      "status": "modified"
+    },
+    "native/tests/core_1000.cpp": {
+      "baselineSha256": null,
+      "sha256": "c41f2cb60ad522abc779b8c0c38d94734329037daef597fc2f658de138224323",
+      "status": "added"
+    },
+    "native/tests/core_1000_benchmark.cpp": {
+      "baselineSha256": null,
+      "sha256": "7851e6fa28791703b66313250bce7659eff296b38b18c30151d021828e8ac13b",
+      "status": "added"
+    },
+    "native/tests/core_60.cpp": {
+      "baselineSha256": null,
+      "sha256": "7c5083cdb7dee0001dfa60d278ff6b8a4abdc58ea1a2c70647bfcfc9c573dad4",
+      "status": "added"
+    },
+    "native/tests/core_performance.cpp": {
+      "baselineSha256": null,
+      "sha256": "e85af55abf3d098b7ec33791434d660ea991f61f23449b750a6a55f7a2a50fa6",
+      "status": "added"
+    },
+    "native/tests/core_performance_benchmark.cpp": {
+      "baselineSha256": null,
+      "sha256": "dbe0f8b603c98ad064c5188d92630525e3330cdf16a45410e49ed3f6defe3527",
+      "status": "added"
+    },
+    "native/tests/ether_batch.cpp": {
+      "baselineSha256": null,
+      "sha256": "60473e205bc627cb8efcda5fc2620ab10d9f0139b9e075d260da76711ac0ec2d",
+      "status": "added"
+    },
+    "native/tests/ether_core.cpp": {
+      "baselineSha256": null,
+      "sha256": "144d20b7803d9e261cf06192dedecdca411ee6bc4516e6779aa2bf9234bac9c6",
+      "status": "added"
+    },
+    "native/tests/ether_frame.cpp": {
+      "baselineSha256": null,
+      "sha256": "31c2a2b6da3e78e1bb9dcf8ddd97d2d52fed701a38d88b85e0d17e8f53343797",
+      "status": "added"
+    },
+    "native/tests/ether_fusion.cpp": {
+      "baselineSha256": null,
+      "sha256": "5bbcfba885a8aa585f984a81f2fc5e011025aa56b6ad0a891bc321ba5c2d0eea",
+      "status": "added"
+    },
+    "native/tests/ether_rules.cpp": {
+      "baselineSha256": null,
+      "sha256": "a7b16b56eb83515815b1c8ad4520b644f92405bb1825708c4d76a8e40574a6e3",
+      "status": "added"
+    },
+    "native/tests/ether_stress.cpp": {
+      "baselineSha256": null,
+      "sha256": "e2265235be1c8cff672986860e9672d9ac2e5fdffac4e6dd491a922cc17582c3",
+      "status": "added"
+    },
+    "native/tests/infinite_address.cpp": {
+      "baselineSha256": null,
+      "sha256": "7cd34dc3722ade0329510b79b6ef73f0fa6d40dfc11d2cb77ddba9bbc58d6969",
+      "status": "added"
+    },
+    "native/tests/infinite_bridge.cpp": {
+      "baselineSha256": null,
+      "sha256": "6e13c4121485a1cda5a854472e4cf100ec8e2111c60ce86fd5d191a760aceff0",
+      "status": "added"
+    },
+    "native/tests/infinite_core.cpp": {
+      "baselineSha256": null,
+      "sha256": "81838a8c8f1e4805866b3da5aa2c18cf8310ccf8c85be098149e4501f4e22865",
+      "status": "added"
+    },
+    "native/tests/infinite_extreme.cpp": {
+      "baselineSha256": null,
+      "sha256": "83da541739bde66cc6a765bada0722e3400b28751cebfb002bcfd260f4f85a37",
+      "status": "added"
+    },
+    "native/tests/infinite_scale.cpp": {
+      "baselineSha256": null,
+      "sha256": "48927e5e0a8e0c6622f21e275aba573682bd89abffc63f80baeeacb6a764cfd5",
+      "status": "added"
+    },
+    "native/tests/infinite_session.cpp": {
+      "baselineSha256": null,
+      "sha256": "d7e5d787373d45bc8e8ae019231448ce97018f683f3ecb109faa48305d306c43",
+      "status": "added"
+    },
+    "native/tests/infinite_tensor.cpp": {
+      "baselineSha256": null,
+      "sha256": "c243a2fdc14ceed62b5c1f032b8acd8286d02b4400e0cebcad3055ebc42a083f",
+      "status": "added"
+    },
+    "native/tests/physics_allocation.cpp": {
+      "baselineSha256": null,
+      "sha256": "d4abc599762c37b418b8f2797f87117fd889418a509c0f7ed6b9e4892a78ac11",
+      "status": "added"
+    },
+    "native/tests/physics_world.cpp": {
+      "baselineSha256": null,
+      "sha256": "302245529d6aaa3e20f50356d9af11f44cf215a47a9e7d966f7ebc226dfa5bc3",
+      "status": "added"
+    },
+    "native/tests/quantum_algorithms.cpp": {
+      "baselineSha256": null,
+      "sha256": "49209b1a951bee47fb4c94a6ebe7fb2e98eec6cb94cc89d220a2869971c2fd8e",
+      "status": "added"
+    },
+    "native/tests/rule_physics.cpp": {
+      "baselineSha256": null,
+      "sha256": "dac17e91cfedde75f538ee4fc2385ad47717176d8c35af48637234f56bcb6555",
+      "status": "added"
+    },
+    "native/tests/xasm_60.cpp": {
+      "baselineSha256": null,
+      "sha256": "c54a50d4a1a1d3296a2f1975a2dda5cadf7fc26ed050a435ce506eff5b59c2cd",
+      "status": "added"
+    }
+  },
+  "sharedResolutionReferenceCommit": "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6",
+  "sharedResolutionGeometrySha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5"
+}

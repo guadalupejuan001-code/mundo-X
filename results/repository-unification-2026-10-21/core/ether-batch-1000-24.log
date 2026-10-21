@@ -1,0 +1,1 @@
+{"mode":"batch","n":1000,"extra":24,"status":"ok","error":"","elapsed_ms":120.723363,"setup_ms":47.90349,"work_ms":71.384195,"checksum":0,"state_tableau_bytes":257000,"state_address_bytes":2890,"active":1000,"components":1,"rules":0,"peak_cone_sites":0,"snapshot_bytes":0,"new_calls_work":10630,"new_bytes_work":1740920,"new_live_at_work_start":915620,"new_peak_work":1252396}

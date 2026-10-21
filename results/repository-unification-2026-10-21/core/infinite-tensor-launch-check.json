@@ -1,0 +1,9 @@
+{
+  "before_mode": "0o644",
+  "after_mode": "0o755",
+  "after_run_mode": "0o755",
+  "returncode": 0,
+  "stdout": "{\"ok\":true,\"checks\":106805,\"dense_comparisons\":1534,\"tensor_cases\":115}\n",
+  "stderr": "",
+  "rlimit_as_bytes": 2147483648
+}

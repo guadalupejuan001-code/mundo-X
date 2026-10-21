@@ -1,0 +1,7 @@
+{
+  "test": "all allocation retry sites",
+  "returncode": 0,
+  "stdout": "{\"suite\":\"physics_allocation\",\"ok\":true,\"failures_recovered\":5,\"checks\":9010}\n",
+  "stderr": "",
+  "rlimit_as_bytes": 2147483648
+}

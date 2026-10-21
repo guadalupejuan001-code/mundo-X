@@ -2,6 +2,11 @@
 
 ## Referencia y resultado
 
+Esta sección conserva la evidencia del 20 de octubre. La
+[consolidación del 21 de octubre](repository-unification-2026-10-21.md) incorpora
+los espejos en la integración del repositorio, la reutilización exacta Android,
+el acceso desde COSMIC y las campañas nuevas; el estado remoto se consulta en PR25.
+
 Implementación del renderizador, sin continuar el trabajo de Solar.
 
 - Referencia recuperable: `d7592bb87ae4285161b958939efa292850158726`.
