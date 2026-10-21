@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mundo_x/infinite_core.hpp"
+#include "mundo_x/inverse_memory.hpp"
 
 #include <array>
 #include <cstdint>
@@ -206,8 +207,29 @@ inline void write_stats(std::ostream& out, const InfiniteCore& core) {
 
 struct ProgramResult { std::string output; bool explicit_mutation = false; };
 
+inline unsigned memory_byte_value(const std::string& text, const char* name) {
+  const auto value = decimal<unsigned>(text, name);
+  if (value > 255U) throw std::out_of_range(std::string(name) + " exceeds one byte");
+  return value;
+}
+
+inline void write_memory_stats(std::ostream& out, const InverseMemory& memory) {
+  const auto stats = memory.stats();
+  const auto& limits = memory.limits();
+  out << "{\"type\":\"memory_stats\",\"model\":\"inverse-ether-memory\","
+      << "\"background_byte\":" << unsigned(stats.background_byte)
+      << ",\"overrides\":" << stats.overrides
+      << ",\"quantum_bindings\":" << stats.quantum_bindings
+      << ",\"revision\":" << stats.revision
+      << ",\"limits\":{\"max_address_digits\":" << limits.max_address_digits
+      << ",\"max_overrides\":" << limits.max_overrides
+      << ",\"max_quantum_bindings\":" << limits.max_quantum_bindings
+      << ",\"max_materialize_bytes\":" << limits.max_materialize_bytes << "}}\n";
+}
+
 inline void execute_line(const std::vector<std::string>& words, InfiniteCore& core,
-                         std::ostream& out, bool& explicit_mutation) {
+                         InverseMemory* memory, std::ostream& out,
+                         bool& explicit_mutation) {
   const auto command = lower_ascii(words.front());
   if (is_gate(command)) { core.apply({parse_gate(words)}); return; }
   if (command == "h_all" || command == "cz_neighbors") {
@@ -283,6 +305,67 @@ inline void execute_line(const std::vector<std::string>& words, InfiniteCore& co
     out << "{\"type\":\"compact\",\"released_qubits\":" << released << "}\n";
     return;
   }
+  if (command == "mem_reset") {
+    if (!memory) throw std::invalid_argument("Inverse Memory is not enabled in this runtime");
+    require_count(words, 2);
+    memory->reset(static_cast<std::uint8_t>(memory_byte_value(words[1], "memory background")));
+    return;
+  }
+  if (command == "mem_store") {
+    if (!memory) throw std::invalid_argument("Inverse Memory is not enabled in this runtime");
+    require_count(words, 3);
+    memory->store(words[1], static_cast<std::uint8_t>(memory_byte_value(words[2], "memory byte")), core);
+    return;
+  }
+  if (command == "mem_bind") {
+    if (!memory) throw std::invalid_argument("Inverse Memory is not enabled in this runtime");
+    require_count(words, 3);
+    memory->bind_quantum_byte(words[1], words[2], core);
+    return;
+  }
+  if (command == "mem_unbind") {
+    if (!memory) throw std::invalid_argument("Inverse Memory is not enabled in this runtime");
+    require_count(words, 2);
+    memory->unbind_quantum_byte(words[1]);
+    return;
+  }
+  if (command == "mem_read") {
+    if (!memory) throw std::invalid_argument("Inverse Memory is not enabled in this runtime");
+    require_count(words, 2);
+    const auto address = infinite_detail::canonical_address(words[1], memory->limits().max_address_digits);
+    const auto value = memory->read(address, core);
+    out << "{\"type\":\"memory_read\",\"address\":\"" << address << "\",";
+    if (value.deterministic)
+      out << "\"deterministic\":true,\"value\":" << unsigned(value.value);
+    else
+      out << "\"deterministic\":false,\"handle\":\"" << value.handle << "\"";
+    out << "}\n";
+    return;
+  }
+  if (command == "mem_materialize") {
+    if (!memory) throw std::invalid_argument("Inverse Memory is not enabled in this runtime");
+    require_count(words, 3);
+    const auto count = decimal<std::size_t>(words[2], "materialization count");
+    const auto bytes = memory->materialize(words[1], count, core);
+    static constexpr char hex[] = "0123456789abcdef";
+    std::string packed;
+    if (bytes.size() > (max_response_bytes / 2))
+      throw std::length_error("materialized memory response exceeds transport budget");
+    packed.reserve(bytes.size() * 2);
+    for (const auto byte : bytes) {
+      packed.push_back(hex[byte >> 4]);
+      packed.push_back(hex[byte & 15]);
+    }
+    out << "{\"type\":\"memory_materialization\",\"address\":\"" << words[1]
+        << "\",\"bytes\":" << bytes.size() << ",\"hex\":\"" << packed << "\"}\n";
+    return;
+  }
+  if (command == "mem_stats") {
+    if (!memory) throw std::invalid_argument("Inverse Memory is not enabled in this runtime");
+    require_count(words, 1);
+    write_memory_stats(out, *memory);
+    return;
+  }
   if (command == "assert") {
     if (words.size() < 3) throw std::invalid_argument("incomplete assertion");
     const auto subject = lower_ascii(words[1]);
@@ -309,7 +392,8 @@ inline void execute_line(const std::vector<std::string>& words, InfiniteCore& co
 
 // This function acts on a private candidate owned by InfiniteSession. All
 // output is buffered and bounded before the session commits the candidate.
-inline ProgramResult run(InfiniteCore& core, const std::string& program,
+inline ProgramResult run(InfiniteCore& core, InverseMemory* memory,
+                         const std::string& program,
                          bool require_matching_background = false) {
   if (program.size() > max_program_bytes)
     throw std::length_error("program exceeds 16 MiB transport budget");
@@ -366,7 +450,7 @@ inline ProgramResult run(InfiniteCore& core, const std::string& program,
         line.imbue(std::locale::classic());
         line.exceptions(std::ios::badbit | std::ios::failbit);
         line << std::setprecision(17);
-        execute_line(words, core, line, result.explicit_mutation);
+        execute_line(words, core, memory, line, result.explicit_mutation);
         const auto output = line.str();
         if (output.size() > max_response_bytes - result.output.size())
           throw std::length_error("response exceeds 16 MiB transport budget");
@@ -378,6 +462,11 @@ inline ProgramResult run(InfiniteCore& core, const std::string& program,
     throw std::runtime_error("line " + std::to_string(line_number) + ": " + error.what());
   }
   return result;
+}
+
+inline ProgramResult run(InfiniteCore& core, const std::string& program,
+                         bool require_matching_background = false) {
+  return run(core, nullptr, program, require_matching_background);
 }
 }  // namespace infinite_program_detail
 
