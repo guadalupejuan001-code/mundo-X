@@ -32,9 +32,31 @@ El [contrato de arquitectura Ether](docs/ether-architecture.md) fija las
 responsabilidades por componente, la conservación del estado, la coherencia de
 las observaciones y los criterios de integración y rendimiento.
 
-La primera capa de [Ether Memory](docs/ether-memory-v0-1.md) añade bytes lógicos
-`qload8/qstore8` sobre el mismo dominio, sin presentar la RAM física clásica
-del teléfono como qRAM de hardware.
+La primera capa de [Ether Memory](docs/ether-memory-v0-1.md) y la ventana
+MemoryFabric x86 permanecen como compatibilidad y evidencia histórica. **La
+dirección principal de simulación cuántica pasa a
+[Inverse Ether Memory](docs/inverse-ether-memory.md):** regla global, diferencias
+finitas y enlaces cuánticos explícitos, sin un arreglo denso ni un mapeo global
+de ocho qubits por byte.
+
+### Ruta cuántica pura
+
+`quantum-runtime/` configura una compilación aislada que incluye
+Ether/InfiniteCore/CompactCore, XI e Inverse Ether Memory y **no configura PC,
+Graphics, Solar, física, JNI ni GLES**. El workflow
+`quantum-only.yml` inspecciona las unidades compiladas para mantener esa
+separación.
+
+```sh
+cmake -S quantum-runtime -B quantum-build -DCMAKE_BUILD_TYPE=Release
+cmake --build quantum-build --parallel 2
+ctest --test-dir quantum-build --output-on-failure
+./quantum-build/mundo_x_quantum examples/inverse_memory.xi
+```
+
+Los comandos XI nuevos son `mem_reset`, `mem_store`, `mem_bind`,
+`mem_unbind`, `mem_read`, `mem_materialize` y `mem_stats`. Una lectura
+de un enlace cuántico no determinista devuelve un handle y **no mide** el estado.
 
 **Fusión implementada:** Ether y los componentes finitos ahora describen un
 único estado cuántico por sesión. Las reglas globales, puertas locales,
