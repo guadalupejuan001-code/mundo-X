@@ -1,0 +1,775 @@
+﻿2026-10-21T00:47:31.3728096Z Current runner version: '2.337.0'
+2026-10-21T00:47:31.3745216Z ##[group]Runner Image Provisioner
+2026-10-21T00:47:31.3745868Z Hosted Compute Agent
+2026-10-21T00:47:31.3746237Z Version: 20261015.610
+2026-10-21T00:47:31.3746628Z Commit: 267fdb4e8bbec4ab5ea31367f3a00d5c480c7656
+2026-10-21T00:47:31.3747124Z Build Date: 2026-10-14T17:06:54Z
+2026-10-21T00:47:31.3747578Z Worker ID: {bce9471b-f69c-4fad-b480-ff75bece06cd}
+2026-10-21T00:47:31.3748033Z Region: westus3
+2026-10-21T00:47:31.3748395Z Cloud: Azure
+2026-10-21T00:47:31.3748745Z ##[endgroup]
+2026-10-21T00:47:31.3749540Z ##[group]Operating System
+2026-10-21T00:47:31.3749980Z Ubuntu
+2026-10-21T00:47:31.3750340Z 24.04.5
+2026-10-21T00:47:31.3750679Z LTS
+2026-10-21T00:47:31.3751005Z ##[endgroup]
+2026-10-21T00:47:31.3751383Z ##[group]Runner Image
+2026-10-21T00:47:31.3751790Z Image: ubuntu-24.04
+2026-10-21T00:47:31.3752135Z Version: 20261018.339.1
+2026-10-21T00:47:31.3753071Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261018.339/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-21T00:47:31.3754001Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261018.339
+2026-10-21T00:47:31.3754608Z ##[endgroup]
+2026-10-21T00:47:31.3755366Z ##[group]GITHUB_TOKEN Permissions
+2026-10-21T00:47:31.3756526Z Contents: read
+2026-10-21T00:47:31.3756888Z Metadata: read
+2026-10-21T00:47:31.3757345Z ##[endgroup]
+2026-10-21T00:47:31.3758629Z Secret source: Actions
+2026-10-21T00:47:31.3759230Z Cache mode: write
+2026-10-21T00:47:31.3759658Z Prepare workflow directory
+2026-10-21T00:47:31.3965001Z Prepare all required actions
+2026-10-21T00:47:31.3996288Z Getting action download info
+2026-10-21T00:47:31.6971461Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-21T00:47:31.7746814Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-10-21T00:47:32.3660552Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-21T00:47:32.5751955Z Complete job name: android-validation
+2026-10-21T00:47:32.6243979Z ##[group]Run actions/checkout@v4
+2026-10-21T00:47:32.6244429Z with:
+2026-10-21T00:47:32.6244729Z   ref: 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:32.6245086Z   fetch-depth: 0
+2026-10-21T00:47:32.6245364Z   persist-credentials: false
+2026-10-21T00:47:32.6245695Z   repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:47:32.6248167Z   token: ***
+2026-10-21T00:47:32.6248427Z   ssh-strict: true
+2026-10-21T00:47:32.6248696Z   ssh-user: git
+2026-10-21T00:47:32.6248952Z   clean: true
+2026-10-21T00:47:32.6249227Z   sparse-checkout-cone-mode: true
+2026-10-21T00:47:32.6249542Z   fetch-tags: false
+2026-10-21T00:47:32.6249821Z   show-progress: true
+2026-10-21T00:47:32.6250098Z   lfs: false
+2026-10-21T00:47:32.6250348Z   submodules: false
+2026-10-21T00:47:32.6250622Z   set-safe-directory: true
+2026-10-21T00:47:32.6250929Z   allow-unsafe-pr-checkout: false
+2026-10-21T00:47:32.6251313Z ##[endgroup]
+2026-10-21T00:47:32.6918149Z Syncing repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:47:32.6919938Z ##[group]Getting Git version info
+2026-10-21T00:47:32.6920605Z Working directory is '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:47:32.6921609Z [command]/usr/bin/git version
+2026-10-21T00:47:32.6988559Z git version 2.55.0
+2026-10-21T00:47:32.7002109Z ##[endgroup]
+2026-10-21T00:47:32.7018075Z Temporarily overriding HOME='/home/runner/work/_temp/af03a605-5ace-4644-8082-3cad35874af4' before making global git config changes
+2026-10-21T00:47:32.7019575Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:47:32.7020712Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:47:32.7075612Z Deleting the contents of '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:47:32.7079036Z ##[group]Initializing the repository
+2026-10-21T00:47:32.7082559Z [command]/usr/bin/git init /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:47:32.7166957Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-21T00:47:32.7167884Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-21T00:47:32.7168667Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-21T00:47:32.7169556Z hint: call:
+2026-10-21T00:47:32.7170014Z hint:
+2026-10-21T00:47:32.7170617Z hint: 	git config --global init.defaultBranch <name>
+2026-10-21T00:47:32.7171393Z hint:
+2026-10-21T00:47:32.7172014Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-21T00:47:32.7172969Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-21T00:47:32.7173605Z hint:
+2026-10-21T00:47:32.7174052Z hint: 	git branch -m <name>
+2026-10-21T00:47:32.7174574Z hint:
+2026-10-21T00:47:32.7175132Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-21T00:47:32.7176260Z Initialized empty Git repository in /home/runner/work/mundo-X/mundo-X/.git/
+2026-10-21T00:47:32.7180916Z [command]/usr/bin/git remote add origin https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:47:32.7229359Z ##[endgroup]
+2026-10-21T00:47:32.7229837Z ##[group]Disabling automatic garbage collection
+2026-10-21T00:47:32.7233203Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-21T00:47:32.7263394Z ##[endgroup]
+2026-10-21T00:47:32.7263958Z ##[group]Setting up auth
+2026-10-21T00:47:32.7268805Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:47:32.7307304Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:47:32.7620749Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:47:32.7657632Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:47:32.7848923Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:47:32.7884889Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:47:32.8077050Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-21T00:47:32.8119379Z ##[endgroup]
+2026-10-21T00:47:32.8119977Z ##[group]Fetching the repository
+2026-10-21T00:47:32.8126246Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-10-21T00:47:33.8893011Z From https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:47:33.8894487Z  * [new branch]      build/android-apk-v0.1  -> origin/build/android-apk-v0.1
+2026-10-21T00:47:33.8896135Z  * [new branch]      codex/basis-vm-android  -> origin/codex/basis-vm-android
+2026-10-21T00:47:33.8897644Z  * [new branch]      codex/core-1000-qubits-20261019 -> origin/codex/core-1000-qubits-20261019
+2026-10-21T00:47:33.8899562Z  * [new branch]      codex/cosmic-android-unified-20261019 -> origin/codex/cosmic-android-unified-20261019
+2026-10-21T00:47:33.8901472Z  * [new branch]      codex/cosmic-engine-4k-20261019 -> origin/codex/cosmic-engine-4k-20261019
+2026-10-21T00:47:33.8903662Z  * [new branch]      codex/cosmic-engine-8k-20261019 -> origin/codex/cosmic-engine-8k-20261019
+2026-10-21T00:47:33.8905666Z  * [new branch]      codex/cosmic-solar-4k-atmospheres-20261019 -> origin/codex/cosmic-solar-4k-atmospheres-20261019
+2026-10-21T00:47:33.8907441Z  * [new branch]      codex/cosmic-solar-explorer -> origin/codex/cosmic-solar-explorer
+2026-10-21T00:47:33.8908932Z  * [new branch]      codex/cosmic-x-engine-20261019 -> origin/codex/cosmic-x-engine-20261019
+2026-10-21T00:47:33.8910534Z  * [new branch]      codex/ether-audit-stress-20261020 -> origin/codex/ether-audit-stress-20261020
+2026-10-21T00:47:33.8912607Z  * [new branch]      codex/ether-core-v0-1-20261019 -> origin/codex/ether-core-v0-1-20261019
+2026-10-21T00:47:33.8914486Z  * [new branch]      codex/ether-fusion-pc-check-20261020 -> origin/codex/ether-fusion-pc-check-20261020
+2026-10-21T00:47:33.8916381Z  * [new branch]      codex/ether-fusion-session-20261020 -> origin/codex/ether-fusion-session-20261020
+2026-10-21T00:47:33.8918377Z  * [new branch]      codex/factorized-exact-structure-20261018 -> origin/codex/factorized-exact-structure-20261018
+2026-10-21T00:47:33.8920231Z  * [new branch]      codex/graphics-spatial-20261018 -> origin/codex/graphics-spatial-20261018
+2026-10-21T00:47:33.8921928Z  * [new branch]      codex/infinite-8k-extreme-20261019 -> origin/codex/infinite-8k-extreme-20261019
+2026-10-21T00:47:33.8923785Z  * [new branch]      codex/infinite-core-rules-20261019 -> origin/codex/infinite-core-rules-20261019
+2026-10-21T00:47:33.8925661Z  * [new branch]      codex/integrate-cosmic-projects-20261019 -> origin/codex/integrate-cosmic-projects-20261019
+2026-10-21T00:47:33.8927440Z  * [new branch]      codex/motor-x-visual-20261018 -> origin/codex/motor-x-visual-20261018
+2026-10-21T00:47:33.8929541Z  * [new branch]      codex/mundo-x-graphics-android-20261019 -> origin/codex/mundo-x-graphics-android-20261019
+2026-10-21T00:47:33.8932046Z  * [new branch]      codex/own-pc-x86-20261019 -> origin/codex/own-pc-x86-20261019
+2026-10-21T00:47:33.8934305Z  * [new branch]      codex/pc-enter-iso-fix-20261019 -> origin/codex/pc-enter-iso-fix-20261019
+2026-10-21T00:47:33.8936690Z  * [new branch]      codex/pc-graphics-iso-fix-20261019 -> origin/codex/pc-graphics-iso-fix-20261019
+2026-10-21T00:47:33.8939606Z  * [new branch]      codex/physics-foundation-20261019 -> origin/codex/physics-foundation-20261019
+2026-10-21T00:47:33.8941790Z  * [new branch]      codex/quantum-echo-android -> origin/codex/quantum-echo-android
+2026-10-21T00:47:33.8943679Z  * [new branch]      codex/rule-render-physics-20261019 -> origin/codex/rule-render-physics-20261019
+2026-10-21T00:47:33.8945344Z  * [new branch]      codex/visual-microlab-20261018 -> origin/codex/visual-microlab-20261018
+2026-10-21T00:47:33.8947239Z  * [new branch]      codex/windows-reference-diagnostics-20261018 -> origin/codex/windows-reference-diagnostics-20261018
+2026-10-21T00:47:33.8949355Z  * [new branch]      codex/xasm-reduced-t    -> origin/codex/xasm-reduced-t
+2026-10-21T00:47:33.8950601Z  * [new branch]      delivery/xlab-0.3.1     -> origin/delivery/xlab-0.3.1
+2026-10-21T00:47:33.8951839Z  * [new branch]      delivery/xlab-0.3.2     -> origin/delivery/xlab-0.3.2
+2026-10-21T00:47:33.8953442Z  * [new branch]      experiment/quantum-core-v0.1 -> origin/experiment/quantum-core-v0.1
+2026-10-21T00:47:33.8955036Z  * [new branch]      experiment/transformer-x-v0.1 -> origin/experiment/transformer-x-v0.1
+2026-10-21T00:47:33.8956360Z  * [new branch]      main                    -> origin/main
+2026-10-21T00:47:33.8957570Z  * [new branch]      phase-performance-trial -> origin/phase-performance-trial
+2026-10-21T00:47:33.8958708Z  * [new tag]         v0.3.1                  -> v0.3.1
+2026-10-21T00:47:33.8959605Z  * [new tag]         v0.3.2                  -> v0.3.2
+2026-10-21T00:47:33.8962346Z [command]/usr/bin/git rev-parse --verify --quiet 2be39f7915001c46b63246b9a9502071b599475d^{object}
+2026-10-21T00:47:33.8963966Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:33.8967150Z ##[endgroup]
+2026-10-21T00:47:33.8968246Z ##[group]Determining the checkout info
+2026-10-21T00:47:33.8969363Z ##[endgroup]
+2026-10-21T00:47:33.8970220Z [command]/usr/bin/git sparse-checkout disable
+2026-10-21T00:47:33.9118160Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-21T00:47:33.9152517Z ##[group]Checking out the ref
+2026-10-21T00:47:33.9153995Z [command]/usr/bin/git checkout --progress --force 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:33.9798980Z Note: switching to '2be39f7915001c46b63246b9a9502071b599475d'.
+2026-10-21T00:47:33.9872826Z 
+2026-10-21T00:47:33.9873700Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-21T00:47:33.9875838Z changes and commit them, and you can discard any commits you make in this
+2026-10-21T00:47:33.9877556Z state without impacting any branches by switching back to a branch.
+2026-10-21T00:47:33.9878543Z 
+2026-10-21T00:47:33.9879240Z If you want to create a new branch to retain commits you create, you may
+2026-10-21T00:47:33.9880828Z do so (now or later) by using -c with the switch command. Example:
+2026-10-21T00:47:33.9881735Z 
+2026-10-21T00:47:33.9882109Z   git switch -c <new-branch-name>
+2026-10-21T00:47:33.9882846Z 
+2026-10-21T00:47:33.9883192Z Or undo this operation with:
+2026-10-21T00:47:33.9883752Z 
+2026-10-21T00:47:33.9884057Z   git switch -
+2026-10-21T00:47:33.9884469Z 
+2026-10-21T00:47:33.9885224Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-21T00:47:33.9886336Z 
+2026-10-21T00:47:33.9887229Z HEAD is now at 2be39f7 fix: define Solar filtering and verify exact reference replays
+2026-10-21T00:47:33.9890686Z ##[endgroup]
+2026-10-21T00:47:33.9892704Z [command]/usr/bin/git log -1 --format=%H
+2026-10-21T00:47:33.9900762Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:33.9908879Z ##[group]Removing auth
+2026-10-21T00:47:33.9911484Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:47:33.9946259Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:47:34.0134397Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:47:34.0167147Z http.https://github.com/.extraheader
+2026-10-21T00:47:34.0172569Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-21T00:47:34.0211307Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:47:34.0404185Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:47:34.0441602Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:47:34.0632729Z ##[endgroup]
+2026-10-21T00:47:34.0857681Z ##[group]Run actions/download-artifact@v4
+2026-10-21T00:47:34.0858343Z with:
+2026-10-21T00:47:34.0858814Z   name: COSMIC-X-Engine-8K-APK
+2026-10-21T00:47:34.0859406Z   path: graphics-8k-apks
+2026-10-21T00:47:34.0859962Z   merge-multiple: false
+2026-10-21T00:47:34.0860545Z   repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:47:34.0861212Z   run-id: 39523264180
+2026-10-21T00:47:34.0861715Z ##[endgroup]
+2026-10-21T00:47:34.1882940Z Downloading single artifact
+2026-10-21T00:47:34.1979834Z (node:2194) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:47:34.1982460Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:47:34.4228609Z Preparing to download the following artifacts:
+2026-10-21T00:47:34.4231318Z - COSMIC-X-Engine-8K-APK (ID: 12312372391, Size: 1927684, Expected Digest: sha256:605ed3ca3d7383ac328a75eb0c804d85e7ad118066b50084d4d4c4a9cf29d689)
+2026-10-21T00:47:34.6402685Z Redirecting to blob download url: https://productionresultssa0.blob.core.windows.net/actions-results/71f9b273-6416-8ba9-9277-dd32d8041155/workflow-job-run-9e078998-ed90-5300-b27b-5f510923d899/artifacts/2eb876d00453590f76acff184f61d4f6089bc56cf8ac80d3f4b2eb9e50153067.zip
+2026-10-21T00:47:34.6403787Z Starting download of artifact to: /home/runner/work/mundo-X/mundo-X/graphics-8k-apks
+2026-10-21T00:47:34.9018478Z (node:2194) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-21T00:47:35.2515291Z SHA256 digest of downloaded artifact is 605ed3ca3d7383ac328a75eb0c804d85e7ad118066b50084d4d4c4a9cf29d689
+2026-10-21T00:47:35.2515790Z Artifact download completed successfully.
+2026-10-21T00:47:35.2518707Z Total of 1 artifact(s) downloaded
+2026-10-21T00:47:35.2518959Z Download artifact has finished successfully
+2026-10-21T00:47:35.2640444Z ##[group]Run set -euo pipefail
+2026-10-21T00:47:35.2640670Z [36;1mset -euo pipefail[0m
+2026-10-21T00:47:35.2640825Z [36;1msudo chmod 666 /dev/kvm[0m
+2026-10-21T00:47:35.2641023Z [36;1m"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \[0m
+2026-10-21T00:47:35.2641296Z [36;1m  'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'[0m
+2026-10-21T00:47:35.2789711Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:35.2789936Z ##[endgroup]
+2026-10-21T00:47:36.1323262Z Loading package information...                                                  
+2026-10-21T00:47:36.1921692Z Loading local repository...                                                     
+2026-10-21T00:47:36.1923118Z [                                       ] 3% Loading local repository...        
+2026-10-21T00:47:36.6175831Z [                                       ] 3% Fetch remote repository...         
+2026-10-21T00:47:36.9023715Z [=                                      ] 3% Fetch remote repository...         
+2026-10-21T00:47:36.9553618Z [=                                      ] 4% Fetch remote repository...         
+2026-10-21T00:47:36.9819236Z [=                                      ] 5% Fetch remote repository...         
+2026-10-21T00:47:37.0146471Z [==                                     ] 5% Fetch remote repository...         
+2026-10-21T00:47:37.0993113Z [==                                     ] 6% Fetch remote repository...         
+2026-10-21T00:47:37.1914243Z [==                                     ] 7% Fetch remote repository...         
+2026-10-21T00:47:37.1933312Z [==                                     ] 7% Computing updates...               
+2026-10-21T00:47:37.2003461Z [===                                    ] 8% Computing updates...               
+2026-10-21T00:47:37.2094012Z [===                                    ] 10% Computing updates...              
+2026-10-21T00:47:37.3667901Z [===                                    ] 10% Installing Android Emulator       
+2026-10-21T00:47:37.3997273Z [===                                    ] 10% Downloading emulator-linux_x64-164
+2026-10-21T00:47:37.6249994Z [====                                   ] 10% Downloading emulator-linux_x64-164
+2026-10-21T00:47:39.6896001Z [====                                   ] 11% Downloading emulator-linux_x64-164
+2026-10-21T00:47:43.6601871Z [====                                   ] 12% Downloading emulator-linux_x64-164
+2026-10-21T00:47:45.5595099Z [=====                                  ] 13% Downloading emulator-linux_x64-164
+2026-10-21T00:47:49.3894292Z [=====                                  ] 14% Downloading emulator-linux_x64-164
+2026-10-21T00:47:49.8907890Z [=====                                  ] 15% Downloading emulator-linux_x64-164
+2026-10-21T00:47:50.0754384Z [======                                 ] 15% Downloading emulator-linux_x64-164
+2026-10-21T00:47:50.5091325Z [======                                 ] 16% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.6836443Z [======                                 ] 17% Downloading emulator-linux_x64-164
+2026-10-21T00:47:53.1469509Z [=======                                ] 18% Downloading emulator-linux_x64-164
+2026-10-21T00:47:54.4937456Z [=======                                ] 19% Downloading emulator-linux_x64-164
+2026-10-21T00:47:54.8736483Z [=======                                ] 20% Downloading emulator-linux_x64-164
+2026-10-21T00:47:55.6796219Z [========                               ] 20% Downloading emulator-linux_x64-164
+2026-10-21T00:47:56.1472720Z [========                               ] 21% Downloading emulator-linux_x64-164
+2026-10-21T00:47:56.1969099Z [========                               ] 21% Unzipping...                      
+2026-10-21T00:47:56.1969546Z [========                               ] 21% Unzipping... emulator/            
+2026-10-21T00:47:56.1974485Z [========                               ] 21% Unzipping... emulator/resources/  
+2026-10-21T00:47:56.2232881Z [========                               ] 21% Unzipping... emulator/qsn         
+2026-10-21T00:47:56.2729657Z [========                               ] 21% Unzipping... emulator/emulator    
+2026-10-21T00:47:56.2914064Z [========                               ] 21% Unzipping... emulator/netsimd     
+2026-10-21T00:47:56.3679904Z [========                               ] 22% Unzipping... emulator/netsimd     
+2026-10-21T00:47:56.3684500Z [========                               ] 22% Unzipping... emulator/bin64/      
+2026-10-21T00:47:56.3684751Z [========                               ] 22% Unzipping... emulator/qemu/       
+2026-10-21T00:47:56.3691504Z [========                               ] 22% Unzipping... emulator/NOTICE.txt  
+2026-10-21T00:47:56.4863081Z [========                               ] 22% Unzipping... emulator/crashpad_han
+2026-10-21T00:47:56.4863960Z [========                               ] 22% Unzipping... emulator/source.prope
+2026-10-21T00:47:56.5340898Z [========                               ] 22% Unzipping... emulator/nimble_bridg
+2026-10-21T00:47:56.5342976Z [========                               ] 22% Unzipping... emulator/LICENSE     
+2026-10-21T00:47:56.5343418Z [========                               ] 22% Unzipping... emulator/lib/        
+2026-10-21T00:47:56.5418227Z [========                               ] 22% Unzipping... emulator/qemu-img    
+2026-10-21T00:47:56.5418595Z [========                               ] 22% Unzipping... emulator/include/    
+2026-10-21T00:47:56.5422073Z [========                               ] 22% Unzipping... emulator/NOTICE.csv  
+2026-10-21T00:47:56.5422667Z [========                               ] 22% Unzipping... emulator/lib64/      
+2026-10-21T00:47:56.5569808Z [========                               ] 22% Unzipping... emulator/emulator-che
+2026-10-21T00:47:56.5720464Z [========                               ] 22% Unzipping... emulator/crashreport 
+2026-10-21T00:47:56.5726162Z [========                               ] 22% Unzipping... emulator/mksdcard    
+2026-10-21T00:47:56.6642990Z [========                               ] 22% Unzipping... emulator/resources/To
+2026-10-21T00:47:56.6691575Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:56.6693392Z [========                               ] 22% Unzipping... emulator/resources/To
+2026-10-21T00:47:56.6701390Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:56.6796951Z [========                               ] 22% Unzipping... emulator/resources/To
+2026-10-21T00:47:56.6797469Z [========                               ] 22% Unzipping... emulator/resources/ma
+2026-10-21T00:47:56.6814292Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:56.6815291Z [========                               ] 22% Unzipping... emulator/resources/sk
+2026-10-21T00:47:56.6838056Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:56.6838575Z [========                               ] 22% Unzipping... emulator/resources/ma
+2026-10-21T00:47:56.6845899Z [========                               ] 22% Unzipping... emulator/resources/po
+2026-10-21T00:47:56.6888269Z [========                               ] 22% Unzipping... emulator/resources/ma
+2026-10-21T00:47:56.6891572Z [=========                              ] 23% Unzipping... emulator/resources/ma
+2026-10-21T00:47:56.6920732Z [=========                              ] 23% Unzipping... emulator/resources/sk
+2026-10-21T00:47:56.6928555Z [=========                              ] 23% Unzipping... emulator/resources/ma
+2026-10-21T00:47:56.6953074Z [=========                              ] 23% Unzipping... emulator/bin64/e2fsck
+2026-10-21T00:47:56.6977182Z [=========                              ] 23% Unzipping... emulator/bin64/fsck.e
+2026-10-21T00:47:56.6992435Z [=========                              ] 23% Unzipping... emulator/bin64/tune2f
+2026-10-21T00:47:56.7003046Z [=========                              ] 23% Unzipping... emulator/bin64/resize
+2026-10-21T00:47:56.7019856Z [=========                              ] 23% Unzipping... emulator/bin64/mkfs.e
+2026-10-21T00:47:57.0614086Z [=========                              ] 23% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:57.5409953Z [=========                              ] 24% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:57.7859256Z [=========                              ] 25% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:58.0456954Z [==========                             ] 25% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:58.0463444Z [==========                             ] 25% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:58.0469062Z [==========                             ] 25% Unzipping... emulator/lib/rtc_serv
+2026-10-21T00:47:58.0469595Z [==========                             ] 25% Unzipping... emulator/lib/advanced
+2026-10-21T00:47:58.0470058Z [==========                             ] 25% Unzipping... emulator/lib/cmake/  
+2026-10-21T00:47:58.0470537Z [==========                             ] 25% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:58.0471022Z [==========                             ] 25% Unzipping... emulator/lib/control_
+2026-10-21T00:47:58.0471478Z [==========                             ] 25% Unzipping... emulator/lib/emulated
+2026-10-21T00:47:58.1540666Z [==========                             ] 25% Unzipping... emulator/lib/rtc_serv
+2026-10-21T00:47:58.1544071Z [==========                             ] 25% Unzipping... emulator/lib/emu-orig
+2026-10-21T00:47:58.1547820Z [==========                             ] 25% Unzipping... emulator/lib/hardware
+2026-10-21T00:47:58.1551150Z [==========                             ] 25% Unzipping... emulator/lib/pkgconfi
+2026-10-21T00:47:58.1551611Z [==========                             ] 25% Unzipping... emulator/lib/pc-bios/
+2026-10-21T00:47:58.1551938Z [==========                             ] 25% Unzipping... emulator/lib/snapshot
+2026-10-21T00:47:58.1552391Z [==========                             ] 25% Unzipping... emulator/lib/adb_serv
+2026-10-21T00:47:58.1582792Z [==========                             ] 25% Unzipping... emulator/lib/hostapd.
+2026-10-21T00:47:58.1589614Z [==========                             ] 25% Unzipping... emulator/lib/grpc_end
+2026-10-21T00:47:58.1590232Z [==========                             ] 25% Unzipping... emulator/lib/ca-bundl
+2026-10-21T00:47:58.1590685Z [==========                             ] 25% Unzipping... emulator/lib/ui_contr
+2026-10-21T00:47:58.1591039Z [==========                             ] 25% Unzipping... emulator/lib/snapshot
+2026-10-21T00:47:58.1591388Z [==========                             ] 25% Unzipping... emulator/lib/ice_conf
+2026-10-21T00:47:58.1667496Z [==========                             ] 25% Unzipping... emulator/lib/libflatb
+2026-10-21T00:47:58.1830233Z [==========                             ] 26% Unzipping... emulator/lib/libflatb
+2026-10-21T00:47:58.1835639Z [==========                             ] 26% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:58.1837297Z [==========                             ] 26% Unzipping... emulator/lib/waterfal
+2026-10-21T00:47:58.1839183Z [==========                             ] 26% Unzipping... emulator/lib/emulated
+2026-10-21T00:47:58.1847488Z [==========                             ] 26% Unzipping... emulator/lib/cmake/fl
+2026-10-21T00:47:58.1849200Z [==========                             ] 26% Unzipping... emulator/lib/pkgconfi
+2026-10-21T00:47:58.1969682Z [==========                             ] 26% Unzipping... emulator/lib/pc-bios/
+2026-10-21T00:47:58.2384341Z [==========                             ] 26% Unzipping... emulator/include/flat
+2026-10-21T00:47:58.2439127Z [==========                             ] 26% Unzipping... emulator/lib64/libgli
+2026-10-21T00:47:58.2535386Z [==========                             ] 26% Unzipping... emulator/lib64/libpro
+2026-10-21T00:47:58.2536226Z [==========                             ] 26% Unzipping... emulator/lib64/qt/   
+2026-10-21T00:47:58.2848329Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:58.3405621Z [==========                             ] 26% Unzipping... emulator/lib64/libgfx
+2026-10-21T00:47:58.3406145Z [==========                             ] 26% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:47:58.3411711Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:58.3412074Z [==========                             ] 26% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:47:58.3412556Z [==========                             ] 26% Unzipping... emulator/lib64/gles_s
+2026-10-21T00:47:58.3415045Z [==========                             ] 26% Unzipping... emulator/lib64/libemu
+2026-10-21T00:47:58.3509481Z [==========                             ] 26% Unzipping... emulator/lib64/libpro
+2026-10-21T00:47:58.5857482Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:58.5874230Z [==========                             ] 26% Unzipping... emulator/lib64/libtcm
+2026-10-21T00:47:58.5876123Z [==========                             ] 26% Unzipping... emulator/lib64/libima
+2026-10-21T00:47:58.5925929Z [==========                             ] 26% Unzipping... emulator/lib64/libc++
+2026-10-21T00:47:58.6141998Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:58.6178067Z [==========                             ] 26% Unzipping... emulator/lib64/libabs
+2026-10-21T00:47:58.6178473Z [==========                             ] 26% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:58.6242650Z [==========                             ] 26% Unzipping... emulator/lib64/libsha
+2026-10-21T00:47:58.6285805Z [==========                             ] 26% Unzipping... emulator/lib64/libc++
+2026-10-21T00:47:58.6286253Z [==========                             ] 26% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:58.6286656Z [==========                             ] 26% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:58.6287188Z [==========                             ] 26% Unzipping... emulator/lib64/qt/tra
+2026-10-21T00:47:58.6287527Z [==========                             ] 26% Unzipping... emulator/lib64/qt/plu
+2026-10-21T00:47:58.6311925Z [==========                             ] 26% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:58.7860293Z [==========                             ] 27% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:58.8698278Z [==========                             ] 27% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:59.2620900Z [===========                            ] 28% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:59.5828586Z [===========                            ] 29% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:48:00.4493661Z [===========                            ] 30% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:48:00.5135379Z [============                           ] 30% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:48:00.6786612Z [============                           ] 30% Unzipping... emulator/lib64/qt/tra
+2026-10-21T00:48:00.6870696Z [============                           ] 30% Unzipping... emulator/lib64/qt/plu
+2026-10-21T00:48:00.7037850Z [============                           ] 30% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:48:00.7546219Z [============                           ] 31% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:48:01.1262534Z [============                           ] 31% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:48:01.8165708Z [============                           ] 32% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:48:01.8695332Z [============                           ] 32% Unzipping... emulator/lib64/gles_s
+2026-10-21T00:48:01.9980252Z [============                           ] 32% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:48:02.0603480Z [=============                          ] 33% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:48:02.1527177Z [=====================                  ] 55% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:48:02.3014013Z [=====================                  ] 55% Installing Google APIs Intel x86_6
+2026-10-21T00:48:02.8646601Z [=====================                  ] 55% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:05.2323161Z [======================                 ] 55% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:10.4314108Z [======================                 ] 56% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:15.2699233Z [======================                 ] 57% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:19.6956648Z [=======================                ] 58% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:23.8787661Z [=======================                ] 59% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:26.4209682Z [=======================                ] 60% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:28.4599716Z [========================               ] 60% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:33.7924287Z [========================               ] 61% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:38.0561149Z [========================               ] 62% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:42.8407294Z [=========================              ] 63% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:47.1618233Z [=========================              ] 64% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:49.2314687Z [=========================              ] 65% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:51.5453543Z [==========================             ] 65% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:54.9205898Z [==========================             ] 66% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:54.9216933Z [==========================             ] 66% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:48:55.0427119Z [==========================             ] 66% Unzipping... x86_64/NOTICE.txt    
+2026-10-21T00:48:55.0429149Z [==========================             ] 66% Unzipping... x86_64/VerifiedBootPa
+2026-10-21T00:48:55.0429832Z [==========================             ] 66% Unzipping... x86_64/advancedFeatur
+2026-10-21T00:48:55.0430997Z [==========================             ] 66% Unzipping... x86_64/build.prop    
+2026-10-21T00:48:55.1625156Z [==========================             ] 66% Unzipping... x86_64/encryptionkey.
+2026-10-21T00:48:55.3328648Z [==========================             ] 66% Unzipping... x86_64/kernel-ranchu 
+2026-10-21T00:48:55.3332488Z [==========================             ] 66% Unzipping... x86_64/kernel_cmdline
+2026-10-21T00:48:55.3441416Z [==========================             ] 66% Unzipping... x86_64/ramdisk.img   
+2026-10-21T00:48:55.3442091Z [==========================             ] 66% Unzipping... x86_64/source.propert
+2026-10-21T00:48:55.4635529Z [==========================             ] 66% Unzipping... x86_64/system.img    
+2026-10-21T00:48:56.5905725Z [==========================             ] 67% Unzipping... x86_64/system.img    
+2026-10-21T00:48:57.6924133Z [===========================            ] 68% Unzipping... x86_64/system.img    
+2026-10-21T00:48:58.6852918Z [===========================            ] 69% Unzipping... x86_64/system.img    
+2026-10-21T00:48:59.2465830Z [===========================            ] 70% Unzipping... x86_64/system.img    
+2026-10-21T00:48:59.6753189Z [============================           ] 70% Unzipping... x86_64/system.img    
+2026-10-21T00:49:00.8832983Z [============================           ] 71% Unzipping... x86_64/system.img    
+2026-10-21T00:49:01.8702571Z [============================           ] 72% Unzipping... x86_64/system.img    
+2026-10-21T00:49:02.8888887Z [=============================          ] 73% Unzipping... x86_64/system.img    
+2026-10-21T00:49:04.1344204Z [=============================          ] 74% Unzipping... x86_64/system.img    
+2026-10-21T00:49:04.7467438Z [=============================          ] 75% Unzipping... x86_64/system.img    
+2026-10-21T00:49:05.1802102Z [==============================         ] 75% Unzipping... x86_64/system.img    
+2026-10-21T00:49:06.3460578Z [==============================         ] 76% Unzipping... x86_64/system.img    
+2026-10-21T00:49:17.8527235Z [==============================         ] 77% Unzipping... x86_64/system.img    
+2026-10-21T00:49:18.7092656Z [==============================         ] 77% Unzipping... x86_64/vendor.img    
+2026-10-21T00:49:18.7095736Z [==============================         ] 77% Unzipping... x86_64/data/empty_dat
+2026-10-21T00:49:18.7096908Z [==============================         ] 77% Unzipping... x86_64/data/local.pro
+2026-10-21T00:49:18.7098437Z [==============================         ] 77% Unzipping... x86_64/data/misc/Gold
+2026-10-21T00:49:18.7099815Z [==============================         ] 77% Unzipping... x86_64/data/misc/apns
+2026-10-21T00:49:18.7102178Z [==============================         ] 77% Unzipping... x86_64/data/misc/emul
+2026-10-21T00:49:18.7108092Z [==============================         ] 77% Unzipping... x86_64/data/misc/mode
+2026-10-21T00:49:18.7115677Z [==============================         ] 77% Unzipping... x86_64/data/misc/pixe
+2026-10-21T00:49:18.9084196Z [==============================         ] 78% Unzipping... x86_64/data/misc/pixe
+2026-10-21T00:49:18.9084580Z [=======================================] 100% Unzipping... x86_64/data/misc/pix
+2026-10-21T00:49:18.9134779Z 
+2026-10-21T00:49:18.9424230Z ##[group]Run bash tools/graphics-emulator-test.sh
+2026-10-21T00:49:18.9424493Z [36;1mbash tools/graphics-emulator-test.sh[0m
+2026-10-21T00:49:18.9468376Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:49:18.9468568Z env:
+2026-10-21T00:49:18.9468686Z   GRAPHICS_ULTRA8K: true
+2026-10-21T00:49:18.9468822Z   GRAPHICS_TEST_TIMEOUT: 1700
+2026-10-21T00:49:18.9468974Z   GRAPHICS_APK_DIR: graphics-8k-apks
+2026-10-21T00:49:18.9469148Z   GRAPHICS_EVIDENCE_DIR: graphics-8k-evidence
+2026-10-21T00:49:18.9469319Z ##[endgroup]
+2026-10-21T00:49:19.4896269Z Loading local repository...                                                     
+2026-10-21T00:49:19.4897034Z [=========                              ] 25% Loading local repository...       
+2026-10-21T00:49:19.4897631Z [=========                              ] 25% Fetch remote repository...        
+2026-10-21T00:49:19.4900615Z [=======================================] 100% Fetch remote repository...       
+2026-10-21T00:49:19.7392848Z Auto-selecting single ABI x86_64
+2026-10-21T00:49:20.0332740Z All APKs match build checksums.
+2026-10-21T00:49:20.5797409Z * daemon not running; starting now at tcp:5037
+2026-10-21T00:49:20.8369210Z * daemon started successfully
+2026-10-21T00:49:59.6393419Z Performing Streamed Install
+2026-10-21T00:49:59.6394093Z Success
+2026-10-21T00:50:01.2842458Z Performing Streamed Install
+2026-10-21T00:50:01.2852079Z Success
+2026-10-21T00:50:03.1038844Z Performing Streamed Install
+2026-10-21T00:50:03.1063165Z Success
+2026-10-21T00:50:06.6286385Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:06.6288016Z INSTRUMENTATION_STATUS: current=1
+2026-10-21T00:50:06.6288526Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:06.6289052Z INSTRUMENTATION_STATUS: test=default_ether_world_and_finite_compatibility
+2026-10-21T00:50:06.6289570Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:11.0559839Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:11.0573346Z INSTRUMENTATION_STATUS: current=1
+2026-10-21T00:50:11.0599625Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:11.0623029Z INSTRUMENTATION_STATUS: test=default_ether_world_and_finite_compatibility
+2026-10-21T00:50:11.0652669Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:11.0663670Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:11.0664348Z INSTRUMENTATION_STATUS: current=2
+2026-10-21T00:50:11.0664688Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:11.0665019Z INSTRUMENTATION_STATUS: test=native_bell_invariants
+2026-10-21T00:50:11.0665371Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:11.0693990Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:11.0694656Z INSTRUMENTATION_STATUS: current=2
+2026-10-21T00:50:11.0694925Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:11.0695194Z INSTRUMENTATION_STATUS: test=native_bell_invariants
+2026-10-21T00:50:11.0695502Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:11.0817981Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:11.0841017Z INSTRUMENTATION_STATUS: current=3
+2026-10-21T00:50:11.0872730Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:11.0898638Z INSTRUMENTATION_STATUS: test=native_1000_qubit_invariants
+2026-10-21T00:50:11.0899115Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:11.2663334Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:11.2665170Z INSTRUMENTATION_STATUS: current=3
+2026-10-21T00:50:11.2665564Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:11.2665964Z INSTRUMENTATION_STATUS: test=native_1000_qubit_invariants
+2026-10-21T00:50:11.2666378Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:11.2666860Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:11.2667357Z INSTRUMENTATION_STATUS: current=4
+2026-10-21T00:50:11.2667698Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:11.2668563Z INSTRUMENTATION_STATUS: test=native_infinite_contracts
+2026-10-21T00:50:11.2669018Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:11.3727361Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:11.3727826Z INSTRUMENTATION_STATUS: current=4
+2026-10-21T00:50:11.3728084Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:11.3728389Z INSTRUMENTATION_STATUS: test=native_infinite_contracts
+2026-10-21T00:50:11.3728701Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:12.7912971Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:12.7953472Z INSTRUMENTATION_STATUS: current=5
+2026-10-21T00:50:12.7954105Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:12.7975663Z INSTRUMENTATION_STATUS: test=native_ether_contracts
+2026-10-21T00:50:12.7976208Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:19.1859353Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:19.1877193Z INSTRUMENTATION_STATUS: current=5
+2026-10-21T00:50:19.1877608Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:19.1877971Z INSTRUMENTATION_STATUS: test=native_ether_contracts
+2026-10-21T00:50:19.1878295Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:19.1963054Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:19.2012757Z INSTRUMENTATION_STATUS: current=6
+2026-10-21T00:50:19.2042592Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:19.2062957Z INSTRUMENTATION_STATUS: test=renderer_borrows_native_state
+2026-10-21T00:50:19.2084126Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:19.2106240Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:19.2122599Z INSTRUMENTATION_STATUS: current=6
+2026-10-21T00:50:19.2128160Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:19.2128564Z INSTRUMENTATION_STATUS: test=renderer_borrows_native_state
+2026-10-21T00:50:19.2128980Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:19.2129455Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:19.2130282Z INSTRUMENTATION_STATUS: current=7
+2026-10-21T00:50:19.2130624Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:19.2131014Z INSTRUMENTATION_STATUS: test=gles_one_million_objects
+2026-10-21T00:50:19.2131402Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:19.6625843Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:19.6647522Z INSTRUMENTATION_STATUS: current=7
+2026-10-21T00:50:19.6665605Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:19.6682871Z INSTRUMENTATION_STATUS: test=gles_one_million_objects
+2026-10-21T00:50:19.6712803Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:19.6722760Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:19.6743495Z INSTRUMENTATION_STATUS: current=8
+2026-10-21T00:50:19.6752800Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:19.6753123Z INSTRUMENTATION_STATUS: test=gles_maximum_object_limit
+2026-10-21T00:50:19.6753474Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:20.0053954Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:20.0054429Z INSTRUMENTATION_STATUS: current=8
+2026-10-21T00:50:20.0054687Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:20.0054983Z INSTRUMENTATION_STATUS: test=gles_maximum_object_limit
+2026-10-21T00:50:20.0055300Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:20.0055654Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:20.0056032Z INSTRUMENTATION_STATUS: current=9
+2026-10-21T00:50:20.0056281Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:20.0056593Z INSTRUMENTATION_STATUS: test=render_observes_without_mutating
+2026-10-21T00:50:20.0056923Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:20.5421178Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:20.5421638Z INSTRUMENTATION_STATUS: current=9
+2026-10-21T00:50:20.5422351Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:20.5422666Z INSTRUMENTATION_STATUS: test=render_observes_without_mutating
+2026-10-21T00:50:20.5423005Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:20.5439257Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:20.5439647Z INSTRUMENTATION_STATUS: current=10
+2026-10-21T00:50:20.5440027Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:20.5440381Z INSTRUMENTATION_STATUS: test=gate_changes_coupled_image
+2026-10-21T00:50:20.5440696Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:20.8673481Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:20.8693045Z INSTRUMENTATION_STATUS: current=10
+2026-10-21T00:50:20.8702761Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:20.8722662Z INSTRUMENTATION_STATUS: test=gate_changes_coupled_image
+2026-10-21T00:50:20.8780119Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:20.8783265Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:20.8783675Z INSTRUMENTATION_STATUS: current=11
+2026-10-21T00:50:20.8783938Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:20.8784225Z INSTRUMENTATION_STATUS: test=gate_preserves_uncoupled_image
+2026-10-21T00:50:20.8784529Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:21.1783633Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:21.1799356Z INSTRUMENTATION_STATUS: current=11
+2026-10-21T00:50:21.1852764Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:21.1853200Z INSTRUMENTATION_STATUS: test=gate_preserves_uncoupled_image
+2026-10-21T00:50:21.1853530Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:21.1853871Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:21.1854186Z INSTRUMENTATION_STATUS: current=12
+2026-10-21T00:50:21.1854341Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:21.1854528Z INSTRUMENTATION_STATUS: test=selection_and_individual_edits
+2026-10-21T00:50:21.1854752Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:22.1547147Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:22.1554720Z INSTRUMENTATION_STATUS: current=12
+2026-10-21T00:50:22.1555061Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:22.1555376Z INSTRUMENTATION_STATUS: test=selection_and_individual_edits
+2026-10-21T00:50:22.1555753Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:22.1580604Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:22.1581226Z INSTRUMENTATION_STATUS: current=13
+2026-10-21T00:50:22.1581598Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:22.1581995Z INSTRUMENTATION_STATUS: test=edit_restoration
+2026-10-21T00:50:22.1582495Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:22.6259300Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:22.6263788Z INSTRUMENTATION_STATUS: current=13
+2026-10-21T00:50:22.6264327Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:22.6264740Z INSTRUMENTATION_STATUS: test=edit_restoration
+2026-10-21T00:50:22.6265074Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:22.6266730Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:22.6267081Z INSTRUMENTATION_STATUS: current=14
+2026-10-21T00:50:22.6267354Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:22.6267657Z INSTRUMENTATION_STATUS: test=pause_resume_preserves_state
+2026-10-21T00:50:22.6267963Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:24.4043354Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:24.4103685Z INSTRUMENTATION_STATUS: current=14
+2026-10-21T00:50:24.4142982Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:24.4202807Z INSTRUMENTATION_STATUS: test=pause_resume_preserves_state
+2026-10-21T00:50:24.4253048Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:24.4283180Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:24.4293626Z INSTRUMENTATION_STATUS: current=15
+2026-10-21T00:50:24.4294100Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:24.4294587Z INSTRUMENTATION_STATUS: test=frame_reuse_exact_inputs_and_invalidation
+2026-10-21T00:50:24.4295073Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:29.2997469Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:29.2997889Z INSTRUMENTATION_STATUS: current=15
+2026-10-21T00:50:29.2998120Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:29.2998434Z INSTRUMENTATION_STATUS: test=frame_reuse_exact_inputs_and_invalidation
+2026-10-21T00:50:29.2998763Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:29.3003706Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:29.3004571Z INSTRUMENTATION_STATUS: current=16
+2026-10-21T00:50:29.3005059Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:29.3005409Z INSTRUMENTATION_STATUS: test=uhd_real_framebuffer_and_legacy_return
+2026-10-21T00:50:29.3005715Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:31.7593576Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:31.7603294Z INSTRUMENTATION_STATUS: current=16
+2026-10-21T00:50:31.7603842Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:31.7604273Z INSTRUMENTATION_STATUS: test=uhd_real_framebuffer_and_legacy_return
+2026-10-21T00:50:31.7604727Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:31.7752630Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:31.7782899Z INSTRUMENTATION_STATUS: current=17
+2026-10-21T00:50:31.7786864Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:31.7813670Z INSTRUMENTATION_STATUS: test=uhd_id_selection_and_letterbox
+2026-10-21T00:50:31.7842671Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:34.9765108Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:34.9771133Z INSTRUMENTATION_STATUS: current=17
+2026-10-21T00:50:34.9771618Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:34.9772038Z INSTRUMENTATION_STATUS: test=uhd_id_selection_and_letterbox
+2026-10-21T00:50:34.9773082Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:34.9779186Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:34.9782559Z INSTRUMENTATION_STATUS: current=18
+2026-10-21T00:50:34.9783009Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:34.9783417Z INSTRUMENTATION_STATUS: test=uhd_orientation_roundtrip
+2026-10-21T00:50:34.9783828Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:41.8674486Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:41.8675399Z INSTRUMENTATION_STATUS: current=18
+2026-10-21T00:50:41.8675876Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:41.8676306Z INSTRUMENTATION_STATUS: test=uhd_orientation_roundtrip
+2026-10-21T00:50:41.8676754Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:41.8688632Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:41.8689304Z INSTRUMENTATION_STATUS: current=19
+2026-10-21T00:50:41.8689601Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:41.8689960Z INSTRUMENTATION_STATUS: test=uhd_lifecycle_snapshot_native_preserved
+2026-10-21T00:50:41.8690315Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:48.5394637Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:48.5395075Z INSTRUMENTATION_STATUS: current=19
+2026-10-21T00:50:48.5402995Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:48.5403320Z INSTRUMENTATION_STATUS: test=uhd_lifecycle_snapshot_native_preserved
+2026-10-21T00:50:48.5403664Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:48.5404020Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:48.5404371Z INSTRUMENTATION_STATUS: current=20
+2026-10-21T00:50:48.5404645Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:48.5405021Z INSTRUMENTATION_STATUS: test=ultra8k_real_framebuffer_and_budget_limits
+2026-10-21T00:50:48.5405388Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:50.6084864Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:50.6131234Z INSTRUMENTATION_STATUS: current=20
+2026-10-21T00:50:50.6139568Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:50.6203378Z INSTRUMENTATION_STATUS: test=ultra8k_real_framebuffer_and_budget_limits
+2026-10-21T00:50:50.6259942Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:50.6283159Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:50.6286743Z INSTRUMENTATION_STATUS: current=21
+2026-10-21T00:50:50.6333013Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:50.6366126Z INSTRUMENTATION_STATUS: test=ultra8k_tiles_match_monolithic_color_and_ids
+2026-10-21T00:50:50.6373110Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:52.6181276Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:52.6183128Z INSTRUMENTATION_STATUS: current=21
+2026-10-21T00:50:52.6183563Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:52.6184053Z INSTRUMENTATION_STATUS: test=ultra8k_tiles_match_monolithic_color_and_ids
+2026-10-21T00:50:52.6184544Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:52.6234120Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:52.6235140Z INSTRUMENTATION_STATUS: current=22
+2026-10-21T00:50:52.6235587Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:52.6236052Z INSTRUMENTATION_STATUS: test=ultra8k_streamed_png_dimensions_and_rows
+2026-10-21T00:50:52.6236499Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:55.7587514Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:55.7588634Z INSTRUMENTATION_STATUS: current=22
+2026-10-21T00:50:55.7589188Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:55.7589730Z INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: 8K PNG contains no substantive rendered geometry
+2026-10-21T00:50:55.7590473Z 	at com.mundox.graphics.GraphicsInstrumentation.expect(GraphicsInstrumentation.java:2199)
+2026-10-21T00:50:55.7591132Z 	at com.mundox.graphics.GraphicsInstrumentation.ultraStreamed(GraphicsInstrumentation.java:1318)
+2026-10-21T00:50:55.7595114Z 	at com.mundox.graphics.GraphicsInstrumentation.$r8$lambda$QUEeoQoW3D885gfQph-o0LGrn7o(Unknown Source:0)
+2026-10-21T00:50:55.7595835Z 	at com.mundox.graphics.GraphicsInstrumentation$$ExternalSyntheticLambda85.run(D8$$SyntheticClass:0)
+2026-10-21T00:50:55.7596484Z 	at com.mundox.graphics.GraphicsInstrumentation.runCase(GraphicsInstrumentation.java:208)
+2026-10-21T00:50:55.7597115Z 	at com.mundox.graphics.GraphicsInstrumentation.onStart(GraphicsInstrumentation.java:160)
+2026-10-21T00:50:55.7597684Z 	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+2026-10-21T00:50:55.7597985Z 
+2026-10-21T00:50:55.7598146Z INSTRUMENTATION_STATUS: test=ultra8k_streamed_png_dimensions_and_rows
+2026-10-21T00:50:55.7598477Z INSTRUMENTATION_STATUS_CODE: -2
+2026-10-21T00:50:55.7603770Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:55.7609676Z INSTRUMENTATION_STATUS: current=23
+2026-10-21T00:50:55.7610134Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:55.7610603Z INSTRUMENTATION_STATUS: test=ultra8k_failure_preserves_scene_and_native_state
+2026-10-21T00:50:55.7610991Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:58.5915045Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:58.5925887Z INSTRUMENTATION_STATUS: current=23
+2026-10-21T00:50:58.5927416Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:58.5928107Z INSTRUMENTATION_STATUS: test=ultra8k_failure_preserves_scene_and_native_state
+2026-10-21T00:50:58.5928699Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:58.5958052Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:58.5959557Z INSTRUMENTATION_STATUS: current=24
+2026-10-21T00:50:58.5959963Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:58.5960813Z INSTRUMENTATION_STATUS: test=portable_codec_strict_validation
+2026-10-21T00:50:58.5961263Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:50:59.0882885Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:59.0883723Z INSTRUMENTATION_STATUS: current=24
+2026-10-21T00:50:59.0884233Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:59.0884604Z INSTRUMENTATION_STATUS: test=portable_codec_strict_validation
+2026-10-21T00:50:59.0884949Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:50:59.0887618Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:50:59.0888189Z INSTRUMENTATION_STATUS: current=25
+2026-10-21T00:50:59.0888492Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:50:59.0888777Z INSTRUMENTATION_STATUS: test=portable_1000_and_legacy_expansion
+2026-10-21T00:50:59.0889081Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:51:04.6457030Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:04.6481783Z INSTRUMENTATION_STATUS: current=25
+2026-10-21T00:51:04.6513050Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:04.6536737Z INSTRUMENTATION_STATUS: test=portable_1000_and_legacy_expansion
+2026-10-21T00:51:04.6537119Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:51:04.6539273Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:04.6539682Z INSTRUMENTATION_STATUS: current=26
+2026-10-21T00:51:04.6539928Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:04.6540235Z INSTRUMENTATION_STATUS: test=portable_desktop_fixtures_import
+2026-10-21T00:51:04.6540555Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:51:09.6571851Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:09.6572937Z INSTRUMENTATION_STATUS: current=26
+2026-10-21T00:51:09.6574405Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:09.6576953Z INSTRUMENTATION_STATUS: test=portable_desktop_fixtures_import
+2026-10-21T00:51:09.6577558Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:51:09.6578027Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:09.6578436Z INSTRUMENTATION_STATUS: current=27
+2026-10-21T00:51:09.6579007Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:09.6579347Z INSTRUMENTATION_STATUS: test=portable_mutation_export_reimport
+2026-10-21T00:51:09.6579713Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:51:14.3953436Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:14.4093104Z INSTRUMENTATION_STATUS: current=27
+2026-10-21T00:51:14.4133903Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:14.4151484Z INSTRUMENTATION_STATUS: test=portable_mutation_export_reimport
+2026-10-21T00:51:14.4151831Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:51:14.4152157Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:14.4152641Z INSTRUMENTATION_STATUS: current=28
+2026-10-21T00:51:14.4152897Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:14.4153235Z INSTRUMENTATION_STATUS: test=portable_invalid_import_preserves_session
+2026-10-21T00:51:14.4153552Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:51:14.6493272Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:14.6706814Z INSTRUMENTATION_STATUS: current=28
+2026-10-21T00:51:14.6707404Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:14.6707989Z INSTRUMENTATION_STATUS: test=portable_invalid_import_preserves_session
+2026-10-21T00:51:14.6708482Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:51:14.6708927Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:14.6709403Z INSTRUMENTATION_STATUS: current=29
+2026-10-21T00:51:14.6709758Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:14.6710168Z INSTRUMENTATION_STATUS: test=portable_activity_recreation
+2026-10-21T00:51:14.6710579Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:51:17.9116986Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:17.9142885Z INSTRUMENTATION_STATUS: current=29
+2026-10-21T00:51:17.9173160Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:17.9173684Z INSTRUMENTATION_STATUS: test=portable_activity_recreation
+2026-10-21T00:51:17.9202683Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:51:17.9353213Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:17.9393206Z INSTRUMENTATION_STATUS: current=30
+2026-10-21T00:51:17.9393787Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:17.9415900Z INSTRUMENTATION_STATUS: test=infinite_live_renderer_and_portability
+2026-10-21T00:51:17.9416334Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:51:23.6589954Z INSTRUMENTATION_STATUS: class=com.mundox.graphics.GraphicsInstrumentation
+2026-10-21T00:51:23.6612797Z INSTRUMENTATION_STATUS: current=30
+2026-10-21T00:51:23.6722973Z INSTRUMENTATION_STATUS: numtests=30
+2026-10-21T00:51:23.6803390Z INSTRUMENTATION_STATUS: test=infinite_live_renderer_and_portability
+2026-10-21T00:51:23.6825049Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:51:23.9192488Z INSTRUMENTATION_RESULT: stream=
+2026-10-21T00:51:23.9192861Z MUNDOX_GRAPHICS_TESTS_FAILED tests=30 failures=1
+2026-10-21T00:51:23.9193072Z 
+2026-10-21T00:51:23.9193152Z INSTRUMENTATION_RESULT: tests_failed=1
+2026-10-21T00:51:23.9193322Z INSTRUMENTATION_RESULT: tests_run=30
+2026-10-21T00:51:23.9193477Z INSTRUMENTATION_CODE: 0
+2026-10-21T00:51:25.0313336Z Instrumentation success marker missing
+2026-10-21T00:51:25.3729049Z ##[error]Process completed with exit code 1.
+2026-10-21T00:51:25.3805838Z ##[group]Run actions/upload-artifact@v4
+2026-10-21T00:51:25.3806099Z with:
+2026-10-21T00:51:25.3806302Z   name: COSMIC-X-Engine-8K-Android-Evidence
+2026-10-21T00:51:25.3806566Z   path: graphics-8k-evidence/**
+2026-10-21T00:51:25.3806792Z   if-no-files-found: warn
+2026-10-21T00:51:25.3806995Z   retention-days: 14
+2026-10-21T00:51:25.3807197Z   compression-level: 6
+2026-10-21T00:51:25.3807391Z   overwrite: false
+2026-10-21T00:51:25.3807586Z   include-hidden-files: false
+2026-10-21T00:51:25.3807803Z ##[endgroup]
+2026-10-21T00:51:25.5118928Z (node:2923) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:51:25.5119690Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:51:25.5213758Z With the provided path, there will be 77 files uploaded
+2026-10-21T00:51:25.5217173Z Artifact name is valid!
+2026-10-21T00:51:25.5217645Z Root directory input is valid!
+2026-10-21T00:51:25.8826418Z Beginning upload of artifact content to blob storage
+2026-10-21T00:51:26.1449879Z (node:2923) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-21T00:51:26.8768079Z Uploaded bytes 7745525
+2026-10-21T00:51:26.9387750Z Finished uploading artifact content to blob storage!
+2026-10-21T00:51:26.9388318Z SHA256 digest of uploaded artifact zip is fd003e52bb165738c81fb6ce7a3865b41b689c70af08d7f90540b9e428a81220
+2026-10-21T00:51:26.9389044Z Finalizing artifact upload
+2026-10-21T00:51:27.3734392Z Artifact COSMIC-X-Engine-8K-Android-Evidence.zip successfully finalized. Artifact ID 12311638267
+2026-10-21T00:51:27.3734995Z Artifact COSMIC-X-Engine-8K-Android-Evidence has been successfully uploaded! Final size is 7745525 bytes. Artifact ID is 12311638267
+2026-10-21T00:51:27.3740569Z Artifact download URL: https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264180/artifacts/12311638267
+2026-10-21T00:51:27.4047985Z Post job cleanup.
+2026-10-21T00:51:27.4853124Z [command]/usr/bin/git version
+2026-10-21T00:51:27.4918161Z git version 2.55.0
+2026-10-21T00:51:27.4944059Z Temporarily overriding HOME='/home/runner/work/_temp/1dfa348e-8dfc-4c36-9695-3dbfa658f4f9' before making global git config changes
+2026-10-21T00:51:27.4944781Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:51:27.4952808Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:51:27.4984013Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:51:27.5017741Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:51:27.5245318Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:51:27.5279022Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:51:27.5505029Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:51:27.5554366Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:51:27.5889022Z Cleaning up orphan processes
+2026-10-21T00:51:27.6095346Z Terminate orphan process: pid (2416) (adb)
+2026-10-21T00:51:27.6112454Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/download-artifact@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+

@@ -132,7 +132,7 @@ def main():
             if a.swiftshader_threads is not None:
                 config=f'[Processor]\nThreadCount={a.swiftshader_threads}\n[Testing]\nDisableServer=1\n'
                 (user/'SwiftShader.ini').write_text(config);(output/'SwiftShader.ini').write_text(config)
-                report.update(swiftshader_threads=a.swiftshader_threads,driver_configuration=config,driver_configuration_sha256=hashlib.sha256(config.encode()).hexdigest())
+                report.update(swiftshader_threads=a.swiftshader_threads,driver_configuration=config,driver_configuration_sha256=hashlib.sha256(config.encode()).hexdigest(),driver_configuration_directory=str(user))
                 tracer=shutil.which('strace')
                 if not tracer:raise RuntimeError('strace is required to verify the requested emulator SwiftShader configuration')
             stage('creating_avd')
@@ -143,7 +143,11 @@ def main():
                 args=[str(sdk/'emulator/emulator'),'-avd','solar-pair','-port','5580','-no-window','-no-audio','-no-boot-anim','-no-snapshot','-gpu','swiftshader','-memory','2048','-cores','2','-feature','-Vulkan']
                 if a.no_accel:args+=['-accel','off']
                 if a.swiftshader_threads is not None:
-                    args=[tracer,'-f','-qq','-e','trace=open,openat','-P',str(user/'SwiftShader.ini'),'-o',str(output/'driver-config-open.log'),*args]
+                    # Keep both spellings: some strace/path-namespace combinations
+                    # omit openat(AT_FDCWD, "SwiftShader.ini", ...) when only the
+                    # absolute filter is supplied. strace runs in this same user
+                    # directory, so both filters identify the isolated config.
+                    args=[tracer,'-f','-qq','-e','trace=open,openat','-P',str(user/'SwiftShader.ini'),'-P','SwiftShader.ini','-o',str(output/'driver-config-open.log'),*args]
                 stage('booting_emulator')
                 emulator=subprocess.Popen(args,env=env,cwd=user,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
                 wait_for_boot(emulator,adb,serial,env,a.boot_seconds,report,save)

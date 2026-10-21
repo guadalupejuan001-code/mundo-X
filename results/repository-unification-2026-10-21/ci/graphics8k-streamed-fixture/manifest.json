@@ -1,0 +1,31 @@
+{
+  "observed_utc": "2026-10-21T01:01:35.282721+00:00",
+  "failed_head": "2be39f7915001c46b63246b9a9502071b599475d",
+  "failed_run": 39523264180,
+  "failed_job": 118972460953,
+  "artifact_id": 12311638267,
+  "artifact_sha256": "fd003e52bb165738c81fb6ce7a3865b41b689c70af08d7f90540b9e428a81220",
+  "failure_log": "results/repository-unification-2026-10-21/ci/2be39f7-run-39523264180-graphics8k-android-job-118972460953.log",
+  "changed_source": {
+    "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java": "1bb0e31b550da8c8dbc3a862353e4cd587017cd0157a523f7f95ac3ba73f4bee"
+  },
+  "unchanged_production": {
+    "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java": "dae0db33c3a03849a9a81e1201ec4d2fee2c0fdc7240258743d0b4696c703bfe"
+  },
+  "assertion_unchanged": "different > 100",
+  "verification_scope": [
+    "Analysis of original Android artifact",
+    "Independent CPU ray/box oracle for64 sampling offsets",
+    "Compilation of changed Java instrumentation"
+  ],
+  "new_android_run": false,
+  "evidence_sha256": {
+    "2be39f7-failure-ultra8k_streamed_png_dimensions_and_rows.png": "47432df10e66922e0b6777323a16009c49d15a040ba7bdbdac5de3cb59271369",
+    "2be39f7-ultra-8k-streamed.png": "e11841be140cdc277a2cae7ae7a527932d05e211439dbd05e7baef8e668c8f6a",
+    "analysis.json": "936a73ded946ea27765ac033c4504c3328be48d9ddc37f3bd84bacc23d70060b",
+    "analyze_failure.py": "ee21c1473d6d708a2b741ed175c2e0df73b3fc8f90de8ab3bfce632929d40d20",
+    "diagnosis.md": "a5300b42c06e4d49ff0b26c49e7999faa4edb9d666c01d7e59aabf54e6929dba",
+    "instrumentation-compile.json": "91d85717a80537c55766c3ffd6661a4f6b1511c4803516b42408dc3c5a22e36b",
+    "instrumentation-compile.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

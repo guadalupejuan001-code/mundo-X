@@ -195,6 +195,7 @@ jobs:
           python -m pip install -r graphics-desktop/requirements.txt
       - name: Compare mirrors with an independent optical oracle under 2 GiB
         run: |
+          python -c 'import sys; sys.path.insert(0,"graphics-desktop"); from engine import build_native; build_native()'
           python tools/ether_mirror_check.py \
             --output cosmic-evidence/mirrors/report.json \
             --images cosmic-evidence/mirrors/images

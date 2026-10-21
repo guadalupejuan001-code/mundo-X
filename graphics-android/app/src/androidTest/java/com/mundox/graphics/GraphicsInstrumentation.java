@@ -1103,6 +1103,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
 
     private void frameReuseContracts() throws Exception {
         scene(64);
+        long originalSeed = visualSnapshot().seed;
         JSONArray checks = new JSONArray();
         try {
             gl(() -> { activity.renderer.setSynchronousTiming(false);activity.renderer.setFrameReuseEnabled(true); });
@@ -1155,6 +1156,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
                     .put("timingForcesDrawing",true).put("exactComparison",true));
         } finally {
             gl(() -> { activity.renderer.setSynchronousTiming(false);activity.renderer.setFrameReuseEnabled(true);
+                activity.renderer.worldSeed(originalSeed);
                 activity.renderer.setPresentation(QuantumRenderer.PRESENTATION_LEGACY); });
         }
     }
@@ -1281,6 +1283,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private void ultraStreamed() throws Exception {
         scene(1);
         gl(() -> {
+            // The visibility threshold belongs to this fixed geometry, independent of earlier tests.
+            activity.renderer.worldSeed(2026);
             activity.renderer.coupling(true);
             activity.renderer.gate(NativeCore.Z, 0, 0);
             activity.renderer.setTime(.875f);
@@ -1315,6 +1319,9 @@ public final class GraphicsInstrumentation extends Instrumentation {
             int different = 0, first = preview.getPixel(0, 0);
             for (int y = 0; y < preview.getHeight(); y += 7) for (int x = 0; x < preview.getWidth(); x += 7)
                 if (preview.getPixel(x, y) != first) different++;
+            metrics.put("ultra8kStreamedPreview", new JSONObject().put("seed", logical.seed)
+                    .put("width", preview.getWidth()).put("height", preview.getHeight())
+                    .put("sampleStride", 7).put("differentSamples", different).put("minimumExclusive", 100));
             expect(different > 100, "8K PNG contains no substantive rendered geometry");
         } finally { preview.recycle(); }
         sameGraphics(logical, visualSnapshot(), "8K export changed the active scene");

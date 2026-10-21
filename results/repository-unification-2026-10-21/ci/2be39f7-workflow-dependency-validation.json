@@ -1,0 +1,145 @@
+{
+  "scope": "Read-only enumeration of current CTest commands and workflow build targets; no rebuild or test campaign",
+  "observed_utc": "2026-10-21T00:49:15.223159+00:00",
+  "source_commit": "2be39f7915001c46b63246b9a9502071b599475d",
+  "workflow_sha256": "04e99217916f8ac81d7339187e6daea40030da5a192722f8e8260a5d83366c0b",
+  "cmake_source_sha256": "b3a9f9d39b364ea451559b68b5148c6cd72f1f83f2d6dc6b719b86ce07c9c3c6",
+  "ctest_command": [
+    "/workspace/scratch/7def14e3f3d9/solar-build/sdk/cmake/3.22.1/bin/ctest",
+    "--test-dir",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/core/build",
+    "--show-only=json-v1",
+    "-R",
+    "^(infinite_|ether_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)"
+  ],
+  "selection": "^(infinite_|ether_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)",
+  "selected_count": 19,
+  "selected": [
+    {
+      "test": "compact_measurement",
+      "required_target": "test_compact_measurement",
+      "covered": true
+    },
+    {
+      "test": "engine_session",
+      "required_target": "test_engine_session",
+      "covered": true
+    },
+    {
+      "test": "core_1000",
+      "required_target": "test_core_1000",
+      "covered": true
+    },
+    {
+      "test": "infinite_address",
+      "required_target": "test_infinite_address",
+      "covered": true
+    },
+    {
+      "test": "infinite_core",
+      "required_target": "test_infinite_core",
+      "covered": true
+    },
+    {
+      "test": "infinite_tensor",
+      "required_target": "test_infinite_tensor",
+      "covered": true
+    },
+    {
+      "test": "infinite_session",
+      "required_target": "test_infinite_session",
+      "covered": true
+    },
+    {
+      "test": "infinite_bridge",
+      "required_target": "test_infinite_bridge",
+      "covered": true
+    },
+    {
+      "test": "ether_core",
+      "required_target": "test_ether_core",
+      "covered": true
+    },
+    {
+      "test": "ether_frame",
+      "required_target": "test_ether_frame",
+      "covered": true
+    },
+    {
+      "test": "ether_fusion",
+      "required_target": "test_ether_fusion",
+      "covered": true
+    },
+    {
+      "test": "ether_rules",
+      "required_target": "test_ether_rules",
+      "covered": true
+    },
+    {
+      "test": "infinite_extreme",
+      "required_target": "test_infinite_extreme",
+      "covered": true
+    },
+    {
+      "test": "ether_batch",
+      "required_target": "test_ether_batch",
+      "covered": true
+    },
+    {
+      "test": "ether_example",
+      "required_target": "mundo_x_infinite",
+      "covered": true
+    },
+    {
+      "test": "infinite_example_zero",
+      "required_target": "mundo_x_infinite",
+      "covered": true
+    },
+    {
+      "test": "infinite_example_bell",
+      "required_target": "mundo_x_infinite",
+      "covered": true
+    },
+    {
+      "test": "infinite_cli_contract",
+      "required_target": "mundo_x_infinite",
+      "covered": true
+    },
+    {
+      "test": "native_core_and_xasm",
+      "required_target": "mundo_x_native_tests",
+      "covered": true
+    }
+  ],
+  "declared_targets": [
+    "infinite_scale",
+    "mundo_x_infinite",
+    "mundo_x_native_tests",
+    "test_compact_measurement",
+    "test_core_1000",
+    "test_engine_session",
+    "test_ether_batch",
+    "test_ether_core",
+    "test_ether_frame",
+    "test_ether_fusion",
+    "test_ether_rules",
+    "test_infinite_address",
+    "test_infinite_bridge",
+    "test_infinite_core",
+    "test_infinite_extreme",
+    "test_infinite_session",
+    "test_infinite_tensor"
+  ],
+  "missing_targets": [],
+  "canonical_bridge_builder": {
+    "path": "graphics-desktop/engine.py",
+    "function": "build_native",
+    "source_sha256": "5f8ba374a91618a337ab8e9f25b3b19994418d7a7d3e7d0cb76c30a17990c022",
+    "builds": [
+      "native/src/graphics_core_bridge.cpp",
+      "native/src/infinite_bridge.cpp"
+    ],
+    "output": "graphics-desktop/native/libmx_optical.so"
+  },
+  "cosmic_contracts_workflow_sha256": "fcc35c3a15bd79ffb56127a3287a8e9515a835d2bd2891542d6227729dd2d8cc"
+}

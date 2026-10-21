@@ -1,0 +1,21 @@
+{
+  "manifest": {
+    "schema": 1,
+    "repository": "guadalupejuan001-code/mundo-X",
+    "transport_branch": "codex/integration-transport-20261021",
+    "pull_request": 25,
+    "base_commit": "aab0930378796ebfd42f9629e2575108ca94fcff",
+    "candidate_commit": "2be39f7915001c46b63246b9a9502071b599475d",
+    "candidate_tree": "4d6dc4d33d4890124590129c3dd4c2956ba5b3d5",
+    "bundle_ref": "HEAD",
+    "bundle_bytes": 1616435,
+    "bundle_sha256": "a35bc9a69d60f9229a012dfd18e17bbdb72bdb984b810e8f8afb1a99b65663d3"
+  },
+  "run": 39523209346,
+  "conclusion": "success",
+  "transport_commit": "c670ffc66e867292729ea146fd78167ad99b8a56",
+  "transport_merge": "dcdc036c1bc751f38732275f3323ac6e1927422a",
+  "candidate": "2be39f7915001c46b63246b9a9502071b599475d",
+  "tree_unchanged": true,
+  "product_update_confirmed": true
+}

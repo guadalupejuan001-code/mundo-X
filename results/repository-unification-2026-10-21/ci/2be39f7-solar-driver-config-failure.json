@@ -1,0 +1,9 @@
+{
+  "head_sha": "2be39f7915001c46b63246b9a9502071b599475d",
+  "run": 39523264394,
+  "job": 118971900026,
+  "failed_stage": "driver configuration trace",
+  "cause": "Absolute-only strace path filter omitted relative open calls. Shader and APK completed host checks/builds. Exact Android comparison was not run.",
+  "artifact_id": 12311933435,
+  "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264394"
+}

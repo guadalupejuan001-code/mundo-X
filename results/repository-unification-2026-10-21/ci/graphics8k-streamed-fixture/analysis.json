@@ -1,0 +1,1268 @@
+{
+  "scope": "Saved Android PNG plus independent CPU ray/box geometry; no new Android execution",
+  "run_id": 39523264180,
+  "job_id": 118972460953,
+  "artifact_id": 12311638267,
+  "head_sha": "2be39f7915001c46b63246b9a9502071b599475d",
+  "source_png_sha256": "e11841be140cdc277a2cae7ae7a527932d05e211439dbd05e7baef8e668c8f6a",
+  "width": 7680,
+  "height": 4320,
+  "background_rgba": [
+    17,
+    22,
+    19,
+    255
+  ],
+  "different_pixels_from_background": 234465,
+  "geometry_bbox_exclusive": [
+    3563,
+    2231,
+    4109,
+    2764
+  ],
+  "colors": [
+    {
+      "rgba": [
+        208,
+        204,
+        186,
+        255
+      ],
+      "pixels": 57962
+    },
+    {
+      "rgba": [
+        75,
+        74,
+        67,
+        255
+      ],
+      "pixels": 60396
+    },
+    {
+      "rgba": [
+        107,
+        104,
+        95,
+        255
+      ],
+      "pixels": 116107
+    },
+    {
+      "rgba": [
+        17,
+        22,
+        19,
+        255
+      ],
+      "pixels": 32943135
+    }
+  ],
+  "original_assert": "different > 100",
+  "preview": [
+    960,
+    540
+  ],
+  "sample_stride": 7,
+  "camera_eye": [
+    5,
+    4,
+    7
+  ],
+  "camera_target": [
+    0,
+    1,
+    0
+  ],
+  "camera_fov_degrees": 48,
+  "camera_extent": [
+    7680,
+    4320
+  ],
+  "time": 0.875,
+  "quantum_strength": 0.25,
+  "first_observable_after_Z0": -1,
+  "derivation": "scene resets graph state; Z0 anticommutes with its first graph stabilizer; export computes its camera from the requested image extent, not the UI surface",
+  "seeds": [
+    {
+      "seed": 2026,
+      "hash_u32": 1009825174,
+      "height": 1.4762599489978832,
+      "base_height": 1.871875,
+      "predicted_sample_count_range": [
+        147,
+        149
+      ],
+      "all_offsets_above_unchanged_threshold": true,
+      "samples": [
+        {
+          "offset": [
+            0,
+            0
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            0
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            0
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            0
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            0
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            0
+          ],
+          "predicted_geometry": 148,
+          "observed_geometry": 78,
+          "mask_differences": 70
+        },
+        {
+          "offset": [
+            6,
+            0
+          ],
+          "predicted_geometry": 148,
+          "observed_geometry": 78,
+          "mask_differences": 70
+        },
+        {
+          "offset": [
+            7,
+            0
+          ],
+          "predicted_geometry": 148,
+          "observed_geometry": 78,
+          "mask_differences": 70
+        },
+        {
+          "offset": [
+            0,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            6,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            7,
+            1
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            0,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            6,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            7,
+            2
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            0,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            6,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            7,
+            3
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            0,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            6,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            7,
+            4
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            0,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            6,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            7,
+            5
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            0,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            6,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            7,
+            6
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 79,
+          "mask_differences": 70
+        },
+        {
+          "offset": [
+            0,
+            7
+          ],
+          "predicted_geometry": 147,
+          "observed_geometry": 76,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            1,
+            7
+          ],
+          "predicted_geometry": 147,
+          "observed_geometry": 76,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            2,
+            7
+          ],
+          "predicted_geometry": 147,
+          "observed_geometry": 76,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            3,
+            7
+          ],
+          "predicted_geometry": 148,
+          "observed_geometry": 77,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            4,
+            7
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            5,
+            7
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 78,
+          "mask_differences": 71
+        },
+        {
+          "offset": [
+            6,
+            7
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 79,
+          "mask_differences": 70
+        },
+        {
+          "offset": [
+            7,
+            7
+          ],
+          "predicted_geometry": 149,
+          "observed_geometry": 79,
+          "mask_differences": 70
+        }
+      ]
+    },
+    {
+      "seed": 2027,
+      "hash_u32": 2265714451,
+      "height": 0.6691228316409437,
+      "base_height": 0.8484375,
+      "predicted_sample_count_range": [
+        76,
+        79
+      ],
+      "all_offsets_above_unchanged_threshold": false,
+      "samples": [
+        {
+          "offset": [
+            0,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            0
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            0,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            1
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            0,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            2
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            0,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            3
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            0,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            4
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            0,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            5
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            0,
+            6
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            6
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            6
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            6
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            6
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            6
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            6
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            6
+          ],
+          "predicted_geometry": 79,
+          "observed_geometry": 79,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            0,
+            7
+          ],
+          "predicted_geometry": 76,
+          "observed_geometry": 76,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            1,
+            7
+          ],
+          "predicted_geometry": 76,
+          "observed_geometry": 76,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            2,
+            7
+          ],
+          "predicted_geometry": 76,
+          "observed_geometry": 76,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            3,
+            7
+          ],
+          "predicted_geometry": 77,
+          "observed_geometry": 77,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            4,
+            7
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            5,
+            7
+          ],
+          "predicted_geometry": 78,
+          "observed_geometry": 78,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            6,
+            7
+          ],
+          "predicted_geometry": 79,
+          "observed_geometry": 79,
+          "mask_differences": 0
+        },
+        {
+          "offset": [
+            7,
+            7
+          ],
+          "predicted_geometry": 79,
+          "observed_geometry": 79,
+          "mask_differences": 0
+        }
+      ]
+    }
+  ],
+  "conclusion": "The inherited seed 2027 explains the small valid image; canonical seed 2026 clears the unchanged threshold for all 64 pixel sampling offsets.",
+  "rss_peak_kib": 446900
+}
