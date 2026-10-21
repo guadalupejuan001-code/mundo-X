@@ -127,11 +127,26 @@ los fragmentos vecinos. La corrección calcula los gradientes del rayo, de la
 superficie y de los anillos de forma explícita, y suministra esos gradientes al
 muestreo de texturas. También define los casos límite de polos y tangencias.
 
-La referencia histórica recibe exclusivamente esa corrección de filtrado y sus
-guardas numéricas; mantiene la evaluación completa de materiales y capas. Frente
-a esa referencia definida, el candidato conserva sus optimizaciones y supera
-32 escenas exactas en Mesa y SwiftShader. Es una prueba de equivalencia después
-de corregir el filtrado; no afirma igualdad con el color indefinido anterior.
+La referencia histórica recibe la misma corrección de filtrado y sus guardas
+numéricas; mantiene la evaluación completa de materiales y capas. La primera
+campaña de 32 escenas fue exacta en Mesa y SwiftShader. La comparación Android
+añadió un caso que esas escenas no cubrían: una imagen de Urano de 360 × 203
+mostraba una banda de 53 píxeles diferentes, aunque todas las repeticiones de
+cada versión coincidían.
+
+Las entradas exactas de Android reprodujeron los mismos 53 píxeles en host.
+El límite normalizado de los tiles de la referencia elegía otra fila de máscaras
+en y=101; el productor utiliza tiles reales de 128 píxeles. El oráculo que evalúa
+los 23 cuerpos, sin descartar ninguno por tile, coincide exactamente con la
+producción: cero diferencias en los 73.080 píxeles de ese caso, también con los
+materiales y nubes completos de la referencia. Por ello la referencia final
+evalúa todos los cuerpos y comprueba de forma independiente el descarte de
+candidatos del motor. El shader de producción conserva sus optimizaciones y
+sus bytes; no se revierte su particionado correcto para imitar la referencia
+antigua. El caso exacto se incorpora a la regresión.
+
+Son pruebas de equivalencia después de corregir el filtrado y definir el
+oráculo completo; no afirman igualdad con el color indefinido anterior.
 
 SwiftShader necesitó un trabajador y calentamiento simétrico para las repeticiones
 exactas. Los fallos previos, los transitorios y la sensibilidad al controlador
@@ -154,8 +169,9 @@ separado; compilar los APK o pasar GLES en host no lo sustituye.
 | XLab Java | 23 fuentes, 84 clases | Incluye ambas instrumentaciones. |
 | COSMIC Java | 46 fuentes, 170 clases | Incluye el menú de espejos, el renderer y las instrumentaciones compartidas. |
 | Procedencia nativa | 83 fuentes verificadas byte por byte | Las fuentes revisadas tienen un pin nuevo; las no modificadas conservan su referencia. |
-| Solar GLES, Mesa | 32/32 escenas; color, identidad y profundidad exactos | 5.529.600 píxeles entre las tres salidas; 241.412 KiB RSS máximo. |
-| Solar GLES, SwiftShader | 32/32 escenas; 1.843.200 píxeles RGBA, cero diferencias | Un trabajador, procesos separados y repeticiones exactas tras calentamiento simétrico; candidato 723.444 KiB RSS máximo. |
+| Solar GLES, Mesa, referencia final completa | 32/32 escenas más el caso Android exacto; color, identidad y profundidad exactos | 5.529.600 + 219.240 píxeles entre las tres salidas; 241.568 KiB RSS máximo de las dos campañas. |
+| Solar GLES, SwiftShader, referencia inicial | 32/32 escenas; 1.843.200 píxeles RGBA, cero diferencias | Un trabajador, procesos separados y repeticiones exactas tras calentamiento simétrico; candidato 723.444 KiB RSS máximo. El caso Android adicional reveló después el defecto de particionado de esta referencia. |
+| Solar GLES, SwiftShader, referencia final completa | Caso Android de Urano: 73.080 píxeles RGBA, cero diferencias y repeticiones exactas | Incluye todos los cuerpos y la evaluación completa de materiales y nubes; mismo shader de producción. |
 | Gradientes Solar | 896 componentes por controlador, cero fallos | Diferencias finitas independientes; máximo error absoluto observado 2,06 × 10⁻⁸. |
 | APK Solar | Candidato, referencia definida, instrumentación y variante coexistente compilados | JDK17, Gradle8.9, un trabajador, JVM de 1 GiB; firma, fuentes, assets, ABI y alineación verificados. |
 
@@ -179,6 +195,43 @@ vinculados a su propio commit y APK. La campaña local Android del shader
 corregido está pendiente en este corte. Su runner exige observar que el emulador
 leyó la configuración de SwiftShader antes de atribuirle el número de trabajadores
 solicitado; después exige ocho escenas y todas sus repeticiones exactas.
+
+## Cierre de los fallos encontrados por el CI
+
+La primera pasada remota de `2be39f7` completó 13 de 18 campañas con éxito.
+Sus cinco fallos no se descartaron: se conservaron los logs y se aislaron las
+causas. En `5e8df8f`, los contratos nativos, de sesión y espejos ya aprobaron,
+al igual que los 19 tests seleccionados de Infinite tanto en Linux como en
+Windows. Los checks del PR identifican el estado posterior de cada campaña.
+
+- **Dependencias:** el workflow de Infinite ahora compila también los dos
+  ejecutables que seleccionaba CTest; el de espejos prepara el puente nativo
+  canónico antes de usarlo.
+- **Gráficos 8K:** una prueba nueva dejaba la semilla en 2027 y cambiaba la escena
+  de una prueba posterior. Se restaura la semilla y el caso de exportación fija
+  explícitamente 2026. El PNG anterior era válido y contenía geometría; se
+  conserva el umbral original y un oráculo independiente explica la diferencia.
+- **Coste del observador:** el índice nuevo añade 320 bytes al observador de
+  20 qubits en x64, de 560 a 880 bytes; el payload del núcleo permanece en 340.
+  El comparador exige los mismos resultados, checksum y carga, y contabiliza
+  expresamente ese índice acotado. Comprueba además un límite virtual de 2 GiB
+  y plazos finitos para cada ejecución nativa. No presenta ese aumento como
+  ahorro de memoria.
+- **Solar exacto:** se observa la lectura real de la configuración del
+  controlador, tanto con ruta relativa como absoluta. El caso de Urano se
+  resuelve mediante el oráculo completo descrito arriba.
+- **Solar 8K:** el hilo gráfico completó un intervalo de 159.880,88 ms frente
+  a un plazo de captura de 150 segundos. La instrumentación asigna 240 segundos
+  sólo a las dos capturas 8K y conserva los plazos de los demás perfiles. Mantiene
+  el dibujo bajo demanda durante el informe para no encolar otra imagen 8K al
+  limpiar un fallo. El framebuffer, el PNG, su contenido, sus muestras y la
+  restauración exacta siguen siendo obligatorios. El tiempo observado no es una
+  medición de tiempo GPU ni acredita rendimiento interactivo a 8K.
+
+La [evidencia de CI](../results/repository-unification-2026-10-21/ci/) conserva
+los fallos originales y sus diagnósticos. La compilación conjunta y la ejecución
+Android de las correcciones finales son comprobaciones separadas, vinculadas al
+commit que contienen, y no se dan por aprobadas por haber identificado la causa.
 
 ## Qué demuestra la estructura y qué falta para valorarla
 

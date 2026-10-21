@@ -1,0 +1,104 @@
+{
+  "production_sources": {
+    "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java": {
+      "repository_sha256": "2ad900613108fa223be7fea46b10ef1daf7e40f33da63a830b995d1754969e2e",
+      "compiled_snapshot_sha256": "2ad900613108fa223be7fea46b10ef1daf7e40f33da63a830b995d1754969e2e",
+      "same": true
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarData.java": {
+      "repository_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+      "compiled_snapshot_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+      "same": true
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java": {
+      "repository_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+      "compiled_snapshot_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+      "same": true
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java": {
+      "repository_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+      "compiled_snapshot_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+      "same": true
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java": {
+      "repository_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+      "compiled_snapshot_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+      "same": true
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java": {
+      "repository_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+      "compiled_snapshot_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+      "same": true
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": {
+      "repository_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+      "compiled_snapshot_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+      "same": true
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": {
+      "repository_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+      "compiled_snapshot_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+      "same": true
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": {
+      "repository_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+      "compiled_snapshot_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+      "same": true
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java": {
+      "repository_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+      "compiled_snapshot_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+      "same": true
+    }
+  },
+  "harness_files": {
+    "src/android/content/Context.java": "e51b9f8f1675a2194c0d7e5fb7f20db071588b2e03998248357a8cb44fe1d8fc",
+    "src/android/opengl/Matrix.java": "093d363b9a26e45d036fea5e0ea0e02c5e8eba7d7c6a1aeb168471d603dbdc9d",
+    "src/android/content/res/AssetManager.java": "a2658f13338ce9e01762e0b871322dbd549f3d378656bdbd1d934e9594db219a",
+    "src/com/mundox/solar/AndroidInputFixture.java": "4ce9d86f1415a6f9324e25010a944194d00d5dd4d911b6507fd88c75e78a84a4"
+  },
+  "outputs": {
+    "output/case-1-input-hashes.json": {
+      "sha256": "c8306623c54cf6dbb770868dd24f5ac7e20974b9975d65b97dfa54498a6a03be",
+      "bytes": 2234
+    },
+    "output/case-4-input-hashes.json": {
+      "sha256": "303c1bdbbe6fcec6e32db0638f2d940e8c7de1136c08a48f9f38b1fc0f713989",
+      "bytes": 2234
+    },
+    "output/case-7-input-values.json": {
+      "sha256": "98a2afdbc9b71de4e157219fd5e5a35f2e58f0c6b69683d90dd6b458558078dc",
+      "bytes": 446548
+    },
+    "output/case-5-input-hashes.json": {
+      "sha256": "e630b2c47c720e79b6f17755d4b6aa7fec190ea8b1e6e2caf408493ca73625ee",
+      "bytes": 2234
+    },
+    "output/case-7-input-hashes.json": {
+      "sha256": "660489a84975844eab96a2ee4935f95472cbb58a42cb6111fdc996460d1be3aa",
+      "bytes": 2234
+    },
+    "output/fixture-android-case-7.json": {
+      "sha256": "2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1",
+      "bytes": 4618
+    },
+    "output/case-6-input-hashes.json": {
+      "sha256": "74d6c8eba7af88caa9fa2b36276dc8e6b79c53166095c2e3353819d34cebe940",
+      "bytes": 2234
+    },
+    "output/case-3-input-hashes.json": {
+      "sha256": "f98eac88bd40d1ec0ab70436cde702950df242e1795b766c329beb70395daf45",
+      "bytes": 2234
+    },
+    "output/case-2-input-hashes.json": {
+      "sha256": "310b19e3e90669b89d40e509fa1bb0685e9769e8ab3eded7627e7e76ad83a20a",
+      "bytes": 2234
+    },
+    "output/case-0-input-hashes.json": {
+      "sha256": "f28ec4b5ee04f0ccfff6df621b6f7148c7c0a2998606029d8cfa47a223bfd5db",
+      "bytes": 2234
+    }
+  },
+  "execution.json_sha256": "dfc8e2f5b165fcecf530c1887fb47c89a46c644e8a784447610bdaad83740a22",
+  "android-input-comparison.json_sha256": "d3c6cea86ae8ee543ef6c3596af5bffe440e3f687142eccb00a9651b3388f959"
+}

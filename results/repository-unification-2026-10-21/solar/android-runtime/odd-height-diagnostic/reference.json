@@ -1,0 +1,147 @@
+{
+  "driver": {
+    "vendor": "Google Inc.",
+    "renderer": "Google SwiftShader",
+    "version": "OpenGL ES 3.0 SwiftShader 4.0.0.1",
+    "glsl": "OpenGL ES GLSL ES 3.00 SwiftShader 4.0.0.1",
+    "hardware_gpu_available": false,
+    "timer_query_supported": false
+  },
+  "resolution": [
+    360,
+    203
+  ],
+  "results": [
+    {
+      "scene": 8,
+      "selected": 7,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          311.202047,
+          309.649389,
+          313.994291
+        ],
+        "before": [
+          303.067019,
+          325.195917,
+          318.426307
+        ]
+      },
+      "fresh_ms": {
+        "after": 13633.106331,
+        "before": 301.176003
+      },
+      "warmup_different_pixels": {
+        "after": [
+          5
+        ],
+        "before": [
+          0
+        ]
+      },
+      "repeat_different_pixels": {
+        "after": [
+          0,
+          0,
+          0
+        ],
+        "before": [
+          0,
+          0,
+          0
+        ]
+      },
+      "median_ms": {
+        "after": 311.202047,
+        "before": 318.426307
+      },
+      "eclipse_candidates": 45
+    },
+    {
+      "scene": 30,
+      "selected": 7,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          195.222119,
+          208.970186,
+          183.635411
+        ],
+        "before": [
+          177.451338,
+          179.329896,
+          181.53186
+        ]
+      },
+      "fresh_ms": {
+        "after": 192.834865,
+        "before": 182.713391
+      },
+      "warmup_different_pixels": {
+        "after": [
+          0
+        ],
+        "before": [
+          0
+        ]
+      },
+      "repeat_different_pixels": {
+        "after": [
+          0,
+          0,
+          0
+        ],
+        "before": [
+          0,
+          0,
+          0
+        ]
+      },
+      "median_ms": {
+        "after": 195.222119,
+        "before": 179.329896
+      },
+      "eclipse_candidates": 32
+    }
+  ],
+  "compared_pixels": 146160,
+  "different_pixels": {
+    "color": 0
+  },
+  "max_color_channel_delta": 0,
+  "repeat_different_pixels": {
+    "before": 0,
+    "after": 0
+  },
+  "warmup_frames": 2,
+  "warmup_different_pixels": {
+    "before": 0,
+    "after": 5
+  },
+  "independent_programs": false,
+  "process_memory": {
+    "VmPeak": "816972 kB",
+    "VmSize": "699732 kB",
+    "VmHWM": "666332 kB",
+    "VmRSS": "579224 kB"
+  },
+  "median_ms": {
+    "before": 248.8781015,
+    "after": 253.212083
+  },
+  "rss_peak_kib": 666332,
+  "process_threads": 2,
+  "swiftshader_threads": 1,
+  "driver_configuration": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+  "baseline": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/tests/fixtures/solar-defined-reference.frag",
+  "source_commit": "2be39f7915001c46b63246b9a9502071b599475d",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": true,
+  "shader_sha256": "7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6",
+  "fixtures_sha256": "cee1c45cc9d9820f759d17153d0309b95155756b1bb0d1f55220456801615e76",
+  "baseline_shader_sha256": "7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6",
+  "egl_library": "/workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libEGL.so"
+}

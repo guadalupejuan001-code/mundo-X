@@ -1,0 +1,52 @@
+{
+  "status": "passed",
+  "pixel_tolerance": 0,
+  "scope": "Optimization equivalence after correcting filtering; independent single-program processes",
+  "compared_pixels": 73080,
+  "different_pixels": 0,
+  "exact_scenes": 1,
+  "cases": [
+    {
+      "scene": 7,
+      "pixels": 73080,
+      "different_pixels": 0,
+      "different_channels": 0,
+      "maximum_channel_delta": 0,
+      "mean_absolute_channel_error": 0.0,
+      "before_rgba_sha256": "da584a4d884399619eca63826cbb97b546a8e73a1bcfe8e364e704339b6ba24a",
+      "after_rgba_sha256": "da584a4d884399619eca63826cbb97b546a8e73a1bcfe8e364e704339b6ba24a"
+    }
+  ],
+  "before_shader_sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+  "after_shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+  "fixtures_sha256": "2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1",
+  "driver": {
+    "vendor": "Google Inc.",
+    "renderer": "Google SwiftShader",
+    "version": "OpenGL ES 3.0 SwiftShader 4.0.0.1",
+    "glsl": "OpenGL ES GLSL ES 3.00 SwiftShader 4.0.0.1",
+    "hardware_gpu_available": false,
+    "timer_query_supported": false
+  },
+  "swiftshader_threads": 1,
+  "driver_configuration": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+  "warmup_frames": 2,
+  "warmup_different_pixels": {
+    "before": {
+      "before": 1,
+      "after": 0
+    },
+    "after": {
+      "before": 1,
+      "after": 0
+    }
+  },
+  "rss_peak_kib": {
+    "before": 662664,
+    "after": 723052
+  },
+  "report_sha256": {
+    "before": "06b669494accabcabebdf973b86d82a9cfe5e72f5bc055dc4ae73e6dded5a21e",
+    "after": "6f25e0173e3a4b39501cbd08073c77dd13f09566790d7b58bba75fd1e910e1fb"
+  }
+}

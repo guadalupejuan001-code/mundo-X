@@ -1,0 +1,629 @@
+﻿2026-10-21T00:47:21.3932154Z Current runner version: '2.337.0'
+2026-10-21T00:47:21.3966281Z ##[group]Runner Image Provisioner
+2026-10-21T00:47:21.3967948Z Hosted Compute Agent
+2026-10-21T00:47:21.3969025Z Version: 20261012.601
+2026-10-21T00:47:21.3970230Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+2026-10-21T00:47:21.3971578Z Build Date: 2026-10-12T17:48:21Z
+2026-10-21T00:47:21.3972745Z Worker ID: {0426a3d1-6960-45a1-a111-d7acc943271c}
+2026-10-21T00:47:21.3973980Z Region: eastus
+2026-10-21T00:47:21.3974837Z Cloud: Azure
+2026-10-21T00:47:21.3975717Z ##[endgroup]
+2026-10-21T00:47:21.3978320Z ##[group]Operating System
+2026-10-21T00:47:21.3979399Z Ubuntu
+2026-10-21T00:47:21.3980404Z 24.04.5
+2026-10-21T00:47:21.3981231Z LTS
+2026-10-21T00:47:21.3982123Z ##[endgroup]
+2026-10-21T00:47:21.3983094Z ##[group]Runner Image
+2026-10-21T00:47:21.3984086Z Image: ubuntu-24.04
+2026-10-21T00:47:21.3985065Z Version: 20261012.334.1
+2026-10-21T00:47:21.3987085Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-21T00:47:21.3990363Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
+2026-10-21T00:47:21.3992011Z ##[endgroup]
+2026-10-21T00:47:21.3993967Z ##[group]GITHUB_TOKEN Permissions
+2026-10-21T00:47:21.3996960Z Contents: read
+2026-10-21T00:47:21.3998243Z Metadata: read
+2026-10-21T00:47:21.3999130Z ##[endgroup]
+2026-10-21T00:47:21.4002196Z Secret source: Actions
+2026-10-21T00:47:21.4003723Z Cache mode: write
+2026-10-21T00:47:21.4005015Z Prepare workflow directory
+2026-10-21T00:47:21.4489033Z Prepare all required actions
+2026-10-21T00:47:21.4561100Z Getting action download info
+2026-10-21T00:47:21.6563608Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-21T00:47:21.7583288Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-10-21T00:47:21.9276090Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-21T00:47:22.1377338Z Complete job name: android-validation
+2026-10-21T00:47:22.2179976Z ##[group]Run actions/checkout@v4
+2026-10-21T00:47:22.2180872Z with:
+2026-10-21T00:47:22.2181360Z   ref: 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:22.2181954Z   fetch-depth: 0
+2026-10-21T00:47:22.2182419Z   persist-credentials: false
+2026-10-21T00:47:22.2182977Z   repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:47:22.2186927Z   token: ***
+2026-10-21T00:47:22.2187414Z   ssh-strict: true
+2026-10-21T00:47:22.2188123Z   ssh-user: git
+2026-10-21T00:47:22.2188561Z   clean: true
+2026-10-21T00:47:22.2189008Z   sparse-checkout-cone-mode: true
+2026-10-21T00:47:22.2189538Z   fetch-tags: false
+2026-10-21T00:47:22.2190003Z   show-progress: true
+2026-10-21T00:47:22.2190466Z   lfs: false
+2026-10-21T00:47:22.2190875Z   submodules: false
+2026-10-21T00:47:22.2191339Z   set-safe-directory: true
+2026-10-21T00:47:22.2191910Z   allow-unsafe-pr-checkout: false
+2026-10-21T00:47:22.2192764Z ##[endgroup]
+2026-10-21T00:47:22.3238694Z Syncing repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:47:22.3241461Z ##[group]Getting Git version info
+2026-10-21T00:47:22.3242581Z Working directory is '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:47:22.3244164Z [command]/usr/bin/git version
+2026-10-21T00:47:22.3306744Z git version 2.55.0
+2026-10-21T00:47:22.3330878Z ##[endgroup]
+2026-10-21T00:47:22.3349495Z Temporarily overriding HOME='/home/runner/work/_temp/0c46cdea-35f9-4300-b7a6-395b21e065e9' before making global git config changes
+2026-10-21T00:47:22.3351867Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:47:22.3355690Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:47:22.3409689Z Deleting the contents of '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:47:22.3414254Z ##[group]Initializing the repository
+2026-10-21T00:47:22.3418377Z [command]/usr/bin/git init /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:47:22.3522515Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-21T00:47:22.3524092Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-21T00:47:22.3525698Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-21T00:47:22.3527333Z hint: call:
+2026-10-21T00:47:22.3537520Z hint:
+2026-10-21T00:47:22.3539131Z hint: 	git config --global init.defaultBranch <name>
+2026-10-21T00:47:22.3540645Z hint:
+2026-10-21T00:47:22.3541983Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-21T00:47:22.3544011Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-21T00:47:22.3545472Z hint:
+2026-10-21T00:47:22.3546372Z hint: 	git branch -m <name>
+2026-10-21T00:47:22.3547563Z hint:
+2026-10-21T00:47:22.3557059Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-21T00:47:22.3562121Z Initialized empty Git repository in /home/runner/work/mundo-X/mundo-X/.git/
+2026-10-21T00:47:22.3566121Z [command]/usr/bin/git remote add origin https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:47:22.3621347Z ##[endgroup]
+2026-10-21T00:47:22.3638703Z ##[group]Disabling automatic garbage collection
+2026-10-21T00:47:22.3642113Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-21T00:47:22.3650704Z ##[endgroup]
+2026-10-21T00:47:22.3651874Z ##[group]Setting up auth
+2026-10-21T00:47:22.3657547Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:47:22.3692818Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:47:22.4102259Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:47:22.4145285Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:47:22.4457246Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:47:22.4511896Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:47:22.4757953Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-21T00:47:22.4812257Z ##[endgroup]
+2026-10-21T00:47:22.4813333Z ##[group]Fetching the repository
+2026-10-21T00:47:22.4825934Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-10-21T00:47:22.9502439Z From https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:47:22.9503747Z  * [new branch]      build/android-apk-v0.1  -> origin/build/android-apk-v0.1
+2026-10-21T00:47:22.9504906Z  * [new branch]      codex/basis-vm-android  -> origin/codex/basis-vm-android
+2026-10-21T00:47:22.9506092Z  * [new branch]      codex/core-1000-qubits-20261019 -> origin/codex/core-1000-qubits-20261019
+2026-10-21T00:47:22.9507468Z  * [new branch]      codex/cosmic-android-unified-20261019 -> origin/codex/cosmic-android-unified-20261019
+2026-10-21T00:47:22.9509904Z  * [new branch]      codex/cosmic-engine-4k-20261019 -> origin/codex/cosmic-engine-4k-20261019
+2026-10-21T00:47:22.9511215Z  * [new branch]      codex/cosmic-engine-8k-20261019 -> origin/codex/cosmic-engine-8k-20261019
+2026-10-21T00:47:22.9512738Z  * [new branch]      codex/cosmic-solar-4k-atmospheres-20261019 -> origin/codex/cosmic-solar-4k-atmospheres-20261019
+2026-10-21T00:47:22.9514200Z  * [new branch]      codex/cosmic-solar-explorer -> origin/codex/cosmic-solar-explorer
+2026-10-21T00:47:22.9515468Z  * [new branch]      codex/cosmic-x-engine-20261019 -> origin/codex/cosmic-x-engine-20261019
+2026-10-21T00:47:22.9516890Z  * [new branch]      codex/ether-audit-stress-20261020 -> origin/codex/ether-audit-stress-20261020
+2026-10-21T00:47:22.9519165Z  * [new branch]      codex/ether-core-v0-1-20261019 -> origin/codex/ether-core-v0-1-20261019
+2026-10-21T00:47:22.9520807Z  * [new branch]      codex/ether-fusion-pc-check-20261020 -> origin/codex/ether-fusion-pc-check-20261020
+2026-10-21T00:47:22.9522335Z  * [new branch]      codex/ether-fusion-session-20261020 -> origin/codex/ether-fusion-session-20261020
+2026-10-21T00:47:22.9524658Z  * [new branch]      codex/factorized-exact-structure-20261018 -> origin/codex/factorized-exact-structure-20261018
+2026-10-21T00:47:22.9526067Z  * [new branch]      codex/graphics-spatial-20261018 -> origin/codex/graphics-spatial-20261018
+2026-10-21T00:47:22.9527248Z  * [new branch]      codex/infinite-8k-extreme-20261019 -> origin/codex/infinite-8k-extreme-20261019
+2026-10-21T00:47:22.9529292Z  * [new branch]      codex/infinite-core-rules-20261019 -> origin/codex/infinite-core-rules-20261019
+2026-10-21T00:47:22.9531699Z  * [new branch]      codex/integrate-cosmic-projects-20261019 -> origin/codex/integrate-cosmic-projects-20261019
+2026-10-21T00:47:22.9533307Z  * [new branch]      codex/motor-x-visual-20261018 -> origin/codex/motor-x-visual-20261018
+2026-10-21T00:47:22.9535177Z  * [new branch]      codex/mundo-x-graphics-android-20261019 -> origin/codex/mundo-x-graphics-android-20261019
+2026-10-21T00:47:22.9539893Z  * [new branch]      codex/own-pc-x86-20261019 -> origin/codex/own-pc-x86-20261019
+2026-10-21T00:47:22.9542119Z  * [new branch]      codex/pc-enter-iso-fix-20261019 -> origin/codex/pc-enter-iso-fix-20261019
+2026-10-21T00:47:22.9544858Z  * [new branch]      codex/pc-graphics-iso-fix-20261019 -> origin/codex/pc-graphics-iso-fix-20261019
+2026-10-21T00:47:22.9547900Z  * [new branch]      codex/physics-foundation-20261019 -> origin/codex/physics-foundation-20261019
+2026-10-21T00:47:22.9550327Z  * [new branch]      codex/quantum-echo-android -> origin/codex/quantum-echo-android
+2026-10-21T00:47:22.9553008Z  * [new branch]      codex/rule-render-physics-20261019 -> origin/codex/rule-render-physics-20261019
+2026-10-21T00:47:22.9555534Z  * [new branch]      codex/visual-microlab-20261018 -> origin/codex/visual-microlab-20261018
+2026-10-21T00:47:22.9558632Z  * [new branch]      codex/windows-reference-diagnostics-20261018 -> origin/codex/windows-reference-diagnostics-20261018
+2026-10-21T00:47:22.9561069Z  * [new branch]      codex/xasm-reduced-t    -> origin/codex/xasm-reduced-t
+2026-10-21T00:47:22.9562321Z  * [new branch]      delivery/xlab-0.3.1     -> origin/delivery/xlab-0.3.1
+2026-10-21T00:47:22.9563432Z  * [new branch]      delivery/xlab-0.3.2     -> origin/delivery/xlab-0.3.2
+2026-10-21T00:47:22.9564711Z  * [new branch]      experiment/quantum-core-v0.1 -> origin/experiment/quantum-core-v0.1
+2026-10-21T00:47:22.9566413Z  * [new branch]      experiment/transformer-x-v0.1 -> origin/experiment/transformer-x-v0.1
+2026-10-21T00:47:22.9568627Z  * [new branch]      main                    -> origin/main
+2026-10-21T00:47:22.9570253Z  * [new branch]      phase-performance-trial -> origin/phase-performance-trial
+2026-10-21T00:47:22.9571737Z  * [new tag]         v0.3.1                  -> v0.3.1
+2026-10-21T00:47:22.9572897Z  * [new tag]         v0.3.2                  -> v0.3.2
+2026-10-21T00:47:22.9576035Z [command]/usr/bin/git rev-parse --verify --quiet 2be39f7915001c46b63246b9a9502071b599475d^{object}
+2026-10-21T00:47:22.9578347Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:22.9581288Z ##[endgroup]
+2026-10-21T00:47:22.9582663Z ##[group]Determining the checkout info
+2026-10-21T00:47:22.9585880Z ##[endgroup]
+2026-10-21T00:47:22.9586768Z [command]/usr/bin/git sparse-checkout disable
+2026-10-21T00:47:22.9641462Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-21T00:47:22.9673615Z ##[group]Checking out the ref
+2026-10-21T00:47:22.9678678Z [command]/usr/bin/git checkout --progress --force 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:23.0552788Z Note: switching to '2be39f7915001c46b63246b9a9502071b599475d'.
+2026-10-21T00:47:23.0554958Z 
+2026-10-21T00:47:23.0556504Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-21T00:47:23.0558463Z changes and commit them, and you can discard any commits you make in this
+2026-10-21T00:47:23.0560054Z state without impacting any branches by switching back to a branch.
+2026-10-21T00:47:23.0560941Z 
+2026-10-21T00:47:23.0561588Z If you want to create a new branch to retain commits you create, you may
+2026-10-21T00:47:23.0563604Z do so (now or later) by using -c with the switch command. Example:
+2026-10-21T00:47:23.0642240Z 
+2026-10-21T00:47:23.0642905Z   git switch -c <new-branch-name>
+2026-10-21T00:47:23.0644023Z 
+2026-10-21T00:47:23.0644623Z Or undo this operation with:
+2026-10-21T00:47:23.0645392Z 
+2026-10-21T00:47:23.0645856Z   git switch -
+2026-10-21T00:47:23.0646519Z 
+2026-10-21T00:47:23.0647522Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-21T00:47:23.0649328Z 
+2026-10-21T00:47:23.0650581Z HEAD is now at 2be39f7 fix: define Solar filtering and verify exact reference replays
+2026-10-21T00:47:23.0655825Z ##[endgroup]
+2026-10-21T00:47:23.0659249Z [command]/usr/bin/git log -1 --format=%H
+2026-10-21T00:47:23.0661014Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:47:23.0664458Z ##[group]Removing auth
+2026-10-21T00:47:23.0665745Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:47:23.0701687Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:47:23.0925989Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:47:23.0955633Z http.https://github.com/.extraheader
+2026-10-21T00:47:23.0964535Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-21T00:47:23.1001568Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:47:23.1225196Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:47:23.1263067Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:47:23.1490351Z ##[endgroup]
+2026-10-21T00:47:23.1801675Z ##[group]Run actions/download-artifact@v4
+2026-10-21T00:47:23.1802919Z with:
+2026-10-21T00:47:23.1803848Z   name: COSMIC-X-Solar-8K-APK
+2026-10-21T00:47:23.1804949Z   path: solar-8k-apks
+2026-10-21T00:47:23.1805970Z   merge-multiple: false
+2026-10-21T00:47:23.1807093Z   repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:47:23.1808677Z   run-id: 39523264220
+2026-10-21T00:47:23.1809627Z ##[endgroup]
+2026-10-21T00:47:23.3323878Z Downloading single artifact
+2026-10-21T00:47:23.3501809Z (node:2398) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:47:23.3504728Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:47:23.4250812Z Preparing to download the following artifacts:
+2026-10-21T00:47:23.4255989Z - COSMIC-X-Solar-8K-APK (ID: 12311442868, Size: 6241069, Expected Digest: sha256:ed3d9576d2b9a85f4241fef22892e7f2900060462910ee53db7ac8a6a2543f32)
+2026-10-21T00:47:23.5519917Z Redirecting to blob download url: https://productionresultssa8.blob.core.windows.net/actions-results/13cd3a92-0eb9-8149-8713-150c9485754e/workflow-job-run-5b537c78-0bad-544c-a271-8f559400410f/artifacts/d4d48d72304c182139273df1a39d642bc23353a89ef528d26c5077f9e95cd3a1.zip
+2026-10-21T00:47:23.5522744Z Starting download of artifact to: /home/runner/work/mundo-X/mundo-X/solar-8k-apks
+2026-10-21T00:47:23.6362293Z (node:2398) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-21T00:47:23.7934410Z SHA256 digest of downloaded artifact is ed3d9576d2b9a85f4241fef22892e7f2900060462910ee53db7ac8a6a2543f32
+2026-10-21T00:47:23.7935484Z Artifact download completed successfully.
+2026-10-21T00:47:23.7936050Z Total of 1 artifact(s) downloaded
+2026-10-21T00:47:23.7940788Z Download artifact has finished successfully
+2026-10-21T00:47:23.8113300Z ##[group]Run set -euo pipefail
+2026-10-21T00:47:23.8113692Z [36;1mset -euo pipefail[0m
+2026-10-21T00:47:23.8113966Z [36;1msudo chmod 666 /dev/kvm[0m
+2026-10-21T00:47:23.8114315Z [36;1m"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \[0m
+2026-10-21T00:47:23.8114816Z [36;1m  'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'[0m
+2026-10-21T00:47:23.8362334Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:23.8362765Z ##[endgroup]
+2026-10-21T00:47:28.5832137Z Loading package information...                                                  
+2026-10-21T00:47:28.6606838Z Loading local repository...                                                     
+2026-10-21T00:47:28.6610565Z [                                       ] 3% Loading local repository...        
+2026-10-21T00:47:29.8049188Z [                                       ] 3% Fetch remote repository...         
+2026-10-21T00:47:30.2501851Z [=                                      ] 3% Fetch remote repository...         
+2026-10-21T00:47:30.3214009Z [=                                      ] 4% Fetch remote repository...         
+2026-10-21T00:47:30.3476956Z [=                                      ] 5% Fetch remote repository...         
+2026-10-21T00:47:30.4006217Z [==                                     ] 5% Fetch remote repository...         
+2026-10-21T00:47:30.5203804Z [==                                     ] 6% Fetch remote repository...         
+2026-10-21T00:47:30.6263530Z [==                                     ] 7% Fetch remote repository...         
+2026-10-21T00:47:30.6308553Z [==                                     ] 7% Computing updates...               
+2026-10-21T00:47:30.6423756Z [===                                    ] 8% Computing updates...               
+2026-10-21T00:47:30.6740534Z [===                                    ] 10% Computing updates...              
+2026-10-21T00:47:30.7169550Z [===                                    ] 10% Installing Android Emulator       
+2026-10-21T00:47:30.8399843Z [===                                    ] 10% Downloading emulator-linux_x64-164
+2026-10-21T00:47:30.9260845Z [====                                   ] 10% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.0269089Z [====                                   ] 11% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.1163381Z [====                                   ] 12% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.1977989Z [=====                                  ] 13% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.2608983Z [=====                                  ] 14% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.2992394Z [=====                                  ] 15% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.3283596Z [======                                 ] 15% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.3943409Z [======                                 ] 16% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.4533987Z [======                                 ] 17% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.5116975Z [=======                                ] 18% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.5695199Z [=======                                ] 19% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.5959828Z [=======                                ] 20% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.6289871Z [========                               ] 20% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.6693060Z [========                               ] 21% Downloading emulator-linux_x64-164
+2026-10-21T00:47:31.8319141Z [========                               ] 21% Unzipping...                      
+2026-10-21T00:47:31.8338829Z [========                               ] 21% Unzipping... emulator/            
+2026-10-21T00:47:31.8339850Z [========                               ] 21% Unzipping... emulator/resources/  
+2026-10-21T00:47:31.8761600Z [========                               ] 21% Unzipping... emulator/qsn         
+2026-10-21T00:47:31.9462282Z [========                               ] 21% Unzipping... emulator/emulator    
+2026-10-21T00:47:31.9704491Z [========                               ] 21% Unzipping... emulator/netsimd     
+2026-10-21T00:47:32.0648268Z [========                               ] 22% Unzipping... emulator/netsimd     
+2026-10-21T00:47:32.0649288Z [========                               ] 22% Unzipping... emulator/bin64/      
+2026-10-21T00:47:32.0649964Z [========                               ] 22% Unzipping... emulator/qemu/       
+2026-10-21T00:47:32.0664270Z [========                               ] 22% Unzipping... emulator/NOTICE.txt  
+2026-10-21T00:47:32.0852937Z [========                               ] 22% Unzipping... emulator/crashpad_han
+2026-10-21T00:47:32.0860660Z [========                               ] 22% Unzipping... emulator/source.prope
+2026-10-21T00:47:32.1462189Z [========                               ] 22% Unzipping... emulator/nimble_bridg
+2026-10-21T00:47:32.1465554Z [========                               ] 22% Unzipping... emulator/LICENSE     
+2026-10-21T00:47:32.1466560Z [========                               ] 22% Unzipping... emulator/lib/        
+2026-10-21T00:47:32.1547355Z [========                               ] 22% Unzipping... emulator/qemu-img    
+2026-10-21T00:47:32.1548701Z [========                               ] 22% Unzipping... emulator/include/    
+2026-10-21T00:47:32.1556688Z [========                               ] 22% Unzipping... emulator/NOTICE.csv  
+2026-10-21T00:47:32.1558064Z [========                               ] 22% Unzipping... emulator/lib64/      
+2026-10-21T00:47:32.1749195Z [========                               ] 22% Unzipping... emulator/emulator-che
+2026-10-21T00:47:32.1948023Z [========                               ] 22% Unzipping... emulator/crashreport 
+2026-10-21T00:47:32.1952612Z [========                               ] 22% Unzipping... emulator/mksdcard    
+2026-10-21T00:47:32.2202430Z [========                               ] 22% Unzipping... emulator/resources/To
+2026-10-21T00:47:32.2273039Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:32.2275307Z [========                               ] 22% Unzipping... emulator/resources/To
+2026-10-21T00:47:32.2289467Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:32.2440836Z [========                               ] 22% Unzipping... emulator/resources/To
+2026-10-21T00:47:32.2446223Z [========                               ] 22% Unzipping... emulator/resources/ma
+2026-10-21T00:47:32.2469131Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:32.2470075Z [========                               ] 22% Unzipping... emulator/resources/sk
+2026-10-21T00:47:32.2502782Z [========                               ] 22% Unzipping... emulator/resources/de
+2026-10-21T00:47:32.2503509Z [========                               ] 22% Unzipping... emulator/resources/ma
+2026-10-21T00:47:32.2515338Z [========                               ] 22% Unzipping... emulator/resources/po
+2026-10-21T00:47:32.2579965Z [========                               ] 22% Unzipping... emulator/resources/ma
+2026-10-21T00:47:32.2584998Z [=========                              ] 23% Unzipping... emulator/resources/ma
+2026-10-21T00:47:32.2656838Z [=========                              ] 23% Unzipping... emulator/resources/sk
+2026-10-21T00:47:32.2674636Z [=========                              ] 23% Unzipping... emulator/resources/ma
+2026-10-21T00:47:32.2708374Z [=========                              ] 23% Unzipping... emulator/bin64/e2fsck
+2026-10-21T00:47:32.2743062Z [=========                              ] 23% Unzipping... emulator/bin64/fsck.e
+2026-10-21T00:47:32.2764724Z [=========                              ] 23% Unzipping... emulator/bin64/tune2f
+2026-10-21T00:47:32.2779479Z [=========                              ] 23% Unzipping... emulator/bin64/resize
+2026-10-21T00:47:32.2801594Z [=========                              ] 23% Unzipping... emulator/bin64/mkfs.e
+2026-10-21T00:47:32.6623854Z [=========                              ] 23% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:33.2539348Z [=========                              ] 24% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:33.4809584Z [=========                              ] 25% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:33.6634886Z [==========                             ] 25% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:33.6637315Z [==========                             ] 25% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:33.6640879Z [==========                             ] 25% Unzipping... emulator/lib/rtc_serv
+2026-10-21T00:47:33.6644771Z [==========                             ] 25% Unzipping... emulator/lib/advanced
+2026-10-21T00:47:33.6645765Z [==========                             ] 25% Unzipping... emulator/lib/cmake/  
+2026-10-21T00:47:33.6649390Z [==========                             ] 25% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:33.6651842Z [==========                             ] 25% Unzipping... emulator/lib/control_
+2026-10-21T00:47:33.6654754Z [==========                             ] 25% Unzipping... emulator/lib/emulated
+2026-10-21T00:47:33.6657498Z [==========                             ] 25% Unzipping... emulator/lib/rtc_serv
+2026-10-21T00:47:33.6661342Z [==========                             ] 25% Unzipping... emulator/lib/emu-orig
+2026-10-21T00:47:33.6665404Z [==========                             ] 25% Unzipping... emulator/lib/hardware
+2026-10-21T00:47:33.6666123Z [==========                             ] 25% Unzipping... emulator/lib/pkgconfi
+2026-10-21T00:47:33.6666856Z [==========                             ] 25% Unzipping... emulator/lib/pc-bios/
+2026-10-21T00:47:33.6670373Z [==========                             ] 25% Unzipping... emulator/lib/snapshot
+2026-10-21T00:47:33.7495262Z [==========                             ] 25% Unzipping... emulator/lib/adb_serv
+2026-10-21T00:47:33.7507063Z [==========                             ] 25% Unzipping... emulator/lib/hostapd.
+2026-10-21T00:47:33.7512113Z [==========                             ] 25% Unzipping... emulator/lib/grpc_end
+2026-10-21T00:47:33.7529587Z [==========                             ] 25% Unzipping... emulator/lib/ca-bundl
+2026-10-21T00:47:33.7558517Z [==========                             ] 25% Unzipping... emulator/lib/ui_contr
+2026-10-21T00:47:33.7559263Z [==========                             ] 25% Unzipping... emulator/lib/snapshot
+2026-10-21T00:47:33.7559969Z [==========                             ] 25% Unzipping... emulator/lib/ice_conf
+2026-10-21T00:47:33.7658628Z [==========                             ] 25% Unzipping... emulator/lib/libflatb
+2026-10-21T00:47:33.7862270Z [==========                             ] 26% Unzipping... emulator/lib/libflatb
+2026-10-21T00:47:33.7870729Z [==========                             ] 26% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:33.7873367Z [==========                             ] 26% Unzipping... emulator/lib/waterfal
+2026-10-21T00:47:33.7876493Z [==========                             ] 26% Unzipping... emulator/lib/emulated
+2026-10-21T00:47:33.7888266Z [==========                             ] 26% Unzipping... emulator/lib/cmake/fl
+2026-10-21T00:47:33.7891843Z [==========                             ] 26% Unzipping... emulator/lib/pkgconfi
+2026-10-21T00:47:33.8548501Z [==========                             ] 26% Unzipping... emulator/lib/pc-bios/
+2026-10-21T00:47:34.0034777Z [==========                             ] 26% Unzipping... emulator/include/flat
+2026-10-21T00:47:34.0104795Z [==========                             ] 26% Unzipping... emulator/lib64/libgli
+2026-10-21T00:47:34.0232241Z [==========                             ] 26% Unzipping... emulator/lib64/libpro
+2026-10-21T00:47:34.0233355Z [==========                             ] 26% Unzipping... emulator/lib64/qt/   
+2026-10-21T00:47:34.0620582Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:34.1303337Z [==========                             ] 26% Unzipping... emulator/lib64/libgfx
+2026-10-21T00:47:34.1303966Z [==========                             ] 26% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:47:34.1312458Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:34.1313187Z [==========                             ] 26% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:47:34.1313771Z [==========                             ] 26% Unzipping... emulator/lib64/gles_s
+2026-10-21T00:47:34.1317285Z [==========                             ] 26% Unzipping... emulator/lib64/libemu
+2026-10-21T00:47:34.1438942Z [==========                             ] 26% Unzipping... emulator/lib64/libpro
+2026-10-21T00:47:34.2946274Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:34.2970455Z [==========                             ] 26% Unzipping... emulator/lib64/libtcm
+2026-10-21T00:47:34.2973176Z [==========                             ] 26% Unzipping... emulator/lib64/libima
+2026-10-21T00:47:34.3060563Z [==========                             ] 26% Unzipping... emulator/lib64/libc++
+2026-10-21T00:47:34.3365379Z [==========                             ] 26% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:34.3411575Z [==========                             ] 26% Unzipping... emulator/lib64/libabs
+2026-10-21T00:47:34.3412338Z [==========                             ] 26% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:34.3482279Z [==========                             ] 26% Unzipping... emulator/lib64/libsha
+2026-10-21T00:47:34.3549674Z [==========                             ] 26% Unzipping... emulator/lib64/libc++
+2026-10-21T00:47:34.3550625Z [==========                             ] 26% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:34.3551681Z [==========                             ] 26% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:34.3552434Z [==========                             ] 26% Unzipping... emulator/lib64/qt/tra
+2026-10-21T00:47:34.3553146Z [==========                             ] 26% Unzipping... emulator/lib64/qt/plu
+2026-10-21T00:47:34.3583962Z [==========                             ] 26% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:34.4292459Z [==========                             ] 27% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:34.5359778Z [==========                             ] 27% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:34.9242733Z [===========                            ] 28% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:35.3228611Z [===========                            ] 29% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:35.5235202Z [===========                            ] 30% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:35.6069965Z [============                           ] 30% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:35.7164596Z [============                           ] 30% Unzipping... emulator/lib64/qt/tra
+2026-10-21T00:47:35.7285308Z [============                           ] 30% Unzipping... emulator/lib64/qt/plu
+2026-10-21T00:47:35.7536198Z [============                           ] 30% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:47:35.8160904Z [============                           ] 31% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:47:36.1666369Z [============                           ] 31% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:47:36.4855479Z [============                           ] 32% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:47:36.5521877Z [============                           ] 32% Unzipping... emulator/lib64/gles_s
+2026-10-21T00:47:36.6090728Z [============                           ] 32% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:36.6724708Z [=============                          ] 33% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:36.9649316Z [=====================                  ] 55% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:37.0009125Z [=====================                  ] 55% Installing Google APIs Intel x86_6
+2026-10-21T00:47:37.1273197Z [=====================                  ] 55% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:37.3423483Z [======================                 ] 55% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:37.6333185Z [======================                 ] 56% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:37.9256988Z [======================                 ] 57% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:38.2837543Z [=======================                ] 58% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:38.5913682Z [=======================                ] 59% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:38.7562856Z [=======================                ] 60% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:38.8963143Z [========================               ] 60% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:39.2026378Z [========================               ] 61% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:39.4920565Z [========================               ] 62% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:39.8227354Z [=========================              ] 63% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:40.1519807Z [=========================              ] 64% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:40.2989153Z [=========================              ] 65% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:40.4703403Z [==========================             ] 65% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:40.6657295Z [==========================             ] 66% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:47:40.6672282Z [==========================             ] 66% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:40.7521013Z [==========================             ] 66% Unzipping... x86_64/NOTICE.txt    
+2026-10-21T00:47:40.7522654Z [==========================             ] 66% Unzipping... x86_64/VerifiedBootPa
+2026-10-21T00:47:40.7524453Z [==========================             ] 66% Unzipping... x86_64/advancedFeatur
+2026-10-21T00:47:40.7526288Z [==========================             ] 66% Unzipping... x86_64/build.prop    
+2026-10-21T00:47:40.8934507Z [==========================             ] 66% Unzipping... x86_64/encryptionkey.
+2026-10-21T00:47:41.0534728Z [==========================             ] 66% Unzipping... x86_64/kernel-ranchu 
+2026-10-21T00:47:41.0539840Z [==========================             ] 66% Unzipping... x86_64/kernel_cmdline
+2026-10-21T00:47:41.0676008Z [==========================             ] 66% Unzipping... x86_64/ramdisk.img   
+2026-10-21T00:47:41.0677994Z [==========================             ] 66% Unzipping... x86_64/source.propert
+2026-10-21T00:47:41.2158932Z [==========================             ] 66% Unzipping... x86_64/system.img    
+2026-10-21T00:47:42.6476116Z [==========================             ] 67% Unzipping... x86_64/system.img    
+2026-10-21T00:47:44.0431216Z [===========================            ] 68% Unzipping... x86_64/system.img    
+2026-10-21T00:47:45.3265635Z [===========================            ] 69% Unzipping... x86_64/system.img    
+2026-10-21T00:47:46.0655154Z [===========================            ] 70% Unzipping... x86_64/system.img    
+2026-10-21T00:47:46.6388538Z [============================           ] 70% Unzipping... x86_64/system.img    
+2026-10-21T00:47:48.2274249Z [============================           ] 71% Unzipping... x86_64/system.img    
+2026-10-21T00:47:49.4931138Z [============================           ] 72% Unzipping... x86_64/system.img    
+2026-10-21T00:47:50.7718848Z [=============================          ] 73% Unzipping... x86_64/system.img    
+2026-10-21T00:47:52.2331205Z [=============================          ] 74% Unzipping... x86_64/system.img    
+2026-10-21T00:47:53.0339806Z [=============================          ] 75% Unzipping... x86_64/system.img    
+2026-10-21T00:47:53.5918794Z [==============================         ] 75% Unzipping... x86_64/system.img    
+2026-10-21T00:47:55.0284984Z [==============================         ] 76% Unzipping... x86_64/system.img    
+2026-10-21T00:47:58.4956793Z [==============================         ] 77% Unzipping... x86_64/system.img    
+2026-10-21T00:47:58.9663439Z [==============================         ] 77% Unzipping... x86_64/vendor.img    
+2026-10-21T00:47:58.9666716Z [==============================         ] 77% Unzipping... x86_64/data/empty_dat
+2026-10-21T00:47:58.9678732Z [==============================         ] 77% Unzipping... x86_64/data/local.pro
+2026-10-21T00:47:58.9679837Z [==============================         ] 77% Unzipping... x86_64/data/misc/Gold
+2026-10-21T00:47:58.9680860Z [==============================         ] 77% Unzipping... x86_64/data/misc/apns
+2026-10-21T00:47:58.9681605Z [==============================         ] 77% Unzipping... x86_64/data/misc/emul
+2026-10-21T00:47:58.9686914Z [==============================         ] 77% Unzipping... x86_64/data/misc/mode
+2026-10-21T00:47:58.9701131Z [==============================         ] 77% Unzipping... x86_64/data/misc/pixe
+2026-10-21T00:47:59.2986235Z [==============================         ] 78% Unzipping... x86_64/data/misc/pixe
+2026-10-21T00:47:59.2987043Z [=======================================] 100% Unzipping... x86_64/data/misc/pix
+2026-10-21T00:47:59.3067486Z 
+2026-10-21T00:47:59.3651932Z ##[group]Run bash tools/solar-emulator-test.sh
+2026-10-21T00:47:59.3652369Z [36;1mbash tools/solar-emulator-test.sh[0m
+2026-10-21T00:47:59.3717406Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:59.3718104Z env:
+2026-10-21T00:47:59.3718332Z   SOLAR_UHD8K: true
+2026-10-21T00:47:59.3718608Z   SOLAR_APK_DIR: solar-8k-apks
+2026-10-21T00:47:59.3718926Z   SOLAR_EVIDENCE_DIR: solar-8k-evidence
+2026-10-21T00:47:59.3719249Z ##[endgroup]
+2026-10-21T00:47:59.4227865Z All signed APKs match build checksums and the exact checked source.
+2026-10-21T00:48:00.2525769Z Loading local repository...                                                     
+2026-10-21T00:48:00.2548907Z [=========                              ] 25% Loading local repository...       
+2026-10-21T00:48:00.2549412Z [=========                              ] 25% Fetch remote repository...        
+2026-10-21T00:48:00.2549968Z [=======================================] 100% Fetch remote repository...       
+2026-10-21T00:48:00.4443953Z Auto-selecting single ABI x86_64
+2026-10-21T00:48:01.1155167Z * daemon not running; starting now at tcp:5037
+2026-10-21T00:48:01.2695492Z * daemon started successfully
+2026-10-21T00:48:38.9210691Z Performing Streamed Install
+2026-10-21T00:48:38.9211589Z Success
+2026-10-21T00:48:42.5572683Z Performing Streamed Install
+2026-10-21T00:48:42.5580975Z Success
+2026-10-21T00:48:44.7333518Z Performing Streamed Install
+2026-10-21T00:48:44.7359429Z Success
+2026-10-21T00:49:15.2778729Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:49:15.2808012Z INSTRUMENTATION_STATUS: current=1
+2026-10-21T00:49:15.2808515Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:49:15.2828197Z INSTRUMENTATION_STATUS: test=native_gles_launch_and_textures
+2026-10-21T00:49:15.2838132Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:52:43.0511439Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:43.0536598Z INSTRUMENTATION_STATUS: current=1
+2026-10-21T00:52:43.0559375Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:43.0588151Z INSTRUMENTATION_STATUS: test=native_gles_launch_and_textures
+2026-10-21T00:52:43.0598152Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:52:43.0628322Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:43.0661311Z INSTRUMENTATION_STATUS: current=2
+2026-10-21T00:52:43.0710181Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:43.0738259Z INSTRUMENTATION_STATUS: test=astronomy_and_magnetic_classification
+2026-10-21T00:52:43.0768353Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:52:43.0798302Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:43.0828102Z INSTRUMENTATION_STATUS: current=2
+2026-10-21T00:52:43.0858249Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:43.0888221Z INSTRUMENTATION_STATUS: test=astronomy_and_magnetic_classification
+2026-10-21T00:52:43.0915596Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:52:43.0938778Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:43.0968311Z INSTRUMENTATION_STATUS: current=3
+2026-10-21T00:52:43.0998122Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:43.1028520Z INSTRUMENTATION_STATUS: test=native_ether_fusion_and_readonly_observation
+2026-10-21T00:52:43.1029278Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:52:45.3962338Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:45.4038683Z INSTRUMENTATION_STATUS: current=3
+2026-10-21T00:52:45.4086027Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:45.4095762Z INSTRUMENTATION_STATUS: test=native_ether_fusion_and_readonly_observation
+2026-10-21T00:52:45.4096628Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:52:45.4318471Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:45.4360380Z INSTRUMENTATION_STATUS: current=4
+2026-10-21T00:52:45.4408182Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:45.4440297Z INSTRUMENTATION_STATUS: test=quantum_coupled_and_uncoupled_frames
+2026-10-21T00:52:45.4478266Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:52:51.4728777Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:51.4784018Z INSTRUMENTATION_STATUS: current=4
+2026-10-21T00:52:51.4784595Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:51.4818486Z INSTRUMENTATION_STATUS: test=quantum_coupled_and_uncoupled_frames
+2026-10-21T00:52:51.4848081Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:52:51.8979690Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:52:51.9008532Z INSTRUMENTATION_STATUS: current=5
+2026-10-21T00:52:51.9011279Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:52:51.9045210Z INSTRUMENTATION_STATUS: test=intrinsic_and_induced_field_frames
+2026-10-21T00:52:51.9069206Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:53:07.3711972Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:07.3768557Z INSTRUMENTATION_STATUS: current=5
+2026-10-21T00:53:07.3812945Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:07.3868866Z INSTRUMENTATION_STATUS: test=intrinsic_and_induced_field_frames
+2026-10-21T00:53:07.3870462Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:53:07.3900155Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:07.3927615Z INSTRUMENTATION_STATUS: current=6
+2026-10-21T00:53:07.3963952Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:07.3974453Z INSTRUMENTATION_STATUS: test=solar_wind_layer
+2026-10-21T00:53:07.3998418Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:53:10.8158807Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:10.8188140Z INSTRUMENTATION_STATUS: current=6
+2026-10-21T00:53:10.8198350Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:10.8218209Z INSTRUMENTATION_STATUS: test=solar_wind_layer
+2026-10-21T00:53:10.8248136Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:53:11.1866886Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:11.1883474Z INSTRUMENTATION_STATUS: current=7
+2026-10-21T00:53:11.1884214Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:11.1889396Z INSTRUMENTATION_STATUS: test=saturn_rings_and_moon_navigation
+2026-10-21T00:53:11.1910144Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:53:23.7724762Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:23.7744081Z INSTRUMENTATION_STATUS: current=7
+2026-10-21T00:53:23.7748111Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:23.7776296Z INSTRUMENTATION_STATUS: test=saturn_rings_and_moon_navigation
+2026-10-21T00:53:23.7797522Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:53:25.0879148Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:25.0880377Z INSTRUMENTATION_STATUS: current=8
+2026-10-21T00:53:25.0944048Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:25.0978501Z INSTRUMENTATION_STATUS: test=forward_reverse_and_paused_time
+2026-10-21T00:53:25.0979364Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:53:32.8568952Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:32.8848591Z INSTRUMENTATION_STATUS: current=8
+2026-10-21T00:53:32.8938167Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:32.8998302Z INSTRUMENTATION_STATUS: test=forward_reverse_and_paused_time
+2026-10-21T00:53:32.9098156Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:53:32.9128181Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:32.9188378Z INSTRUMENTATION_STATUS: current=9
+2026-10-21T00:53:32.9254657Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:32.9318118Z INSTRUMENTATION_STATUS: test=real_scale_earth_focus
+2026-10-21T00:53:32.9348215Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:53:47.8575699Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:48.4888719Z INSTRUMENTATION_STATUS: current=9
+2026-10-21T00:53:48.4922194Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:48.4989015Z INSTRUMENTATION_STATUS: test=real_scale_earth_focus
+2026-10-21T00:53:48.5015803Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:53:48.5098569Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:48.5158457Z INSTRUMENTATION_STATUS: current=10
+2026-10-21T00:53:48.5215339Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:48.5268439Z INSTRUMENTATION_STATUS: test=camera_rotation_zoom_pan_and_flight
+2026-10-21T00:53:48.5315411Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:53:57.2960695Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:57.2988447Z INSTRUMENTATION_STATUS: current=10
+2026-10-21T00:53:57.2989202Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:57.3038421Z INSTRUMENTATION_STATUS: test=camera_rotation_zoom_pan_and_flight
+2026-10-21T00:53:57.3088264Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:53:57.9091980Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:53:57.9093152Z INSTRUMENTATION_STATUS: current=11
+2026-10-21T00:53:57.9094330Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:53:57.9094882Z INSTRUMENTATION_STATUS: test=resolution_budget
+2026-10-21T00:53:57.9095465Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:54:03.2491226Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:54:03.2545290Z INSTRUMENTATION_STATUS: current=11
+2026-10-21T00:54:03.2598407Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:54:03.2628273Z INSTRUMENTATION_STATUS: test=resolution_budget
+2026-10-21T00:54:03.2678387Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:54:03.9542362Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:54:03.9598462Z INSTRUMENTATION_STATUS: current=12
+2026-10-21T00:54:03.9638816Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:54:03.9698693Z INSTRUMENTATION_STATUS: test=background_resume_preserves_state
+2026-10-21T00:54:03.9718318Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:54:10.9769006Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:54:10.9858629Z INSTRUMENTATION_STATUS: current=12
+2026-10-21T00:54:10.9918685Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:54:10.9950069Z INSTRUMENTATION_STATUS: test=background_resume_preserves_state
+2026-10-21T00:54:10.9968329Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:54:11.0028505Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:54:11.0029206Z INSTRUMENTATION_STATUS: current=13
+2026-10-21T00:54:11.0029653Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:54:11.0030263Z INSTRUMENTATION_STATUS: test=recreation_and_orientation_preserve_state
+2026-10-21T00:54:11.0030908Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:55:48.6480467Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:55:48.6489748Z INSTRUMENTATION_STATUS: current=13
+2026-10-21T00:55:48.6504036Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:55:48.6537938Z INSTRUMENTATION_STATUS: test=recreation_and_orientation_preserve_state
+2026-10-21T00:55:48.6551458Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:55:48.6555629Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:55:48.6588139Z INSTRUMENTATION_STATUS: current=14
+2026-10-21T00:55:48.6596629Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:55:48.6604708Z INSTRUMENTATION_STATUS: test=ultra8k_framebuffer_return_preserves_scene
+2026-10-21T00:55:48.6612176Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T00:57:23.9752567Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:57:23.9810656Z INSTRUMENTATION_STATUS: current=14
+2026-10-21T00:57:23.9814969Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:57:23.9816389Z INSTRUMENTATION_STATUS: test=ultra8k_framebuffer_return_preserves_scene
+2026-10-21T00:57:23.9819689Z INSTRUMENTATION_STATUS_CODE: 0
+2026-10-21T00:57:23.9820529Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T00:57:23.9823840Z INSTRUMENTATION_STATUS: current=15
+2026-10-21T00:57:23.9824466Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T00:57:23.9825664Z INSTRUMENTATION_STATUS: test=ultra8k_earth_entry_atmosphere
+2026-10-21T00:57:23.9826470Z INSTRUMENTATION_STATUS_CODE: 1
+2026-10-21T01:00:04.3311662Z INSTRUMENTATION_STATUS: class=com.mundox.solar.SolarInstrumentation
+2026-10-21T01:00:04.3312500Z INSTRUMENTATION_STATUS: current=15
+2026-10-21T01:00:04.3312974Z INSTRUMENTATION_STATUS: numtests=15
+2026-10-21T01:00:04.3313804Z INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Actual GLES framebuffer capture timed out
+2026-10-21T01:00:04.3314934Z 	at com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1134)
+2026-10-21T01:00:04.3315927Z 	at com.mundox.solar.SolarInstrumentation.await(SolarInstrumentation.java:980)
+2026-10-21T01:00:04.3316886Z 	at com.mundox.solar.SolarInstrumentation.frame(SolarInstrumentation.java:967)
+2026-10-21T01:00:04.3318163Z 	at com.mundox.solar.SolarInstrumentation.ultraEntry(SolarInstrumentation.java:851)
+2026-10-21T01:00:04.3319354Z 	at com.mundox.solar.SolarInstrumentation.$r8$lambda$UPqC1OEgeJB9T5Mzi3BACcf0QfQ(Unknown Source:0)
+2026-10-21T01:00:04.3320561Z 	at com.mundox.solar.SolarInstrumentation$$ExternalSyntheticLambda21.run(D8$$SyntheticClass:0)
+2026-10-21T01:00:04.3321688Z 	at com.mundox.solar.SolarInstrumentation.runCase(SolarInstrumentation.java:1093)
+2026-10-21T01:00:04.3322717Z 	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:119)
+2026-10-21T01:00:04.3323769Z 	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+2026-10-21T01:00:04.3324472Z 
+2026-10-21T01:00:04.3324770Z INSTRUMENTATION_STATUS: test=ultra8k_earth_entry_atmosphere
+2026-10-21T01:00:04.3325407Z INSTRUMENTATION_STATUS_CODE: -2
+2026-10-21T01:02:34.4326080Z INSTRUMENTATION_RESULT: stream=
+2026-10-21T01:02:34.4348631Z COSMIC_SOLAR_TESTS_FAILED tests=16 failures=2
+2026-10-21T01:02:34.4377967Z 
+2026-10-21T01:02:34.4390351Z INSTRUMENTATION_RESULT: tests_failed=2
+2026-10-21T01:02:34.4390913Z INSTRUMENTATION_RESULT: tests_run=16
+2026-10-21T01:02:34.4391418Z INSTRUMENTATION_CODE: 0
+2026-10-21T01:02:46.8428762Z Solar instrumentation success marker missing
+2026-10-21T01:02:46.8542507Z ##[error]Process completed with exit code 1.
+2026-10-21T01:02:46.8663746Z ##[group]Run actions/upload-artifact@v4
+2026-10-21T01:02:46.8664460Z with:
+2026-10-21T01:02:46.8664955Z   name: COSMIC-X-Solar-8K-Android-Evidence
+2026-10-21T01:02:46.8665631Z   path: solar-8k-evidence/**
+2026-10-21T01:02:46.8666199Z   if-no-files-found: warn
+2026-10-21T01:02:46.8666579Z   retention-days: 14
+2026-10-21T01:02:46.8667006Z   compression-level: 6
+2026-10-21T01:02:46.8667366Z   overwrite: false
+2026-10-21T01:02:46.8667962Z   include-hidden-files: false
+2026-10-21T01:02:46.8668497Z ##[endgroup]
+2026-10-21T01:02:47.0470782Z (node:3420) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T01:02:47.0472087Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T01:02:47.0613701Z With the provided path, there will be 31 files uploaded
+2026-10-21T01:02:47.0616270Z Artifact name is valid!
+2026-10-21T01:02:47.0617199Z Root directory input is valid!
+2026-10-21T01:02:47.2383668Z Beginning upload of artifact content to blob storage
+2026-10-21T01:02:47.6473861Z (node:3420) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-21T01:02:47.8405090Z Uploaded bytes 8388608
+2026-10-21T01:02:48.0913446Z Uploaded bytes 16777216
+2026-10-21T01:02:48.3715740Z Uploaded bytes 25165824
+2026-10-21T01:02:48.5299946Z Uploaded bytes 31376123
+2026-10-21T01:02:48.5465005Z Finished uploading artifact content to blob storage!
+2026-10-21T01:02:48.5466278Z SHA256 digest of uploaded artifact zip is b6f7b7a17b4a495cc33925c8695a6b049bb2eb2b6c012253994459d19e0377d1
+2026-10-21T01:02:48.5468707Z Finalizing artifact upload
+2026-10-21T01:02:48.7897561Z Artifact COSMIC-X-Solar-8K-Android-Evidence.zip successfully finalized. Artifact ID 12311484949
+2026-10-21T01:02:48.7899994Z Artifact COSMIC-X-Solar-8K-Android-Evidence has been successfully uploaded! Final size is 31376123 bytes. Artifact ID is 12311484949
+2026-10-21T01:02:48.7905700Z Artifact download URL: https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264220/artifacts/12311484949
+2026-10-21T01:02:48.8118236Z Post job cleanup.
+2026-10-21T01:02:48.8976663Z [command]/usr/bin/git version
+2026-10-21T01:02:48.9020380Z git version 2.55.0
+2026-10-21T01:02:48.9061347Z Temporarily overriding HOME='/home/runner/work/_temp/5ab63729-906d-483d-8776-5a9193092a24' before making global git config changes
+2026-10-21T01:02:48.9062896Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T01:02:48.9067594Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T01:02:48.9108573Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T01:02:48.9150727Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T01:02:48.9400067Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T01:02:48.9440365Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T01:02:48.9698047Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T01:02:48.9737625Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T01:02:49.0132730Z Cleaning up orphan processes
+2026-10-21T01:02:49.0436529Z Terminate orphan process: pid (2610) (adb)
+2026-10-21T01:02:49.0489687Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/download-artifact@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+

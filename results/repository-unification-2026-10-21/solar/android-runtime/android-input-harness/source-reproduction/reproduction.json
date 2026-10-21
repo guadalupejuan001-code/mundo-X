@@ -1,0 +1,112 @@
+{
+  "scope": "Unchanged production Java preparation only; no GLES/Gradle/Android process",
+  "jni_sha256": "b1f67bda6d4bba056818984ec9e9db5012c67270305ce100709b8b6304dfa192",
+  "production_source_sha256": {
+    "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java": "2ad900613108fa223be7fea46b10ef1daf7e40f33da63a830b995d1754969e2e",
+    "solar-android/app/src/main/java/com/mundox/solar/SolarData.java": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+    "solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+    "solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+    "solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+    "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+    "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+    "solar-android/tests/SolarOcclusion.java": "bdd6ba369594fd93ab50e7d5bb3d961e4dbd75edd308eec2c03fe9b7a0e3b6bd"
+  },
+  "steps": [
+    {
+      "name": "compile",
+      "command": [
+        "/workspace/scratch/7def14e3f3d9/solar-build/jdk/jdk-17.0.20.1+1/bin/javac",
+        "-encoding",
+        "UTF-8",
+        "-cp",
+        "/workspace/scratch/7def14e3f3d9/solar-build/sdk/platforms/android-35/android.jar",
+        "-d",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/source-reproduction/classes",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/java/com/mundox/solar/SolarData.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/android/content/Context.java",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/android/opengl/Matrix.java",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/android/content/res/AssetManager.java",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/com/mundox/solar/AndroidInputFixture.java",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/tests/SolarOcclusion.java"
+      ],
+      "returncode": 0,
+      "wall_seconds": 1.272170994998305
+    },
+    {
+      "name": "run",
+      "command": [
+        "/workspace/scratch/7def14e3f3d9/solar-build/jdk/jdk-17.0.20.1+1/bin/java",
+        "-Xms32m",
+        "-Xmx256m",
+        "-XX:+UseSerialGC",
+        "-XX:ActiveProcessorCount=1",
+        "-XX:CompressedClassSpaceSize=64m",
+        "-XX:ReservedCodeCacheSize=64m",
+        "-Djava.library.path=/workspace/scratch/7def14e3f3d9/solar-build/host-validation/jni",
+        "-cp",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/source-reproduction/classes:/workspace/scratch/7def14e3f3d9/solar-build/sdk/platforms/android-35/android.jar",
+        "com.mundox.solar.AndroidInputFixture",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/assets",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/source-reproduction/output"
+      ],
+      "returncode": 0,
+      "wall_seconds": 0.35935856199648697
+    }
+  ],
+  "android_results_sha256": "01bf2fd4f3504756fd814fb51e56aa167c3227e2b609e8eb50cb639ee5fde63a",
+  "case7": {
+    "field_count": 29,
+    "matched": [
+      "packedBodies",
+      "appearance",
+      "colors",
+      "axes",
+      "poleBasis",
+      "atmosphere",
+      "atmosphereColors",
+      "layers",
+      "quantum",
+      "ether",
+      "forward",
+      "right",
+      "up",
+      "vp",
+      "cameraEye",
+      "jd",
+      "clockSeconds",
+      "entryAltitude",
+      "near",
+      "far",
+      "aspect",
+      "lines",
+      "points",
+      "paused",
+      "fields",
+      "wind",
+      "orbits",
+      "entryMode"
+    ],
+    "differed": {
+      "orbitCache": {
+        "host": "d8a0c3bed186859899df68177d2df31d63e4df840ee66c2ffed1d3f1c384b5d8",
+        "android": "58407aa91f8e3f6bcc2083bb2533955c79d432b94fe8ab41fa19995043c6137f"
+      }
+    },
+    "all_recorded_fields_exact": false,
+    "shader_and_overlay_packet_exact": true
+  },
+  "fixture_sha256": "2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1",
+  "original_fixture_sha256": "2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1"
+}

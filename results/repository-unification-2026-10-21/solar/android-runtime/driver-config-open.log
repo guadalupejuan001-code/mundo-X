@@ -1,0 +1,111 @@
+49826 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=49828, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+49834 +++ killed by SIGKILL +++
+49833 +++ killed by SIGKILL +++
+49826 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=49833, si_uid=0, si_status=SIGKILL, si_utime=0, si_stime=0} ---
+49826 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=49843, si_uid=0, si_status=0, si_utime=0, si_stime=1 /* 0.01 s */} ---
+49826 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=49845, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+49826 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=49847, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+49826 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=49849, si_uid=0, si_status=0, si_utime=0, si_stime=1 /* 0.01 s */} ---
+49826 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49826 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49826 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49826 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49826 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49826 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49854 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49856 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49855 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+49857 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+50049 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+50357 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+50365 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+50037 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+50372 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+50411 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+50420 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=50421, si_uid=0, si_status=1, si_utime=0, si_stime=0} ---
+50422 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=50423, si_uid=0, si_status=0, si_utime=0, si_stime=1 /* 0.01 s */} ---
+49842 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=50446, si_uid=0, si_status=1, si_utime=0, si_stime=0} ---
+50447 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=50448, si_uid=0, si_status=0, si_utime=0, si_stime=1 /* 0.01 s */} ---
+49860 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=50456, si_uid=0, si_status=1, si_utime=0, si_stime=0} ---
+50457 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=50458, si_uid=0, si_status=0, si_utime=0, si_stime=1 /* 0.01 s */} ---
+50484 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 64
+50505 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 71
+50506 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 71
+50509 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 75
+50537 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 79
+50557 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 83
+50733 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 132
+50734 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 132
+50981 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 71
+50983 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 71
+49826 --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=49753, si_uid=0} ---
+49826 --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=49826, si_uid=0} ---
+51193 +++ killed by SIGUSR1 +++
+51192 +++ killed by SIGUSR1 +++
+51189 +++ killed by SIGUSR1 +++
+51188 +++ killed by SIGUSR1 +++
+51186 +++ killed by SIGUSR1 +++
+51183 +++ killed by SIGUSR1 +++
+50981 +++ killed by SIGUSR1 +++
+50736 +++ killed by SIGUSR1 +++
+50510 +++ killed by SIGUSR1 +++
+50438 +++ killed by SIGUSR1 +++
+50412 +++ killed by SIGUSR1 +++
+50377 +++ killed by SIGUSR1 +++
+50374 +++ killed by SIGUSR1 +++
+50361 +++ killed by SIGUSR1 +++
+50049 +++ killed by SIGUSR1 +++
+50039 +++ killed by SIGUSR1 +++
+50038 +++ killed by SIGUSR1 +++
+50037 +++ killed by SIGUSR1 +++
+50036 +++ killed by SIGUSR1 +++
+49986 +++ killed by SIGUSR1 +++
+49982 +++ killed by SIGUSR1 +++
+49864 +++ killed by SIGUSR1 +++
+49863 +++ killed by SIGUSR1 +++
+49860 +++ killed by SIGUSR1 +++
+49858 +++ killed by SIGUSR1 +++
+49857 +++ killed by SIGUSR1 +++
+49855 +++ killed by SIGUSR1 +++
+49842 +++ killed by SIGUSR1 +++
+49841 +++ killed by SIGUSR1 +++
+49831 +++ killed by SIGUSR1 +++
+49827 +++ killed by SIGUSR1 +++
+51190 +++ killed by SIGUSR1 +++
+51184 +++ killed by SIGUSR1 +++
+50984 +++ killed by SIGUSR1 +++
+50737 +++ killed by SIGUSR1 +++
+50506 +++ killed by SIGUSR1 +++
+50485 +++ killed by SIGUSR1 +++
+50443 +++ killed by SIGUSR1 +++
+50486 +++ killed by SIGUSR1 +++
+51191 +++ killed by SIGUSR1 +++
+50439 +++ killed by SIGUSR1 +++
+50426 +++ killed by SIGUSR1 +++
+50376 +++ killed by SIGUSR1 +++
+50372 +++ killed by SIGUSR1 +++
+50411 +++ killed by SIGUSR1 +++
+50362 +++ killed by SIGUSR1 +++
+51185 +++ killed by SIGUSR1 +++
+50986 +++ killed by SIGUSR1 +++
+50360 +++ killed by SIGUSR1 +++
+51003 +++ killed by SIGUSR1 +++
+50985 +++ killed by SIGUSR1 +++
+50050 +++ killed by SIGUSR1 +++
+50509 +++ killed by SIGUSR1 +++
+50041 +++ killed by SIGUSR1 +++
+49856 +++ killed by SIGUSR1 +++
+49854 +++ killed by SIGUSR1 +++
+49853 +++ killed by SIGUSR1 +++
+49852 +++ killed by SIGUSR1 +++
+50366 +++ killed by SIGUSR1 +++
+50357 +++ killed by SIGUSR1 +++
+50365 +++ killed by SIGUSR1 +++
+50484 +++ killed by SIGUSR1 +++
+51187 +++ killed by SIGUSR1 +++
+49851 +++ killed by SIGUSR1 +++
+50983 +++ killed by SIGUSR1 +++
+49861 +++ killed by SIGUSR1 +++
+49870 +++ killed by SIGUSR1 +++
+50511 +++ killed by SIGUSR1 +++
+49826 +++ killed by SIGUSR1 +++

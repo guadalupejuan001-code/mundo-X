@@ -1,0 +1,13 @@
+{
+  "host_different_pixels": 53,
+  "host_different_channels": 136,
+  "bounds_gl_rows": [
+    153,
+    101,
+    205,
+    101
+  ],
+  "android_and_host_delta_equal_every_channel": true,
+  "different_delta_channels": 0,
+  "max_delta": 13
+}

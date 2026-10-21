@@ -1,0 +1,43 @@
+{
+  "compile_command": [
+    "/workspace/scratch/7def14e3f3d9/solar-build/jdk/jdk-17.0.20.1+1/bin/javac",
+    "-encoding",
+    "UTF-8",
+    "-cp",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/solar-android/app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes:/workspace/scratch/7def14e3f3d9/solar-build/sdk/platforms/android-35/android.jar",
+    "-d",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/classes",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/android/content/Context.java",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/android/opengl/Matrix.java",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/android/content/res/AssetManager.java",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/src/com/mundox/solar/AndroidInputFixture.java",
+    "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/tests/SolarOcclusion.java"
+  ],
+  "run_command": [
+    "/workspace/scratch/7def14e3f3d9/solar-build/jdk/jdk-17.0.20.1+1/bin/java",
+    "-Xms32m",
+    "-Xmx256m",
+    "-XX:+UseSerialGC",
+    "-XX:ActiveProcessorCount=1",
+    "-XX:CompressedClassSpaceSize=64m",
+    "-XX:ReservedCodeCacheSize=64m",
+    "-Djava.library.path=/workspace/scratch/7def14e3f3d9/solar-build/host-validation/jni",
+    "-cp",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/classes:/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate/solar-android/app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes:/workspace/scratch/7def14e3f3d9/solar-build/sdk/platforms/android-35/android.jar",
+    "com.mundox.solar.AndroidInputFixture",
+    "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/app/src/main/assets",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness/output"
+  ],
+  "jni_sha256": "b1f67bda6d4bba056818984ec9e9db5012c67270305ce100709b8b6304dfa192",
+  "production_source_sha256": "2ad900613108fa223be7fea46b10ef1daf7e40f33da63a830b995d1754969e2e",
+  "shipping_class_sha256": "d5a2ce330747d630444a7c769066c92cddea975f2b59b49af8263771db58453b",
+  "scope": "Java preparation only, unchanged shipping SolarRenderer; no GL calls/Gradle/Android process",
+  "compile": {
+    "returncode": 0,
+    "wall_seconds": 0.8643240840028739
+  },
+  "run": {
+    "returncode": 0,
+    "wall_seconds": 0.3440232690045377
+  }
+}

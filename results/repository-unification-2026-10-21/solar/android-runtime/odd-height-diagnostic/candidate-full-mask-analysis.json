@@ -1,0 +1,30 @@
+{
+  "exact-reference": {
+    "pixels": 53,
+    "channels": 136,
+    "max": 13,
+    "bounds": [
+      153,
+      101,
+      205,
+      101
+    ]
+  },
+  "exact-candidate": {
+    "pixels": 0,
+    "channels": 0,
+    "max": 0,
+    "bounds": null
+  },
+  "original-tile": {
+    "pixels": 53,
+    "channels": 136,
+    "max": 13,
+    "bounds": [
+      153,
+      101,
+      205,
+      101
+    ]
+  }
+}

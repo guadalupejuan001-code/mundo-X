@@ -1,0 +1,12 @@
+{
+  "source_fixture": "results/solar-integration-2026-10-20/shipping/fixtures-native-320.json",
+  "source_sha256": "e34e642655d489f09e08a86dbbfb8af4043ee956a5e79ebf306d876606b1c408",
+  "diagnostic_fixture_sha256": "cee1c45cc9d9820f759d17153d0309b95155756b1bb0d1f55220456801615e76",
+  "changes": [
+    "width=360",
+    "height=203",
+    "aspect=float32(360/203)"
+  ],
+  "unchanged": "Native camera/body/material/tile payload from 32-scene fixture; diagnostic resized replay, not an exported Android frame",
+  "purpose": "Isolate exact centre scanline condition after Android case7 differs in53pixels at y101"
+}

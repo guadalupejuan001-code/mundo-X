@@ -37,7 +37,7 @@ def run(fixtures,repeats,select,candidate_shader=None,baseline_shader=None,color
     vao=g.object('glGenVertexArrays');g.glBindVertexArray(vao)
     maps=g.object('glGenTextures');g.glActiveTexture(0x84C0);g.glBindTexture(0x8C1A,maps)
     g.glTexStorage3D(0x8C1A,12,0x8058,2048,1024,3)
-    for layer,name in enumerate(['earth.png','moon.jpg','jupiter.jpg']):
+    for layer,name in enumerate(fixtures[0].get('mapOrder',['earth.png','moon.jpg','jupiter.jpg'])):
         a=np.asarray(Image.open(assets/'textures'/name).convert('RGBA').resize((2048,1024),Image.Resampling.BILINEAR)).copy()
         g.glTexSubImage3D(0x8C1A,0,0,0,layer,2048,1024,1,0x1908,0x1401,a.ctypes.data)
     for key,value in [(0x2801,0x2703),(0x2800,0x2601),(0x2802,0x2901),(0x2803,0x812F)]:g.glTexParameteri(0x8C1A,key,value)
@@ -57,8 +57,8 @@ def run(fixtures,repeats,select,candidate_shader=None,baseline_shader=None,color
         loc=lambda s:g.glGetUniformLocation(p,s.encode())
         for name,value in [('uResolution',[w,h])]:g.glUniform2f(loc(name),*value)
         for name,key in [('uForward','forward'),('uRight','right'),('uUp','up')]:g.glUniform3f(loc(name),*f[key])
-        for name,value in [('uAspect',f['aspect']),('uTanHalfFov',f['tan']),('uNear',f['near']),('uFar',f['far']),('uTime',f['scene']*.7),('uCoupling',1)]:g.glUniform1f(loc(name),value)
-        for name,value in [('uCount',23),('uMaps',0),('uBodyTiles',1),('uBodyTileSize',128),('uAtmosphereEnabled',int(f['scene']%4!=2))]:g.glUniform1i(loc(name),value)
+        for name,value in [('uAspect',f['aspect']),('uTanHalfFov',f['tan']),('uNear',f['near']),('uFar',f['far']),('uTime',f.get('time',f['scene']*.7)),('uCoupling',f.get('coupling',1))]:g.glUniform1f(loc(name),value)
+        for name,value in [('uCount',23),('uMaps',0),('uBodyTiles',1),('uBodyTileSize',f.get('tileSize',128)),('uAtmosphereEnabled',int(f.get('atmosphereEnabled',f['scene']%4!=2)))]:g.glUniform1i(loc(name),value)
         g.glUniform2i(loc('uBodyTileGrid'),f['tilesX'],f['tilesY'])
         for name,key,components in [('uBodies[0]','bodies',4),('uAppearance[0]','appearance',4),('uColors[0]','colors',4),('uAxes[0]','axes',3),('uAtmosphere[0]','atmosphere',4),('uAtmosphereColors[0]','atmoColors',3)]:
             a=np.array(f[key],dtype=np.float32);getattr(g,'glUniform%dfv'%components)(loc(name),23,a.ctypes.data)

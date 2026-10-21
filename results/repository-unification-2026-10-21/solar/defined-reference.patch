@@ -1,5 +1,5 @@
---- a/solar-android/app/src/main/assets/shaders/solar.frag
-+++ b/solar-android/app/src/main/assets/shaders/solar.frag
+--- af0b179/solar.frag
++++ defined-reference/solar.frag
 @@ -109,11 +109,51 @@
      vec3 x=normalize(cross(pole,reference)),z=cross(x,pole);
      return rotY(vec3(dot(n,x),dot(n,pole),dot(n,z)),-uAppearance[id].x);
@@ -129,8 +129,18 @@
      float fine=1.0-smoothstep(.5,2.8,footprint*617.0);
      float medium=1.0-smoothstep(.5,2.8,footprint*172.0);
      float bands=.55+.21*sin(radial*172.0)*medium+.12*sin(radial*617.0)*fine;
-@@ -336,7 +379,10 @@
+@@ -328,15 +371,14 @@
+     if(background&&entering(id)&&!star)color*=1.0-daylight*smoothstep(.005,.12,1.0-transmission)*.998;
+     color=color*transmission+accumulated;
  }
+-uint visualCandidates(){
+-    ivec2 grid=max(uBodyTileGrid,ivec2(1));
+-    vec2 uv=clamp(gl_FragCoord.xy/uResolution,vec2(0.0),vec2(.999999));
+-    ivec2 tile=clamp(ivec2(floor(uv*vec2(grid))),ivec2(0),grid-1);
+-    return texelFetch(uBodyTiles,tile,0).r;
+-}
++uint visualCandidates(){ return (1u<<uint(uCount))-1u; }
++
  void main(){
      vec2 ndc=2.0*gl_FragCoord.xy/uResolution-1.0;
 -    vec3 rd=normalize(uForward+ndc.x*uAspect*uTanHalfFov*uRight+ndc.y*uTanHalfFov*uUp);
@@ -141,7 +151,7 @@
      uint candidates=visualCandidates();
      vec3 color=vec3(0);
      float closest=uFar;int id=-1;
-@@ -349,17 +395,20 @@
+@@ -349,17 +391,20 @@
          float t=sphere(rd,uBodies[j].xyz,uBodies[j].w);
          if(t>0.0&&t<closest){closest=t;id=j;}
      }
@@ -165,7 +175,7 @@
              vec3 light=normalize(uBodies[0].xyz-point),viewDir=normalize(-rd);
              float nl=dot(normal,light),visibility=eclipse(point,id);
              float roughness=clamp(materialRoughness(id,ocean,clouds),.045,.98);
-@@ -367,7 +416,8 @@
+@@ -367,7 +412,8 @@
              // metal fractions are not invented from unavailable material maps.
              color=pbrDirect(albedo,normal,viewDir,light,roughness,0.0)*3.35*visibility;
              color+=albedo*.008;
@@ -175,7 +185,7 @@
              if(!entering(id))color+=atmosphereColor(id)*rim*(.10+.35*smoothstep(-.22,.55,nl))*visibility;
              // A planet casts its shadow onto its own rings, and rings dim its day side.
              if(uAppearance[id].w>0.0){
-@@ -376,8 +426,11 @@
+@@ -376,8 +422,11 @@
                  if(abs(den)>.0001){
                      float d=-dot(point-uBodies[id].xyz,axis)/den;
                      if(d>0.001){
@@ -189,7 +199,7 @@
                      }
                  }
              }
-@@ -396,7 +449,8 @@
+@@ -396,7 +445,8 @@
          if(t<=uNear||t>=closest)continue;
          vec3 p=rd*t-uBodies[j].xyz;
          float rr=length(p)/uBodies[j].w;

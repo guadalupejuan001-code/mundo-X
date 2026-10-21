@@ -1,0 +1,21 @@
+{
+  "ram_mb": 2048,
+  "software_gles": "swiftshader",
+  "virtualization": "TCG",
+  "system_image": "system-images;android-29;default;x86_64",
+  "art_compile": "speed",
+  "status": "blocked_or_failed",
+  "stage": "finished",
+  "cases": [],
+  "swiftshader_threads": 1,
+  "driver_configuration": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+  "driver_configuration_sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0",
+  "active_version": null,
+  "boot_poll_timeouts": 0,
+  "boot_seconds": 155.32648707199405,
+  "emulator_processes": [],
+  "driver_config_read_observed": false,
+  "driver_config_trace_sha256": "89102e488fc6f7de84df9bbb01d096792fe6ef9dc7fb16cf26a1246e327d3924",
+  "error": "RuntimeError: The emulator did not observably read the requested SwiftShader.ini; refusing to claim that worker configuration",
+  "stage_before_cleanup": "verifying_driver_configuration"
+}

@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-21T01:16:04.345479+00:00",
+  "status": "harness_correction_ready; Android_validation_pending",
+  "original_head": "2be39f7915001c46b63246b9a9502071b599475d",
+  "worktree_base_head": "5e8df8f9b1c77ced0e233eaeaf944554db7b37d5",
+  "run_id": 39523264220,
+  "job_id": 118972408715,
+  "job_url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264220/job/118972408715",
+  "artifact": {
+    "id": 12311484949,
+    "name": "COSMIC-X-Solar-8K-Android-Evidence",
+    "zip_bytes": 31376123,
+    "sha256": "b6f7b7a17b4a495cc33925c8695a6b049bb2eb2b6c012253994459d19e0377d1",
+    "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264220/artifacts/12311484949"
+  },
+  "observed": {
+    "expected_cases": 15,
+    "passed_cases": 14,
+    "reported_tests": 16,
+    "reported_failures": 2,
+    "first_failed_case": "ultra8k_earth_entry_atmosphere",
+    "timeout_logcat_utc": "2026-10-21T00:59:54.062Z",
+    "capture_deadline_ms": 150000,
+    "completed_gl_swap_logcat_utc": "2026-10-21T01:00:03.559Z",
+    "gl_thread_pid": 2440,
+    "gl_thread_tid": 4512,
+    "gl_swap_interval_ms": 159880.88,
+    "gl_swap_interval_sample_count": 1,
+    "timing_scope": "EGL_emulation app_time_stats interval between GL swaps, including preparation/render/readback/blit and any intervening wait; not a GPU timer query or physical-device FPS.",
+    "failure_screenshot": "failure-ultra8k_earth_entry_atmosphere.png",
+    "screenshot_observation": "The visible Activity shows Earth atmospheric entry at 25 km, paused, and accepted 4320x7680 framebuffer; it is a display screenshot, not the missing full 8K PNG proof.",
+    "orbit_8k_case_passed": true,
+    "orbit_8k_case_duration_seconds": 95.32,
+    "orbit_gl_swap_max_interval_ms": 89865.78,
+    "entry_case_duration_including_failure_screenshot_seconds": 160.349,
+    "second_timeout": "GL command timed out while collecting final metrics at 01:02:34.019Z; original code had restored continuous rendering before queuing that command.",
+    "app_oom_recorded": false,
+    "other_process_anr": "com.google.android.ext.services at 01:00:03.717Z, not the Solar process",
+    "app_termination": "ActivityManager force-stopped/killed PID 2440 after instrumentation finish at 01:02:34, not an OOM kill."
+  },
+  "diagnosis": {
+    "primary": "The actual 8K atmospheric capture completion interval exceeded the shared 150-second UHD operation deadline by about10 seconds; drawing demonstrably completed shortly after the timeout.",
+    "secondary": "The test finally restored RENDERMODE_CONTINUOUSLY while failed ultraEntry had not reverted the 8K atmosphere state. This allowed another expensive draw to delay final GL reporting and add a second 150-second timeout.",
+    "limits": "No thread dump proves every instant of scheduling; the 159.88-second completed GL swap, screenshot and source control flow support a slow completed operation and a reporting scheduling defect, not a persistent renderer deadlock."
+  },
+  "correction": {
+    "source": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java",
+    "ultra_capture_deadline_ms": 240000,
+    "deadline_derivation": "ceil(1.5 * 159880.88 ms) rounded to 240000 ms; applies only to the two 8K capture calls in saveUhd(ultraSuite) and ultraEntry.",
+    "other_uhd_capture_and_gl_deadline_ms": 150000,
+    "normal_capture_and_gl_deadline_ms": 30000,
+    "demand_mode": "Retain RENDERMODE_WHEN_DIRTY through final metrics and instrumentation finish; no cleanup restart of continuous 8K drawing.",
+    "failed_queue": "After a GL operation timeout, retain that failed test and save reports without queuing another GL metrics request.",
+    "new_evidence": "ultraCaptureWaits records deadline, elapsed time, queued/requested/completed phase, actual target dimensions and whether the capture callback completed.",
+    "criteria_unchanged": [
+      "15 required tests",
+      "actual 4320x7680 framebuffer and RGBA byte count",
+      "actual 4320x7680 orbit and atmospheric PNGs",
+      "25 decoded PNG pixel/channel/orientation samples and RGBA SHA256",
+      "substantial geometry/brightness",
+      "Earth atmosphere and entry state",
+      "exact adaptive return image and native owner identity"
+    ],
+    "production_shader_renderer_changes": false,
+    "new_performance_claim": false
+  },
+  "verification": {
+    "git_diff_check_exit_code": 0,
+    "GLES_or_AVD_run": false,
+    "Gradle_run": false,
+    "compile_pending": "Android closure and core agents confirmed the next joint final Solar build includes source SHA2566e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c; no separate javac/Gradle or emulator campaign requested."
+  },
+  "source_sha256": {
+    "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c"
+  },
+  "unchanged_source_sha256": {
+    "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java": "2ad900613108fa223be7fea46b10ef1daf7e40f33da63a830b995d1754969e2e",
+    "solar-android/app/src/main/assets/shaders/solar.frag": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+    "tools/solar-verify-evidence.py": "7e01cd68ead3921b1f81f8290e3210d637c0c52887b229531cedfebb6a9080f0"
+  },
+  "full_logcat_sha256": "81a2943d998341070c47a6a9affd57878b760e42175a67aa64a22fb7aaf2e86c",
+  "evidence_files_sha256": {
+    "apk-SHA256SUMS.txt": "91eb68d06869bb2e3174036e41771d0c4687a7fa55799051a67bc0a0dfe5f517",
+    "app-memory.txt": "97f5770d2d6bb9a84a613e7cd00dcf20d5d9801470e32d2741ad9ab5794df7fa",
+    "build-commit.txt": "219943e5782a9d64f7fd828ae0e6ff5638e920e5125e2e92387d556ffb8e43ad",
+    "emulator.log": "bf193224219059960ac343929656f5adfbf5748d1cd039c352289a77bd4d1323",
+    "failure-ultra8k_earth_entry_atmosphere.png": "0c2bb0b730b2092fd789a167c26b28848f3ceacc8c2fc19f4b2882e107e6a759",
+    "initial-paused-pair.json": "827aafaa08b051a126326ad2c895a41e7f46ccca431153ac2b0dc185d4718a33",
+    "instrumentation.txt": "40a204096623959ebf43e536d59c33a2c8f58acc372b21663ba4cd138e318e67",
+    "job-118972408715.log": "2bc766c9ff4aa9e969c745949ae12de0348cf5ffbf095909de7d719c49bad4b4",
+    "junit.xml": "d21dfbe23ebc15bc6be7ac30738ffd52008f75328a648a8642432ff84905d265",
+    "logcat-relevant.txt": "43bc86e0a6360b38caac77eca235f81d340da6732b817820da4df107725cf3a6",
+    "report.json": "ca64214a2d867b23e35045c72162976108743570f97c22a3c500ecc5090a3691"
+  }
+}

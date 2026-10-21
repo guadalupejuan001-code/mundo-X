@@ -1,10 +1,69 @@
 # Solar: filtrado definido y comprobación exacta
 
-## Resultado de esta revisión
+## Cierre del fallo de 53 píxeles y referencia completa
+
+La prueba Android con un trabajador terminó con **7/8 comparaciones exactas**;
+ambos APK repitieron sus ocho escenas sin un solo cambio y sus 32 entradas
+registradas coincidieron. El fallo restante fue una fila de 53 píxeles de Urano
+(136 canales, diferencia máxima 13). Ese fallo se conserva íntegro en
+[`android-runtime/runner.json`](../results/repository-unification-2026-10-21/solar/android-runtime/runner.json);
+no se convirtió en un aprobado ni se cambió la tolerancia.
+
+Se reprodujeron en host **todos los canales de la diferencia Android**, usando
+la misma cámara, matrices, cuerpos, máscaras, estado y tiempo de la escena, con
+el mismo SwiftShader. Esto aisló este fallo del proceso Java/ART y de las
+superposiciones Android. El exportador usa `SolarRenderer` intacto; 28 de sus 29
+hashes reconstruidos coinciden con Android. La única excepción es el caché de
+órbitas en doble precisión; los vértices float realmente dibujados sí coinciden.
+El fixture exacto y su exportador están conservados, con instrucciones de
+reproducción, en
+[`android-input-harness`](../results/repository-unification-2026-10-21/solar/android-runtime/android-input-harness/).
+
+La referencia inicial conservaba una selección de mosaicos incorrecta para la
+partición de 128 píxeles que produce la CPU: calculaba
+`floor((gl_FragCoord / resolution) * grid)`. A 360 × 203, la fila normalizada cambia
+en y=101, mientras el mosaico de producción cambia en y=128. En x=153..205,
+`masks[1] ^ masks[4] = 1 << 20`, correspondiente a Titania. La esfera de esa luna
+no intersecta esos rayos: su discriminante queda entre -89,77 y -71,33. Por tanto,
+no se atribuye la diferencia a una oclusión geométrica legítima de Titania ni a
+una línea concreta del controlador.
+
+Se hicieron tres ablaciones dirigidas, sin modificar la producción:
+
+| Comparación con las entradas exactas de Android | Píxeles distintos / 73.080 |
+| --- | --- |
+| Referencia inicial con lookup normalizado frente a candidato con mosaicos de 128 píxeles | 53 |
+| Referencia inicial frente a candidato cambiando sólo el lookup al histórico | 0 |
+| Candidato con todos los cuerpos habilitados frente al candidato de producción | 0 |
+| Material y nubes completos, todos los cuerpos habilitados, frente al candidato de producción | 0 |
+
+La última fila establece un oracle independiente: la nueva referencia ejecuta
+**todos los cuerpos**, sin el lookup histórico ni el culling optimizado, y conserva
+el cálculo completo de material y nubes. Se mantuvo intacto el shader de producción
+`361676e4…`, incluido su índice correcto de 128 píxeles. La referencia nueva es
+`1c978eab…`; la anterior `7aae77f5…` queda preservada junto a sus fallos y su parche.
+La prueba ahora verifica también que el culling no cambia la salida de la
+evaluación completa. No es una referencia generada automáticamente para copiar
+la salida del candidato.
+
+Las evidencias de las ablaciones, hashes y el delta firmado idéntico entre host y
+Android están en
+[`odd-height-diagnostic`](../results/repository-unification-2026-10-21/solar/android-runtime/odd-height-diagnostic/).
+El nuevo fixture de regresión
+[`solar-android-case-7.json`](../solar-android/tests/fixtures/solar-android-case-7.json)
+se ejecuta en CI junto a las 32 escenas anteriores, con color, identidad y
+profundidad. El checker admite el tiempo y orden de texturas reales registrados;
+los fixtures previos conservan sus valores por defecto. **Al congelar este cambio,
+el nuevo pareado Android con la referencia completa está pendiente.** Los
+resultados host no se presentan como aprobación de Android.
+
+## Validación inicial de filtrado: evidencia conservada
 
 Se corrigieron operaciones de filtrado con resultados indefinidos en GLSL ES y se
 estableció una referencia explícita que incorpora la misma corrección. Frente a
-esa referencia, las optimizaciones conservadas producen **32/32 escenas idénticas**:
+la primera referencia corregida (`7aae77f5…`), las optimizaciones conservadas
+produjeron **32/32 escenas idénticas**. Estos resultados históricos se conservan
+y no se atribuyen al hash nuevo sin volver a ejecutar el gate:
 
 | Comprobación | Resultado | Memoria máxima del proceso |
 | --- | --- | --- |
@@ -22,8 +81,8 @@ una mejora de rendimiento: hubo compilaciones independientes en el entorno.
 
 La evidencia está en
 [`results/repository-unification-2026-10-21/solar`](../results/repository-unification-2026-10-21/solar/).
-Los resultados de Android para estos APK se incorporarán después de ejecutar la
-campaña descrita abajo. **No se considera Android aprobado por las pruebas host.**
+La campaña Android inicial y su fallo de 53 píxeles están descritos arriba.
+**No se considera Android aprobado por las pruebas host.**
 
 ## Defecto encontrado y corrección de producción
 
@@ -67,18 +126,21 @@ al entorno de ejecución de SwiftShader, descrita más abajo.
 
 La referencia congelada está en
 [`solar-android/tests/fixtures/solar-defined-reference.frag`](../solar-android/tests/fixtures/solar-defined-reference.frag).
-Parte del shader de `af0b1797573b55a739dcaef7b784eb98825ff07c` y sólo incorpora la
-corrección de filtrado y sus guardas numéricas. Mantiene el cálculo completo del
-campo de material, las nubes originales y el cálculo original del mosaico de
-candidatos. El candidato conserva sus omisiones de cálculos no consumidos y el
-índice actual del mosaico.
+Parte del shader de `af0b1797573b55a739dcaef7b784eb98825ff07c`. Incorpora la
+corrección de filtrado, sus guardas numéricas y la evaluación de todos los cuerpos.
+Mantiene el cálculo completo del campo de material y las nubes originales. El
+candidato conserva sus omisiones de cálculos no consumidos y el culling mediante
+mosaicos de 128 píxeles. La justificación independiente del cambio de referencia
+está en las ablaciones anteriores.
 
 | Objeto | SHA-256 |
 | --- | --- |
 | Shader original de `af0b179` | `e99a3064ca1e0111d4e909382bf8c81cc44288398b0253d804bf433aab10156d` |
-| Referencia corregida | `7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6` |
+| Primera referencia, lookup histórico (supersedida) | `7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6` |
+| Referencia completa final, todos los cuerpos | `1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753` |
 | Shader candidato de producción | `361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50` |
 | Fixtures de 32 escenas, 320 × 180 | `e34e642655d489f09e08a86dbbfb8af4043ee956a5e79ebf306d876606b1c408` |
+| Fixture exacto Android, 360 × 203 | `2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1` |
 
 [`defined-reference.patch`](../results/repository-unification-2026-10-21/solar/defined-reference.patch)
 conserva el parche exacto contra el shader histórico;
@@ -185,14 +247,21 @@ o entradas inconcluyentes.
 `--swiftshader-threads 1` crea una configuración exclusiva para el emulador.
 `strace` se filtra al archivo exacto y debe observar una apertura de lectura
 exitosa antes de continuar. Un archivo escrito pero no leído **no permite
-afirmar que se aplicó la configuración**. Se guardan la configuración, la traza y
-los mapas/hilos del árbol de procesos del emulador. La opción no cambia el shader
+afirmar que se aplicó la configuración**. Se guardan la configuración y la traza. En la campaña inicial hubo 24 aperturas
+exitosas del archivo exacto; su hash, directorio de trabajo y bibliotecas cargadas
+se comprobaron además por lectura del proceso. El campo automático
+`emulator_processes` quedó vacío; la evidencia manual está en
+`actual-driver-process.json` y no se atribuye a ese campo. El filtro de strace
+incluye las grafías absoluta y relativa del mismo archivo, tras comprobar que un
+único filtro absoluto omitía aperturas relativas en este entorno. La opción no cambia el shader
 ni las tolerancias y se aplica igual a ambos APK.
 
 `solar-performance.yml` usa la referencia corregida, el oracle independiente y el
-gate de Mesa antes del pareado Android. La ejecución local Android de estas
-fuentes está pendiente al congelar el cambio; su resultado se añadirá como
-evidencia posterior. No se ejecutaron pruebas en un móvil físico ni se afirma
+gate de Mesa, incluidas las entradas exactas del fallo, antes del pareado Android.
+La ejecución local Android con la referencia completa está pendiente al congelar
+este cambio; su resultado se añadirá como evidencia posterior. La campaña inicial
+solicitó ART `speed`, pero sus logs conservan un fallback por ClassLoaderContext;
+no se afirma que toda la instrumentación se ejecutara en AOT. No se ejecutaron pruebas en un móvil físico ni se afirma
 rendimiento o exactitud para su controlador.
 
 ## Reproducción mínima del gate host

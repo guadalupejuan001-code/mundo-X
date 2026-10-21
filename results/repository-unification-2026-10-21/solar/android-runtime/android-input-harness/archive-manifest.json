@@ -1,0 +1,103 @@
+{
+  "scope": "Minimal reproducible Java input diagnostic. No generated .class/.so or Android images in this subfolder. Other campaign evidence remains in the parent android-runtime folder.",
+  "origin": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-input-harness",
+  "files": {
+    "README.md": {
+      "sha256": "eb5cf59fd345a1da1dad090a81679c62ad79d5d6067fc21f4115246ff297c041",
+      "bytes": 3531
+    },
+    "reproduce.py": {
+      "sha256": "5b6765712d41d021f59e4d425e4451d12be7896e9535598a1cb6bb383eede333",
+      "bytes": 4737
+    },
+    "execution.json": {
+      "sha256": "dfc8e2f5b165fcecf530c1887fb47c89a46c644e8a784447610bdaad83740a22",
+      "bytes": 2541
+    },
+    "manifest.json": {
+      "sha256": "0777c0b028864635c3444e8b4c9d1ce1fa136ca655f89a1a260a6b90a3c584a4",
+      "bytes": 5299
+    },
+    "android-input-comparison.json": {
+      "sha256": "d3c6cea86ae8ee543ef6c3596af5bffe440e3f687142eccb00a9651b3388f959",
+      "bytes": 15137
+    },
+    "compile.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "run.log": {
+      "sha256": "65511d0a4912d963bffd1ec0d5493c178e882600d393a9ce5cc3f51c3602c072",
+      "bytes": 2214
+    },
+    "source-reproduction/reproduction.json": {
+      "sha256": "66ddf9fcb81b0d66ead8af70164c1b728042e361acf27d0d76a226a38f7a3875",
+      "bytes": 6229
+    },
+    "source-reproduction/compile.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "source-reproduction/run.log": {
+      "sha256": "65511d0a4912d963bffd1ec0d5493c178e882600d393a9ce5cc3f51c3602c072",
+      "bytes": 2214
+    },
+    "output/fixture-android-case-7.json": {
+      "sha256": "2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1",
+      "bytes": 4618
+    },
+    "src/android/content/Context.java": {
+      "sha256": "e51b9f8f1675a2194c0d7e5fb7f20db071588b2e03998248357a8cb44fe1d8fc",
+      "bytes": 383
+    },
+    "src/android/opengl/Matrix.java": {
+      "sha256": "093d363b9a26e45d036fea5e0ea0e02c5e8eba7d7c6a1aeb168471d603dbdc9d",
+      "bytes": 1686
+    },
+    "src/android/content/res/AssetManager.java": {
+      "sha256": "a2658f13338ce9e01762e0b871322dbd549f3d378656bdbd1d934e9594db219a",
+      "bytes": 387
+    },
+    "src/com/mundox/solar/AndroidInputFixture.java": {
+      "sha256": "4ce9d86f1415a6f9324e25010a944194d00d5dd4d911b6507fd88c75e78a84a4",
+      "bytes": 8449
+    },
+    "output/case-1-input-hashes.json": {
+      "sha256": "c8306623c54cf6dbb770868dd24f5ac7e20974b9975d65b97dfa54498a6a03be",
+      "bytes": 2234
+    },
+    "output/case-4-input-hashes.json": {
+      "sha256": "303c1bdbbe6fcec6e32db0638f2d940e8c7de1136c08a48f9f38b1fc0f713989",
+      "bytes": 2234
+    },
+    "output/case-5-input-hashes.json": {
+      "sha256": "e630b2c47c720e79b6f17755d4b6aa7fec190ea8b1e6e2caf408493ca73625ee",
+      "bytes": 2234
+    },
+    "output/case-7-input-hashes.json": {
+      "sha256": "660489a84975844eab96a2ee4935f95472cbb58a42cb6111fdc996460d1be3aa",
+      "bytes": 2234
+    },
+    "output/case-6-input-hashes.json": {
+      "sha256": "74d6c8eba7af88caa9fa2b36276dc8e6b79c53166095c2e3353819d34cebe940",
+      "bytes": 2234
+    },
+    "output/case-3-input-hashes.json": {
+      "sha256": "f98eac88bd40d1ec0ab70436cde702950df242e1795b766c329beb70395daf45",
+      "bytes": 2234
+    },
+    "output/case-2-input-hashes.json": {
+      "sha256": "310b19e3e90669b89d40e509fa1bb0685e9769e8ab3eded7627e7e76ad83a20a",
+      "bytes": 2234
+    },
+    "output/case-0-input-hashes.json": {
+      "sha256": "f28ec4b5ee04f0ccfff6df621b6f7148c7c0a2998606029d8cfa47a223bfd5db",
+      "bytes": 2234
+    }
+  },
+  "case7_all_recorded_fields_exact": false,
+  "case7_matching_fields": 28,
+  "case7_total_fields": 29,
+  "case7_only_different_field": "orbitCache",
+  "shader_camera_and_float_overlay_inputs_exact": true
+}

@@ -3,9 +3,9 @@
   "source_path": "solar-android/app/src/main/assets/shaders/solar.frag",
   "source_sha256": "e99a3064ca1e0111d4e909382bf8c81cc44288398b0253d804bf433aab10156d",
   "reference_path": "solar-android/tests/fixtures/solar-defined-reference.frag",
-  "reference_sha256": "7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6",
+  "reference_sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
   "candidate_shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
-  "corrections": "Defined analytic filter gradients and explicit LOD gradients; longitude at poles; clamp rounded negative pow bases. The original full material/cloud evaluation and tile lookup remain.",
+  "corrections": "Defined analytic filter gradients and explicit LOD gradients; longitude at poles; clamp rounded negative pow bases. Preserve full original material and cloud evaluation; evaluate every body instead of the historical normalized tile lookup, so this reference independently checks candidate culling.",
   "specification": "https://registry.khronos.org/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf",
   "sections": [
     "3.10.2",
@@ -14,5 +14,8 @@
     "8.8",
     "8.9"
   ],
-  "comparison_scope": "Equivalence of optimizations after correcting filtering, not color equality with the undefined af0b reference."
+  "comparison_scope": "Equivalence of optimizations after correcting filtering, not color equality with the undefined af0b reference.",
+  "supersedes_reference_sha256": "7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6",
+  "reference_revision_reason": "An exact Android input fixture reproduced 53 RGBA pixel differences with the historical normalized lookup. Both full-body shaders match the candidate pixel-for-pixel; changing only the candidate lookup to the historical normalized lookup reproduces all 53 differences. The full-body reference removes this invalid tile partition from the oracle.",
+  "reference_revision_evidence": "android-runtime/odd-height-diagnostic/full-evaluation-vs-candidate.json"
 }

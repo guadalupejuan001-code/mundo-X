@@ -1,0 +1,100 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    360,
+    203
+  ],
+  "results": [
+    {
+      "scene": 7,
+      "selected": 7,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          12.966985,
+          13.300407,
+          13.861725
+        ],
+        "after": [
+          12.370959,
+          12.426031,
+          12.410518
+        ]
+      },
+      "fresh_ms": {
+        "before": 1012.013753,
+        "after": 1100.145951
+      },
+      "warmup_different_pixels": {
+        "before": [
+          0
+        ],
+        "after": [
+          0
+        ]
+      },
+      "repeat_different_pixels": {
+        "before": [
+          0,
+          0,
+          0
+        ],
+        "after": [
+          0,
+          0,
+          0
+        ]
+      },
+      "median_ms": {
+        "before": 13.300407,
+        "after": 12.410518
+      },
+      "eclipse_candidates": 27
+    }
+  ],
+  "compared_pixels": 219240,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "repeat_different_pixels": {
+    "before": 0,
+    "after": 0
+  },
+  "warmup_frames": 2,
+  "warmup_different_pixels": {
+    "before": 0,
+    "after": 0
+  },
+  "independent_programs": true,
+  "process_memory": {
+    "VmPeak": "694888 kB",
+    "VmSize": "694888 kB",
+    "VmHWM": "238548 kB",
+    "VmRSS": "236096 kB"
+  },
+  "median_ms": {
+    "before": 13.300407,
+    "after": 12.410518
+  },
+  "rss_peak_kib": 238548,
+  "process_threads": 3,
+  "baseline": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/solar-android/tests/fixtures/solar-defined-reference.frag",
+  "source_commit": "5e8df8f9b1c77ced0e233eaeaf944554db7b37d5",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": false,
+  "shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+  "fixtures_sha256": "2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1",
+  "baseline_shader_sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753"
+}
