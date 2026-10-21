@@ -1,6 +1,11 @@
 # Ether Memory v0.1
 
-**Estado:** prototipo integrado en el lenguaje Infinite de Mundo X.
+**Estado:** compatibilidad histórica integrada; **sustituido como arquitectura principal**
+por [Inverse Ether Memory](inverse-ether-memory.md).
+
+`qload8/qstore8` se conservan para consumidores heredados, incluido MemoryFabric
+del PC. El runtime cuántico puro los rechaza expresamente para evitar volver al
+mapeo global de ocho qubits por byte.
 
 Ether Memory no convierte la RAM física del teléfono en qRAM de hardware. La
 RAM del Galaxy A16 5G sigue siendo clásica. Esta capa cambia la **representación
@@ -45,11 +50,10 @@ Una carga arbitraria y densa puede materializar muchos qubits y llegar a los
 presupuestos de `InfiniteCore`; con el perfil actual hay 4096 qubits activos y
 1024 por componente. Por eso no se presenta como 2 GiB de qRAM densa.
 
-La CPU x86 mantiene su RAM clásica exacta. El siguiente paso seguro sería un
-`MemoryFabric` que reserve una ventana explícita del mapa del PC para Ether
-Memory y deje las demás páginas en SparseRam. Antes de hacerlo hay que definir
-qué ocurre con cargas clásicas sobre bits no deterministas y mantener el mapa
-BIOS coherente.
+La CPU x86 mantiene su RAM clásica exacta. El experimento siguiente,
+[MemoryFabric v0.2](ether-memory-v0-2.md), ya implementó una ventana explícita.
+Esa ruta se conserva como compatibilidad del PC; la investigación principal de
+memoria cuántica continúa en Inverse Ether Memory.
 
 ## Procedencia
 

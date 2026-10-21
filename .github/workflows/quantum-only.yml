@@ -1,0 +1,105 @@
+name: COSMIC X quantum-only runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/include/mundo_x/**'
+      - 'native/src/quantum_runner.cpp'
+      - 'native/tests/inverse_memory.cpp'
+      - 'native/tests/quantum_runtime.cpp'
+      - 'native/tests/infinite_extreme.cpp'
+      - 'native/tests/quantum_algorithms.cpp'
+      - 'native/tests/ether_rules.cpp'
+      - 'native/tests/infinite_session.cpp'
+      - 'quantum-runtime/**'
+      - '.github/workflows/quantum-only.yml'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/**'
+      - 'native/src/quantum_runner.cpp'
+      - 'native/tests/**'
+      - 'quantum-runtime/**'
+      - '.github/workflows/quantum-only.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cosmic-quantum-only-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quantum-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure isolated quantum graph
+        run: cmake -S quantum-runtime -B quantum-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Prove non-quantum components are disconnected
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          rows=json.load(open("quantum-build/compile_commands.json"))
+          files=[str(pathlib.Path(row["file"]).resolve()) for row in rows]
+          forbidden=("pc-android","graphics-android","graphics-desktop","solar-android",
+                     "physics_world","rule_physics","Solar")
+          bad=[path for path in files if any(token in path for token in forbidden)]
+          assert not bad, bad
+          result={"compiled_translation_units":len(files),
+                  "forbidden_components":[],"quantum_only":True}
+          pathlib.Path("quantum-build/compile-scope.json").write_text(json.dumps(result,indent=2)+"\n")
+          print(result)
+          PY
+
+      - name: Build quantum runtime and gates
+        run: cmake --build quantum-build --config Release -j 2
+
+      - name: Run quantum-only tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir quantum-build --output-on-failure -j 2 | tee quantum-build/ctest.log
+
+      - name: Run XI inverse-memory smoke program
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > quantum-build/inverse-memory-demo.xi <<'XI'
+          mem_store 1000000000000000000000000 37
+          mem_read 1000000000000000000000000
+          mem_bind 7 100
+          h 100
+          mem_read 7
+          mem_stats
+          XI
+          ./quantum-build/mundo_x_quantum quantum-build/inverse-memory-demo.xi | tee quantum-build/quantum-demo.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open("quantum-build/quantum-demo.jsonl") if line.strip()]
+          assert rows[0]["type"]=="memory_read" and rows[0]["value"]==37
+          assert rows[1]["type"]=="memory_read" and rows[1]["deterministic"] is False
+          assert rows[1]["handle"]=="qbyte:7@100"
+          assert rows[2]["type"]=="memory_stats" and rows[2]["model"]=="inverse-ether-memory"
+          print("XI Inverse Memory smoke verified:", rows)
+          PY
+
+      - name: Upload quantum-only evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Inverse-Ether-Memory
+          path: |
+            quantum-build/compile-scope.json
+            quantum-build/ctest.log
+            quantum-build/quantum-demo.jsonl
+          if-no-files-found: error
+          retention-days: 14

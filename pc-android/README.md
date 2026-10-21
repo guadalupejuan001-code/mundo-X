@@ -45,6 +45,13 @@ Se acepta la gramática del núcleo: `h/s/x/y/z`, `cx/cz`, `expect`, `probz`, `m
 
 ### Ether Memory v0.2 · ventana x86 directa
 
+> **Compatibilidad/experimento histórico.** Esta ventana permanece disponible
+> para el PC, pero ya no define la arquitectura principal de memoria de la
+> simulación cuántica. La ruta cuántica pura usa
+> [Inverse Ether Memory](../docs/inverse-ether-memory.md) y no compila PC,
+> SparseRam, VBE ni GLES.
+
+
 El mismo lenguaje Infinite acepta `qload8 DIRECCION` y `qstore8 DIRECCION VALOR`.
 Un byte lógico se representa mediante ocho qubits consecutivos
 `q(8a)..q(8a+7)`. `qload8` no mide: si un bit no tiene un valor Z determinista,

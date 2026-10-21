@@ -116,6 +116,24 @@ automáticamente una mejora de extremo a extremo.
 
 ## 5. Estado de implementación
 
+### Ruta cuántica pura e Inverse Ether Memory
+
+La simulación cuántica dispone de un propietario independiente,
+`QuantumRuntime`, formado únicamente por `InfiniteCore` e
+`InverseMemory`. Su build en `quantum-runtime/` excluye PC, gráficos, Solar,
+física, Android/JNI y GLES; esos módulos siguen existiendo como consumidores o
+aplicaciones, pero no son dependencias del simulador cuántico.
+
+`InverseMemory` mantiene una regla de fondo para el dominio lógico, diferencias
+clásicas finitas y enlaces cuánticos explícitos. Los bytes clásicos son una
+**proyección solicitada**, no la autoridad primaria. Una lectura no determinista
+produce un handle y no mide el estado.
+
+Los experimentos anteriores `qload8/qstore8` y MemoryFabric x86 se conservan
+para compatibilidad y como antecedentes, pero no definen la arquitectura
+principal de memoria del runtime cuántico. Véase
+[Inverse Ether Memory](inverse-ether-memory.md).
+
 La [fusión de estado implementada](ether-fusion.md) sustituye la conexión
 auxiliar de v0.1. EtherCore define un marco Clifford global `U`, e InfiniteCore
 conserva el estado base y sus modificaciones finitas `φ`; juntos representan
