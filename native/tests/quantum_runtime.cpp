@@ -22,6 +22,11 @@ int main() {
   try {
     mundo_x::QuantumRuntime runtime;
 
+    rejects([&] { runtime.execute("qload8 0\n"); },
+            "legacy qload8 remained enabled in QuantumRuntime");
+    rejects([&] { runtime.execute("qstore8 0 1\n"); },
+            "legacy qstore8 remained enabled in QuantumRuntime");
+
     const auto out = runtime.execute(
         "mem_store 1000000000000000000000000 7\n"
         "mem_read 1000000000000000000000000\n"
