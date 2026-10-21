@@ -22,9 +22,6 @@ uniform vec4 uEntry; // body (-1 outside entry), altitude km, mean radius km, ac
 uniform int uAtmosphereEnabled;
 uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
-uniform highp usampler2D uBodyTiles;
-uniform ivec2 uBodyTileGrid;
-uniform int uBodyTileSize;
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
 out vec4 outColor;
@@ -440,11 +437,10 @@ void main(){
         float viewZ=dot(point,uForward);
         gl_FragDepth=clamp(uFar/(uFar-uNear)-(uFar*uNear/(uFar-uNear))/max(viewZ,uNear),0.0,1.0);
     }
-    // Analytic rings avoid polygon seams and remain stable during close flybys.
-    for(int j=1;j<MAX_BODIES;j++){
+    // The fixed catalogue has rings only on the four giant planets (5..8).
+    // Avoid scanning the other nineteen bodies for every fragment.
+    for(int j=5;j<=8;j++){
         if(j>=uCount)break;
-        if((candidates&(1u<<uint(j)))==0u)continue;
-        if(uAppearance[j].w<=0.0)continue;
         vec3 axis=uAxes[j];
         float den=dot(rd,axis);if(abs(den)<.00001)continue;
         float t=dot(uBodies[j].xyz,axis)/den;
@@ -480,13 +476,24 @@ void main(){
         }
     }
     if(uAtmosphereEnabled==1){
-        for(int j=0;j<MAX_BODIES;j++){
-            if(j>=uCount)break;
-            if((candidates&(1u<<uint(j)))==0u)continue;
-            // Entry resolves the local medium; distant bodies keep their
-            // orbital shading without paying for another local ray march.
-            if(uEntry.w>.5&&!entering(j))continue;
+        // Entry resolves only its local medium. Outside entry, preserve the
+        // catalogue order but call only bodies with a non-zero scattering
+        // volume. Explicit calls avoid driver-dependent local array lowering.
+        if(uEntry.w>.5){
+            int j=clamp(int(uEntry.x+.5),0,uCount-1);
             atmosphereVolume(rd,j,closest,id<0,color);
+        }else{
+            atmosphereVolume(rd,0,closest,id<0,color);
+            atmosphereVolume(rd,2,closest,id<0,color);
+            atmosphereVolume(rd,3,closest,id<0,color);
+            atmosphereVolume(rd,4,closest,id<0,color);
+            atmosphereVolume(rd,5,closest,id<0,color);
+            atmosphereVolume(rd,6,closest,id<0,color);
+            atmosphereVolume(rd,7,closest,id<0,color);
+            atmosphereVolume(rd,8,closest,id<0,color);
+            atmosphereVolume(rd,10,closest,id<0,color);
+            atmosphereVolume(rd,14,closest,id<0,color);
+            atmosphereVolume(rd,16,closest,id<0,color);
         }
     }
     // Filmic highlight compression preserves solar/atmospheric dynamic range

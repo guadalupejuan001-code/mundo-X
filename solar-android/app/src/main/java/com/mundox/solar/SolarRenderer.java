@@ -12,7 +12,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import javax.microedition.khronos.egl.EGLConfig;
@@ -69,12 +68,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final FloatBuffer lines=direct(MAX_OVERLAY_VERTICES*7*4).asFloatBuffer();
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
     private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
-    private int mapTexture,bodyMaskTexture,colorTexture,depthBuffer,framebuffer;
-    private int bodyMaskTilesX,bodyMaskTilesY;
-    private SolarVisualEther.Plan visualPlan;
-    private final SolarVisualEther.Workspace visualWorkspace=new SolarVisualEther.Workspace();
-    private ByteBuffer bodyMaskBytes;
-    private int[] uploadedBodyMasks;
+    private int mapTexture,colorTexture,depthBuffer,framebuffer;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -163,8 +157,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     @Override public void onSurfaceCreated(GL10 unused,EGLConfig config){
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
-        mapTexture=bodyMaskTexture=colorTexture=depthBuffer=framebuffer=0;
-        bodyMaskTilesX=bodyMaskTilesY=0;visualPlan=null;uploadedBodyMasks=null;
+        mapTexture=colorTexture=depthBuffer=framebuffer=0;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -179,13 +172,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             glEnableVertexAttribArray(1);glVertexAttribPointer(1,4,GL_FLOAT,false,7*4,3*4);
             glBindVertexArray(0);
             loadMaps();
-            bodyMaskTexture=newTexture();
-            glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);
-            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-            glActiveTexture(GL_TEXTURE0);
             glDisable(GL_DITHER);glDisable(GL_CULL_FACE);glClearColor(0,0,0,1);
             framebufferDirty=true;device=glGetString(GL_RENDERER);check("Inicio del observador solar");
         }catch(Throwable e){error(e);}
@@ -475,28 +461,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(SolarData.Body body:SolarData.BODIES){int p=body.id*4;for(int k=0;k<3;k++)packedBodies[p+k]=(float)((positions[body.id][k]-cameraEye[k])*sceneScale);packedBodies[p+3]=(float)(radii[body.id]*sceneScale);}
         initializedCamera=true;
     }
-    private void syncVisualEther(){
-        visualPlan=visualWorkspace.update(width,height,SolarVisualEther.DEFAULT_TILE,TAN_HALF_FOV,aspect,
-                forward,right,up,packedBodies,appearance,atmosphere,SolarData.BODIES.length);
-        boolean resize=bodyMaskTilesX!=visualPlan.tilesX||bodyMaskTilesY!=visualPlan.tilesY;
-        if(!resize&&Arrays.equals(uploadedBodyMasks,visualPlan.masks))return;
-        int bytes=visualPlan.masks.length*4;
-        if(bodyMaskBytes==null||bodyMaskBytes.capacity()!=bytes)bodyMaskBytes=direct(bytes);
-        ByteBuffer raw=bodyMaskBytes;raw.clear();raw.asIntBuffer().put(visualPlan.masks);
-        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);
-        if(resize){
-            glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,visualPlan.tilesX,visualPlan.tilesY,0,
-                    GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
-            bodyMaskTilesX=visualPlan.tilesX;bodyMaskTilesY=visualPlan.tilesY;
-        }else{
-            glTexSubImage2D(GL_TEXTURE_2D,0,0,0,visualPlan.tilesX,visualPlan.tilesY,
-                    GL_RED_INTEGER,GL_UNSIGNED_INT,raw);
-        }
-        glActiveTexture(GL_TEXTURE0);check("Visual Ether");
-        if(uploadedBodyMasks==null||uploadedBodyMasks.length!=visualPlan.masks.length)
-            uploadedBodyMasks=new int[visualPlan.masks.length];
-        System.arraycopy(visualPlan.masks,0,uploadedBodyMasks,0,visualPlan.masks.length);
-    }
     private void drawScene(){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
@@ -518,10 +482,6 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
-        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,bodyMaskTexture);glUniform1i(sceneLoc("uBodyTiles"),1);
-        glUniform2i(sceneLoc("uBodyTileGrid"),visualPlan.tilesX,visualPlan.tilesY);
-        glUniform1i(sceneLoc("uBodyTileSize"),visualPlan.tileSize);
-        glActiveTexture(GL_TEXTURE0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
 
@@ -735,7 +695,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 SolarFlightPhysics.step(selected,SolarEnvironment.environment(selected),flightState,0,dt);
                 entryAltitude=flightState.altitudeKm;publishEntry();
             }
-            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);syncVisualEther();
+            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
             glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
             lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
             check("Observación solar");
@@ -981,12 +941,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     /** Delete GPU resources while the GL context is current; the core is borrowed. */
     public void release(){
         if(sceneProgram!=0)glDeleteProgram(sceneProgram);if(overlayProgram!=0)glDeleteProgram(overlayProgram);
-        glDeleteTextures(3,new int[]{mapTexture,bodyMaskTexture,colorTexture},0);
+        glDeleteTextures(2,new int[]{mapTexture,colorTexture},0);
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
         glDeleteBuffers(1,new int[]{overlayVbo},0);glDeleteVertexArrays(2,new int[]{eyeVao,overlayVao},0);
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
-        mapTexture=bodyMaskTexture=colorTexture=depthBuffer=framebuffer=0;
-        bodyMaskTilesX=bodyMaskTilesY=0;uploadedBodyMasks=null;
+        mapTexture=colorTexture=depthBuffer=framebuffer=0;
         hasFrame=false;capture=null;
         activeUhd=activeUltra=false;
     }
