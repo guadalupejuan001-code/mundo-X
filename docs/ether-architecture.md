@@ -116,6 +116,24 @@ automáticamente una mejora de extremo a extremo.
 
 ## 5. Estado de implementación
 
+### Ruta de simulación cuántica aislada
+
+La simulación cuántica dispone de un propietario independiente,
+`QuantumRuntime`, formado únicamente por `InfiniteCore` e
+`InverseMemory`. Su build en `quantum-runtime/` excluye PC, gráficos, Solar,
+física, Android/JNI y GLES. Esta separación evita que un consumidor no cuántico
+se convierta en requisito accidental del núcleo.
+
+`InverseMemory` mantiene una regla de fondo, diferencias clásicas finitas y
+enlaces cuánticos explícitos. Los bytes clásicos son una **proyección solicitada**,
+no la autoridad primaria. Una lectura no determinista produce un handle y no
+mide el estado. El lenguaje XI incorpora `mem_reset`, `mem_store`,
+`mem_bind`, `mem_unbind`, `mem_read`, `mem_materialize` y `mem_stats`.
+
+Los dos experimentos previos de Ether Memory (mapeo fijo de ocho qubits por byte
+y ventana x86 MemoryFabric) quedan como borradores históricos; no forman parte
+de esta ruta. Véase [Inverse Ether Memory](inverse-ether-memory.md).
+
 La [fusión de estado implementada](ether-fusion.md) sustituye la conexión
 auxiliar de v0.1. EtherCore define un marco Clifford global `U`, e InfiniteCore
 conserva el estado base y sus modificaciones finitas `φ`; juntos representan
