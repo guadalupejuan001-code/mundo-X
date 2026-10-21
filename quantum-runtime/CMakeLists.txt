@@ -8,12 +8,12 @@ find_package(Threads REQUIRED)
 enable_testing()
 
 function(mx_quantum_target name source)
-  add_executable(\${name} "\${CMAKE_CURRENT_LIST_DIR}/../\${source}")
-  target_include_directories(\${name} PRIVATE
-    "\${CMAKE_CURRENT_LIST_DIR}/../native/include")
-  target_compile_features(\${name} PRIVATE cxx_std_17)
+  add_executable(${name} "${CMAKE_CURRENT_LIST_DIR}/../${source}")
+  target_include_directories(${name} PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/../native/include")
+  target_compile_features(${name} PRIVATE cxx_std_17)
   if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(\${name} PRIVATE -O3 -Wall -Wextra -Wpedantic)
+    target_compile_options(${name} PRIVATE -O3 -Wall -Wextra -Wpedantic)
   endif()
 endfunction()
 
