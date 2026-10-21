@@ -136,7 +136,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
                 if(entryPose!=null)observer.restoreEntryState(entryPose);
                 else{observer.enterAtmosphere(body);observer.setEntryAltitudeKm(desiredEntryAltitude);}
             }else entryActive=false;
-            surface=new SolarSurface(this,observer);
+            surface=new SolarSurface(this,observer);surface.setPausedRendering(paused);
             root=new FrameLayout(this);root.setBackgroundColor(BG);
             root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
             buildInterface();setContentView(root);installInsets();
@@ -246,7 +246,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         updateBody();updateButtons();
     }
     private void toggleFields(){fields=!fields;final boolean b=fields;runGL(()->observer.setFields(b));updateButtons();updateBody();}
-    private void togglePause(){paused=!paused;final boolean b=paused;runGL(()->observer.setPaused(b));updateButtons();}
+    private void togglePause(){paused=!paused;final boolean b=paused;runGL(()->observer.setPaused(b));surface.setPausedRendering(b);updateButtons();}
     private void toggleFlight(){if(entryActive){exitEntry();return;}freeFlight=!freeFlight;final boolean b=freeFlight;runGL(()->observer.setFreeFlight(b));updateButtons();}
     private void toggleClean(){
         cleanView=!cleanView;bottom.setVisibility(cleanView?View.GONE:View.VISIBLE);flight.setVisibility(cleanView?View.GONE:View.VISIBLE);
@@ -286,7 +286,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     private void updateTelemetry(){
         if(dateLabel==null||observer==null)return;
         double jd=observer.julianDate();
-        boolean actualPause=observer.isPaused();if(paused!=actualPause){paused=actualPause;updateButtons();}
+        boolean actualPause=observer.isPaused();if(paused!=actualPause){paused=actualPause;if(surface!=null)surface.setPausedRendering(actualPause);updateButtons();}
         dateLabel.setText(dateFormat.format(new Date((long)((jd-2440587.5)*86400000)))+"    "+(paused?"Pausa":SPEED_NAMES[speedIndex]));
         engineLabel.setText(String.format(Locale.ROOT,"NÚCLEO X  ·  %d × %d  ·  %.0f fps%s",observer.renderedWidth(),observer.renderedHeight(),observer.fps,entryActive&&localPhysics?String.format(Locale.ROOT," · g %.2f m/s² · vr %.3f km/s",observer.localGravityMs2(),observer.radialVelocityKmS()):""));
         if(entryActive&&observer.isEntryMode()){
@@ -300,7 +300,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     }
     @Override public void status(String status){latestStatus=status;}
     @Override public void selected(int id){handler.post(()->{if(destroyed)return;body=clamp(id,-1,SolarData.BODIES.length-1);freeFlight=false;entryActive=observer!=null&&observer.isEntryMode();if(activeMap!=null)activeMap.setSelectedBody(Math.max(0,body));updateBody();updateButtons();});}
-    private void runGL(Runnable action){if(surface!=null&&!destroyed)surface.queueEvent(()->{if(!destroyed)action.run();});}
+    private void runGL(Runnable action){if(surface!=null&&!destroyed){surface.queueEvent(()->{if(!destroyed)action.run();});surface.requestRender();}}
 
     void selectDestination(int id){chooseBody(id);}
     SolarMapView mapView(){return activeMap;}
@@ -653,7 +653,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     private static String periodText(double hours){if(hours==0)return "variable";return String.format(new Locale("es"),Math.abs(hours)>=48?"%.2f días":"%.2f h",Math.abs(hours)>=48?Math.abs(hours)/24:Math.abs(hours))+(hours<0?" ↶":"");}
     private static double nowJulian(){return System.currentTimeMillis()/86400000.0+2440587.5;}
 
-    @Override protected void onResume(){super.onResume();resumed=true;immersive();if(surface!=null){surface.queueEvent(()->observer.resetFrameClock());surface.onResume();}handler.post(ticker);}
+    @Override protected void onResume(){super.onResume();resumed=true;immersive();if(surface!=null){surface.queueEvent(()->observer.resetFrameClock());surface.onResume();surface.setPausedRendering(paused);surface.requestRender();}handler.post(ticker);}
     @Override protected void onPause(){
         resumed=false;handler.removeCallbacks(ticker);if(joystick!=null)joystick.stop();
         if(surface!=null)surface.onPause();savePreferences();super.onPause();
@@ -691,6 +691,6 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     public int selectedDestination(){return body;}
     public void navigateForTest(int id){chooseBody(id);}
     public void fieldsForTest(boolean enabled){fields=enabled;runGL(()->observer.setFields(enabled));updateButtons();updateBody();}
-    public void pauseForTest(boolean enabled){paused=enabled;runGL(()->observer.setPaused(enabled));updateButtons();}
+    public void pauseForTest(boolean enabled){paused=enabled;runGL(()->observer.setPaused(enabled));if(surface!=null)surface.setPausedRendering(enabled);updateButtons();}
     public void scaleForTest(boolean enabled){realScale=enabled;runGL(()->observer.setRealScale(enabled));updateBody();}
 }
