@@ -437,11 +437,10 @@ void main(){
         float viewZ=dot(point,uForward);
         gl_FragDepth=clamp(uFar/(uFar-uNear)-(uFar*uNear/(uFar-uNear))/max(viewZ,uNear),0.0,1.0);
     }
-    // Analytic rings avoid polygon seams and remain stable during close flybys.
-    for(int j=1;j<MAX_BODIES;j++){
+    // The fixed catalogue has rings only on the four giant planets (5..8).
+    // Avoid scanning the other nineteen bodies for every fragment.
+    for(int j=5;j<=8;j++){
         if(j>=uCount)break;
-        if((candidates&(1u<<uint(j)))==0u)continue;
-        if(uAppearance[j].w<=0.0)continue;
         vec3 axis=uAxes[j];
         float den=dot(rd,axis);if(abs(den)<.00001)continue;
         float t=dot(uBodies[j].xyz,axis)/den;
@@ -477,9 +476,12 @@ void main(){
         }
     }
     if(uAtmosphereEnabled==1){
-        for(int j=0;j<MAX_BODIES;j++){
-            if(j>=uCount)break;
-            if((candidates&(1u<<uint(j)))==0u)continue;
+        // Only these catalogue entries have a non-zero global scattering
+        // volume. The ids are validated by SolarOptimizationChecks.
+        const int atmosphereIds[11]=int[11](0,2,3,4,5,6,7,8,10,14,16);
+        for(int k=0;k<11;k++){
+            int j=atmosphereIds[k];
+            if(j>=uCount)continue;
             // Entry resolves the local medium; distant bodies keep their
             // orbital shading without paying for another local ray march.
             if(uEntry.w>.5&&!entering(j))continue;
