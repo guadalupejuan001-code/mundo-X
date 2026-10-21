@@ -330,6 +330,14 @@ static void print_program_result(const mundo_x::XasmRunResult& result,
               << " scene_objects=" << result.scene_objects
               << " scene_logical_rule_bytes=" << result.scene_rule_bytes << "\n";
   }
+  if (result.render_width) {
+    std::cout << "render_instructions=" << result.render_instructions
+              << " render_size=" << result.render_width << "x" << result.render_height
+              << " render_bodies=" << result.render_bodies
+              << " render_candidate_tests=" << result.render_candidate_tests
+              << " render_brute_tests=" << result.render_brute_tests
+              << " render_hash=" << result.render_hash << "\n";
+  }
 }
 
 static int run_program(const std::string& path, bool scene_stdout = false) {
