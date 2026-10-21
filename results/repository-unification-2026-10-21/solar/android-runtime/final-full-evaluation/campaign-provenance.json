@@ -1,0 +1,50 @@
+{
+  "recorded_utc": "2026-10-21T01:25:32.516207+00:00",
+  "source_context_commit_at_start": "5e8df8f9b1c77ced0e233eaeaf944554db7b37d5",
+  "source_hashes": {
+    "solar-android/app/src/main/assets/shaders/solar.frag": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+    "solar-android/tests/fixtures/solar-defined-reference.frag": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+    "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c",
+    "solar-android/app/src/androidTest/java/com/mundox/solar/SolarPerformanceChecks.java": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809",
+    "tools/solar_performance_android.py": "ce4719a28177747e180691acf85cf41de2a4a7eb655ee56b6b479af83720d885"
+  },
+  "reference_origin": "af0b1797573b55a739dcaef7b784eb98825ff07c plus frozen defined filtering, numeric guards, full-body evaluation; exact patch recorded separately",
+  "production_app_reused_without_rebuild": true,
+  "apks": {
+    "before": {
+      "app_apk": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-full-evaluation/before/debug/app-debug.apk",
+      "app_apk_sha256": "b92745aad2803b7690d83ae8ff90051d752822cb833e999f43570d12dfd0b81e",
+      "test_apk": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-full-evaluation/before/androidTest/debug/app-debug-androidTest.apk",
+      "test_apk_sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862"
+    },
+    "after": {
+      "app_apk": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-full-evaluation/after/debug/app-debug.apk",
+      "app_apk_sha256": "a32e5de449e008d0552633f714999eefd46b0e5f8576024edd89eb2037a1730e",
+      "test_apk": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-full-evaluation/after/androidTest/debug/app-debug-androidTest.apk",
+      "test_apk_sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862"
+    }
+  },
+  "baseline_build_manifest_sha256": "c9143c0c09e7844b3d1f6405498964b13bb9405350313fc3635d33a46c4f8863",
+  "scope": "Android API29 default x86_64, TCG, declared ThreadCount=1 software GLES, 2048 MB guest; no phone performance claim; ART speed requested, coverage not assumed",
+  "previous_failed_campaign": "../runner.json",
+  "host_justification": "../odd-height-diagnostic/full-evaluation-vs-candidate.json",
+  "parameters": {
+    "system_image": "system-images;android-29;default;x86_64",
+    "boot_seconds": 300,
+    "test_seconds_per_version": 600,
+    "no_accel": true,
+    "aot_requested": true,
+    "swiftshader_threads": 1,
+    "display_setup_command_timeout_seconds": 120
+  },
+  "published_source_commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+  "published_source_hashes_match": true,
+  "local_runner_override": {
+    "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/solar_performance_android_tcg.py",
+    "sha256": "b0e091ca73ee7f43ba9846d1ee461e06ca798ffef4acde376ebe078216081684",
+    "published_runner_sha256": "ce4719a28177747e180691acf85cf41de2a4a7eb655ee56b6b479af83720d885",
+    "change": "Display preparation commands have a120s deadline instead of30s, after input keyevent82 timed out during cold TCG setup. All boot/test budgets and exactness gates unchanged.",
+    "evidence": "attempt-display-timeout/runner.json",
+    "patch": "tcg-display-deadline.patch"
+  }
+}

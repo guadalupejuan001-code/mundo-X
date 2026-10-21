@@ -1,0 +1,123 @@
+{
+  "source_commit": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+  "workflow_run": 39529818861,
+  "job": 118992887821,
+  "report_origin": "Unmodified JSON report extracted from successful Actions job stdout; full artifact ID12314104812",
+  "status": "passed",
+  "exact_capture_matches": 8,
+  "pixels": 584640,
+  "pixel_tolerance": 0,
+  "driver_config_read_observed": true,
+  "swiftshader_threads": 1,
+  "system_image": "system-images;android-35;google_apis;x86_64",
+  "apk_hashes": {
+    "before": {
+      "app-debug.apk": "ab01ec852bc18e074ac544365bed9c8350b134391d2b6cf347f530e6dea8364e",
+      "app-debug-androidTest.apk": "93aee29711f7f4aa51b0cdacf3f56406e9861d511949c981caf19b550ba4ff39"
+    },
+    "after": {
+      "app-debug.apk": "f20b02fe0190c755df80031c5a8fb16dade18daa906ac581465fbbb19ef0f560",
+      "app-debug-androidTest.apk": "93aee29711f7f4aa51b0cdacf3f56406e9861d511949c981caf19b550ba4ff39"
+    }
+  },
+  "cases": [
+    {
+      "case": 0,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    },
+    {
+      "case": 1,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    },
+    {
+      "case": 2,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    },
+    {
+      "case": 3,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    },
+    {
+      "case": 4,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    },
+    {
+      "case": 5,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    },
+    {
+      "case": 6,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    },
+    {
+      "case": 7,
+      "pixels": 73080,
+      "width": 360,
+      "height": 203,
+      "rgba_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "reference_repeat_exact": true,
+      "candidate_repeat_exact": true,
+      "equal": true,
+      "input_fields": 29,
+      "inputs_equal": true
+    }
+  ],
+  "requested_ram_mib": 2048,
+  "memory_scope": "The runner requested 2048 MiB. This paired report did not measure guest MemTotal. Emulator versions may raise the requested memory; no effective 2 GiB VM or Android process cap is claimed."
+}

@@ -1,0 +1,4292 @@
+{
+  "schema_version": 2,
+  "verified_utc": "2026-10-21T01:57:20.075648+00:00",
+  "scope": "Read-only exact Git source and APK identity audit; no tests, builds, CI polls, staging, commits, source edits or remote mutations.",
+  "repository": "/workspace/scratch/d0e1d0a0e3a1/mundo-X",
+  "commits": {
+    "before": {
+      "commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+      "tree": "61d4d6ee6781d14719595b819086a4e4b3058b3e"
+    },
+    "final": {
+      "commit": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+      "tree": "fe01d54cb61b14c3f7326aafbe925b4b4d73a34c"
+    }
+  },
+  "previous_identity_manifest": {
+    "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/source-identity-history/final-source-identity-3954b000.json",
+    "sha256": "22edee1f275c9c25bccc3a9013d1a0cc8a5a2a1dd29068a573871b11fd359fcf",
+    "preserved_exactly": true,
+    "scope": "Historical 2be-to-3954 Solar / 5e-to-3954 all-modules identity; old candidate hashes are historical."
+  },
+  "method": {
+    "git_tree_inventory": "git ls-tree -r -z <commit>",
+    "content": "git cat-file --batch; full content SHA-256 for every recorded blob, including binary evidence",
+    "comparison": "Exact path/mode/kind/blob identity plus SHA-256; no whitespace normalization or tolerant comparison",
+    "module_coverage": "Whole module trees include tests/build files wherever listed; Solar production is app/src/main plus its four Gradle configuration files. All changed files elsewhere are listed separately.",
+    "apk": "Current file SHA-256 compared with original build-verification record; shader asset extracted from each archive; selected compiled production source hashes compared with final Git blobs."
+  },
+  "all_modules_3954b000_to_b9ec7452": {
+    "native_core_including_tests": {
+      "scope": {
+        "prefixes": [
+          "native/",
+          "src/"
+        ],
+        "files": [
+          "CMakeLists.txt",
+          "requirements.txt"
+        ]
+      },
+      "includes_tests_where_present": true,
+      "file_count_before": 82,
+      "file_count_after": 82,
+      "identical": true,
+      "changed_paths": [],
+      "before_manifest_sha256": "b109383918a5a058662ef31aa47def03084985471182b1e47b7a5fc5ca158c56",
+      "after_manifest_sha256": "b109383918a5a058662ef31aa47def03084985471182b1e47b7a5fc5ca158c56"
+    },
+    "graphics_android_and_desktop_including_tests": {
+      "scope": {
+        "prefixes": [
+          "graphics-android/",
+          "graphics-desktop/"
+        ],
+        "files": []
+      },
+      "includes_tests_where_present": true,
+      "file_count_before": 62,
+      "file_count_after": 62,
+      "identical": true,
+      "changed_paths": [],
+      "before_manifest_sha256": "26403fda7c76f4723bb465bfe95c7d5abe6fe8e53eeea797f8ebbe3c5d26d101",
+      "after_manifest_sha256": "26403fda7c76f4723bb465bfe95c7d5abe6fe8e53eeea797f8ebbe3c5d26d101"
+    },
+    "pc_including_native_and_tests": {
+      "scope": {
+        "prefixes": [
+          "pc-android/"
+        ],
+        "files": []
+      },
+      "includes_tests_where_present": true,
+      "file_count_before": 44,
+      "file_count_after": 44,
+      "identical": true,
+      "changed_paths": [],
+      "before_manifest_sha256": "6c8aa0d944cc93aa82bccffc5e347cbfb9380b7c093f2917d162e219a55ded5f",
+      "after_manifest_sha256": "6c8aa0d944cc93aa82bccffc5e347cbfb9380b7c093f2917d162e219a55ded5f"
+    },
+    "xlab_including_android_experiments_and_tests": {
+      "scope": {
+        "prefixes": [
+          "app/",
+          "android-experiments/"
+        ],
+        "files": [
+          "build.gradle",
+          "settings.gradle",
+          "gradle.properties"
+        ]
+      },
+      "includes_tests_where_present": true,
+      "file_count_before": 47,
+      "file_count_after": 47,
+      "identical": true,
+      "changed_paths": [],
+      "before_manifest_sha256": "e473301dd27286bcc73e923401be8a48d1d2808264a4f114d0b0fd5cc837c2a5",
+      "after_manifest_sha256": "e473301dd27286bcc73e923401be8a48d1d2808264a4f114d0b0fd5cc837c2a5"
+    },
+    "cosmic_including_tests": {
+      "scope": {
+        "prefixes": [
+          "cosmic-android/"
+        ],
+        "files": []
+      },
+      "includes_tests_where_present": true,
+      "file_count_before": 17,
+      "file_count_after": 17,
+      "identical": true,
+      "changed_paths": [],
+      "before_manifest_sha256": "4b3767ca5ea132e3052d1813efc9697b3a3d7b9cd71a9599913dd95b30f37d5f",
+      "after_manifest_sha256": "4b3767ca5ea132e3052d1813efc9697b3a3d7b9cd71a9599913dd95b30f37d5f"
+    },
+    "solar_production_and_build_configuration": {
+      "scope": {
+        "prefixes": [
+          "solar-android/app/src/main/"
+        ],
+        "files": [
+          "solar-android/app/build.gradle",
+          "solar-android/build.gradle",
+          "solar-android/settings.gradle",
+          "solar-android/gradle.properties"
+        ]
+      },
+      "includes_tests_where_present": true,
+      "file_count_before": 26,
+      "file_count_after": 26,
+      "identical": false,
+      "changed_paths": [
+        "solar-android/app/src/main/assets/shaders/solar.frag",
+        "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java"
+      ],
+      "before_manifest_sha256": "e82bc4aa7bece993de82dc242fc8cf126df988d58de2401bbba48b5630c61424",
+      "after_manifest_sha256": "a17807282b1cf06ee8d128565a12891787830ce57e6bc6a467c926d950ca1926"
+    },
+    "additional_experiments_examples_and_tests": {
+      "scope": {
+        "prefixes": [
+          "experiments/",
+          "examples/",
+          "tests/"
+        ],
+        "files": [
+          "hello_mundo_x.py"
+        ]
+      },
+      "includes_tests_where_present": true,
+      "file_count_before": 36,
+      "file_count_after": 36,
+      "identical": true,
+      "changed_paths": [],
+      "before_manifest_sha256": "4c5d3541cacb1bd02225b1917e1deb120ab01fdc15e2ae7e48a280a58a5d901b",
+      "after_manifest_sha256": "4c5d3541cacb1bd02225b1917e1deb120ab01fdc15e2ae7e48a280a58a5d901b"
+    }
+  },
+  "scoped_file_count": 314,
+  "unchanged_non_solar_file_count": 288,
+  "all_non_solar_scopes_identical": true,
+  "all_changed_files_3954b000_to_b9ec7452": [
+    {
+      "path": ".github/workflows/solar-performance.yml",
+      "change": "modified",
+      "classification": "solar_validation_workflow",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "21b31ee63e1e22d7fe783a8230d3e9d2542ce9cf",
+        "sha256": "54f7a85f32b044101cf9a892f356ab9aae9a31211d48ba26620af57d6af2c8ff",
+        "bytes": 5011
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "b306559978c54bda8f98e950c8ae21e593a2c461",
+        "sha256": "f4a9e8ea3300627157ea3f5e00dad973fbe0ce46587d7933751fed75f9a215c5",
+        "bytes": 5370
+      }
+    },
+    {
+      "path": "docs/repository-unification-2026-10-21.md",
+      "change": "modified",
+      "classification": "documentation",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "f5d6c94c10ef7c90d30a48c88f75554368881b85",
+        "sha256": "25d8a781badd1bee8a1bab5b073ed0cfe83d4a87561646d9ff2136dd5ea83556",
+        "bytes": 19632
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "01cee02fd400a68031a54e39a117acdb8a760614",
+        "sha256": "5cc87beb4e5f4c3a73a7c7759d36e6cd6247ef8d33928d0e8c34255a11a7618e",
+        "bytes": 22319
+      }
+    },
+    {
+      "path": "docs/solar-shader-determinism-2026-10-21.md",
+      "change": "modified",
+      "classification": "documentation",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "82e58b5096b52f4db9b11451f9ce23eb8b62d535",
+        "sha256": "60c5abf1acb163c945a7b0d5eac3074d8b280d577358d845dddb9974ca3fa52a",
+        "bytes": 18506
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "ed0ccb0364963bda5c72b1930ab8c905489ba5fc",
+        "sha256": "f928d406acb40310ecf4a5fe52eb366547d235d06dd9b485f84262b8bf97792d",
+        "bytes": 21479
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-4k-foreign-anr/analysis.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "287a47b54bd84ff4f80600bde401ed3f7734ffad",
+        "sha256": "135b740ab24b47b047d0040e01c85e1525872f88d8e24fabecbd58cde91f8645",
+        "bytes": 1618
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-4k-foreign-anr/failure-background_resume_preserves_state.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "61f62a938135b472ec444bf7a7176e867123014e",
+        "sha256": "128ce05e015ed683c42889d8175cc0fbd8c120327d7e3cebc1519dc6a0b01f3a",
+        "bytes": 265397
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-4k-foreign-anr/failure-map_ui_planet_and_moon_selection.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "b8743c0ae13e52d62c278110a06ddcb48cfc4c53",
+        "sha256": "a196cac4756bd9539ad6bd4012c87116b6cb8c7a284e63f5639ffcab4f4da83f",
+        "bytes": 138561
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-4k-foreign-anr/failure-recreation_and_orientation_preserve_state.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "2642d4e33e67765fc184ea65e02db153de43b307",
+        "sha256": "b12a04c6d50a3dcefaabf327803c79c1ea9d0090cad1276f9444425d5cbfa0ce",
+        "bytes": 270242
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-4k-foreign-anr/logcat-focus-excerpts.txt",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "bcbdc5069cd1b0999c4013493687632b644f98b3",
+        "sha256": "65009e300b4f7ce553e0836a5bd0b8edfad5507819f2fcff28ff9a46430de2d4",
+        "bytes": 11654
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-artifact-transport/ci-excerpt.log",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "5faaf348b6f76a696ef1eb58e8ffc3c0af3baba4",
+        "sha256": "ab3f474f72d80afcf61edfaab8a66f04d8e00baf669bca60fee189f70fcb76c8",
+        "bytes": 1264
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-artifact-transport/collector-verification.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "410c6585161642112e35cc3033928a8aa8e28994",
+        "sha256": "fc9f43804b2defd7535271c240bb520be330cf2a05ff4da7236b394b9c315a6b",
+        "bytes": 2619
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/ci/solar-artifact-transport/failure-analysis.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "87f7c4ec081e6bfd8c743f0422f07fae0d8cd23a",
+        "sha256": "8134fba1c8ba1ae2525b05ebddb0796e5d844471a2ca06936db143ef3417f24d",
+        "bytes": 2811
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/defined-reference.json",
+      "change": "modified",
+      "classification": "evidence",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "81068ca231dbff3a111d8b4780722c5c7e4871a2",
+        "sha256": "965d747b6c7760844ee1a7420d8fd992a67881c5b75a2b18bdbb92cf628920fa",
+        "bytes": 1717
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "4ce2bd2a83f42b55faeb9fa3eafd16ecee1317fa",
+        "sha256": "969b7a4c1cd2ff8ee2fdec8a76cf2c96ef6801621675a3a745db4f2620aefb3e",
+        "bytes": 2194
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-after-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-after-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-after-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-after-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-after-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-before-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-before-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-before-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-before-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene01-before-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-after-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "4c64959a0a4495f107c4fa9efda27315a9f6b35f",
+        "sha256": "fc5c2d58bf5ada016af40c94ffcc0cc2c031858337b12ece966c7232e269389d",
+        "bytes": 23827
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-after-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-after-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-after-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-after-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-before-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-before-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-before-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-before-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate-captures/scene02-before-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-candidate.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "6f5909b180823988cb2e9249ecec3433e3fdc4fb",
+        "sha256": "02527622794782b6ad1e4be1721cc056c54d2485bed4dd57d61fbe2346e3f9a6",
+        "bytes": 3340
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-comparison.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "339a2f2c02c84dad6c9bfe0724c5ad70b8c8fb61",
+        "sha256": "6840b5fec0fd727e634c7cf7a2285493f163d053f35b9b524061c3c32add4a3c",
+        "bytes": 2092
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-after-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-after-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-after-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-after-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-after-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-before-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-before-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-before-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-before-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene01-before-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "1ba49cffc39bff2f2aabc9cec5769e6183c3c1a7",
+        "sha256": "994ce67202f25362a8e7741ec213f2dcd835ecadce04b6706a17c04042973eff",
+        "bytes": 21057
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-after-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "4c64959a0a4495f107c4fa9efda27315a9f6b35f",
+        "sha256": "fc5c2d58bf5ada016af40c94ffcc0cc2c031858337b12ece966c7232e269389d",
+        "bytes": 23827
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-after-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-after-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-after-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-after-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-before-0.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-before-1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-before-2.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-before-3.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference-captures/scene02-before-warmup1.png",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "77721798ce824f0395344260d99585eab563022a",
+        "sha256": "e651b455ab2f37aad0aeba1160d13b73427e06f1d4d15d9b12c541d4102e6ed7",
+        "bytes": 23836
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/cases12-full-reference.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "b713ecbb2df69b88eca78023e6f339ce1bc40545",
+        "sha256": "dcbc40936f085050fe47c6682d8f4c42b8bb0b31688b17fb5aee127284b1aeef",
+        "bytes": 3347
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/mesa32.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "474a5b9016f6760f1625a86f3a9c41070afe62b3",
+        "sha256": "69b02c8ec7f7c35c05347fcf51f710f99ccef5ee7687d342aa041d06e1bf6b30",
+        "bytes": 27044
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/pixel-eligibility.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "e8779cc470e324575f73a4f6dfb7f70a20908318",
+        "sha256": "3804dbde6e3bc29546c287194037074cfa9c27da0cb3926fc8bddaf26b5d364e",
+        "bytes": 10588
+      }
+    },
+    {
+      "path": "results/repository-unification-2026-10-21/solar/full-evaluation-fallback/reproduction.json",
+      "change": "added",
+      "classification": "evidence",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "332cdc76d03dcb6be5c54b0697568fed7ee842fd",
+        "sha256": "b67a9943fbc4c088020663e690c7d86c12965731d8976f99d178f913b4fc82f3",
+        "bytes": 11761
+      }
+    },
+    {
+      "path": "solar-android/app/src/main/assets/shaders/solar.frag",
+      "change": "modified",
+      "classification": "solar_production_fallback",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "46dc7c15e71c2950fcc83de6fa8f99ee86f06762",
+        "sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+        "bytes": 25346
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "ce0758ae9aa43612047058fbee995b4206a337a4",
+        "sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+        "bytes": 25206
+      }
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+      "change": "modified",
+      "classification": "solar_production_fallback",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "5539f383ccd5703c788f29a51d675957627bad32",
+        "sha256": "2ad900613108fa223be7fea46b10ef1daf7e40f33da63a830b995d1754969e2e",
+        "bytes": 64866
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "6733f56e785f373886f00006c1a582da688283ae",
+        "sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+        "bytes": 64805
+      }
+    },
+    {
+      "path": "solar-android/tests/fixtures/solar-android-cases-1-2.json",
+      "change": "added",
+      "classification": "exact_input_fixture",
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "2a3bfe5947debeafca25aeee08f6ee6f70ac839c",
+        "sha256": "7ff9aaf2f146ca0342467fecdf46df997be248d18c1a3b4d7800185e28072987",
+        "bytes": 18319
+      }
+    },
+    {
+      "path": "tools/solar-emulator-test.sh",
+      "change": "modified",
+      "classification": "solar_test_runner",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "f1e3c645403878266755f1d539ec70b4c3bdf1fe",
+        "sha256": "0c860035e74890f24602f1419cefbc0af99d6802812d7fd7ad4266d6f74638bc",
+        "bytes": 7624
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "a90f53d6fed379ba53001e580f4de619d440d594",
+        "sha256": "4ce428b5cdac98ab0802eba69bcbd7a765abf86aee1c458a031ce9f4ea95c084",
+        "bytes": 10294
+      }
+    }
+  ],
+  "change_category_counts": {
+    "solar_validation_workflow": 1,
+    "documentation": 2,
+    "evidence": 55,
+    "solar_production_fallback": 2,
+    "exact_input_fixture": 1,
+    "solar_test_runner": 1
+  },
+  "changed_files_count": 62,
+  "unexpected_changed_paths": [],
+  "final_scoped_file_manifest": {
+    "CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "eb8dafbf689034f62b7b6324331a6ebcae071647",
+      "sha256": "b3a9f9d39b364ea451559b68b5148c6cd72f1f83f2d6dc6b719b86ce07c9c3c6",
+      "bytes": 11756
+    },
+    "android-experiments/CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "28857843d6fa39f96964d2b2afc724b292e2c0ba",
+      "sha256": "a078c717687674b42f86a6290ebbb5f8b35aff21621ba9d8c13cd16fe41da994",
+      "bytes": 806
+    },
+    "android-experiments/PROVENANCE.json": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f3b6afa181c1f6ce375d4f9c79b4d76d19bbfb30",
+      "sha256": "e730943fb0824fce518734ce6205ff7361c43b805c32d7adbbdf8c1449a072ac",
+      "bytes": 4869
+    },
+    "android-experiments/README.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c9ca9d562416683934778d363f70faab87b49891",
+      "sha256": "08b56082c9d226d9dabccff53777b272341aa657b4f86f9b7161953c05808d2a",
+      "bytes": 2692
+    },
+    "android-experiments/java/com/mundox/echoes/MainActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7e770452a50b5b9435d629e5ee1fa689988b559a",
+      "sha256": "2fd7b629620c4255cc77ea474bf3ee952aa36a01ac8874f80b1c3eba3415bc26",
+      "bytes": 37159
+    },
+    "android-experiments/java/com/mundox/lab/BasisVmActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "05a4066af5e88b17be5d683d8a1868b1350d887c",
+      "sha256": "ba1d75d1be06b5f59505997c192ce2ccdb5ee5c28821a7fbfbc9b3907454310a",
+      "bytes": 29618
+    },
+    "android-experiments/java/com/mundox/lab/BasisVmNative.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ee766a2375321198d2b0523634a5bce84d153874",
+      "sha256": "7205dec79ad6c13141993ee4841b2bc618bbacde728eaef7ee1bede596fc3a6f",
+      "bytes": 398
+    },
+    "android-experiments/native/include/mundo_x/basis_vm.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "39725bffcb22a750d3e5df6c303f2ba456d9a717",
+      "sha256": "040f6b0bcc8cd01f702a5aa854a61816fb089d6e6508fa74466712df55c7fd35",
+      "bytes": 23422
+    },
+    "android-experiments/native/include/mundo_x/quantum_echo.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "cb7678ac032638455333e435837b4921ca4e87f7",
+      "sha256": "3979fbad1973f31760d7421180f9c35badb6ae0c9b1469fc52d07c6a82e04776",
+      "bytes": 24534
+    },
+    "android-experiments/native/tests/basis_vm_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d83320cf1678f94b33c4cd6bf614d736f26e7fbe",
+      "sha256": "c48ac5ce72a2ede91bfa690f05aa0b2a8934604ff4825bbe89793a088663006f",
+      "bytes": 9924
+    },
+    "android-experiments/native/tests/quantum_echo_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9c157b8eb052e667884b5a9de17469d94798a98b",
+      "sha256": "43b06c8fe3c541d0c95c57d1b24859370d2cfe0f76813dce921912d4f480e8b5",
+      "bytes": 7290
+    },
+    "android-experiments/native/tests/sparse_observable_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9a045b1950cbc05e6b9dfd7846b865d01b5e4e53",
+      "sha256": "d89dbff3d04b127632c470469fa94561cd6ddac582645b9c7f17bacd7776666e",
+      "bytes": 11081
+    },
+    "android-experiments/src/main/cpp/basis-vm-jni.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "09a1a12d7e59269e1cffe8d11c01137fd9ea523f",
+      "sha256": "5104984d5154551dd84c3fcfacfacd41bf32b4440ba39095ebd745a5a2109cca",
+      "bytes": 1833
+    },
+    "android-experiments/src/main/cpp/native-echo.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9fda5fef3ba4814f79aabc99ec086baa9cb2c389",
+      "sha256": "38032e861ab23cf92e6d80d26a7b09129bcb6c86cbf9231c8d82284e4ea7443d",
+      "bytes": 2833
+    },
+    "app/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "1d0f6196f23f89d46ace0861bfc0d9155a83bfb4",
+      "sha256": "9da2cb43bfe917bae692a4102bf9dbcc64b1b6bcf3884e885e80054540b5dfff",
+      "bytes": 2525
+    },
+    "app/src/androidTest/java/com/mundox/lab/MicroLabInstrumentation.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "afa5ea2c29471552db4df3f52e6c3a7cb3870bc3",
+      "sha256": "3be3d732fbe67479fbd03f4f388e3b333ed249b3664009e8a193388ea5fc019c",
+      "bytes": 10038
+    },
+    "app/src/androidTest/java/com/mundox/lab/XLabInstrumentation.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c891cb52cb8fdcde9e9e083e19f38c1ee9fbbbcf",
+      "sha256": "82bdfd0c6c140781e999b23fa3ac6526f93f94759ba27b82f992e9dd1b26e6d9",
+      "bytes": 75092
+    },
+    "app/src/main/AndroidManifest.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "22a0f362f84e753a9c4034839b4a72d16aea82ee",
+      "sha256": "999ab44159d30e12f89df1dc487fe933ae730eecd8cebac13a4e0a4b0e2a3a98",
+      "bytes": 2754
+    },
+    "app/src/main/cpp/CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9e7d2edc76bedbcbb9cec75b712283b1df2c2aa3",
+      "sha256": "591484bb75465840c8e7ab8123f23df73b0b000906b820afe2e2b24388a68c3e",
+      "bytes": 459
+    },
+    "app/src/main/cpp/lab-jni.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "459d5dd457920965ee7cb4f1b135bbc12b3c5f90",
+      "sha256": "f1c2464b4ceaf62c2b590ad702edb34e434869478a4fafbbaf575738289289d8",
+      "bytes": 3135
+    },
+    "app/src/main/cpp/micro-jni.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ea8b90810f98b74a80285e2efb2fa3963a198cec",
+      "sha256": "c27c73548b7123a10e50a899a790d01fb940a17fc8ccdd6f4f075d5a23dada3a",
+      "bytes": 4029
+    },
+    "app/src/main/cpp/native-lib.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e52e301cfc84a8539015b83076dfb092179fc553",
+      "sha256": "e8c17c317c69a528d22e1f24211c4e91f321f496358d378421d67cd5ee9620fd",
+      "bytes": 14496
+    },
+    "app/src/main/java/com/mundox/lab/DeviceLauncherActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "daef99712228d260ebb4c51e858fe09772ce9f4f",
+      "sha256": "7a64bf6775a0aaa380216cf1f6389607a7d75c33e32465cfd96c44045e65542f",
+      "bytes": 11730
+    },
+    "app/src/main/java/com/mundox/lab/GpuVisualActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f585a2cc207a55bb193c31a688d5d630965d8462",
+      "sha256": "1fde547740dc6f82fd7fc7dfd2560dcdd98479e6938d96c214a33305991ff439",
+      "bytes": 15089
+    },
+    "app/src/main/java/com/mundox/lab/InternetSyncActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "33be159ddf942750086bdd99f8be20f9f2179f7e",
+      "sha256": "e6a3c0ad670bb220647b8baf2d7e35317fa9529b2e05690e24aa8b06b23da57b",
+      "bytes": 14082
+    },
+    "app/src/main/java/com/mundox/lab/LabPlotView.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "004bcbba0a1937707e4a8427b66d36724a658a49",
+      "sha256": "c81ae90ce507ef21f88b1c2d506bfe9372d06b47feb595031a95e78de885aa5f",
+      "bytes": 17071
+    },
+    "app/src/main/java/com/mundox/lab/MainActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5dff224262fca6c3c06c32a59d88780ab6998731",
+      "sha256": "eb9b7bb1c568f69a8c9372213d77918106761f15405f936d82d1e25d922416b5",
+      "bytes": 16842
+    },
+    "app/src/main/java/com/mundox/lab/MicroLabActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4418a8c34a694e5c81f5329538f920750130d77a",
+      "sha256": "a71dd0b9be93e5737bd2239251f51d6205fdaff4bbe5f449707ebb3ce083f045",
+      "bytes": 17942
+    },
+    "app/src/main/java/com/mundox/lab/MicroLabRenderer.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ae7f31890e5156ab5838baccd4183b3496b4f6aa",
+      "sha256": "6248488e70887c73b4cf60e74d5241c8c4f34ba6dadd42b732521ca79a92f3eb",
+      "bytes": 9467
+    },
+    "app/src/main/java/com/mundox/lab/MicroStateView.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2ffb536018d3f7ed4df96be082989e10ba7c639c",
+      "sha256": "25436e52f4db6e52e2e53d1d566ff884218dcb6bc8d930dbc87855bddf25d422",
+      "bytes": 3273
+    },
+    "app/src/main/java/com/mundox/lab/NativeCore.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2cc34f9eeca8830cc7c87ad6d372b6309a2cdcb4",
+      "sha256": "3ef7b5503461aa0627f10dc93717bdda29938a60770bffaf82abaab57892fb02",
+      "bytes": 1551
+    },
+    "app/src/main/java/com/mundox/lab/ObjectDrawPlan.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "776eff4b4fbe2aaedeebbd482887d5bf943384ec",
+      "sha256": "2b7e2a1994e13478764fae43321d832c72b18b5ae2e2e6251ceb64053abb7e12",
+      "bytes": 8300
+    },
+    "app/src/main/java/com/mundox/lab/ObjectDrawPlanChecks.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "160505079e22d939420428192e1474dfb731913f",
+      "sha256": "e40bc084f8103ac2ac59a5c2ff0008c274aff05a12b3cc8bc98228672e3a1106",
+      "bytes": 14912
+    },
+    "app/src/main/java/com/mundox/lab/ObjectLabActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "34789cf4b9b810097c7cc35ee0c610d28101d2f3",
+      "sha256": "0378105c7165cb5daa332565e5469ef1f2ff67e39a229ab568a3e8cb46a7987e",
+      "bytes": 40013
+    },
+    "app/src/main/java/com/mundox/lab/ObjectSceneModel.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4115641d412bedb63b1ee83a5c457e29121fcfb9",
+      "sha256": "b9ccf5ef9ab1eb6b9df219c3cf8e8bd9194507b934a4871709ebe4fc607fd961",
+      "bytes": 12569
+    },
+    "app/src/main/java/com/mundox/lab/ObjectSceneModelChecks.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "40bd7010146daca27b7ef1cbc2354d8e54d95b1f",
+      "sha256": "a66a6dfae51efca79e2b8c8b66481375bef0c8c4d2a6f271e4500a4bded72a0a",
+      "bytes": 13922
+    },
+    "app/src/main/java/com/mundox/lab/ObjectSceneRenderer.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7447bb61408b78200ce7173abf90015c8eb57c57",
+      "sha256": "0cc9f37f02f6ee48e08841ac8e114241d358659ee6fa9701829484ba103a872c",
+      "bytes": 69635
+    },
+    "app/src/main/java/com/mundox/lab/PerformanceLauncherActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "df11b913ca24ca530c52fcf05524171a10490b8a",
+      "sha256": "365fa169aeef16eeb4e6f892679ddb59698a024852729a4d55ecfb2394f2cedc",
+      "bytes": 12182
+    },
+    "app/src/main/java/com/mundox/lab/ProceduralGameDemoActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4e0e180e0574b30f1d936b6b42a9788966b5a55f",
+      "sha256": "7b8228ab4b9052ba96985b6d437e0901b036437848b0b6f7db62771c3a258682",
+      "bytes": 33532
+    },
+    "app/src/main/java/com/mundox/lab/QuantumInterfaceActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6a4dc310fd0d106d1ba5139940400b5b0f588553",
+      "sha256": "1d94bf78b561063f177606f7786fdd86cde4f4918c1ba01e0026b168a315bf17",
+      "bytes": 11801
+    },
+    "app/src/main/java/com/mundox/lab/SyncedGpuActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a284a0c77486898162f9483b0e89232d056a5c3c",
+      "sha256": "43a035f22c9f0757983c3f7c4e379bed999e919766f977360a1661753c339d14",
+      "bytes": 24628
+    },
+    "app/src/main/java/com/mundox/lab/VisualExperimentActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "582e0c46492749c2e6a1e1df508e9fef0f2c9b51",
+      "sha256": "aba90ae1891bea1fe78a1c1d8106f9e0d0636b87346d1a6a29093f7e1a30adf6",
+      "bytes": 16323
+    },
+    "app/src/main/java/com/mundox/lab/XLabActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "80b8abc027cb59bb185c8bcf0c331dcc070a55ad",
+      "sha256": "4da5adf551fa11b6fa0cd1c526a7adb82a7bbf439c8cc71426b4a65e74a7721b",
+      "bytes": 56470
+    },
+    "app/src/main/res/drawable/ic_xlab.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "254e69360910ae4d81e2aaca196de1f7efe654b4",
+      "sha256": "aff81dfbca97004b2bcb0c50689f1381892ccc54f6f9f94dc1c05a467505d8ec",
+      "bytes": 480
+    },
+    "app/src/main/res/values/styles.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "22f30c3992264f7be182cde53487bb171d0e1691",
+      "sha256": "c32f7a8dd4627488d4ef7c336b2a2a3d6cd3ef537fbdfd181e9d9c76801c3fdc",
+      "bytes": 544
+    },
+    "build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5b7ccba7c566afb5057eaea1b10b99b083851fe4",
+      "sha256": "c3c0cf04da0fc239f391c774554d97d890018ab6e37e87cc62f6070d0c8c9909",
+      "bytes": 73
+    },
+    "cosmic-android/.gitignore": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "72bf7393adc1dad2fe6ed3d43b9d1ca0222a620f",
+      "sha256": "9f4044a44b27bc6da4f5b205211536a5ef5a64da7f1e954e190e3b067cc55b60",
+      "bytes": 45
+    },
+    "cosmic-android/README.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "526501fc7281fd91427a9e36b8afe0f2cb36f022",
+      "sha256": "7ee39c39bf221e80912a75474bc88dc992e9a95b494e62662824f74f7ef7dfb4",
+      "bytes": 5743
+    },
+    "cosmic-android/app/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b23ead1c71d2870bcad17ff7f459dcbe6b9bb29a",
+      "sha256": "45602ddc1f02bfa3da04c7e0f6318c6312fe3f0ab1a30c7faf6ead5996e003c3",
+      "bytes": 2424
+    },
+    "cosmic-android/app/src/androidTest/AndroidManifest.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d8294ee148501115cb13832a6ad0cdbf5f37608c",
+      "sha256": "bb357114a5daa70144dbc8bc953405211d0c1530de4848a94536201abe91f855",
+      "bytes": 971
+    },
+    "cosmic-android/app/src/androidTest/java/com/mundox/cosmic/CosmicInstrumentation.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5c0f393d157c3a58df6e17b3d9be8171cc685c23",
+      "sha256": "9fdade5941d7afe3eae2fb65496224cbb55c6358ea20842cd1f856a1f0ad23c5",
+      "bytes": 63775
+    },
+    "cosmic-android/app/src/androidTest/java/com/mundox/cosmic/ProjectEvidenceProvider.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2474de42936597a3e72be917eb301447618e4f93",
+      "sha256": "c310be41e47f419f578d92405fa47c22c0e106dec7c17b8118801ed3e71a7b19",
+      "bytes": 2912
+    },
+    "cosmic-android/app/src/main/AndroidManifest.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e8668c455cc54d6aa7b6b8b65297546551fbf17f",
+      "sha256": "5e36651eb60e62fabe5935100399eb717e588d7418e04586f45115457f61295b",
+      "bytes": 3064
+    },
+    "cosmic-android/app/src/main/cpp/CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c897e461fd24969faa9ae25ca0998258fff0f623",
+      "sha256": "89aaab6a3af87e1dd3a6e580a4c1d67ec648aef01e29b377f7440abd652ec5ee",
+      "bytes": 1126
+    },
+    "cosmic-android/app/src/main/java/com/mundox/cosmic/CoreSignalsView.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "dc9cbfa14e1b9b9cd58cdaea61fcc3c2299b4440",
+      "sha256": "0c7e6dce17794bc0651cf60986560e9e4cb4d9776ca0b9424c95cd4b1f58834c",
+      "bytes": 3500
+    },
+    "cosmic-android/app/src/main/java/com/mundox/cosmic/CosmicActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "09699354603f219760023ae3bc735fe4875c1d7e",
+      "sha256": "d3929c95db8112477b73c64e0f218bde04a3145d685045591c2d3e634bccdb28",
+      "bytes": 51904
+    },
+    "cosmic-android/app/src/main/java/com/mundox/cosmic/CosmicUi.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "23834ebb5d3198eb3bfae788e662ed5c8b725171",
+      "sha256": "cb0c125dcc6b231e69d0342007c81bb20785b5c9e979dbea5a2038d579c0b4c1",
+      "bytes": 6138
+    },
+    "cosmic-android/app/src/main/java/com/mundox/cosmic/Experiments.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "33082691044781d785b8caf5a50ed598c0f01df1",
+      "sha256": "cf3d5ec0555d3291f008031e1db89d871f81b57e36b2ee20513d30a542236291",
+      "bytes": 3176
+    },
+    "cosmic-android/app/src/main/res/drawable/ic_cosmic.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "82da2625ea6e4daab2fa5f2e47d0b22a53aafc2e",
+      "sha256": "03c5c7f4f6576aa14bdb894b1b327287f5e078b93f132d8947d95dd13c0d4555",
+      "bytes": 781
+    },
+    "cosmic-android/app/src/main/res/values/styles.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "69bc40f9ea996913636666b37ab56182dde7740e",
+      "sha256": "645458ccddfbd6f8bc50c8ffad8c137e1c04367e8829969db955c2a08c20e649",
+      "bytes": 611
+    },
+    "cosmic-android/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e5ce0d95c7f5f20385cd3f1bbfe77db777662d94",
+      "sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+      "bytes": 69
+    },
+    "cosmic-android/gradle.properties": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "041c145e712ff8d6c393c0b164ab41d72c526585",
+      "sha256": "10f39abfd08872d02895784fe98bd86653e465cbda1827168224c98535a97899",
+      "bytes": 107
+    },
+    "cosmic-android/settings.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6776d1d128f2e8a0966176e7f537b209f6e1158e",
+      "sha256": "bdc333875eb8ac9285071be23746861f829adeb9508141eaa37b45527b9f0445",
+      "bytes": 281
+    },
+    "examples/adder50.qx": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2370228aed88104a5777d4e8f3e753265ba8d248",
+      "sha256": "774891fe423890bfb821e0061a36d2d53a89e67aaf593facc7f277c31b5fe269",
+      "bytes": 27221
+    },
+    "examples/bell.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "49d666f09d408309c536c0e5f8ef0e23cecc96b4",
+      "sha256": "ca3cf50975332d24ff3a56d4cd2624793b83b26fbd252911604d4487f7013cb8",
+      "bytes": 80
+    },
+    "examples/clifford_t.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "0ac07069269a3feb699ff59dab89ad0e5b6e1f5c",
+      "sha256": "27eec490ba43672d481e1f6d5ca3604ab790ee69d2ce2467c7b7d4ede7b36709",
+      "bytes": 190
+    },
+    "examples/ether_fusion.xi": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "56c8f41cce0e443f71c1f761f8e7c0156de18260",
+      "sha256": "584c5a130b0eecaff59b05c7d47ddfdf24f9c80e0221bf495282cff5cb29435e",
+      "bytes": 419
+    },
+    "examples/ghz1000.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7dd731e6a4563a0a2ce2611a84c6460ec7e10aa0",
+      "sha256": "ba525ca0540d78cc992d7b0d43a1cb390aec50bbbcdc1864389c78f5f0c1fa9a",
+      "bytes": 11919
+    },
+    "examples/ghz4.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "bff911d676ea22b399241856de28479f7202b2b9",
+      "sha256": "755fd97b169d2d281a42621533eaf58deed30934c2d03121d2bf6e0795c9dfe0",
+      "bytes": 70
+    },
+    "examples/hello.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9e9f29a86fed8e2a39af9e3ae90e7f89e2948b3a",
+      "sha256": "ec6129fab70ef84290982cfc3dcb9c0c804d39fd48b3513f7453ebc4c024ef42",
+      "bytes": 67
+    },
+    "examples/infinite_bell.xi": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "461289e567f9745392c89ae71a16bbc53ba489e8",
+      "sha256": "744fe29bcf8fe1377e5dea3a531969ae2d768269db8b5c652abf107502e6d45c",
+      "bytes": 676
+    },
+    "examples/infinite_zero.xi": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "69d1b845ee80dc3cb0d2e416abca7fbf0475281c",
+      "sha256": "85b38dc1226bb9ae0b651da32c0c21b14021e1a311f734dc8438aa449725e4d7",
+      "bytes": 980
+    },
+    "examples/magic_t.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f8271537d736865cd649382e302396adfeea9e7d",
+      "sha256": "5052456f56e398fae4d54b9e602de505852a26d5e5bbbc9cf1ac9c10309ee8ca",
+      "bytes": 145
+    },
+    "examples/measurement_bell.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "bb5d1d1e5ff5bb6c7f990e1b8cd3c75b12977009",
+      "sha256": "ddc7c10249580264f7095ae4acc46e3662b94401ca759e7fec4806c931b52a91",
+      "bytes": 250
+    },
+    "examples/measurement_interference.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "cd96a62b77cebbb06363642663e51cc5d5739a3d",
+      "sha256": "9fb4a3c4db7472d5244687f131e24705ec8866956096e5e8b705cec9962c5718",
+      "bytes": 123
+    },
+    "examples/mx_bell.mx": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4c5d91cde6146f0368fa90adc1e2c29bc230ff76",
+      "sha256": "05eecb0e263a457968e5f6b94a77b259c0edc4b7c30d1c367211dc416d892e34",
+      "bytes": 194
+    },
+    "examples/mx_layers.mx": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e74e11dd4a60ca82525f48410ba8c19e39a17063",
+      "sha256": "24abd7115f8b6979e150c4b1a1d5dafb6f026810cc2c042bc8c2725e2521e36a",
+      "bytes": 406
+    },
+    "examples/mx_magic.mx": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "1fd04a9fb48b13e6bd17521ec3ca4734b37f5875",
+      "sha256": "5f05b253d455bedce6a3b88f35efa6783c8ad141a477e5d3ba985141a5661583",
+      "bytes": 136
+    },
+    "examples/t60.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8a01fdc8f76289e1ca3dfe5826718f2517c32fa1",
+      "sha256": "459edac594ebe89b71192eb5fc90de6d88d05bd7d25f3903e9db7543c9e9fea9",
+      "bytes": 901
+    },
+    "examples/visual_interference.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "852943c7a52d47bcd64fc1817cc2b7dded919740",
+      "sha256": "051d2f079375be4ff09f94e54ac094ff29dd53318c4d14f9667a166f736ee827",
+      "bytes": 424
+    },
+    "examples/visual_scene.x": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6aa98df025b165b44f7d7a8621ca32e3250a044e",
+      "sha256": "c5507dcd21e3b1088cbade21be845a2dcf951c57dd1c48967b341ed93b3bac84",
+      "bytes": 160
+    },
+    "experiments/quantum_interference_v0_1.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d53524fe8b570e34b0c0077efd1d44c191361d4d",
+      "sha256": "913a3d50168324730c86eea4f418805a777e01c877c11ec37e357971c671023c",
+      "bytes": 1256
+    },
+    "experiments/train_file_v0_1.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e8d09efa9b8b01f7628a2da53272f1ae405b4063",
+      "sha256": "fd765a0f6ad1c075c3d6981492d99c0c74de22262924d7cdde2d74a2de513e19",
+      "bytes": 3822
+    },
+    "gradle.properties": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ed2d02acdd57b96d06bba03e812cb4bb053be633",
+      "sha256": "cc38bc495ca4e4d7fa2fe7c9c1112f36af7a63fbf4fc3e7a088e215942403385",
+      "bytes": 110
+    },
+    "graphics-android/.gitignore": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "dae56405fa2731ae8264f9dc7e78373fd18f05d0",
+      "sha256": "1e0d606019b90948b3009a152fc6042a7ebbc49a63f3771e4adc9dea8252ca46",
+      "bytes": 42
+    },
+    "graphics-android/README.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8d3aa93b22843927a8c7605f5c57376b2443fbc5",
+      "sha256": "1f051a68a7f5a22755aab9fb5143d22a3d2fc1bd1596ccaa5edfd3c3e160789e",
+      "bytes": 13040
+    },
+    "graphics-android/app/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "50f4e606cac8a392ec62a60e6d34459c06d2a993",
+      "sha256": "dfef05f5ff22e0629ae50a8c6ad64b961f83c8bb697d0a079d743f645ed02d61",
+      "bytes": 1382
+    },
+    "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "332517bc8e6d01aac3a9ae33d67fd39c3ef1dd8d",
+      "sha256": "1bb0e31b550da8c8dbc3a862353e4cd587017cd0157a523f7f95ac3ba73f4bee",
+      "bytes": 140049
+    },
+    "graphics-android/app/src/androidTest/java/com/mundox/graphics/ProjectCodecChecks.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b9b5dc882b1081d27c1b2bb75cb47734971adbb1",
+      "sha256": "1858bea78863e42bb2b3b1ea2d5c0069bff78e9e3522381183e805e316fb0baf",
+      "bytes": 20323
+    },
+    "graphics-android/app/src/main/AndroidManifest.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ef4e0e2354db932ba3d454b695c4d4f7b7ccc1ef",
+      "sha256": "9e84f7aa7bbdaa6f45f7c82c54823959446d70bbaa7f49490efe1f044bd60f99",
+      "bytes": 732
+    },
+    "graphics-android/app/src/main/assets/projects/bell-observer.cosmic": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4b10b6514f182ffe81ba456453610730cad338e3",
+      "sha256": "06e11b8d3f56b3026f2d5ac0c5de772ffa23f8ef50342693da8f0d47b0adf39c",
+      "bytes": 976
+    },
+    "graphics-android/app/src/main/assets/projects/ghz-city.cosmic": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4b1c13a8fe807fcc212cf011264c9f3f386b3503",
+      "sha256": "29568921331416a7e25945e5ee4cb7510df0cf49a4343165a162885550e64208",
+      "bytes": 1047
+    },
+    "graphics-android/app/src/main/assets/projects/infinite-native-fixture.json": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d8483ea88af92cf6c7e50e1148119ef02726d34d",
+      "sha256": "bc38d6f8b766a0dfb72a1cd9b22c15db063a8fcd9e2caedf9de31a09f3e54a23",
+      "bytes": 12801
+    },
+    "graphics-android/app/src/main/assets/shaders/common.glsl": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "417302b81c6968be7e7c90ec5d8a45729f8c2427",
+      "sha256": "fbc6c19ff6b30452126512fd6b01a8c802ee162261220c0fca759f77eda9a92c",
+      "bytes": 8216
+    },
+    "graphics-android/app/src/main/assets/shaders/eye.frag": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "0de9cc9930f7362c6f04b09c825ff156ad7b01f9",
+      "sha256": "de1a2f17a0e922514f7e73a9afa2abf2f09349eb013be885d5c0cb7c3aa9cb7c",
+      "bytes": 22151
+    },
+    "graphics-android/app/src/main/assets/shaders/eye.vert": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8f365c081eebb5df295f6b5a22dc30e2cfb41d5c",
+      "sha256": "2697290515ef382c9b1fb7f444e3a10d40fce11413327210bd0e56e369093701",
+      "bytes": 145
+    },
+    "graphics-android/app/src/main/cpp/CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "49ca54e82a92e335c0fd43074238ff19f88e5e2f",
+      "sha256": "f4f66dbcd02dc7208bd4f2e5feb0faa21edaadba8ac25eff6279b78fe9f1002f",
+      "bytes": 590
+    },
+    "graphics-android/app/src/main/cpp/PROVENANCE.json": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "73ad00800cee73499fb8c69e734d62f360edfc08",
+      "sha256": "0b252065e142afc8a2ff4d218f2e94d1e98218cb9af5ae0108838cf69aa016fe",
+      "bytes": 4332
+    },
+    "graphics-android/app/src/main/cpp/graphics_jni.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5b06aa2a3a1b794c34ec2b94de8dd8fbc27ff8d4",
+      "sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+      "bytes": 13974
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/CosmicProject.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6c3d1b1740ecfa817ecb0c75c41dfc8f1848a8bb",
+      "sha256": "195ad1a89d0f46c796c59dea8bb94cc6f93f7a7f15b007d83ed74056bdc92e31",
+      "bytes": 28243
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/EditPages.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "719d81d3c80b120d3a3f950821229b2579c9385e",
+      "sha256": "66c82baa1d937d7bbcbe6251e80129c7334e47aea83e3e213f291a666ba17160",
+      "bytes": 2023
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "50493e93b17a153320a81cbec46dd0b695aef5a7",
+      "sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+      "bytes": 2963
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/FramePng.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a273536f1096434de59d327a4743f9be07eda888",
+      "sha256": "acd7138ca33dfb9360436903a9e385c85e95ffa3590e23fb2bf0b0c7d0a6b31f",
+      "bytes": 1997
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteControls.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "3fd54d46e7ca4d3435635f6a7a142e5f4ce489c2",
+      "sha256": "684b43b3fad45f714af13acc16a889b462f385875453cc0826a1e52f5166dea7",
+      "bytes": 8454
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7495980d73597d4cd35c46728d0ab7ea0f12fc5d",
+      "sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+      "bytes": 4298
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/MainActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "182666ad5942ebfe8447a781e8fe8bf605719b1f",
+      "sha256": "08861b5cb75d41ff0176afb83208eb1e31e09413b8a0d476e9ddce074fdea36a",
+      "bytes": 47702
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e3470ec3915fed8c47995ec0b31d35b1d772999f",
+      "sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+      "bytes": 13249
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d650a5d97e0800d3b10460aa7cb346b08130c630",
+      "sha256": "dae0db33c3a03849a9a81e1201ec4d2fee2c0fdc7240258743d0b4696c703bfe",
+      "bytes": 57390
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "988ef3ae0087f2a05eeb3b94a2921d8dc5d9f364",
+      "sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+      "bytes": 6585
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/StreamPng.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e794fe42ed6ae0078f6d61d5d183497f615f494a",
+      "sha256": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+      "bytes": 3855
+    },
+    "graphics-android/app/src/main/java/com/mundox/graphics/TilePlan.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a9d2f3650c060cff04f38064037c7f6b06f3006b",
+      "sha256": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+      "bytes": 2993
+    },
+    "graphics-android/app/src/main/res/drawable/ic_graphics.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c77f8c45548cb5ef1534c221b50d122995077155",
+      "sha256": "cdb2e19f9be5c359086a25b6daf48348fcda9f7228f59b0aa16fad7956c39972",
+      "bytes": 550
+    },
+    "graphics-android/app/src/main/res/values/styles.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "de7562a71a0a33443bc51831be1e6a17a71e36e7",
+      "sha256": "483ba49ab16675cb90a1787c92f5970eeeebf2c57a6f0ad6bb80d41bc1c721e5",
+      "bytes": 535
+    },
+    "graphics-android/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e5ce0d95c7f5f20385cd3f1bbfe77db777662d94",
+      "sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+      "bytes": 69
+    },
+    "graphics-android/docs/4k.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2d6c6e2cfcfa808446754b4356a3e3297df1c075",
+      "sha256": "e0ce495adf5d72f097365dca5a6e34053e828ffdbc1dadcd96b2a116f8324f5f",
+      "bytes": 5189
+    },
+    "graphics-android/docs/8k.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "73df60fe362e25fdf5b64e266053ea80e809b970",
+      "sha256": "1c5c3b69473b7a4d0c8265524a9d6c31cd039bd72d51262fe5977d6a0b4a2ae8",
+      "bytes": 6903
+    },
+    "graphics-android/gradle.properties": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "de07ff865135dd3e97a83366a8fb014ac7690ae4",
+      "sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+      "bytes": 101
+    },
+    "graphics-android/settings.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "14a9bdf0f7a9899505ee0f7f01cbb2df14d8f9ef",
+      "sha256": "6d75c6e78f244c48236d303c3853494fe0055f4c1719bb0381466cc08a47e73e",
+      "bytes": 282
+    },
+    "graphics-desktop/.gitignore": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "13ce02ec7b06a72b0dc659f7c19c34417d2f9f7d",
+      "sha256": "3dccb6655ff6793e194c64894fd1ce953347aefc83bdf2c33dc9644971b94248",
+      "bytes": 130
+    },
+    "graphics-desktop/PROJECT_FORMAT.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b711c262960e7435df33feea911baf78195f1b4a",
+      "sha256": "5ba9e3e3d5d4efca93b0d540d28bb413d6c4fd752485ae1daed205aea022740d",
+      "bytes": 8362
+    },
+    "graphics-desktop/README.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "704200d071381cd4fde9e3d39d7d55596f62d1cd",
+      "sha256": "f969399a31b459144bb3a10ae4beb34dfee26aa6516cf55cbf362e86a95d5430",
+      "bytes": 9634
+    },
+    "graphics-desktop/benchmark.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "483796733518aafc77ac1d72c24b90e2f7ac644a",
+      "sha256": "ca2e82f59535f1cccd49af81618896167f3d7f1e2d5a1ef43f47114e30cd871e",
+      "bytes": 5600
+    },
+    "graphics-desktop/check_core_profile.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "81225224a9df9873736bc66f631b45d69b6d6e49",
+      "sha256": "1c9d7e5cf0d60544980b13b8bfd4fdb261e2d818cf45d4601199a84c6223b377",
+      "bytes": 7825
+    },
+    "graphics-desktop/core_profile.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9f89fab683a5f49ff9466f32805d195137c35eb0",
+      "sha256": "06574ead9b6e217279e8a82673020aa29133ca94a17973cfca27b5319234c849",
+      "bytes": 255
+    },
+    "graphics-desktop/core_runtime.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "28c3795a24c2af3b837475f2390c84814324bae9",
+      "sha256": "29ed1c7ee07cf86946983241d066e47ec4bf714beae91229d4d12ab7e6f84deb",
+      "bytes": 5699
+    },
+    "graphics-desktop/demo.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "0a42f1b04afad9cfeda7df1fda093294f7876ade",
+      "sha256": "8b9e76ac3e6a6aa06f967409f1127552f201894f1aa9da6142f63b6d7555229d",
+      "bytes": 10047
+    },
+    "graphics-desktop/edit_pages.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "0e28fb170ce721d0b44c260a2430e34e3b336c71",
+      "sha256": "e8d51b90d859f3e1e5cad4850c93c3293ecafde4ade5d44ecbffabc1e04338bd",
+      "bytes": 2221
+    },
+    "graphics-desktop/egl_runtime.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b2e249bac86a6a6ab725c9b7e2bbd6efc68edb39",
+      "sha256": "6cd8dd3cb15cc56536d76c370f1ed209009d7e04b7d9570ddebca9d8c49b1442",
+      "bytes": 6798
+    },
+    "graphics-desktop/engine.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e4b9ee5650e035b04b29dc3ed1901b0d36eeb2fc",
+      "sha256": "5f8ba374a91618a337ab8e9f25b3b19994418d7a7d3e7d0cb76c30a17990c022",
+      "bytes": 16239
+    },
+    "graphics-desktop/examples/bell-observer.cosmic": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4b10b6514f182ffe81ba456453610730cad338e3",
+      "sha256": "06e11b8d3f56b3026f2d5ac0c5de772ffa23f8ef50342693da8f0d47b0adf39c",
+      "bytes": 976
+    },
+    "graphics-desktop/examples/ghz-city.cosmic": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4b1c13a8fe807fcc212cf011264c9f3f386b3503",
+      "sha256": "29568921331416a7e25945e5ee4cb7510df0cf49a4343165a162885550e64208",
+      "bytes": 1047
+    },
+    "graphics-desktop/infinite_format.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f888c834818c35e31fe25daf53c3810b328c5c0d",
+      "sha256": "bb88994b7653d13de5d3a2578a54540c6192a24d412808890e023cb11c4ca2d6",
+      "bytes": 2604
+    },
+    "graphics-desktop/infinite_runtime.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "37a46e072829c4bb4c841307e2b634e6eec7e7d5",
+      "sha256": "23bd06bc273ec653a3d4aeb212570829f79d69f58e73005111e9a80f6cfcba02",
+      "bytes": 8004
+    },
+    "graphics-desktop/native/PROVENANCE.json": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "bdd0070caccc9679b341e91c0c5157addb4c2822",
+      "sha256": "d4ecd60a9e3251b1026d955a1e4ef45ca0bcb17566bb44790cdcb021205efe14",
+      "bytes": 7653
+    },
+    "graphics-desktop/project.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "23c3b8805dc68517e89006ce6762f81f55e1c4d6",
+      "sha256": "b5aa12a9503960b3a39adfaec827572b572678702b08605e52cb39b9f8648657",
+      "bytes": 20615
+    },
+    "graphics-desktop/renderer.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "cfde7728d987204430ad30e9f5f3caa0f9495d66",
+      "sha256": "a51cf6fa4b5189be8c0ecab1c9acb975eced1b135096d8d289f4ec7416766229",
+      "bytes": 15373
+    },
+    "graphics-desktop/requirements.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "258a21f56ba5df83ade9a447c5718d6d5fc68bd9",
+      "sha256": "d7a6a8e0c2f532f0cbdd138f326ead6b70f4087091ce75f7ba24d6a39a9df8c9",
+      "bytes": 22
+    },
+    "graphics-desktop/shaders/common.glsl": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "417302b81c6968be7e7c90ec5d8a45729f8c2427",
+      "sha256": "fbc6c19ff6b30452126512fd6b01a8c802ee162261220c0fca759f77eda9a92c",
+      "bytes": 8216
+    },
+    "graphics-desktop/shaders/eye.frag": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "0de9cc9930f7362c6f04b09c825ff156ad7b01f9",
+      "sha256": "de1a2f17a0e922514f7e73a9afa2abf2f09349eb013be885d5c0cb7c3aa9cb7c",
+      "bytes": 22151
+    },
+    "graphics-desktop/shaders/eye.vert": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8f365c081eebb5df295f6b5a22dc30e2cfb41d5c",
+      "sha256": "2697290515ef382c9b1fb7f444e3a10d40fce11413327210bd0e56e369093701",
+      "bytes": 145
+    },
+    "graphics-desktop/shaders/raster.frag": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d892538d81fb03fc05d95f8ac923f37f8bbc92fb",
+      "sha256": "8dbb71fe4246698fb1b8da2f33da753c416f437c6c9e5856017acbc4e7bbf4d0",
+      "bytes": 203
+    },
+    "graphics-desktop/shaders/raster.vert": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "332b967b3cf69e4c35d71b0ceb376ec3dbacd812",
+      "sha256": "a0dd06f12bffbb93576246f65245c9e40f3f4a14bcf8c053b224ebdc5d0483c9",
+      "bytes": 944
+    },
+    "graphics-desktop/validate.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2a2109c9de987e8ad1b06de4744d94a7117672f7",
+      "sha256": "c7323d57123cf115062c43cdf83e3533eb6140f1069044607cb6292095e2808a",
+      "bytes": 6256
+    },
+    "graphics-desktop/validate_contract.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d66f22094832adbfe16f798b44ecc7f06f0ad8f3",
+      "sha256": "80ffbfd3c37a9c7c37f955598c1ca0bdc5fc0a5a1821f5ba0394c0ca61aa44bf",
+      "bytes": 7074
+    },
+    "graphics-desktop/validate_infinite.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d979d69859e6dcea864ac211d066d276464131f0",
+      "sha256": "4788739667261afc38289f5ca714a74b130e7e083957ee8dbb479d22f1530c3d",
+      "bytes": 10601
+    },
+    "graphics-desktop/validate_projects.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6fe9413ad005cb988fcbed5f0e02e1f4dac07485",
+      "sha256": "7e7ca12502f0893ba46bd8cc828918e651d53b93ca6f30786c97c65dd059c110",
+      "bytes": 14911
+    },
+    "hello_mundo_x.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d8b8ffe0cf65df8e4fc3c2b6a445987afb5eb871",
+      "sha256": "37039817e7132e6d01c2ebf5f1dc95a6be74e145ab268f80a8374a4f0294aff6",
+      "bytes": 1278
+    },
+    "native/include/mundo_x/adaptive_phase_core.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "46f47f6d781026b0ac7a1e8241ec82060911aa7a",
+      "sha256": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+      "bytes": 9737
+    },
+    "native/include/mundo_x/compact_core.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "3239af9186ab9ea306eac6fc99cd72eea145f1c2",
+      "sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+      "bytes": 25313
+    },
+    "native/include/mundo_x/dense_core.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "551150407bd498e28fabb938300b7024ffe2687c",
+      "sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+      "bytes": 6439
+    },
+    "native/include/mundo_x/engine_session.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "96bcdacd42568e3ee45824037f06278d1dd05c3f",
+      "sha256": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+      "bytes": 10597
+    },
+    "native/include/mundo_x/ether_core.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "159c688f8962aa3292cf7f8ba8c26510530d1dce",
+      "sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+      "bytes": 25060
+    },
+    "native/include/mundo_x/exact_t_experiment.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "98932308341f33cc6bb52008b86bb01a905ac25c",
+      "sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+      "bytes": 59106
+    },
+    "native/include/mundo_x/factorized_core.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6054617d573e9a0c07aa11bea05b48ad54f7daa9",
+      "sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+      "bytes": 27597
+    },
+    "native/include/mundo_x/graphics_core_bridge.h": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "af7b224754b430f4ec1b708047fc539f2f7d139c",
+      "sha256": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+      "bytes": 3579
+    },
+    "native/include/mundo_x/infinite_address.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "50fc67c2d89789de2f6972f997e52cdc0ad43456",
+      "sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+      "bytes": 2260
+    },
+    "native/include/mundo_x/infinite_bridge.h": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c20743a06fc73f403140c34262e22cbc913490b6",
+      "sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+      "bytes": 1962
+    },
+    "native/include/mundo_x/infinite_bridge.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d72ee50aa4eb4795b920f32a86671014458b05f7",
+      "sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+      "bytes": 598
+    },
+    "native/include/mundo_x/infinite_core.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fa2f85647bf7c2b5418a745dc99c40fd7c41a838",
+      "sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+      "bytes": 42332
+    },
+    "native/include/mundo_x/infinite_program.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8a4e4ed583ecf736716564a56e9c923e02731fc1",
+      "sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+      "bytes": 13565
+    },
+    "native/include/mundo_x/infinite_session.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "43086dbaa1a05416052cddaf0f1124c0d1d7f778",
+      "sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+      "bytes": 8308
+    },
+    "native/include/mundo_x/lab_circuit.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5da18358b4694a3eb4b38d98f5411980c41851ec",
+      "sha256": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+      "bytes": 7535
+    },
+    "native/include/mundo_x/lab_memory.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "61dbba049a1cfe526dee963dfdb9da7df7bcff76",
+      "sha256": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+      "bytes": 8789
+    },
+    "native/include/mundo_x/lab_protocols.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2665f726f0649a94f9dd8d7aded891a0c9561ffc",
+      "sha256": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+      "bytes": 7359
+    },
+    "native/include/mundo_x/micro_lab.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e1d97bdd5d3c1a03a0456c91d906104c4c5959b8",
+      "sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+      "bytes": 15798
+    },
+    "native/include/mundo_x/mxlang.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b38c1ce14f3ec038ef1bd4454903c63b18d9be11",
+      "sha256": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+      "bytes": 25554
+    },
+    "native/include/mundo_x/pauli_observer.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b7fed757d36ee31d0f0a6faad7c37b7c7611fd4c",
+      "sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+      "bytes": 5252
+    },
+    "native/include/mundo_x/physics_world.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "875ece74d9eaab81a6b5039017c1089eb3212c58",
+      "sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+      "bytes": 8420
+    },
+    "native/include/mundo_x/rule_physics.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "85c60d31f75869f0444417f4c66e9be161f51560",
+      "sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+      "bytes": 12555
+    },
+    "native/include/mundo_x/teleport.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2704b7ec90d97aa6f4a9eb16488a6e85c37da546",
+      "sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+      "bytes": 3157
+    },
+    "native/include/mundo_x/visual_scene.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "37ddd5e0271901f7286473eaa833dfb93b81ed26",
+      "sha256": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+      "bytes": 9268
+    },
+    "native/include/mundo_x/xasm.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e2518640c7ab35bd18c0bccbd497e5b4d9acd88d",
+      "sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+      "bytes": 16830
+    },
+    "native/src/basis_vm_main.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ea09f0e2e56fc201fa77958bb83325b66e0c0445",
+      "sha256": "5b07139fd292e4f3393fc07c1c3e2bad593e1d30ab56ad8c12db369696cacc54",
+      "bytes": 1898
+    },
+    "native/src/graphics_core_bridge.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f211a416314cd3a20f5ede7736292fed65cb3ab9",
+      "sha256": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+      "bytes": 5858
+    },
+    "native/src/infinite_bridge.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c7f82931db5c7fdfd9b1d00f7a0e5a082ce6af98",
+      "sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+      "bytes": 5698
+    },
+    "native/src/infinite_runner.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d610681276c70ebdddc506b2b27ddfdccfdcac08",
+      "sha256": "263ca82ff0c8ba2669e8d4ec095744bdd901fb8e081f5488df22d0c21f79cb63",
+      "bytes": 6103
+    },
+    "native/src/main.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a27953ed7d60af6446d20735a6699ea11d7fb982",
+      "sha256": "b0448963d9b0b4b912f4756d26b26dd3d43efe849ed2177a638eb09b50ac3e06",
+      "bytes": 20079
+    },
+    "native/src/phase_runner.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c102a8c37689cf75797c24042e1f5d0f475983b3",
+      "sha256": "319b781847dfdff49c09878279e3fdcaa9f81e54a84fbfcfb6f2934b8d136ba9",
+      "bytes": 5933
+    },
+    "native/tests/boundaries.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "0e406c97b7fb47971591af1c7a2fd739cbe80002",
+      "sha256": "72a8dc292f98a1264467117d3db78c7bf8f76dd22393750c436b91196c2f33bd",
+      "bytes": 4384
+    },
+    "native/tests/compact_measurement.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "21e7cf0d2215a1588efc4ada4d196bd2674a117c",
+      "sha256": "be6196f9de45f6827b47c578baa9dd0ad8a5383e7097bf6003ba6a8a74330564",
+      "bytes": 11259
+    },
+    "native/tests/core_1000.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "0794162d3d3b65979e27b8ae765ae729a9888496",
+      "sha256": "c41f2cb60ad522abc779b8c0c38d94734329037daef597fc2f658de138224323",
+      "bytes": 17069
+    },
+    "native/tests/core_1000_benchmark.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "bf542a7da851518d7f3a2a8d7e0b2b7153f1bfe8",
+      "sha256": "7851e6fa28791703b66313250bce7659eff296b38b18c30151d021828e8ac13b",
+      "bytes": 14764
+    },
+    "native/tests/core_60.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c2a7b9211f25cb5d3441258ef3e35d60e87d7836",
+      "sha256": "7c5083cdb7dee0001dfa60d278ff6b8a4abdc58ea1a2c70647bfcfc9c573dad4",
+      "bytes": 22619
+    },
+    "native/tests/core_performance.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9bac0fdd22478fb58529de059c488292c3857a49",
+      "sha256": "e85af55abf3d098b7ec33791434d660ea991f61f23449b750a6a55f7a2a50fa6",
+      "bytes": 6463
+    },
+    "native/tests/core_performance_benchmark.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "41e4fd940c617a4035ed23b6c12ba892d1b29c9b",
+      "sha256": "dbe0f8b603c98ad064c5188d92630525e3330cdf16a45410e49ed3f6defe3527",
+      "bytes": 8339
+    },
+    "native/tests/dense_precision.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "06aa753e9ebad5cfad80cac6b69bc5e2955a4f1d",
+      "sha256": "1726e083dbad38c034f490b29987467c73c0a241506f287a1b387fe273df01b6",
+      "bytes": 2104
+    },
+    "native/tests/engine_session.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "bff3e1a937943cccec2060fce0541def4f86ead8",
+      "sha256": "ebaec77b3498a2f0155cf5c0a56e0afe5649ea488be9a169df532309d5b9bf84",
+      "bytes": 15134
+    },
+    "native/tests/ether_batch.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "741983440d6af05b247ac0eece0032b0c6fcce0f",
+      "sha256": "60473e205bc627cb8efcda5fc2620ab10d9f0139b9e075d260da76711ac0ec2d",
+      "bytes": 3235
+    },
+    "native/tests/ether_core.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "da2139280cf20eeefd74d76666a60d920c1aeacf",
+      "sha256": "144d20b7803d9e261cf06192dedecdca411ee6bc4516e6779aa2bf9234bac9c6",
+      "bytes": 4401
+    },
+    "native/tests/ether_frame.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2254ceb6fb0734defe27de80e55110297d274087",
+      "sha256": "31c2a2b6da3e78e1bb9dcf8ddd97d2d52fed701a38d88b85e0d17e8f53343797",
+      "bytes": 8409
+    },
+    "native/tests/ether_fusion.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f71526721950fdc11996ac39469a6e8cf3f38d3a",
+      "sha256": "5bbcfba885a8aa585f984a81f2fc5e011025aa56b6ad0a891bc321ba5c2d0eea",
+      "bytes": 30666
+    },
+    "native/tests/ether_rules.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fafa83fe01da43cb221cfead2a88114afb97e66f",
+      "sha256": "a7b16b56eb83515815b1c8ad4520b644f92405bb1825708c4d76a8e40574a6e3",
+      "bytes": 11248
+    },
+    "native/tests/ether_stress.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "90a82709bcef788daacf81de09ae7a029194828b",
+      "sha256": "e2265235be1c8cff672986860e9672d9ac2e5fdffac4e6dd491a922cc17582c3",
+      "bytes": 8904
+    },
+    "native/tests/factorized_benchmark.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e4176b4ba297d65665c33d3fc832b446a2cc9499",
+      "sha256": "6ce3b643101d9d5b77662d0877c8b94554493a29f02d81e681b522dc27efc3bb",
+      "bytes": 27776
+    },
+    "native/tests/factorized_core.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "bc67d9e12eda0950df1b66f745e7c8b9805b8be1",
+      "sha256": "5637b6e61354fc0d7e927909259b7c5adf73d5b81dc7b77269122b61d52c5a2e",
+      "bytes": 10207
+    },
+    "native/tests/factorized_diversity.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "65537c708bddcfecba3a3939c40bc0bbdd8bcf52",
+      "sha256": "72027d9b090c6d91e2ae3709b60dd9e483af1bf9f3a21ccb499b80bbc3180fe6",
+      "bytes": 14614
+    },
+    "native/tests/factorized_oracle_runner.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9516a083fdc9e9abba4b798917836525a415a7c7",
+      "sha256": "b0156cd022ce2ea08497f83e1447b8a1148ca51c77acd9c2a23107601e0d8f5f",
+      "bytes": 8008
+    },
+    "native/tests/factorized_storage.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fdaaae87f563b4224e2c92360166b8d008092ba0",
+      "sha256": "5de5ef6783f3994e75cef82974c86fed902d6e6559115cfbfadff31a0257a74e",
+      "bytes": 11990
+    },
+    "native/tests/factorized_stream_benchmark.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "67ab7bca777a3c8aef76e5352e5350eb4f700801",
+      "sha256": "2ec0dede8235e2ec86bbc8be4e3d3f0958412ddf964f2de8797b29e0bee46f6e",
+      "bytes": 18125
+    },
+    "native/tests/factorized_structure.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e3a9541941a37a64cc7035aada7cc8973aa40ec2",
+      "sha256": "252978f7019abdf68c0ab5441036555b12ceee426d58beee0566601504bfac68",
+      "bytes": 6046
+    },
+    "native/tests/factorized_structure_probe.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f390a734f01ad5657cf406b5cf4498840d2810e1",
+      "sha256": "ca14a4b9cc48503a16f6cb969aad5fc0ab4f8cf1645eb90c9a58a330b7aa0e3f",
+      "bytes": 4139
+    },
+    "native/tests/infinite_address.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5bc1ecb6484c72bea6821a6a2d2c0fd925ce74dd",
+      "sha256": "7cd34dc3722ade0329510b79b6ef73f0fa6d40dfc11d2cb77ddba9bbc58d6969",
+      "bytes": 7635
+    },
+    "native/tests/infinite_bridge.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5933f4bdefff2573cbe0783baa5c9744a6e20516",
+      "sha256": "6e13c4121485a1cda5a854472e4cf100ec8e2111c60ce86fd5d191a760aceff0",
+      "bytes": 7742
+    },
+    "native/tests/infinite_core.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "510afc0112004fd52703056df726e77aab644db7",
+      "sha256": "81838a8c8f1e4805866b3da5aa2c18cf8310ccf8c85be098149e4501f4e22865",
+      "bytes": 28377
+    },
+    "native/tests/infinite_extreme.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "49f085c1a5c4b712a368feb8c72a57d983163fa2",
+      "sha256": "83da541739bde66cc6a765bada0722e3400b28751cebfb002bcfd260f4f85a37",
+      "bytes": 4102
+    },
+    "native/tests/infinite_scale.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d25badeb8f3c1e73bf4f8491685c10eef8ded5a6",
+      "sha256": "48927e5e0a8e0c6622f21e275aba573682bd89abffc63f80baeeacb6a764cfd5",
+      "bytes": 11651
+    },
+    "native/tests/infinite_session.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "cdc7be84a6838dc5a306faa8eb292fe9b42ffb42",
+      "sha256": "d7e5d787373d45bc8e8ae019231448ce97018f683f3ecb109faa48305d306c43",
+      "bytes": 13721
+    },
+    "native/tests/infinite_tensor.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "cb3fee2d3f1ea27e9722609d75141a68b9c061b5",
+      "sha256": "c243a2fdc14ceed62b5c1f032b8acd8286d02b4400e0cebcad3055ebc42a083f",
+      "bytes": 9919
+    },
+    "native/tests/integrated_runtime.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "dcb300a007daa05ee3af34e381f4158a3c0ebdc7",
+      "sha256": "c2cd1fbc28133a38dbdf5eb1b23c50ec9c5511b50b5d1ae1e16a2546da9f824c",
+      "bytes": 4978
+    },
+    "native/tests/lab_circuit.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d5c1edda2a812d05d490b2ed7ca32e6b2f5a8d6e",
+      "sha256": "2a70b0fb520d0a80cfc60f65f1717b97731b5df22ab3827772ef88852603f9dd",
+      "bytes": 9752
+    },
+    "native/tests/lab_memory.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d914569f985d91bec246417ee70dee9676d6c6d5",
+      "sha256": "7b9a2d551e13fcead9cd5b40a4583d01ce0391bfe4f919e85a728c3fd0882b01",
+      "bytes": 5115
+    },
+    "native/tests/lab_protocols.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "742d9f9ef8af97ef1550b96b221e3146e6873f14",
+      "sha256": "fcf9c21f03405323d5051bfdea2c9431690c6a64516ce6f9d7da73841fa3a254",
+      "bytes": 8190
+    },
+    "native/tests/micro_lab.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a7282f0fef4d409370c8d3315a7ee963a9e3452e",
+      "sha256": "44fc82588796843b1781799bfc6f0860f92b1cc19539a30dc183f792dc7d5a21",
+      "bytes": 4704
+    },
+    "native/tests/native_original_exams.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b24553c6af93d2bc4a6e6aefc2d1bb48fb2c6291",
+      "sha256": "2414e29db137f79143713c9610c46034f3d33dd6b910ef0e41a3debbfb2d29cb",
+      "bytes": 15024
+    },
+    "native/tests/physics_allocation.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "12e1112cf1dcb7ab253a45b651cdcc9a0eae4396",
+      "sha256": "d4abc599762c37b418b8f2797f87117fd889418a509c0f7ed6b9e4892a78ac11",
+      "bytes": 4319
+    },
+    "native/tests/physics_world.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fecbe2c06d300090cbb0e6596190ee0a4b6299b9",
+      "sha256": "302245529d6aaa3e20f50356d9af11f44cf215a47a9e7d966f7ebc226dfa5bc3",
+      "bytes": 4793
+    },
+    "native/tests/quantum_algorithms.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ebfdd0a36b04d5d179d80ee42154941812df0c77",
+      "sha256": "49209b1a951bee47fb4c94a6ebe7fb2e98eec6cb94cc89d220a2869971c2fd8e",
+      "bytes": 4925
+    },
+    "native/tests/reduced_optimization.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ae2ca18053b8a0d21573e31a9bfed9637ecc9844",
+      "sha256": "1936fcc281754815c837119b27aa9b0745c8254c2b1ae16dea2fce1292d93f08",
+      "bytes": 8028
+    },
+    "native/tests/rule_physics.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "868bae3b192e47764e3e1ac93ef0d1f22d51e44a",
+      "sha256": "dac17e91cfedde75f538ee4fc2385ad47717176d8c35af48637234f56bcb6555",
+      "bytes": 7835
+    },
+    "native/tests/stress_driver.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "45af5fd0825786aa5bcc1788ebfae6b334466712",
+      "sha256": "6c04d55811210253b33c4773513067832728dc96729f7bf26c4a553514b8c0b7",
+      "bytes": 14878
+    },
+    "native/tests/visual_scene.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9ad766d987a45b3b466c65c09d25b3ff8d97daba",
+      "sha256": "e74109e3d4251a11e4afae86f0e88b3091a3ac110b723cd8580c594eb097d410",
+      "bytes": 15518
+    },
+    "native/tests/xasm_60.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "45cbe41c1e8f421797242b97a43ac29e11b07e85",
+      "sha256": "c54a50d4a1a1d3296a2f1975a2dda5cadf7fc26ed050a435ce506eff5b59c2cd",
+      "bytes": 9937
+    },
+    "native/tests/xasm_measurement.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e9cd138c8f42cc1c7220ba4f525b6d8011577650",
+      "sha256": "d1a344651058654c99fb9963ee56de6f06baefb2b558db424d2830cbf49eb9da",
+      "bytes": 3562
+    },
+    "native/tests/xasm_visual.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "3250a328d1ff95812759a312caad60b87e70191c",
+      "sha256": "8fde89c2c3e34641ef237bca3f786e7f1e14e49ea75387c1cf3b770c1141abdf",
+      "bytes": 15623
+    },
+    "pc-android/.gitignore": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b00820b751d6b2acbfb590459d6af77ed6d0e1e9",
+      "sha256": "88a7756777f46038eec7c12776191d2574f030f2fc618a15ecb0a2371b884530",
+      "bytes": 145
+    },
+    "pc-android/CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5923b6fa554cc2e2ee1ab8be0013f315470189e8",
+      "sha256": "10821a20e371a5f8714bc0475a342415dc316cf2aaabfa47d00370aaed4f99f2",
+      "bytes": 1343
+    },
+    "pc-android/README.md": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2d2a378f73abe78d8b1b132f6e63a550b375d39d",
+      "sha256": "8a13addb5c45c0fc098e2bda7c0ca4850df9cdbb9bdbf7693a4c063285d71309",
+      "bytes": 28602
+    },
+    "pc-android/app/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d6169d17676a51622cac215b712b94d68eb7127c",
+      "sha256": "c04235babc67ef65e42e1da1519fc81ec19e3be73eaf122003f873c2d008a521",
+      "bytes": 1599
+    },
+    "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "96fdad40212690261db0f8d116479884ed7be341",
+      "sha256": "06a36dda97173b62572a5df5f971a429a7115c93489de936560be75d82e5b39f",
+      "bytes": 54687
+    },
+    "pc-android/app/src/main/AndroidManifest.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c15bb7b46bb1baec86c71308586f47310333bddf",
+      "sha256": "05bf0ac907912aac132d52a0aa6f0cf31b5e1e0193e20daff95bc65620d9fe25",
+      "bytes": 765
+    },
+    "pc-android/app/src/main/cpp/CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "672655bfa8adbcd1f1d16f87e9d6d0ac52cc2cc4",
+      "sha256": "5d056532d5f261431633d20ff9e5afed15228f01d2b6268b0d8c1bfb41c66cdb",
+      "bytes": 1162
+    },
+    "pc-android/app/src/main/cpp/pc_jni.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4402e10b3e445d415eaa4db8176ed846994afc27",
+      "sha256": "ae93dbfcef480713829c490ca362f8ce080b1452b10266082bee9531d5037342",
+      "bytes": 14715
+    },
+    "pc-android/app/src/main/java/com/cosmicx/pc/MainActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d6dea140c30744b3f0cf31d05c4d04fe194c2a18",
+      "sha256": "6ee680d739624b3761d3221f1969c4e689b92e80372b60fc6ced087f8e45bcc7",
+      "bytes": 72166
+    },
+    "pc-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a45c11ea832f470f8346610b8ae072b68a195f08",
+      "sha256": "9ab6361ae6e463c2fbe5258fd0d3de37b8f0992855620b0b186e7a35c6e814d1",
+      "bytes": 2954
+    },
+    "pc-android/app/src/main/java/com/cosmicx/pc/PcVideoRenderer.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "97c57ce4bb45d3a05a49037d39a2380d7301b415",
+      "sha256": "80011ef58ad5e8e8c640f7f4cf6b4c3b4430cc0ff290deac6c52f9037b54f9e5",
+      "bytes": 32759
+    },
+    "pc-android/app/src/main/java/com/cosmicx/pc/PcVideoView.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "af5d89ac9661321e85474ab9321f8624dce26e04",
+      "sha256": "d374c0449520d0449c09495f10a6b061c9d72685216580a5da56d8e13d7e7e58",
+      "bytes": 3284
+    },
+    "pc-android/app/src/main/res/values/colors.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "3a1b4ba227d7808e92d866c328a2cef0b57b5d43",
+      "sha256": "b27d0b5a26ca6c8dd18dc67a5bdafaaaf8c2144a41779276bace455d9c4c00a3",
+      "bytes": 210
+    },
+    "pc-android/app/src/main/res/values/strings.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "51792c79a0b08f3193f5a858bc75a433faa49fe5",
+      "sha256": "680d4e7a05e1254811b8929f1993691d8e7189bfc0b91c7141fe25b133ecb84f",
+      "bytes": 4360
+    },
+    "pc-android/app/src/main/res/values/styles.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "43ded4d61a855fa2f62fb8259b8e4a258500509d",
+      "sha256": "3f3beb26c34411f4d6775a0121d6c2fdd8f040d3f90a66895b8fb872eaf198db",
+      "bytes": 715
+    },
+    "pc-android/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e5ce0d95c7f5f20385cd3f1bbfe77db777662d94",
+      "sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+      "bytes": 69
+    },
+    "pc-android/gradle.properties": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ed2d02acdd57b96d06bba03e812cb4bb053be633",
+      "sha256": "cc38bc495ca4e4d7fa2fe7c9c1112f36af7a63fbf4fc3e7a088e215942403385",
+      "bytes": 110
+    },
+    "pc-android/native/boot_media.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7843eb5525e944243ed5b896b6656b0265069f89",
+      "sha256": "aa56d8741d7f46c4df2084454da056c7cf87cc407f1b03d3373ef4d07efd98e9",
+      "bytes": 10815
+    },
+    "pc-android/native/demo_boot.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "bee1a6d59134ac52a29d481688fd424633c46abe",
+      "sha256": "bbb3493a6018dc2f2d81f07405d2044a61da9fe179a0fac50c97615c0d479793",
+      "bytes": 2889
+    },
+    "pc-android/native/graphics_demo.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "31f444db6639143eac4de393c63c5c4520acce13",
+      "sha256": "4685a1d249ec55a77a34bff6d7ef6dc26d5ede39d805548d22fcf2ee23b8b018",
+      "bytes": 6237
+    },
+    "pc-android/native/long_mode_guest.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "599a8413f657aeb838c9118ce6e490839c54ed93",
+      "sha256": "19f372be7bd5e06b96b979b5108cec8193c8cc747177d63372cc2f52eaf4933f",
+      "bytes": 5443
+    },
+    "pc-android/native/pc_cli.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f0ed42307ae7a170f76bf2b7eaf8a289754ec6b5",
+      "sha256": "b5733793a250fa1b7636a9c461ae189c84d458dbdafd6794de22b135ebf930c9",
+      "bytes": 3970
+    },
+    "pc-android/native/pc_machine.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "165e1380dcc29f78cd1c4ae96ae3614cf282e63c",
+      "sha256": "1269989f115840c7d49c2c4c6db81106d6b2109024a3548b3e7c975178a61fb8",
+      "bytes": 27151
+    },
+    "pc-android/native/pc_video.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "5f4531d7f6fe0491b12b5bf6fcc136e488a4b582",
+      "sha256": "70fefe548ad35312480a241f3b0680e81b30793812f3802891946089c799ff24",
+      "bytes": 9954
+    },
+    "pc-android/native/quantum_device.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "aed53a8c8dee28862e1aeb16e014785d291802b0",
+      "sha256": "fcdac4e9d50a0bcfb10bbc122980ec7171bc346c163551f367b09c9350e0b2be",
+      "bytes": 4782
+    },
+    "pc-android/native/quantum_guest.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9df5c7fd4ca3a527b9afeda737a68d8973d15e83",
+      "sha256": "a501b6d7dcbaf79f314a1c75f780dca75e6fe3ccd64381b4994c73a52ca847aa",
+      "bytes": 6960
+    },
+    "pc-android/native/sparse_ram.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "437ac1b3a7e373143d0eff5a4581a5c66164ea83",
+      "sha256": "0204321efe4d311db0d5605d339fe2472581b8bc81c92ca5a6ba81636a387d8b",
+      "bytes": 14858
+    },
+    "pc-android/native/tests/boot_media_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "79fdf3d4b1fbc27061bb8ea3a33c5c81c02fd78d",
+      "sha256": "6b278bba6c15e1f3d36b7e2b1e70970ece4406de0f2648a1340fe968ca050deb",
+      "bytes": 15326
+    },
+    "pc-android/native/tests/memory_benchmark.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "1c832949f0c8764d42b1b5c76a65867dbc7fb224",
+      "sha256": "eb4aa3e714b497790d2aadad0dbfd537a1e1eb1dca467011be7be75e2797e01c",
+      "bytes": 7019
+    },
+    "pc-android/native/tests/pc_iso_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "61fc0fd3f0db5a60381039f6f3246e23097e1307",
+      "sha256": "02fc96bd0f864588eb39c18f7143e6fa1ae4385c0b07f37c0ad63a7e80689d2f",
+      "bytes": 20519
+    },
+    "pc-android/native/tests/pc_machine_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "de8bf722d3b4225fcf5fcdad8204b30848098297",
+      "sha256": "f5368b325ca0d254892ee020785c919bdadfb1f2fda02b09f89ebfff7f86a466",
+      "bytes": 4093
+    },
+    "pc-android/native/tests/pc_memory_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e305479b7a5490f81d06b5b04178dd7ddd299260",
+      "sha256": "b3c4e62324bd2bcf1400e9ba4169c8e51ab25b630bd4bb10ab175c84a8b27758",
+      "bytes": 5779
+    },
+    "pc-android/native/tests/pc_quantum_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e3ddbb4dd27c0cea3e34e207a3e5ec9c1c87e723",
+      "sha256": "fa1d0d02d8d657bbe6a409536b7b1089cf7f9bdfdc32657cf55e8e2dc567bb4a",
+      "bytes": 10560
+    },
+    "pc-android/native/tests/pc_video_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f394cf32a84bc3e7ccedc96c82b5df25421db5fd",
+      "sha256": "2db472bf5c430a18554b384e02780334beb96dbbcac67c2dfe9d61ffabfdd9b4",
+      "bytes": 13824
+    },
+    "pc-android/native/tests/sparse_ram_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d1fcf36249681ae6615e4272d54b8f2f51d1a9ff",
+      "sha256": "fc894825b58f247f6f20ca68126b2ac0269097004b382a6b6edcd18387d8b008",
+      "bytes": 14509
+    },
+    "pc-android/native/tests/x86_alu64_oracle_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f8a390895d077594745af7fb35c5c2644cf3b823",
+      "sha256": "08fc63ce3bce0a6f5b1b7bc2c758ddaaabf6b000142a5910aaa9cbe1bb6d8b5a",
+      "bytes": 13973
+    },
+    "pc-android/native/tests/x86_cpu_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "f985183038434286e123a8a3f760209aa6b798e1",
+      "sha256": "0b8b5f698cee28254f603d16c814e7ee9480a1c753f35135612c43682c13d87d",
+      "bytes": 42221
+    },
+    "pc-android/native/tests/x86_enter_oracle_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a5e8e8a9fb58c722dd4f900dfcde5131c4595550",
+      "sha256": "01737f2ce0573b957ce51b9f8fdeae006ee99bc80f2693b78b93a1fbbbf2a4b3",
+      "bytes": 16008
+    },
+    "pc-android/native/tests/x86_long_mode_test.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fcac86165942fa5b7c8fd8bb96f6881be267c6f7",
+      "sha256": "7d5365a6cbde7993223ca11796eec4c7f2c9703449fb53485f39a1ae59c92ca7",
+      "bytes": 28540
+    },
+    "pc-android/native/x86_cpu.hpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7721b281f04b7d113436bdf6332c859e3a47f0a4",
+      "sha256": "9b9fb6dcaa0fbe6759984398e3d5f1c2931f0e59c01739d6f7ec845ec11cd0b8",
+      "bytes": 69300
+    },
+    "pc-android/settings.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "772a6c20d516961474e8a2ad52fce22821179eda",
+      "sha256": "288641e9cee52cb28cd859f4f6800eb4a82572921c6676fce2e92aeb3da9164c",
+      "bytes": 272
+    },
+    "pc-android/tools/android-test.sh": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6080f5c1f52594efa982ecf93cc101647684ff33",
+      "sha256": "a0191007c3409dabd1d716fe7e5caf9c9b1ea75e2658dc9c38921c6023e71b0a",
+      "bytes": 8427
+    },
+    "pc-android/tools/benchmark-memory.sh": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "3900aecf3ac550ad2c6103aa222d177a83f4e1ca",
+      "sha256": "7759d0dd9b93f2ff0152739587033567b8941fbf70fc7139f32b0e10eded0c3e",
+      "bytes": 1311
+    },
+    "pc-android/tools/test-native.sh": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2bdfedd316422c20409cba643e69a7d85837b682",
+      "sha256": "ba5b9da37c513fa04d36bc1d1636575e9eb214956ea4aad8af7d58fb0c0334e1",
+      "bytes": 1068
+    },
+    "requirements.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "657e282eebed1bd4e3338fb34aa18603a0d22419",
+      "sha256": "802d706bb0be3434d7bdbc49bc17f246407b6c619f002c5da5ea327a197a7f1f",
+      "bytes": 11
+    },
+    "settings.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2858276a91345a5b6769758921eb4c2c54f13e7a",
+      "sha256": "cbd42f2fc80d5e8cf690f17f2756c380508b89cada23b9f3a070378c32fa7f7f",
+      "bytes": 329
+    },
+    "solar-android/app/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fa255b0e30878a7db101b2db62609598f7f66d01",
+      "sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+      "bytes": 2373
+    },
+    "solar-android/app/src/main/AndroidManifest.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e408667b777f048d89ebaf7688e8e7fb596bb69b",
+      "sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+      "bytes": 681
+    },
+    "solar-android/app/src/main/assets/science-assets.json": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8d542a8070bcf5692ce30990bc702e0699cc5aab",
+      "sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+      "bytes": 1473
+    },
+    "solar-android/app/src/main/assets/shaders/overlay.frag": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "361b4c064241f304fe745f41f72638ccd8a394db",
+      "sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+      "bytes": 296
+    },
+    "solar-android/app/src/main/assets/shaders/overlay.vert": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "d27a053a6ea17e9b741729ed9d53faa0e1f8f301",
+      "sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+      "bytes": 277
+    },
+    "solar-android/app/src/main/assets/shaders/solar.frag": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ce0758ae9aa43612047058fbee995b4206a337a4",
+      "sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+      "bytes": 25206
+    },
+    "solar-android/app/src/main/assets/shaders/solar.vert": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "863854d72ef94f8565fb1f5fa227683407ed917e",
+      "sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+      "bytes": 230
+    },
+    "solar-android/app/src/main/assets/textures/earth.png": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2ee151841b2e493ed5bb3e99520051ed78f1ed5b",
+      "sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+      "bytes": 1511379
+    },
+    "solar-android/app/src/main/assets/textures/jupiter.jpg": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "221a89c343223adbce8d7f3c949fe49b891d5a72",
+      "sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+      "bytes": 115028
+    },
+    "solar-android/app/src/main/assets/textures/moon.jpg": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ed05d2cbce6b1258bc06d0f74ed8bb05851a6a55",
+      "sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+      "bytes": 457942
+    },
+    "solar-android/app/src/main/cpp/CMakeLists.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "534b18976a3f1c8f163b4136bb38463424787158",
+      "sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+      "bytes": 739
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "550ae93c79d2575f28c21d87888b3e8c70b8a840",
+      "sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+      "bytes": 7340
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "3e07d351282634b4edd80f19ffe9c42343369923",
+      "sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+      "bytes": 56850
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarData.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7b75f7c48ad6a79fcc432bc69f18e1722063228b",
+      "sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+      "bytes": 28282
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "c055afdc8416b232ccdd1c273faa09a5559ea487",
+      "sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+      "bytes": 11069
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fd4913fa3d28c9161ebd201736b7254603e790bb",
+      "sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+      "bytes": 3239
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarMapView.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "1d493cdba816ea47032ca6d7f0efd8c2cf53d20a",
+      "sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+      "bytes": 21577
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarPng.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a1d4cfef81f3998874040876209497b3136969e9",
+      "sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+      "bytes": 798
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6733f56e785f373886f00006c1a582da688283ae",
+      "sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+      "bytes": 64805
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarSurface.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "62e0a2df0adacccf959f9f539ceffdd34796fb69",
+      "sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+      "bytes": 3078
+    },
+    "solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b60aa17ff8fb63fed2023693842b603a9796c2fa",
+      "sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+      "bytes": 7481
+    },
+    "solar-android/app/src/main/res/drawable/ic_solar.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "2184199f2fa48df499649d2dba61cf5c18bb014b",
+      "sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+      "bytes": 1038
+    },
+    "solar-android/app/src/main/res/values/styles.xml": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b44058cbdb91655f1fee869b88f11f76d0093b9f",
+      "sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+      "bytes": 604
+    },
+    "solar-android/build.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "e5ce0d95c7f5f20385cd3f1bbfe77db777662d94",
+      "sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+      "bytes": 69
+    },
+    "solar-android/gradle.properties": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "de07ff865135dd3e97a83366a8fb014ac7690ae4",
+      "sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+      "bytes": 101
+    },
+    "solar-android/settings.gradle": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "3f2a8aa851d25bc25a7d7143714de68b50efe8b1",
+      "sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+      "bytes": 280
+    },
+    "src/bridge_x.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "950c69e1e63c4bbdaab854876a71c3d11ca40e5c",
+      "sha256": "425f0be3a19dd5395e36e8b633e29c4da9f4d132e033230be05626733dff65af",
+      "bytes": 1965
+    },
+    "src/quantum_core.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "4f3957f1e0370e0b05c787af59ebc0dae837e479",
+      "sha256": "06fdafd5f1b2a0e5a8e1f92d05d23731c0e77bf5976783a65e252355f4042152",
+      "bytes": 3715
+    },
+    "src/transformer_x.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8980d37dfc45e341953c662f2f06047e5d2d53c9",
+      "sha256": "290df60e9edb80acda8e4680e19e554159dd926060d80358939115bed894492a",
+      "bytes": 2604
+    },
+    "tests/check_mx_cli.cmake": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "7d8413f4e759bfd5380f348cbb580f2d3f9dd3f5",
+      "sha256": "f35b78921010f9604d371391173ff52a3e51400449875dcad6f89b2036e96d41",
+      "bytes": 1233
+    },
+    "tests/java/com/mundox/graphics/EtherFusionJni.java": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "9cadfcbcb4cc9c44a13785394a5a0bb818184285",
+      "sha256": "4d9c03ca4874d3e4d831837560e91335789ba2d7702604d3501024e16651a63b",
+      "bytes": 8694
+    },
+    "tests/java/ether_fusion_jni.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "6c4c6bfce78416e56842806b0641113621098118",
+      "sha256": "9fbd78ec5c072f08f0c2a156f7496bd4bdb1af4fe4298502d72c157f5fa52048",
+      "bytes": 756
+    },
+    "tests/mxlang_tests.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "83f2cfacb1ff83ad01bc6cdc8bdafd77c5a702cd",
+      "sha256": "cf6e40351d544e386386bae19296535ffaf85f9f10f894d7b83cb15ae555d257",
+      "bytes": 8203
+    },
+    "tests/native_tests.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "8bf7e881ebfe503433952183ddf79e30ca6ef510",
+      "sha256": "288630c424a15905b0e9e770633071e5ced0954629d9c2f992fd75bb7952bb9b",
+      "bytes": 12072
+    },
+    "tests/phase_benchmark.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "a8bdf824ecfa498079b988fb3d6db328fcfe1686",
+      "sha256": "8f6ae74aa6a82de82d090ab0940b61ecd54b78d5d84a1ad79c1ac0eb7d5c5295",
+      "bytes": 6546
+    },
+    "tests/phase_circuits.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "76490641f924f889341e9a55eaf38628979891fc",
+      "sha256": "1111a2308c3b730390c572e3b3d074a8834f2a843310715d4f56dc4e0efdc9a2",
+      "bytes": 2133
+    },
+    "tests/phase_regression.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "1c5f63c6ec143c46df6efd2d9fbb94f81f403cfa",
+      "sha256": "59aa04cca4c7ac86074560f8d515893b1cbf36e9b951ae3f43e843b447004c5f",
+      "bytes": 2231
+    },
+    "tests/phase_requirements.txt": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "21f4dcd59dbe08a8ab846fd20317548ababf9eb9",
+      "sha256": "4cb3b9303fb2473b877bd96a681d111048281d8d65949b6f71e0e70b84f38844",
+      "bytes": 61
+    },
+    "tests/phase_validation.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "ecfae53c28c30be21b8f657606e2596a6adad36f",
+      "sha256": "83794cf472353a909116f7ba80f0ac6598b584a107cf33a2b0fb7ab751c9b30e",
+      "bytes": 4974
+    },
+    "tests/regression_worker.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "38148bffd08fb2541a057421cb4a6eae2dea8085",
+      "sha256": "2c0623c1964a8a20decbb1b8b38d75674728d60a893f20726a94deb4f1d9abe2",
+      "bytes": 11522
+    },
+    "tests/state_transfer_check.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "b68a1c14b8949748c3f94f212dcf41b8d7700774",
+      "sha256": "62d89e2cbfa1f2b676d95c73d195aed073e62d7184611313f4d44c400d67dbf7",
+      "bytes": 4120
+    },
+    "tests/test_phase_core.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "009d82e8fd751487652c60c4fd45a98bbf3670bd",
+      "sha256": "dee820a2e8447d08e756c3f9ec48777986f1e0e74f225394e662aeef9b507010",
+      "bytes": 2128
+    },
+    "tests/test_quantum_core.py": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "628204cf504d05544bac1d1b73bacb7829ddd228",
+      "sha256": "f583701b8a5c76fde2cc718db916e2bbb5e2be5c9b292ab140997b8b336f9be4",
+      "bytes": 968
+    },
+    "tests/test_state_transfer.cpp": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "fba3cbaa08ea6c496aa6bb097869ab7f53ed5563",
+      "sha256": "456b1b83f377870b31a9735997027b78b3c2d13fb2bf66d530de18a183f76d92",
+      "bytes": 6431
+    }
+  },
+  "current_worktree_scope_mismatches": [],
+  "current_worktree_scoped_files_match_final_commit": true,
+  "final_candidate_apks": {
+    "candidate-allbody": {
+      "source_manifest": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody-source-manifest.json",
+      "source_manifest_sha256": "431ce8755bbdec31ffe8750e78ecaf96c2c56019694e308b5b3c82984d5d2724",
+      "recorded_source_base_commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+      "overlays_now_published_in": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+      "source_file_count": 62,
+      "production_build_files": 60,
+      "test_source_files": 2,
+      "all_62_sources_match_published_commit": true,
+      "source_comparison": [
+        {
+          "path": "graphics-android/app/src/main/cpp/graphics_jni.cpp",
+          "recorded_snapshot_sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+          "current_snapshot_sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+          "published_sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java",
+          "recorded_snapshot_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+          "current_snapshot_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+          "published_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java",
+          "recorded_snapshot_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+          "current_snapshot_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+          "published_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java",
+          "recorded_snapshot_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+          "current_snapshot_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+          "published_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java",
+          "recorded_snapshot_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+          "current_snapshot_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+          "published_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/StreamPng.java",
+          "recorded_snapshot_sha256": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+          "current_snapshot_sha256": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+          "published_sha256": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/TilePlan.java",
+          "recorded_snapshot_sha256": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+          "current_snapshot_sha256": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+          "published_sha256": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/adaptive_phase_core.hpp",
+          "recorded_snapshot_sha256": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+          "current_snapshot_sha256": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+          "published_sha256": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/compact_core.hpp",
+          "recorded_snapshot_sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+          "current_snapshot_sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+          "published_sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/dense_core.hpp",
+          "recorded_snapshot_sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+          "current_snapshot_sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+          "published_sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/engine_session.hpp",
+          "recorded_snapshot_sha256": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+          "current_snapshot_sha256": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+          "published_sha256": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/ether_core.hpp",
+          "recorded_snapshot_sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+          "current_snapshot_sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+          "published_sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/exact_t_experiment.hpp",
+          "recorded_snapshot_sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+          "current_snapshot_sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+          "published_sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/factorized_core.hpp",
+          "recorded_snapshot_sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+          "current_snapshot_sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+          "published_sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/graphics_core_bridge.h",
+          "recorded_snapshot_sha256": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+          "current_snapshot_sha256": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+          "published_sha256": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_address.hpp",
+          "recorded_snapshot_sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+          "current_snapshot_sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+          "published_sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_bridge.h",
+          "recorded_snapshot_sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+          "current_snapshot_sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+          "published_sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_bridge.hpp",
+          "recorded_snapshot_sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+          "current_snapshot_sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+          "published_sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_core.hpp",
+          "recorded_snapshot_sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+          "current_snapshot_sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+          "published_sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_program.hpp",
+          "recorded_snapshot_sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+          "current_snapshot_sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+          "published_sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_session.hpp",
+          "recorded_snapshot_sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+          "current_snapshot_sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+          "published_sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/lab_circuit.hpp",
+          "recorded_snapshot_sha256": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+          "current_snapshot_sha256": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+          "published_sha256": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/lab_memory.hpp",
+          "recorded_snapshot_sha256": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+          "current_snapshot_sha256": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+          "published_sha256": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/lab_protocols.hpp",
+          "recorded_snapshot_sha256": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+          "current_snapshot_sha256": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+          "published_sha256": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/micro_lab.hpp",
+          "recorded_snapshot_sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+          "current_snapshot_sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+          "published_sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/mxlang.hpp",
+          "recorded_snapshot_sha256": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+          "current_snapshot_sha256": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+          "published_sha256": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/pauli_observer.hpp",
+          "recorded_snapshot_sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+          "current_snapshot_sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+          "published_sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/physics_world.hpp",
+          "recorded_snapshot_sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+          "current_snapshot_sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+          "published_sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/rule_physics.hpp",
+          "recorded_snapshot_sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+          "current_snapshot_sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+          "published_sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/teleport.hpp",
+          "recorded_snapshot_sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+          "current_snapshot_sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+          "published_sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/visual_scene.hpp",
+          "recorded_snapshot_sha256": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+          "current_snapshot_sha256": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+          "published_sha256": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/xasm.hpp",
+          "recorded_snapshot_sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+          "current_snapshot_sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+          "published_sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+          "same": true
+        },
+        {
+          "path": "native/src/graphics_core_bridge.cpp",
+          "recorded_snapshot_sha256": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+          "current_snapshot_sha256": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+          "published_sha256": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+          "same": true
+        },
+        {
+          "path": "native/src/infinite_bridge.cpp",
+          "recorded_snapshot_sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+          "current_snapshot_sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+          "published_sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/build.gradle",
+          "recorded_snapshot_sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+          "current_snapshot_sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+          "published_sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java",
+          "recorded_snapshot_sha256": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c",
+          "current_snapshot_sha256": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c",
+          "published_sha256": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarPerformanceChecks.java",
+          "recorded_snapshot_sha256": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809",
+          "current_snapshot_sha256": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809",
+          "published_sha256": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/AndroidManifest.xml",
+          "recorded_snapshot_sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+          "current_snapshot_sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+          "published_sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/science-assets.json",
+          "recorded_snapshot_sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+          "current_snapshot_sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+          "published_sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/overlay.frag",
+          "recorded_snapshot_sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+          "current_snapshot_sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+          "published_sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/overlay.vert",
+          "recorded_snapshot_sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+          "current_snapshot_sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+          "published_sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/solar.frag",
+          "recorded_snapshot_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "current_snapshot_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "published_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/solar.vert",
+          "recorded_snapshot_sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+          "current_snapshot_sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+          "published_sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/textures/earth.png",
+          "recorded_snapshot_sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+          "current_snapshot_sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+          "published_sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/textures/jupiter.jpg",
+          "recorded_snapshot_sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+          "current_snapshot_sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+          "published_sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/textures/moon.jpg",
+          "recorded_snapshot_sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+          "current_snapshot_sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+          "published_sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/cpp/CMakeLists.txt",
+          "recorded_snapshot_sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+          "current_snapshot_sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+          "published_sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java",
+          "recorded_snapshot_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+          "current_snapshot_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+          "published_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java",
+          "recorded_snapshot_sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+          "current_snapshot_sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+          "published_sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarData.java",
+          "recorded_snapshot_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+          "current_snapshot_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+          "published_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java",
+          "recorded_snapshot_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+          "current_snapshot_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+          "published_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java",
+          "recorded_snapshot_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+          "current_snapshot_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+          "published_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarMapView.java",
+          "recorded_snapshot_sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+          "current_snapshot_sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+          "published_sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarPng.java",
+          "recorded_snapshot_sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+          "current_snapshot_sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+          "published_sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+          "recorded_snapshot_sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+          "current_snapshot_sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+          "published_sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarSurface.java",
+          "recorded_snapshot_sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+          "current_snapshot_sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+          "published_sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java",
+          "recorded_snapshot_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+          "current_snapshot_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+          "published_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/res/drawable/ic_solar.xml",
+          "recorded_snapshot_sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+          "current_snapshot_sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+          "published_sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/res/values/styles.xml",
+          "recorded_snapshot_sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+          "current_snapshot_sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+          "published_sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+          "same": true
+        },
+        {
+          "path": "solar-android/build.gradle",
+          "recorded_snapshot_sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+          "current_snapshot_sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+          "published_sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+          "same": true
+        },
+        {
+          "path": "solar-android/gradle.properties",
+          "recorded_snapshot_sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+          "current_snapshot_sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+          "published_sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+          "same": true
+        },
+        {
+          "path": "solar-android/settings.gradle",
+          "recorded_snapshot_sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+          "current_snapshot_sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+          "published_sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+          "same": true
+        }
+      ],
+      "verification_record": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody-verification.json",
+      "verification_sha256": "efcfdecee52ccc74f6d79adb06d9d7e62a6509d267c08a6020af4c22c9ddf988",
+      "package": "com.cosmicx.solar",
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "copies": [
+        {
+          "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody/solar-android/app/build/outputs/apk/debug/app-debug.apk",
+          "sha256": "c01b2294c4f64c8d9181884f9dca34fb462365e425c73dea6cdf02e547484430",
+          "bytes": 4620435,
+          "same_as_verification": true,
+          "shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "shader_matches_published_source": true
+        },
+        {
+          "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/COSMIC-X-Solar-1.3.0.apk",
+          "sha256": "c01b2294c4f64c8d9181884f9dca34fb462365e425c73dea6cdf02e547484430",
+          "bytes": 4620435,
+          "same_as_verification": true,
+          "shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "shader_matches_published_source": true
+        },
+        {
+          "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/after/debug/app-debug.apk",
+          "sha256": "c01b2294c4f64c8d9181884f9dca34fb462365e425c73dea6cdf02e547484430",
+          "bytes": 4620435,
+          "same_as_verification": true,
+          "shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "shader_matches_published_source": true
+        }
+      ],
+      "signature_verification_reused_by_exact_apk_identity": true
+    },
+    "candidate-review-allbody": {
+      "source_manifest": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-review-allbody-source-manifest.json",
+      "source_manifest_sha256": "73c6d13c210871e88736de0686b033e53069f6652d14ab21ff40d64260cd0ff2",
+      "recorded_source_base_commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+      "overlays_now_published_in": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+      "source_file_count": 62,
+      "production_build_files": 60,
+      "test_source_files": 2,
+      "all_62_sources_match_published_commit": true,
+      "source_comparison": [
+        {
+          "path": "graphics-android/app/src/main/cpp/graphics_jni.cpp",
+          "recorded_snapshot_sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+          "current_snapshot_sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+          "published_sha256": "4072e2dc234fb9d6880fc4388e554fe42f63f93329723f52270d949c42b775cc",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java",
+          "recorded_snapshot_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+          "current_snapshot_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+          "published_sha256": "d64db27c7a0fc79039d8d57e0439c8817dcb48208223e1495816ff2328c3178f",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java",
+          "recorded_snapshot_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+          "current_snapshot_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+          "published_sha256": "2972dc45f6b2cb8b0728990852d53fb05749e267fec0aba4e8ea1e4bf05a7abf",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java",
+          "recorded_snapshot_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+          "current_snapshot_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+          "published_sha256": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java",
+          "recorded_snapshot_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+          "current_snapshot_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+          "published_sha256": "35c0864577416509e305ad3470c38fd2f231ad63b0fd9b8562e019bb651272d5",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/StreamPng.java",
+          "recorded_snapshot_sha256": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+          "current_snapshot_sha256": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+          "published_sha256": "2c98d0f7cb42d9424a0e7570ce09bdcf3312c3a1d4cde029d1d854391a005805",
+          "same": true
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/TilePlan.java",
+          "recorded_snapshot_sha256": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+          "current_snapshot_sha256": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+          "published_sha256": "03667a200996e177843be2217d5d58248133d08c9ed137a8544dec7767b47135",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/adaptive_phase_core.hpp",
+          "recorded_snapshot_sha256": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+          "current_snapshot_sha256": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+          "published_sha256": "8e65e0b5e45573516375cf9c649a3c0b919182d1f9cd3d74c5d230a93e05ee25",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/compact_core.hpp",
+          "recorded_snapshot_sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+          "current_snapshot_sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+          "published_sha256": "57453bef557c6c63e8daf339da827755870eb6d6a38042e74d59376a3ca22cbb",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/dense_core.hpp",
+          "recorded_snapshot_sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+          "current_snapshot_sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+          "published_sha256": "3fe2b0caa9c20959301273615776e8814c39a768dc2f631a33b71f2d91e58d3f",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/engine_session.hpp",
+          "recorded_snapshot_sha256": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+          "current_snapshot_sha256": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+          "published_sha256": "b23bd4f883469393cc38ccd8f73813a382660a516d9bd1909cc54d36d402a4d3",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/ether_core.hpp",
+          "recorded_snapshot_sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+          "current_snapshot_sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+          "published_sha256": "c3954b3509728ba95856f8132483f7c335a3a8a765d1f05a7ce6ae0203ae662d",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/exact_t_experiment.hpp",
+          "recorded_snapshot_sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+          "current_snapshot_sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+          "published_sha256": "df80eda8ba632504e209f300261e48665add589b8f7e48fc93ac8ef5794b4cda",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/factorized_core.hpp",
+          "recorded_snapshot_sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+          "current_snapshot_sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+          "published_sha256": "b76db1d63d1036aebccda6fff43870100e592e55a48bce29d392d10043dbc142",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/graphics_core_bridge.h",
+          "recorded_snapshot_sha256": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+          "current_snapshot_sha256": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+          "published_sha256": "f2db6d8491c83729b57171b4602d88f88fb2905993c6aa8a1b7e5a4250d7cff2",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_address.hpp",
+          "recorded_snapshot_sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+          "current_snapshot_sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+          "published_sha256": "2a9d581d74c6ce99dbf7f43ada863aa4e0fabd06951743f6542a8f1554a3d23f",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_bridge.h",
+          "recorded_snapshot_sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+          "current_snapshot_sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+          "published_sha256": "33b1c2ea461bec90304d21c75b9482e295dff9e87f9531ce624b51e599db578b",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_bridge.hpp",
+          "recorded_snapshot_sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+          "current_snapshot_sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+          "published_sha256": "979c9768fc958c986bceca7d449d97fd7c551faa83b1febe2a962a497014f6fa",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_core.hpp",
+          "recorded_snapshot_sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+          "current_snapshot_sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+          "published_sha256": "ff18ec11360f90387ee86a8ca6aa42e8841cfa56fa74d27a7efc88024abe7791",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_program.hpp",
+          "recorded_snapshot_sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+          "current_snapshot_sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+          "published_sha256": "d13ac3ac5c604ada8107fe70524c9c4777a2f24c832e659b462bdd2abfbdb94a",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_session.hpp",
+          "recorded_snapshot_sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+          "current_snapshot_sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+          "published_sha256": "269ec507c04fa3bf35866e11f6147d0d1966a826a429b51f40113eeef0913c1d",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/lab_circuit.hpp",
+          "recorded_snapshot_sha256": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+          "current_snapshot_sha256": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+          "published_sha256": "eb0fd4c6c70fb89d5da12721e7716c3b497449c7f34d902b4ac6dd42aca84a28",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/lab_memory.hpp",
+          "recorded_snapshot_sha256": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+          "current_snapshot_sha256": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+          "published_sha256": "50dfe3447bd70c46778b7aa99a82cd04491d6525f683f62a25e77abeb7d8438b",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/lab_protocols.hpp",
+          "recorded_snapshot_sha256": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+          "current_snapshot_sha256": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+          "published_sha256": "dc871fa19379494d2607d2ec8daf365d92af5430f46a2f62eede007e892688eb",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/micro_lab.hpp",
+          "recorded_snapshot_sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+          "current_snapshot_sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+          "published_sha256": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/mxlang.hpp",
+          "recorded_snapshot_sha256": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+          "current_snapshot_sha256": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+          "published_sha256": "5bc54cef9a6f0dde006390d8202e7b20a9ca90112ba3b87b073f6f523678d587",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/pauli_observer.hpp",
+          "recorded_snapshot_sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+          "current_snapshot_sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+          "published_sha256": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/physics_world.hpp",
+          "recorded_snapshot_sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+          "current_snapshot_sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+          "published_sha256": "e3ee0c7b0f5a2d75d2ead1ea5ce5b16ff49332afad894bc93e6b74f45a1ed2bb",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/rule_physics.hpp",
+          "recorded_snapshot_sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+          "current_snapshot_sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+          "published_sha256": "a68c16c1cbdcede6bdd255bfe96f1db2b75938982c4e9abe0e27212835aca2f9",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/teleport.hpp",
+          "recorded_snapshot_sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+          "current_snapshot_sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+          "published_sha256": "5e85ced4fab3779411ac1dc2bd89fffa1b6725e94ce8928594a15949ddb12825",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/visual_scene.hpp",
+          "recorded_snapshot_sha256": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+          "current_snapshot_sha256": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+          "published_sha256": "e6c1e2f30e81dcd225fd90243be5f456523602416e319060c4a9a810b67ec194",
+          "same": true
+        },
+        {
+          "path": "native/include/mundo_x/xasm.hpp",
+          "recorded_snapshot_sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+          "current_snapshot_sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+          "published_sha256": "73b5ffd6a202c36f05565db33254db3e3b6cd7a41399a5694fe92162fe278ca0",
+          "same": true
+        },
+        {
+          "path": "native/src/graphics_core_bridge.cpp",
+          "recorded_snapshot_sha256": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+          "current_snapshot_sha256": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+          "published_sha256": "543643b5466222f898302338d6ac8a8432e6fc45deb5da3c9d20cc6b1bff5b5f",
+          "same": true
+        },
+        {
+          "path": "native/src/infinite_bridge.cpp",
+          "recorded_snapshot_sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+          "current_snapshot_sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+          "published_sha256": "7657e5e5d2b7ccf81ea78039783acff106622a8a9b71a196b12bf2f6abf10b7e",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/build.gradle",
+          "recorded_snapshot_sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+          "current_snapshot_sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+          "published_sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java",
+          "recorded_snapshot_sha256": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c",
+          "current_snapshot_sha256": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c",
+          "published_sha256": "6e2ffb8e29d9e7a2fff302ce1bceb08b00b7f431bdd94294371b74cb70a4730c",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarPerformanceChecks.java",
+          "recorded_snapshot_sha256": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809",
+          "current_snapshot_sha256": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809",
+          "published_sha256": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/AndroidManifest.xml",
+          "recorded_snapshot_sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+          "current_snapshot_sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+          "published_sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/science-assets.json",
+          "recorded_snapshot_sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+          "current_snapshot_sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+          "published_sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/overlay.frag",
+          "recorded_snapshot_sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+          "current_snapshot_sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+          "published_sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/overlay.vert",
+          "recorded_snapshot_sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+          "current_snapshot_sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+          "published_sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/solar.frag",
+          "recorded_snapshot_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "current_snapshot_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "published_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/shaders/solar.vert",
+          "recorded_snapshot_sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+          "current_snapshot_sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+          "published_sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/textures/earth.png",
+          "recorded_snapshot_sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+          "current_snapshot_sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+          "published_sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/textures/jupiter.jpg",
+          "recorded_snapshot_sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+          "current_snapshot_sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+          "published_sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/assets/textures/moon.jpg",
+          "recorded_snapshot_sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+          "current_snapshot_sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+          "published_sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/cpp/CMakeLists.txt",
+          "recorded_snapshot_sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+          "current_snapshot_sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+          "published_sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java",
+          "recorded_snapshot_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+          "current_snapshot_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+          "published_sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java",
+          "recorded_snapshot_sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+          "current_snapshot_sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+          "published_sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarData.java",
+          "recorded_snapshot_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+          "current_snapshot_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+          "published_sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java",
+          "recorded_snapshot_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+          "current_snapshot_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+          "published_sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java",
+          "recorded_snapshot_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+          "current_snapshot_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+          "published_sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarMapView.java",
+          "recorded_snapshot_sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+          "current_snapshot_sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+          "published_sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarPng.java",
+          "recorded_snapshot_sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+          "current_snapshot_sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+          "published_sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+          "recorded_snapshot_sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+          "current_snapshot_sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+          "published_sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarSurface.java",
+          "recorded_snapshot_sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+          "current_snapshot_sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+          "published_sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java",
+          "recorded_snapshot_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+          "current_snapshot_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+          "published_sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/res/drawable/ic_solar.xml",
+          "recorded_snapshot_sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+          "current_snapshot_sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+          "published_sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+          "same": true
+        },
+        {
+          "path": "solar-android/app/src/main/res/values/styles.xml",
+          "recorded_snapshot_sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+          "current_snapshot_sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+          "published_sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+          "same": true
+        },
+        {
+          "path": "solar-android/build.gradle",
+          "recorded_snapshot_sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+          "current_snapshot_sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+          "published_sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+          "same": true
+        },
+        {
+          "path": "solar-android/gradle.properties",
+          "recorded_snapshot_sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+          "current_snapshot_sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+          "published_sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+          "same": true
+        },
+        {
+          "path": "solar-android/settings.gradle",
+          "recorded_snapshot_sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+          "current_snapshot_sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+          "published_sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+          "same": true
+        }
+      ],
+      "verification_record": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-review-allbody-verification.json",
+      "verification_sha256": "c72aab32198cdf08674642dbda384233d44df9b02fac77df9d4658e56b4fca35",
+      "package": "com.cosmicx.solar.review",
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "copies": [
+        {
+          "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-review-allbody/solar-android/app/build/outputs/apk/debug/app-debug.apk",
+          "sha256": "8000d7e47d046f3cf7415e51cf2180e6a72924680bffc55d76aebe2dc35fdcd4",
+          "bytes": 4620451,
+          "same_as_verification": true,
+          "shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "shader_matches_published_source": true
+        },
+        {
+          "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/COSMIC-X-Solar-Pruebas-1.3.0.apk",
+          "sha256": "8000d7e47d046f3cf7415e51cf2180e6a72924680bffc55d76aebe2dc35fdcd4",
+          "bytes": 4620451,
+          "same_as_verification": true,
+          "shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+          "shader_matches_published_source": true
+        }
+      ],
+      "signature_verification_reused_by_exact_apk_identity": true
+    }
+  },
+  "full_evaluation_reference": {
+    "path": "solar-android/tests/fixtures/solar-defined-reference.frag",
+    "before": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "570b82ee302f0feee1a1315d933f85040cb76c72",
+      "sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+      "bytes": 24883
+    },
+    "after": {
+      "mode": "100644",
+      "kind": "blob",
+      "git_blob": "570b82ee302f0feee1a1315d933f85040cb76c72",
+      "sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+      "bytes": 24883
+    },
+    "unchanged": true
+  },
+  "reused_baseline_and_test_apks": [
+    {
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/before/debug/app-debug.apk",
+      "role": "baseline",
+      "sha256": "b92745aad2803b7690d83ae8ff90051d752822cb833e999f43570d12dfd0b81e",
+      "recorded_sha256": "b92745aad2803b7690d83ae8ff90051d752822cb833e999f43570d12dfd0b81e",
+      "unchanged": true
+    },
+    {
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/before/androidTest/debug/app-debug-androidTest.apk",
+      "role": "test",
+      "sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+      "recorded_sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+      "unchanged": true
+    },
+    {
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/after/androidTest/debug/app-debug-androidTest.apk",
+      "role": "test",
+      "sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+      "recorded_sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+      "unchanged": true
+    }
+  ],
+  "historical_candidate_apks": {
+    "preservation_manifest": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/preservation-manifest.json",
+    "manifest_sha256": "7fc8d512335671a07f90fbf17b1ea0a48dd28387d1820714224791d306a5d171",
+    "files": [
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/COSMIC-X-Solar-1.3.0.apk",
+        "recorded_sha256": "a32e5de449e008d0552633f714999eefd46b0e5f8576024edd89eb2037a1730e",
+        "current_sha256": "a32e5de449e008d0552633f714999eefd46b0e5f8576024edd89eb2037a1730e",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/COSMIC-X-Solar-Pruebas-1.3.0.apk",
+        "recorded_sha256": "5e1512ec4374c500b2a61ae73f1fe69adffad2eff5ed5fceddd1c7c6bdd03efb",
+        "current_sha256": "5e1512ec4374c500b2a61ae73f1fe69adffad2eff5ed5fceddd1c7c6bdd03efb",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-source-manifest.json",
+        "recorded_sha256": "589a429e213c2587cd023816c15c3a173f7f4678cd82f17f739d6b5b90afc5ed",
+        "current_sha256": "589a429e213c2587cd023816c15c3a173f7f4678cd82f17f739d6b5b90afc5ed",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-verification.json",
+        "recorded_sha256": "83e7699283fdb9d56a12504ed8e4889448e0a67e64e16b7877872e6adb03cae2",
+        "current_sha256": "83e7699283fdb9d56a12504ed8e4889448e0a67e64e16b7877872e6adb03cae2",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-build.json",
+        "recorded_sha256": "b092054f242bc25cb7e9611bbeb7c3a90475925200deba7cdfec85f73b877349",
+        "current_sha256": "b092054f242bc25cb7e9611bbeb7c3a90475925200deba7cdfec85f73b877349",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-gradle-build.log",
+        "recorded_sha256": "ca65ac611f43e0187c240c9956eb72fd1b5b9f50b573cc8a7e6c5858ef23506d",
+        "current_sha256": "ca65ac611f43e0187c240c9956eb72fd1b5b9f50b573cc8a7e6c5858ef23506d",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-review-source-manifest.json",
+        "recorded_sha256": "6f6b199284fb3a0a3da9fbe37e522167e293a4dbcff9f8e2cdac48069b9bbfb7",
+        "current_sha256": "6f6b199284fb3a0a3da9fbe37e522167e293a4dbcff9f8e2cdac48069b9bbfb7",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-review-verification.json",
+        "recorded_sha256": "187a63718bb6dc25b6dbbe7ab30e4a30250522c74923940a52119f672555e154",
+        "current_sha256": "187a63718bb6dc25b6dbbe7ab30e4a30250522c74923940a52119f672555e154",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-review-build.json",
+        "recorded_sha256": "4cce84d74f02580481adedec7e043f18b0d4e7d8d813d21f57b56d2a0f1f00f8",
+        "current_sha256": "4cce84d74f02580481adedec7e043f18b0d4e7d8d813d21f57b56d2a0f1f00f8",
+        "unchanged": true
+      },
+      {
+        "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/candidate-review-gradle-build.log",
+        "recorded_sha256": "cef91e46dc291ceadcd4bb766b2c30ddd68f8dfc7bb522bd564a1ef91dd84425",
+        "current_sha256": "cef91e46dc291ceadcd4bb766b2c30ddd68f8dfc7bb522bd564a1ef91dd84425",
+        "unchanged": true
+      }
+    ]
+  },
+  "historical_c2c_delivery": {
+    "previous_check_manifest": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/source-identity-history/final-source-identity-3954b000.json",
+    "is_final_candidate": false,
+    "rechecked_or_modified_in_this_audit": false
+  },
+  "attribution_limits": [
+    "Exact source identity does not move an earlier CI run to a new commit or assert that the final CI run passed.",
+    "All non-Solar module trees including their tests/build inputs are unchanged 3954-to-b9ec; historical 5e-to-3954 equality is retained separately.",
+    "Solar production changed two files: full-catalogue fragment evaluation and its honest status label. Old a32e/5e15 APKs are historical; current APKs are c01b/8000.",
+    "Both current APK builds used 3954 plus two frozen overlays. All 62 snapshot entries now exactly match b9ec, including 60 production/build inputs and 2 reused test source files.",
+    "Signature checks are reused only after APK byte identity with their verification reports. No new physical-device or emulator validation is claimed.",
+    "MERGE_SHA is not yet known; this manifest identifies the published PR head, not a completed merge."
+  ],
+  "all_identity_assertions_passed": true
+}

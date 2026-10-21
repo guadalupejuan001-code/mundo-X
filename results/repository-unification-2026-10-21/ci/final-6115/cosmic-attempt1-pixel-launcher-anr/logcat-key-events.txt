@@ -1,0 +1,3 @@
+29727: 10-21 02:25:02.282   560   581 I WindowManager: finishDrawing of orientation change: Window{3e9cf7d u0 Application Not Responding: com.google.android.apps.nexuslauncher} 2392ms
+30477: 10-21 02:25:06.290   560   581 I WindowManager: finishDrawing of orientation change: Window{3e9cf7d u0 Application Not Responding: com.google.android.apps.nexuslauncher} 273ms
+44367: 10-21 02:26:13.842  3100  3160 E CosmicTests: java.lang.AssertionError: Timed out: dialog control Ir a 10¹⁰⁰ y su pareja

@@ -8,11 +8,13 @@ ofrece un modo **Solar 4K UHD**, un mapa orbital interactivo y una cámara de
 descenso para los ocho planetas y las catorce lunas del catálogo.
 
 La integración **1.3.0** publica observaciones atómicas de Ether, comparte las
-efemérides, reutiliza las máscaras de visibilidad y evita evaluar material
-procedural cuyo resultado no se usa. La exportación usa el `StreamPng`
-original de Graphics sin crear un segundo Bitmap completo. Véase el
-[informe de integración y rendimiento](../docs/solar-integration-performance.md)
-para resultados, límites, procedencia y comandos de repetición.
+efemérides y evita evaluar material procedural cuyo resultado no se usa. El
+shader evalúa los 23 cuerpos con gradientes de filtrado definidos; el descarte
+GPU por teselas se retiró al detectar diferencias frente a la referencia
+completa. La exportación usa el `StreamPng` original de Graphics sin crear un
+segundo Bitmap completo. La [validación actual de Solar](../docs/solar-shader-determinism-2026-10-21.md)
+recoge fuentes, comprobaciones y límites; el [informe anterior](../docs/solar-integration-performance.md)
+conserva las medidas y la procedencia de la primera integración.
 
 ## Explorar
 
@@ -179,16 +181,25 @@ paquete elegido y «Pruebas» al nombre; permite instalar esta revisión junto a
 la original. Las compilaciones de desarrollo usan firma debug; actualizar un
 paquete existente requiere la misma clave con la que se firmó su instalación.
 
-La nueva [workflow de comparación](../.github/workflows/solar-performance.yml)
-compila la referencia af0b179 y esta versión con instrumentación idéntica.
-No se ejecutó remotamente en esta ronda: la publicación GitHub fue bloqueada
-por la revisión automática de permisos. Las pruebas locales ejecutadas se
-distinguen de las pruebas disponibles en el informe.
+El [workflow de comparación](../.github/workflows/solar-performance.yml)
+construye una referencia a partir de `af0b179`, con filtrado definido y
+evaluación independiente de todo el catálogo, y el candidato con la misma
+instrumentación. El pareado de `b9ec7452` aprobó **8/8 escenas y 584.640
+píxeles RGBA sin diferencias**, con repeticiones exactas; también aprobó la
+ejecución posterior de `6115ccad`, cuyas fuentes de producto permanecen
+idénticas. La [revisión de exactitud](../docs/solar-shader-determinism-2026-10-21.md)
+conserva los hashes, resultados y límites de cada comparación. La referencia
+definida no equivale a conservar el comportamiento indefinido del shader antiguo.
 
 El workflow [solar-4k.yml](../.github/workflows/solar-4k.yml) construye
 el APK, verifica firma y ABI, registra SHA-256 y procedencia del núcleo, y lo
-prueba en Android 15 con el driver de software SwiftShader y 2 GB configurados
-para el emulador. Esas comprobaciones no miden el rendimiento de un Samsung A16.
+prueba en Android 15 con el driver de software SwiftShader y 2.048 MiB
+solicitados al emulador. El runner registra ahora la memoria efectiva: el
+argumento solicitado no es un límite de la VM, y se observó un aumento a
+2.560 MiB. El perfil [8K](../.github/workflows/solar-8k.yml) usa la imagen AOSP
+API35 y aprobó [15/15 casos en `6115ccad`](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39532390017).
+Estas comprobaciones acreditan corrección en software GLES; no miden el
+rendimiento de un Samsung A16.
 La procedencia verifica las fuentes de los perfiles integrados del núcleo y
 de resolución, y registra los cambios frente a la versión 4K original. Los
 workflows se ejecutan en `main` y en los pull requests cuando cambian Solar o

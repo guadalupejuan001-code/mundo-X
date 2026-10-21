@@ -1,0 +1,22 @@
+{
+  "ram_mb": 2048,
+  "software_gles": "swiftshader",
+  "virtualization": "TCG",
+  "system_image": "system-images;android-29;default;x86_64",
+  "art_compile": "speed",
+  "status": "blocked_or_failed",
+  "stage": "finished",
+  "cases": [],
+  "swiftshader_threads": 1,
+  "driver_configuration": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+  "driver_configuration_sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0",
+  "driver_configuration_directory": "/tmp/solar-avd-hpn2veqm",
+  "active_version": null,
+  "boot_poll_timeouts": 0,
+  "boot_seconds": 144.27351104200352,
+  "emulator_processes": [],
+  "driver_config_read_observed": true,
+  "driver_config_trace_sha256": "08de36b6abd95427e15eb37084d5ba2cbe183ae18fe4befa10498ac5f3dd5ee2",
+  "error": "TimeoutExpired: Command '['/workspace/scratch/7def14e3f3d9/solar-build/sdk/platform-tools/adb', '-s', 'emulator-5580', 'shell', 'input', 'keyevent', '82']' timed out after 29.999987962000887 seconds",
+  "stage_before_cleanup": "configuring_display"
+}

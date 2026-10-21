@@ -1,5 +1,47 @@
 # Consolidación de Mundo X: estructura, rescates y evidencia
 
+## Cierre publicado
+
+**PR25 fue fusionada en `main` el 21 de octubre de 2026 a las 02:36:12 UTC**
+mediante [`faa653c9bc81a3a7a48a5fce643878c32c98bd61`](https://github.com/guadalupejuan001-code/mundo-X/commit/faa653c9bc81a3a7a48a5fce643878c32c98bd61).
+La fusión conserva el historial recuperado. **Las 18 campañas de CI aprobaron**
+en el head `6115ccadef747c0a767990f35a39d1079ec65c87` antes de fusionar.
+Los PR **19, 20, 21 y 22 quedaron cerrados como sustituidos**, con sus aportes,
+descartes y descripciones originales conservados. La consulta posterior no
+encontró PR abiertos. Las ramas y entregas históricas conservan su procedencia.
+
+| Validación final | Resultado |
+| --- | --- |
+| Campañas de GitHub Actions | 18/18 aprobadas sobre `6115ccad`. |
+| Graphics normal / 4K / 8K | 23/23, 26/26 y 30/30. |
+| COSMIC / Graphics compartido / MicroLab | 26/26, 22/22 y 8/8. |
+| Solar normal / 4K / 8K | 13/13, 19/19 y 15/15. |
+| Solar, comparación definida independiente | 8/8 escenas, 584.640 píxeles RGBA, cero diferencias y repeticiones exactas. |
+| Solar 8K AOSP | 16 capturas PNG; las dos imágenes UHD miden 4320 × 7680, 33.177.600 píxeles cada una. |
+| Núcleo, PC, Windows, XLab y demás contratos | Campañas aprobadas; los resultados y límites individuales permanecen en los apartados siguientes. |
+
+El [recibo de cierre](../results/repository-unification-2026-10-21/closure-receipt.json)
+y el [estado final de las 18 campañas](../results/repository-unification-2026-10-21/ci/final-6115/workflow-summary.json)
+fijan SHAs, estados y enlaces. La evidencia 8K conserva el
+[resumen de capturas](../results/repository-unification-2026-10-21/ci/final-6115/solar-8k-summary.json)
+y los [recursos observados](../results/repository-unification-2026-10-21/ci/final-6115/solar-8k-resource-provenance.json).
+El emulador anunció 2.560 MiB tras solicitarle 2.048; `MemTotal` del invitado
+fue 2.532.896 KiB y el RSS del proceso emulador antes de instrumentar fue
+3.450.340 KiB. Son fotografías de recursos del entorno, no picos de la aplicación
+ni una garantía de consumo total de 2 GiB.
+
+COSMIC necesitó un único reintento del perfil de 26 casos: un aviso ANR de
+Pixel Launcher cubrió su selector de direcciones. La captura, el primer resultado
+25/26 y el resultado posterior 26/26 con el mismo APK están preservados en
+`ci/final-6115/cosmic-attempt1-pixel-launcher-anr` y `cosmic-attempt2-success`.
+No se modificó el producto ni se relajó la comprobación para aprobar.
+
+Este cierre documental añade informes y procedencia después de la fusión;
+los resultados de ejecución se atribuyen al head validado, no a una ejecución
+nueva del commit documental.
+
+## Referencia de la revisión
+
 **Corte de revisión: 21 de octubre de 2026.** La base recuperada es
 `52150dfa928c088a32e69ce32f53c1e5a3b558c3`. La integración se reúne en
 [PR25](https://github.com/guadalupejuan001-code/mundo-X/pull/25), cuyo historial
@@ -49,7 +91,7 @@ número no equivale a 70 funciones nuevas.
 | PR22, física y Solar | La física 2D y las conexiones Ether/Solar posteriores ya están presentes. Se corrige además un fallo real de recuperación de memoria en la física 2D actual. | Se conservan las mejoras posteriores; el plan histórico con rutas obsoletas no sustituye la documentación actual. |
 | PR4/5 y otras ramas integradas | Lenguajes `.mx`, `.x`, `.qx`, fases, transferencia, núcleos finitos, laboratorios, VM, Windows anfitrión y proyectos portables. | Sus fuentes actuales permanecen. Entregas binarias y disparadores antiguos de CI no se importan como actualizaciones de código. |
 
-El cierre de los borradores se vincula a PR25 una vez publicado su reemplazo.
+El cierre de los cuatro borradores está vinculado a la fusión de PR25.
 Los SHAs históricos del inventario permiten recuperar su procedencia.
 
 ## Correcciones de esta consolidación
@@ -159,7 +201,8 @@ con repeticiones exactas en ambos programas ejecutados por separado. La
 interfaz deja de presentar el porcentaje del planificador como trabajo GPU
 ahorrado. El planificador permanece como infraestructura comprobable; ese
 ahorro ya no se atribuye al renderer publicado. La comparación Android de
-ocho escenas sigue siendo obligatoria para este nuevo candidato.
+ocho escenas del nuevo candidato `b9ec7452` aprobó: **584.640 píxeles RGBA,
+cero diferencias y todas las repeticiones exactas**.
 
 Son pruebas de equivalencia después de corregir el filtrado y definir el
 oráculo completo; no afirman igualdad con el color indefinido anterior.
@@ -185,11 +228,13 @@ separado; compilar los APK o pasar GLES en host no lo sustituye.
 | XLab Java | 23 fuentes, 84 clases | Incluye ambas instrumentaciones. |
 | COSMIC Java | 46 fuentes, 170 clases | Incluye el menú de espejos, el renderer y las instrumentaciones compartidas. |
 | Procedencia nativa | 83 fuentes verificadas byte por byte | Las fuentes revisadas tienen un pin nuevo; las no modificadas conservan su referencia. |
-| Solar GLES, Mesa, referencia final completa | 32/32 escenas más el caso Android exacto; color, identidad y profundidad exactos | 5.529.600 + 219.240 píxeles entre las tres salidas; 241.568 KiB RSS máximo de las dos campañas. |
+| Solar GLES, Mesa, shader final `e36370ee` | 32/32 escenas; color, identidad y profundidad exactos | 5.529.600 píxeles entre las tres salidas; 241.436 KiB RSS máximo. |
 | Solar GLES, SwiftShader, referencia inicial | 32/32 escenas; 1.843.200 píxeles RGBA, cero diferencias | Un trabajador, procesos separados y repeticiones exactas tras calentamiento simétrico; candidato 723.444 KiB RSS máximo. El caso Android adicional reveló después el defecto de particionado de esta referencia. |
-| Solar GLES, SwiftShader, referencia final completa | Caso Android de Urano: 73.080 píxeles RGBA, cero diferencias y repeticiones exactas | Incluye todos los cuerpos y la evaluación completa de materiales y nubes; mismo shader de producción. |
+| Solar GLES, SwiftShader, ensayo de Urano anterior al retiro del filtro | Caso Android de Urano: 73.080 píxeles RGBA, cero diferencias y repeticiones exactas | Referencia completa contra el candidato `361676e4`; no sustituye los casos de Tierra y Saturno encontrados después. |
+| Solar GLES, SwiftShader, shader final `e36370ee` | Tierra y Saturno: 146.160 píxeles RGBA, cero diferencias y repeticiones exactas | Referencia completa independiente en procesos separados; RSS máximo 722.488 KiB candidato y 664.796 KiB referencia. |
 | Gradientes Solar | 896 componentes por controlador, cero fallos | Diferencias finitas independientes; máximo error absoluto observado 2,06 × 10⁻⁸. |
-| APK Solar | Candidato, referencia definida, instrumentación y variante coexistente compilados | JDK17, Gradle8.9, un trabajador, JVM de 1 GiB; firma, fuentes, assets, ABI y alineación verificados. |
+| Solar Android, shader final `e36370ee` | 8/8 escenas A/B, 584.640 píxeles RGBA exactos; repeticiones exactas; normal 13/13 | Android 15, SwiftShader, 2.048 MiB solicitados al emulador, sin medición de `MemTotal` en ese pareado; configuración de un trabajador observada por el runner. |
+| APK Solar | Candidato final `c01b2294` y variante coexistente `8000d7e4` recompilados; referencia e instrumento común intactos | JDK17, Gradle8.9, un trabajador, JVM de 1 GiB; firma, 62 fuentes por variante, assets, ABI y alineación verificados. |
 
 Fuentes: [campaña nativa](../results/repository-unification-2026-10-21/core/gate-status.json),
 [revisión de física](repository-core-review-2026-10-21.md),
@@ -198,8 +243,8 @@ Fuentes: [campaña nativa](../results/repository-unification-2026-10-21/core/gat
 [XLab](../results/repository-unification-2026-10-21/xlab-java-compile.json) y
 [COSMIC](../results/repository-unification-2026-10-21/cosmic-java-compile.json), además de los
 [pins](../results/repository-unification-2026-10-21/core/integrated-source-provenance.json),
-la [campaña Solar](solar-shader-determinism-2026-10-21.md) y su
-[procedencia de APK](../results/repository-unification-2026-10-21/solar/android-builds/solar-apk-builds.json).
+la [campaña Solar](solar-shader-determinism-2026-10-21.md) y la
+[procedencia de sus APK finales](../results/repository-unification-2026-10-21/solar/android-builds/APK-PROVENANCE-allbody.json).
 
 CTest tuvo un problema local de permiso ejecutable en `infinite_tensor`. Se
 conservan los intentos iniciales y el hash del binario; corregir sólo su modo de
@@ -209,10 +254,13 @@ Los manifiestos comprueban 144 entradas antes y después de las pruebas.
 Los resultados Android se consultan en los checks de PR25, vinculados a su
 propio commit y APK. La campaña local del candidato `3954b000` terminó con
 seis de ocho escenas exactas y los ocho píxeles diferentes descritos arriba;
-no se registra como aprobada. El nuevo candidato exige repetir ese gate.
-Su runner observa que el emulador leyó la configuración de SwiftShader antes
-de atribuirle el número de trabajadores solicitado; después exige ocho escenas
-y todas sus repeticiones exactas.
+no se registra como aprobada. El candidato `b9ec7452` sí superó ese gate en
+[CI](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818861).
+El [informe completo](../results/repository-unification-2026-10-21/ci/final-b9ec/solar-paired-report.json)
+conserva las entradas, repeticiones e identidades APK. Su runner observa que
+el emulador leyó la configuración de SwiftShader antes de atribuirle el número
+de trabajadores solicitado; después exige ocho escenas y todas sus repeticiones
+exactas.
 
 ## Cierre de los fallos encontrados por el CI
 
@@ -272,6 +320,39 @@ La [evidencia de CI](../results/repository-unification-2026-10-21/ci/) conserva
 los fallos originales y sus diagnósticos. La compilación conjunta y la ejecución
 Android de las correcciones finales son comprobaciones separadas, vinculadas al
 commit que contienen, y no se dan por aprobadas por haber identificado la causa.
+
+### Arranque de Solar 8K y memoria efectiva del emulador
+
+El candidato de producto `b9ec7452` completó **17 de 18 campañas**, incluidas
+la comparación exacta de ocho escenas, Solar normal 13/13 y Solar 4K 19/19.
+Solar 8K no completó ninguno de sus dos intentos sobre la imagen Google APIs:
+el sistema Android abortó y el segundo intento registró presión de memoria
+antes de iniciar Solar, pérdida de foco y la terminación de `system_server`
+por watchdog. Esos intentos son fallos conservados, no pruebas aprobadas.
+El [resumen de esa revisión](../results/repository-unification-2026-10-21/ci/final-b9ec/workflow-summary.json)
+y sus dos diagnósticos fijan la evidencia y los artefactos originales.
+
+`6115ccadef747c0a767990f35a39d1079ec65c87` cambia únicamente el workflow
+Solar 8K y su runner. Selecciona para 8K la imagen AOSP Android 15 que ya
+utiliza XLab; normal y 4K conservan Google APIs. El producto, el inicio real
+en 8K, los quince casos, sus aserciones y plazos permanecen intactos. El
+runner añade mediciones previas de host/invitado, configuración efectiva,
+identidad del sistema y logcat del arranque.
+
+El [cotejo de identidad](../results/repository-unification-2026-10-21/ci/final-6115/source-identity.json)
+verifica 416 entradas protegidas idénticas, incluidas 319 de producto, build y
+pruebas; también conserva las 62 fuentes y el hash de cada APK preparado.
+Se adjuntan el diff y el script tal como se ejecutó, con rutas de esta sesión.
+Esto mantiene la atribución de los resultados anteriores a sus bytes probados;
+no convierte las 17 campañas de `b9ec` en ejecuciones sobre el runner nuevo.
+
+El emulador había anunciado **2.560 MiB** pese a recibir `-memory 2048`.
+Ese aumento también aparece en una ejecución AOSP de XLab, por lo que no se
+atribuye exclusivamente a Google APIs. La solicitud de 2.048 MiB no prueba
+un límite efectivo de la VM. Las nuevas evidencias distinguen la solicitud,
+`MemTotal` observado y el proceso host; una fotografía previa no equivale a
+un pico. El límite virtual de 2 GiB de las campañas nativas sigue teniendo
+su alcance por proceso.
 
 ## Qué demuestra la estructura y qué falta para valorarla
 

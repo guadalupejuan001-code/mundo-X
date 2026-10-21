@@ -1,0 +1,51 @@
+{
+  "commit": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+  "run": 39529818889,
+  "attempt": 1,
+  "failedJob": 118993282306,
+  "artifactId": 12315067473,
+  "artifactSha256": "6def6b4a69c96ccb15293ea8faa326b51dd518bbe45276daee8e2e59c4aab2e7",
+  "observation": "Android ART SuspendAll/SuspendThread timeouts aborted com.android.phone and Google Play Services. system_server then crashed with DeadSystemException and zygote restarted. Solar instrumentation aborted after 3 passed tests, before a complete test result. No Solar assertion or Solar native fatal is recorded. This attempt does not validate the remaining 12 tests.",
+  "retry": "One retry of the failed android-validation job only, with unchanged source and APKs.",
+  "excerpts": [
+    {
+      "line": 9345,
+      "text": "10-21 01:56:42.521  1693  1911 F libc    : Fatal signal 6 (SIGABRT), code -6 (SI_TKILL) in tid 1911 (Lite Thread #0), pid 1693 (earchbox:search)"
+    },
+    {
+      "line": 17261,
+      "text": "10-21 01:57:18.410  1066  1075 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 1075 (HeapTaskDaemon), pid 1066 (m.android.phone)"
+    },
+    {
+      "line": 17275,
+      "text": "10-21 01:57:33.049  2883  2883 F libc    : Fatal signal 6 (SIGABRT), code -6 (SI_TKILL) in tid 2883 (.gms.persistent), pid 2883 (.gms.persistent)"
+    },
+    {
+      "line": 17786,
+      "text": "10-21 01:57:38.370  3313  3313 F DEBUG   : Abort message: 'Caused CMEventHandler failure : SuspendThreadByThreadId timed out: 2883 (main), state&flags: 0xb, priority: 5, barriers: 0x781d935bf980, ours: 0x781d935bf980, barrier value: 1, nsusps: 0, ncheckpts: 0, thread_info: Target states: [2883 (.gms.persistent) D 359 359 0 0 -1 4194624 12169 0 9 0 39 12 0 0 20 0 45 0 11108 168, 2883 (.gms.persistent) D 359 359 0 0 -1 4194624 12174 0 9 0 39 12 0 0 20 0 43 0 11108 168]1@132068421663108 Final wait time: 2.100s'"
+    },
+    {
+      "line": 18173,
+      "text": "10-21 01:57:40.297  3306  3306 F DEBUG   : Abort message: 'Caused HeapTaskDaemon failure : SuspendAll timeout: Unsuspended threads: Thread[10,tid=1074,Runnable,Thread*=0x781fadd71b90,peer=0x1400db58,\"Jit thread pool worker thread 0\"], Info for Thread[10,tid=1074,Runnable,Thread*=0x781fadd71b90,peer=0x1400db58,\"Jit thread pool worker thread 0\"]:Jit thread pool worker thread 0 tid: 1074, state&flags: 0x9, priority: 5,  barrier value: 1, Target states: [1074 (Jit thread pool) D 359 359 0 0 -1 4194368 32258 0 105 0 83 31 0 0 29 9 58 0 2259 16, 1074 (Jit thread pool) D 359 359 0 0 -1 4194368 32258 0 105 0 83 31 0 0 29 9 58 0 2259 16]1@132068650029212 Final wait time: 2.070s'"
+    },
+    {
+      "line": 18339,
+      "text": "10-21 01:57:41.091   549   576 E AndroidRuntime: *** FATAL EXCEPTION IN SYSTEM PROCESS: android.fg"
+    },
+    {
+      "line": 18425,
+      "text": "10-21 01:57:41.107   549   576 I DropBoxManagerService: add tag=system_server_crash isTagEnabled=true flags=0x2"
+    },
+    {
+      "line": 18821,
+      "text": "10-21 01:57:42.977   359   359 E Zygote  : Exit zygote because system server (pid 549) has terminated"
+    }
+  ],
+  "evidenceSha256": {
+    "logcat.txt": "732ccb25883b13b1e9b95dad1ef32d299dab838c7f37e562a99395da3e9947e2",
+    "instrumentation.txt": "3c756a708850d7ea6a4d47472db3e88c67beb2cabbb27ef7ccec0b251b97ecbe",
+    "emulator.log": "b593bca0c1d90c4858d47521b87d7b2b05ac92b0cfa071324c1890880f3513a0",
+    "job-118993282306.log": "8c62e7f3a6d333b25e568eadb9b6115eae8a9a154572b6add2bcc0dc1388b7d4",
+    "wellbeing-disabled.txt": "b941b666f999ed1e31d250d6b78f14f076a754b5fb1b15b01074a014a674686e"
+  }
+}

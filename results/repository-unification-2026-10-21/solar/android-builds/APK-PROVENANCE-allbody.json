@@ -1,0 +1,63 @@
+{
+  "created_utc": "2026-10-21T01:51:48.787142+00:00",
+  "scope": "Current normal/review delivery APKs rebuilt after full-catalogue production fallback; signature/manifest/ABI/assets verified. Runtime validation is separate.",
+  "head_at_delivery_verification": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+  "frozen_source_base_commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+  "production_overlay_paths": [
+    "solar-android/app/src/main/assets/shaders/solar.frag",
+    "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java"
+  ],
+  "historical_preservation_manifest_sha256": "7fc8d512335671a07f90fbf17b1ea0a48dd28387d1820714224791d306a5d171",
+  "baseline_rebuilt": false,
+  "test_rebuilt": false,
+  "baseline_sha256": "b92745aad2803b7690d83ae8ff90051d752822cb833e999f43570d12dfd0b81e",
+  "common_test_sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+  "runtime_pair_manifest": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/pair-manifest.json",
+  "runtime_pair_manifest_sha256": "268dc75fc6d17a0d58374badc4559536992315b29b842c49acb8cb8284ae96be",
+  "artifacts": [
+    {
+      "variant": "candidate-allbody",
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/COSMIC-X-Solar-1.3.0.apk",
+      "sha256": "c01b2294c4f64c8d9181884f9dca34fb462365e425c73dea6cdf02e547484430",
+      "bytes": 4620435,
+      "package": "com.cosmicx.solar",
+      "version_name": "1.3.0",
+      "version_code": "4",
+      "min_sdk": "26",
+      "target_sdk": "35",
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "abis": [
+        "arm64-v8a",
+        "x86_64"
+      ],
+      "shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+      "verified_source_snapshot": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody",
+      "source_manifest_sha256": "431ce8755bbdec31ffe8750e78ecaf96c2c56019694e308b5b3c82984d5d2724",
+      "verification_sha256": "efcfdecee52ccc74f6d79adb06d9d7e62a6509d267c08a6020af4c22c9ddf988",
+      "previous_sha256": "a32e5de449e008d0552633f714999eefd46b0e5f8576024edd89eb2037a1730e",
+      "previous_archive": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/COSMIC-X-Solar-1.3.0.apk"
+    },
+    {
+      "variant": "candidate-review-allbody",
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/COSMIC-X-Solar-Pruebas-1.3.0.apk",
+      "sha256": "8000d7e47d046f3cf7415e51cf2180e6a72924680bffc55d76aebe2dc35fdcd4",
+      "bytes": 4620451,
+      "package": "com.cosmicx.solar.review",
+      "version_name": "1.3.0",
+      "version_code": "4",
+      "min_sdk": "26",
+      "target_sdk": "35",
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "abis": [
+        "arm64-v8a",
+        "x86_64"
+      ],
+      "shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+      "verified_source_snapshot": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-review-allbody",
+      "source_manifest_sha256": "73c6d13c210871e88736de0686b033e53069f6652d14ab21ff40d64260cd0ff2",
+      "verification_sha256": "c72aab32198cdf08674642dbda384233d44df9b02fac77df9d4658e56b4fca35",
+      "previous_sha256": "5e1512ec4374c500b2a61ae73f1fe69adffad2eff5ed5fceddd1c7c6bdd03efb",
+      "previous_archive": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/historical/3954b000-culling/COSMIC-X-Solar-Pruebas-1.3.0.apk"
+    }
+  ]
+}

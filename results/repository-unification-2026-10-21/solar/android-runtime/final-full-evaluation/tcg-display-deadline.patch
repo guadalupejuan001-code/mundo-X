@@ -1,0 +1,11 @@
+--- published/tools/solar_performance_android.py
++++ local-tcg/solar_performance_android_tcg.py
+@@ -156,7 +156,7 @@
+                     report['emulator_processes']=driver_processes(emulator)
+                     verify_driver_config(output/'driver-config-open.log',report);save()
+                 report['status']='running';stage('configuring_display')
+-                for cmd in [['shell','wm','size','640x360'],['shell','wm','density','160'],['shell','input','keyevent','82'],['shell','settings','put','secure','immersive_mode_confirmations','confirmed']]:android(cmd,timeout=30)
++                for cmd in [['shell','wm','size','640x360'],['shell','wm','density','160'],['shell','input','keyevent','82'],['shell','settings','put','secure','immersive_mode_confirmations','confirmed']]:android(cmd,timeout=120)
+                 for label,root in [('before',a.baseline),('after',a.after)]:
+                     stage('preparing_apks',label)
+                     target=output/label;target.mkdir(exist_ok=True)

@@ -1,5 +1,24 @@
 # Solar: integración, APK y medidas reproducibles
 
+## Actualización del 21 de octubre de 2026
+
+Este documento conserva la recuperación y las medidas del 20 de octubre.
+Los apartados que describen el remoto sin publicar, el permiso de aquella
+sesión y el gate Android fallido corresponden a ese corte histórico. La
+[consolidación posterior](repository-unification-2026-10-21.md) y
+[PR25](https://github.com/guadalupejuan001-code/mundo-X/pull/25) registran la
+publicación autorizada y el estado de integración posterior.
+
+El candidato `b9ec7452307c610448adbb1217e1566aa88fa79b` define los gradientes
+del filtrado y evalúa todos los cuerpos en GPU. Se retiró el descarte por
+teselas tras diferencias reproducibles frente a la referencia completa; el
+planificador y sus cachés permanecen como infraestructura, sin atribuirles
+ahorro GPU en esta versión. Las otras mejoras de materiales, efemérides,
+observaciones y exportación se conservan. La [validación actual](solar-shader-determinism-2026-10-21.md)
+identifica cada referencia, shader y ejecución, incluidos los fallos intermedios.
+Las cifras de rendimiento del resto de este informe pertenecen a sus fuentes
+históricas y no se trasladan al shader nuevo.
+
 ## Versión y alcance
 
 Esta ronda reanuda Solar por petición explícita del usuario. La referencia es

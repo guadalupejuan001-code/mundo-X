@@ -208,10 +208,10 @@ Los workflows comprueban los cambios de código en solicitudes de integración a
 | Ruta | Comprobaciones que conserva |
 | --- | --- |
 | [Contratos nativos y escritorio](.github/workflows/cosmic-contracts.yml) | Núcleos, GHZ de 1.000, qubit 999, presupuestos, restauración, proyectos `.cosmic`, VM, CPU/PC y relación causal entre núcleo e imagen. |
-| [COSMIC Android](.github/workflows/cosmic-android.yml) | 25 casos COSMIC, 18 Graphics y 8 MicroLab sobre las fuentes compartidas. |
-| [Graphics](.github/workflows/graphics-android.yml), [4K](.github/workflows/graphics-4k.yml), [8K](.github/workflows/graphics-8k.yml) | Inventarios de 20, 24 y 28 casos: registro de 1.000, Infinite, estado portable, framebuffer, selección, orientación y PNG. |
-| [Solar](.github/workflows/solar-android.yml) y [Solar 4K](.github/workflows/solar-4k.yml) | 511 comprobaciones analíticas; 13 casos Android del perfil normal y 19 del perfil UHD/ambientes. |
-| [PC propia](.github/workflows/own-pc-android.yml) | Diez suites nativas y 29 casos Android previstos: arranque, memoria, regresión ISO, vídeo huésped/GLES hasta 8K, propiedad de instantáneas JNI y sesión Infinite compartida entre CPU y viewport. |
+| [COSMIC Android](.github/workflows/cosmic-android.yml) | 26 casos COSMIC, 22 Graphics y 8 MicroLab sobre las fuentes compartidas. |
+| [Graphics](.github/workflows/graphics-android.yml), [4K](.github/workflows/graphics-4k.yml), [8K](.github/workflows/graphics-8k.yml) | Inventarios de 23, 26 y 30 casos: registro de 1.000, Infinite, estado portable, reutilización exacta de fotogramas, espejos en el perfil normal, selección, orientación y PNG. |
+| [Solar](.github/workflows/solar-android.yml), [Solar 4K](.github/workflows/solar-4k.yml) y [Solar 8K](.github/workflows/solar-8k.yml) | 511 comprobaciones analíticas; 13 casos Android del perfil normal, 19 del perfil 4K/ambientes y 15 del perfil 8K. |
+| [PC propia](.github/workflows/own-pc-android.yml) | Diez suites nativas y 30 casos Android previstos: arranque, memoria, regresión ISO ENTER/LEAVE, vídeo huésped/GLES hasta 8K, propiedad de instantáneas JNI y sesión Infinite compartida entre CPU y viewport. |
 | [Windows](.github/workflows/windows-x64.yml), [runtime visual](.github/workflows/visual-runtime.yml), [XLab](.github/workflows/android-apk.yml) | Compilación del conjunto en sus plataformas y regresiones de los experimentos conservados. |
 
 Los recuentos describen el inventario esperado; el resultado de cada ejecución está en [Actions](https://github.com/guadalupejuan001-code/mundo-X/actions). Una prueba que pasa demuestra las condiciones examinadas. Las pruebas GLES en Android virtual no sustituyen una medición de rendimiento en el teléfono físico.

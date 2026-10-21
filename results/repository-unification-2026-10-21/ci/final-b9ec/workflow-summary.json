@@ -1,0 +1,148 @@
+{
+  "head": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+  "observed_at": "2026-10-21 02:15:12 UTC",
+  "total": 18,
+  "passed": 17,
+  "failed": 1,
+  "scope": "GitHub Actions workflows triggered for this exact PR head. Solar 8K second attempt failed due to incomplete Android system run and is not reported as validated.",
+  "runs": [
+    {
+      "id": 39529818934,
+      "name": "COSMIC X quantum algorithm experiments",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818934"
+    },
+    {
+      "id": 39529818909,
+      "name": "COSMIC X Engine 8K and optimized core validation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818909"
+    },
+    {
+      "id": 39529818833,
+      "name": "COSMIC X Solar APK and Android validation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818833"
+    },
+    {
+      "id": 39529818890,
+      "name": "COSMIC X Engine unified Android",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818890"
+    },
+    {
+      "id": 39529818861,
+      "name": "Solar defined filtering and exact Android integration",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818861"
+    },
+    {
+      "id": 39529818933,
+      "name": "Verify procedural graphics",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818933"
+    },
+    {
+      "id": 39529818869,
+      "name": "COSMIC X Engine contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818869"
+    },
+    {
+      "id": 39529818836,
+      "name": "Ether bounded stress and independent regression",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818836"
+    },
+    {
+      "id": 39529818871,
+      "name": "Ether shared state and finite components",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818871"
+    },
+    {
+      "id": 39529818877,
+      "name": "COSMIC X Engine native 4K APK and Android validation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818877"
+    },
+    {
+      "id": 39529818907,
+      "name": "Verify Motor X visual integration",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818907"
+    },
+    {
+      "id": 39529818822,
+      "name": "Build Mundo X Windows 10 x64",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818822"
+    },
+    {
+      "id": 39529818837,
+      "name": "MicroLab Android preview",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818837"
+    },
+    {
+      "id": 39529818842,
+      "name": "COSMIC X PC own x86 engine",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818842"
+    },
+    {
+      "id": 39529818891,
+      "name": "COSMIC X Engine APK and Android validation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818891"
+    },
+    {
+      "id": 39529818870,
+      "name": "Build Mundo X Lab APK",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818870"
+    },
+    {
+      "id": 39529818915,
+      "name": "COSMIC X Solar 4K, atmospheres and Android validation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818915"
+    },
+    {
+      "id": 39529818889,
+      "name": "COSMIC X Solar 8K, hyperreal rendering and Android validation",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818889"
+    }
+  ],
+  "solar8k": {
+    "attempt": 2,
+    "job": 118996189528,
+    "diagnostic": "solar-8k-attempt2-system-crash.json"
+  },
+  "solar4k": {
+    "run": 39529818915,
+    "job": 118993461768,
+    "tests": 19,
+    "failures": 0,
+    "png_captures": 62
+  }
+}

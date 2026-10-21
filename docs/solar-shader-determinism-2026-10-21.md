@@ -1,5 +1,49 @@
 # Solar: filtrado definido y comprobación exacta
 
+## Cierre de integración
+
+PR25 quedó fusionada en `main` mediante
+[`faa653c9bc81a3a7a48a5fce643878c32c98bd61`](https://github.com/guadalupejuan001-code/mundo-X/commit/faa653c9bc81a3a7a48a5fce643878c32c98bd61).
+La revisión `6115ccad` aprobó las 18 campañas, incluido un nuevo pareado exacto,
+Solar normal **13/13**, Solar 4K **19/19** y Solar 8K AOSP **15/15**.
+El [estado final](../results/repository-unification-2026-10-21/ci/final-6115/workflow-summary.json)
+enlaza cada ejecución. El producto y sus pruebas conservan exactamente los
+bytes de `b9ec7452`; el cambio posterior se limita al fixture de ejecución y
+registro de recursos, como acredita el
+[cotejo de fuentes](../results/repository-unification-2026-10-21/ci/final-6115/source-identity.json).
+
+El [ensayo 8K](../results/repository-unification-2026-10-21/ci/final-6115/solar-8k-summary.json)
+conserva 16 capturas, incluidas dos PNG de 4320 × 7680. Solicitó 2.048 MiB al
+emulador, que anunció 2.560 MiB; `MemTotal` observado del invitado fue 2.532.896
+KiB y el RSS previo del proceso emulador fue 3.450.340 KiB. Estas mediciones
+no se presentan como un límite de 2 GiB ni como un pico de la aplicación.
+Las imágenes y el estado aprobado acreditan las condiciones examinadas en
+software GLES; no sustituyen una medición de FPS en un teléfono físico.
+
+## Validación Android del candidato publicado
+
+El commit `b9ec7452307c610448adbb1217e1566aa88fa79b` supera el
+[pareado Android final](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818861):
+**8 de 8 escenas, 584.640 píxeles RGBA, cero diferencias**, y todas las
+repeticiones exactas. Los 29 hashes de entrada por captura coinciden entre
+versiones. El runner observó la lectura de la configuración de SwiftShader
+con un trabajador y solicitó 2.048 MiB de RAM al emulador Android 15.
+Ese argumento no acredita por sí solo la RAM efectiva del invitado: este
+pareado no registró `MemTotal`. En los intentos 8K posteriores, el emulador
+registró un aumento automático a 2.560 MiB pese a la misma solicitud.
+El límite comprobado de 2 GiB por proceso corresponde a los ensayos host;
+no se extiende a toda la VM Android ni al teléfono.
+No hubo problemas de evidencia, instrumentación ni referencia inconclusa.
+
+El [informe completo](../results/repository-unification-2026-10-21/ci/final-b9ec/solar-paired-report.json)
+y el [resumen por escena](../results/repository-unification-2026-10-21/ci/final-b9ec/solar-paired-summary.json)
+conservan las identidades APK, los hashes de imagen, las entradas y el entorno.
+La variante normal también aprobó sus
+[13/13 pruebas Android](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39529818833).
+Estos resultados acreditan la comparación definida y la integración en ese
+emulador; los perfiles UHD y el rendimiento de un dispositivo físico son
+comprobaciones diferentes.
+
 ## Decisión final: retirar el culling GPU que no acreditó exactitud
 
 El pareado Android de `3954b0008db6b61acb1700b8201d75f1f18623e2` comprobó la
@@ -35,16 +79,16 @@ imagen sigue siendo cero y el filtrado analítico conserva su oracle independien
 La evidencia nueva está en
 [`full-evaluation-fallback`](../results/repository-unification-2026-10-21/solar/full-evaluation-fallback/).
 Los fixtures exactos de casos 1/2 se añaden al gate de CI junto al caso 7 y las 32
-escenas generales. **Al congelar este arreglo, falta el pareado Android del nuevo
-APK**; el fallo anterior se conserva y no se convierte en un aprobado por estos
-replays host. No se inicia otro emulador TCG duplicado mientras CI/KVM verifica
-las ocho escenas.
+escenas generales. El pareado Android del nuevo APK aprobó después de congelar
+el arreglo, como documenta el apartado inicial. El fallo anterior se conserva;
+los replays host y la ejecución Android mantienen sus resultados propios.
 
 ## Primer aislamiento: 53 píxeles y referencia completa
 
 La prueba Android con un trabajador terminó con **7/8 comparaciones exactas**;
-ambos APK repitieron sus ocho escenas sin un solo cambio y sus 32 entradas
-registradas coincidieron. El fallo restante fue una fila de 53 píxeles de Urano
+ambos APK repitieron sus ocho escenas sin un solo cambio y sus 29 hashes de
+entrada registrados por captura coincidieron. El fallo restante fue una fila
+de 53 píxeles de Urano
 (136 canales, diferencia máxima 13). Ese fallo se conserva íntegro en
 [`android-runtime/runner.json`](../results/repository-unification-2026-10-21/solar/android-runtime/runner.json);
 no se convirtió en un aprobado ni se cambió la tolerancia.
@@ -82,9 +126,10 @@ La última fila establece un oracle independiente: la nueva referencia ejecuta
 el cálculo completo de material y nubes. Se mantuvo intacto el shader de producción
 `361676e4…`, incluido su índice correcto de 128 píxeles. La referencia nueva es
 `1c978eab…`; la anterior `7aae77f5…` queda preservada junto a sus fallos y su parche.
-La prueba ahora verifica también que el culling no cambia la salida de la
-evaluación completa. No es una referencia generada automáticamente para copiar
-la salida del candidato.
+En ese primer aislamiento, la evaluación completa permitió comprobar el culling
+del caso 7. El pareado posterior detectó los ocho píxeles descritos en la decisión
+final y llevó a retirar esa optimización de producción. La referencia completa
+se conserva; no se genera automáticamente para copiar la salida del candidato.
 
 Las evidencias de las ablaciones, hashes y el delta firmado idéntico entre host y
 Android están en
@@ -241,7 +286,7 @@ identidad. Quitar la integración atmosférica no eliminó el problema.
 | Gradientes analíticos, antes de las guardas finales, mismos trabajadores | 22 píxeles distintos | 65 / 53 |
 | Original, un trabajador, seis escenas | 0 | 0 / 0 |
 | Gradientes analíticos, antes de las guardas finales, un trabajador | 0 | 0 / 0 |
-| Referencia y candidato finales, un trabajador, 32 escenas cada uno | 0 | 0 / 0 |
+| Primera referencia corregida (`7aae77f5…`) y candidato con culling (`361676e4…`), un trabajador, 32 escenas cada uno | 0 | 0 / 0 |
 
 La variante intermedia analítica tiene hash `795e111afbd5e8c6dd6f740e2937f5dcb8abe7ed32eb2cabcdeea7cc927e21bb`;
 no se confunde con el candidato final de la tabla de procedencia. La opción de
@@ -260,9 +305,10 @@ frente a diez con el comportamiento por defecto.
 Con un trabajador aún existen cambios del primer dibujo de algunas escenas. Se
 realizan **dos dibujos completos de calentamiento para ambos programas**, se
 registran sus diferencias por separado y después se exige exactitud a todas las
-repeticiones. En los replays finales las sumas de cambios de calentamiento son
-47/41, idénticas para referencia y candidato. No se descartan divergencias
-persistentes: éstas hacen fallar el ejecutable.
+repeticiones. En esos replays históricos de 32 escenas (`7aae77f5…` / `361676e4…`),
+las sumas de cambios de calentamiento son 47/41, idénticas para referencia y
+candidato. Esas cifras no se atribuyen al candidato final `e36370ee…`. No se
+descartan divergencias persistentes: éstas hacen fallar el ejecutable.
 
 Se conservaron además intentos fallidos: SwiftShader produjo `SIGSEGV` con algunas
 variantes complejas o con dos programas completos en el mismo proceso. Separar
@@ -302,7 +348,7 @@ ni las tolerancias y se aplica igual a ambos APK.
 gate de Mesa, incluidas las entradas exactas del fallo, antes del pareado Android.
 La ejecución local con la referencia completa terminó con el fallo de ocho
 píxeles descrito arriba. La verificación Android del nuevo candidato sin culling
-se ejecuta en CI/KVM y está pendiente al congelar este arreglo. La campaña inicial
+aprobó las ocho escenas en CI/KVM, según el apartado inicial. La campaña inicial
 solicitó ART `speed`, pero sus logs conservan un fallback por ClassLoaderContext;
 no se afirma que toda la instrumentación se ejecutara en AOT. No se ejecutaron pruebas en un móvil físico ni se afirma
 rendimiento o exactitud para su controlador.

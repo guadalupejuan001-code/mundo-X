@@ -1,0 +1,67 @@
+{
+  "runId": 39532390013,
+  "jobId": 119001691292,
+  "headSha": "6115ccadef747c0a767990f35a39d1079ec65c87",
+  "conclusion": "failure",
+  "classification": "external Android launcher ANR dialog obstructed required application dialog",
+  "testsRun": 26,
+  "testsFailed": 1,
+  "failedTests": [
+    {
+      "name": "infinite_ui_shared_state_and_persistence",
+      "passed": false,
+      "durationMs": 51845,
+      "failure": "java.lang.AssertionError: Timed out: dialog control Ir a 10¹⁰⁰ y su pareja\n\tat com.mundox.cosmic.CosmicInstrumentation.await(CosmicInstrumentation.java:860)\n\tat com.mundox.cosmic.CosmicInstrumentation.clickWindowText(CosmicInstrumentation.java:330)\n\tat com.mundox.cosmic.CosmicInstrumentation.infiniteUi(CosmicInstrumentation.java:362)\n\tat com.mundox.cosmic.CosmicInstrumentation.$r8$lambda$TGE5wqx_GLu1darxWD6Gc-Q5src(Unknown Source:0)\n\tat com.mundox.cosmic.CosmicInstrumentation$$ExternalSyntheticLambda39.run(D8$$SyntheticClass:0)\n\tat com.mundox.cosmic.CosmicInstrumentation.check(CosmicInstrumentation.java:165)\n\tat com.mundox.cosmic.CosmicInstrumentation.onStart(CosmicInstrumentation.java:134)\n\tat android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)\n"
+    }
+  ],
+  "visibleEvidence": "Failure PNG shows Pixel Launcher is not responding above the COSMIC infinite-address selector. The requested shortcut is behind the OS window.",
+  "logEvidence": [
+    "29727: 10-21 02:25:02.282   560   581 I WindowManager: finishDrawing of orientation change: Window{3e9cf7d u0 Application Not Responding: com.google.android.apps.nexuslauncher} 2392ms",
+    "30477: 10-21 02:25:06.290   560   581 I WindowManager: finishDrawing of orientation change: Window{3e9cf7d u0 Application Not Responding: com.google.android.apps.nexuslauncher} 273ms",
+    "44367: 10-21 02:26:13.842  3100  3160 E CosmicTests: java.lang.AssertionError: Timed out: dialog control Ir a 10¹⁰⁰ y su pareja"
+  ],
+  "sourceDeltaFromPriorPassingCommit": [
+    ".github/workflows/solar-8k.yml",
+    "tools/solar-emulator-test.sh"
+  ],
+  "artifact": {
+    "id": 12316426031,
+    "bytes": 12200065,
+    "sha256": "79cc7c3a136aa9f5e34224bf6ec788e5295f9f0c1bb3023ee73b8a48f0524ffc",
+    "completeArchiveLocalPath": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/final-ci/cosmic-6115-infinite-dialog/artifact.zip"
+  },
+  "sourceFiles": {
+    "failure-infinite_ui_shared_state_and_persistence.png": {
+      "sha256": "7c0e95a140c8412c67e1e85d6e0be6079de9ba6bf3f95f8a9b19a1542ccb802d",
+      "bytes": 96525
+    },
+    "report.json": {
+      "sha256": "b6221c7bb5596970c16d6388796a669e81fb390e895bebbb22939bdd27e8d326",
+      "bytes": 17500
+    },
+    "instrumentation.txt": {
+      "sha256": "4b5fbf7b66dee7ba6e40b4400164ce2cf260275d1e9b00f8112880456568c066",
+      "bytes": 12971
+    },
+    "build-commit.txt": {
+      "sha256": "bebbc5c79448ae431d7eba55dc1a2514fd4d6e644782e29bd9876f8e2fd6efab",
+      "bytes": 41
+    },
+    "build-fingerprint.txt": {
+      "sha256": "633fbfc3b92b012914165717ce367282664c75ad9f6e533b4a1ad6e2418ec93a",
+      "bytes": 82
+    },
+    "apk-SHA256SUMS.txt": {
+      "sha256": "382bf01bff403586f9bf50dbe935ee2b2ed59050b71be1768ef6563d386f33d5",
+      "bytes": 285
+    },
+    "apk-audit.json": {
+      "sha256": "3a795a5e4a48e0fda26c5266d36d7eda93ce6b5e094a7f7729dfa3af512038c7",
+      "bytes": 2540
+    }
+  },
+  "completeLogcatSha256": "7b690ed713e333a4a1adffdf96f21b5170dd2106be6ab5f02c294410e854ac55",
+  "jobLogSha256": "303d49b1f9d7b5e6617b23571d9229b4ea2c9f25fdf74d20f40b7453305e5f63",
+  "rerunDecision": "Root authorized and launched one retry of only the failed job with the existing build; no source changes and no retry by this reviewer.",
+  "limits": "Failure remains preserved as failed. A later passing attempt must be reported separately. This evidence does not establish the internal cause of the launcher ANR."
+}

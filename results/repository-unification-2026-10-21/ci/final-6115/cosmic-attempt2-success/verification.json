@@ -1,0 +1,55 @@
+{
+  "runId": 39532390013,
+  "jobId": 119003779624,
+  "attempt": 2,
+  "headSha": "6115ccadef747c0a767990f35a39d1079ec65c87",
+  "conclusion": "success",
+  "testsRun": 26,
+  "testsFailed": 0,
+  "previousFailure": "../cosmic-attempt1-pixel-launcher-anr/diagnosis.json",
+  "sameApkHashManifestAsAttempt1": true,
+  "apkZipDigestVerifiedInBothJobLogs": "aa28ba54e3365e012b74a91c966e33ca9e41133cb7b5964f22d83091da06e1cd",
+  "artifact": {
+    "id": 12316900148,
+    "bytes": 13451926,
+    "sha256": "90be6c838ef3bc863d7db8e8964805b88b006891792fc6febfdb157e01ec69e9",
+    "completeArchiveLocalPath": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/final-ci/cosmic-6115-attempt2-success/artifact.zip"
+  },
+  "sourceFiles": {
+    "report.json": {
+      "sha256": "b93a4f5cf9a780613f2cea2af4374b053698f965ef85870f3bb53cacd43c6078",
+      "bytes": 17301
+    },
+    "junit.xml": {
+      "sha256": "3ba8f928b526102ea954b5eca6f47f041b6257844637cb72b3eede8c99e165e9",
+      "bytes": 1942
+    },
+    "instrumentation.txt": {
+      "sha256": "e35a0e3a15a4acd9fe9329ec3a42905fdca054675e1cbef52c8b6623437c7771",
+      "bytes": 12150
+    },
+    "build-commit.txt": {
+      "sha256": "bebbc5c79448ae431d7eba55dc1a2514fd4d6e644782e29bd9876f8e2fd6efab",
+      "bytes": 41
+    },
+    "build-fingerprint.txt": {
+      "sha256": "633fbfc3b92b012914165717ce367282664c75ad9f6e533b4a1ad6e2418ec93a",
+      "bytes": 82
+    },
+    "apk-SHA256SUMS.txt": {
+      "sha256": "382bf01bff403586f9bf50dbe935ee2b2ed59050b71be1768ef6563d386f33d5",
+      "bytes": 285
+    },
+    "apk-audit.json": {
+      "sha256": "3a795a5e4a48e0fda26c5266d36d7eda93ce6b5e094a7f7729dfa3af512038c7",
+      "bytes": 2540
+    },
+    "cosmic-infinite-core.png": {
+      "sha256": "3c7784ace4f88953dabe0e1ebd93f5ba865f18b61d21422684dca3462913372a",
+      "bytes": 188466
+    }
+  },
+  "completeLogcatSha256": "f1a6a1f855a975a2d63cc5f0a1bd43edaced32273f0962c4fe41ebf241a87e4e",
+  "jobLogSha256": "8cd1d243ceb0d37110cfab04c24086e1e5a7de7de004ce01d4c2081480300a89",
+  "scope": "One retry of the failed cosmic job, launched by root. No source, APK, assertions or thresholds changed. Desktop portability step is skipped for cosmic and belongs to the already successful graphics profile."
+}

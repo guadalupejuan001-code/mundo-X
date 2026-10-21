@@ -1,0 +1,3 @@
+INSTRUMENTATION_RESULT: stream=Solar performance: 8 scenes, 40 completed frames, 128 core lifetimes passed
+
+INSTRUMENTATION_CODE: -1

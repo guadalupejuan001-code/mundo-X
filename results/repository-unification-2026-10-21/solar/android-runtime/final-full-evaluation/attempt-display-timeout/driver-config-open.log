@@ -1,0 +1,145 @@
+58362 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58364, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+58370 +++ killed by SIGKILL +++
+58369 +++ killed by SIGKILL +++
+58362 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=58369, si_uid=0, si_status=SIGKILL, si_utime=0, si_stime=0} ---
+58362 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58377, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+58362 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58379, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+58362 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58381, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+58362 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58383, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+58362 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58362 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58362 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58362 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58362 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58362 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58388 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58389 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58390 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58391 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 6
+58542 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+58699 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+58735 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+58500 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+58780 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+58816 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 57
+58857 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58858, si_uid=0, si_status=1, si_utime=0, si_stime=1 /* 0.01 s */} ---
+58859 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58860, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+58376 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58903, si_uid=0, si_status=1, si_utime=0, si_stime=0} ---
+58904 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58905, si_uid=0, si_status=0, si_utime=0, si_stime=1 /* 0.01 s */} ---
+58376 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58907, si_uid=0, si_status=1, si_utime=0, si_stime=1 /* 0.01 s */} ---
+58908 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=58909, si_uid=0, si_status=0, si_utime=0, si_stime=1 /* 0.01 s */} ---
+58927 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 68
+58933 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 68
+58934 openat(AT_FDCWD, "SwiftShader.ini", O_RDONLY) = 68
+58362 --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=58289, si_uid=0} ---
+58362 --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=58362, si_uid=0} ---
+58394 +++ killed by SIGUSR1 +++
+58936 +++ killed by SIGUSR1 +++
+58935 +++ killed by SIGUSR1 +++
+58933 +++ killed by SIGUSR1 +++
+58927 +++ killed by SIGUSR1 +++
+58934 +++ killed by SIGUSR1 +++
+58843 +++ killed by SIGUSR1 +++
+58840 +++ killed by SIGUSR1 +++
+58838 +++ killed by SIGUSR1 +++
+58837 +++ killed by SIGUSR1 +++
+58818 +++ killed by SIGUSR1 +++
+58816 +++ killed by SIGUSR1 +++
+58793 +++ killed by SIGUSR1 +++
+58781 +++ killed by SIGUSR1 +++
+58780 +++ killed by SIGUSR1 +++
+58736 +++ killed by SIGUSR1 +++
+58735 +++ killed by SIGUSR1 +++
+58733 +++ killed by SIGUSR1 +++
+58703 +++ killed by SIGUSR1 +++
+58702 +++ killed by SIGUSR1 +++
+58701 +++ killed by SIGUSR1 +++
+58699 +++ killed by SIGUSR1 +++
+58559 +++ killed by SIGUSR1 +++
+58542 +++ killed by SIGUSR1 +++
+58504 +++ killed by SIGUSR1 +++
+58503 +++ killed by SIGUSR1 +++
+58502 +++ killed by SIGUSR1 +++
+58501 +++ killed by SIGUSR1 +++
+58500 +++ killed by SIGUSR1 +++
+58482 +++ killed by SIGUSR1 +++
+58481 +++ killed by SIGUSR1 +++
+58480 +++ killed by SIGUSR1 +++
+58479 +++ killed by SIGUSR1 +++
+58478 +++ killed by SIGUSR1 +++
+58477 +++ killed by SIGUSR1 +++
+58476 +++ killed by SIGUSR1 +++
+58475 +++ killed by SIGUSR1 +++
+58474 +++ killed by SIGUSR1 +++
+58473 +++ killed by SIGUSR1 +++
+58472 +++ killed by SIGUSR1 +++
+58471 +++ killed by SIGUSR1 +++
+58470 +++ killed by SIGUSR1 +++
+58469 +++ killed by SIGUSR1 +++
+58468 +++ killed by SIGUSR1 +++
+58467 +++ killed by SIGUSR1 +++
+58466 +++ killed by SIGUSR1 +++
+58465 +++ killed by SIGUSR1 +++
+58464 +++ killed by SIGUSR1 +++
+58463 +++ killed by SIGUSR1 +++
+58462 +++ killed by SIGUSR1 +++
+58461 +++ killed by SIGUSR1 +++
+58460 +++ killed by SIGUSR1 +++
+58459 +++ killed by SIGUSR1 +++
+58458 +++ killed by SIGUSR1 +++
+58457 +++ killed by SIGUSR1 +++
+58456 +++ killed by SIGUSR1 +++
+58455 +++ killed by SIGUSR1 +++
+58454 +++ killed by SIGUSR1 +++
+58453 +++ killed by SIGUSR1 +++
+58452 +++ killed by SIGUSR1 +++
+58451 +++ killed by SIGUSR1 +++
+58450 +++ killed by SIGUSR1 +++
+58449 +++ killed by SIGUSR1 +++
+58448 +++ killed by SIGUSR1 +++
+58447 +++ killed by SIGUSR1 +++
+58446 +++ killed by SIGUSR1 +++
+58445 +++ killed by SIGUSR1 +++
+58444 +++ killed by SIGUSR1 +++
+58443 +++ killed by SIGUSR1 +++
+58442 +++ killed by SIGUSR1 +++
+58441 +++ killed by SIGUSR1 +++
+58440 +++ killed by SIGUSR1 +++
+58439 +++ killed by SIGUSR1 +++
+58438 +++ killed by SIGUSR1 +++
+58437 +++ killed by SIGUSR1 +++
+58436 +++ killed by SIGUSR1 +++
+58434 +++ killed by SIGUSR1 +++
+58432 +++ killed by SIGUSR1 +++
+58431 +++ killed by SIGUSR1 +++
+58430 +++ killed by SIGUSR1 +++
+58429 +++ killed by SIGUSR1 +++
+58428 +++ killed by SIGUSR1 +++
+58424 +++ killed by SIGUSR1 +++
+58423 +++ killed by SIGUSR1 +++
+58422 +++ killed by SIGUSR1 +++
+58419 +++ killed by SIGUSR1 +++
+58417 +++ killed by SIGUSR1 +++
+58415 +++ killed by SIGUSR1 +++
+58404 +++ killed by SIGUSR1 +++
+58398 +++ killed by SIGUSR1 +++
+58397 +++ killed by SIGUSR1 +++
+58395 +++ killed by SIGUSR1 +++
+58392 +++ killed by SIGUSR1 +++
+58391 +++ killed by SIGUSR1 +++
+58390 +++ killed by SIGUSR1 +++
+58388 +++ killed by SIGUSR1 +++
+58387 +++ killed by SIGUSR1 +++
+58386 +++ killed by SIGUSR1 +++
+58376 +++ killed by SIGUSR1 +++
+58375 +++ killed by SIGUSR1 +++
+58367 +++ killed by SIGUSR1 +++
+58363 +++ killed by SIGUSR1 +++
+58435 +++ killed by SIGUSR1 +++
+58433 +++ killed by SIGUSR1 +++
+58427 +++ killed by SIGUSR1 +++
+58426 +++ killed by SIGUSR1 +++
+58389 +++ killed by SIGUSR1 +++
+58385 +++ killed by SIGUSR1 +++
+58425 +++ killed by SIGUSR1 +++
+58362 +++ killed by SIGUSR1 +++

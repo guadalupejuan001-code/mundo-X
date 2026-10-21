@@ -1,0 +1,51 @@
+{
+  "variant": "candidate-allbody",
+  "verified_utc": "2026-10-21T01:50:37.618947+00:00",
+  "source_commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+  "source_snapshot": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody",
+  "source_manifest_sha256": "431ce8755bbdec31ffe8750e78ecaf96c2c56019694e308b5b3c82984d5d2724",
+  "scope": "Fresh debug application build only; package, signatures, alignment, ABI and assets verified. Existing baseline/test artifacts reused unchanged. No device execution in this report.",
+  "apks": {
+    "debug": {
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody/solar-android/app/build/outputs/apk/debug/app-debug.apk",
+      "sha256": "c01b2294c4f64c8d9181884f9dca34fb462365e425c73dea6cdf02e547484430",
+      "bytes": 4620435,
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "package": "com.cosmicx.solar",
+      "version_name": "1.3.0",
+      "version_code": "4",
+      "application_label": "COSMIC X Solar",
+      "min_sdk": "26",
+      "target_sdk": "35",
+      "signature_verified": true,
+      "alignment_16k_verified": true,
+      "verification_logs": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody-verification",
+      "assets_sha256": {
+        "assets/science-assets.json": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+        "assets/textures/earth.png": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+        "assets/textures/jupiter.jpg": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+        "assets/textures/moon.jpg": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+        "assets/shaders/overlay.frag": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+        "assets/shaders/solar.vert": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+        "assets/shaders/solar.frag": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+        "assets/shaders/overlay.vert": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0"
+      },
+      "native_libraries": {
+        "arm64-v8a": {
+          "entry": "lib/arm64-v8a/libmx_graphics.so",
+          "sha256": "0771b11b631cd280af9ad23028a8eabc97eace38fb44b432b760c3ece5361644",
+          "bytes": 1196104,
+          "elf_machine": 183
+        },
+        "x86_64": {
+          "entry": "lib/x86_64/libmx_graphics.so",
+          "sha256": "afaab33628ce4ac9806716217ad6ac54e0d16414ec5afa67a8a85daf6807608b",
+          "bytes": 1173032,
+          "elf_machine": 62
+        }
+      },
+      "shader_matches_source": true
+    }
+  },
+  "all_checks_passed": true
+}

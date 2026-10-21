@@ -1,0 +1,793 @@
+{
+  "status": "blocked_or_failed",
+  "error": "AssertionError: Before/after capture changed",
+  "stage": "finished",
+  "ram_mb": 2048,
+  "system_image": "system-images;android-29;default;x86_64",
+  "virtualization": "TCG",
+  "art_compile": "speed",
+  "swiftshader_threads": 1,
+  "driver_config_read_observed": true,
+  "driver_configuration_sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0",
+  "boot_seconds": 156.12118879700574,
+  "exact_capture_matches": 6,
+  "scope": "Android emulator only; corrected frozen reference versus candidate; zero RGBA tolerance; ART speed requested, actual AOT coverage not inferred.",
+  "versions": {
+    "before": {
+      "status": "passed",
+      "error": null,
+      "renderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+      "gles": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+      "frames": 65,
+      "sessionLifetimes": 128,
+      "repeatCaptureFailures": 0,
+      "cases": [
+        {
+          "case": 0,
+          "body": 3,
+          "entry": false,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31131272,
+          "javaUsedBytes": 22054736
+        },
+        {
+          "case": 1,
+          "body": 3,
+          "entry": false,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+            "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31216152,
+          "javaUsedBytes": 11167272
+        },
+        {
+          "case": 2,
+          "body": 6,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+            "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31184376,
+          "javaUsedBytes": 14617976
+        },
+        {
+          "case": 3,
+          "body": 0,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31228424,
+          "javaUsedBytes": 7489360
+        },
+        {
+          "case": 4,
+          "body": 3,
+          "entry": true,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31318328,
+          "javaUsedBytes": 11326512
+        },
+        {
+          "case": 5,
+          "body": 5,
+          "entry": true,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31100056,
+          "javaUsedBytes": 14920376
+        },
+        {
+          "case": 6,
+          "body": 9,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31097608,
+          "javaUsedBytes": 8154064
+        },
+        {
+          "case": 7,
+          "body": 7,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+            "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31065032,
+          "javaUsedBytes": 9198864
+        }
+      ]
+    },
+    "after": {
+      "status": "passed",
+      "error": null,
+      "renderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+      "gles": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+      "frames": 65,
+      "sessionLifetimes": 128,
+      "repeatCaptureFailures": 0,
+      "cases": [
+        {
+          "case": 0,
+          "body": 3,
+          "entry": false,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25308216,
+          "javaUsedBytes": 25712456
+        },
+        {
+          "case": 1,
+          "body": 3,
+          "entry": false,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+            "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25480392,
+          "javaUsedBytes": 6828912
+        },
+        {
+          "case": 2,
+          "body": 6,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+            "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25870760,
+          "javaUsedBytes": 11060536
+        },
+        {
+          "case": 3,
+          "body": 0,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25810696,
+          "javaUsedBytes": 9398432
+        },
+        {
+          "case": 4,
+          "body": 3,
+          "entry": true,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25943360,
+          "javaUsedBytes": 7352976
+        },
+        {
+          "case": 5,
+          "body": 5,
+          "entry": true,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25745520,
+          "javaUsedBytes": 7705704
+        },
+        {
+          "case": 6,
+          "body": 9,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25738368,
+          "javaUsedBytes": 8821136
+        },
+        {
+          "case": 7,
+          "body": 7,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+            "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25713856,
+          "javaUsedBytes": 5807472
+        }
+      ]
+    }
+  },
+  "paired": [
+    {
+      "case": 0,
+      "body": 3,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 1,
+      "body": 3,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 4,
+        "different_channels": 12,
+        "max_channel_delta": 133,
+        "absolute_channel_delta_sum": 1059,
+        "mean_absolute_channel_delta": 0.003622742200328407,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": [
+          170,
+          145,
+          177,
+          147
+        ],
+        "changed_coordinates_gl_row_order": [
+          [
+            177,
+            145
+          ],
+          [
+            170,
+            147
+          ],
+          [
+            174,
+            147
+          ],
+          [
+            175,
+            147
+          ]
+        ]
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 4,
+        "different_channels": 12,
+        "max_channel_delta": 133,
+        "absolute_channel_delta_sum": 1059,
+        "mean_absolute_channel_delta": 0.003622742200328407,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": [
+          170,
+          145,
+          177,
+          147
+        ],
+        "changed_coordinates_gl_row_order": [
+          [
+            177,
+            145
+          ],
+          [
+            170,
+            147
+          ],
+          [
+            174,
+            147
+          ],
+          [
+            175,
+            147
+          ]
+        ]
+      }
+    },
+    {
+      "case": 2,
+      "body": 6,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 4,
+        "different_channels": 12,
+        "max_channel_delta": 17,
+        "absolute_channel_delta_sum": 108,
+        "mean_absolute_channel_delta": 0.00036945812807881776,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": [
+          205,
+          96,
+          205,
+          104
+        ],
+        "changed_coordinates_gl_row_order": [
+          [
+            205,
+            96
+          ],
+          [
+            205,
+            97
+          ],
+          [
+            205,
+            98
+          ],
+          [
+            205,
+            104
+          ]
+        ]
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 4,
+        "different_channels": 12,
+        "max_channel_delta": 17,
+        "absolute_channel_delta_sum": 108,
+        "mean_absolute_channel_delta": 0.00036945812807881776,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": [
+          205,
+          96,
+          205,
+          104
+        ],
+        "changed_coordinates_gl_row_order": [
+          [
+            205,
+            96
+          ],
+          [
+            205,
+            97
+          ],
+          [
+            205,
+            98
+          ],
+          [
+            205,
+            104
+          ]
+        ]
+      }
+    },
+    {
+      "case": 3,
+      "body": 0,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 4,
+      "body": 3,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 5,
+      "body": 5,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 6,
+      "body": 9,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 7,
+      "body": 7,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    }
+  ],
+  "paired_total": {
+    "pixels": 584640,
+    "different_pixels": 8,
+    "different_channels": 24,
+    "absolute_channel_delta_sum": 1167,
+    "alpha_differences": 0,
+    "all_recorded_input_hashes_equal": true
+  }
+}

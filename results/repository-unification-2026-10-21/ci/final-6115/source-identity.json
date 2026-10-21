@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-21T02:20:24.290570+00:00",
+  "status": "compared",
+  "scope": "Read-only source/APK identity; no builds, tests, CI polls, staging, commits or remote writes",
+  "baseline": {
+    "commit": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+    "tree": "fe01d54cb61b14c3f7326aafbe925b4b4d73a34c"
+  },
+  "successor": {
+    "commit": "6115ccadef747c0a767990f35a39d1079ec65c87",
+    "tree": "7301dae2bd183953ed190fff405f7d7de402a28c"
+  },
+  "method": "Exact tracked path/mode/type/blob comparison plus SHA256 of every protected input; docs/results listed separately",
+  "allowed_executable_changes": [
+    ".github/workflows/solar-8k.yml",
+    "tools/solar-emulator-test.sh"
+  ],
+  "protected_input_count": 416,
+  "product_build_test_count": 319,
+  "baseline_protected_manifest_sha256": "fcd53f8dbaabca0d78a541542be09541274edd1bb6a1fb23e8290026d3eb63de",
+  "baseline_product_build_test_manifest_sha256": "99ec4945ddc211f7e423819aac05bc3a79774409f9a59be502c91aab725ad4b5",
+  "historical_ci_statement": {
+    "reported_by_parent": "17 campaigns SUCCESS at b9ec; Solar 8K failed twice due to its runtime fixture",
+    "independently_polled_by_this_script": false
+  },
+  "attribution_limits": [
+    "Identical inputs preserve attribution of historical results to the tested product/test bytes; those runs remain executions of b9ec.",
+    "The AOSP 8K environment and effective-memory recording need their own runtime evidence; this audit cannot certify runtime success.",
+    "The shared runner changes diagnostic collection as well as the 8K image. Unchanged product tests do not mean that the new diagnostic code ran in the previous 17 campaigns.",
+    "No APK is rebuilt or re-signed by this script; APK identity is checked against the existing verified files."
+  ],
+  "all_identity_assertions_passed": true,
+  "baseline_is_ancestor": true,
+  "changed_files": [
+    {
+      "path": ".github/workflows/solar-8k.yml",
+      "category": "allowed_solar_8k_fixture",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "b949981d9bc869f499cf7b5f9bee7b32e62aebd8",
+        "sha256": "12c76f0786471b33c52c2e7aaee595aac87fbe6e002fad00b82afb13a1bcc942",
+        "bytes": 6376
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "33168ae827505ab739bf50468a479be02c10033b",
+        "sha256": "c1ec847980e7cec7ca8c7f6b8c7f12a546cc2586e04a0a38a7f03693d13cf645",
+        "bytes": 6388
+      }
+    },
+    {
+      "path": "tools/solar-emulator-test.sh",
+      "category": "allowed_solar_8k_fixture",
+      "before": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "a90f53d6fed379ba53001e580f4de619d440d594",
+        "sha256": "4ce428b5cdac98ab0802eba69bcbd7a765abf86aee1c458a031ce9f4ea95c084",
+        "bytes": 10294
+      },
+      "after": {
+        "mode": "100644",
+        "kind": "blob",
+        "git_blob": "dc783336a81597496a5d8dd46e20efce49abfe17",
+        "sha256": "658e72ef539348fc0ec1112f4c23c3535955b3c2c0f45888c6bdc5cc4d06399a",
+        "bytes": 13837
+      }
+    }
+  ],
+  "changed_category_counts": {
+    "allowed_solar_8k_fixture": 2
+  },
+  "protected_input_changes": [],
+  "product_build_test_changes": [],
+  "successor_protected_manifest_sha256": "fcd53f8dbaabca0d78a541542be09541274edd1bb6a1fb23e8290026d3eb63de",
+  "successor_product_build_test_manifest_sha256": "99ec4945ddc211f7e423819aac05bc3a79774409f9a59be502c91aab725ad4b5",
+  "shared_runner_static_contract": {
+    "test_selection_assignments_unchanged": true,
+    "instrumentation_command_unchanged": true,
+    "aosp_image_assignment_inside_8k_branch": true,
+    "normal_4k_google_apis_default_retained": true,
+    "requested_ram_2048_cores_2_retained": true,
+    "limitation": "Static checks of selection/arguments only; not shell execution or a memory-cap measurement"
+  },
+  "existing_apks": {
+    "candidate-allbody": {
+      "source_count": 62,
+      "source_mismatches": [],
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/COSMIC-X-Solar-1.3.0.apk",
+      "sha256": "c01b2294c4f64c8d9181884f9dca34fb462365e425c73dea6cdf02e547484430",
+      "unchanged_from_verified_apk": true
+    },
+    "candidate-review-allbody": {
+      "source_count": 62,
+      "source_mismatches": [],
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/apks/COSMIC-X-Solar-Pruebas-1.3.0.apk",
+      "sha256": "8000d7e47d046f3cf7415e51cf2180e6a72924680bffc55d76aebe2dc35fdcd4",
+      "unchanged_from_verified_apk": true
+    }
+  },
+  "fixture_diff": {
+    "path": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/ci/final-6115/source-identity.fixture.diff",
+    "sha256": "2410a372377a2f66e7678f583d1d8a5b920ce1aa6cecc7cdc0575a13d865b118"
+  }
+}

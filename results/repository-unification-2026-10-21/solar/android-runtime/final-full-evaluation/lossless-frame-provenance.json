@@ -1,0 +1,908 @@
+{
+  "schema_version": 1,
+  "verified_utc": "2026-10-21T01:57:07.892413+00:00",
+  "scope": "Historical failed full-reference comparison on commit 3954b, before removal of GPU culling from the final candidate.",
+  "purpose": "Lossless PNGs, reports and logs stay in Git; original raw readbacks and duplicate transport TARs are preserved outside the repository.",
+  "historical_source_commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+  "historical_candidate_shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+  "reference_shader_sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+  "outcome": {
+    "status": "blocked_or_failed",
+    "exact_cases": 6,
+    "cases": 8,
+    "different_pixels": 8,
+    "compared_pixels": 584640,
+    "input_hashes_per_capture": 29,
+    "all_paired_input_hashes_equal": true
+  },
+  "original_archive_directory": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/raw-failed-full-reference",
+  "files_moved": 34,
+  "raw_bytes": 9354240,
+  "tar_bytes": 9468928,
+  "retained_bytes_before_manifest_and_readme": 1636598,
+  "frames": [
+    {
+      "raw_path": "before/solar-performance/case-0.rgba",
+      "png_path": "before/solar-performance/case-0.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "reported_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-0-repeat.rgba",
+      "png_path": "before/solar-performance/case-0-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "reported_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-1.rgba",
+      "png_path": "before/solar-performance/case-1.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+      "png_sha256": "2209ecf6bbc2f22bd414febe7477eb286e37e0b24afc89242f32a0919d8d9770",
+      "reported_sha256": "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-1-repeat.rgba",
+      "png_path": "before/solar-performance/case-1-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+      "png_sha256": "2209ecf6bbc2f22bd414febe7477eb286e37e0b24afc89242f32a0919d8d9770",
+      "reported_sha256": "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-2.rgba",
+      "png_path": "before/solar-performance/case-2.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+      "png_sha256": "b4c59de5a8346e092f4ba653be76f58c33d4ce2d09188abf603ea46a36176113",
+      "reported_sha256": "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-2-repeat.rgba",
+      "png_path": "before/solar-performance/case-2-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+      "png_sha256": "b4c59de5a8346e092f4ba653be76f58c33d4ce2d09188abf603ea46a36176113",
+      "reported_sha256": "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-3.rgba",
+      "png_path": "before/solar-performance/case-3.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "reported_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-3-repeat.rgba",
+      "png_path": "before/solar-performance/case-3-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "reported_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-4.rgba",
+      "png_path": "before/solar-performance/case-4.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "reported_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-4-repeat.rgba",
+      "png_path": "before/solar-performance/case-4-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "reported_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-5.rgba",
+      "png_path": "before/solar-performance/case-5.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "reported_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-5-repeat.rgba",
+      "png_path": "before/solar-performance/case-5-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "reported_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-6.rgba",
+      "png_path": "before/solar-performance/case-6.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "reported_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-6-repeat.rgba",
+      "png_path": "before/solar-performance/case-6-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "reported_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-7.rgba",
+      "png_path": "before/solar-performance/case-7.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "png_sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4",
+      "reported_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-7-repeat.rgba",
+      "png_path": "before/solar-performance/case-7-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "png_sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4",
+      "reported_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-0.rgba",
+      "png_path": "after/solar-performance/case-0.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "reported_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-0-repeat.rgba",
+      "png_path": "after/solar-performance/case-0-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "reported_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-1.rgba",
+      "png_path": "after/solar-performance/case-1.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "png_sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0",
+      "reported_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-1-repeat.rgba",
+      "png_path": "after/solar-performance/case-1-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "png_sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0",
+      "reported_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-2.rgba",
+      "png_path": "after/solar-performance/case-2.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "png_sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3",
+      "reported_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-2-repeat.rgba",
+      "png_path": "after/solar-performance/case-2-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "png_sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3",
+      "reported_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-3.rgba",
+      "png_path": "after/solar-performance/case-3.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "reported_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-3-repeat.rgba",
+      "png_path": "after/solar-performance/case-3-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "reported_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-4.rgba",
+      "png_path": "after/solar-performance/case-4.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "reported_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-4-repeat.rgba",
+      "png_path": "after/solar-performance/case-4-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "reported_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-5.rgba",
+      "png_path": "after/solar-performance/case-5.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "reported_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-5-repeat.rgba",
+      "png_path": "after/solar-performance/case-5-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "reported_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-6.rgba",
+      "png_path": "after/solar-performance/case-6.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "reported_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-6-repeat.rgba",
+      "png_path": "after/solar-performance/case-6-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "reported_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-7.rgba",
+      "png_path": "after/solar-performance/case-7.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "png_sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4",
+      "reported_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-7-repeat.rgba",
+      "png_path": "after/solar-performance/case-7-repeat.png",
+      "width": 360,
+      "height": 203,
+      "raw_bytes": 292320,
+      "raw_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "png_sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4",
+      "reported_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "reconstruction": "Decode PNG as uint8 RGBA, reverse row order, concatenate rows without a header.",
+      "exact": true
+    }
+  ],
+  "transport_archives": [
+    {
+      "path": "before/evidence.tar",
+      "bytes": 4734464,
+      "sha256": "41c7335d33404b3efd78caef5edd73736ea7526b156333b2e33efa85952152b9",
+      "members": [
+        {
+          "path": "solar-performance/case-0.rgba",
+          "bytes": 292320,
+          "sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-0-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-1.rgba",
+          "bytes": 292320,
+          "sha256": "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-1-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "98a277542f144a17506691644b80e24bd79d93a5ab30f3cf9e386cb4147f1e8a",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-2.rgba",
+          "bytes": 292320,
+          "sha256": "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-2-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "75c6a26b3186d5c104f0c4e35ca406fb58d09df229871336e0cf0a8005b1c401",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-3.rgba",
+          "bytes": 292320,
+          "sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-3-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-4.rgba",
+          "bytes": 292320,
+          "sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-4-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-5.rgba",
+          "bytes": 292320,
+          "sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-5-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-6.rgba",
+          "bytes": 292320,
+          "sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-6-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-7.rgba",
+          "bytes": 292320,
+          "sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-7-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/results.json",
+          "bytes": 46408,
+          "sha256": "747a18e351f6767b83b07675df41d643e3cdf734874cdce4184a97afe5cb493e",
+          "matches_extracted": true
+        }
+      ],
+      "all_members_match_extracted": true
+    },
+    {
+      "path": "after/evidence.tar",
+      "bytes": 4734464,
+      "sha256": "8d0fcd7cfc65d223e96cc44a85e0a705aea0e82b4be5876c863f2e52465c1fe8",
+      "members": [
+        {
+          "path": "solar-performance/case-0.rgba",
+          "bytes": 292320,
+          "sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-0-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-1.rgba",
+          "bytes": 292320,
+          "sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-1-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-2.rgba",
+          "bytes": 292320,
+          "sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-2-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-3.rgba",
+          "bytes": 292320,
+          "sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-3-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-4.rgba",
+          "bytes": 292320,
+          "sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-4-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-5.rgba",
+          "bytes": 292320,
+          "sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-5-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-6.rgba",
+          "bytes": 292320,
+          "sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-6-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-7.rgba",
+          "bytes": 292320,
+          "sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/case-7-repeat.rgba",
+          "bytes": 292320,
+          "sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+          "matches_extracted": true
+        },
+        {
+          "path": "solar-performance/results.json",
+          "bytes": 46407,
+          "sha256": "3678086c84627b6972955bcce521797e4b64125297c4b709fadbc5096ff6e901",
+          "matches_extracted": true
+        }
+      ],
+      "all_members_match_extracted": true
+    }
+  ],
+  "retained_files": [
+    {
+      "path": "SwiftShader.ini",
+      "bytes": 52,
+      "sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0"
+    },
+    {
+      "path": "after/art-compile.txt",
+      "bytes": 16,
+      "sha256": "f5b6aee2d32311288120b2a4be0136410019ceecb2a318f6b372f5ff611f7125"
+    },
+    {
+      "path": "after/instrumentation.txt",
+      "bytes": 133,
+      "sha256": "b188f3fe54d5448cc1850a7a5935b2831172eb5df1e81b865d6e1347577175e6"
+    },
+    {
+      "path": "after/logcat.txt",
+      "bytes": 49699,
+      "sha256": "a691cff009f104b27ec48c764e8c5b26c00592b1face39f0ab6856e13b29bba8"
+    },
+    {
+      "path": "after/memory.txt",
+      "bytes": 40,
+      "sha256": "3a41255e7f09a62c08e30d0d765af6dc10b69667bb44369bdb6ee23372f8b7c3"
+    },
+    {
+      "path": "after/solar-performance/case-0-repeat.png",
+      "bytes": 41553,
+      "sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94"
+    },
+    {
+      "path": "after/solar-performance/case-0.png",
+      "bytes": 41553,
+      "sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94"
+    },
+    {
+      "path": "after/solar-performance/case-1-repeat.png",
+      "bytes": 49927,
+      "sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0"
+    },
+    {
+      "path": "after/solar-performance/case-1.png",
+      "bytes": 49927,
+      "sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0"
+    },
+    {
+      "path": "after/solar-performance/case-2-repeat.png",
+      "bytes": 36140,
+      "sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3"
+    },
+    {
+      "path": "after/solar-performance/case-2.png",
+      "bytes": 36140,
+      "sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3"
+    },
+    {
+      "path": "after/solar-performance/case-3-repeat.png",
+      "bytes": 64175,
+      "sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc"
+    },
+    {
+      "path": "after/solar-performance/case-3.png",
+      "bytes": 64175,
+      "sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc"
+    },
+    {
+      "path": "after/solar-performance/case-4-repeat.png",
+      "bytes": 37662,
+      "sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a"
+    },
+    {
+      "path": "after/solar-performance/case-4.png",
+      "bytes": 37662,
+      "sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a"
+    },
+    {
+      "path": "after/solar-performance/case-5-repeat.png",
+      "bytes": 28003,
+      "sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734"
+    },
+    {
+      "path": "after/solar-performance/case-5.png",
+      "bytes": 28003,
+      "sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734"
+    },
+    {
+      "path": "after/solar-performance/case-6-repeat.png",
+      "bytes": 28649,
+      "sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c"
+    },
+    {
+      "path": "after/solar-performance/case-6.png",
+      "bytes": 28649,
+      "sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c"
+    },
+    {
+      "path": "after/solar-performance/case-7-repeat.png",
+      "bytes": 31405,
+      "sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4"
+    },
+    {
+      "path": "after/solar-performance/case-7.png",
+      "bytes": 31405,
+      "sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4"
+    },
+    {
+      "path": "after/solar-performance/results.json",
+      "bytes": 46407,
+      "sha256": "3678086c84627b6972955bcce521797e4b64125297c4b709fadbc5096ff6e901"
+    },
+    {
+      "path": "attempt-display-timeout/SwiftShader.ini",
+      "bytes": 52,
+      "sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0"
+    },
+    {
+      "path": "attempt-display-timeout/actual-driver-process.json",
+      "bytes": 4032,
+      "sha256": "46ab2f0558651ae8bfd8834fc8cfc4851c2591c9817e52af00e4e319ba788ab6"
+    },
+    {
+      "path": "attempt-display-timeout/campaign-provenance.json",
+      "bytes": 2828,
+      "sha256": "0fcee068e6870f0b714e435c4304eacdd0e45cb7a22cb8c481d7ae152d8bbd3e"
+    },
+    {
+      "path": "attempt-display-timeout/driver-config-open.log",
+      "bytes": 6343,
+      "sha256": "858c012a5483f80233f9392df000c40d6a69314c2094654021937bbc292497d8"
+    },
+    {
+      "path": "attempt-display-timeout/emulator.log",
+      "bytes": 5011,
+      "sha256": "0f051d46ee136149df4b05637069e435b100e8186ca0b150e823025d3613db17"
+    },
+    {
+      "path": "attempt-display-timeout/runner.json",
+      "bytes": 1038,
+      "sha256": "b773565bc8d9a61e76ec7289ed653ca9cb7c689bdfdb65b1746f17b10845a7aa"
+    },
+    {
+      "path": "before/art-compile.txt",
+      "bytes": 16,
+      "sha256": "f5b6aee2d32311288120b2a4be0136410019ceecb2a318f6b372f5ff611f7125"
+    },
+    {
+      "path": "before/instrumentation.txt",
+      "bytes": 133,
+      "sha256": "b188f3fe54d5448cc1850a7a5935b2831172eb5df1e81b865d6e1347577175e6"
+    },
+    {
+      "path": "before/logcat.txt",
+      "bytes": 61833,
+      "sha256": "5ba7ae2e3eea97224570a07d82d833e096ca6f1e97c6ee225670d17a85b39fba"
+    },
+    {
+      "path": "before/memory.txt",
+      "bytes": 40,
+      "sha256": "3a41255e7f09a62c08e30d0d765af6dc10b69667bb44369bdb6ee23372f8b7c3"
+    },
+    {
+      "path": "before/solar-performance/case-0-repeat.png",
+      "bytes": 41553,
+      "sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94"
+    },
+    {
+      "path": "before/solar-performance/case-0.png",
+      "bytes": 41553,
+      "sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94"
+    },
+    {
+      "path": "before/solar-performance/case-1-repeat.png",
+      "bytes": 49944,
+      "sha256": "2209ecf6bbc2f22bd414febe7477eb286e37e0b24afc89242f32a0919d8d9770"
+    },
+    {
+      "path": "before/solar-performance/case-1.png",
+      "bytes": 49944,
+      "sha256": "2209ecf6bbc2f22bd414febe7477eb286e37e0b24afc89242f32a0919d8d9770"
+    },
+    {
+      "path": "before/solar-performance/case-2-repeat.png",
+      "bytes": 36139,
+      "sha256": "b4c59de5a8346e092f4ba653be76f58c33d4ce2d09188abf603ea46a36176113"
+    },
+    {
+      "path": "before/solar-performance/case-2.png",
+      "bytes": 36139,
+      "sha256": "b4c59de5a8346e092f4ba653be76f58c33d4ce2d09188abf603ea46a36176113"
+    },
+    {
+      "path": "before/solar-performance/case-3-repeat.png",
+      "bytes": 64175,
+      "sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc"
+    },
+    {
+      "path": "before/solar-performance/case-3.png",
+      "bytes": 64175,
+      "sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc"
+    },
+    {
+      "path": "before/solar-performance/case-4-repeat.png",
+      "bytes": 37662,
+      "sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a"
+    },
+    {
+      "path": "before/solar-performance/case-4.png",
+      "bytes": 37662,
+      "sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a"
+    },
+    {
+      "path": "before/solar-performance/case-5-repeat.png",
+      "bytes": 28003,
+      "sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734"
+    },
+    {
+      "path": "before/solar-performance/case-5.png",
+      "bytes": 28003,
+      "sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734"
+    },
+    {
+      "path": "before/solar-performance/case-6-repeat.png",
+      "bytes": 28649,
+      "sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c"
+    },
+    {
+      "path": "before/solar-performance/case-6.png",
+      "bytes": 28649,
+      "sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c"
+    },
+    {
+      "path": "before/solar-performance/case-7-repeat.png",
+      "bytes": 31405,
+      "sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4"
+    },
+    {
+      "path": "before/solar-performance/case-7.png",
+      "bytes": 31405,
+      "sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4"
+    },
+    {
+      "path": "before/solar-performance/results.json",
+      "bytes": 46408,
+      "sha256": "747a18e351f6767b83b07675df41d643e3cdf734874cdce4184a97afe5cb493e"
+    },
+    {
+      "path": "campaign-provenance.json",
+      "bytes": 3486,
+      "sha256": "b4a3ebce5b9c602fe7f3a908c2a3b9d236befb26a9527632af14fe0ef5f7256e"
+    },
+    {
+      "path": "comparison-analysis.json",
+      "bytes": 24060,
+      "sha256": "939b7612c5cd008e49fa8df133e66863c713874b7c586aac91cbff76949eb6da"
+    },
+    {
+      "path": "driver-config-open.log",
+      "bytes": 5329,
+      "sha256": "6d101b28e427e05fc1165d587fb0091ae0e2caf61e699df13fbce6dcfa09152f"
+    },
+    {
+      "path": "emulator.log",
+      "bytes": 5011,
+      "sha256": "56d0e05efd80d11c2d359654d1c778e55754c453345a0a5d07902cd9115952b9"
+    },
+    {
+      "path": "runner.json",
+      "bytes": 103529,
+      "sha256": "1e0d1ef55dea524ccbfaea2f4f40360549fb2d3328264372bf502628b096252d"
+    },
+    {
+      "path": "tcg-display-deadline.patch",
+      "bytes": 1014,
+      "sha256": "362c7f687039d7afe9abb180d70681df6fc5a7ed1ea35bd379edd4b4ad467dce"
+    }
+  ]
+}

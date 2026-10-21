@@ -1,0 +1,56 @@
+{
+  "commit": "b9ec7452307c610448adbb1217e1566aa88fa79b",
+  "run": 39529818889,
+  "attempt": 2,
+  "failedJob": 118996189528,
+  "artifactId": 12315129368,
+  "artifactSha256": "2207491a4502de0ac83cfc378b851c4b18a0eaa791576c306153fbc20301fe2d",
+  "status": "incomplete_validation",
+  "observation": "Initial launch focus assertion failed. Android system watchdog subsequently killed system_server after all monitored handlers stalled for >60s. LMKD recorded low-watermark package kills before test launch. Google processes aborted; Solar later aborted in Binder/NewStringUTF after system-server death. The final screen capture is truncated, so the initial obscuring window cannot be identified from this artifact. This attempt does not establish completion or correctness of Solar 8K.",
+  "action": "No further identical retries. Preserve evidence and inspect emulator first-boot/resource configuration before another attempt. No pixel, lifecycle or focus assertion was relaxed.",
+  "excerpt": [
+    {
+      "line": 160,
+      "text": "10-21 02:05:09.675   149   149 I lowmemorykiller: Kill 'com.android.localtransport' (1902), uid 1000, oom_score_adj 965 to free 103728kB rss, 0kB swap; reason: low watermark is breached"
+    },
+    {
+      "line": 166,
+      "text": "10-21 02:05:09.702   149   149 I lowmemorykiller: Kill 'com.android.printspooler' (1502), uid 10127, oom_score_adj 955 to free 103344kB rss, 3328kB swap; reason: low watermark is breached"
+    },
+    {
+      "line": 177,
+      "text": "10-21 02:05:09.746   149   149 I lowmemorykiller: Kill 'com.android.carrierconfig' (1887), uid 10178, oom_score_adj 975 to free 100912kB rss, 3072kB swap; reason: low watermark is breached"
+    },
+    {
+      "line": 8438,
+      "text": "10-21 02:05:53.524  2895  2959 E CosmicSolarTests: java.lang.AssertionError: Solar Activity is obscured by another window at launch"
+    },
+    {
+      "line": 8882,
+      "text": "10-21 02:06:25.699   558   586 I Watchdog: WAITED_UNTIL_PRE_WATCHDOG"
+    },
+    {
+      "line": 8887,
+      "text": "10-21 02:06:25.713  1211  3285 F libc    : Fatal signal 6 (SIGABRT), code -6 (SI_TKILL) in tid 3285 (lowpool[12]), pid 1211 (.gms.persistent)"
+    },
+    {
+      "line": 9051,
+      "text": "10-21 02:07:09.146  1586  3097 F libc    : Fatal signal 6 (SIGABRT), code -6 (SI_TKILL) in tid 3097 (binder:1586_8), pid 1586 (earchbox:search)"
+    },
+    {
+      "line": 11068,
+      "text": "10-21 02:09:58.480   558   586 W Watchdog: *** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on monitor thread (watchdog.monitor) for 60s, Blocked in handler on foreground thread (android.fg) for 60s, Blocked in handler on main thread (main) for 60s, Blocked in handler on ui thread (android.ui) for 60s, Blocked in handler on i/o thread (android.io) for 60s, Blocked in handler on display thread (android.display) for 60s, Blocked in handler on animation thread (android.anim) for 60s, Blocked in handler on surface animation thread (android.anim.lf) for 60s, Blocked in handler on ActivityManager (ActivityManager) for 60s, Blocked in handler on PowerManagerService (PowerManagerService) for 60s, Blocked in handler on CpuMonitorService (CpuMonitorService) for 60s, Blocked in handler on BlobStore (BlobStore) for 60s"
+    },
+    {
+      "line": 14545,
+      "text": "10-21 02:12:02.646  2895  2895 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 2895 (icx.solar.ultra), pid 2895 (icx.solar.ultra)"
+    },
+    {
+      "line": 14618,
+      "text": "10-21 02:12:03.883   363   363 E Zygote  : Exit zygote because system server (pid 558) has terminated"
+    }
+  ],
+  "logcatSha256": "373b23907ddc9c476f269edc9dd0d32841980e53667b937547520df706299751",
+  "instrumentationSha256": "c95ca291272e4d09bb108659536d32f1637f352dc36427e28a8f7ff927d4710d",
+  "wellbeingDisabled": "package:com.google.android.apps.wellbeing"
+}

@@ -1,0 +1,57 @@
+{
+  "created_utc": "2026-10-21T01:51:11.805874+00:00",
+  "scope": "Fresh full-catalogue candidate debug APK, unchanged full-evaluation reference and unchanged common instrumentation. No runtime execution in this manifest.",
+  "source_commit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+  "production_overlays": [
+    {
+      "path": "solar-android/app/src/main/assets/shaders/solar.frag",
+      "commit_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+      "snapshot_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+      "commit_sha256": "2ad900613108fa223be7fea46b10ef1daf7e40f33da63a830b995d1754969e2e",
+      "snapshot_sha256": "4a072da7afe555809655aeba641809cc57c10f05d2dde237b500fed1167e343e"
+    }
+  ],
+  "candidate_source_manifest_sha256": "431ce8755bbdec31ffe8750e78ecaf96c2c56019694e308b5b3c82984d5d2724",
+  "candidate_verification_sha256": "efcfdecee52ccc74f6d79adb06d9d7e62a6509d267c08a6020af4c22c9ddf988",
+  "candidate_shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+  "baseline_reference_shader_sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+  "baseline_and_tests_rebuilt": false,
+  "baseline_and_candidate_same_test_apk": true,
+  "artifacts": [
+    {
+      "source": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-full-evaluation/before/debug/app-debug.apk",
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/before/debug/app-debug.apk",
+      "role": "baseline",
+      "sha256": "b92745aad2803b7690d83ae8ff90051d752822cb833e999f43570d12dfd0b81e",
+      "bytes": 4620291,
+      "reused": true
+    },
+    {
+      "source": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-full-evaluation/before/androidTest/debug/app-debug-androidTest.apk",
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/before/androidTest/debug/app-debug-androidTest.apk",
+      "role": "test",
+      "sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+      "bytes": 54836,
+      "reused": true
+    },
+    {
+      "source": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/candidate-allbody/solar-android/app/build/outputs/apk/debug/app-debug.apk",
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/after/debug/app-debug.apk",
+      "role": "candidate",
+      "sha256": "c01b2294c4f64c8d9181884f9dca34fb462365e425c73dea6cdf02e547484430",
+      "bytes": 4620435,
+      "reused": false
+    },
+    {
+      "source": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-full-evaluation/after/androidTest/debug/app-debug-androidTest.apk",
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/android-pair-allbody/after/androidTest/debug/app-debug-androidTest.apk",
+      "role": "test",
+      "sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+      "bytes": 54836,
+      "reused": true
+    }
+  ]
+}

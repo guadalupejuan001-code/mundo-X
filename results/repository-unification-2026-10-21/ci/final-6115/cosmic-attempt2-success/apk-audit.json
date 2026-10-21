@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "applicationId": "com.mundox.cosmic",
+  "version": "0.3.1",
+  "nativeLibraries": {
+    "lib/arm64-v8a/libmundox.so": "c5fff664859ad6e09911e6c2916fef8e950be0514e6c75c0ac202df7147c06af",
+    "lib/arm64-v8a/libmundox_basis.so": "bbd6682c3cd521599311d0275ea38bd50ececf8856f4749b02f58da5f48baaf5",
+    "lib/arm64-v8a/libmundox_echoes.so": "2f273129b1cef04be77f64213b65e243c6074e1cc32f1231ad4e805e694b543c",
+    "lib/arm64-v8a/libmx_graphics.so": "ea36272d4fdda868a0b8172b68cbd1517cea4fac2b691aa50e03e643bdb9ab14",
+    "lib/x86_64/libmundox.so": "c60f63305d85cc729b69bd62fa73cbeb1628e5c464216aeb8dded08b7a05b23f",
+    "lib/x86_64/libmundox_basis.so": "716e484f5e0af351e023c1ee947916e02cf93d05c746dd3717f513c80533e13f",
+    "lib/x86_64/libmundox_echoes.so": "6439f00898f45fc153803bb6dfcbfab2889159151527bdd61d21973bb4cd1dad",
+    "lib/x86_64/libmx_graphics.so": "d2be93a04466cfa078495f6957dc63b09fde02b9c1746789040644d0ce503a54"
+  },
+  "definedClasses": 608,
+  "includedActivities": [
+    "com.mundox.cosmic.CosmicActivity",
+    "com.mundox.echoes.MainActivity",
+    "com.mundox.graphics.MainActivity",
+    "com.mundox.lab.BasisVmActivity",
+    "com.mundox.lab.DeviceLauncherActivity",
+    "com.mundox.lab.GpuVisualActivity",
+    "com.mundox.lab.InternetSyncActivity",
+    "com.mundox.lab.MainActivity",
+    "com.mundox.lab.MicroLabActivity",
+    "com.mundox.lab.ObjectLabActivity",
+    "com.mundox.lab.PerformanceLauncherActivity",
+    "com.mundox.lab.ProceduralGameDemoActivity",
+    "com.mundox.lab.QuantumInterfaceActivity",
+    "com.mundox.lab.SyncedGpuActivity",
+    "com.mundox.lab.VisualExperimentActivity",
+    "com.mundox.lab.XLabActivity"
+  ],
+  "windowsEmulatorPackaged": false,
+  "passed": true,
+  "buildCommit": "6115ccadef747c0a767990f35a39d1079ec65c87",
+  "apkSha256": {
+    "COSMIC-X-Engine-0.3.1.apk": "0305884e3c6899be92d94198de20f8355d7122cf8fd9ee879e6a679b92951130",
+    "COSMIC-X-Engine-0.3.1-tests.apk": "760a7efc73ab18541b479913e12abd134cbfce030dacc2352862393de03449da",
+    "Mundo-X-Graphics-coexist.apk": "4c5377e4ee9dbf755361465454c869004955e6d7aeb9f65631b4441e8fa5fa0e"
+  },
+  "certificateSha256": {
+    "COSMIC-X-Engine-0.3.1.apk": "56b6a4ab8a4284f798f6c4808435e421cc49e144055cc0ff9b1f9415dfb88380",
+    "COSMIC-X-Engine-0.3.1-tests.apk": "56b6a4ab8a4284f798f6c4808435e421cc49e144055cc0ff9b1f9415dfb88380",
+    "Mundo-X-Graphics-coexist.apk": "56b6a4ab8a4284f798f6c4808435e421cc49e144055cc0ff9b1f9415dfb88380"
+  },
+  "experimentActivities": 14,
+  "coinstallationCompanionIsDelivery": false
+}

@@ -1,11 +1,32 @@
 # Disposición de ramas y borradores de mundo-X — 2026-10-21
 
+## Cierre aplicado
+
+La consolidación de [PR25](https://github.com/guadalupejuan001-code/mundo-X/pull/25)
+quedó fusionada en `main` mediante
+[`faa653c9bc81a3a7a48a5fce643878c32c98bd61`](https://github.com/guadalupejuan001-code/mundo-X/commit/faa653c9bc81a3a7a48a5fce643878c32c98bd61),
+después de **18/18 campañas aprobadas** en `6115ccadef747c0a767990f35a39d1079ec65c87`.
+Los PR [19](https://github.com/guadalupejuan001-code/mundo-X/pull/19),
+[20](https://github.com/guadalupejuan001-code/mundo-X/pull/20),
+[21](https://github.com/guadalupejuan001-code/mundo-X/pull/21) y
+[22](https://github.com/guadalupejuan001-code/mundo-X/pull/22) están **cerrados
+como sustituidos**. Sus aportes útiles se integraron de forma selectiva y
+sus descripciones históricas permanecen en los cuerpos de cierre.
+
+La consulta posterior encontró **cero PR abiertos**. Las ramas históricas
+se conservan para recuperar procedencia; no se reintrodujeron APK antiguos ni
+planes superados como actualizaciones vigentes. El
+[recibo de cierre](../results/repository-unification-2026-10-21/closure-receipt.json)
+registra los estados y horas reales de la operación.
+
+## Fotografía inicial conservada
+
 La [consolidación](repository-unification-2026-10-21.md) registra los rescates y
 correcciones posteriores a esta fotografía inicial. Las expresiones «pendiente»
 de este inventario describen lo que faltaba en la referencia fija, no sustituyen
 el estado posterior de PR25.
 
-**Referencia fija auditada:** `52150dfa928c088a32e69ce32f53c1e5a3b558c3`. **Main remoto:** `7b028db2344912b2ab86a0affa2a1fe56180922b`. **Captura de API:** `2026-10-21T00:01:25.574Z`. La consolidación se trabaja desde `codex/unify-mundo-x-20261021`; los resultados posteriores deben quedar ligados a sus propios commits.
+**Referencia fija auditada:** `52150dfa928c088a32e69ce32f53c1e5a3b558c3`. **Main remoto en esa captura:** `7b028db2344912b2ab86a0affa2a1fe56180922b`. **Captura de API:** `2026-10-21T00:01:25.574Z`. La consolidación se preparó desde `codex/unify-mundo-x-20261021`; los resultados posteriores están ligados a sus propios commits.
 
 ## Resultado y decisión de integración
 

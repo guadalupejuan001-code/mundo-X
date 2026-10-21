@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "6115ccadef747c0a767990f35a39d1079ec65c87",
+  "runId": 39532390017,
+  "runAttempt": 1,
+  "jobId": 119001645013,
+  "runUrl": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39532390017",
+  "jobUrl": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39532390017/job/119001645013",
+  "conclusion": "success",
+  "artifact": {
+    "id": 12315719868,
+    "bytes": 37729607,
+    "sha256": "1d9e3aa4b1df4b9d898bca8aa4b1e68e2f60a1fa8f429f01b66d46a34c4f4d1c",
+    "locallyVerified": true
+  },
+  "testsRun": 15,
+  "testsFailed": 0,
+  "tests": [
+    {
+      "name": "native_gles_launch_and_textures",
+      "passed": true,
+      "durationSeconds": 103.01
+    },
+    {
+      "name": "astronomy_and_magnetic_classification",
+      "passed": true,
+      "durationSeconds": 0.002
+    },
+    {
+      "name": "native_ether_fusion_and_readonly_observation",
+      "passed": true,
+      "durationSeconds": 2.096
+    },
+    {
+      "name": "quantum_coupled_and_uncoupled_frames",
+      "passed": true,
+      "durationSeconds": 5.095
+    },
+    {
+      "name": "intrinsic_and_induced_field_frames",
+      "passed": true,
+      "durationSeconds": 15.838
+    },
+    {
+      "name": "solar_wind_layer",
+      "passed": true,
+      "durationSeconds": 14.775
+    },
+    {
+      "name": "saturn_rings_and_moon_navigation",
+      "passed": true,
+      "durationSeconds": 5.079
+    },
+    {
+      "name": "forward_reverse_and_paused_time",
+      "passed": true,
+      "durationSeconds": 11.675
+    },
+    {
+      "name": "real_scale_earth_focus",
+      "passed": true,
+      "durationSeconds": 13.686
+    },
+    {
+      "name": "camera_rotation_zoom_pan_and_flight",
+      "passed": true,
+      "durationSeconds": 7.562
+    },
+    {
+      "name": "resolution_budget",
+      "passed": true,
+      "durationSeconds": 5.459
+    },
+    {
+      "name": "background_resume_preserves_state",
+      "passed": true,
+      "durationSeconds": 5.21
+    },
+    {
+      "name": "recreation_and_orientation_preserve_state",
+      "passed": true,
+      "durationSeconds": 98.161
+    },
+    {
+      "name": "ultra8k_framebuffer_return_preserves_scene",
+      "passed": true,
+      "durationSeconds": 94.742
+    },
+    {
+      "name": "ultra8k_earth_entry_atmosphere",
+      "passed": true,
+      "durationSeconds": 162.427
+    }
+  ],
+  "verifiedPngCaptureCount": 16,
+  "actual8kPngs": {
+    "ultra8k-earth-entry.png": {
+      "width": 4320,
+      "height": 7680,
+      "bytes": 3819502,
+      "sha256": "c8fdfca203bc6f9656bf75774d5f38be23abe028752381364bfa453686a4e06e",
+      "pixels": 33177600,
+      "localSha256AndPngHeaderVerified": true
+    },
+    "ultra8k-earth-orbit.png": {
+      "width": 4320,
+      "height": 7680,
+      "bytes": 12296087,
+      "sha256": "1278633b53d65325e6bea71e16351f2df5f1d3f64ab8697549efa095771af7f4",
+      "pixels": 33177600,
+      "localSha256AndPngHeaderVerified": true
+    }
+  },
+  "metrics": {
+    "applicationId": "com.cosmicx.solar.ultra",
+    "performanceScope": "Software GLES emulator; not Samsung A16 performance measurements",
+    "physicalScope": "JPL analytical orbits + JPL-GM local gravity; illustrative moon phases and magnetic geometries",
+    "initialWindowFocused": true,
+    "startupViewport": [
+      320,
+      640
+    ],
+    "deterministicPausedChangedPixels": 0,
+    "ultra8kSuite": true,
+    "uhd4kSuite": false,
+    "ultraCaptureWaits": [
+      {
+        "deadlineMs": 240000,
+        "elapsedMs": 90373,
+        "phase": "capture callback completed",
+        "width": 4320,
+        "height": 7680,
+        "callbackCompleted": true
+      },
+      {
+        "deadlineMs": 240000,
+        "elapsedMs": 161094,
+        "phase": "capture callback completed",
+        "width": 4320,
+        "height": 7680,
+        "callbackCompleted": true
+      }
+    ],
+    "uhdPixels": 33177600,
+    "uhdReturnChangedPixels": 0,
+    "uhdNativeOwnerPreserved": true,
+    "ultra8kEntry": {
+      "width": 4320,
+      "height": 7680,
+      "altitudeKm": 25,
+      "brightPixels": 33177600
+    },
+    "glRenderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+    "glVersion": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+    "framesRendered": 11,
+    "nativePreparationSites": 8,
+    "nativeActiveSites": 8,
+    "nativeStateBytes": 136
+  },
+  "resources": {
+    "systemImage": "system-images;android-35;default;x86_64",
+    "androidSdk": 35,
+    "buildFingerprint": "Android/sdk_phone64_x86_64/emu64x:15/AE3A.240806.019/12368160:userdebug/test-keys",
+    "requestedRamMiB": 2048,
+    "requestedCores": 2,
+    "emulatorRamMiBFromLog": 2560,
+    "guestBeforeKiB": {
+      "MemTotal": 2532896,
+      "MemAvailable": 1416376,
+      "SwapTotal": 1899668,
+      "SwapFree": 1899668
+    },
+    "hostBeforeKiB": {
+      "MemTotal": 16367524,
+      "MemAvailable": 11934328,
+      "SwapTotal": 3145724,
+      "SwapFree": 3145724
+    },
+    "emulatorBefore": {
+      "VmPeak": 4861124,
+      "VmHWM": 3450340,
+      "VmRSS": 3450340,
+      "Threads": 79
+    },
+    "scope": "Pre-instrumentation snapshots; requested RAM is not an effective memory cap or a process peak."
+  },
+  "interpretation": [
+    "The 8K suite passed on the Android 15 AOSP x86_64 fixture. Normal and 4K profiles retain their Google APIs image.",
+    "2048 MiB was requested; the emulator log reports 2560 MiB, and guest MemTotal is measured separately. This is not proof of an effective 2 GiB whole-emulator cap.",
+    "Resource snapshots were taken before instrumentation; emulator process RSS/HWM is not the Solar application peak and does not establish physical-device performance.",
+    "Earlier Google APIs 8K failures at b9ec remain documented in final-b9ec; no assertions, product source, default 8K launch mode, capture deadlines or driver configuration were weakened for this fixture result."
+  ]
+}

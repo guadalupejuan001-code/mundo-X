@@ -1,0 +1,66 @@
+{
+  "variant": "baseline-full-evaluation",
+  "verified_utc": "2026-10-21T01:20:25.212353+00:00",
+  "source_commit": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_snapshot": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/baseline-full-evaluation",
+  "source_manifest_sha256": "0432e6ccd678b65dfe6f2031f33a5a487d9dd854020bfd3f7beb8ad6be4ae431",
+  "scope": "Fresh Gradle builds; package, signatures, alignment, ABI and assets verified. No device execution in this report.",
+  "apks": {
+    "debug": {
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/baseline-full-evaluation/solar-android/app/build/outputs/apk/debug/app-debug.apk",
+      "sha256": "b92745aad2803b7690d83ae8ff90051d752822cb833e999f43570d12dfd0b81e",
+      "bytes": 4620291,
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "package": "com.cosmicx.solar",
+      "version_name": "1.1.0",
+      "version_code": "2",
+      "min_sdk": "26",
+      "target_sdk": "35",
+      "signature_verified": true,
+      "alignment_16k_verified": true,
+      "verification_logs": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/baseline-full-evaluation-verification",
+      "assets_sha256": {
+        "assets/science-assets.json": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+        "assets/textures/earth.png": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+        "assets/textures/jupiter.jpg": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+        "assets/textures/moon.jpg": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+        "assets/shaders/overlay.frag": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+        "assets/shaders/solar.vert": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+        "assets/shaders/solar.frag": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+        "assets/shaders/overlay.vert": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0"
+      },
+      "native_libraries": {
+        "arm64-v8a": {
+          "entry": "lib/arm64-v8a/libmx_graphics.so",
+          "sha256": "781917b7649cd330a63b8b5dc3d64901e2ab8064a596db7fb73b5a922c999b53",
+          "bytes": 1196104,
+          "elf_machine": 183
+        },
+        "x86_64": {
+          "entry": "lib/x86_64/libmx_graphics.so",
+          "sha256": "5a0dbb0644740132675a0a8f2d2625655c815a324b12989c511a31fa617bf18a",
+          "bytes": 1173032,
+          "elf_machine": 62
+        }
+      },
+      "shader_matches_source": true
+    },
+    "androidTest": {
+      "path": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/baseline-full-evaluation/solar-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
+      "sha256": "09302337c282dd8348e180824399baf28617e357025a33e959b221b540c85862",
+      "bytes": 54836,
+      "certificate_sha256": "08e89c777b87f8d0187ac000053c0b2b2ee1996240f664eb7369e5f0f800c61f",
+      "package": "com.cosmicx.solar.test",
+      "version_name": "",
+      "version_code": "",
+      "min_sdk": "26",
+      "target_sdk": "35",
+      "signature_verified": true,
+      "alignment_16k_verified": true,
+      "verification_logs": "/workspace/scratch/d0e1d0a0e3a1/closure/unification/solar/baseline-full-evaluation-verification",
+      "instrumentation_target": "com.cosmicx.solar"
+    }
+  },
+  "application_and_tests_same_certificate": true,
+  "all_checks_passed": true
+}

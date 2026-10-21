@@ -1,0 +1,27 @@
+{
+  "systemImage": "system-images;android-35;google_apis;x86_64",
+  "androidSdk": 35,
+  "buildFingerprint": "google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys",
+  "requestedRamMiB": 2048,
+  "requestedCores": 2,
+  "emulatorRamMiBFromLog": 2560,
+  "guestBeforeKiB": {
+    "MemTotal": 2532420,
+    "MemAvailable": 1024596,
+    "SwapTotal": 1899308,
+    "SwapFree": 1893676
+  },
+  "hostBeforeKiB": {
+    "MemTotal": 16366516,
+    "MemAvailable": 11936744,
+    "SwapTotal": 3145724,
+    "SwapFree": 3145724
+  },
+  "emulatorBefore": {
+    "VmPeak": 4894724,
+    "VmHWM": 3439384,
+    "VmRSS": 3439384,
+    "Threads": 83
+  },
+  "scope": "Pre-instrumentation snapshots; requested RAM is not an effective memory cap or a process peak."
+}
