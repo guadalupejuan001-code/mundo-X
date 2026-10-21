@@ -59,15 +59,16 @@ class PcMachine {
     cpu.interrupt_hook=[this](Cpu&,std::uint8_t n){return bios(n);};
     cpu.in_hook=[this](std::uint16_t port,unsigned width){return input(port,width);};
     cpu.out_hook=[this](std::uint16_t port,unsigned width,std::uint32_t v){return output(port,width,v);};
-    cpu.memory.attach_window(
-        kEtherMemoryPhysicalBase,kEtherMemoryBytes,
-        [this](std::uint64_t offset){
-          return quantum_session->qload8(std::to_string(kEtherMemoryLogicalByteBase+offset));
-        },
-        [this](std::uint64_t offset,std::uint8_t value){
-          quantum_session->qstore8(std::to_string(kEtherMemoryLogicalByteBase+offset),value);
-          quantum_cache_valid_=false;
-        });
+    if(cpu.memory.size()>=kEtherMemoryPhysicalBase+kEtherMemoryBytes)
+      cpu.memory.attach_window(
+          kEtherMemoryPhysicalBase,kEtherMemoryBytes,
+          [this](std::uint64_t offset){
+            return quantum_session->qload8(std::to_string(kEtherMemoryLogicalByteBase+offset));
+          },
+          [this](std::uint64_t offset,std::uint8_t value){
+            quantum_session->qstore8(std::to_string(kEtherMemoryLogicalByteBase+offset),value);
+            quantum_cache_valid_=false;
+          });
     clear_screen();
     video_.reset(cpu.memory);
   }
@@ -232,9 +233,9 @@ class PcMachine {
      <<",\"disk_reads\":"<<disk_reads<<",\"ram_bytes\":"<<cpu.memory.size()
      <<",\"ram_allocated_bytes\":"<<cpu.memory.allocated_bytes()<<",\"ram_budget_bytes\":"<<cpu.memory.budget_bytes()
      <<",\"ram_metadata_bytes\":"<<cpu.memory.metadata_bytes()<<",\"ram_allocated_pages\":"<<cpu.memory.allocated_pages()
-     <<",\"ether_memory_physical_base\":"<<kEtherMemoryPhysicalBase
-     <<",\"ether_memory_bytes\":"<<kEtherMemoryBytes
-     <<",\"ether_memory_logical_byte_base\":"<<kEtherMemoryLogicalByteBase
+     <<",\"ether_memory_physical_base\":"<<(cpu.memory.has_window()?kEtherMemoryPhysicalBase:0)
+     <<",\"ether_memory_bytes\":"<<cpu.memory.window_bytes()
+     <<",\"ether_memory_logical_byte_base\":"<<(cpu.memory.has_window()?kEtherMemoryLogicalByteBase:0)
      <<",\"video_kind\":"<<quote(video.graphics?"vbe32":"text")<<",\"video_mode\":"<<video.mode
      <<",\"video_width\":"<<video.width<<",\"video_height\":"<<video.height<<",\"video_pitch\":"<<video.pitch
      <<",\"video_bytes\":"<<video.byte_size<<",\"video_address\":"<<video.physical_address
