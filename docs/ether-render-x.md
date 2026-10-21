@@ -26,7 +26,7 @@ XASM world
 The implementation is in:
 
 - `native/include/mundo_x/ether_renderer.hpp`
-- `native/tests/ether_renderer.cpp`
+- `native/tests/rule_renderer.cpp`
 - `native/tests/xasm_renderer.cpp`
 - `examples/ether_render.x`
 
@@ -50,9 +50,42 @@ Example:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
-cmake --build build --target mundo_x test_ether_renderer test_xasm_renderer -j 2
+cmake --build build --target mundo_x test_rule_renderer test_xasm_renderer -j 2
 ./build/mundo_x run examples/ether_render.x
-ctest --test-dir build -R '^(ether_renderer|xasm_renderer)$' --output-on-failure
+ctest --test-dir build -R '^(rule_renderer|xasm_renderer) --output-on-failure
+```
+
+## Exactness contract
+
+`render_assert_exact` renders the frame through both paths:
+
+1. region candidate path;
+2. brute-force all-bodies path.
+
+It fails if any pixel differs in body id, exact selected depth or RGBA result. This is deliberately stricter than a visual tolerance.
+
+The native randomized oracle also checks 100 generated 20-body scenes.
+
+## Current scope
+
+v0.1 implements:
+
+- one perspective camera;
+- up to 64 spherical bodies;
+- conservative screen-region projection;
+- region candidate masks;
+- exact nearest sphere intersection;
+- deterministic direct lighting;
+- framebuffer and pixel observations;
+- brute-force exactness oracle;
+- work counters: candidate references/tests versus brute-force references/tests.
+
+It does **not** yet implement the Solar materials, textures, rings, atmospheres, eclipses, mirrors or Android GLES execution. Those are later stages. This keeps the first structural claim measurable before replacing a production renderer.
+
+## Promotion rule
+
+Ether Render X is allowed to enter Solar only after a Solar-specific adapter proves zero candidate omissions and zero frame differences against Solar's full reference while reducing total work on the target path.
+ --output-on-failure
 ```
 
 ## Exactness contract
