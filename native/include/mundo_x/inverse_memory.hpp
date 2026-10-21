@@ -200,7 +200,7 @@ class InverseMemory {
     return out.str();
   }
 
-  static InverseMemory from_snapshot(const std::string& saved, Limits limits = Limits{}) {
+  static InverseMemory from_snapshot(const std::string& saved, Limits limits) {
     std::istringstream input(saved);
     input.imbue(std::locale::classic());
     std::string magic, value;
@@ -228,6 +228,10 @@ class InverseMemory {
     }
     if (!input.eof()) throw std::invalid_argument("Malformed Inverse Memory snapshot");
     return result;
+  }
+
+  static InverseMemory from_snapshot(const std::string& saved) {
+    return from_snapshot(saved, Limits{});
   }
 
  private:
