@@ -1,0 +1,383 @@
+﻿2026-10-21T00:45:48.5969018Z Current runner version: '2.337.0'
+2026-10-21T00:45:48.5995243Z ##[group]Runner Image Provisioner
+2026-10-21T00:45:48.5996132Z Hosted Compute Agent
+2026-10-21T00:45:48.5996842Z Version: 20261015.610
+2026-10-21T00:45:48.5997534Z Commit: 267fdb4e8bbec4ab5ea31367f3a00d5c480c7656
+2026-10-21T00:45:48.5998297Z Build Date: 2026-10-14T17:06:54Z
+2026-10-21T00:45:48.5999104Z Worker ID: {3a2bd6e8-a08e-46c1-9ed0-91c35380c3f2}
+2026-10-21T00:45:48.6000158Z Region: westus
+2026-10-21T00:45:48.6000712Z Cloud: Azure
+2026-10-21T00:45:48.6001342Z ##[endgroup]
+2026-10-21T00:45:48.6002856Z ##[group]Operating System
+2026-10-21T00:45:48.6003622Z Ubuntu
+2026-10-21T00:45:48.6004188Z 24.04.5
+2026-10-21T00:45:48.6004716Z LTS
+2026-10-21T00:45:48.6005330Z ##[endgroup]
+2026-10-21T00:45:48.6005893Z ##[group]Runner Image
+2026-10-21T00:45:48.6006576Z Image: ubuntu-24.04
+2026-10-21T00:45:48.6007172Z Version: 20261018.339.1
+2026-10-21T00:45:48.6008486Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261018.339/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-21T00:45:48.6010507Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261018.339
+2026-10-21T00:45:48.6011624Z ##[endgroup]
+2026-10-21T00:45:48.6012771Z ##[group]GITHUB_TOKEN Permissions
+2026-10-21T00:45:48.6014795Z Contents: read
+2026-10-21T00:45:48.6015449Z Metadata: read
+2026-10-21T00:45:48.6016065Z ##[endgroup]
+2026-10-21T00:45:48.6018264Z Secret source: Actions
+2026-10-21T00:45:48.6019247Z Cache mode: write
+2026-10-21T00:45:48.6020417Z Prepare workflow directory
+2026-10-21T00:45:48.6502194Z Prepare all required actions
+2026-10-21T00:45:48.6552565Z Getting action download info
+2026-10-21T00:45:49.0251545Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-21T00:45:49.1226923Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-21T00:45:49.2092830Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-21T00:45:49.4172046Z Complete job name: Mirror geometry, shared Ether and bounded work
+2026-10-21T00:45:49.4981336Z ##[group]Run actions/checkout@v4
+2026-10-21T00:45:49.4982233Z with:
+2026-10-21T00:45:49.4982712Z   ref: 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:45:49.4983299Z   fetch-depth: 0
+2026-10-21T00:45:49.4983759Z   persist-credentials: false
+2026-10-21T00:45:49.4984306Z   repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:45:49.4988150Z   token: ***
+2026-10-21T00:45:49.4988581Z   ssh-strict: true
+2026-10-21T00:45:49.4989055Z   ssh-user: git
+2026-10-21T00:45:49.4989480Z   clean: true
+2026-10-21T00:45:49.4990127Z   sparse-checkout-cone-mode: true
+2026-10-21T00:45:49.4990659Z   fetch-tags: false
+2026-10-21T00:45:49.4991109Z   show-progress: true
+2026-10-21T00:45:49.4991567Z   lfs: false
+2026-10-21T00:45:49.4991980Z   submodules: false
+2026-10-21T00:45:49.4992433Z   set-safe-directory: true
+2026-10-21T00:45:49.4992942Z   allow-unsafe-pr-checkout: false
+2026-10-21T00:45:49.4993765Z env:
+2026-10-21T00:45:49.4994188Z   EGL_PLATFORM: surfaceless
+2026-10-21T00:45:49.4994721Z   LIBGL_ALWAYS_SOFTWARE: 1
+2026-10-21T00:45:49.4995208Z ##[endgroup]
+2026-10-21T00:45:49.6115523Z Syncing repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:45:49.6118268Z ##[group]Getting Git version info
+2026-10-21T00:45:49.6119382Z Working directory is '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:45:49.6121270Z [command]/usr/bin/git version
+2026-10-21T00:45:49.6198045Z git version 2.55.0
+2026-10-21T00:45:49.6256726Z ##[endgroup]
+2026-10-21T00:45:49.6272423Z Temporarily overriding HOME='/home/runner/work/_temp/32713d22-f0d9-47ac-a697-93a92adadfe8' before making global git config changes
+2026-10-21T00:45:49.6274942Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:45:49.6278315Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:45:49.6333941Z Deleting the contents of '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:45:49.6338453Z ##[group]Initializing the repository
+2026-10-21T00:45:49.6343117Z [command]/usr/bin/git init /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:45:49.6454388Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-21T00:45:49.6456062Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-21T00:45:49.6457634Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-21T00:45:49.6458876Z hint: call:
+2026-10-21T00:45:49.6460176Z hint:
+2026-10-21T00:45:49.6461134Z hint: 	git config --global init.defaultBranch <name>
+2026-10-21T00:45:49.6462171Z hint:
+2026-10-21T00:45:49.6463140Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-21T00:45:49.6464666Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-21T00:45:49.6465877Z hint:
+2026-10-21T00:45:49.6466528Z hint: 	git branch -m <name>
+2026-10-21T00:45:49.6467340Z hint:
+2026-10-21T00:45:49.6468469Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-21T00:45:49.6470948Z Initialized empty Git repository in /home/runner/work/mundo-X/mundo-X/.git/
+2026-10-21T00:45:49.6477621Z [command]/usr/bin/git remote add origin https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:45:49.6535604Z ##[endgroup]
+2026-10-21T00:45:49.6537158Z ##[group]Disabling automatic garbage collection
+2026-10-21T00:45:49.6540093Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-21T00:45:49.6582647Z ##[endgroup]
+2026-10-21T00:45:49.6584134Z ##[group]Setting up auth
+2026-10-21T00:45:49.6591534Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:45:49.6634019Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:45:49.7061069Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:45:49.7107865Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:45:49.7416369Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:45:49.7468760Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:45:49.7725679Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-21T00:45:49.7776507Z ##[endgroup]
+2026-10-21T00:45:49.7777351Z ##[group]Fetching the repository
+2026-10-21T00:45:49.7787358Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-10-21T00:45:50.5657189Z From https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:45:50.5670345Z  * [new branch]      build/android-apk-v0.1  -> origin/build/android-apk-v0.1
+2026-10-21T00:45:50.5671546Z  * [new branch]      codex/basis-vm-android  -> origin/codex/basis-vm-android
+2026-10-21T00:45:50.5672711Z  * [new branch]      codex/core-1000-qubits-20261019 -> origin/codex/core-1000-qubits-20261019
+2026-10-21T00:45:50.5674023Z  * [new branch]      codex/cosmic-android-unified-20261019 -> origin/codex/cosmic-android-unified-20261019
+2026-10-21T00:45:50.5675303Z  * [new branch]      codex/cosmic-engine-4k-20261019 -> origin/codex/cosmic-engine-4k-20261019
+2026-10-21T00:45:50.5676537Z  * [new branch]      codex/cosmic-engine-8k-20261019 -> origin/codex/cosmic-engine-8k-20261019
+2026-10-21T00:45:50.5678325Z  * [new branch]      codex/cosmic-solar-4k-atmospheres-20261019 -> origin/codex/cosmic-solar-4k-atmospheres-20261019
+2026-10-21T00:45:50.5680593Z  * [new branch]      codex/cosmic-solar-explorer -> origin/codex/cosmic-solar-explorer
+2026-10-21T00:45:50.5682919Z  * [new branch]      codex/cosmic-x-engine-20261019 -> origin/codex/cosmic-x-engine-20261019
+2026-10-21T00:45:50.5684518Z  * [new branch]      codex/ether-audit-stress-20261020 -> origin/codex/ether-audit-stress-20261020
+2026-10-21T00:45:50.5686015Z  * [new branch]      codex/ether-core-v0-1-20261019 -> origin/codex/ether-core-v0-1-20261019
+2026-10-21T00:45:50.5688661Z  * [new branch]      codex/ether-fusion-pc-check-20261020 -> origin/codex/ether-fusion-pc-check-20261020
+2026-10-21T00:45:50.5691414Z  * [new branch]      codex/ether-fusion-session-20261020 -> origin/codex/ether-fusion-session-20261020
+2026-10-21T00:45:50.5694286Z  * [new branch]      codex/factorized-exact-structure-20261018 -> origin/codex/factorized-exact-structure-20261018
+2026-10-21T00:45:50.5697008Z  * [new branch]      codex/graphics-spatial-20261018 -> origin/codex/graphics-spatial-20261018
+2026-10-21T00:45:50.5699410Z  * [new branch]      codex/infinite-8k-extreme-20261019 -> origin/codex/infinite-8k-extreme-20261019
+2026-10-21T00:45:50.5702340Z  * [new branch]      codex/infinite-core-rules-20261019 -> origin/codex/infinite-core-rules-20261019
+2026-10-21T00:45:50.5705396Z  * [new branch]      codex/integrate-cosmic-projects-20261019 -> origin/codex/integrate-cosmic-projects-20261019
+2026-10-21T00:45:50.5708315Z  * [new branch]      codex/integration-transport-20261021 -> origin/codex/integration-transport-20261021
+2026-10-21T00:45:50.5711316Z  * [new branch]      codex/motor-x-visual-20261018 -> origin/codex/motor-x-visual-20261018
+2026-10-21T00:45:50.5713981Z  * [new branch]      codex/mundo-x-graphics-android-20261019 -> origin/codex/mundo-x-graphics-android-20261019
+2026-10-21T00:45:50.5716316Z  * [new branch]      codex/own-pc-x86-20261019 -> origin/codex/own-pc-x86-20261019
+2026-10-21T00:45:50.5718356Z  * [new branch]      codex/pc-enter-iso-fix-20261019 -> origin/codex/pc-enter-iso-fix-20261019
+2026-10-21T00:45:50.5721441Z  * [new branch]      codex/pc-graphics-iso-fix-20261019 -> origin/codex/pc-graphics-iso-fix-20261019
+2026-10-21T00:45:50.5723903Z  * [new branch]      codex/physics-foundation-20261019 -> origin/codex/physics-foundation-20261019
+2026-10-21T00:45:50.5725273Z  * [new branch]      codex/quantum-echo-android -> origin/codex/quantum-echo-android
+2026-10-21T00:45:50.5726586Z  * [new branch]      codex/rule-render-physics-20261019 -> origin/codex/rule-render-physics-20261019
+2026-10-21T00:45:50.5727958Z  * [new branch]      codex/visual-microlab-20261018 -> origin/codex/visual-microlab-20261018
+2026-10-21T00:45:50.5730280Z  * [new branch]      codex/windows-reference-diagnostics-20261018 -> origin/codex/windows-reference-diagnostics-20261018
+2026-10-21T00:45:50.5733017Z  * [new branch]      codex/xasm-reduced-t    -> origin/codex/xasm-reduced-t
+2026-10-21T00:45:50.5734875Z  * [new branch]      delivery/xlab-0.3.1     -> origin/delivery/xlab-0.3.1
+2026-10-21T00:45:50.5736745Z  * [new branch]      delivery/xlab-0.3.2     -> origin/delivery/xlab-0.3.2
+2026-10-21T00:45:50.5738789Z  * [new branch]      experiment/quantum-core-v0.1 -> origin/experiment/quantum-core-v0.1
+2026-10-21T00:45:50.5741481Z  * [new branch]      experiment/transformer-x-v0.1 -> origin/experiment/transformer-x-v0.1
+2026-10-21T00:45:50.5743302Z  * [new branch]      main                    -> origin/main
+2026-10-21T00:45:50.5744951Z  * [new branch]      phase-performance-trial -> origin/phase-performance-trial
+2026-10-21T00:45:50.5746680Z  * [new tag]         v0.3.1                  -> v0.3.1
+2026-10-21T00:45:50.5748033Z  * [new tag]         v0.3.2                  -> v0.3.2
+2026-10-21T00:45:50.5751907Z [command]/usr/bin/git rev-parse --verify --quiet 2be39f7915001c46b63246b9a9502071b599475d^{object}
+2026-10-21T00:45:50.5753716Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:45:50.5756142Z ##[endgroup]
+2026-10-21T00:45:50.5757349Z ##[group]Determining the checkout info
+2026-10-21T00:45:50.5758739Z ##[endgroup]
+2026-10-21T00:45:50.5759532Z [command]/usr/bin/git sparse-checkout disable
+2026-10-21T00:45:50.5819024Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-21T00:45:50.5862819Z ##[group]Checking out the ref
+2026-10-21T00:45:50.5867849Z [command]/usr/bin/git checkout --progress --force 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:45:50.6783031Z Note: switching to '2be39f7915001c46b63246b9a9502071b599475d'.
+2026-10-21T00:45:50.6784990Z 
+2026-10-21T00:45:50.6785931Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-21T00:45:50.6788073Z changes and commit them, and you can discard any commits you make in this
+2026-10-21T00:45:50.6790413Z state without impacting any branches by switching back to a branch.
+2026-10-21T00:45:50.6791598Z 
+2026-10-21T00:45:50.6792259Z If you want to create a new branch to retain commits you create, you may
+2026-10-21T00:45:50.6793521Z do so (now or later) by using -c with the switch command. Example:
+2026-10-21T00:45:50.6794291Z 
+2026-10-21T00:45:50.6794676Z   git switch -c <new-branch-name>
+2026-10-21T00:45:50.6883718Z 
+2026-10-21T00:45:50.6884687Z Or undo this operation with:
+2026-10-21T00:45:50.6885683Z 
+2026-10-21T00:45:50.6886328Z   git switch -
+2026-10-21T00:45:50.6887136Z 
+2026-10-21T00:45:50.6888386Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-21T00:45:50.6890251Z 
+2026-10-21T00:45:50.6892141Z HEAD is now at 2be39f7 fix: define Solar filtering and verify exact reference replays
+2026-10-21T00:45:50.6903404Z ##[endgroup]
+2026-10-21T00:45:50.6906829Z [command]/usr/bin/git log -1 --format=%H
+2026-10-21T00:45:50.6908358Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:45:50.6919338Z ##[group]Removing auth
+2026-10-21T00:45:50.6924024Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:45:50.6968247Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:45:50.7223593Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:45:50.7262272Z http.https://github.com/.extraheader
+2026-10-21T00:45:50.7272973Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-21T00:45:50.7325978Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:45:50.7579162Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:45:50.7630467Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:45:50.7883446Z ##[endgroup]
+2026-10-21T00:45:50.8256865Z ##[group]Run actions/setup-python@v5
+2026-10-21T00:45:50.8258064Z with:
+2026-10-21T00:45:50.8258940Z   python-version: 3.12
+2026-10-21T00:45:50.8260180Z   cache: pip
+2026-10-21T00:45:50.8261391Z   cache-dependency-path: graphics-desktop/requirements.txt
+2026-10-21T00:45:50.8262810Z   check-latest: false
+2026-10-21T00:45:50.8271746Z   token: ***
+2026-10-21T00:45:50.8272676Z   update-environment: true
+2026-10-21T00:45:50.8273746Z   allow-prereleases: false
+2026-10-21T00:45:50.8274787Z   freethreaded: false
+2026-10-21T00:45:50.8275729Z env:
+2026-10-21T00:45:50.8276600Z   EGL_PLATFORM: surfaceless
+2026-10-21T00:45:50.8277638Z   LIBGL_ALWAYS_SOFTWARE: 1
+2026-10-21T00:45:50.8278632Z ##[endgroup]
+2026-10-21T00:45:50.9731656Z ##[group]Installed versions
+2026-10-21T00:45:50.9828683Z (node:2410) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:45:50.9832137Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:45:50.9833759Z Successfully set up CPython (3.12.15)
+2026-10-21T00:45:50.9835552Z ##[endgroup]
+2026-10-21T00:45:51.0173664Z [command]/opt/hostedtoolcache/Python/3.12.15/x64/bin/pip cache dir
+2026-10-21T00:45:51.3396255Z /home/runner/.cache/pip
+2026-10-21T00:45:51.6184071Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.15-pip-3582e485fa31d11f0bef28164178f84ca8da3ab773ad4b3978050edee3a537db
+2026-10-21T00:45:51.6289274Z (node:2410) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-21T00:45:52.9199992Z Received 12108183 of 24691095 (49.0%), 11.6 MBs/sec
+2026-10-21T00:45:53.2217391Z Received 24691095 of 24691095 (100.0%), 18.1 MBs/sec
+2026-10-21T00:45:53.2218250Z Cache Size: ~24 MB (24691095 B)
+2026-10-21T00:45:53.2245116Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a7f6e87c-682f-4eee-a186-a862a99e2695/cache.tzst -P -C /home/runner/work/mundo-X/mundo-X --use-compress-program unzstd
+2026-10-21T00:45:53.2684963Z Cache restored successfully
+2026-10-21T00:45:53.2701538Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.15-pip-3582e485fa31d11f0bef28164178f84ca8da3ab773ad4b3978050edee3a537db
+2026-10-21T00:45:53.2916588Z ##[group]Run sudo apt-get update -qq
+2026-10-21T00:45:53.2917003Z [36;1msudo apt-get update -qq[0m
+2026-10-21T00:45:53.2917542Z [36;1msudo apt-get install -y --no-install-recommends g++ libegl1 libegl-mesa0 libgles2 libgl1-mesa-dri[0m
+2026-10-21T00:45:53.2918168Z [36;1mpython -m pip install -r graphics-desktop/requirements.txt[0m
+2026-10-21T00:45:53.3089963Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:45:53.3090347Z env:
+2026-10-21T00:45:53.3090576Z   EGL_PLATFORM: surfaceless
+2026-10-21T00:45:53.3090844Z   LIBGL_ALWAYS_SOFTWARE: 1
+2026-10-21T00:45:53.3091158Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:45:53.3091610Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:45:53.3092062Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:45:53.3092496Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:45:53.3092951Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:45:53.3093346Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:45:53.3093690Z ##[endgroup]
+2026-10-21T00:45:57.8361839Z Reading package lists...
+2026-10-21T00:45:58.0688699Z Building dependency tree...
+2026-10-21T00:45:58.0697431Z Reading state information...
+2026-10-21T00:45:58.2722295Z g++ is already the newest version (4:13.2.0-7ubuntu1).
+2026-10-21T00:45:58.2723334Z libgl1-mesa-dri is already the newest version (25.2.8-0ubuntu0.24.04.4).
+2026-10-21T00:45:58.2724172Z libgl1-mesa-dri set to manually installed.
+2026-10-21T00:45:58.2724996Z The following NEW packages will be installed:
+2026-10-21T00:45:58.2731232Z   libegl-mesa0 libegl1 libgles2
+2026-10-21T00:45:58.2947138Z 0 upgraded, 3 newly installed, 0 to remove and 45 not upgraded.
+2026-10-21T00:45:58.2947581Z Need to get 163 kB of archives.
+2026-10-21T00:45:58.2947981Z After this operation, 609 kB of additional disk space will be used.
+2026-10-21T00:45:58.2948466Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-10-21T00:45:58.3847448Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libegl-mesa0 amd64 25.2.8-0ubuntu0.24.04.4 [117 kB]
+2026-10-21T00:45:58.4601607Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libegl1 amd64 1.7.0-1build1 [28.7 kB]
+2026-10-21T00:45:58.5335159Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libgles2 amd64 1.7.0-1build1 [17.1 kB]
+2026-10-21T00:45:58.8156925Z Fetched 163 kB in 0s (647 kB/s)
+2026-10-21T00:45:58.8400378Z Selecting previously unselected package libegl-mesa0:amd64.
+2026-10-21T00:45:58.8669488Z (Reading database ... 
+2026-10-21T00:45:58.8670406Z (Reading database ... 5%
+2026-10-21T00:45:58.8670983Z (Reading database ... 10%
+2026-10-21T00:45:58.8671413Z (Reading database ... 15%
+2026-10-21T00:45:58.8672007Z (Reading database ... 20%
+2026-10-21T00:45:58.8672378Z (Reading database ... 25%
+2026-10-21T00:45:58.8673020Z (Reading database ... 30%
+2026-10-21T00:45:58.8673263Z (Reading database ... 35%
+2026-10-21T00:45:58.8673740Z (Reading database ... 40%
+2026-10-21T00:45:58.8674154Z (Reading database ... 45%
+2026-10-21T00:45:58.8674569Z (Reading database ... 50%
+2026-10-21T00:45:58.8721103Z (Reading database ... 55%
+2026-10-21T00:45:59.0181878Z (Reading database ... 60%
+2026-10-21T00:45:59.2201531Z (Reading database ... 65%
+2026-10-21T00:45:59.3159585Z (Reading database ... 70%
+2026-10-21T00:45:59.4111369Z (Reading database ... 75%
+2026-10-21T00:45:59.5793961Z (Reading database ... 80%
+2026-10-21T00:45:59.7341795Z (Reading database ... 85%
+2026-10-21T00:45:59.8410640Z (Reading database ... 90%
+2026-10-21T00:45:59.9303616Z (Reading database ... 95%
+2026-10-21T00:45:59.9304091Z (Reading database ... 100%
+2026-10-21T00:45:59.9304675Z (Reading database ... 214410 files and directories currently installed.)
+2026-10-21T00:45:59.9346227Z Preparing to unpack .../libegl-mesa0_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+2026-10-21T00:45:59.9380183Z Unpacking libegl-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+2026-10-21T00:45:59.9650769Z Selecting previously unselected package libegl1:amd64.
+2026-10-21T00:45:59.9786975Z Preparing to unpack .../libegl1_1.7.0-1build1_amd64.deb ...
+2026-10-21T00:45:59.9795906Z Unpacking libegl1:amd64 (1.7.0-1build1) ...
+2026-10-21T00:46:00.0039805Z Selecting previously unselected package libgles2:amd64.
+2026-10-21T00:46:00.0181768Z Preparing to unpack .../libgles2_1.7.0-1build1_amd64.deb ...
+2026-10-21T00:46:00.0190940Z Unpacking libgles2:amd64 (1.7.0-1build1) ...
+2026-10-21T00:46:00.0602574Z Setting up libegl-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+2026-10-21T00:46:00.0625804Z Setting up libgles2:amd64 (1.7.0-1build1) ...
+2026-10-21T00:46:00.0650130Z Setting up libegl1:amd64 (1.7.0-1build1) ...
+2026-10-21T00:46:00.0675291Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+2026-10-21T00:46:00.7615309Z 
+2026-10-21T00:46:00.7616012Z Running kernel seems to be up-to-date.
+2026-10-21T00:46:00.7616438Z 
+2026-10-21T00:46:00.7616625Z No services need to be restarted.
+2026-10-21T00:46:00.7616952Z 
+2026-10-21T00:46:00.7617136Z No containers need to be restarted.
+2026-10-21T00:46:00.7617466Z 
+2026-10-21T00:46:00.7617683Z No user sessions are running outdated binaries.
+2026-10-21T00:46:00.7618040Z 
+2026-10-21T00:46:00.7618386Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-10-21T00:46:02.4349952Z Collecting numpy>=1.24 (from -r graphics-desktop/requirements.txt (line 1))
+2026-10-21T00:46:02.4369084Z   Using cached numpy-2.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+2026-10-21T00:46:02.6168141Z Collecting Pillow>=9 (from -r graphics-desktop/requirements.txt (line 2))
+2026-10-21T00:46:02.6182563Z   Using cached pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+2026-10-21T00:46:02.6241060Z Using cached numpy-2.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+2026-10-21T00:46:02.6315748Z Using cached pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.1 MB)
+2026-10-21T00:46:02.7056947Z Installing collected packages: Pillow, numpy
+2026-10-21T00:46:05.0486239Z 
+2026-10-21T00:46:05.0497084Z Successfully installed Pillow-13.0.0 numpy-2.5.4
+2026-10-21T00:46:05.1023573Z ##[group]Run python tools/ether_mirror_check.py \
+2026-10-21T00:46:05.1023994Z [36;1mpython tools/ether_mirror_check.py \[0m
+2026-10-21T00:46:05.1024368Z [36;1m  --output cosmic-evidence/mirrors/report.json \[0m
+2026-10-21T00:46:05.1024737Z [36;1m  --images cosmic-evidence/mirrors/images[0m
+2026-10-21T00:46:05.1078530Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:46:05.1078888Z env:
+2026-10-21T00:46:05.1079096Z   EGL_PLATFORM: surfaceless
+2026-10-21T00:46:05.1079352Z   LIBGL_ALWAYS_SOFTWARE: 1
+2026-10-21T00:46:05.1079982Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:05.1080453Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:46:05.1081098Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:05.1081486Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:05.1081875Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:05.1082297Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:46:05.1082637Z ##[endgroup]
+2026-10-21T00:46:12.4289421Z geometry: passed
+2026-10-21T00:46:12.6838073Z limits: passed
+2026-10-21T00:46:20.4447403Z periodic_hits: passed
+2026-10-21T00:46:21.1109430Z virtual: passed
+2026-10-21T00:46:21.2450508Z Traceback (most recent call last):
+2026-10-21T00:46:21.2457039Z   File "/home/runner/work/mundo-X/mundo-X/tools/ether_mirror_check.py", line 509, in <module>
+2026-10-21T00:46:21.2457608Z     if __name__=='__main__':main()
+2026-10-21T00:46:21.2457883Z                             ^^^^^^
+2026-10-21T00:46:21.2458373Z   File "/home/runner/work/mundo-X/mundo-X/tools/ether_mirror_check.py", line 499, in main
+2026-10-21T00:46:21.2458995Z     raise RuntimeError(name+'\n'+child.stdout+'\n'+child.stderr)
+2026-10-21T00:46:21.2459360Z RuntimeError: pipeline
+2026-10-21T00:46:21.2459793Z 
+2026-10-21T00:46:21.2459923Z Traceback (most recent call last):
+2026-10-21T00:46:21.2460440Z   File "/home/runner/work/mundo-X/mundo-X/tools/ether_mirror_check.py", line 509, in <module>
+2026-10-21T00:46:21.2460908Z     if __name__=='__main__':main()
+2026-10-21T00:46:21.2461157Z                             ^^^^^^
+2026-10-21T00:46:21.2461597Z   File "/home/runner/work/mundo-X/mundo-X/tools/ether_mirror_check.py", line 484, in main
+2026-10-21T00:46:21.2462114Z     started=time.perf_counter_ns();report=functions[args.child]()
+2026-10-21T00:46:21.2462485Z                                           ^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-21T00:46:21.2462998Z   File "/home/runner/work/mundo-X/mundo-X/tools/ether_mirror_check.py", line 246, in pipeline_check
+2026-10-21T00:46:21.2463478Z     with InfiniteCore() as core:
+2026-10-21T00:46:21.2463746Z          ^^^^^^^^^^^^^^
+2026-10-21T00:46:21.2464210Z   File "/home/runner/work/mundo-X/mundo-X/graphics-desktop/infinite_runtime.py", line 34, in __init__
+2026-10-21T00:46:21.2464804Z     self.lib = ct.CDLL(str(Path(__file__).parent / "native/libmx_optical.so"))
+2026-10-21T00:46:21.2465226Z                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-21T00:46:21.2465767Z   File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/ctypes/__init__.py", line 379, in __init__
+2026-10-21T00:46:21.2466279Z     self._handle = _dlopen(self._name, mode)
+2026-10-21T00:46:21.2466580Z                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-21T00:46:21.2467198Z OSError: /home/runner/work/mundo-X/mundo-X/graphics-desktop/native/libmx_optical.so: cannot open shared object file: No such file or directory
+2026-10-21T00:46:21.2467737Z 
+2026-10-21T00:46:21.2541449Z ##[error]Process completed with exit code 1.
+2026-10-21T00:46:21.2625486Z ##[group]Run actions/upload-artifact@v4
+2026-10-21T00:46:21.2625802Z with:
+2026-10-21T00:46:21.2626015Z   name: COSMIC-X-Mirror-Contracts
+2026-10-21T00:46:21.2626294Z   path: cosmic-evidence/mirrors/
+2026-10-21T00:46:21.2626567Z   if-no-files-found: warn
+2026-10-21T00:46:21.2626805Z   compression-level: 6
+2026-10-21T00:46:21.2627026Z   overwrite: false
+2026-10-21T00:46:21.2627250Z   include-hidden-files: false
+2026-10-21T00:46:21.2627489Z env:
+2026-10-21T00:46:21.2627689Z   EGL_PLATFORM: surfaceless
+2026-10-21T00:46:21.2627926Z   LIBGL_ALWAYS_SOFTWARE: 1
+2026-10-21T00:46:21.2628227Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:21.2628669Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:46:21.2629106Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:21.2629499Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:21.2630347Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:21.2630753Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:46:21.2631351Z ##[endgroup]
+2026-10-21T00:46:21.4339032Z (node:2933) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:46:21.4340084Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:46:21.4421876Z With the provided path, there will be 4 files uploaded
+2026-10-21T00:46:21.4429420Z Artifact name is valid!
+2026-10-21T00:46:21.4430985Z Root directory input is valid!
+2026-10-21T00:46:21.8112736Z Beginning upload of artifact content to blob storage
+2026-10-21T00:46:21.8556331Z (node:2933) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-21T00:46:22.4216071Z Uploaded bytes 584592
+2026-10-21T00:46:22.4933824Z Finished uploading artifact content to blob storage!
+2026-10-21T00:46:22.4934783Z SHA256 digest of uploaded artifact zip is 7a62042a941107866e25a9e719dd399a8ac593acd0fd19a32045feb23cfcc721
+2026-10-21T00:46:22.4937150Z Finalizing artifact upload
+2026-10-21T00:46:22.8037916Z Artifact COSMIC-X-Mirror-Contracts.zip successfully finalized. Artifact ID 12311267856
+2026-10-21T00:46:22.8039457Z Artifact COSMIC-X-Mirror-Contracts has been successfully uploaded! Final size is 584592 bytes. Artifact ID is 12311267856
+2026-10-21T00:46:22.8044486Z Artifact download URL: https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264233/artifacts/12311267856
+2026-10-21T00:46:22.8253389Z Post job cleanup.
+2026-10-21T00:46:22.9103805Z [command]/usr/bin/git version
+2026-10-21T00:46:22.9152342Z git version 2.55.0
+2026-10-21T00:46:22.9193337Z Temporarily overriding HOME='/home/runner/work/_temp/1f67097c-8694-423e-abf9-8bbeef93d42f' before making global git config changes
+2026-10-21T00:46:22.9194676Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:46:22.9199962Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:46:22.9247175Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:46:22.9288300Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:46:22.9567186Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:46:22.9608457Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:46:22.9913367Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:46:22.9956130Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:46:23.0414555Z Cleaning up orphan processes
+2026-10-21T00:46:23.0731452Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+

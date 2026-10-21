@@ -192,14 +192,15 @@ class InfiniteCore {
       if (rules > limits.max_ether_rules)
         throw std::length_error("snapshot Ether rule budget exceeded");
       input.require(rules);
-      std::vector<EtherCore::Rule> decoded;
-      decoded.reserve(rules);
+      EtherCore::Rule first = EtherCore::Rule::HAll;
       for (std::size_t i = 0; i < rules; ++i) {
         const auto value = input.byte();
         if (value > 1) throw std::invalid_argument("unknown snapshot Ether rule");
-        decoded.push_back(static_cast<EtherCore::Rule>(value));
+        if (i == 0) first = static_cast<EtherCore::Rule>(value);
+        else if (value != (static_cast<unsigned>(first) ^ (i & 1U)))
+          throw std::invalid_argument("Ether snapshot contains uncancelled adjacent rules");
       }
-      state.ether.restore_rules(decoded, limits.max_ether_rules);
+      state.ether.restore_rule_run(first, rules, limits.max_ether_rules);
     }
     // Every component needs at least its count, one address length/digit,
     // and one 17-byte tableau. This check precedes metadata reservation.
@@ -280,10 +281,32 @@ class InfiniteCore {
   // All input is validated before an early zero result is returned. Queries
   // create only temporary observer data and never materialize the background.
   double expectation(const std::vector<Term>& terms, int sign = 1) const {
+    return expectation_cached(terms, sign, nullptr);
+  }
+
+ private:
+  // Scoped to one locked observation. No cache survives mutation, restore or
+  // a failed request, and independent owners never share mutable observers.
+  struct ObserverCache {
+    std::vector<std::unique_ptr<mundo_x_bridge::PauliObserver>> slots;
+    std::size_t builds = 0, payload_bytes = 0;
+  };
+  friend class InfiniteSession;
+
+  double expectation_cached(const std::vector<Term>& terms, int sign,
+                            ObserverCache* observers) const {
     if (sign != 1 && sign != -1)
       throw std::invalid_argument("Pauli sign must be +1 or -1");
     if (terms.size() > limits_.max_query_terms)
       throw std::length_error("Pauli query term budget exceeded");
+    if (ether_rule_count() != 0) {
+      // Ether validates every axis/address/alias before evaluation. Do not
+      // allocate a second normalized input tree that this route never reads.
+      const auto pulled = pull_pauli(*state_, terms, sign);
+      const auto answer = frame_expectation(*state_, pulled, observers);
+      ether_query_stats_ = pulled.stats;
+      return answer;
+    }
     TermMap normalized;
     for (const auto& term : terms) {
       if (term.axis != 'I' && term.axis != 'X' && term.axis != 'Y' && term.axis != 'Z')
@@ -293,13 +316,10 @@ class InfiniteCore {
         throw std::invalid_argument("duplicate canonical address in Pauli query");
     }
 
-    if (ether_rule_count() == 0) return raw_expectation(*state_, normalized, sign);
-    const auto pulled = pull_pauli(*state_, terms, sign);
-    const auto answer = frame_expectation(*state_, pulled);
-    ether_query_stats_ = pulled.stats;
-    return answer;
+    return raw_expectation(*state_, normalized, sign, observers);
   }
 
+ public:
   // Fixed-size Z queries bypass max_query_terms. The empty-frame fast path
   // avoids sparse-term allocation; a frame still enforces cone/address caps.
   double probability_one(const std::string& address) const {
@@ -611,15 +631,17 @@ class InfiniteCore {
     return state.ether.pullback(physical, sign, work);
   }
 
-  double frame_expectation(const State& state, const EtherCore::Observable& pulled) const {
+  double frame_expectation(const State& state, const EtherCore::Observable& pulled,
+                           ObserverCache* observers = nullptr) const {
     TermMap terms;
     for (const auto& term : pulled.terms) terms.emplace(term.address, term.axis);
-    return raw_expectation(state, terms, pulled.sign);
+    return raw_expectation(state, terms, pulled.sign, observers);
   }
 
   // Evaluate a Pauli on phi, without applying U a second time. Untouched
   // coordinates still use the original Zero/BellPairs analytic background.
-  double raw_expectation(const State& state, const TermMap& normalized, int sign) const {
+  double raw_expectation(const State& state, const TermMap& normalized, int sign,
+                         ObserverCache* observers = nullptr) const {
     std::map<std::size_t, mundo_x_bridge::Pauli> active;
     double answer = static_cast<double>(sign);
     for (const auto& term : normalized) {
@@ -644,8 +666,19 @@ class InfiniteCore {
       }
     }
     for (auto& query : active) {
-      const mundo_x_bridge::PauliObserver observer(state.components[query.first]->core);
-      answer *= observer.expectation(std::move(query.second));
+      if (observers) {
+        if (observers->slots.empty()) observers->slots.resize(state.components.size());
+        auto& observer = observers->slots[query.first];
+        if (!observer) {
+          observer = std::make_unique<mundo_x_bridge::PauliObserver>(state.components[query.first]->core);
+          ++observers->builds;
+          observers->payload_bytes += observer->payload_bytes();
+        }
+        answer *= observer->expectation(std::move(query.second));
+      } else {
+        const mundo_x_bridge::PauliObserver observer(state.components[query.first]->core);
+        answer *= observer.expectation(std::move(query.second));
+      }
       if (answer == 0.0) return 0.0;
     }
     return answer;
@@ -841,6 +874,14 @@ class InfiniteCore {
   }
 
   void apply_gate(State& state, const Gate& gate) const {
+    // An unmaterialized Zero-background site is exactly |0>, including when
+    // this helper operates inside a pulled-back physical gate. CX with that
+    // control, or CZ with either such endpoint, is identity. Keep the implicit
+    // rule instead of building an ever larger all-zero tensor component.
+    if (background_ == Background::Zero && (gate.op == 'C' || gate.op == 'D')) {
+      if (state.locations.find(gate.first) == state.locations.end()) return;
+      if (gate.op == 'D' && state.locations.find(gate.second) == state.locations.end()) return;
+    }
     materialize(state, gate.first);
     if (gate.op == 'C' || gate.op == 'D') {
       materialize(state, gate.second);

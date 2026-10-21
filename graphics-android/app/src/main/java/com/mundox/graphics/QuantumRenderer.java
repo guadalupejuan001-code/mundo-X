@@ -14,6 +14,7 @@ import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -23,6 +24,7 @@ import static android.opengl.GLES30.*;
 public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public static final int MAX_OBJECTS=1_048_576;
     public static final int PRESENTATION_LEGACY=0,PRESENTATION_COSMIC=1;
+    public static final int MIRRORS_OFF=0,MIRRORS_FLOOR=1,MIRRORS_PAIR=2;
     public static final int RESOLUTION_ADAPTIVE=RenderResolution.ADAPTIVE,RESOLUTION_UHD_4K=RenderResolution.UHD_4K,
             RESOLUTION_UHD_8K=RenderResolution.UHD_8K;
     public static final int UHD_LONG=RenderResolution.UHD_LONG,UHD_SHORT=RenderResolution.UHD_SHORT;
@@ -31,10 +33,11 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public interface CaptureListener { void captured(Capture image); }
     /** Last completed frame. Reading this value never queries or measures the core. */
     public static final class FrameStats {
-        public final int objectCount,width,height,qubits,observables,selectedId;
+        public final int objectCount,width,height,qubits,observables,selectedId,mirrorMode,mirrorBudget;
         /** Actual framebuffer mode and its FIT destination, in Android top-left coordinates. */
         public final int resolutionMode,viewWidth,viewHeight,displayLeft,displayTop,displayWidth,displayHeight;
-        public final long coreRevision,coreEpoch,frameNumber;
+        public final long coreRevision,coreEpoch,frameNumber,renderNumber,reusedFrames;
+        public final boolean frameReused;
         public final boolean infinite;
         /** CPU submission wall time by default; includes driver completion only when gpuSynchronized. */
         public final double drawMs;
@@ -43,7 +46,9 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         private FrameStats(QuantumRenderer r,double elapsed){
             objectCount=r.count;width=r.width;height=r.height;qubits=r.core.qubits;
             observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;coreEpoch=r.uploadedEpoch;infinite=r.core.isInfinite();
-            frameNumber=r.drawNumber;drawMs=elapsed;device=r.device;gpuSynchronized=r.synchronousTiming;
+            mirrorMode=r.mirrorMode;mirrorBudget=r.mirrorBudget;
+            frameNumber=r.drawNumber;renderNumber=r.renderNumber;reusedFrames=r.reusedFrames;frameReused=r.frameReused;
+            drawMs=elapsed;device=r.device;gpuSynchronized=r.synchronousTiming;
             resolutionMode=r.resolutionMode;viewWidth=r.viewWidth;viewHeight=r.viewHeight;
             displayLeft=r.display.left;displayTop=r.display.top;
             displayWidth=r.display.width;displayHeight=r.display.height;
@@ -104,6 +109,11 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         public final int objectCount,selectedId,resolutionLimit;
         // Optional device preference, omitted from .cosmic v1. Old sessions default to 0.
         public final int resolutionMode;
+        // Optical observer preferences, retained in app sessions, outside .cosmic v1/v2.
+        // Old serialized sessions default mirrorMode to OFF.
+        public final int mirrorMode,mirrorBudget;
+        public final boolean mirrorFold;
+        public final float mirrorReflectance;
         public final int projectVersion;
         public final long seed;
         public final boolean overview,coupling;
@@ -117,6 +127,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         private Snapshot(QuantumRenderer r){
             objectCount=r.count;selectedId=r.selected;resolutionLimit=r.requestedLimit;
             resolutionMode=r.requestedResolutionMode;
+            mirrorMode=r.mirrorMode;mirrorBudget=r.mirrorBudget;mirrorFold=r.mirrorFold;mirrorReflectance=r.mirrorReflectance;
             projectVersion=1;seed=r.seed;
             overview=r.overview;coupling=r.strength!=0;
             yaw=r.yaw;pitch=r.pitch;zoom=r.zoom;time=r.timeValue;quantumStrength=r.strength;
@@ -134,6 +145,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                  String[] observables,int[] ids,int[] values){
             this.objectCount=count;this.selectedId=selected;this.resolutionLimit=resolution;
             this.resolutionMode=RESOLUTION_ADAPTIVE;
+            this.mirrorMode=MIRRORS_OFF;this.mirrorBudget=16;this.mirrorFold=true;this.mirrorReflectance=1f;
             this.projectVersion=1;this.seed=seed;this.overview=overview;this.coupling=strength!=0;
             this.yaw=yaw;this.pitch=pitch;this.zoom=zoom;this.time=time;this.quantumStrength=strength;
             this.enabledQuantumStrength=strength!=0?strength:.25f;
@@ -145,6 +157,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         Snapshot(Snapshot source,String[] observables){
             objectCount=source.objectCount;selectedId=source.selectedId;resolutionLimit=source.resolutionLimit;
             resolutionMode=source.resolutionMode;
+            mirrorMode=source.mirrorMode;mirrorBudget=source.mirrorBudget;mirrorFold=source.mirrorFold;mirrorReflectance=source.mirrorReflectance;
             projectVersion=source.projectVersion;seed=source.seed;overview=source.overview;coupling=source.coupling;
             yaw=source.yaw;pitch=source.pitch;zoom=source.zoom;time=source.time;quantumStrength=source.quantumStrength;
             enabledQuantumStrength=source.enabledQuantumStrength;
@@ -164,7 +177,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private long programRevision,uploadedProgram=-1;
     private final TreeMap<Integer,Integer> edits=new TreeMap<>();
     private final HashMap<String,Integer> locations=new HashMap<>();
-    private int program,vao,editTexture,quantumTexture,colorTexture,depth,fbo;
+    private int program,plainProgram,mirrorProgram,vao,editTexture,quantumTexture,colorTexture,depth,fbo;
     private int viewWidth=1,viewHeight=1,width=1,height=1,limit=640;
     private int requestedLimit=640,requestedResolutionMode=RESOLUTION_ADAPTIVE;
     private volatile int resolutionMode=RESOLUTION_ADAPTIVE;
@@ -173,6 +186,10 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private int count=1_000_000,selected=-1;
     // App presentation preference, intentionally outside the portable logical world.
     private int presentation=PRESENTATION_LEGACY;
+    private volatile int mirrorMode=MIRRORS_OFF,mirrorBudget=16;
+    private boolean mirrorFold=true;
+    private float mirrorReflectance=1f;
+    private volatile String opticalMessage;
     private long seed=2026;
     private boolean framebufferDirty=true,editsDirty=true,failed=false;
     private boolean synchronousTiming=false,exporting=false;
@@ -187,6 +204,27 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private int pickX=-1,pickY=-1;
     private boolean pickPending;
     private long drawNumber;
+    private long renderNumber,reusedFrames,editUploadRevision;
+    private int activeEditCount;
+    private boolean frameReused,frameReuseEnabled=true;
+    private final ExactFrameKey frameKey=new ExactFrameKey();
+    /** Exact uniform/stamp comparison: no lossy hash and no framebuffer copy. */
+    private static final class ExactFrameKey {
+        private final long[] candidate=new long[64],rendered=new long[64];
+        private int count,renderedCount;
+        private boolean valid;
+        void begin(){count=0;}
+        void integer(long value){candidate[count++]=value;}
+        void real(float value){integer(Float.floatToRawIntBits(value));}
+        void vector(float[] values){for(float value:values)real(value);}
+        boolean matches(){
+            if(!valid||count!=renderedCount)return false;
+            for(int i=0;i<count;i++)if(candidate[i]!=rendered[i])return false;
+            return true;
+        }
+        void remember(){System.arraycopy(candidate,0,rendered,0,count);renderedCount=count;valid=true;}
+        void invalidate(){valid=false;}
+    }
     private volatile FrameStats latestFrame;
     public volatile boolean hasFrame;
     public volatile String failure;
@@ -229,6 +267,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                ||state.cameraNear<.001f||state.cameraNear>=state.cameraFar||state.cameraFar>1_000_000
                ||state.cameraFov<1||state.cameraFov>170)))
             throw new IllegalArgumentException("Estado visual guardado inválido");
+        if(state.mirrorMode!=MIRRORS_OFF)
+            setReflections(state.mirrorMode,state.mirrorBudget,state.mirrorFold,state.mirrorReflectance);
         validateProgram(state.observables);
         int previous=-1;
         for(int j=0;j<state.editIds.length;j++){
@@ -266,15 +306,16 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     }
     @Override public void onSurfaceCreated(GL10 unused,EGLConfig config){
         // EGL context recreation invalidates every old GL name, never the world.
-        program=vao=editTexture=quantumTexture=colorTexture=depth=fbo=0;
+        program=plainProgram=mirrorProgram=vao=editTexture=quantumTexture=colorTexture=depth=fbo=0;
         resolutionMode=RESOLUTION_ADAPTIVE;
-        hasFrame=false;failure=null;failed=false;latestFrame=null;locations.clear();
+        hasFrame=false;failure=null;failed=false;latestFrame=null;locations.clear();frameKey.invalidate();
         int vert=0,frag=0;
         try{
             vert=shader(GL_VERTEX_SHADER,vertexSource);frag=shader(GL_FRAGMENT_SHADER,fragmentSource);
             program=glCreateProgram();glAttachShader(program,vert);glAttachShader(program,frag);glLinkProgram(program);
             int[] ok=new int[1];glGetProgramiv(program,GL_LINK_STATUS,ok,0);
             if(ok[0]==0)throw new IllegalStateException("Programa: "+glGetProgramInfoLog(program));
+            plainProgram=program;
             int[] id=new int[1];glGenVertexArrays(1,id,0);vao=id[0];glBindVertexArray(vao);
             editTexture=texture();quantumTexture=texture();
             glDisable(GL_DITHER);glDisable(GL_BLEND);glDisable(GL_CULL_FACE);
@@ -346,6 +387,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             Framebuffer next=allocateFramebuffer(size);
             int oldColor=colorTexture,oldDepth=depth,oldFbo=fbo;
             colorTexture=next.color;depth=next.depth;fbo=next.name;width=size.width;height=size.height;
+            frameKey.invalidate();
             glBindFramebuffer(GL_FRAMEBUFFER,fbo);deleteFramebuffer(oldColor,oldDepth,oldFbo);
         }
         display=fitted;limit=newLimit;requestedLimit=newLimit;requestedResolutionMode=mode;
@@ -388,12 +430,12 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private int maxTexture(){int[] n=new int[1];glGetIntegerv(GL_MAX_TEXTURE_SIZE,n,0);return n[0];}
     private void sync(){
         if(editsDirty){
-            int max=maxTexture(),w=Math.min(Math.min(4096,max),Math.max(1,edits.size())),h=Math.max(1,(edits.size()+w-1)/w);
-            if(h>max)throw new IllegalStateException("Las ediciones exceden la textura de este dispositivo");
-            ByteBuffer bytes=direct(w*h*8);for(int j=0;j<w*h;j++){bytes.putInt(-1);bytes.putInt(-1);}bytes.rewind();
-            for(Map.Entry<Integer,Integer> e:edits.entrySet()){bytes.putInt(e.getKey());bytes.putInt(e.getValue());}bytes.rewind();
+            // Smaller views preserve off-range edits in the logical project.
+            // Only visible IDs belong to the derived GPU directory.
+            SortedMap<Integer,Integer> activeEdits=edits.headMap(count);
+            EditPages index=EditPages.encode(count,activeEdits,maxTexture());
             glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,editTexture);
-            glTexImage2D(GL_TEXTURE_2D,0,GL_RG32I,w,h,0,GL_RG_INTEGER,GL_INT,bytes);sampling();check("Ediciones");editsDirty=false;
+            glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,index.width,index.height,0,GL_RED_INTEGER,GL_UNSIGNED_INT,index.bytes);sampling();check("Ediciones");activeEditCount=activeEdits.size();editsDirty=false;editUploadRevision++;
         }
         NativeCore.Observation observation=null;
         synchronized(core){
@@ -433,10 +475,36 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         Matrix.setLookAtM(view,0,eye[0],eye[1],eye[2],target[0],target[1],target[2],up[0],up[1],up[2]);
         Matrix.perspectiveM(projection,0,cameraFov,aspect,near,far);Matrix.multiplyMM(vp,0,projection,0,view,0);
     }
+    private void selectOpticalProgram(){
+        if(mirrorMode!=MIRRORS_OFF&&mirrorProgram==0){
+            int vertex=0,fragment=0,candidate=0;
+            try{
+                vertex=shader(GL_VERTEX_SHADER,vertexSource);
+                fragment=shader(GL_FRAGMENT_SHADER,fragmentSource.replace("#version 300 es", "#version 300 es\n#define MX_MIRRORS 1"));
+                candidate=glCreateProgram();glAttachShader(candidate,vertex);glAttachShader(candidate,fragment);glLinkProgram(candidate);
+                int[] ok=new int[1];glGetProgramiv(candidate,GL_LINK_STATUS,ok,0);
+                if(ok[0]==0)throw new IllegalStateException("Reflejos: "+glGetProgramInfoLog(candidate));
+                mirrorProgram=candidate;candidate=0;
+            }catch(RuntimeException|OutOfMemoryError rejected){
+                // A mobile driver can reject this optional specialization.
+                // Keep the existing primary program and framebuffer usable.
+                mirrorMode=MIRRORS_OFF;
+                opticalMessage="No se pudieron activar los reflejos en este dispositivo: "+rejected.getMessage();
+                for(int j=0;j<16&&glGetError()!=GL_NO_ERROR;j++){}
+            }finally{
+                if(vertex!=0)glDeleteShader(vertex);if(fragment!=0)glDeleteShader(fragment);
+                if(candidate!=0)glDeleteProgram(candidate);
+            }
+        }
+        int next=mirrorMode==MIRRORS_OFF?plainProgram:mirrorProgram;
+        if(program!=next){program=next;locations.clear();}
+    }
     private void drawState(int debug,int fullWidth,int fullHeight){
-        glUseProgram(program);glBindVertexArray(vao);
+        selectOpticalProgram();glUseProgram(program);glBindVertexArray(vao);
         int side=(int)Math.ceil(Math.sqrt(count));
-        i("uCount",count);i("uSide",side);i("uEditCount",edits.size());i("uSelected",selected);i("uDebug",debug);i("uEdits",0);i("uQuantum",1);i("uQuantumCount",coefficients.length);i("uPresentation",presentation);
+        i("uCount",count);i("uSide",side);i("uEditCount",activeEditCount);i("uSelected",selected);i("uDebug",debug);i("uEdits",0);i("uQuantum",1);i("uQuantumCount",coefficients.length);i("uPresentation",presentation);
+        i("uMirrorMode",mirrorMode);i("uMirrorBudget",mirrorBudget);i("uMirrorFold",mirrorFold?1:0);
+        f("uMirrorReflectance",mirrorReflectance);
         int seedBits=(int)seed;glUniform4ui(loc("uSeedBytes"),seedBits&255,(seedBits>>>8)&255,(seedBits>>>16)&255,(seedBits>>>24)&255);
         f("uTime",timeValue);f("uFogDistance",Math.max(50,side*2.2f));f("uQuantumStrength",strength);
         f("uNear",near);f("uFar",far);f("uAspect",aspect);f("uTanHalfFov",(float)Math.tan(Math.toRadians(cameraFov*.5)));
@@ -459,6 +527,31 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private double draw(int debug){
         drawState(debug,width,height);return drawTarget(fbo,width,height,0,0,synchronousTiming);
     }
+    /** Keep in step with drawState: every uniform or uploaded texture affecting pixels is represented. */
+    private void describeFrame(int debug){
+        frameKey.begin();
+        frameKey.integer(program);frameKey.integer(fbo);frameKey.integer(width);frameKey.integer(height);
+        frameKey.integer(count);frameKey.integer(selected);frameKey.integer(debug);frameKey.integer(presentation);
+        frameKey.integer(mirrorMode);frameKey.integer(mirrorBudget);frameKey.integer(mirrorFold?1:0);
+        frameKey.real(mirrorReflectance);frameKey.integer(seed);frameKey.real(timeValue);frameKey.real(strength);
+        frameKey.integer(editUploadRevision);frameKey.integer(activeEditCount);
+        frameKey.integer(uploadedCore);frameKey.integer(uploadedEpoch);frameKey.integer(uploadedProgram);
+        frameKey.integer(coefficients.length);frameKey.integer(editTexture);frameKey.integer(quantumTexture);
+        frameKey.real(near);frameKey.real(far);frameKey.real(aspect);frameKey.real(cameraFov);
+        frameKey.vector(eye);frameKey.vector(forward);frameKey.vector(right);frameKey.vector(up);frameKey.vector(vp);
+    }
+    private int pickId(int x,int y){
+        // Keep the full projection and viewport: the selected fragment uses
+        // exactly the same ray as the full ID image, including mirror paths.
+        drawState(1,width,height);glEnable(GL_SCISSOR_TEST);glScissor(x,y,1,1);
+        try{
+            drawTarget(fbo,width,height,0,0,synchronousTiming);
+            ByteBuffer bytes=direct(4);glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bytes);
+            boolean incomplete=(bytes.get(0)&255)==255&&(bytes.get(1)&255)==0&&(bytes.get(2)&255)==255;
+            check("Selección");
+            return incomplete?-1:(bytes.get(0)&255)+((bytes.get(1)&255)<<8)+((bytes.get(2)&255)<<16)-1;
+        }finally{glDisable(GL_SCISSOR_TEST);}
+    }
     private Capture read(){
         // Keep the public RGBA capture, but avoid a second full UHD allocation for readback.
         int rowBytes=width*4,blockRows=Math.min(height,128);byte[] data=new byte[rowBytes*height];
@@ -468,7 +561,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             glReadPixels(0,row,width,rows,GL_RGBA,GL_UNSIGNED_BYTE,bytes);check("Lectura");
             bytes.rewind();bytes.get(data,row*rowBytes,rows*rowBytes);
         }
-        for(int j=0;j<data.length;j+=4)if((data[j]&255)==255&&(data[j+1]&255)==0&&(data[j+2]&255)==255)throw new IllegalStateException("Se agotó el recorrido de celdas");
+        for(int j=0;j<data.length;j+=4)if((data[j]&255)==255&&(data[j+1]&255)==0&&(data[j+2]&255)==255)throw new IllegalStateException("Rayo incompleto: recorrido de celdas o presupuesto de reflejos agotado");
         return new Capture(width,height,data);
     }
     @Override public void onDrawFrame(GL10 unused){
@@ -476,17 +569,24 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         try{
             if(framebufferDirty)sizeFramebuffer();sync();camera();
             if(pickPending){
+                // The scissored ID pass writes into the color framebuffer, even if selection stays unchanged.
+                frameKey.invalidate();
                 if(display.contains(pickX,pickY)){
-                    draw(1);int x=display.framebufferX(pickX),y=height-1-display.framebufferY(pickY);
-                    ByteBuffer bytes=direct(4);glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bytes);
-                    selected=(bytes.get(0)&255)+((bytes.get(1)&255)<<8)+((bytes.get(2)&255)<<16)-1;
-                    check("Selección");
+                    int x=display.framebufferX(pickX),y=height-1-display.framebufferY(pickY);
+                    selected=pickId(x,y);
                     if(selected>=count)throw new IllegalStateException("El recorrido devolvió un ID inválido");
                 }
                 pickPending=false;pickX=-1;pickY=-1;
             }
             CaptureListener requested=capture;int debug=requested==null?0:captureDebug;
-            double elapsed=draw(debug);Capture pixels=requested==null?null:read();
+            selectOpticalProgram();describeFrame(debug);
+            // Synchronous timing always measures actual drawing, never the reuse path.
+            frameReused=frameReuseEnabled&&!synchronousTiming&&frameKey.matches();
+            double elapsed=0;
+            if(frameReused)reusedFrames++;
+            else {elapsed=draw(debug);frameKey.remember();renderNumber++;}
+            glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+            Capture pixels=requested==null?null:read();
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
             glBindFramebuffer(GL_READ_FRAMEBUFFER,fbo);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
             int bottom=viewHeight-display.top-display.height;
@@ -496,7 +596,11 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             hasFrame=true;drawNumber++;
             latestFrame=new FrameStats(this,elapsed);
             if(requested!=null)capture=null;
-            listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %.1f ms %s\n%s · %d observables · estado %s%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",elapsed,synchronousTiming?"GPU completada":"CPU envío",core.domainLabel(),coefficients.length,Long.toUnsignedString(uploadedCore),selected>=0?" · ID "+selected:"",device,resolutionMessage==null?"":"\n"+resolutionMessage));
+            String timing=frameReused?"imagen conservada":String.format(Locale.US,"%.1f ms %s",elapsed,synchronousTiming?"GPU completada":"CPU envío");
+            listener.status(String.format(Locale.US,"%,d objetos · %dx%d%s · %s\n%s · %d observables · estado %s%s\n%s%s",count,width,height,isUhd8k()?" · UHD 8K":isUhd4k()?" · UHD 4K":"",timing,core.domainLabel(),coefficients.length,Long.toUnsignedString(uploadedCore),selected>=0?" · ID "+selected:"",device,(resolutionMessage==null?"":"\n"+resolutionMessage)
+                +(opticalMessage==null?"":"\n"+opticalMessage)
+                +(mirrorMode==MIRRORS_OFF?"":"\n"+(mirrorMode==MIRRORS_FLOOR?"Suelo reflectante":"Espejos enfrentados")
+                    +" · "+mirrorBudget+" rebotes explícitos · violeta = recorrido pendiente")));
             if(requested!=null)requested.captured(pixels);
         }catch(Throwable e){error(e);}
     }
@@ -546,10 +650,27 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         presentation=value;
     }
     public int presentation(){return presentation;}
+    /** Validated before mutation. One ray state per fragment; no mirror framebuffers. */
+    public void setReflections(int mode,int budget,boolean fold,float reflectance){
+        if(mode<MIRRORS_OFF||mode>MIRRORS_PAIR||budget<1||budget>64||!finite(reflectance)||reflectance<0f||reflectance>1f)
+            throw new IllegalArgumentException("Espejos: modo 0..2, presupuesto 1..64 y reflectancia 0..1");
+        mirrorMode=mode;mirrorBudget=budget;mirrorFold=fold;mirrorReflectance=reflectance;
+        opticalMessage=null;
+    }
+    public int mirrorMode(){return mirrorMode;}
+    public int mirrorBudget(){return mirrorBudget;}
+    /** A starting view into the paired mirrors; the current world is preserved. */
+    public void mirrorView(){
+        float extent=(float)Math.ceil(Math.sqrt(count))*1.1f+2.2f;
+        overrideEye=new float[]{0,4.2f,extent*.7f};overrideTarget=new float[]{extent,3f,extent*.5f};
+        overrideNear=.02f;overrideFar=10000;cameraFov=65;
+    }
     /** Null until the first successful frame after creating the current EGL context. */
     public FrameStats frameStats(){return latestFrame;}
     /** Explicit opt-in for a completion-time benchmark; normal frames never force glFinish. */
     public void setSynchronousTiming(boolean enabled){synchronousTiming=enabled;}
+    /** Reference mode for A/B validation; does not change world data or optical settings. */
+    public void setFrameReuseEnabled(boolean enabled){frameReuseEnabled=enabled;frameKey.invalidate();}
     public void orbit(float dx,float dy){
         if(!finite(dx)||!finite(dy))throw new IllegalArgumentException("Movimiento de cámara inválido");
         yaw=(yaw+dx*.006f)%(float)(Math.PI*2);pitch=Math.max(.04f,Math.min(1.52f,pitch+dy*.005f));overrideEye=null;overrideTarget=null;cameraFov=48;
@@ -578,7 +699,8 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     public String resolutionNotice(){return resolutionMessage;}
     public void objectCount(int n){
         if(n<1||n>MAX_OBJECTS)throw new IllegalArgumentException("Número de objetos");
-        count=n;if(selected>=n)selected=-1;
+        if(count!=n){count=n;editsDirty=true;}
+        if(selected>=n)selected=-1;
         // Off-range IDs retain their edits and reappear intact when count grows.
     }
     public void worldSeed(long value){
@@ -667,7 +789,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                         int offset=row*image.width*4;
                         for(int p=offset;p<offset+image.width*4;p+=4){
                             if((band[p]&255)==255&&(band[p+1]&255)==0&&(band[p+2]&255)==255)
-                                throw new IOException("Se agotó el recorrido de celdas durante la exportación");
+                                throw new IOException("Rayo incompleto durante la exportación: recorrido de celdas o presupuesto de reflejos agotado");
                         }
                         png.writeRow(band,offset);
                     }

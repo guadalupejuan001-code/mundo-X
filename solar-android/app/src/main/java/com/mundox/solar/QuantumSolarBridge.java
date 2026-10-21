@@ -21,11 +21,25 @@ public final class QuantumSolarBridge implements AutoCloseable {
     };
     private static final String[] ALL_OBSERVABLES = combinedObservables();
     private NativeCore core;
-    private volatile float[] values = new float[8];
-    private volatile float[] etherValues = new float[5];
-    private volatile long etherRules;
-    private volatile int preset;
-    private volatile long revision, bytes, activeSites, observedRevision, observedEpoch;
+    /** One publication couples both coefficient groups to their exact epoch.
+     * Arrays never escape; consumers can retain this immutable observation. */
+    public static final class Observation {
+        private final float[] values,etherValues;
+        public final int preset;
+        public final long revision,bytes,activeSites,observedRevision,observedEpoch,etherRules;
+        private Observation(float[] values,float[] etherValues,int preset,long revision,
+                            long bytes,long activeSites,long observedRevision,long observedEpoch,long etherRules){
+            this.values=values;this.etherValues=etherValues;this.preset=preset;this.revision=revision;
+            this.bytes=bytes;this.activeSites=activeSites;this.observedRevision=observedRevision;
+            this.observedEpoch=observedEpoch;this.etherRules=etherRules;
+        }
+        public void copyCoefficients(float[] local,float[] global){
+            if(local==null||local.length!=8||global==null||global.length<4||global.length>5)
+                throw new IllegalArgumentException("Tamaño de observación inválido");
+            System.arraycopy(values,0,local,0,8);System.arraycopy(etherValues,0,global,0,global.length);
+        }
+    }
+    private volatile Observation view;
     private boolean closed;
 
     public QuantumSolarBridge() { this(2); }
@@ -61,26 +75,26 @@ public final class QuantumSolarBridge implements AutoCloseable {
             float[] ether = Arrays.copyOfRange(observation.values,OBSERVABLES.length,ALL_OBSERVABLES.length);
             NativeCore previous = core;
             core = candidate; candidate = null;
-            values = result; etherValues = ether; etherRules = rules;
-            observedRevision = observation.revision; observedEpoch = observation.epoch;
-            preset = value; bytes = actualBytes; activeSites = actualSites; revision++;
+            view=new Observation(result,ether,value,view==null?1:view.revision+1,
+                    actualBytes,actualSites,observation.revision,observation.epoch,rules);
             if (previous != null) previous.close();
         } finally { if (candidate != null) candidate.close(); }
     }
 
-    /** Immutable cached view; callers must not write into this array. */
-    public float[] coefficients() { return values; }
+    public Observation observation() { return view; }
+    /** Owned copy for compatibility; rendering uses the allocation-free observation. */
+    public float[] coefficients() { return view.values.clone(); }
     /** Another view of the same atomic state observation; never ephemeris inputs. */
-    public float[] etherCoefficients() { return etherValues; }
-    public long etherRules() { return etherRules; }
-    public long revision() { return revision; }
+    public float[] etherCoefficients() { return view.etherValues.clone(); }
+    public long etherRules() { return view.etherRules; }
+    public long revision() { return view.revision; }
     /** Finite tableau payload only; excludes rule metadata and process RAM. */
-    public long stateBytes() { return bytes; }
-    public long activeSites() { return activeSites; }
-    public long observationRevision() { return observedRevision; }
-    public long observationEpoch() { return observedEpoch; }
-    public int preset() { return preset; }
-    public String status() { return "Ether Core ∞ · preparación en 8 sitios · " + PRESETS[preset]; }
+    public long stateBytes() { return view.bytes; }
+    public long activeSites() { return view.activeSites; }
+    public long observationRevision() { return view.observedRevision; }
+    public long observationEpoch() { return view.observedEpoch; }
+    public int preset() { return view.preset; }
+    public String status() { return "Ether Core ∞ · preparación en 8 sitios · " + PRESETS[view.preset]; }
     public synchronized long nativeRevision() { return core.version(); }
     public synchronized long nativeEpoch() { return core.epoch(); }
     public synchronized float[] verifyReadOnly() {

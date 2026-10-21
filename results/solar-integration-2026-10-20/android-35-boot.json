@@ -1,0 +1,9 @@
+{
+  "ram_mb": 2048,
+  "software_gles": "swiftshader",
+  "virtualization": "TCG",
+  "status": "blocked_or_failed",
+  "cases": [],
+  "boot_seconds": 301.5553576589991,
+  "error": "TimeoutError: Android boot exceeded budget"
+}

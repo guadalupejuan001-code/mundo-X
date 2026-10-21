@@ -1,0 +1,1458 @@
+﻿2026-10-21T00:46:43.2362450Z Current runner version: '2.337.0'
+2026-10-21T00:46:43.2392202Z ##[group]Runner Image Provisioner
+2026-10-21T00:46:43.2393187Z Hosted Compute Agent
+2026-10-21T00:46:43.2393793Z Version: 20261015.610
+2026-10-21T00:46:43.2394530Z Commit: 267fdb4e8bbec4ab5ea31367f3a00d5c480c7656
+2026-10-21T00:46:43.2395573Z Build Date: 2026-10-14T17:06:54Z
+2026-10-21T00:46:43.2396364Z Worker ID: {3e366446-e5b9-4a90-a33d-c1da7038d6d1}
+2026-10-21T00:46:43.2397368Z Region: centralus
+2026-10-21T00:46:43.2397969Z Cloud: Azure
+2026-10-21T00:46:43.2398557Z ##[endgroup]
+2026-10-21T00:46:43.2400302Z ##[group]Operating System
+2026-10-21T00:46:43.2400937Z Ubuntu
+2026-10-21T00:46:43.2401599Z 24.04.5
+2026-10-21T00:46:43.2402122Z LTS
+2026-10-21T00:46:43.2402723Z ##[endgroup]
+2026-10-21T00:46:43.2403297Z ##[group]Runner Image
+2026-10-21T00:46:43.2403930Z Image: ubuntu-24.04
+2026-10-21T00:46:43.2404719Z Version: 20261018.339.1
+2026-10-21T00:46:43.2406316Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261018.339/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-21T00:46:43.2408002Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261018.339
+2026-10-21T00:46:43.2408994Z ##[endgroup]
+2026-10-21T00:46:43.2410282Z ##[group]GITHUB_TOKEN Permissions
+2026-10-21T00:46:43.2412856Z Contents: read
+2026-10-21T00:46:43.2413572Z Metadata: read
+2026-10-21T00:46:43.2414142Z ##[endgroup]
+2026-10-21T00:46:43.2416853Z Secret source: Actions
+2026-10-21T00:46:43.2417877Z Cache mode: write
+2026-10-21T00:46:43.2419069Z Prepare workflow directory
+2026-10-21T00:46:43.3692827Z Prepare all required actions
+2026-10-21T00:46:43.3753823Z Getting action download info
+2026-10-21T00:46:43.6314497Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-21T00:46:44.0069776Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-10-21T00:46:44.5885319Z Download action repository 'gradle/actions@v4' (SHA:ed408507eac070d1f99cc633dbcf757c94c7933a)
+2026-10-21T00:46:45.7802428Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-21T00:46:46.0036715Z Complete job name: exact-solar
+2026-10-21T00:46:46.0596366Z ##[group]Run actions/checkout@v4
+2026-10-21T00:46:46.0596881Z with:
+2026-10-21T00:46:46.0597197Z   ref: 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:46.0597560Z   fetch-depth: 0
+2026-10-21T00:46:46.0597846Z   persist-credentials: false
+2026-10-21T00:46:46.0598203Z   repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:46:46.0600365Z   token: ***
+2026-10-21T00:46:46.0600647Z   ssh-strict: true
+2026-10-21T00:46:46.0600936Z   ssh-user: git
+2026-10-21T00:46:46.0601205Z   clean: true
+2026-10-21T00:46:46.0601541Z   sparse-checkout-cone-mode: true
+2026-10-21T00:46:46.0601860Z   fetch-tags: false
+2026-10-21T00:46:46.0602135Z   show-progress: true
+2026-10-21T00:46:46.0602448Z   lfs: false
+2026-10-21T00:46:46.0602706Z   submodules: false
+2026-10-21T00:46:46.0603082Z   set-safe-directory: true
+2026-10-21T00:46:46.0603421Z   allow-unsafe-pr-checkout: false
+2026-10-21T00:46:46.0603815Z ##[endgroup]
+2026-10-21T00:46:46.1493198Z Syncing repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:46:46.1495751Z ##[group]Getting Git version info
+2026-10-21T00:46:46.1496416Z Working directory is '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:46:46.1497576Z [command]/usr/bin/git version
+2026-10-21T00:46:46.1534711Z git version 2.55.0
+2026-10-21T00:46:46.1549596Z ##[endgroup]
+2026-10-21T00:46:46.1562332Z Temporarily overriding HOME='/home/runner/work/_temp/b3dbc73f-942a-4d2c-b30f-bd412f171744' before making global git config changes
+2026-10-21T00:46:46.1565011Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:46:46.1566417Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:46:46.1607325Z Deleting the contents of '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:46:46.1611431Z ##[group]Initializing the repository
+2026-10-21T00:46:46.1615924Z [command]/usr/bin/git init /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:46:46.1745791Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-21T00:46:46.1746709Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-21T00:46:46.1747457Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-21T00:46:46.1747895Z hint: call:
+2026-10-21T00:46:46.1748197Z hint:
+2026-10-21T00:46:46.1748575Z hint: 	git config --global init.defaultBranch <name>
+2026-10-21T00:46:46.1748948Z hint:
+2026-10-21T00:46:46.1749295Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-21T00:46:46.1749780Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-21T00:46:46.1750166Z hint:
+2026-10-21T00:46:46.1750421Z hint: 	git branch -m <name>
+2026-10-21T00:46:46.1750754Z hint:
+2026-10-21T00:46:46.1751103Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-21T00:46:46.1751962Z Initialized empty Git repository in /home/runner/work/mundo-X/mundo-X/.git/
+2026-10-21T00:46:46.1755337Z [command]/usr/bin/git remote add origin https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:46:46.1807652Z ##[endgroup]
+2026-10-21T00:46:46.1808367Z ##[group]Disabling automatic garbage collection
+2026-10-21T00:46:46.1812030Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-21T00:46:46.1842804Z ##[endgroup]
+2026-10-21T00:46:46.1850550Z ##[group]Setting up auth
+2026-10-21T00:46:46.1851009Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:46:46.1880805Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:46:46.2196431Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:46:46.2229828Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:46:46.2391383Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:46:46.2417003Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:46:46.2579791Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-21T00:46:46.2615963Z ##[endgroup]
+2026-10-21T00:46:46.2616708Z ##[group]Fetching the repository
+2026-10-21T00:46:46.2625685Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-10-21T00:46:47.0363492Z From https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:46:47.0364160Z  * [new branch]      build/android-apk-v0.1  -> origin/build/android-apk-v0.1
+2026-10-21T00:46:47.0364619Z  * [new branch]      codex/basis-vm-android  -> origin/codex/basis-vm-android
+2026-10-21T00:46:47.0365295Z  * [new branch]      codex/core-1000-qubits-20261019 -> origin/codex/core-1000-qubits-20261019
+2026-10-21T00:46:47.0366055Z  * [new branch]      codex/cosmic-android-unified-20261019 -> origin/codex/cosmic-android-unified-20261019
+2026-10-21T00:46:47.0366766Z  * [new branch]      codex/cosmic-engine-4k-20261019 -> origin/codex/cosmic-engine-4k-20261019
+2026-10-21T00:46:47.0367392Z  * [new branch]      codex/cosmic-engine-8k-20261019 -> origin/codex/cosmic-engine-8k-20261019
+2026-10-21T00:46:47.0368026Z  * [new branch]      codex/cosmic-solar-4k-atmospheres-20261019 -> origin/codex/cosmic-solar-4k-atmospheres-20261019
+2026-10-21T00:46:47.0368588Z  * [new branch]      codex/cosmic-solar-explorer -> origin/codex/cosmic-solar-explorer
+2026-10-21T00:46:47.0369050Z  * [new branch]      codex/cosmic-x-engine-20261019 -> origin/codex/cosmic-x-engine-20261019
+2026-10-21T00:46:47.0369917Z  * [new branch]      codex/ether-audit-stress-20261020 -> origin/codex/ether-audit-stress-20261020
+2026-10-21T00:46:47.0370514Z  * [new branch]      codex/ether-core-v0-1-20261019 -> origin/codex/ether-core-v0-1-20261019
+2026-10-21T00:46:47.0371100Z  * [new branch]      codex/ether-fusion-pc-check-20261020 -> origin/codex/ether-fusion-pc-check-20261020
+2026-10-21T00:46:47.0371694Z  * [new branch]      codex/ether-fusion-session-20261020 -> origin/codex/ether-fusion-session-20261020
+2026-10-21T00:46:47.0372394Z  * [new branch]      codex/factorized-exact-structure-20261018 -> origin/codex/factorized-exact-structure-20261018
+2026-10-21T00:46:47.0372978Z  * [new branch]      codex/graphics-spatial-20261018 -> origin/codex/graphics-spatial-20261018
+2026-10-21T00:46:47.0373508Z  * [new branch]      codex/infinite-8k-extreme-20261019 -> origin/codex/infinite-8k-extreme-20261019
+2026-10-21T00:46:47.0374044Z  * [new branch]      codex/infinite-core-rules-20261019 -> origin/codex/infinite-core-rules-20261019
+2026-10-21T00:46:47.0374805Z  * [new branch]      codex/integrate-cosmic-projects-20261019 -> origin/codex/integrate-cosmic-projects-20261019
+2026-10-21T00:46:47.0375623Z  * [new branch]      codex/motor-x-visual-20261018 -> origin/codex/motor-x-visual-20261018
+2026-10-21T00:46:47.0376305Z  * [new branch]      codex/mundo-x-graphics-android-20261019 -> origin/codex/mundo-x-graphics-android-20261019
+2026-10-21T00:46:47.0376854Z  * [new branch]      codex/own-pc-x86-20261019 -> origin/codex/own-pc-x86-20261019
+2026-10-21T00:46:47.0377317Z  * [new branch]      codex/pc-enter-iso-fix-20261019 -> origin/codex/pc-enter-iso-fix-20261019
+2026-10-21T00:46:47.0377850Z  * [new branch]      codex/pc-graphics-iso-fix-20261019 -> origin/codex/pc-graphics-iso-fix-20261019
+2026-10-21T00:46:47.0378358Z  * [new branch]      codex/physics-foundation-20261019 -> origin/codex/physics-foundation-20261019
+2026-10-21T00:46:47.0378817Z  * [new branch]      codex/quantum-echo-android -> origin/codex/quantum-echo-android
+2026-10-21T00:46:47.0379399Z  * [new branch]      codex/rule-render-physics-20261019 -> origin/codex/rule-render-physics-20261019
+2026-10-21T00:46:47.0379897Z  * [new branch]      codex/visual-microlab-20261018 -> origin/codex/visual-microlab-20261018
+2026-10-21T00:46:47.0380452Z  * [new branch]      codex/windows-reference-diagnostics-20261018 -> origin/codex/windows-reference-diagnostics-20261018
+2026-10-21T00:46:47.0381016Z  * [new branch]      codex/xasm-reduced-t    -> origin/codex/xasm-reduced-t
+2026-10-21T00:46:47.0381398Z  * [new branch]      delivery/xlab-0.3.1     -> origin/delivery/xlab-0.3.1
+2026-10-21T00:46:47.0381824Z  * [new branch]      delivery/xlab-0.3.2     -> origin/delivery/xlab-0.3.2
+2026-10-21T00:46:47.0382439Z  * [new branch]      experiment/quantum-core-v0.1 -> origin/experiment/quantum-core-v0.1
+2026-10-21T00:46:47.0382955Z  * [new branch]      experiment/transformer-x-v0.1 -> origin/experiment/transformer-x-v0.1
+2026-10-21T00:46:47.0383360Z  * [new branch]      main                    -> origin/main
+2026-10-21T00:46:47.0383713Z  * [new branch]      phase-performance-trial -> origin/phase-performance-trial
+2026-10-21T00:46:47.0384047Z  * [new tag]         v0.3.1                  -> v0.3.1
+2026-10-21T00:46:47.0384306Z  * [new tag]         v0.3.2                  -> v0.3.2
+2026-10-21T00:46:47.0385728Z [command]/usr/bin/git rev-parse --verify --quiet 2be39f7915001c46b63246b9a9502071b599475d^{object}
+2026-10-21T00:46:47.0402435Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:47.0409666Z ##[endgroup]
+2026-10-21T00:46:47.0410293Z ##[group]Determining the checkout info
+2026-10-21T00:46:47.0410734Z ##[endgroup]
+2026-10-21T00:46:47.0410957Z [command]/usr/bin/git sparse-checkout disable
+2026-10-21T00:46:47.0457069Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-21T00:46:47.0510752Z ##[group]Checking out the ref
+2026-10-21T00:46:47.0513190Z [command]/usr/bin/git checkout --progress --force 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:47.1207716Z Note: switching to '2be39f7915001c46b63246b9a9502071b599475d'.
+2026-10-21T00:46:47.1208407Z 
+2026-10-21T00:46:47.1208891Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-21T00:46:47.1209551Z changes and commit them, and you can discard any commits you make in this
+2026-10-21T00:46:47.1210226Z state without impacting any branches by switching back to a branch.
+2026-10-21T00:46:47.1210628Z 
+2026-10-21T00:46:47.1210993Z If you want to create a new branch to retain commits you create, you may
+2026-10-21T00:46:47.1211664Z do so (now or later) by using -c with the switch command. Example:
+2026-10-21T00:46:47.1212010Z 
+2026-10-21T00:46:47.1212251Z   git switch -c <new-branch-name>
+2026-10-21T00:46:47.1212517Z 
+2026-10-21T00:46:47.1212699Z Or undo this operation with:
+2026-10-21T00:46:47.1212924Z 
+2026-10-21T00:46:47.1213098Z   git switch -
+2026-10-21T00:46:47.1213283Z 
+2026-10-21T00:46:47.1213567Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-21T00:46:47.1213895Z 
+2026-10-21T00:46:47.1214198Z HEAD is now at 2be39f7 fix: define Solar filtering and verify exact reference replays
+2026-10-21T00:46:47.1216736Z ##[endgroup]
+2026-10-21T00:46:47.1258399Z [command]/usr/bin/git log -1 --format=%H
+2026-10-21T00:46:47.1283344Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:47.1291334Z ##[group]Removing auth
+2026-10-21T00:46:47.1295838Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:46:47.1323860Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:46:47.1498113Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:46:47.1520556Z http.https://github.com/.extraheader
+2026-10-21T00:46:47.1529095Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-21T00:46:47.1562979Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:46:47.1730122Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:46:47.1757932Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:46:47.1924288Z ##[endgroup]
+2026-10-21T00:46:47.2141245Z ##[group]Run actions/setup-java@v4
+2026-10-21T00:46:47.2141487Z with:
+2026-10-21T00:46:47.2141682Z   distribution: temurin
+2026-10-21T00:46:47.2141873Z   java-version: 17
+2026-10-21T00:46:47.2142050Z   java-package: jdk
+2026-10-21T00:46:47.2142231Z   check-latest: false
+2026-10-21T00:46:47.2142411Z   server-id: github
+2026-10-21T00:46:47.2142676Z   server-username: GITHUB_ACTOR
+2026-10-21T00:46:47.2142919Z   server-password: GITHUB_TOKEN
+2026-10-21T00:46:47.2143126Z   overwrite-settings: true
+2026-10-21T00:46:47.2143322Z   job-status: success
+2026-10-21T00:46:47.2145544Z   token: ***
+2026-10-21T00:46:47.2145803Z ##[endgroup]
+2026-10-21T00:46:47.3519453Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-10-21T00:46:47.3525826Z ##[group]Installed distributions
+2026-10-21T00:46:47.3782867Z Resolved Java 17.0.20+1 from tool-cache
+2026-10-21T00:46:47.3783239Z Setting Java 17.0.20+1 as the default
+2026-10-21T00:46:47.3791516Z (node:2181) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:46:47.3792147Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:46:47.3794063Z Creating toolchains.xml for JDK version 17 from temurin
+2026-10-21T00:46:47.3849545Z Writing to /home/runner/.m2/toolchains.xml
+2026-10-21T00:46:47.3850043Z 
+2026-10-21T00:46:47.3850162Z Java configuration:
+2026-10-21T00:46:47.3850389Z   Distribution: temurin
+2026-10-21T00:46:47.3850631Z   Version: 17.0.20+1
+2026-10-21T00:46:47.3850975Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:46:47.3851247Z 
+2026-10-21T00:46:47.3851554Z ##[endgroup]
+2026-10-21T00:46:47.3872732Z Creating settings.xml with server-id: github
+2026-10-21T00:46:47.3887917Z Writing to /home/runner/.m2/settings.xml
+2026-10-21T00:46:47.4192207Z ##[group]Run gradle/actions/setup-gradle@v4
+2026-10-21T00:46:47.4193054Z with:
+2026-10-21T00:46:47.4193652Z   gradle-version: 8.9
+2026-10-21T00:46:47.4194305Z   cache-disabled: false
+2026-10-21T00:46:47.4195113Z   cache-read-only: true
+2026-10-21T00:46:47.4195677Z   cache-write-only: false
+2026-10-21T00:46:47.4196305Z   cache-overwrite-existing: false
+2026-10-21T00:46:47.4196961Z   cache-cleanup: on-success
+2026-10-21T00:46:47.4197648Z   gradle-home-cache-includes: caches
+notifications
+
+2026-10-21T00:46:47.4198343Z   add-job-summary: always
+2026-10-21T00:46:47.4199021Z   add-job-summary-as-pr-comment: never
+2026-10-21T00:46:47.4199769Z   dependency-graph: disabled
+2026-10-21T00:46:47.4200246Z   dependency-graph-report-dir: dependency-graph-reports
+2026-10-21T00:46:47.4200730Z   dependency-graph-continue-on-failure: true
+2026-10-21T00:46:47.4201055Z   build-scan-publish: false
+2026-10-21T00:46:47.4201363Z   validate-wrappers: true
+2026-10-21T00:46:47.4201660Z   allow-snapshot-wrappers: false
+2026-10-21T00:46:47.4201941Z   gradle-home-cache-strict-match: false
+2026-10-21T00:46:47.4202217Z   workflow-job-context: null
+2026-10-21T00:46:47.4204269Z   github-token: ***
+2026-10-21T00:46:47.4204448Z env:
+2026-10-21T00:46:47.4204708Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:46:47.4205320Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:46:47.4205639Z ##[endgroup]
+2026-10-21T00:46:49.3169466Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+2026-10-21T00:46:49.3171862Z ##[group]Restore Gradle state from cache
+2026-10-21T00:46:49.4828161Z Cache hit for restore-key: gradle-home-v1|Linux-X64|build-and-verify[7d9ed3180fffbd97d541832a9ed6b88e]-7b028db2344912b2ab86a0affa2a1fe56180922b
+2026-10-21T00:46:50.0394985Z Received 946510 of 946510 (100.0%), 2.2 MBs/sec
+2026-10-21T00:46:50.0396149Z Cache Size: ~1 MB (946510 B)
+2026-10-21T00:46:50.0420566Z [command]/usr/bin/tar -xf /home/runner/work/_temp/b34332f8-9f4a-4611-86e6-3e018f90e9fd/cache.tzst -P -C /home/runner/work/mundo-X/mundo-X --use-compress-program unzstd
+2026-10-21T00:46:50.0669687Z Cache restored successfully
+2026-10-21T00:46:50.0675993Z Restored cache entry with key gradle-home-v1|Linux-X64|exact-solar[96dd3706b4be211bdb6c8c0f5d3c99b2]-226abdb53b10a62d9e593370cb8f9cc228e79f0a to /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 749ms
+2026-10-21T00:46:50.2130166Z Cache hit for: gradle-dependencies-v1-aa72e648b2278a6625f4c6c041a52dea
+2026-10-21T00:46:50.2265975Z Cache hit for: gradle-groovy-dsl-v1-796b92c2c8453f2464175c75c4da00b9
+2026-10-21T00:46:50.2358513Z Cache hit for: gradle-instrumented-jars-v1-1b01f20973c22a628d8e9c30b4a54a21
+2026-10-21T00:46:50.2397585Z Cache hit for: gradle-transforms-v1-8f89919c4729f54bb880bdaae63f5c56
+2026-10-21T00:46:50.6027811Z Received 246453 of 246453 (100.0%), 1.3 MBs/sec
+2026-10-21T00:46:50.6028449Z Cache Size: ~0 MB (246453 B)
+2026-10-21T00:46:50.6045268Z [command]/usr/bin/tar -xf /home/runner/work/_temp/75da717e-60b7-4441-b835-282e8e08075a/cache.tzst -P -C /home/runner/work/mundo-X/mundo-X --use-compress-program unzstd
+2026-10-21T00:46:50.6247922Z Cache restored successfully
+2026-10-21T00:46:50.6249394Z Restored cache entry with key gradle-groovy-dsl-v1-796b92c2c8453f2464175c75c4da00b9 to /home/runner/.gradle/caches/*/groovy-dsl/*/ in 556ms
+2026-10-21T00:46:50.6961177Z Received 103706 of 103706 (100.0%), 0.4 MBs/sec
+2026-10-21T00:46:50.6962674Z Cache Size: ~0 MB (103706 B)
+2026-10-21T00:46:50.6994307Z [command]/usr/bin/tar -xf /home/runner/work/_temp/baa7db88-0dfa-422d-99a5-dcc9bde5c55c/cache.tzst -P -C /home/runner/work/mundo-X/mundo-X --use-compress-program unzstd
+2026-10-21T00:46:50.7095611Z Cache restored successfully
+2026-10-21T00:46:50.7097001Z Restored cache entry with key gradle-instrumented-jars-v1-1b01f20973c22a628d8e9c30b4a54a21 to /home/runner/.gradle/caches/jars-*/*/ in 641ms
+2026-10-21T00:46:51.4124925Z Received 90293363 of 90293363 (100.0%), 84.4 MBs/sec
+2026-10-21T00:46:51.4126363Z Cache Size: ~86 MB (90293363 B)
+2026-10-21T00:46:51.4131223Z Received 49137404 of 53331708 (92.1%), 46.4 MBs/sec
+2026-10-21T00:46:51.4280966Z [command]/usr/bin/tar -xf /home/runner/work/_temp/61db04cd-419e-4fa7-aed6-84ff848d7683/cache.tzst -P -C /home/runner/work/mundo-X/mundo-X --use-compress-program unzstd
+2026-10-21T00:46:51.5328696Z Cache restored successfully
+2026-10-21T00:46:51.5362025Z Restored cache entry with key gradle-dependencies-v1-aa72e648b2278a6625f4c6c041a52dea to /home/runner/.gradle/caches/modules-*/files-*/*/*/*/* in 1468ms
+2026-10-21T00:46:51.5821746Z Received 53331708 of 53331708 (100.0%), 43.2 MBs/sec
+2026-10-21T00:46:51.5823330Z Cache Size: ~51 MB (53331708 B)
+2026-10-21T00:46:51.5968743Z [command]/usr/bin/tar -xf /home/runner/work/_temp/acaac74c-71b8-4027-ae0d-3da8b9eda536/cache.tzst -P -C /home/runner/work/mundo-X/mundo-X --use-compress-program unzstd
+2026-10-21T00:46:51.8801524Z Cache restored successfully
+2026-10-21T00:46:51.8821142Z Restored cache entry with key gradle-transforms-v1-8f89919c4729f54bb880bdaae63f5c56 to /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 1813ms
+2026-10-21T00:46:51.8881514Z ##[endgroup]
+2026-10-21T00:46:51.8995587Z ##[group]All Gradle Wrapper jars are valid
+2026-10-21T00:46:51.8996199Z 
+2026-10-21T00:46:51.8996532Z ##[endgroup]
+2026-10-21T00:46:52.1259219Z ##[group]Provision Gradle 8.9
+2026-10-21T00:46:57.6629179Z Cache hit for: gradle-8.9
+2026-10-21T00:46:58.8326857Z Received 83886080 of 135826040 (61.8%), 79.9 MBs/sec
+2026-10-21T00:46:59.2085322Z Received 135826040 of 135826040 (100.0%), 94.1 MBs/sec
+2026-10-21T00:46:59.2088160Z Cache Size: ~130 MB (135826040 B)
+2026-10-21T00:46:59.2113215Z [command]/usr/bin/tar -xf /home/runner/work/_temp/c32d8908-efeb-4cbb-8765-6a96c0b7df59/cache.tzst -P -C /home/runner/work/mundo-X/mundo-X --use-compress-program unzstd
+2026-10-21T00:46:59.3397691Z Cache restored successfully
+2026-10-21T00:46:59.3446944Z Restored Gradle distribution gradle-8.9 from cache to /home/runner/work/_temp/.gradle-actions/gradle-installations/downloads/gradle-8.9-bin.zip
+2026-10-21T00:46:59.3461631Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/.gradle-actions/gradle-installations/downloads/gradle-8.9-bin.zip
+2026-10-21T00:47:00.3888801Z Extracted Gradle 8.9 to /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9
+2026-10-21T00:47:00.3889966Z Provisioned Gradle executable /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9/bin/gradle
+2026-10-21T00:47:00.3891331Z ##[endgroup]
+2026-10-21T00:47:00.4154703Z ##[group]Run python3 tools/test_solar_performance_runner.py
+2026-10-21T00:47:00.4155684Z [36;1mpython3 tools/test_solar_performance_runner.py[0m
+2026-10-21T00:47:00.4271069Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:00.4271572Z env:
+2026-10-21T00:47:00.4271974Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:00.4272517Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:00.4272979Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:47:00.4273348Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:47:00.4273711Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:47:00.4274100Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:47:00.4274577Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:47:00.4275267Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:47:00.4275969Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:47:00.4276316Z ##[endgroup]
+2026-10-21T00:47:00.5237194Z ...
+2026-10-21T00:47:00.5237824Z ----------------------------------------------------------------------
+2026-10-21T00:47:00.5369866Z Ran 3 tests in 0.004s
+2026-10-21T00:47:00.5370260Z 
+2026-10-21T00:47:00.5370396Z OK
+2026-10-21T00:47:00.5827203Z ##[group]Run bash tools/solar_host_checks.sh | tee solar-host.log
+2026-10-21T00:47:00.5827764Z [36;1mbash tools/solar_host_checks.sh | tee solar-host.log[0m
+2026-10-21T00:47:00.5859952Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:00.5860473Z env:
+2026-10-21T00:47:00.5860876Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:00.5861415Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:00.5861862Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:47:00.5862286Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:47:00.5862649Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:47:00.5863038Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:47:00.5863496Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:47:00.5864041Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:47:00.5864527Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:47:00.5864998Z ##[endgroup]
+2026-10-21T00:47:14.9197318Z SolarDataChecks PASS: 567 checks; 23 bodies; Kepler, moon and dipole invariants.
+2026-10-21T00:47:15.0500400Z SolarVisualEtherChecks PASS: 41567 checks; candidate ratio=0.0170076726342711; max candidates=4; tiles=2040
+2026-10-21T00:47:15.3790749Z eclipse_omission_checks=9956160
+2026-10-21T00:47:15.3803167Z SolarOptimizationChecks PASS: 10239383
+2026-10-21T00:47:15.6465673Z SolarPhysicsComparison PASS: 588800 bitwise state checks; overflow rollback passed
+2026-10-21T00:47:15.8276826Z SolarBridgeChecks PASS: 301014; 2205 session constructions, 100000 concurrent observations
+2026-10-21T00:47:15.8457762Z ##[group]Run sudo apt-get update
+2026-10-21T00:47:15.8458197Z [36;1msudo apt-get update[0m
+2026-10-21T00:47:15.8458713Z [36;1msudo apt-get install -y libegl1 libgles2 libgl1-mesa-dri python3-numpy python3-pil strace[0m
+2026-10-21T00:47:15.8459260Z [36;1mexport OPENBLAS_NUM_THREADS=1 LP_NUM_THREADS=1[0m
+2026-10-21T00:47:15.8459777Z [36;1m/usr/bin/python3 tools/solar_gradients_check.py --output solar-gradients.json[0m
+2026-10-21T00:47:15.8460280Z [36;1m/usr/bin/python3 tools/solar_shader_check.py \[0m
+2026-10-21T00:47:15.8460795Z [36;1m  --fixtures results/solar-integration-2026-10-20/shipping/fixtures-native-320.json \[0m
+2026-10-21T00:47:15.8461401Z [36;1m  --baseline-shader solar-android/tests/fixtures/solar-defined-reference.frag \[0m
+2026-10-21T00:47:15.8461967Z [36;1m  --warmup-frames 2 --repeats 3 --output solar-defined-host.json[0m
+2026-10-21T00:47:15.8495430Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:15.8495976Z env:
+2026-10-21T00:47:15.8496486Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:15.8497013Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:15.8497496Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:47:15.8497893Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:47:15.8498278Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:47:15.8498647Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:47:15.8499154Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:47:15.8499651Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:47:15.8500059Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:47:15.8500401Z ##[endgroup]
+2026-10-21T00:47:15.9132170Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-10-21T00:47:15.9472093Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-10-21T00:47:15.9915597Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-10-21T00:47:15.9925780Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-10-21T00:47:15.9952435Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-10-21T00:47:15.9968991Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-10-21T00:47:16.0051931Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [628 kB]
+2026-10-21T00:47:16.0218042Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [565 kB]
+2026-10-21T00:47:16.0834993Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1397 kB]
+2026-10-21T00:47:16.0888315Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1704 kB]
+2026-10-21T00:47:16.1614357Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1145 kB]
+2026-10-21T00:47:16.1659639Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [231 kB]
+2026-10-21T00:47:16.1674980Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1222 kB]
+2026-10-21T00:47:19.2435208Z Fetched 7274 kB in 1s (10.7 MB/s)
+2026-10-21T00:47:20.1175230Z Reading package lists...
+2026-10-21T00:47:20.1483306Z Reading package lists...
+2026-10-21T00:47:20.3321273Z Building dependency tree...
+2026-10-21T00:47:20.3329752Z Reading state information...
+2026-10-21T00:47:20.4922458Z libgl1-mesa-dri is already the newest version (25.2.8-0ubuntu0.24.04.4).
+2026-10-21T00:47:20.4923273Z libgl1-mesa-dri set to manually installed.
+2026-10-21T00:47:20.4924146Z strace is already the newest version (6.8-0ubuntu2).
+2026-10-21T00:47:20.4924699Z strace set to manually installed.
+2026-10-21T00:47:20.4925709Z The following additional packages will be installed:
+2026-10-21T00:47:20.4929909Z   libblas3 libegl-mesa0 libimagequant0 liblapack3 libraqm0 python3-olefile
+2026-10-21T00:47:20.4937708Z Suggested packages:
+2026-10-21T00:47:20.4938243Z   python3-pytest python-pil-doc
+2026-10-21T00:47:20.5275010Z The following NEW packages will be installed:
+2026-10-21T00:47:20.5282278Z   libblas3 libegl-mesa0 libegl1 libgles2 libimagequant0 liblapack3 libraqm0
+2026-10-21T00:47:20.5283109Z   python3-numpy python3-olefile python3-pil
+2026-10-21T00:47:20.5463618Z 0 upgraded, 10 newly installed, 0 to remove and 45 not upgraded.
+2026-10-21T00:47:20.5464225Z Need to get 8022 kB of archives.
+2026-10-21T00:47:20.5465011Z After this operation, 34.6 MB of additional disk space will be used.
+2026-10-21T00:47:20.5465607Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-10-21T00:47:20.5895656Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libblas3 amd64 3.12.0-3build1.1 [238 kB]
+2026-10-21T00:47:20.6202910Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libegl-mesa0 amd64 25.2.8-0ubuntu0.24.04.4 [117 kB]
+2026-10-21T00:47:20.6490439Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libimagequant0 amd64 2.18.0-1build1 [36.3 kB]
+2026-10-21T00:47:20.6766848Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 liblapack3 amd64 3.12.0-3build1.1 [2646 kB]
+2026-10-21T00:47:20.7641941Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libraqm0 amd64 0.10.1-1build1 [15.0 kB]
+2026-10-21T00:47:20.8050393Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-numpy amd64 1:1.26.4+ds-6ubuntu1 [4437 kB]
+2026-10-21T00:47:20.9041247Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-olefile all 0.46-3 [33.8 kB]
+2026-10-21T00:47:20.9387738Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 python3-pil amd64 10.2.0-1ubuntu1.3 [452 kB]
+2026-10-21T00:47:20.9749244Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libegl1 amd64 1.7.0-1build1 [28.7 kB]
+2026-10-21T00:47:21.0065929Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libgles2 amd64 1.7.0-1build1 [17.1 kB]
+2026-10-21T00:47:21.2436046Z Fetched 8022 kB in 0s (17.1 MB/s)
+2026-10-21T00:47:21.2749303Z Selecting previously unselected package libblas3:amd64.
+2026-10-21T00:47:21.2918451Z (Reading database ... 
+2026-10-21T00:47:21.2919202Z (Reading database ... 5%
+2026-10-21T00:47:21.2919620Z (Reading database ... 10%
+2026-10-21T00:47:21.2920105Z (Reading database ... 15%
+2026-10-21T00:47:21.2920845Z (Reading database ... 20%
+2026-10-21T00:47:21.2921745Z (Reading database ... 25%
+2026-10-21T00:47:21.2922529Z (Reading database ... 30%
+2026-10-21T00:47:21.2923336Z (Reading database ... 35%
+2026-10-21T00:47:21.2924190Z (Reading database ... 40%
+2026-10-21T00:47:21.2925298Z (Reading database ... 45%
+2026-10-21T00:47:21.2926132Z (Reading database ... 50%
+2026-10-21T00:47:21.2968572Z (Reading database ... 55%
+2026-10-21T00:47:21.4620381Z (Reading database ... 60%
+2026-10-21T00:47:21.6623456Z (Reading database ... 65%
+2026-10-21T00:47:21.7654379Z (Reading database ... 70%
+2026-10-21T00:47:21.8947444Z (Reading database ... 75%
+2026-10-21T00:47:22.1013601Z (Reading database ... 80%
+2026-10-21T00:47:22.3040717Z (Reading database ... 85%
+2026-10-21T00:47:22.4977899Z (Reading database ... 90%
+2026-10-21T00:47:22.7110191Z (Reading database ... 95%
+2026-10-21T00:47:22.7111169Z (Reading database ... 100%
+2026-10-21T00:47:22.7111902Z (Reading database ... 214410 files and directories currently installed.)
+2026-10-21T00:47:22.7160463Z Preparing to unpack .../0-libblas3_3.12.0-3build1.1_amd64.deb ...
+2026-10-21T00:47:22.7645822Z Unpacking libblas3:amd64 (3.12.0-3build1.1) ...
+2026-10-21T00:47:22.7934212Z Selecting previously unselected package libegl-mesa0:amd64.
+2026-10-21T00:47:22.8055248Z Preparing to unpack .../1-libegl-mesa0_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+2026-10-21T00:47:22.8063409Z Unpacking libegl-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+2026-10-21T00:47:22.8270769Z Selecting previously unselected package libimagequant0:amd64.
+2026-10-21T00:47:22.8390472Z Preparing to unpack .../2-libimagequant0_2.18.0-1build1_amd64.deb ...
+2026-10-21T00:47:22.8398582Z Unpacking libimagequant0:amd64 (2.18.0-1build1) ...
+2026-10-21T00:47:22.8616135Z Selecting previously unselected package liblapack3:amd64.
+2026-10-21T00:47:22.8736003Z Preparing to unpack .../3-liblapack3_3.12.0-3build1.1_amd64.deb ...
+2026-10-21T00:47:22.8766169Z Unpacking liblapack3:amd64 (3.12.0-3build1.1) ...
+2026-10-21T00:47:22.9515501Z Selecting previously unselected package libraqm0:amd64.
+2026-10-21T00:47:22.9636222Z Preparing to unpack .../4-libraqm0_0.10.1-1build1_amd64.deb ...
+2026-10-21T00:47:22.9789050Z Unpacking libraqm0:amd64 (0.10.1-1build1) ...
+2026-10-21T00:47:22.9977726Z Selecting previously unselected package python3-numpy.
+2026-10-21T00:47:23.0097745Z Preparing to unpack .../5-python3-numpy_1%3a1.26.4+ds-6ubuntu1_amd64.deb ...
+2026-10-21T00:47:23.0105097Z Unpacking python3-numpy (1:1.26.4+ds-6ubuntu1) ...
+2026-10-21T00:47:23.2456279Z Selecting previously unselected package python3-olefile.
+2026-10-21T00:47:23.2581416Z Preparing to unpack .../6-python3-olefile_0.46-3_all.deb ...
+2026-10-21T00:47:23.2592962Z Unpacking python3-olefile (0.46-3) ...
+2026-10-21T00:47:23.2810892Z Selecting previously unselected package python3-pil:amd64.
+2026-10-21T00:47:23.2928438Z Preparing to unpack .../7-python3-pil_10.2.0-1ubuntu1.3_amd64.deb ...
+2026-10-21T00:47:23.2938792Z Unpacking python3-pil:amd64 (10.2.0-1ubuntu1.3) ...
+2026-10-21T00:47:23.3244449Z Selecting previously unselected package libegl1:amd64.
+2026-10-21T00:47:23.3364199Z Preparing to unpack .../8-libegl1_1.7.0-1build1_amd64.deb ...
+2026-10-21T00:47:23.3370958Z Unpacking libegl1:amd64 (1.7.0-1build1) ...
+2026-10-21T00:47:23.3547706Z Selecting previously unselected package libgles2:amd64.
+2026-10-21T00:47:23.3664771Z Preparing to unpack .../9-libgles2_1.7.0-1build1_amd64.deb ...
+2026-10-21T00:47:23.3672027Z Unpacking libgles2:amd64 (1.7.0-1build1) ...
+2026-10-21T00:47:23.4060900Z Setting up python3-olefile (0.46-3) ...
+2026-10-21T00:47:23.5411425Z Setting up libblas3:amd64 (3.12.0-3build1.1) ...
+2026-10-21T00:47:23.5459758Z update-alternatives: using /usr/lib/x86_64-linux-gnu/blas/libblas.so.3 to provide /usr/lib/x86_64-linux-gnu/libblas.so.3 (libblas.so.3-x86_64-linux-gnu) in auto mode
+2026-10-21T00:47:23.5477237Z Setting up libegl-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+2026-10-21T00:47:23.5500453Z Setting up libgles2:amd64 (1.7.0-1build1) ...
+2026-10-21T00:47:23.5517963Z Setting up libraqm0:amd64 (0.10.1-1build1) ...
+2026-10-21T00:47:23.5537118Z Setting up libimagequant0:amd64 (2.18.0-1build1) ...
+2026-10-21T00:47:23.5554998Z Setting up libegl1:amd64 (1.7.0-1build1) ...
+2026-10-21T00:47:23.5574008Z Setting up liblapack3:amd64 (3.12.0-3build1.1) ...
+2026-10-21T00:47:23.5623558Z update-alternatives: using /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3 to provide /usr/lib/x86_64-linux-gnu/liblapack.so.3 (liblapack.so.3-x86_64-linux-gnu) in auto mode
+2026-10-21T00:47:23.5638089Z Setting up python3-pil:amd64 (10.2.0-1ubuntu1.3) ...
+2026-10-21T00:47:23.7777454Z Setting up python3-numpy (1:1.26.4+ds-6ubuntu1) ...
+2026-10-21T00:47:24.9074577Z Processing triggers for man-db (2.12.0-4build2) ...
+2026-10-21T00:47:24.9096203Z Not building database; man-db/auto-update is not 'true'.
+2026-10-21T00:47:24.9112577Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+2026-10-21T00:47:29.1666401Z 
+2026-10-21T00:47:29.1667388Z Running kernel seems to be up-to-date.
+2026-10-21T00:47:29.1667791Z 
+2026-10-21T00:47:29.1667970Z No services need to be restarted.
+2026-10-21T00:47:29.1668518Z 
+2026-10-21T00:47:29.1668704Z No containers need to be restarted.
+2026-10-21T00:47:29.1668982Z 
+2026-10-21T00:47:29.1669189Z No user sessions are running outdated binaries.
+2026-10-21T00:47:29.1669558Z 
+2026-10-21T00:47:29.1669858Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-10-21T00:47:35.5476541Z {"passed": true, "driver": {"vendor": "Mesa", "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)", "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.4", "glsl": "OpenGL ES GLSL ES 3.20", "hardware_gpu_available": false, "timer_query_supported": true}, "seed": 20261021, "cases_per_family": 128, "statistics": {"sphere_normal": {"values": 384, "failures": 0, "max_absolute_error": 2.0583549087405117e-08, "max_error_over_limit": 0.001238083629197377}, "angular_coordinates": {"values": 256, "failures": 0, "max_absolute_error": 1.213986688952673e-10, "max_error_over_limit": 3.8226964265378926e-05}, "ring_plane_radius": {"values": 128, "failures": 0, "max_absolute_error": 1.5385254847899432e-08, "max_error_over_limit": 0.0005924499374396826}, "ring_shadow_radius": {"values": 128, "failures": 0, "max_absolute_error": 1.52445434054016e-09, "max_error_over_limit": 0.0003089653129256751}}, "oracle": "Double precision central differences of independently re-intersected geometry", "oracle_step_pixels": 0.001, "absolute_tolerance": 3e-06, "relative_tolerance": 0.0003, "finite_tangent_and_poles": true, "shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50", "helper_sha256": "43bb3d13cbe49801e663ec8c106bf6678f58df8e3fbe6d6f444d0d042e1fdbfc", "rss_peak_kib": 136772}
+2026-10-21T00:47:36.6995114Z {"stage": "draw", "scene": 0, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "700448 kB", "VmHWM": "284128 kB", "VmRSS": "250212 kB"}}
+2026-10-21T00:47:37.6508940Z {"stage": "draw", "scene": 0, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725008 kB", "VmHWM": "284128 kB", "VmRSS": "272792 kB"}}
+2026-10-21T00:47:38.6910706Z {"stage": "draw", "scene": 1, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276040 kB"}}
+2026-10-21T00:47:38.7523967Z {"stage": "draw", "scene": 1, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276040 kB"}}
+2026-10-21T00:47:38.8288886Z {"stage": "draw", "scene": 2, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276040 kB"}}
+2026-10-21T00:47:38.8672898Z {"stage": "draw", "scene": 2, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276044 kB"}}
+2026-10-21T00:47:38.9223313Z {"stage": "draw", "scene": 3, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276044 kB"}}
+2026-10-21T00:47:38.9753456Z {"stage": "draw", "scene": 3, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276048 kB"}}
+2026-10-21T00:47:39.0426501Z {"stage": "draw", "scene": 4, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276052 kB"}}
+2026-10-21T00:47:39.0972232Z {"stage": "draw", "scene": 4, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276052 kB"}}
+2026-10-21T00:47:39.1670152Z {"stage": "draw", "scene": 5, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276056 kB"}}
+2026-10-21T00:47:39.2164166Z {"stage": "draw", "scene": 5, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276056 kB"}}
+2026-10-21T00:47:39.2804197Z {"stage": "draw", "scene": 6, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276060 kB"}}
+2026-10-21T00:47:39.3148022Z {"stage": "draw", "scene": 6, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276064 kB"}}
+2026-10-21T00:47:39.3635110Z {"stage": "draw", "scene": 7, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276064 kB"}}
+2026-10-21T00:47:39.4218203Z {"stage": "draw", "scene": 7, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276068 kB"}}
+2026-10-21T00:47:39.4998148Z {"stage": "draw", "scene": 8, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276068 kB"}}
+2026-10-21T00:47:39.5522535Z {"stage": "draw", "scene": 8, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276068 kB"}}
+2026-10-21T00:47:39.6200196Z {"stage": "draw", "scene": 9, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276072 kB"}}
+2026-10-21T00:47:39.6810949Z {"stage": "draw", "scene": 9, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276072 kB"}}
+2026-10-21T00:47:39.7661134Z {"stage": "draw", "scene": 10, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276072 kB"}}
+2026-10-21T00:47:39.8050851Z {"stage": "draw", "scene": 10, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276076 kB"}}
+2026-10-21T00:47:39.8582241Z {"stage": "draw", "scene": 11, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276080 kB"}}
+2026-10-21T00:47:39.9056254Z {"stage": "draw", "scene": 11, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276080 kB"}}
+2026-10-21T00:47:39.9672646Z {"stage": "draw", "scene": 12, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276080 kB"}}
+2026-10-21T00:47:40.0131118Z {"stage": "draw", "scene": 12, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276084 kB"}}
+2026-10-21T00:47:40.0719732Z {"stage": "draw", "scene": 13, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276084 kB"}}
+2026-10-21T00:47:40.1175827Z {"stage": "draw", "scene": 13, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.1762645Z {"stage": "draw", "scene": 14, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.2121339Z {"stage": "draw", "scene": 14, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.2605891Z {"stage": "draw", "scene": 15, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.3179086Z {"stage": "draw", "scene": 15, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.3915299Z {"stage": "draw", "scene": 16, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.4487654Z {"stage": "draw", "scene": 16, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.5248282Z {"stage": "draw", "scene": 17, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276088 kB"}}
+2026-10-21T00:47:40.5832254Z {"stage": "draw", "scene": 17, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276092 kB"}}
+2026-10-21T00:47:40.6588170Z {"stage": "draw", "scene": 18, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276092 kB"}}
+2026-10-21T00:47:40.6961189Z {"stage": "draw", "scene": 18, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276092 kB"}}
+2026-10-21T00:47:40.7476289Z {"stage": "draw", "scene": 19, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276092 kB"}}
+2026-10-21T00:47:40.7940921Z {"stage": "draw", "scene": 19, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276100 kB"}}
+2026-10-21T00:47:40.8542510Z {"stage": "draw", "scene": 20, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276100 kB"}}
+2026-10-21T00:47:40.9108018Z {"stage": "draw", "scene": 20, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276100 kB"}}
+2026-10-21T00:47:40.9831868Z {"stage": "draw", "scene": 21, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276100 kB"}}
+2026-10-21T00:47:41.0373813Z {"stage": "draw", "scene": 21, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.1122355Z {"stage": "draw", "scene": 22, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.1536511Z {"stage": "draw", "scene": 22, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.2126390Z {"stage": "draw", "scene": 23, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.2669804Z {"stage": "draw", "scene": 23, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.3406084Z {"stage": "draw", "scene": 24, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.4424982Z {"stage": "draw", "scene": 24, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.5703149Z {"stage": "draw", "scene": 25, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276104 kB"}}
+2026-10-21T00:47:41.6599016Z {"stage": "draw", "scene": 25, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276108 kB"}}
+2026-10-21T00:47:41.7612921Z {"stage": "draw", "scene": 26, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276108 kB"}}
+2026-10-21T00:47:41.7964957Z {"stage": "draw", "scene": 26, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276112 kB"}}
+2026-10-21T00:47:41.8442490Z {"stage": "draw", "scene": 27, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276112 kB"}}
+2026-10-21T00:47:41.9226505Z {"stage": "draw", "scene": 27, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276112 kB"}}
+2026-10-21T00:47:42.0141108Z {"stage": "draw", "scene": 28, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276112 kB"}}
+2026-10-21T00:47:42.0691038Z {"stage": "draw", "scene": 28, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276112 kB"}}
+2026-10-21T00:47:42.1425236Z {"stage": "draw", "scene": 29, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276116 kB"}}
+2026-10-21T00:47:42.2224694Z {"stage": "draw", "scene": 29, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276116 kB"}}
+2026-10-21T00:47:42.3171227Z {"stage": "draw", "scene": 30, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276120 kB"}}
+2026-10-21T00:47:42.3504659Z {"stage": "draw", "scene": 30, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276124 kB"}}
+2026-10-21T00:47:42.3957128Z {"stage": "draw", "scene": 31, "program": "before", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276124 kB"}}
+2026-10-21T00:47:42.4742288Z {"stage": "draw", "scene": 31, "program": "after", "memory": {"VmPeak": "728056 kB", "VmSize": "725588 kB", "VmHWM": "284128 kB", "VmRSS": "276128 kB"}}
+2026-10-21T00:47:42.5858835Z {"median_ms": {"before": 10.126017000000001, "after": 10.249445999999999}, "different_pixels": {"color": 0, "id": 0, "depth": 0}, "max_color_channel_delta": 0, "rss_peak_kib": 284128}
+2026-10-21T00:47:42.6186658Z ##[group]Run sudo chmod 666 /dev/kvm
+2026-10-21T00:47:42.6187340Z [36;1msudo chmod 666 /dev/kvm[0m
+2026-10-21T00:47:42.6187982Z [36;1m"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \[0m
+2026-10-21T00:47:42.6188683Z [36;1m  'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' \[0m
+2026-10-21T00:47:42.6189485Z [36;1m  'cmake;3.22.1' 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'[0m
+2026-10-21T00:47:42.6233023Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:42.6233690Z env:
+2026-10-21T00:47:42.6234224Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:42.6235165Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:47:42.6235835Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:47:42.6236288Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:47:42.6236780Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:47:42.6237660Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:47:42.6238294Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:47:42.6238939Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:47:42.6239438Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:47:42.6240333Z ##[endgroup]
+2026-10-21T00:47:47.3967625Z Loading package information...                                                  
+2026-10-21T00:47:47.4710826Z Loading local repository...                                                     
+2026-10-21T00:47:47.4714787Z [                                       ] 3% Loading local repository...        
+2026-10-21T00:47:48.8948673Z [                                       ] 3% Fetch remote repository...         
+2026-10-21T00:47:49.4523002Z [=                                      ] 3% Fetch remote repository...         
+2026-10-21T00:47:49.5147525Z [=                                      ] 4% Fetch remote repository...         
+2026-10-21T00:47:49.5411262Z [=                                      ] 5% Fetch remote repository...         
+2026-10-21T00:47:49.5798968Z [==                                     ] 5% Fetch remote repository...         
+2026-10-21T00:47:49.6268854Z [==                                     ] 6% Fetch remote repository...         
+2026-10-21T00:47:49.7246831Z [==                                     ] 7% Fetch remote repository...         
+2026-10-21T00:47:49.7276682Z [==                                     ] 7% Computing updates...               
+2026-10-21T00:47:49.7347854Z [===                                    ] 8% Computing updates...               
+2026-10-21T00:47:49.7526635Z [===                                    ] 10% Computing updates...              
+2026-10-21T00:47:49.8033511Z [===                                    ] 10% Installing Android Emulator       
+2026-10-21T00:47:50.6727678Z [===                                    ] 10% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.0286380Z [====                                   ] 10% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.1760463Z [====                                   ] 11% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.2537617Z [====                                   ] 12% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.3483859Z [=====                                  ] 13% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.4209788Z [=====                                  ] 14% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.4601625Z [=====                                  ] 15% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.4986059Z [======                                 ] 15% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.5068186Z [======                                 ] 16% Downloading emulator-linux_x64-164
+2026-10-21T00:47:51.6115827Z [======                                 ] 16% Unzipping...                      
+2026-10-21T00:47:51.6129465Z [======                                 ] 16% Unzipping... emulator/            
+2026-10-21T00:47:51.6130184Z [======                                 ] 16% Unzipping... emulator/resources/  
+2026-10-21T00:47:51.6442774Z [======                                 ] 16% Unzipping... emulator/qsn         
+2026-10-21T00:47:51.7027705Z [======                                 ] 16% Unzipping... emulator/emulator    
+2026-10-21T00:47:51.8184601Z [======                                 ] 16% Unzipping... emulator/netsimd     
+2026-10-21T00:47:51.8185526Z [======                                 ] 16% Unzipping... emulator/bin64/      
+2026-10-21T00:47:51.8186025Z [======                                 ] 16% Unzipping... emulator/qemu/       
+2026-10-21T00:47:51.8198426Z [======                                 ] 16% Unzipping... emulator/NOTICE.txt  
+2026-10-21T00:47:51.8377031Z [======                                 ] 16% Unzipping... emulator/crashpad_han
+2026-10-21T00:47:51.8379292Z [======                                 ] 16% Unzipping... emulator/source.prope
+2026-10-21T00:47:52.0008619Z [======                                 ] 16% Unzipping... emulator/nimble_bridg
+2026-10-21T00:47:52.0012960Z [======                                 ] 16% Unzipping... emulator/LICENSE     
+2026-10-21T00:47:52.0014238Z [======                                 ] 16% Unzipping... emulator/lib/        
+2026-10-21T00:47:52.0093996Z [======                                 ] 16% Unzipping... emulator/qemu-img    
+2026-10-21T00:47:52.0095410Z [======                                 ] 16% Unzipping... emulator/include/    
+2026-10-21T00:47:52.0096608Z [======                                 ] 16% Unzipping... emulator/NOTICE.csv  
+2026-10-21T00:47:52.0097903Z [======                                 ] 16% Unzipping... emulator/lib64/      
+2026-10-21T00:47:52.0255332Z [======                                 ] 16% Unzipping... emulator/emulator-che
+2026-10-21T00:47:52.0441184Z [======                                 ] 16% Unzipping... emulator/crashreport 
+2026-10-21T00:47:52.0459595Z [======                                 ] 16% Unzipping... emulator/mksdcard    
+2026-10-21T00:47:52.0616664Z [======                                 ] 16% Unzipping... emulator/resources/To
+2026-10-21T00:47:52.0676955Z [======                                 ] 16% Unzipping... emulator/resources/de
+2026-10-21T00:47:52.0679576Z [======                                 ] 16% Unzipping... emulator/resources/To
+2026-10-21T00:47:52.0690771Z [======                                 ] 16% Unzipping... emulator/resources/de
+2026-10-21T00:47:52.0808866Z [======                                 ] 16% Unzipping... emulator/resources/To
+2026-10-21T00:47:52.0809675Z [======                                 ] 16% Unzipping... emulator/resources/ma
+2026-10-21T00:47:52.0834234Z [======                                 ] 16% Unzipping... emulator/resources/de
+2026-10-21T00:47:52.0835182Z [======                                 ] 16% Unzipping... emulator/resources/sk
+2026-10-21T00:47:52.0869715Z [======                                 ] 16% Unzipping... emulator/resources/de
+2026-10-21T00:47:52.0870564Z [======                                 ] 16% Unzipping... emulator/resources/ma
+2026-10-21T00:47:52.0880296Z [======                                 ] 16% Unzipping... emulator/resources/po
+2026-10-21T00:47:52.0935496Z [======                                 ] 16% Unzipping... emulator/resources/ma
+2026-10-21T00:47:52.0965689Z [======                                 ] 16% Unzipping... emulator/resources/sk
+2026-10-21T00:47:52.0974795Z [======                                 ] 16% Unzipping... emulator/resources/ma
+2026-10-21T00:47:52.1006481Z [======                                 ] 16% Unzipping... emulator/bin64/e2fsck
+2026-10-21T00:47:52.1038130Z [======                                 ] 16% Unzipping... emulator/bin64/fsck.e
+2026-10-21T00:47:52.1058053Z [======                                 ] 16% Unzipping... emulator/bin64/tune2f
+2026-10-21T00:47:52.1070556Z [======                                 ] 16% Unzipping... emulator/bin64/resize
+2026-10-21T00:47:52.1091746Z [======                                 ] 16% Unzipping... emulator/bin64/mkfs.e
+2026-10-21T00:47:52.2741066Z [======                                 ] 16% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:53.6624725Z [======                                 ] 17% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:53.9587492Z [=======                                ] 18% Unzipping... emulator/qemu/linux-x
+2026-10-21T00:47:53.9588476Z [=======                                ] 18% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:53.9593780Z [=======                                ] 18% Unzipping... emulator/lib/rtc_serv
+2026-10-21T00:47:53.9594483Z [=======                                ] 18% Unzipping... emulator/lib/advanced
+2026-10-21T00:47:53.9595301Z [=======                                ] 18% Unzipping... emulator/lib/cmake/  
+2026-10-21T00:47:53.9600201Z [=======                                ] 18% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:53.9600848Z [=======                                ] 18% Unzipping... emulator/lib/control_
+2026-10-21T00:47:53.9601671Z [=======                                ] 18% Unzipping... emulator/lib/emulated
+2026-10-21T00:47:54.0661421Z [=======                                ] 18% Unzipping... emulator/lib/rtc_serv
+2026-10-21T00:47:54.0668509Z [=======                                ] 18% Unzipping... emulator/lib/emu-orig
+2026-10-21T00:47:54.0669454Z [=======                                ] 18% Unzipping... emulator/lib/hardware
+2026-10-21T00:47:54.0670294Z [=======                                ] 18% Unzipping... emulator/lib/pkgconfi
+2026-10-21T00:47:54.0670870Z [=======                                ] 18% Unzipping... emulator/lib/pc-bios/
+2026-10-21T00:47:54.0672501Z [=======                                ] 18% Unzipping... emulator/lib/snapshot
+2026-10-21T00:47:54.0675303Z [=======                                ] 18% Unzipping... emulator/lib/adb_serv
+2026-10-21T00:47:54.0682580Z [=======                                ] 18% Unzipping... emulator/lib/hostapd.
+2026-10-21T00:47:54.0685920Z [=======                                ] 18% Unzipping... emulator/lib/grpc_end
+2026-10-21T00:47:54.0706327Z [=======                                ] 18% Unzipping... emulator/lib/ca-bundl
+2026-10-21T00:47:54.0709401Z [=======                                ] 18% Unzipping... emulator/lib/ui_contr
+2026-10-21T00:47:54.0713103Z [=======                                ] 18% Unzipping... emulator/lib/snapshot
+2026-10-21T00:47:54.0736015Z [=======                                ] 18% Unzipping... emulator/lib/ice_conf
+2026-10-21T00:47:54.1010715Z [=======                                ] 18% Unzipping... emulator/lib/libflatb
+2026-10-21T00:47:54.1016512Z [=======                                ] 18% Unzipping... emulator/lib/emulator
+2026-10-21T00:47:54.1018326Z [=======                                ] 18% Unzipping... emulator/lib/waterfal
+2026-10-21T00:47:54.1020649Z [=======                                ] 18% Unzipping... emulator/lib/emulated
+2026-10-21T00:47:54.1029163Z [=======                                ] 18% Unzipping... emulator/lib/cmake/fl
+2026-10-21T00:47:54.1035979Z [=======                                ] 18% Unzipping... emulator/lib/pkgconfi
+2026-10-21T00:47:54.1717120Z [=======                                ] 18% Unzipping... emulator/lib/pc-bios/
+2026-10-21T00:47:54.1786113Z [=======                                ] 18% Unzipping... emulator/include/flat
+2026-10-21T00:47:54.1863415Z [=======                                ] 18% Unzipping... emulator/lib64/libgli
+2026-10-21T00:47:54.1988843Z [=======                                ] 18% Unzipping... emulator/lib64/libpro
+2026-10-21T00:47:54.1989589Z [=======                                ] 18% Unzipping... emulator/lib64/qt/   
+2026-10-21T00:47:54.2384117Z [=======                                ] 18% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:54.3084185Z [=======                                ] 18% Unzipping... emulator/lib64/libgfx
+2026-10-21T00:47:54.3085536Z [=======                                ] 18% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:47:54.3093908Z [=======                                ] 18% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:54.3094719Z [=======                                ] 18% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:47:54.3095562Z [=======                                ] 18% Unzipping... emulator/lib64/gles_s
+2026-10-21T00:47:54.3098339Z [=======                                ] 18% Unzipping... emulator/lib64/libemu
+2026-10-21T00:47:54.3217706Z [=======                                ] 18% Unzipping... emulator/lib64/libpro
+2026-10-21T00:47:54.5830341Z [=======                                ] 18% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:54.5849879Z [=======                                ] 18% Unzipping... emulator/lib64/libtcm
+2026-10-21T00:47:54.5851619Z [=======                                ] 18% Unzipping... emulator/lib64/libima
+2026-10-21T00:47:54.5915113Z [=======                                ] 18% Unzipping... emulator/lib64/libc++
+2026-10-21T00:47:54.6178774Z [=======                                ] 18% Unzipping... emulator/lib64/liband
+2026-10-21T00:47:54.6222770Z [=======                                ] 18% Unzipping... emulator/lib64/libabs
+2026-10-21T00:47:54.6223970Z [=======                                ] 18% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:54.6289990Z [=======                                ] 18% Unzipping... emulator/lib64/libsha
+2026-10-21T00:47:54.6352020Z [=======                                ] 18% Unzipping... emulator/lib64/libc++
+2026-10-21T00:47:54.6352849Z [=======                                ] 18% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:54.6353483Z [=======                                ] 18% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:54.6354119Z [=======                                ] 18% Unzipping... emulator/lib64/qt/tra
+2026-10-21T00:47:54.6354782Z [=======                                ] 18% Unzipping... emulator/lib64/qt/plu
+2026-10-21T00:47:54.7090522Z [=======                                ] 18% Unzipping... emulator/lib64/qt/res
+2026-10-21T00:47:54.7125288Z [=======                                ] 18% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:55.6018593Z [=======                                ] 19% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:56.6888927Z [=======                                ] 20% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:56.7682947Z [========                               ] 20% Unzipping... emulator/lib64/qt/lib
+2026-10-21T00:47:56.9693176Z [========                               ] 20% Unzipping... emulator/lib64/qt/tra
+2026-10-21T00:47:56.9794205Z [========                               ] 20% Unzipping... emulator/lib64/qt/plu
+2026-10-21T00:47:57.0609223Z [========                               ] 20% Unzipping... emulator/lib64/gles_l
+2026-10-21T00:47:57.3049677Z [========                               ] 20% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:47:58.3099454Z [========                               ] 21% Unzipping... emulator/lib64/vulkan
+2026-10-21T00:47:58.3952780Z [========                               ] 21% Unzipping... emulator/lib64/gles_s
+2026-10-21T00:47:58.4902031Z [========                               ] 21% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:58.9260140Z [============                           ] 33% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:47:59.0656800Z [============                           ] 33% Installing Google APIs Intel x86_6
+2026-10-21T00:47:59.3419654Z [============                           ] 33% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:00.2293065Z [=============                          ] 33% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:01.0992656Z [=============                          ] 34% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:01.5450935Z [=============                          ] 35% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:01.9874248Z [==============                         ] 35% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:02.8655041Z [==============                         ] 36% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:03.6901080Z [==============                         ] 37% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:04.1912587Z [===============                        ] 38% Downloading x86_64-35_r09.zip... e
+2026-10-21T00:48:04.1923665Z [===============                        ] 38% Unzipping... emulator/lib64/gles_a
+2026-10-21T00:48:04.2906193Z [===============                        ] 38% Unzipping... x86_64/NOTICE.txt    
+2026-10-21T00:48:04.4005725Z [===============                        ] 38% Unzipping... x86_64/VerifiedBootPa
+2026-10-21T00:48:04.4506025Z [===============                        ] 38% Unzipping... x86_64/advancedFeatur
+2026-10-21T00:48:04.4508161Z [===============                        ] 38% Unzipping... x86_64/build.prop    
+2026-10-21T00:48:04.5703038Z [===============                        ] 38% Unzipping... x86_64/encryptionkey.
+2026-10-21T00:48:04.9299433Z [===============                        ] 38% Unzipping... x86_64/kernel-ranchu 
+2026-10-21T00:48:04.9303764Z [===============                        ] 38% Unzipping... x86_64/kernel_cmdline
+2026-10-21T00:48:05.0398746Z [===============                        ] 38% Unzipping... x86_64/ramdisk.img   
+2026-10-21T00:48:05.0402347Z [===============                        ] 38% Unzipping... x86_64/source.propert
+2026-10-21T00:48:05.8836516Z [===============                        ] 38% Unzipping... x86_64/system.img    
+2026-10-21T00:48:08.8936623Z [===============                        ] 39% Unzipping... x86_64/system.img    
+2026-10-21T00:48:09.9584643Z [===============                        ] 40% Unzipping... x86_64/system.img    
+2026-10-21T00:48:11.2876178Z [================                       ] 40% Unzipping... x86_64/system.img    
+2026-10-21T00:48:13.9450921Z [================                       ] 41% Unzipping... x86_64/system.img    
+2026-10-21T00:48:17.0812441Z [================                       ] 42% Unzipping... x86_64/system.img    
+2026-10-21T00:48:19.6063766Z [=================                      ] 43% Unzipping... x86_64/system.img    
+2026-10-21T00:48:30.5112279Z [=================                      ] 44% Unzipping... x86_64/system.img    
+2026-10-21T00:48:31.5160393Z [=================                      ] 44% Unzipping... x86_64/vendor.img    
+2026-10-21T00:48:31.5166169Z [=================                      ] 44% Unzipping... x86_64/data/empty_dat
+2026-10-21T00:48:31.5166809Z [=================                      ] 44% Unzipping... x86_64/data/local.pro
+2026-10-21T00:48:31.5167278Z [=================                      ] 44% Unzipping... x86_64/data/misc/Gold
+2026-10-21T00:48:31.5167743Z [=================                      ] 44% Unzipping... x86_64/data/misc/apns
+2026-10-21T00:48:31.5168457Z [=================                      ] 44% Unzipping... x86_64/data/misc/emul
+2026-10-21T00:48:31.5186215Z [=================                      ] 44% Unzipping... x86_64/data/misc/mode
+2026-10-21T00:48:31.6893525Z [=================                      ] 44% Unzipping... x86_64/data/misc/pixe
+2026-10-21T00:48:31.6994728Z [=====================                  ] 55% Unzipping... x86_64/data/misc/pixe
+2026-10-21T00:48:31.7819456Z [=====================                  ] 55% Installing CMake 3.22.1 x86_64/dat
+2026-10-21T00:48:31.8691674Z [=====================                  ] 55% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:31.9357815Z [======================                 ] 55% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:31.9689561Z [======================                 ] 56% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:31.9843337Z [======================                 ] 57% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:31.9952736Z [=======================                ] 58% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:32.0026189Z [=======================                ] 59% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:32.0056988Z [=======================                ] 60% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:32.0086835Z [========================               ] 60% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:32.0098906Z [========================               ] 61% Downloading cmake-3.22.1-linux.zip
+2026-10-21T00:48:32.0533374Z [========================               ] 61% Unzipping... x86_64/data/misc/pixe
+2026-10-21T00:48:32.1007448Z [========================               ] 61% Unzipping... bin/cmake            
+2026-10-21T00:48:32.1339233Z [========================               ] 62% Unzipping... bin/cmake            
+2026-10-21T00:48:32.1498391Z [========================               ] 62% Unzipping... bin/ctest            
+2026-10-21T00:48:32.2027568Z [=========================              ] 63% Unzipping... bin/ctest            
+2026-10-21T00:48:32.2216569Z [=========================              ] 64% Unzipping... bin/ctest            
+2026-10-21T00:48:32.2522469Z [=========================              ] 64% Unzipping... bin/cpack            
+2026-10-21T00:48:32.2798716Z [=========================              ] 65% Unzipping... bin/cpack            
+2026-10-21T00:48:32.3025640Z [==========================             ] 65% Unzipping... bin/cpack            
+2026-10-21T00:48:32.3030437Z [==========================             ] 65% Unzipping... share/vim/vimfiles/in
+2026-10-21T00:48:32.3036411Z [==========================             ] 65% Unzipping... share/vim/vimfiles/sy
+2026-10-21T00:48:32.3038134Z [==========================             ] 65% Unzipping... share/aclocal/cmake.m
+2026-10-21T00:48:32.3041220Z [==========================             ] 65% Unzipping... share/emacs/site-lisp
+2026-10-21T00:48:32.3044991Z [==========================             ] 65% Unzipping... share/cmake-3.22/incl
+2026-10-21T00:48:32.3048321Z [==========================             ] 65% Unzipping... share/cmake-3.22/Help
+2026-10-21T00:48:32.5099103Z [==========================             ] 66% Unzipping... share/cmake-3.22/Help
+2026-10-21T00:48:32.5158880Z [==========================             ] 66% Unzipping... share/cmake-3.22/Temp
+2026-10-21T00:48:32.6062340Z [==========================             ] 66% Unzipping... share/cmake-3.22/Modu
+2026-10-21T00:48:32.6064207Z [==========================             ] 66% Unzipping... share/bash-completion
+2026-10-21T00:48:32.6065472Z [==========================             ] 66% Unzipping... doc/cmake-3.22/Copyri
+2026-10-21T00:48:32.6066476Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmzlib
+2026-10-21T00:48:32.6067294Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmzstd
+2026-10-21T00:48:32.6068186Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmnght
+2026-10-21T00:48:32.6069409Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmsys/
+2026-10-21T00:48:32.6070589Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmcurl
+2026-10-21T00:48:32.6071787Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmlibr
+2026-10-21T00:48:32.6086363Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmliba
+2026-10-21T00:48:32.6087383Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmlibl
+2026-10-21T00:48:32.6088270Z [==========================             ] 66% Unzipping... doc/cmake-3.22/cmlibu
+2026-10-21T00:48:32.6089011Z [==========================             ] 66% Unzipping... doc/openssl-1.1.1l/LI
+2026-10-21T00:48:32.6089761Z [==========================             ] 66% Unzipping... source.properties    
+2026-10-21T00:48:32.6101158Z [==========================             ] 66% Unzipping... bin/ninja            
+2026-10-21T00:48:32.6103056Z [==========================             ] 66% Unzipping... doc/ninja/LICENSE    
+2026-10-21T00:48:32.6144252Z [==========================             ] 66% Unzipping... share/cmake-3.22/Modu
+2026-10-21T00:48:32.6187360Z [==============================         ] 78% Unzipping... share/cmake-3.22/Modu
+2026-10-21T00:48:32.6526847Z [==============================         ] 78% Installing NDK (Side by side) 27.2
+2026-10-21T00:48:32.6677630Z [==============================         ] 78% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:32.8424190Z [===============================        ] 78% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:33.0190363Z [===============================        ] 79% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:33.1245326Z [===============================        ] 80% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:33.1989731Z [================================       ] 80% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:33.3588353Z [================================       ] 81% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:33.5028124Z [================================       ] 82% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:33.5928411Z [=================================      ] 83% Downloading android-ndk-r27c-linux
+2026-10-21T00:48:33.7541526Z [=================================      ] 83% Unzipping... share/cmake-3.22/Modu
+2026-10-21T00:48:33.7543013Z [=================================      ] 83% Unzipping... android-ndk-r27c/    
+2026-10-21T00:48:33.7544538Z [=================================      ] 83% Unzipping... android-ndk-r27c/READ
+2026-10-21T00:48:33.7549126Z [=================================      ] 83% Unzipping... android-ndk-r27c/meta
+2026-10-21T00:48:33.8670728Z [=================================      ] 83% Unzipping... android-ndk-r27c/shad
+2026-10-21T00:48:33.8671851Z [=================================      ] 83% Unzipping... android-ndk-r27c/ndk-
+2026-10-21T00:48:33.8674046Z [=================================      ] 83% Unzipping... android-ndk-r27c/wrap
+2026-10-21T00:48:33.8675609Z [=================================      ] 83% Unzipping... android-ndk-r27c/ndk-
+2026-10-21T00:48:34.8425554Z [=================================      ] 83% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:37.7081405Z [=================================      ] 84% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:38.9273353Z [=================================      ] 85% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:40.3133583Z [==================================     ] 85% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:43.1524585Z [==================================     ] 86% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:45.4009885Z [==================================     ] 87% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:48.2861857Z [===================================    ] 88% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:48.4333085Z [===================================    ] 89% Unzipping... android-ndk-r27c/tool
+2026-10-21T00:48:48.5257028Z [===================================    ] 89% Unzipping... android-ndk-r27c/buil
+2026-10-21T00:48:48.7258836Z [===================================    ] 89% Unzipping... android-ndk-r27c/sour
+2026-10-21T00:48:48.7275699Z [===================================    ] 89% Unzipping... android-ndk-r27c/NOTI
+2026-10-21T00:48:48.7276434Z [===================================    ] 89% Unzipping... android-ndk-r27c/ndk-
+2026-10-21T00:48:48.7286837Z [===================================    ] 89% Unzipping... android-ndk-r27c/NOTI
+2026-10-21T00:48:48.7508450Z [===================================    ] 89% Unzipping... android-ndk-r27c/pyth
+2026-10-21T00:48:48.7870485Z [===================================    ] 89% Unzipping... android-ndk-r27c/preb
+2026-10-21T00:48:48.7871098Z [===================================    ] 89% Unzipping... android-ndk-r27c/ndk-
+2026-10-21T00:48:48.7872006Z [===================================    ] 89% Unzipping... android-ndk-r27c/sour
+2026-10-21T00:48:48.9778469Z [===================================    ] 89% Unzipping... android-ndk-r27c/simp
+2026-10-21T00:48:49.0446273Z [===================================    ] 89% Unzipping... android-ndk-r27c/CHAN
+2026-10-21T00:48:49.0447141Z [=======================================] 100% Unzipping... android-ndk-r27c/CHA
+2026-10-21T00:48:49.0485538Z 
+2026-10-21T00:48:49.0776535Z ##[group]Run git worktree add --detach ../solar-before af0b1797573b55a739dcaef7b784eb98825ff07c
+2026-10-21T00:48:49.0777200Z [36;1mgit worktree add --detach ../solar-before af0b1797573b55a739dcaef7b784eb98825ff07c[0m
+2026-10-21T00:48:49.0777807Z [36;1mcp solar-android/tests/fixtures/solar-defined-reference.frag \[0m
+2026-10-21T00:48:49.0778303Z [36;1m  ../solar-before/solar-android/app/src/main/assets/shaders/solar.frag[0m
+2026-10-21T00:48:49.0779141Z [36;1mcp solar-android/app/src/androidTest/java/com/mundox/solar/{SolarInstrumentation,SolarPerformanceChecks}.java \[0m
+2026-10-21T00:48:49.0779842Z [36;1m  ../solar-before/solar-android/app/src/androidTest/java/com/mundox/solar/[0m
+2026-10-21T00:48:49.0780595Z [36;1mgradle -p ../solar-before/solar-android --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1g :app:assembleDebug :app:assembleDebugAndroidTest[0m
+2026-10-21T00:48:49.0812083Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:48:49.0812635Z env:
+2026-10-21T00:48:49.0813046Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:48:49.0813586Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:48:49.0814178Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:48:49.0814566Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:48:49.0815126Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:48:49.0815527Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:48:49.0815997Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:48:49.0816513Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:48:49.0816917Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:48:49.0817237Z ##[endgroup]
+2026-10-21T00:48:49.0884506Z Preparing worktree (detached HEAD af0b179)
+2026-10-21T00:48:49.1475154Z HEAD is now at af0b179 docs(graphics): report exact render speedups, RAM, integration and remaining limits
+2026-10-21T00:48:49.7055166Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-21T00:48:50.8046318Z Daemon will be stopped at the end of the build 
+2026-10-21T00:48:58.4066915Z > Task :app:preBuild UP-TO-DATE
+2026-10-21T00:48:58.4067966Z > Task :app:preDebugBuild UP-TO-DATE
+2026-10-21T00:48:58.4068435Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-21T00:48:58.5045180Z > Task :app:generateDebugBuildConfig
+2026-10-21T00:48:58.5057818Z > Task :app:javaPreCompileDebug
+2026-10-21T00:48:58.5058952Z > Task :app:checkDebugAarMetadata
+2026-10-21T00:48:58.5059588Z > Task :app:generateDebugResValues
+2026-10-21T00:48:58.5060276Z > Task :app:mapDebugSourceSetPaths
+2026-10-21T00:48:58.5060856Z > Task :app:generateDebugResources
+2026-10-21T00:48:58.8040336Z > Task :app:mergeDebugResources
+2026-10-21T00:48:58.8041059Z > Task :app:packageDebugResources
+2026-10-21T00:48:59.8040517Z > Task :app:parseDebugLocalResources
+2026-10-21T00:48:59.8041617Z > Task :app:createDebugCompatibleScreenManifests
+2026-10-21T00:48:59.8042269Z > Task :app:extractDeepLinksDebug
+2026-10-21T00:48:59.9041009Z > Task :app:processDebugMainManifest
+2026-10-21T00:49:00.1051778Z > Task :app:processDebugManifest
+2026-10-21T00:49:00.1052689Z > Task :app:processDebugManifestForPackage
+2026-10-21T00:49:00.3050953Z > Task :app:processDebugResources
+2026-10-21T00:49:02.7040519Z 
+2026-10-21T00:49:02.7060056Z Note: Some input files use or override a deprecated API.
+2026-10-21T00:49:02.7060969Z > Task :app:compileDebugJavaWithJavac
+2026-10-21T00:49:02.7076371Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-21T00:49:02.8066178Z 
+2026-10-21T00:49:02.8072708Z > Task :app:mergeDebugShaders
+2026-10-21T00:49:02.8085766Z > Task :app:compileDebugShaders NO-SOURCE
+2026-10-21T00:49:02.8105195Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-10-21T00:49:02.9046759Z > Task :app:mergeDebugAssets
+2026-10-21T00:49:02.9076175Z > Task :app:compressDebugAssets
+2026-10-21T00:49:02.9105882Z > Task :app:processDebugJavaRes NO-SOURCE
+2026-10-21T00:49:03.0046615Z > Task :app:mergeDebugJavaResource
+2026-10-21T00:49:03.0081308Z > Task :app:checkDebugDuplicateClasses
+2026-10-21T00:49:03.0082316Z > Task :app:desugarDebugFileDependencies
+2026-10-21T00:49:03.0083137Z > Task :app:mergeExtDexDebug
+2026-10-21T00:49:03.1050219Z > Task :app:mergeLibDexDebug
+2026-10-21T00:49:06.3043758Z > Task :app:dexBuilderDebug
+2026-10-21T00:49:06.5045460Z > Task :app:mergeProjectDexDebug
+2026-10-21T00:49:06.9070680Z > Task :app:configureCMakeDebug[arm64-v8a]
+2026-10-21T00:49:08.9040084Z 
+2026-10-21T00:49:08.9045285Z > Task :app:buildCMakeDebug[arm64-v8a]
+2026-10-21T00:49:08.9062769Z C/C++: ninja: Entering directory `/home/runner/work/mundo-X/solar-before/solar-android/app/.cxx/Debug/731l5m6n/arm64-v8a'
+2026-10-21T00:49:08.9064312Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/src/graphics_core_bridge.cpp:1:
+2026-10-21T00:49:08.9065801Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/engine_session.hpp:5:
+2026-10-21T00:49:08.9067547Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:08.9068920Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:08.9070284Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:08.9070997Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:08.9072003Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:08.9073011Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:08.9073800Z C/C++:       |                                                     ~
+2026-10-21T00:49:08.9074485Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:08.9075490Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:08.9076629Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:08.9077799Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:08.9078483Z C/C++:       |                                  ^                      
+2026-10-21T00:49:08.9079165Z C/C++:       |             (                                           )
+2026-10-21T00:49:08.9079795Z C/C++: 2 warnings generated.
+2026-10-21T00:49:10.9041017Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/graphics-android/app/src/main/cpp/graphics_jni.cpp:12:
+2026-10-21T00:49:10.9042118Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:10.9042888Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:10.9055230Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:10.9056018Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:10.9056896Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:10.9057762Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:10.9058261Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:10.9059227Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:10.9059889Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:10.9060312Z C/C++:       |                                                     ~
+2026-10-21T00:49:10.9060748Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:10.9061144Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:10.9061825Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:10.9062494Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:10.9062912Z C/C++:       |                                  ^                      
+2026-10-21T00:49:10.9063286Z C/C++:       |             (                                           )
+2026-10-21T00:49:10.9063675Z C/C++: 2 warnings generated.
+2026-10-21T00:49:11.6040234Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/src/infinite_bridge.cpp:2:
+2026-10-21T00:49:11.6040974Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:11.6041952Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:11.6042678Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:11.6045818Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:11.6046971Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:11.6048139Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:11.6048778Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:11.6049648Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:11.6050659Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:11.6051238Z C/C++:       |                                                     ~
+2026-10-21T00:49:11.6051822Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:11.6052447Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:11.6053462Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:11.6054477Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:11.6055325Z C/C++:       |                                  ^                      
+2026-10-21T00:49:11.6055962Z C/C++:       |             (                                           )
+2026-10-21T00:49:11.6056528Z C/C++: 2 warnings generated.
+2026-10-21T00:49:11.8041867Z 
+2026-10-21T00:49:11.8049541Z > Task :app:configureCMakeDebug[x86_64]
+2026-10-21T00:49:13.8040498Z 
+2026-10-21T00:49:13.8041481Z > Task :app:buildCMakeDebug[x86_64]
+2026-10-21T00:49:13.8046811Z C/C++: ninja: Entering directory `/home/runner/work/mundo-X/solar-before/solar-android/app/.cxx/Debug/731l5m6n/x86_64'
+2026-10-21T00:49:13.8048157Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/src/graphics_core_bridge.cpp:1:
+2026-10-21T00:49:13.8049466Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/engine_session.hpp:5:
+2026-10-21T00:49:13.8050745Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:13.8052838Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:13.8054220Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:13.8055215Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:13.8056295Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:13.8057469Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:13.8058129Z C/C++:       |                                                     ~
+2026-10-21T00:49:13.8058846Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:13.8059532Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:13.8060933Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:13.8062042Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:13.8062748Z C/C++:       |                                  ^                      
+2026-10-21T00:49:13.8063709Z C/C++:       |             (                                           )
+2026-10-21T00:49:13.8064410Z C/C++: 2 warnings generated.
+2026-10-21T00:49:15.9040011Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/graphics-android/app/src/main/cpp/graphics_jni.cpp:12:
+2026-10-21T00:49:15.9040969Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:15.9042087Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:15.9042964Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:15.9044015Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:15.9045290Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:15.9046530Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:15.9047108Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:15.9048014Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:15.9048958Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:15.9049603Z C/C++:       |                                                     ~
+2026-10-21T00:49:15.9050161Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:15.9050752Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:15.9051695Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:15.9052717Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:15.9053302Z C/C++:       |                                  ^                      
+2026-10-21T00:49:15.9054037Z C/C++:       |             (                                           )
+2026-10-21T00:49:15.9054492Z C/C++: 2 warnings generated.
+2026-10-21T00:49:16.1041070Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/src/infinite_bridge.cpp:2:
+2026-10-21T00:49:16.1047656Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:16.1048782Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:16.1049892Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:16.1050997Z C/C++: In file included from /home/runner/work/mundo-X/solar-before/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:16.1052267Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:16.1053531Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:16.1054039Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:16.1054782Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:16.1055875Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:16.1056450Z C/C++:       |                                                     ~
+2026-10-21T00:49:16.1056968Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:16.1057512Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:16.1058670Z C/C++: /home/runner/work/mundo-X/solar-before/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:16.1059622Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:16.1060183Z C/C++:       |                                  ^                      
+2026-10-21T00:49:16.1060708Z C/C++:       |             (                                           )
+2026-10-21T00:49:16.1061236Z C/C++: 2 warnings generated.
+2026-10-21T00:49:16.2046103Z 
+2026-10-21T00:49:16.2047575Z > Task :app:mergeDebugJniLibFolders
+2026-10-21T00:49:16.2048571Z > Task :app:mergeDebugNativeLibs
+2026-10-21T00:49:16.2049255Z > Task :app:stripDebugDebugSymbols
+2026-10-21T00:49:17.0044523Z > Task :app:validateSigningDebug
+2026-10-21T00:49:17.0056114Z > Task :app:writeDebugAppMetadata
+2026-10-21T00:49:17.0057571Z > Task :app:writeDebugSigningConfigVersions
+2026-10-21T00:49:17.1040545Z > Task :app:packageDebug
+2026-10-21T00:49:17.1048606Z > Task :app:createDebugApkListingFileRedirect
+2026-10-21T00:49:17.1049756Z > Task :app:assembleDebug
+2026-10-21T00:49:17.2062175Z > Task :app:bundleDebugClassesToCompileJar
+2026-10-21T00:49:17.2086604Z > Task :app:preDebugAndroidTestBuild SKIPPED
+2026-10-21T00:49:17.2096377Z > Task :app:processDebugAndroidTestManifest
+2026-10-21T00:49:17.2121919Z > Task :app:generateDebugAndroidTestBuildConfig
+2026-10-21T00:49:17.2145725Z > Task :app:javaPreCompileDebugAndroidTest
+2026-10-21T00:49:17.2166263Z > Task :app:checkDebugAndroidTestAarMetadata
+2026-10-21T00:49:17.2167137Z > Task :app:generateDebugAndroidTestResValues
+2026-10-21T00:49:17.2167980Z > Task :app:mapDebugAndroidTestSourceSetPaths
+2026-10-21T00:49:17.2168673Z > Task :app:generateDebugAndroidTestResources
+2026-10-21T00:49:17.2169411Z > Task :app:mergeDebugAndroidTestResources
+2026-10-21T00:49:17.3047433Z > Task :app:processDebugAndroidTestResources
+2026-10-21T00:49:17.7052027Z > Task :app:compileDebugAndroidTestJavaWithJavac
+2026-10-21T00:49:17.7053838Z > Task :app:mergeDebugAndroidTestShaders
+2026-10-21T00:49:17.7062529Z > Task :app:compileDebugAndroidTestShaders NO-SOURCE
+2026-10-21T00:49:17.7064057Z > Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+2026-10-21T00:49:17.7064789Z > Task :app:mergeDebugAndroidTestAssets
+2026-10-21T00:49:17.7065807Z > Task :app:compressDebugAndroidTestAssets
+2026-10-21T00:49:17.7066557Z > Task :app:processDebugAndroidTestJavaRes NO-SOURCE
+2026-10-21T00:49:17.7067439Z > Task :app:mergeDebugAndroidTestJavaResource
+2026-10-21T00:49:17.7091153Z > Task :app:checkDebugAndroidTestDuplicateClasses
+2026-10-21T00:49:17.8047473Z > Task :app:desugarDebugAndroidTestFileDependencies
+2026-10-21T00:49:17.8076535Z > Task :app:mergeExtDexDebugAndroidTest
+2026-10-21T00:49:17.8106034Z > Task :app:mergeLibDexDebugAndroidTest
+2026-10-21T00:49:18.1044060Z > Task :app:dexBuilderDebugAndroidTest
+2026-10-21T00:49:18.2066794Z > Task :app:mergeProjectDexDebugAndroidTest
+2026-10-21T00:49:18.2075845Z > Task :app:mergeDebugAndroidTestJniLibFolders
+2026-10-21T00:49:18.2076831Z > Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+2026-10-21T00:49:18.2077776Z > Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+2026-10-21T00:49:18.2078538Z > Task :app:validateSigningDebugAndroidTest
+2026-10-21T00:49:18.2079231Z > Task :app:writeDebugAndroidTestSigningConfigVersions
+2026-10-21T00:49:18.3040477Z > Task :app:packageDebugAndroidTest
+2026-10-21T00:49:18.3041842Z > Task :app:createDebugAndroidTestApkListingFileRedirect
+2026-10-21T00:49:18.3042686Z > Task :app:assembleDebugAndroidTest
+2026-10-21T00:49:18.3043708Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1792543732957.json
+2026-10-21T00:49:18.3044421Z 
+2026-10-21T00:49:18.3044703Z BUILD SUCCESSFUL in 29s
+2026-10-21T00:49:18.3045627Z 64 actionable tasks: 64 executed
+2026-10-21T00:49:18.4618893Z ##[group]Run gradle -p solar-android --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1g :app:assembleDebug :app:assembleDebugAndroidTest
+2026-10-21T00:49:18.4619917Z [36;1mgradle -p solar-android --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1g :app:assembleDebug :app:assembleDebugAndroidTest[0m
+2026-10-21T00:49:18.4654441Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:49:18.4655092Z env:
+2026-10-21T00:49:18.4655490Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:49:18.4656025Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:49:18.4656506Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:49:18.4656930Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:49:18.4657292Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:49:18.4657672Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:49:18.4658215Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:49:18.4658759Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:49:18.4659142Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:49:18.4659527Z ##[endgroup]
+2026-10-21T00:49:19.0287020Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-21T00:49:19.8261484Z Daemon will be stopped at the end of the build 
+2026-10-21T00:49:26.5352807Z > Task :app:preBuild UP-TO-DATE
+2026-10-21T00:49:26.5376272Z > Task :app:preDebugBuild UP-TO-DATE
+2026-10-21T00:49:26.5406266Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-21T00:49:26.6286373Z > Task :app:generateDebugBuildConfig
+2026-10-21T00:49:26.6296624Z > Task :app:javaPreCompileDebug
+2026-10-21T00:49:26.6297851Z > Task :app:checkDebugAarMetadata
+2026-10-21T00:49:26.6298825Z > Task :app:generateDebugResValues
+2026-10-21T00:49:26.6299527Z > Task :app:mapDebugSourceSetPaths
+2026-10-21T00:49:26.7277813Z > Task :app:generateDebugResources
+2026-10-21T00:49:26.9266761Z > Task :app:mergeDebugResources
+2026-10-21T00:49:26.9286396Z > Task :app:packageDebugResources
+2026-10-21T00:49:27.0282161Z > Task :app:parseDebugLocalResources
+2026-10-21T00:49:27.0289962Z > Task :app:createDebugCompatibleScreenManifests
+2026-10-21T00:49:27.0290960Z > Task :app:extractDeepLinksDebug
+2026-10-21T00:49:27.1257926Z > Task :app:processDebugMainManifest
+2026-10-21T00:49:27.3266693Z > Task :app:processDebugManifest
+2026-10-21T00:49:27.3275150Z > Task :app:processDebugManifestForPackage
+2026-10-21T00:49:27.5259502Z > Task :app:processDebugResources
+2026-10-21T00:49:29.6256972Z 
+2026-10-21T00:49:29.6261209Z Note: Some input files use or override a deprecated API.
+2026-10-21T00:49:29.6261928Z > Task :app:compileDebugJavaWithJavac
+2026-10-21T00:49:29.6262950Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-21T00:49:29.8256720Z 
+2026-10-21T00:49:29.8270122Z > Task :app:mergeDebugShaders
+2026-10-21T00:49:29.8271477Z > Task :app:compileDebugShaders NO-SOURCE
+2026-10-21T00:49:29.8272127Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-10-21T00:49:29.8272758Z > Task :app:mergeDebugAssets
+2026-10-21T00:49:29.8273276Z > Task :app:compressDebugAssets
+2026-10-21T00:49:29.8274004Z > Task :app:processDebugJavaRes NO-SOURCE
+2026-10-21T00:49:29.9261360Z > Task :app:mergeDebugJavaResource
+2026-10-21T00:49:29.9277539Z > Task :app:checkDebugDuplicateClasses
+2026-10-21T00:49:29.9281347Z > Task :app:desugarDebugFileDependencies
+2026-10-21T00:49:29.9301869Z > Task :app:mergeExtDexDebug
+2026-10-21T00:49:30.0258149Z > Task :app:mergeLibDexDebug
+2026-10-21T00:49:33.1258891Z > Task :app:dexBuilderDebug
+2026-10-21T00:49:33.3257312Z > Task :app:mergeProjectDexDebug
+2026-10-21T00:49:33.7289793Z > Task :app:configureCMakeDebug[arm64-v8a]
+2026-10-21T00:49:35.7262860Z 
+2026-10-21T00:49:35.7264412Z > Task :app:buildCMakeDebug[arm64-v8a]
+2026-10-21T00:49:35.7266558Z C/C++: ninja: Entering directory `/home/runner/work/mundo-X/mundo-X/solar-android/app/.cxx/Debug/731l5m6n/arm64-v8a'
+2026-10-21T00:49:35.7268672Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/src/graphics_core_bridge.cpp:1:
+2026-10-21T00:49:35.7269725Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/engine_session.hpp:5:
+2026-10-21T00:49:35.7505334Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:35.7506533Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:35.7507649Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:35.7508232Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:35.7509085Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:35.7509931Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:35.7510480Z C/C++:       |                                                     ~
+2026-10-21T00:49:35.7511000Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:35.7511532Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:35.7512447Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:35.7513358Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:35.7513907Z C/C++:       |                                  ^                      
+2026-10-21T00:49:35.7514431Z C/C++:       |             (                                           )
+2026-10-21T00:49:35.7515181Z C/C++: 2 warnings generated.
+2026-10-21T00:49:37.6257798Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/graphics-android/app/src/main/cpp/graphics_jni.cpp:12:
+2026-10-21T00:49:37.6258526Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:37.6259091Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:37.6262447Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:37.6269588Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:37.6270524Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:37.6271176Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:37.6271530Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:37.6272013Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:37.6272544Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:37.6272854Z C/C++:       |                                                     ~
+2026-10-21T00:49:37.6273164Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:37.6273480Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:37.6274042Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:37.6274592Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:37.6275029Z C/C++:       |                                  ^                      
+2026-10-21T00:49:37.6275760Z C/C++:       |             (                                           )
+2026-10-21T00:49:37.6276051Z C/C++: 2 warnings generated.
+2026-10-21T00:49:38.3256674Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/src/infinite_bridge.cpp:2:
+2026-10-21T00:49:38.3257732Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:38.3265987Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:38.3266757Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:38.3267519Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:38.3268259Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:38.3268947Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:38.3269291Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:38.3269790Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:38.3270319Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:38.3270636Z C/C++:       |                                                     ~
+2026-10-21T00:49:38.3270951Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:38.3271267Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:38.3271831Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:38.3272406Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:38.3272721Z C/C++:       |                                  ^                      
+2026-10-21T00:49:38.3273018Z C/C++:       |             (                                           )
+2026-10-21T00:49:38.3273303Z C/C++: 2 warnings generated.
+2026-10-21T00:49:38.5257051Z 
+2026-10-21T00:49:38.5293376Z > Task :app:configureCMakeDebug[x86_64]
+2026-10-21T00:49:40.5255875Z 
+2026-10-21T00:49:40.5256630Z > Task :app:buildCMakeDebug[x86_64]
+2026-10-21T00:49:40.5257687Z C/C++: ninja: Entering directory `/home/runner/work/mundo-X/mundo-X/solar-android/app/.cxx/Debug/731l5m6n/x86_64'
+2026-10-21T00:49:40.5261977Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/src/graphics_core_bridge.cpp:1:
+2026-10-21T00:49:40.5262975Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/engine_session.hpp:5:
+2026-10-21T00:49:40.5266474Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:40.5268157Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:40.5270731Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:40.5272882Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:40.5273860Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:40.5275070Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:40.5275685Z C/C++:       |                                                     ~
+2026-10-21T00:49:40.5276253Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:40.5276810Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:40.5278343Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:40.5279342Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:40.5280088Z C/C++:       |                                  ^                      
+2026-10-21T00:49:40.5280618Z C/C++:       |             (                                           )
+2026-10-21T00:49:40.5281128Z C/C++: 2 warnings generated.
+2026-10-21T00:49:42.7256755Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/graphics-android/app/src/main/cpp/graphics_jni.cpp:12:
+2026-10-21T00:49:42.7258079Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:42.7259277Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:42.7260306Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:42.7261304Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:42.7262502Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:42.7263646Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:42.7264269Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:42.7265293Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:42.7266227Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:42.7266843Z C/C++:       |                                                     ~
+2026-10-21T00:49:42.7267396Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:42.7267981Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:42.7268976Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:42.7269970Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:42.7270531Z C/C++:       |                                  ^                      
+2026-10-21T00:49:42.7271079Z C/C++:       |             (                                           )
+2026-10-21T00:49:42.7271593Z C/C++: 2 warnings generated.
+2026-10-21T00:49:43.0259127Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/src/infinite_bridge.cpp:2:
+2026-10-21T00:49:43.0279054Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3:
+2026-10-21T00:49:43.0281542Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3:
+2026-10-21T00:49:43.0282747Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4:
+2026-10-21T00:49:43.0283676Z C/C++: In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6:
+2026-10-21T00:49:43.0285024Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:254:25: warning: lambda capture 'rows' is not used [-Wunused-lambda-capture]
+2026-10-21T00:49:43.0286189Z C/C++:   254 |     auto is_neighbor = [rows, cols](std::size_t a, std::size_t b) {
+2026-10-21T00:49:43.0286683Z C/C++:       |                         ^~~~~
+2026-10-21T00:49:43.0287237Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: '^' within '|' [-Wbitwise-op-parentheses]
+2026-10-21T00:49:43.0287814Z C/C++:   356 |             (xb ? 1ULL : 0ULL) | (zb ? 2ULL : 0ULL) |
+2026-10-21T00:49:43.0288183Z C/C++:       |                                                     ~
+2026-10-21T00:49:43.0288788Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:43.0289170Z C/C++:       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:49:43.0289984Z C/C++: /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: note: place parentheses around the '^' expression to silence this warning
+2026-10-21T00:49:43.0290603Z C/C++:   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:49:43.0290983Z C/C++:       |                                  ^                      
+2026-10-21T00:49:43.0291335Z C/C++:       |             (                                           )
+2026-10-21T00:49:43.0291660Z C/C++: 2 warnings generated.
+2026-10-21T00:49:43.1275875Z 
+2026-10-21T00:49:43.1306429Z > Task :app:mergeDebugJniLibFolders
+2026-10-21T00:49:43.1307095Z > Task :app:mergeDebugNativeLibs
+2026-10-21T00:49:43.2278433Z > Task :app:stripDebugDebugSymbols
+2026-10-21T00:49:43.3266548Z > Task :app:validateSigningDebug
+2026-10-21T00:49:43.3286070Z > Task :app:writeDebugAppMetadata
+2026-10-21T00:49:43.3345829Z > Task :app:writeDebugSigningConfigVersions
+2026-10-21T00:49:43.6286453Z > Task :app:packageDebug
+2026-10-21T00:49:43.6290456Z > Task :app:createDebugApkListingFileRedirect
+2026-10-21T00:49:43.6316116Z > Task :app:assembleDebug
+2026-10-21T00:49:43.6330886Z > Task :app:bundleDebugClassesToCompileJar
+2026-10-21T00:49:43.6364630Z > Task :app:preDebugAndroidTestBuild SKIPPED
+2026-10-21T00:49:43.7256298Z > Task :app:processDebugAndroidTestManifest
+2026-10-21T00:49:43.7273954Z > Task :app:generateDebugAndroidTestBuildConfig
+2026-10-21T00:49:43.7285475Z > Task :app:javaPreCompileDebugAndroidTest
+2026-10-21T00:49:43.7286037Z > Task :app:checkDebugAndroidTestAarMetadata
+2026-10-21T00:49:43.7286646Z > Task :app:generateDebugAndroidTestResValues
+2026-10-21T00:49:43.7287201Z > Task :app:mapDebugAndroidTestSourceSetPaths
+2026-10-21T00:49:43.7287763Z > Task :app:generateDebugAndroidTestResources
+2026-10-21T00:49:43.7288428Z > Task :app:mergeDebugAndroidTestResources
+2026-10-21T00:49:43.8286321Z > Task :app:processDebugAndroidTestResources
+2026-10-21T00:49:44.3276378Z > Task :app:compileDebugAndroidTestJavaWithJavac
+2026-10-21T00:49:44.3295848Z > Task :app:mergeDebugAndroidTestShaders
+2026-10-21T00:49:44.3345996Z > Task :app:compileDebugAndroidTestShaders NO-SOURCE
+2026-10-21T00:49:44.3365682Z > Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+2026-10-21T00:49:44.3375778Z > Task :app:mergeDebugAndroidTestAssets
+2026-10-21T00:49:44.3405647Z > Task :app:compressDebugAndroidTestAssets
+2026-10-21T00:49:44.3434031Z > Task :app:processDebugAndroidTestJavaRes NO-SOURCE
+2026-10-21T00:49:44.3455604Z > Task :app:mergeDebugAndroidTestJavaResource
+2026-10-21T00:49:44.3465709Z > Task :app:checkDebugAndroidTestDuplicateClasses
+2026-10-21T00:49:44.3495554Z > Task :app:desugarDebugAndroidTestFileDependencies
+2026-10-21T00:49:44.3515523Z > Task :app:mergeExtDexDebugAndroidTest
+2026-10-21T00:49:44.3522705Z > Task :app:mergeLibDexDebugAndroidTest
+2026-10-21T00:49:44.8266087Z > Task :app:dexBuilderDebugAndroidTest
+2026-10-21T00:49:44.9285985Z > Task :app:mergeProjectDexDebugAndroidTest
+2026-10-21T00:49:44.9315564Z > Task :app:mergeDebugAndroidTestJniLibFolders
+2026-10-21T00:49:44.9335645Z > Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+2026-10-21T00:49:44.9355580Z > Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+2026-10-21T00:49:45.0286343Z > Task :app:validateSigningDebugAndroidTest
+2026-10-21T00:49:45.0316098Z > Task :app:writeDebugAndroidTestSigningConfigVersions
+2026-10-21T00:49:45.0345715Z > Task :app:packageDebugAndroidTest
+2026-10-21T00:49:45.0375833Z > Task :app:createDebugAndroidTestApkListingFileRedirect
+2026-10-21T00:49:45.0402280Z > Task :app:assembleDebugAndroidTest
+2026-10-21T00:49:45.1286846Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_6-1792543761281.json
+2026-10-21T00:49:45.1287879Z 
+2026-10-21T00:49:45.1288333Z BUILD SUCCESSFUL in 26s
+2026-10-21T00:49:45.1289163Z 64 actionable tasks: 64 executed
+2026-10-21T00:49:45.2699486Z ##[group]Run mkdir -p build/solar-png
+2026-10-21T00:49:45.2700038Z [36;1mmkdir -p build/solar-png[0m
+2026-10-21T00:49:45.2700838Z [36;1msolar_classes=solar-android/app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes[0m
+2026-10-21T00:49:45.2701643Z [36;1msolar_android_jar="$ANDROID_HOME/platforms/android-35/android.jar"[0m
+2026-10-21T00:49:45.2702425Z [36;1mjavac -cp "$solar_classes:$solar_android_jar" -d build/solar-png solar-android/tests/SolarPngChecks.java[0m
+2026-10-21T00:49:45.2703342Z [36;1mjava -Xmx256m -cp "build/solar-png:$solar_classes:$solar_android_jar" com.mundox.solar.SolarPngChecks[0m
+2026-10-21T00:49:45.2738379Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:49:45.2738811Z env:
+2026-10-21T00:49:45.2739206Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:49:45.2739845Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:49:45.2740549Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:49:45.2740971Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:49:45.2741355Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:49:45.2741768Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:49:45.2742340Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:49:45.2742960Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:49:45.2743380Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:49:45.2743738Z ##[endgroup]
+2026-10-21T00:49:46.7148028Z SolarPngChecks PASS: 553061 exact independently decoded pixels; output failure preserved
+2026-10-21T00:49:46.7250781Z ##[group]Run python tools/solar_performance_android.py --sdk "$ANDROID_HOME" \
+2026-10-21T00:49:46.7251520Z [36;1mpython tools/solar_performance_android.py --sdk "$ANDROID_HOME" \[0m
+2026-10-21T00:49:46.7252154Z [36;1m  --baseline ../solar-before/solar-android/app/build/outputs/apk \[0m
+2026-10-21T00:49:46.7252851Z [36;1m  --after solar-android/app/build/outputs/apk --output solar-performance-evidence \[0m
+2026-10-21T00:49:46.7253443Z [36;1m  --swiftshader-threads 1[0m
+2026-10-21T00:49:46.7293870Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:49:46.7294187Z env:
+2026-10-21T00:49:46.7294480Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:49:46.7295102Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:49:46.7295476Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:49:46.7295759Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:49:46.7296075Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:49:46.7296347Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:49:46.7296713Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:49:46.7297126Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:49:46.7297409Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:49:46.7297653Z ##[endgroup]
+2026-10-21T00:49:48.4472991Z * daemon not running; starting now at tcp:5037
+2026-10-21T00:49:48.6580048Z * daemon started successfully
+2026-10-21T00:51:14.4591197Z {
+2026-10-21T00:51:14.4591745Z   "ram_mb": 2048,
+2026-10-21T00:51:14.4592245Z   "software_gles": "swiftshader",
+2026-10-21T00:51:14.4592805Z   "virtualization": "auto",
+2026-10-21T00:51:14.4593450Z   "system_image": "system-images;android-35;google_apis;x86_64",
+2026-10-21T00:51:14.4593856Z   "art_compile": "default",
+2026-10-21T00:51:14.4594156Z   "status": "blocked_or_failed",
+2026-10-21T00:51:14.4594454Z   "stage": "finished",
+2026-10-21T00:51:14.4594744Z   "cases": [],
+2026-10-21T00:51:14.4595220Z   "swiftshader_threads": 1,
+2026-10-21T00:51:14.4595676Z   "driver_configuration": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+2026-10-21T00:51:14.4596343Z   "driver_configuration_sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0",
+2026-10-21T00:51:14.4596851Z   "active_version": null,
+2026-10-21T00:51:14.4597134Z   "boot_poll_timeouts": 0,
+2026-10-21T00:51:14.4597397Z   "boot_seconds": 82.697256901,
+2026-10-21T00:51:14.4598141Z   "emulator_processes": [
+2026-10-21T00:51:14.4598405Z     {
+2026-10-21T00:51:14.4598622Z       "pid": 3651,
+2026-10-21T00:51:14.4598865Z       "name": "strace",
+2026-10-21T00:51:14.4599116Z       "threads": 1,
+2026-10-21T00:51:14.4599355Z       "thread_names": [
+2026-10-21T00:51:14.4599623Z         "strace"
+2026-10-21T00:51:14.4599857Z       ],
+2026-10-21T00:51:14.4600085Z       "driver_mappings": []
+2026-10-21T00:51:14.4600330Z     },
+2026-10-21T00:51:14.4600541Z     {
+2026-10-21T00:51:14.4600800Z       "pid": 3655,
+2026-10-21T00:51:14.4601061Z       "name": "qemu-system-x86",
+2026-10-21T00:51:14.4601346Z       "threads": 63,
+2026-10-21T00:51:14.4601611Z       "thread_names": [
+2026-10-21T00:51:14.4601860Z         "qemu-system-x86",
+2026-10-21T00:51:14.4602135Z         "qemu-system-x86",
+2026-10-21T00:51:14.4602388Z         "qemu-system-x86",
+2026-10-21T00:51:14.4602637Z         "qemu-system-x86",
+2026-10-21T00:51:14.4602900Z         "qemu-system-x86",
+2026-10-21T00:51:14.4603164Z         "qemu-system-x86",
+2026-10-21T00:51:14.4603435Z         "qemu-system-x86",
+2026-10-21T00:51:14.4603675Z         "qemu-system-x86",
+2026-10-21T00:51:14.4603954Z         "qemu-system-x86",
+2026-10-21T00:51:14.4604219Z         "qemu-system-x86",
+2026-10-21T00:51:14.4604498Z         "qemu-system-x86",
+2026-10-21T00:51:14.4604775Z         "qemu-system-x86",
+2026-10-21T00:51:14.4605310Z         "qemu-system-x86",
+2026-10-21T00:51:14.4605601Z         "qemu-system-x86",
+2026-10-21T00:51:14.4606458Z         "qemu-system-x86",
+2026-10-21T00:51:14.4606767Z         "qemu-system-x86",
+2026-10-21T00:51:14.4607048Z         "qemu-system-x86",
+2026-10-21T00:51:14.4607340Z         "qemu-system-x86",
+2026-10-21T00:51:14.4607628Z         "qemu-system-x86",
+2026-10-21T00:51:14.4607924Z         "qemu-system-x86",
+2026-10-21T00:51:14.4608213Z         "qemu-system-x86",
+2026-10-21T00:51:14.4608500Z         "qemu-system-x86",
+2026-10-21T00:51:14.4608838Z         "qemu-system-x86",
+2026-10-21T00:51:14.4609127Z         "qemu-system-x86",
+2026-10-21T00:51:14.4609412Z         "qemu-system-x86",
+2026-10-21T00:51:14.4609700Z         "qemu-system-x86",
+2026-10-21T00:51:14.4610112Z         "grpc_global_tim",
+2026-10-21T00:51:14.4610537Z         "event_engine",
+2026-10-21T00:51:14.4610910Z         "event_engine",
+2026-10-21T00:51:14.4611246Z         "event_engine",
+2026-10-21T00:51:14.4611580Z         "event_engine",
+2026-10-21T00:51:14.4611899Z         "lifeguard",
+2026-10-21T00:51:14.4612272Z         "qemu-system-x86",
+2026-10-21T00:51:14.4612777Z         "kvm-nx-lpage-re",
+2026-10-21T00:51:14.4613083Z         "qemu-system-x86",
+2026-10-21T00:51:14.4613372Z         "qemu-system-x86",
+2026-10-21T00:51:14.4613644Z         "qemu-system-x86",
+2026-10-21T00:51:14.4613936Z         "qemu-system-x86",
+2026-10-21T00:51:14.4614381Z         "RenderThread",
+2026-10-21T00:51:14.4614712Z         "RenderThread",
+2026-10-21T00:51:14.4615266Z         "RenderThread",
+2026-10-21T00:51:14.4615519Z         "RenderThread",
+2026-10-21T00:51:14.4615820Z         "RenderThread",
+2026-10-21T00:51:14.4616095Z         "RenderThread",
+2026-10-21T00:51:14.4616362Z         "RenderThread",
+2026-10-21T00:51:14.4616644Z         "RenderThread",
+2026-10-21T00:51:14.4616934Z         "qemu-system-x86",
+2026-10-21T00:51:14.4617232Z         "qemu-system-x86",
+2026-10-21T00:51:14.4617534Z         "qemu-system-x86",
+2026-10-21T00:51:14.4617830Z         "qemu-system-x86",
+2026-10-21T00:51:14.4618123Z         "qemu-system-x86",
+2026-10-21T00:51:14.4618432Z         "qemu-system-x86",
+2026-10-21T00:51:14.4618724Z         "qemu-system-x86",
+2026-10-21T00:51:14.4619009Z         "qemu-system-x86",
+2026-10-21T00:51:14.4619298Z         "RenderThread",
+2026-10-21T00:51:14.4619589Z         "RenderThread",
+2026-10-21T00:51:14.4619875Z         "RenderThread",
+2026-10-21T00:51:14.4620173Z         "RenderThread",
+2026-10-21T00:51:14.4620496Z         "RenderThread",
+2026-10-21T00:51:14.4620801Z         "RenderThread",
+2026-10-21T00:51:14.4621113Z         "RenderThread",
+2026-10-21T00:51:14.4621646Z         "RenderThread",
+2026-10-21T00:51:14.4621933Z         "RenderThread"
+2026-10-21T00:51:14.4622216Z       ],
+2026-10-21T00:51:14.4622577Z       "driver_mappings": [
+2026-10-21T00:51:14.4623531Z         "7f2b99400000-7f2b999a0000 r-xp 00000000 103:01 4515735                   /usr/local/lib/android/sdk/emulator/lib64/gles_swiftshader/libGLES_CM.so",
+2026-10-21T00:51:14.4625007Z         "7f2b999a0000-7f2b999f2000 rw-p 0059f000 103:01 4515735                   /usr/local/lib/android/sdk/emulator/lib64/gles_swiftshader/libGLES_CM.so",
+2026-10-21T00:51:14.4626251Z         "7f2b99c00000-7f2b9a227000 r-xp 00000000 103:01 4515736                   /usr/local/lib/android/sdk/emulator/lib64/gles_swiftshader/libGLESv2.so",
+2026-10-21T00:51:14.4627302Z         "7f2b9a227000-7f2b9a27c000 rw-p 00627000 103:01 4515736                   /usr/local/lib/android/sdk/emulator/lib64/gles_swiftshader/libGLESv2.so",
+2026-10-21T00:51:14.4628512Z         "7f2ba8a75000-7f2ba8a82000 r-xp 00000000 103:01 4515734                   /usr/local/lib/android/sdk/emulator/lib64/gles_swiftshader/libEGL.so",
+2026-10-21T00:51:14.4629496Z         "7f2ba8a82000-7f2ba8a83000 rw-p 0000d000 103:01 4515734                   /usr/local/lib/android/sdk/emulator/lib64/gles_swiftshader/libEGL.so"
+2026-10-21T00:51:14.4630145Z       ]
+2026-10-21T00:51:14.4630374Z     },
+2026-10-21T00:51:14.4630604Z     {
+2026-10-21T00:51:14.4630837Z       "pid": 3723,
+2026-10-21T00:51:14.4631110Z       "name": "netsimd",
+2026-10-21T00:51:14.4631741Z       "threads": 15,
+2026-10-21T00:51:14.4632021Z       "thread_names": [
+2026-10-21T00:51:14.4632289Z         "netsimd",
+2026-10-21T00:51:14.4632558Z         "tokio-rt-worker",
+2026-10-21T00:51:14.4632853Z         "tokio-rt-worker",
+2026-10-21T00:51:14.4633140Z         "tokio-rt-worker",
+2026-10-21T00:51:14.4633416Z         "tokio-rt-worker",
+2026-10-21T00:51:14.4633704Z         "grpc_global_tim",
+2026-10-21T00:51:14.4633985Z         "grpc-poll-0",
+2026-10-21T00:51:14.4634259Z         "event_engine",
+2026-10-21T00:51:14.4634538Z         "event_engine",
+2026-10-21T00:51:14.4634805Z         "event_engine",
+2026-10-21T00:51:14.4635274Z         "event_engine",
+2026-10-21T00:51:14.4635535Z         "lifeguard",
+2026-10-21T00:51:14.4635816Z         "slirp_poll",
+2026-10-21T00:51:14.4636095Z         "slirp",
+2026-10-21T00:51:14.4636369Z         "tokio-rt-worker"
+2026-10-21T00:51:14.4636662Z       ],
+2026-10-21T00:51:14.4636935Z       "driver_mappings": []
+2026-10-21T00:51:14.4637252Z     }
+2026-10-21T00:51:14.4637507Z   ],
+2026-10-21T00:51:14.4637808Z   "driver_config_read_observed": false,
+2026-10-21T00:51:14.4638384Z   "driver_config_trace_sha256": "a2c31abc2b521ef6398df75705a04febd5f81df0dc34a64cc7006e9a497463a4",
+2026-10-21T00:51:14.4639487Z   "error": "RuntimeError: The emulator did not observably read the requested SwiftShader.ini; refusing to claim that worker configuration",
+2026-10-21T00:51:14.4640503Z   "stage_before_cleanup": "verifying_driver_configuration"
+2026-10-21T00:51:14.4640912Z }
+2026-10-21T00:51:14.4671097Z ##[error]Process completed with exit code 1.
+2026-10-21T00:51:14.4727512Z ##[group]Run actions/upload-artifact@v4
+2026-10-21T00:51:14.4727790Z with:
+2026-10-21T00:51:14.4728013Z   name: Solar-paired-APK-and-evidence
+2026-10-21T00:51:14.4728899Z   path: solar-performance-evidence/**
+solar-host.log
+solar-gradients.json
+solar-defined-host.json
+solar-android/tests/fixtures/solar-defined-reference.frag
+solar-android/app/build/outputs/apk/debug/*.apk
+solar-android/app/build/outputs/apk/androidTest/debug/*.apk
+
+2026-10-21T00:51:14.4729759Z   if-no-files-found: warn
+2026-10-21T00:51:14.4729990Z   compression-level: 6
+2026-10-21T00:51:14.4730209Z   overwrite: false
+2026-10-21T00:51:14.4730429Z   include-hidden-files: false
+2026-10-21T00:51:14.4730670Z env:
+2026-10-21T00:51:14.4730941Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:51:14.4731357Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-21T00:51:14.4731781Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-21T00:51:14.4732220Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-21T00:51:14.4732492Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-21T00:51:14.4732773Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-21T00:51:14.4733151Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-21T00:51:14.4733572Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-21T00:51:14.4733854Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-21T00:51:14.4734099Z ##[endgroup]
+2026-10-21T00:51:14.6180564Z (node:3857) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:51:14.6181171Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:51:14.6279653Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-21T00:51:14.6283425Z The least common ancestor is /home/runner/work/mundo-X/mundo-X. This will be the root directory of the artifact
+2026-10-21T00:51:14.6284362Z With the provided path, there will be 10 files uploaded
+2026-10-21T00:51:14.6285595Z Artifact name is valid!
+2026-10-21T00:51:14.6286089Z Root directory input is valid!
+2026-10-21T00:51:14.9402347Z Beginning upload of artifact content to blob storage
+2026-10-21T00:51:15.0945437Z (node:3857) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-21T00:51:15.6772399Z Uploaded bytes 3159005
+2026-10-21T00:51:15.7260163Z Finished uploading artifact content to blob storage!
+2026-10-21T00:51:15.7260931Z SHA256 digest of uploaded artifact zip is 14dbe3a469a3ed9ad271345f64e11901dfbcc63d778090e3cd22350a5adc4c68
+2026-10-21T00:51:15.7261579Z Finalizing artifact upload
+2026-10-21T00:51:15.9936337Z Artifact Solar-paired-APK-and-evidence.zip successfully finalized. Artifact ID 12311933435
+2026-10-21T00:51:15.9937059Z Artifact Solar-paired-APK-and-evidence has been successfully uploaded! Final size is 3159005 bytes. Artifact ID is 12311933435
+2026-10-21T00:51:15.9942596Z Artifact download URL: https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264394/artifacts/12311933435
+2026-10-21T00:51:16.0141998Z Post job cleanup.
+2026-10-21T00:51:16.2193735Z In post-action step
+2026-10-21T00:51:16.2201940Z Cache is read-only: will not save state for use in subsequent builds.
+2026-10-21T00:51:16.2206965Z Generating Job Summary
+2026-10-21T00:51:16.2256615Z Completed post-action step
+2026-10-21T00:51:16.2499690Z Post job cleanup.
+2026-10-21T00:51:16.3693271Z (node:3881) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:51:16.3694128Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:51:16.3823065Z Post job cleanup.
+2026-10-21T00:51:16.4573735Z [command]/usr/bin/git version
+2026-10-21T00:51:16.4609695Z git version 2.55.0
+2026-10-21T00:51:16.4640792Z Temporarily overriding HOME='/home/runner/work/_temp/62814858-2dff-4baa-a5e1-d69a19e5a5a3' before making global git config changes
+2026-10-21T00:51:16.4641911Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:51:16.4645530Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:51:16.4679605Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:51:16.4709052Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:51:16.4898793Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:51:16.4926332Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:51:16.5132366Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:51:16.5161832Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:51:16.5518824Z Cleaning up orphan processes
+2026-10-21T00:51:16.5724496Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, actions/upload-artifact@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

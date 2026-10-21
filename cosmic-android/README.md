@@ -6,7 +6,8 @@ Una app nueva para la computación cuántica de Mundo X: su núcleo, su motor gr
 
 ## La nueva interfaz
 
-- **Motor:** ciudad procedural con presentación COSMIC, fachadas iluminadas, cámara cercana, selección de IDs, edición, semilla, resolución y animación. Abre con 16.384 objetos, 1.000 qubits y una resolución máxima de 960 px. La cantidad puede subir hasta 1.048.576 objetos.
+- **Motor:** ciudad procedural con presentación COSMIC, fachadas iluminadas, cámara cercana, selección de IDs, edición, semilla, resolución y animación. Abre con 16.384 objetos, una sesión Ether y una resolución máxima de 960 px. El perfil finito de 1.000 qubits sigue disponible. La cantidad puede subir hasta 1.048.576 objetos.
+- **Motor → Escena → Espejos del mismo mundo:** suelo reflectante o espejos enfrentados sobre el renderer compartido. Seleccionar un reflejo conserva el ID del objeto original. Los ajustes se guardan en la sesión privada; el formato portable `.cosmic` conserva su contrato actual y todavía no incluye la óptica. El motor reutiliza la imagen terminada cuando sus entradas no cambian y la información de la app la identifica como **Imagen conservada**.
 - **Núcleo:** controles H, S, X, Z, Y, CX y CZ sobre el mismo `NativeCore` que observa el motor. Muestra expectativas X/Z y la probabilidad derivada P(1) del qubit seleccionado. La cámara y la selección no realizan una medición proyectiva.
 - **Laboratorios:** 14 experimentos originales dentro de esta APK, con sus modelos y controles existentes.
 - **Proyectos:** nueva escena, ejemplos Bell/GHZ, copias locales y archivos portables `.cosmic`. Importar un archivo inválido conserva el proyecto activo.

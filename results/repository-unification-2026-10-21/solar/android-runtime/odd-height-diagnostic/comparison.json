@@ -1,0 +1,62 @@
+{
+  "status": "passed",
+  "pixel_tolerance": 0,
+  "scope": "Optimization equivalence after correcting filtering; independent single-program processes",
+  "compared_pixels": 146160,
+  "different_pixels": 0,
+  "exact_scenes": 2,
+  "cases": [
+    {
+      "scene": 8,
+      "pixels": 73080,
+      "different_pixels": 0,
+      "different_channels": 0,
+      "maximum_channel_delta": 0,
+      "mean_absolute_channel_error": 0.0,
+      "before_rgba_sha256": "3274faea0f990beed0fb04a1937a415774594e52b812ff4d894221e70a4e3135",
+      "after_rgba_sha256": "3274faea0f990beed0fb04a1937a415774594e52b812ff4d894221e70a4e3135"
+    },
+    {
+      "scene": 30,
+      "pixels": 73080,
+      "different_pixels": 0,
+      "different_channels": 0,
+      "maximum_channel_delta": 0,
+      "mean_absolute_channel_error": 0.0,
+      "before_rgba_sha256": "1e98d2253cb85c13e9bce433b61f42a33e93198520062d3cc8eaeb923647c111",
+      "after_rgba_sha256": "1e98d2253cb85c13e9bce433b61f42a33e93198520062d3cc8eaeb923647c111"
+    }
+  ],
+  "before_shader_sha256": "7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6",
+  "after_shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+  "fixtures_sha256": "cee1c45cc9d9820f759d17153d0309b95155756b1bb0d1f55220456801615e76",
+  "driver": {
+    "vendor": "Google Inc.",
+    "renderer": "Google SwiftShader",
+    "version": "OpenGL ES 3.0 SwiftShader 4.0.0.1",
+    "glsl": "OpenGL ES GLSL ES 3.00 SwiftShader 4.0.0.1",
+    "hardware_gpu_available": false,
+    "timer_query_supported": false
+  },
+  "swiftshader_threads": 1,
+  "driver_configuration": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+  "warmup_frames": 2,
+  "warmup_different_pixels": {
+    "before": {
+      "before": 0,
+      "after": 5
+    },
+    "after": {
+      "before": 0,
+      "after": 5
+    }
+  },
+  "rss_peak_kib": {
+    "before": 666332,
+    "after": 723792
+  },
+  "report_sha256": {
+    "before": "b6805393c69542e8aacb9cebe17fac9a16018ae1e394f4434c5e74b7429ef05f",
+    "after": "b419eeba06d395ea641dd8cc3e809d25c4f43686336dbd52dd2901c20b3798a1"
+  }
+}

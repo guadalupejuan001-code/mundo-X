@@ -272,7 +272,7 @@ def main():
                 and 0 <= entry["altitudeKm"] <= 1000 and entry["brightPixels"] > 80,
                 "Solar 8K atmospheric entry evidence is incomplete")
         require(provenance["applicationId"] == "com.cosmicx.solar.ultra"
-                and provenance["version"] == "1.2.0" and provenance["versionCode"] == 3
+                and provenance["version"] == "1.3.0" and provenance["versionCode"] == 4
                 and provenance["scientificChecks"] >= 511,
                 "Solar 8K APK provenance is incomplete")
         expected_provenance = verify_integrated_core(Path(__file__).resolve().parents[1])

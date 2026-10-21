@@ -1,0 +1,390 @@
+--------- beginning of main
+10-21 02:53:25.631  3617  3617 I dex2oat : Explicit concurrent copying GC freed 33(15KB) AllocSpace objects, 0(0B) LOS objects, 99% free, 896B/1536KB, paused 728us total 124.581ms
+10-21 02:53:26.401  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:26.439  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:26.439  2325  2325 D DnsUtils: DNS error resolving connectivitycheck.gstatic.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:26.442  2325  3604 D NetworkMonitor/100: PROBE_DNS connectivitycheck.gstatic.com 10260ms FAIL
+10-21 02:53:26.522  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:26.549  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:26.550  2325  2325 D DnsUtils: DNS error resolving www.google.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:26.558  2325  3603 D NetworkMonitor/100: PROBE_DNS www.google.com 10375ms FAIL
+--------- beginning of system
+10-21 02:53:26.621  1960  1988 I RoleUserState: Wrote roles.xml successfully
+10-21 02:53:26.646  3617  3617 I dex2oat : Explicit concurrent copying GC freed 642(77KB) AllocSpace objects, 0(0B) LOS objects, 99% free, 3464B/1539KB, paused 88us total 152.198ms
+10-21 02:53:26.814  3617  3617 I dex2oat : Explicit concurrent copying GC freed 33(15KB) AllocSpace objects, 0(0B) LOS objects, 99% free, 4360B/1540KB, paused 73us total 57.470ms
+10-21 02:53:27.290  3617  3617 I dex2oat : dex2oat took 7.558s (1.439s cpu) (threads: 2) arena alloc=26KB (26624B) java alloc=4360B (4360B) native alloc=1057KB (1082864B) free=430KB (440848B)
+10-21 02:53:27.359  1755  1755 V installd: DexInv: --- END '/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk' (success) ---
+10-21 02:53:27.863  2164  2172 I ssioncontrolle: Background young concurrent copying GC freed 13585(802KB) AllocSpace objects, 0(0B) LOS objects, 35% free, 1983KB/3059KB, paused 67us total 202.968ms
+10-21 02:53:28.427  1960  1972 I system_server: Background concurrent copying GC freed 10561(573KB) AllocSpace objects, 2(40KB) LOS objects, 42% free, 7375KB/12MB, paused 132us total 978.123ms
+10-21 02:53:32.205  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:32.205  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:32.263  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:32.263  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:32.294  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:32.294  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:33.299  2164  2172 I ssioncontrolle: Background concurrent copying GC freed 24658(1441KB) AllocSpace objects, 0(0B) LOS objects, 50% free, 1517KB/3053KB, paused 644us total 355.605ms
+10-21 02:53:33.335  3664  3664 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+10-21 02:53:33.455  3664  3664 E libc    : Access denied finding property "persist.device_config.runtime_native_boot.enable_apex_image"
+10-21 02:53:33.456  3664  3664 I AndroidRuntime: Using default boot image
+10-21 02:53:33.470  3664  3664 E libc    : Access denied finding property "persist.device_config.runtime_native_boot.disable_lock_profiling"
+10-21 02:53:33.470  3664  3664 I AndroidRuntime: Leaving lock profiling enabled
+10-21 02:53:33.472  3664  3664 E libc    : Access denied finding property "persist.device_config.runtime_native_boot.enable_generational_cc"
+10-21 02:53:33.429  3664  3664 W app_process: type=1400 audit(0.0:31): avc: denied { read } for name="u:object_r:device_config_runtime_native_boot_prop:s0" dev="tmpfs" ino=7189 scontext=u:r:shell:s0 tcontext=u:object_r:device_config_runtime_native_boot_prop:s0 tclass=file permissive=0
+10-21 02:53:33.439  3664  3664 I chatty  : uid=2000(shell) app_process identical 1 line
+10-21 02:53:33.449  3664  3664 W app_process: type=1400 audit(0.0:33): avc: denied { read } for name="u:object_r:device_config_runtime_native_boot_prop:s0" dev="tmpfs" ino=7189 scontext=u:r:shell:s0 tcontext=u:object_r:device_config_runtime_native_boot_prop:s0 tclass=file permissive=0
+10-21 02:53:33.673  3664  3664 I app_process: Core platform API reporting enabled, enforcing=false
+10-21 02:53:34.495  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:34.496  2325  2325 I chatty  : uid=1073(network_stack) com.android.networkstack identical 1 line
+10-21 02:53:34.496  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:34.497  2325  2325 D DnsUtils: DNS error resolving www.google.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:34.501  2325  3649 D NetworkMonitor/101: PROBE_DNS www.google.com 10208ms FAIL
+10-21 02:53:34.549  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:34.550  2325  2325 D DnsUtils: DNS error resolving connectivitycheck.gstatic.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:53:34.550  2325  3650 D NetworkMonitor/101: PROBE_DNS connectivitycheck.gstatic.com 10304ms FAIL
+10-21 02:53:36.359  3664  3664 D ICU     : Time zone APEX file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+10-21 02:53:36.534  3664  3664 W app_process: Unexpected CPU variant for X86 using defaults: x86_64
+10-21 02:53:36.676  3664  3664 I app_process: The ClassLoaderContext is a special shared library.
+10-21 02:53:36.941  3664  3664 W app_process: JNI RegisterNativeMethods: attempt to register 0 native methods for android.media.AudioAttributes
+10-21 02:53:37.096  3664  3664 D AndroidRuntime: Calling main entry com.android.commands.am.Am
+10-21 02:53:31.620  1960  1988 I chatty  : uid=1000(system) android.bg identical 1 line
+10-21 02:53:36.086  1960  1988 I RoleUserState: Wrote roles.xml successfully
+10-21 02:53:37.260  1960  3049 I ActivityManager: Force stopping com.cosmicx.solar appid=10116 user=0: start instr
+10-21 02:53:37.362  1960  1990 W ActivityManager: Slow operation: 57ms so far, now at startProcess: asking zygote to start proc
+10-21 02:53:37.405  1960  1981 W system_server: Long monitor contention with owner Binder:1960_E (3049) at boolean com.android.server.am.ActivityManagerService.startInstrumentation(android.content.ComponentName, java.lang.String, int, android.os.Bundle, android.app.IInstrumentationWatcher, android.app.IUiAutomationConnection, int, java.lang.String)(ActivityManagerService.java:15706) waiters=2 in void com.android.server.am.ActivityManagerService.dispatchUidsChanged() for 101ms
+10-21 02:53:37.414  1960  1981 W Looper  : Slow dispatch took 113ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=53
+10-21 02:53:37.416  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:37.417  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:37.461  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:37.461  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:37.537  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:37.586  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:37.592  1690  1690 D Zygote  : Forked child process 3678
+10-21 02:53:37.637  1960  1990 W ActivityManager: Slow operation: 331ms so far, now at startProcess: returned from zygote!
+10-21 02:53:37.675  1960  1990 W ActivityManager: Slow operation: 369ms so far, now at startProcess: done updating battery stats
+10-21 02:53:37.675  1960  1990 W ActivityManager: Slow operation: 370ms so far, now at startProcess: building log message
+10-21 02:53:37.676  1960  1990 I ActivityManager: Start proc 3678:com.cosmicx.solar/u0a116 for added application com.cosmicx.solar
+10-21 02:53:37.676  1960  1990 W ActivityManager: Slow operation: 371ms so far, now at startProcess: starting to update pids map
+10-21 02:53:37.677  1960  1990 W ActivityManager: Slow operation: 371ms so far, now at startProcess: done updating pids map
+10-21 02:53:37.699  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:37.699  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:37.755  3678  3678 I m.cosmicx.sola: Late-enabling -Xcheck:jni
+10-21 02:53:37.871  3678  3678 E m.cosmicx.sola: Unknown bits set in runtime_flags: 0x8000
+10-21 02:53:37.910  3678  3678 W m.cosmicx.sola: Unexpected CPU variant for X86 using defaults: x86_64
+10-21 02:53:38.391  3678  3678 W ActivityThread: Package uses different ABI(s) than its instrumentation: package[com.cosmicx.solar]: x86_64, null instrumentation[com.cosmicx.solar.test]: null, null
+10-21 02:53:38.494  3678  3678 I m.cosmicx.sola: The ClassLoaderContext is a special shared library.
+10-21 02:53:38.541  3678  3678 I m.cosmicx.sola: The ClassLoaderContext is a special shared library.
+10-21 02:53:38.585  3678  3678 W m.cosmicx.sola: ClassLoaderContext classpath size mismatch. expected=0, found=2 (PCL[]{PCL[/system/framework/android.test.mock.jar*3601177991]{PCL[/system/framework/android.test.base.jar*1299883780]}#PCL[/system/framework/android.test.runner.jar*3312018701]{PCL[/system/framework/android.test.base.jar*1299883780]#PCL[/system/framework/android.test.mock.jar*3601177991]{PCL[/system/framework/android.test.base.jar*1299883780]}}} | PCL[/system/framework/android.test.runner.jar*3312018701:/system/framework/android.test.mock.jar*3601177991])
+10-21 02:53:38.616  3678  3678 W m.cosmicx.sola: ClassLoaderContext classpath size mismatch. expected=0, found=5 (PCL[] | PCL[/system/framework/android.test.runner.jar*3312018701:/system/framework/android.test.mock.jar*3601177991:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk*1032123560:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes2.dex*3187464354:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes3.dex*625279751])
+10-21 02:53:39.109  3678  3678 I m.cosmicx.sola: The ClassLoaderContext is a special shared library.
+10-21 02:53:39.165  3678  3678 I m.cosmicx.sola: The ClassLoaderContext is a special shared library.
+10-21 02:53:39.174  3678  3678 W m.cosmicx.sola: ClassLoaderContext classpath size mismatch. expected=0, found=2 (PCL[]{PCL[/system/framework/android.test.mock.jar*3601177991]{PCL[/system/framework/android.test.base.jar*1299883780]}#PCL[/system/framework/android.test.runner.jar*3312018701]{PCL[/system/framework/android.test.base.jar*1299883780]#PCL[/system/framework/android.test.mock.jar*3601177991]{PCL[/system/framework/android.test.base.jar*1299883780]}}} | PCL[/system/framework/android.test.runner.jar*3312018701:/system/framework/android.test.mock.jar*3601177991];PCL[/system/framework/android.test.runner.jar*3312018701:/system/framework/android.test.mock.jar*3601177991:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk*1032123560:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes2.dex*3187464354:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes3.dex*625279751:/data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/base.apk*2458018450:/data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/base.a
+10-21 02:53:39.175  3678  3678 W m.cosmicx.sola: Found duplicate classes, falling back to extracting from APK : /data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk
+10-21 02:53:39.175  3678  3678 W m.cosmicx.sola: NOTE: This wastes RAM and hurts startup performance.
+10-21 02:53:39.175  3678  3678 W m.cosmicx.sola: Found duplicated class when checking oat files: 'Lcom/mundox/solar/SolarInstrumentation$$ExternalSyntheticLambda0;' in /data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes2.dex and /data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes2.dex
+10-21 02:53:39.175  3678  3678 W m.cosmicx.sola: 
+10-21 02:53:39.231  3678  3678 W m.cosmicx.sola: ClassLoaderContext classpath size mismatch. expected=0, found=5 (PCL[] | PCL[/system/framework/android.test.runner.jar*3312018701:/system/framework/android.test.mock.jar*3601177991:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk*1032123560:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes2.dex*3187464354:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes3.dex*625279751];PCL[/system/framework/android.test.runner.jar*3312018701:/system/framework/android.test.mock.jar*3601177991:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk*1032123560:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes2.dex*3187464354:/data/app/com.cosmicx.solar.test-L3eYXt1q4zmIKIgxbL1rCg==/base.apk!classes3.dex*625279751:/data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/base.apk*2458018450:/data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/base.apk!classes2.dex*2820561195:/data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/bas
+10-21 02:53:39.231  3678  3678 W m.cosmicx.sola: Found duplicate classes, falling back to extracting from APK : /data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/base.apk
+10-21 02:53:39.231  3678  3678 W m.cosmicx.sola: NOTE: This wastes RAM and hurts startup performance.
+10-21 02:53:39.231  3678  3678 W m.cosmicx.sola: Found duplicated class when checking oat files: 'Lcom/mundox/graphics/EtherCoreNative$Stats;' in /data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/base.apk!classes2.dex and /data/app/com.cosmicx.solar-L-6AbQjpghRKnZ9p0WRSig==/base.apk!classes2.dex
+10-21 02:53:39.231  3678  3678 W m.cosmicx.sola: 
+10-21 02:53:39.961  1960  3049 I ActivityTaskManager: START u0 {flg=0x10008000 cmp=com.cosmicx.solar/com.mundox.solar.SolarActivity} from uid 10116
+10-21 02:53:40.372  1960  2346 W system_server: Long monitor contention with owner Binder:1960_E (3049) at int com.android.server.wm.ActivityStarter.startActivityMayWait(android.app.IApplicationThread, int, java.lang.String, int, int, android.content.Intent, java.lang.String, android.service.voice.IVoiceInteractionSession, com.android.internal.app.IVoiceInteractor, android.os.IBinder, java.lang.String, int, int, android.app.ProfilerInfo, android.app.WaitResult, android.content.res.Configuration, com.android.server.wm.SafeActivityOptions, boolean, int, com.android.server.wm.TaskRecord, java.lang.String, boolean, com.android.server.am.PendingIntentRecord, boolean)(ActivityStarter.java:1217) waiters=2 in void com.android.server.wm.ActivityTaskManagerService.activityTopResumedStateLost() for 161ms
+10-21 02:53:40.436  1960  2912 W InputReader: Device has associated, but no associated display id.
+10-21 02:53:40.471  1960  2912 I chatty  : uid=1000(system) Binder:1960_D identical 28 lines
+10-21 02:53:40.471  1960  2912 W InputReader: Device has associated, but no associated display id.
+10-21 02:53:40.510  3678  3678 W ActivityThread: handleWindowVisibility: no activity for token android.os.BinderProxy@78f25c1
+10-21 02:53:40.516  1960  2912 W InputReader: Device has associated, but no associated display id.
+10-21 02:53:40.516  1960  2912 I chatty  : uid=1000(system) Binder:1960_D identical 8 lines
+10-21 02:53:40.516  1960  2912 W InputReader: Device has associated, but no associated display id.
+10-21 02:53:40.581  1960  1977 W system_server: Long monitor contention with owner Binder:1960_D (2912) at void com.android.server.wm.ActivityTaskManagerService.activityPaused(android.os.IBinder)(ActivityTaskManagerService.java:1696) waiters=0 in void com.android.server.wm.WindowManagerService.setShelfHeight(boolean, int) for 185ms
+10-21 02:53:40.592  1960  1984 E system_server: Invalid ID 0x00000000.
+10-21 02:53:40.601  1960  1983 W system_server: Long monitor contention with owner Binder:1960_D (2912) at void com.android.server.wm.ActivityTaskManagerService.activityPaused(android.os.IBinder)(ActivityTaskManagerService.java:1696) waiters=2 in void com.android.server.wm.ActivityMetricsLogger.checkVisibility(com.android.server.wm.TaskRecord, com.android.server.wm.ActivityRecord) for 131ms
+10-21 02:53:40.891  1960  1984 I Choreographer: Skipped 30 frames!  The application may be doing too much work on its main thread.
+10-21 02:53:40.910  1728  2607 E SurfaceFlinger: ro.sf.lcd_density must be defined as a build property
+10-21 02:53:40.942  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:40.942  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:40.955  1728  2396 E SurfaceFlinger: ro.sf.lcd_density must be defined as a build property
+10-21 02:53:41.082  3678  3702 D libEGL  : Emulator has host GPU support, qemu.gles is set to 1.
+10-21 02:53:41.084  3678  3702 W libc    : Unable to set property "qemu.gles" to "1": connection failed; errno=13 (Permission denied)
+10-21 02:53:41.200  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:53:41.432  1960  1984 W InputReader: Device has associated, but no associated display id.
+10-21 02:53:41.432  1960  1984 I chatty  : uid=1000(system) android.anim identical 8 lines
+10-21 02:53:41.432  1960  1984 W InputReader: Device has associated, but no associated display id.
+10-21 02:53:41.059  3678  3678 W RenderThread: type=1400 audit(0.0:34): avc: denied { write } for name="property_service" dev="tmpfs" ino=7283 scontext=u:r:untrusted_app:s0:c116,c256,c512,c768 tcontext=u:object_r:property_socket:s0 tclass=sock_file permissive=0 app=com.cosmicx.solar
+10-21 02:53:41.503  1960  1983 W system_server: Long monitor contention with owner android.anim (1984) at void com.android.server.wm.WindowSurfacePlacer.lambda$new$0$WindowSurfacePlacer()(WindowSurfacePlacer.java:61) waiters=0 in void com.android.server.wm.WindowManagerService$H.handleMessage(android.os.Message) for 156ms
+10-21 02:53:41.799  3678  3702 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+10-21 02:53:41.855  3678  3702 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+10-21 02:53:42.113  2862  3023 D EGL_emulation: eglMakeCurrent: 0x714f7a9956c0: ver 3 0 (tinfo 0x715055adb1e0)
+10-21 02:53:42.289  3678  3702 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+10-21 02:53:42.583  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:42.583  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:43.993  1960  2755 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+10-21 02:53:45.471  3678  3700 D HostConnection: HostConnection::get() New Host Connection established 0x714fc5a9dfc0, tid 3700
+10-21 02:53:45.475  1728  2001 W ServiceManager: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10116 pid=3678
+10-21 02:53:45.475  1728  2001 D PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10116 => denied (15282 us)
+10-21 02:53:45.512  3678  3700 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_sync_buffer_data ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-21 02:53:45.754  3678  3700 D EGL_emulation: eglCreateContext: 0x714fc5a9e1a0: maj 3 min 0 rcv 3
+10-21 02:53:45.762  3678  3700 D EGL_emulation: eglMakeCurrent: 0x714fc5a9e1a0: ver 3 0 (tinfo 0x715055a33660)
+10-21 02:53:45.892  3678  3704 D HostConnection: HostConnection::get() New Host Connection established 0x714fc5a9e740, tid 3704
+10-21 02:53:45.955  3678  3704 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_sync_buffer_data ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-21 02:53:45.988  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:53:46.000  3678  3704 D EGL_emulation: eglCreateContext: 0x714fc5a9e7e0: maj 3 min 0 rcv 3
+10-21 02:53:46.003  1566  1566 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@3.0::IMapper/default in either framework or device manifest.
+10-21 02:53:46.005  3678  3700 W Gralloc3: mapper 3.x is not supported
+10-21 02:53:46.036  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:53:46.070  3678  3700 D HostConnection: createUnique: call
+10-21 02:53:46.071  3678  3700 D HostConnection: HostConnection::get() New Host Connection established 0x714fc5a9ea60, tid 3700
+10-21 02:53:46.079  3678  3700 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_sync_buffer_data ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+10-21 02:53:46.090  3678  3700 D eglCodecCommon: allocate: Ask for block of size 0x1000
+10-21 02:53:46.090  3678  3700 D eglCodecCommon: allocate: ioctl allocate returned offset 0x3fff0f000 size 0x2000
+10-21 02:53:46.112  3678  3704 D EGL_emulation: eglMakeCurrent: 0x714fc5a9e7e0: ver 3 0 (tinfo 0x715055ad19a0)
+10-21 02:53:46.355  3678  3700 D EGL_emulation: eglMakeCurrent: 0x714fc5a9e1a0: ver 3 0 (tinfo 0x715055a33660)
+10-21 02:53:47.320  3153  3384 I Dialer  : OmtpVvmCarrierCfgHlpr - OmtpEvent:CONFIG_STATUS_SMS_TIME_OUT
+10-21 02:53:47.323  3153  3153 I Dialer  : RetryPolicy - discarding deferred status: configuration_state=4
+10-21 02:53:47.356  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:53:47.361  3678  3689 I m.cosmicx.sola: NativeAlloc concurrent copying GC freed 6351(506KB) AllocSpace objects, 6(264KB) LOS objects, 49% free, 2837KB/5674KB, paused 156us total 1.075s
+10-21 02:53:47.393  3678  3700 I OpenGLRenderer: Davey! duration=3069ms; Flags=1, IntendedVsync=316910907312, Vsync=317010907308, OldestInputEvent=9223372036854775807, NewestInputEvent=0, HandleInputStart=317016213828, AnimationStart=317016398921, PerformTraversalsStart=317016418460, DrawStart=318712646611, SyncQueued=318945815364, SyncStart=318949381421, IssueDrawCommandsStart=318957356047, SwapBuffers=319833452794, FrameCompleted=319983817319, DequeueBufferDuration=33298000, QueueBufferDuration=34200000, 
+10-21 02:53:47.396  3678  3678 I Choreographer: Skipped 175 frames!  The application may be doing too much work on its main thread.
+10-21 02:53:47.434  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:47.435  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:47.603  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:53:47.642  1960  1977 D WificondControl: Scan result ready event
+10-21 02:53:47.676  3678  3700 I OpenGLRenderer: Davey! duration=3203ms; Flags=1, IntendedVsync=317060887330, Vsync=319977553880, OldestInputEvent=9223372036854775807, NewestInputEvent=0, HandleInputStart=319988987971, AnimationStart=319989087548, PerformTraversalsStart=319997927490, DrawStart=320116141269, SyncQueued=320116250950, SyncStart=320120862018, IssueDrawCommandsStart=320145926968, SwapBuffers=320169136203, FrameCompleted=320268724384, DequeueBufferDuration=53991000, QueueBufferDuration=18866000, 
+10-21 02:53:47.724  3153  3153 I Dialer  : VvmTaskExecutor - no more tasks, stopping service if no task are added in 5000 millis
+10-21 02:53:47.781  3153  3153 I Dialer  : VvmTaskReceiver - task received
+10-21 02:53:47.781  3153  3153 I Dialer  : VvmTaskReceiver - TaskExecutor already running
+10-21 02:53:47.782  3153  3153 I Dialer  : Task.createTask - create task:com.android.voicemail.impl.ActivationTask
+10-21 02:53:47.783  3153  3153 I Dialer  : RetryPolicy - retry #1 for com.android.voicemail.impl.ActivationTask@a31437f queued, executing in 5000
+10-21 02:53:47.784  3153  3153 I Dialer  : VvmTaskExecutor - com.android.voicemail.impl.ActivationTask@a31437f added
+10-21 02:53:47.784  3153  3153 I Dialer  : VvmTaskExecutor - minimal wait time:4999
+10-21 02:53:47.790  3153  3153 I Dialer  : VvmTaskExecutor - sleep for 4999 millis
+10-21 02:53:47.908  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:47.908  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:47.992  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:47.992  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:48.141  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:48.141  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:50.622  3678  3689 I m.cosmicx.sola: NativeAlloc concurrent copying GC freed 1001(97KB) AllocSpace objects, 0(0B) LOS objects, 24% free, 18MB/24MB, paused 209us total 456.105ms
+10-21 02:53:50.779  1960  2346 I ActivityManager: Killing 3203:android.process.acore/u0a53 (adj 985): empty #17
+10-21 02:53:51.109  1960  3049 D CountryDetector: No listener is left
+10-21 02:53:51.133  1690  1690 I Zygote  : Process 3203 exited due to signal 9 (Killed)
+10-21 02:53:51.154  1960  1991 I libprocessgroup: Successfully killed process cgroup uid 10053 pid 3203 in 350ms
+10-21 02:53:51.880  1960  1960 W Telecom : Logging: Stale Sessions Cleaned:
+10-21 02:53:51.880  1960  1960 W Telecom : CM.CCCR@AEs
+10-21 02:53:51.880  1960  1960 W Telecom : 	CM.CCCR->CM.UECNT@AEs
+10-21 02:53:51.880  1960  1960 W Telecom : 		CM.CCCR->CM.UECNT@AEs
+10-21 02:53:51.880  1960  1960 W Telecom : 			CM.CCCR->CM.UECNT->CM.CCCR->CM.UECNT@AEs
+10-21 02:53:52.829  3153  3384 I Dialer  : VvmTaskExecutor - executing task com.android.voicemail.impl.ActivationTask@a31437f
+10-21 02:53:52.831  3153  3384 I Dialer  : PreOMigrationHandler - ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, ***, UserHandle{0} already migrated
+10-21 02:53:53.280  1690  1690 D Zygote  : Forked child process 3709
+10-21 02:53:53.344  1960  1990 W ActivityManager: Slow operation: 386ms so far, now at startProcess: returned from zygote!
+10-21 02:53:53.344  1960  1990 W ActivityManager: Slow operation: 386ms so far, now at startProcess: done updating battery stats
+10-21 02:53:53.345  1960  1990 W ActivityManager: Slow operation: 386ms so far, now at startProcess: building log message
+10-21 02:53:53.345  1960  1990 I ActivityManager: Start proc 3709:android.process.acore/u0a53 for content provider {com.android.providers.contacts/com.android.providers.contacts.VoicemailContentProvider}
+10-21 02:53:53.345  1960  1990 W ActivityManager: Slow operation: 386ms so far, now at startProcess: starting to update pids map
+10-21 02:53:53.354  1960  1990 W ActivityManager: Slow operation: 396ms so far, now at startProcess: done updating pids map
+10-21 02:53:53.361  3709  3709 W d.process.acor: Unexpected CPU variant for X86 using defaults: x86_64
+10-21 02:53:53.782  1960  3049 W ActivityManager: Slow operation: 58ms so far, now at attachApplicationLocked: immediately after bindApplication
+10-21 02:53:53.782  1960  3049 W ActivityManager: Slow operation: 58ms so far, now at attachApplicationLocked: after updateLruProcessLocked
+10-21 02:53:53.783  1960  3049 W ActivityManager: Slow operation: 59ms so far, now at attachApplicationLocked: after mServices.attachApplicationLocked
+10-21 02:53:53.793  3678  3704 W m.cosmicx.sola: Accessing hidden field Ljava/nio/Buffer;->position:I (greylist, JNI, allowed)
+10-21 02:53:53.794  3678  3704 W m.cosmicx.sola: Accessing hidden field Ljava/nio/Buffer;->limit:I (greylist, JNI, allowed)
+10-21 02:53:53.794  3678  3704 W m.cosmicx.sola: Accessing hidden field Ljava/nio/Buffer;->_elementSizeShift:I (greylist, JNI, allowed)
+10-21 02:53:53.794  3678  3704 W m.cosmicx.sola: Accessing hidden field Ljava/nio/Buffer;->address:J (greylist, JNI, allowed)
+10-21 02:53:53.804  1960  3049 W ActivityManager: Slow operation: 80ms so far, now at attachApplicationLocked: after updateOomAdjLocked
+10-21 02:53:53.815  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:53.815  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:53.973  3709  3709 I d.process.acor: The ClassLoaderContext is a special shared library.
+10-21 02:53:54.100  3709  3709 I chatty  : uid=10053(com.android.calllogbackup) android.process.acore identical 1 line
+10-21 02:53:54.222  3709  3709 I d.process.acor: The ClassLoaderContext is a special shared library.
+10-21 02:53:54.261  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:53:54.261  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:53:54.275  3709  3709 I ContactsPerf: VoicemailContentProvider.onCreate start
+10-21 02:53:54.545  3709  3709 I ContactsPerf: VoicemailContentProvider.onCreate finish
+10-21 02:53:54.701  1960  3049 D CountryDetector: The first listener is added
+10-21 02:53:54.702  3709  3709 I ContactsDatabaseHelper: updateUseStrictPhoneNumberComparison: US
+10-21 02:53:54.712  3709  3709 D ActivityThread: Loading provider contacts;com.android.contacts: com.android.providers.contacts.ContactsProvider2
+10-21 02:53:54.831  3709  3729 W d.process.acor: Long monitor contention with owner Worker-1 (3728) at long android.database.sqlite.SQLiteConnection.nativeOpen(java.lang.String, int, java.lang.String, boolean, boolean, int, int)(SQLiteConnection.java:-2) waiters=0 in android.database.sqlite.SQLiteDatabase android.database.sqlite.SQLiteOpenHelper.getReadableDatabase() for 227ms
+10-21 02:53:55.342  3709  3726 I VoicemailNotifier: receivers for android.intent.action.PROVIDER_CHANGED :[]
+10-21 02:53:55.455  3153  3384 I Dialer  : VvmActivationTask - VVM content provider configured - vvm_type_cvvm
+10-21 02:53:55.456  3153  3384 I Dialer  : OmtpVvmCarrierCfgHlpr - OmtpEvent:CONFIG_ACTIVATING
+10-21 02:53:55.556  3709  3732 D ContactsDatabaseHelper: WAL enabled for contacts2.db: true
+10-21 02:53:55.655  3709  3726 I VoicemailNotifier: receivers for android.intent.action.PROVIDER_CHANGED :[]
+10-21 02:53:55.710  3709  3733 W d.process.acor: Long monitor contention with owner Worker-1 (3732) at long android.database.sqlite.SQLiteConnection.nativePrepareStatement(long, java.lang.String)(SQLiteConnection.java:-2) waiters=0 in android.database.sqlite.SQLiteDatabase android.database.sqlite.SQLiteOpenHelper.getReadableDatabase() for 550ms
+10-21 02:53:55.733  2395  3252 I LocationAccessPolicy: Allowing com.android.dialer fine because it doesn't target API 29 yet. Please fix this app. Called from getServiceStateForSubscriber
+10-21 02:53:55.737  2395  3252 I LocationAccessPolicy: Allowing com.android.dialer coarse because it doesn't target API 29 yet. Please fix this app. Called from getServiceStateForSubscriber
+10-21 02:53:56.643  3709  3732 I ContactLocale: AddressBook Labels [[en_US]]: […, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Α, Β, Γ, Δ, Ε, Ζ, Η, Θ, Ι, Κ, Λ, Μ, Ν, Ξ, Ο, Π, Ρ, Σ, Τ, Υ, Φ, Χ, Ψ, Ω, …, А, Б, В, Г, Д, Ђ, Е, Є, Ж, З, И, І, Й, Ј, К, Л, Љ, М, Н, Њ, О, П, Р, С, Т, Ћ, У, Ф, Х, Ц, Ч, Џ, Ш, Щ, Ю, Я, …, א, ב, ג, ד, ה, ו, ז, ח, ט, י, כ, ל, מ, נ, ס, ע, פ, צ, ק, ר, ש, ת, …, ا, ب, ت, ث, ج, ح, خ, د, ذ, ر, ز, س, ش, ص, ض, ط, ظ, ع, غ, ف, ق, ك, ل, م, ن, ه, و, ي, …, ก, ข, ฃ, ค, ฅ, ฆ, ง, จ, ฉ, ช, ซ, ฌ, ญ, ฎ, ฏ, ฐ, ฑ, ฒ, ณ, ด, ต, ถ, ท, ธ, น, บ, ป, ผ, ฝ, พ, ฟ, ภ, ม, ย, ร, ฤ, ล, ฦ, ว, ศ, ษ, ส, ห, ฬ, อ, ฮ, …, ㄱ, ㄴ, ㄷ, ㄹ, ㅁ, ㅂ, ㅅ, ㅇ, ㅈ, ㅊ, ㅋ, ㅌ, ㅍ, ㅎ, …, あ, か, さ, た, な, は, ま, や, ら, わ, #, …]
+10-21 02:53:56.648  3709  3733 W d.process.acor: Long monitor contention with owner Worker-1 (3732) at void java.util.concurrent.ConcurrentHashMap.addCount(long, int)(ConcurrentHashMap.java:2327) waiters=0 in void com.android.providers.contacts.ContactLocaleUtils.setLocales(com.android.providers.contacts.LocaleSet) for 792ms
+10-21 02:53:57.023  3709  3732 D ContactsDatabaseHelper: WAL enabled for profile.db: false
+10-21 02:53:57.308  3709  3733 W d.process.acor: Long monitor contention with owner Worker-1 (3732) at long android.database.sqlite.SQLiteConnection.nativePrepareStatement(long, java.lang.String)(SQLiteConnection.java:-2) waiters=0 in android.database.sqlite.SQLiteDatabase android.database.sqlite.SQLiteOpenHelper.getReadableDatabase() for 404ms
+10-21 02:53:57.744  3709  3733 I ContactDirectoryManager: deleted 0 stale rows which don't have any relevant directory
+10-21 02:53:57.744  3709  3733 I ContactDirectoryManager: Discovered 0 contact directories in 60ms
+10-21 02:53:58.964  1785  1785 E netmgr  : Failed to open QEMU pipe 'qemud:network': Invalid argument
+10-21 02:54:00.223  2143  2143 D KeyguardClockSwitch: Updating clock: 254
+10-21 02:54:01.409  1960  2286 D SntpClient: request time failed: java.net.UnknownHostException: Unable to resolve host "time.android.com": No address associated with hostname
+10-21 02:54:01.626  1795  1795 E wifi_forwarder: RemoteConnection failed to initialize: RemoteConnection failed to open pipe
+10-21 02:54:06.621  2325  3602 D NetworkMonitor/100: PROBE_FALLBACK http://www.google.com/gen_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "www.google.com": No address associated with hostname
+10-21 02:54:06.683  2325  3604 D NetworkMonitor/100: PROBE_HTTP http://connectivitycheck.gstatic.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "connectivitycheck.gstatic.com": No address associated with hostname
+10-21 02:54:14.642  2325  3648 D NetworkMonitor/101: PROBE_FALLBACK http://www.google.com/gen_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "www.google.com": No address associated with hostname
+10-21 02:54:14.694  2325  3650 D NetworkMonitor/101: PROBE_HTTP http://connectivitycheck.gstatic.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "connectivitycheck.gstatic.com": No address associated with hostname
+10-21 02:54:16.269  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:54:16.629  2325  3603 D NetworkMonitor/100: PROBE_HTTPS https://www.google.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "www.google.com": No address associated with hostname
+10-21 02:54:16.659  1960  1983 W system_server: Long monitor contention with owner android.anim (1984) at void com.android.server.wm.SurfaceAnimator.lambda$getFinishedCallback$1$SurfaceAnimator(java.lang.Runnable, com.android.server.wm.AnimationAdapter)(SurfaceAnimator.java:75) waiters=0 in void com.android.server.wm.WindowManagerService$H.handleMessage(android.os.Message) for 155ms
+10-21 02:54:16.720  2143  2156 I ndroid.systemu: Background young concurrent copying GC freed 179327(5617KB) AllocSpace objects, 0(0B) LOS objects, 47% free, 6288KB/11MB, paused 78us total 783.835ms
+10-21 02:54:16.725  2325  3602 D NetworkMonitor/100: isCaptivePortal: isSuccessful()=false isPortal()=false RedirectUrl=null isPartialConnectivity()=false Time=60485ms
+10-21 02:54:16.761  1960  2097 D ConnectivityService: NetworkAgentInfo [WIFI () - 100] validation failed
+10-21 02:54:16.763  1960  1988 I ActivityTaskManager: Displayed com.cosmicx.solar/com.mundox.solar.SolarActivity: +36s2ms
+10-21 02:54:16.839  1960  2346 W system_server: Long monitor contention with owner android.anim (1984) at void com.android.server.wm.WindowAnimator.animate(long)(WindowAnimator.java:141) waiters=1 in void com.android.server.wm.WindowManagerService.setTransparentRegionWindow(com.android.server.wm.Session, android.view.IWindow, android.graphics.Region) for 131ms
+10-21 02:54:22.603  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 121148(2718KB) AllocSpace objects, 8(1160KB) LOS objects, 15% free, 21MB/24MB, paused 7.467ms total 171.542ms
+10-21 02:54:23.838  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 84949(2299KB) AllocSpace objects, 12(1120KB) LOS objects, 8% free, 22MB/24MB, paused 75us total 326.048ms
+10-21 02:54:24.183  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 110229(2462KB) AllocSpace objects, 5(576KB) LOS objects, 5% free, 23MB/24MB, paused 12.059ms total 264.752ms
+10-21 02:54:24.706  2325  3649 D NetworkMonitor/101: PROBE_HTTPS https://www.google.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "www.google.com": No address associated with hostname
+10-21 02:54:24.746  2325  3648 D NetworkMonitor/101: isCaptivePortal: isSuccessful()=false isPortal()=false RedirectUrl=null isPartialConnectivity()=false Time=60470ms
+10-21 02:54:24.770  1960  2097 D ConnectivityService: NetworkAgentInfo [MOBILE (LTE) - 101] validation failed
+10-21 02:54:25.057  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 50126(1630KB) AllocSpace objects, 7(648KB) LOS objects, 10% free, 22MB/24MB, paused 5.150ms total 246.489ms
+10-21 02:54:29.483  1690  1690 D Zygote  : Forked child process 3750
+10-21 02:54:29.649  1960  1990 W ActivityManager: Slow operation: 392ms so far, now at startProcess: returned from zygote!
+10-21 02:54:29.650  1960  1990 W ActivityManager: Slow operation: 393ms so far, now at startProcess: done updating battery stats
+10-21 02:54:29.650  1960  1990 W ActivityManager: Slow operation: 394ms so far, now at startProcess: building log message
+10-21 02:54:29.650  1960  1990 I ActivityManager: Start proc 3750:com.android.keychain/1000 for service {com.android.keychain/com.android.keychain.KeyChainService}
+10-21 02:54:29.650  1960  1990 W ActivityManager: Slow operation: 394ms so far, now at startProcess: starting to update pids map
+10-21 02:54:29.654  1960  1990 W ActivityManager: Slow operation: 397ms so far, now at startProcess: done updating pids map
+10-21 02:54:29.725  3750  3750 W ndroid.keychai: Unexpected CPU variant for X86 using defaults: x86_64
+10-21 02:54:30.121  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 56299(1931KB) AllocSpace objects, 2(204KB) LOS objects, 0% free, 24MB/24MB, paused 27.990ms total 655.213ms
+10-21 02:54:30.138  1960  3049 I ActivityManager: Killing 3394:com.android.calendar/u0a105 (adj 985): empty #17
+10-21 02:54:30.214  1960  3049 W ActivityManager: Slow operation: 118ms so far, now at attachApplicationLocked: after mServices.attachApplicationLocked
+10-21 02:54:30.245  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:30.245  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:30.273  3750  3750 I ndroid.keychai: The ClassLoaderContext is a special shared library.
+10-21 02:54:30.497  1960  3049 I ActivityManager: Killing 3418:com.android.camera2/u0a112 (adj 985): empty #17
+10-21 02:54:30.611  1690  1690 I Zygote  : Process 3418 exited due to signal 9 (Killed)
+10-21 02:54:30.725  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:30.726  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:30.796  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 51891(1434KB) AllocSpace objects, 17(20MB) LOS objects, 49% free, 5757KB/11MB, paused 1.769ms total 643.512ms
+10-21 02:54:30.937  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:30.950  2325  2325 I chatty  : uid=1073(network_stack) com.android.networkstack identical 1 line
+10-21 02:54:30.970  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:30.970  2325  2325 D DnsUtils: DNS error resolving www.google.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:30.971  2325  3735 D NetworkMonitor/100: PROBE_DNS www.google.com 10180ms FAIL
+10-21 02:54:30.978  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:30.979  2325  2325 D DnsUtils: DNS error resolving connectivitycheck.gstatic.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:30.979  2325  3736 D NetworkMonitor/100: PROBE_DNS connectivitycheck.gstatic.com 10199ms FAIL
+10-21 02:54:31.051  1960  1991 I libprocessgroup: Successfully killed process cgroup uid 10105 pid 3394 in 861ms
+10-21 02:54:31.053  1690  1690 I Zygote  : Process 3394 exited due to signal 9 (Killed)
+10-21 02:54:31.127  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:31.127  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:31.133  1960  1991 I libprocessgroup: Successfully killed process cgroup uid 10112 pid 3418 in 81ms
+10-21 02:54:31.191  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:31.192  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:31.236  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:31.236  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:31.256  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:31.256  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:31.330  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:31.330  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:31.894  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 252542(5471KB) AllocSpace objects, 5(1136KB) LOS objects, 46% free, 6138KB/11MB, paused 76us total 521.987ms
+10-21 02:54:33.813  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 141491(3643KB) AllocSpace objects, 19(4240KB) LOS objects, 47% free, 6734KB/12MB, paused 4.889ms total 460.546ms
+10-21 02:54:34.348  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 242618(5279KB) AllocSpace objects, 6(2084KB) LOS objects, 53% free, 5430KB/11MB, paused 70us total 140.007ms
+10-21 02:54:34.736  2143  2385 I OpenGLRenderer: Davey! duration=757ms; Flags=0, IntendedVsync=366544213331, Vsync=366860879985, OldestInputEvent=9223372036854775807, NewestInputEvent=0, HandleInputStart=366869128981, AnimationStart=366869176661, PerformTraversalsStart=366869957322, DrawStart=367175270334, SyncQueued=367176119986, SyncStart=367202839025, IssueDrawCommandsStart=367203168781, SwapBuffers=367245714692, FrameCompleted=367328624536, DequeueBufferDuration=6134000, QueueBufferDuration=75814000, 
+10-21 02:54:36.858  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:36.886  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:36.886  2325  2325 D DnsUtils: DNS error resolving connectivitycheck.gstatic.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:36.889  2325  3744 D NetworkMonitor/101: PROBE_DNS connectivitycheck.gstatic.com 10087ms FAIL
+10-21 02:54:36.942  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:36.942  2325  2325 E DnsResolver: resNetworkResult:android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:36.942  2325  2325 D DnsUtils: DNS error resolving www.google.com: android.system.ErrnoException: resNetworkResult failed: ETIMEDOUT (Connection timed out)
+10-21 02:54:36.943  2325  3743 D NetworkMonitor/101: PROBE_DNS www.google.com 10092ms FAIL
+10-21 02:54:38.864  1791  1791 W livelock: sample 1.620s
+10-21 02:54:39.042  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 140579(4154KB) AllocSpace objects, 14(1892KB) LOS objects, 29% free, 8123KB/11MB, paused 29.326ms total 200.418ms
+10-21 02:54:39.750  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 175975(4226KB) AllocSpace objects, 22(4272KB) LOS objects, 49% free, 5977KB/11MB, paused 150us total 203.449ms
+10-21 02:54:43.704  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 187484(4817KB) AllocSpace objects, 15(2220KB) LOS objects, 58% free, 4446KB/10MB, paused 143us total 348.862ms
+10-21 02:54:44.434  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 177771(4330KB) AllocSpace objects, 18(3716KB) LOS objects, 49% free, 5039KB/10079KB, paused 284us total 258.944ms
+10-21 02:54:45.572  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 113145(2985KB) AllocSpace objects, 17(2172KB) LOS objects, 31% free, 6937KB/10079KB, paused 220us total 231.297ms
+10-21 02:54:50.721  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 140242(3361KB) AllocSpace objects, 16(3296KB) LOS objects, 44% free, 7803KB/13MB, paused 235us total 387.274ms
+10-21 02:54:51.443  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 279154(6366KB) AllocSpace objects, 14(2664KB) LOS objects, 35% free, 8993KB/13MB, paused 72us total 298.375ms
+10-21 02:54:51.983  1960  2070 W system_server: Verification of void com.android.org.conscrypt.OpenSSLMessageDigestJDK$MD5.<init>() took 183.612ms
+10-21 02:54:52.282  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 419248(7540KB) AllocSpace objects, 1(1156KB) LOS objects, 47% free, 6793KB/12MB, paused 6.657ms total 477.152ms
+10-21 02:54:52.786  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 387993(6864KB) AllocSpace objects, 0(0B) LOS objects, 40% free, 7706KB/12MB, paused 75us total 147.867ms
+10-21 02:54:53.576  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 266214(4830KB) AllocSpace objects, 9(2784KB) LOS objects, 49% free, 6179KB/12MB, paused 408us total 260.033ms
+10-21 02:54:54.125  1960  1972 I system_server: Background young concurrent copying GC freed 76304(3133KB) AllocSpace objects, 75(1756KB) LOS objects, 37% free, 8070KB/12MB, paused 134us total 265.804ms
+10-21 02:54:54.367  1960  2070 E ReportEncoder: No watchlist hash
+10-21 02:54:54.449  1960  2070 I WatchlistLoggingHandler: Milliseconds spent on tryAggregateRecords(): 301584
+10-21 02:54:54.460  1960  1982 I DropBoxManagerService: add tag=system_server_strictmode isTagEnabled=true flags=0x2
+10-21 02:54:54.924  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 275144(6429KB) AllocSpace objects, 15(4576KB) LOS objects, 39% free, 9558KB/15MB, paused 4.967ms total 298.148ms
+10-21 02:54:55.328  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 414572(7600KB) AllocSpace objects, 0(0B) LOS objects, 35% free, 10135KB/15MB, paused 69us total 134.756ms
+10-21 02:54:55.720  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 430517(7599KB) AllocSpace objects, 0(0B) LOS objects, 22% free, 11MB/15MB, paused 144us total 204.448ms
+10-21 02:54:56.583  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 265548(4862KB) AllocSpace objects, 12(6828KB) LOS objects, 49% free, 3634KB/7269KB, paused 68us total 631.459ms
+10-21 02:54:56.641  3153  3384 I Dialer  : OmtpVvmCarrierCfgHlpr - OmtpEvent:CONFIG_STATUS_SMS_TIME_OUT
+10-21 02:54:56.643  3153  3153 I Dialer  : RetryPolicy - discarding deferred status: configuration_state=4
+10-21 02:54:56.651  3153  3153 I Dialer  : VvmTaskExecutor - no more tasks, stopping service if no task are added in 5000 millis
+10-21 02:54:56.662  3153  3153 I Dialer  : VvmTaskReceiver - task received
+10-21 02:54:56.662  3153  3153 I Dialer  : VvmTaskReceiver - TaskExecutor already running
+10-21 02:54:56.663  3153  3153 I Dialer  : Task.createTask - create task:com.android.voicemail.impl.ActivationTask
+10-21 02:54:56.663  3153  3153 I Dialer  : RetryPolicy - retry #2 for com.android.voicemail.impl.ActivationTask@81dec11 queued, executing in 5000
+10-21 02:54:56.664  3153  3153 I Dialer  : VvmTaskExecutor - com.android.voicemail.impl.ActivationTask@81dec11 added
+10-21 02:54:56.664  3153  3153 I Dialer  : VvmTaskExecutor - minimal wait time:4999
+10-21 02:54:56.665  3153  3153 I Dialer  : VvmTaskExecutor - sleep for 4999 millis
+10-21 02:54:56.672  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:56.672  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:56.909  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:56.909  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:57.030  1960  1988 E memtrack: Couldn't load memtrack module
+10-21 02:54:57.030  1960  1988 W android.os.Debug: failed to get memory consumption info: -1
+10-21 02:54:59.018  1785  1785 E netmgr  : Failed to open QEMU pipe 'qemud:network': Invalid argument
+10-21 02:55:00.028  2143  2143 D KeyguardClockSwitch: Updating clock: 255
+10-21 02:55:00.114  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 66371(1954KB) AllocSpace objects, 6(760KB) LOS objects, 16% free, 6099KB/7269KB, paused 69us total 183.001ms
+10-21 02:55:00.409  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 135182(3028KB) AllocSpace objects, 10(2084KB) LOS objects, 48% free, 6646KB/12MB, paused 280us total 281.125ms
+10-21 02:55:00.703  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 248672(4975KB) AllocSpace objects, 1(1156KB) LOS objects, 35% free, 8215KB/12MB, paused 69us total 159.236ms
+10-21 02:55:01.202  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 419151(7392KB) AllocSpace objects, 1(580KB) LOS objects, 42% free, 8339KB/14MB, paused 331us total 324.277ms
+10-21 02:55:01.534  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 391099(6911KB) AllocSpace objects, 1(1024KB) LOS objects, 48% free, 6595KB/12MB, paused 6.456ms total 131.626ms
+10-21 02:55:01.683  1795  1795 E wifi_forwarder: RemoteConnection failed to initialize: RemoteConnection failed to open pipe
+10-21 02:55:01.691  3153  3384 I Dialer  : VvmTaskExecutor - executing task com.android.voicemail.impl.ActivationTask@81dec11
+10-21 02:55:01.692  3153  3384 I Dialer  : PreOMigrationHandler - ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, ***, UserHandle{0} already migrated
+10-21 02:55:02.174  3709  3726 I VoicemailNotifier: receivers for android.intent.action.PROVIDER_CHANGED :[]
+10-21 02:55:02.199  3153  3384 I Dialer  : VvmActivationTask - VVM content provider configured - vvm_type_cvvm
+10-21 02:55:02.204  3153  3384 I Dialer  : OmtpVvmCarrierCfgHlpr - OmtpEvent:CONFIG_ACTIVATING
+10-21 02:55:02.334  3709  3726 I VoicemailNotifier: receivers for android.intent.action.PROVIDER_CHANGED :[]
+10-21 02:55:02.376  2395  2411 I LocationAccessPolicy: Allowing com.android.dialer fine because it doesn't target API 29 yet. Please fix this app. Called from getServiceStateForSubscriber
+10-21 02:55:02.393  2395  2411 I LocationAccessPolicy: Allowing com.android.dialer coarse because it doesn't target API 29 yet. Please fix this app. Called from getServiceStateForSubscriber
+10-21 02:55:03.086  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 131529(2958KB) AllocSpace objects, 7(928KB) LOS objects, 7% free, 11MB/12MB, paused 69us total 139.403ms
+10-21 02:55:03.325  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 173068(3666KB) AllocSpace objects, 5(4784KB) LOS objects, 41% free, 8491KB/14MB, paused 15.893ms total 213.129ms
+10-21 02:55:03.730  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 423952(7471KB) AllocSpace objects, 0(0B) LOS objects, 33% free, 9771KB/14MB, paused 1.943ms total 182.048ms
+10-21 02:55:03.902  2325  3734 D NetworkMonitor/100: PROBE_FALLBACK http://play.googleapis.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "play.googleapis.com": No address associated with hostname
+10-21 02:55:04.168  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 446400(7888KB) AllocSpace objects, 1(1156KB) LOS objects, 41% free, 8815KB/14MB, paused 219us total 239.792ms
+10-21 02:55:07.768  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 213083(5051KB) AllocSpace objects, 13(3104KB) LOS objects, 40% free, 8854KB/14MB, paused 87us total 134.613ms
+10-21 02:55:08.634  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 199853(4829KB) AllocSpace objects, 25(6380KB) LOS objects, 43% free, 7913KB/13MB, paused 3.084ms total 195.101ms
+10-21 02:55:09.981  2325  3742 D NetworkMonitor/101: PROBE_FALLBACK http://play.googleapis.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "play.googleapis.com": No address associated with hostname
+10-21 02:55:11.072  2325  3735 D NetworkMonitor/100: PROBE_HTTPS https://www.google.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "www.google.com": No address associated with hostname
+10-21 02:55:11.165  2325  3736 D NetworkMonitor/100: PROBE_HTTP http://connectivitycheck.gstatic.com/generate_204 Probe failed with exception java.net.UnknownHostException: Unable to resolve host "connectivitycheck.gstatic.com": No address associated with hostname
+10-21 02:55:11.175  2325  3734 D NetworkMonitor/100: isCaptivePortal: isSuccessful()=false isPortal()=false RedirectUrl=null isPartialConnectivity()=false Time=50408ms
+10-21 02:54:54.721  1960  1982 I chatty  : uid=1000(system) android.io identical 8 lines
+10-21 02:54:54.774  1960  1982 I DropBoxManagerService: add tag=system_server_strictmode isTagEnabled=true flags=0x2
+10-21 02:55:11.188  1960  2097 D ConnectivityService: NetworkAgentInfo [WIFI () - 100] validation failed
+10-21 02:55:12.995  3678  3689 I m.cosmicx.sola: Background young concurrent copying GC freed 142974(3563KB) AllocSpace objects, 12(1792KB) LOS objects, 25% free, 9249KB/12MB, paused 70us total 201.012ms
+10-21 02:55:13.915  3678  3689 I m.cosmicx.sola: Background concurrent copying GC freed 89522(4599KB) AllocSpace objects, 19(4452KB) LOS objects, 49% free, 3614KB/7229KB, paused 1.185ms total 210.231ms
+10-21 02:55:13.974  1960  2248 I ActivityManager: Force stopping com.cosmicx.solar appid=10116 user=0: finished inst
+10-21 02:55:13.975  1960  2248 I ActivityManager: Killing 3678:com.cosmicx.solar/u0a116 (adj 0): stop com.cosmicx.solar
+10-21 02:55:13.991  1960  2248 W ActivityTaskManager: Force removing ActivityRecord{4ec9e85 u0 com.cosmicx.solar/com.mundox.solar.SolarActivity t6 f}: app died, no saved state
+10-21 02:55:14.008  1960  3783 W Binder  : Outgoing transactions from this process must be FLAG_ONEWAY
+10-21 02:55:14.008  1960  3783 W Binder  : java.lang.Throwable
+10-21 02:55:14.008  1960  3783 W Binder  : 	at android.os.BinderProxy.transact(BinderProxy.java:480)
+10-21 02:55:14.008  1960  3783 W Binder  : 	at android.app.IInstrumentationWatcher$Stub$Proxy.instrumentationFinished(IInstrumentationWatcher.java:205)
+10-21 02:55:14.008  1960  3783 W Binder  : 	at com.android.server.am.InstrumentationReporter$MyThread.run(InstrumentationReporter.java:86)
+10-21 02:55:14.017  3664  3664 D AndroidRuntime: Shutting down VM
+10-21 02:55:14.056  1960  2248 W InputReader: Device has associated, but no associated display id.
+10-21 02:55:14.177  1960  2248 I chatty  : uid=1000(system) Binder:1960_6 identical 18 lines
+10-21 02:55:14.177  1960  2248 W InputReader: Device has associated, but no associated display id.
+10-21 02:55:14.184  1690  1690 I Zygote  : Process 3678 exited due to signal 9 (Killed)
+10-21 02:55:14.262  1960  1983 W system_server: Long monitor contention with owner Binder:1960_6 (2248) at void com.android.server.wm.ActivityTaskManagerService$LocalService.handleAppDied(com.android.server.wm.WindowProcessController, boolean, java.lang.Runnable)(ActivityTaskManagerService.java:6758) waiters=0 in void com.android.server.wm.TaskChangeNotificationController$MainHandler.handleMessage(android.os.Message) for 271ms
+10-21 02:55:14.296  1960  1981 W system_server: Long monitor contention with owner Binder:1960_6 (2248) at void com.android.server.am.ActivityManagerService.finishInstrumentation(android.app.IApplicationThread, int, android.os.Bundle)(ActivityManagerService.java:15908) waiters=0 in void com.android.server.am.ActivityManagerService.dispatchUidsChanged() for 317ms
+10-21 02:55:14.326  1960  1981 W Looper  : Slow dispatch took 343ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=53
+10-21 02:55:14.361  1960  1981 W Looper  : Slow delivery took 371ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=32
+10-21 02:55:14.431  1960  1991 I libprocessgroup: Successfully killed process cgroup uid 10116 pid 3678 in 441ms
+10-21 02:55:14.492  1960  1983 W ActivityManager: setHasOverlayUi called on unknown pid: 3678
+10-21 02:55:14.540  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:55:14.564  1709  1887 I chatty  : uid=1000(system) HwBinder:1709_3 identical 1 line
+10-21 02:55:14.576  1709  1887 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 925696
+10-21 02:55:14.628  2862  3023 D EGL_emulation: eglMakeCurrent: 0x714f7a9956c0: ver 3 0 (tinfo 0x715055adb1e0)
+10-21 02:55:14.803  1960  1981 W Looper  : Drained
+10-21 02:55:14.951  1960  3783 I ActivityManager: Failure reporting to instrumentation watcher: comp=ComponentInfo{com.cosmicx.solar.test/com.mundox.solar.SolarInstrumentation} results=Bundle[mParcelledData.dataSize=188]
+10-21 02:55:15.352  1960  1982 I DropBoxManagerService: add tag=system_app_strictmode isTagEnabled=true flags=0x2

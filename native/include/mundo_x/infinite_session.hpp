@@ -22,6 +22,8 @@ class InfiniteSession {
     std::vector<double> values;
     Stats stats;
     std::uint64_t revision = 0, epoch = 0;
+    // Temporary observer payload for this batch, excluding allocator overhead.
+    std::size_t observer_builds = 0, observer_payload_bytes = 0;
   };
   struct Metadata { Stats stats; Background background; std::uint64_t epoch; };
 
@@ -79,8 +81,11 @@ class InfiniteSession {
     std::lock_guard<std::mutex> lock(mutex_);
     Observation result;
     result.values.reserve(observables.size());
+    InfiniteCore::ObserverCache observers;
     for (const auto& observable : observables)
-      result.values.push_back(core_.expectation(observable.terms, observable.sign));
+      result.values.push_back(core_.expectation_cached(observable.terms, observable.sign, &observers));
+    result.observer_builds = observers.builds;
+    result.observer_payload_bytes = observers.payload_bytes;
     result.stats = core_.stats();
     result.revision = result.stats.revision;
     result.epoch = epoch_;

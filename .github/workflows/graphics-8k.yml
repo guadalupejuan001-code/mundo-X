@@ -12,6 +12,7 @@ on:
       - 'android-experiments/**'
       - 'CMakeLists.txt'
       - 'tools/core-performance.py'
+      - 'tools/test_core_performance.py'
       - 'tools/cosmic-*'
       - 'tools/cosmic_source_provenance.py'
       - 'tools/infinite_device_evidence.py'
@@ -28,6 +29,7 @@ on:
       - 'android-experiments/**'
       - 'CMakeLists.txt'
       - 'tools/core-performance.py'
+      - 'tools/test_core_performance.py'
       - 'tools/cosmic-*'
       - 'tools/cosmic_source_provenance.py'
       - 'tools/infinite_device_evidence.py'
@@ -69,6 +71,7 @@ jobs:
       - name: Compare identical workloads against the frozen 4K core
         run: |
           set -euo pipefail
+          python3 tools/test_core_performance.py 2>&1 | tee graphics-8k-native/comparator-checks.log
           baseline_dir="$RUNNER_TEMP/cosmic-core-baseline"
           mkdir -p "$baseline_dir"
           git archive 403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac native/include | tar -x -C "$baseline_dir"

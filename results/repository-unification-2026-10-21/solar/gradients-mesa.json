@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "seed": 20261021,
+  "cases_per_family": 128,
+  "statistics": {
+    "sphere_normal": {
+      "values": 384,
+      "failures": 0,
+      "max_absolute_error": 2.0583549087405117e-08,
+      "max_error_over_limit": 0.0012380805656391958
+    },
+    "angular_coordinates": {
+      "values": 256,
+      "failures": 0,
+      "max_absolute_error": 1.2137091331965166e-10,
+      "max_error_over_limit": 3.821822437210791e-05
+    },
+    "ring_plane_radius": {
+      "values": 128,
+      "failures": 0,
+      "max_absolute_error": 1.538958471769547e-08,
+      "max_error_over_limit": 0.0005926166705005964
+    },
+    "ring_shadow_radius": {
+      "values": 128,
+      "failures": 0,
+      "max_absolute_error": 1.5245653628426226e-09,
+      "max_error_over_limit": 0.00030898781412016125
+    }
+  },
+  "oracle": "Double precision central differences of independently re-intersected geometry",
+  "oracle_step_pixels": 0.001,
+  "absolute_tolerance": 3e-06,
+  "relative_tolerance": 0.0003,
+  "finite_tangent_and_poles": true,
+  "shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+  "helper_sha256": "43bb3d13cbe49801e663ec8c106bf6678f58df8e3fbe6d6f444d0d042e1fdbfc",
+  "rss_peak_kib": 99008
+}

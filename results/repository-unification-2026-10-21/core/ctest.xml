@@ -1,0 +1,509 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Linux-c++"
+	tests="78"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="7b4ea78fb4ce"
+	time="6"
+	timestamp="2026-10-21T02:20:21"
+	>
+	<testcase name="basis_vm_cli_selftest" classname="basis_vm_cli_selftest" time="0.00498524" status="run">
+		<system-out>{"status":"PASS","message":"All bounded VM self-tests passed.","passed":23,"total":23}
+</system-out>
+	</testcase>
+	<testcase name="phase_core" classname="phase_core" time="0.00178567" status="run">
+		<system-out>phase API, fallback, replay, guards: PASS
+</system-out>
+	</testcase>
+	<testcase name="state_transfer" classname="state_transfer" time="0.339685" status="run">
+		<system-out>product transfer: phases, norms, observables, limits, memory, replay: PASS
+</system-out>
+	</testcase>
+	<testcase name="existing_hello" classname="existing_hello" time="0.00199328" status="run">
+		<system-out>HELLO_MUNDO_X dense=PASS compact=PASS
+</system-out>
+	</testcase>
+	<testcase name="existing_teleport" classname="existing_teleport" time="0.00147889" status="run">
+		<system-out>COMPACT QUANTUM TELEPORTATION
+source=q0  entangled_pair=q1-q2  destination=q2
+protocol=CNOT(0,1), H(0), measure q0/q1, X(q2)^m1, Z(q2)^m0
+
+|0&gt; branch=00 destination=+Z PASS
+|0&gt; branch=01 destination=+Z PASS
+|0&gt; branch=10 destination=+Z PASS
+|0&gt; branch=11 destination=+Z PASS
+|1&gt; branch=00 destination=-Z PASS
+|1&gt; branch=01 destination=-Z PASS
+|1&gt; branch=10 destination=-Z PASS
+|1&gt; branch=11 destination=-Z PASS
+|+&gt; branch=00 destination=+X PASS
+|+&gt; branch=01 destination=+X PASS
+|+&gt; branch=10 destination=+X PASS
+|+&gt; branch=11 destination=+X PASS
+|-&gt; branch=00 destination=-X PASS
+|-&gt; branch=01 destination=-X PASS
+|-&gt; branch=10 destination=-X PASS
+|-&gt; branch=11 destination=-X PASS
+|+i&gt; branch=00 destination=+Y PASS
+|+i&gt; branch=01 destination=+Y PASS
+|+i&gt; branch=10 destination=+Y PASS
+|+i&gt; branch=11 destination=+Y PASS
+|-i&gt; branch=00 destination=-Y PASS
+|-i&gt; branch=01 destination=-Y PASS
+|-i&gt; branch=10 destination=-Y PASS
+|-i&gt; branch=11 destination=-Y PASS
+
+passed=24/24
+compact_state_bytes=51
+result=PASS
+meaning=the ...
+The rest of the test output was removed since it exceeds the threshold of 1024 bytes.
+</system-out>
+	</testcase>
+	<testcase name="existing_magic" classname="existing_magic" time="0.00163031" status="run">
+		<system-out>MAGIC STATE WITNESS
+circuit=|0&gt; -&gt; H -&gt; T
+state=(|0&gt; + exp(i*pi/4)|1&gt;)/sqrt(2)
+bloch_x=0.707106727
+bloch_y=0.707106727
+bloch_z=0.000000042
+max_fidelity_to_any_1q_pure_stabilizer=0.853553325
+non_stabilizer=PASS
+expected_magic_geometry=PASS
+result=PASS
+</system-out>
+	</testcase>
+	<testcase name="physics_world" classname="physics_world" time="0.0022754" status="run">
+		<system-out>{"ok":true,"checks":32}
+</system-out>
+	</testcase>
+	<testcase name="physics_allocation" classname="physics_allocation" time="0.00547218" status="run">
+		<system-out>{"suite":"physics_allocation","ok":true,"failures_recovered":5,"failures_recovered_3d":5,"checks":11730}
+</system-out>
+	</testcase>
+	<testcase name="rule_physics" classname="rule_physics" time="0.0474223" status="run">
+		<system-out>{"suite":"rule_physics","ok":true,"checks":442462,"reference_scenes":64,"reference_steps":256,"sparse_pairs_4096":0}
+</system-out>
+	</testcase>
+	<testcase name="reduced_optimization" classname="reduced_optimization" time="0.0480115" status="run">
+		<system-out>PASS checked_states=7081 high_bit=62
+</system-out>
+	</testcase>
+	<testcase name="boundaries" classname="boundaries" time="0.00220665" status="run">
+		<system-out>PASS compact rejects zero qubits
+PASS GHZ across packed-word boundary n=63
+PASS tableau byte count n=63
+PASS GHZ measurement at packed-word boundary is random
+PASS boundary measurement fixes distant GHZ qubit
+PASS measured highest qubit is deterministic
+PASS out-of-range gate rejected
+PASS rejected gate leaves state unchanged
+PASS GHZ across packed-word boundary n=64
+PASS tableau byte count n=64
+PASS GHZ measurement at packed-word boundary is random
+PASS boundary measurement fixes distant GHZ qubit
+PASS measured highest qubit is deterministic
+PASS out-of-range gate rejected
+PASS rejected gate leaves state unchanged
+PASS GHZ across packed-word boundary n=65
+PASS tableau byte count n=65
+PASS GHZ measurement at packed-word boundary is random
+PASS boundary measurement fixes distant GHZ qubit
+PASS measured highest qubit is deterministic
+PASS out-of-range gate rejected
+PASS rejected gate leaves state unchanged
+PASS one-qubit cluster accepted
+PASS cluster signature rejects overflowing dimensions
+PASS tableau multipl...
+The rest of the test output was removed since it exceeds the threshold of 1024 bytes.
+</system-out>
+	</testcase>
+	<testcase name="dense_precision" classname="dense_precision" time="0.00498011" status="run">
+		<system-out>PASS gates=100000 double_norm_error=1.14279e-11 legacy_float_norm_error=0.00211993
+</system-out>
+	</testcase>
+	<testcase name="factorized_core" classname="factorized_core" time="0.0173026" status="run">
+		<system-out>factorized_core PASS checks=44814
+</system-out>
+	</testcase>
+	<testcase name="factorized_storage" classname="factorized_storage" time="0.0120107" status="run">
+		<system-out>storage_product constructor_allocations=4 qubits=100000 logical_bytes=3200000 estimated_reserved_bytes=5600336
+factorized_storage PASS checks=2592 injected_allocation_failures=51
+</system-out>
+	</testcase>
+	<testcase name="factorized_structure" classname="factorized_structure" time="0.0197947" status="run">
+		<system-out>factorized_structure PASS checks=94726
+</system-out>
+	</testcase>
+	<testcase name="micro_lab" classname="micro_lab" time="0.135371" status="run">
+		<system-out>micro_lab PASS checks=33628
+</system-out>
+	</testcase>
+	<testcase name="compact_measurement" classname="compact_measurement" time="0.00411378" status="run">
+		<system-out>PASS compact_measurement checks=8317 measurements=502 random=124
+</system-out>
+	</testcase>
+	<testcase name="xasm_measurement" classname="xasm_measurement" time="0.00228602" status="run">
+		<system-out>checks=16 failures=0
+</system-out>
+	</testcase>
+	<testcase name="visual_scene" classname="visual_scene" time="0.00435474" status="run">
+		<system-out>PASS visual_scene checks=7559
+</system-out>
+	</testcase>
+	<testcase name="xasm_visual" classname="xasm_visual" time="0.0107572" status="run">
+		<system-out>checks=671 failures=0
+</system-out>
+	</testcase>
+	<testcase name="integrated_runtime" classname="integrated_runtime" time="0.00194033" status="run">
+		<system-out>integrated runtime checks=19 failures=0
+</system-out>
+	</testcase>
+	<testcase name="engine_session" classname="engine_session" time="0.0697539" status="run">
+		<system-out>PASS shared_session signed_pauli_comparisons=87296 max_abs_error=3.44169e-15 transactional_apply_restore=PASS readonly_observation=PASS portable_history=PASS wide_qubits=130 same_revision_cache_invalidation=PASS concurrent_snapshot=PASS
+</system-out>
+	</testcase>
+	<testcase name="lab_circuit" classname="lab_circuit" time="0.00290708" status="run">
+		<system-out>PASS lab_circuit checks=468
+</system-out>
+	</testcase>
+	<testcase name="lab_memory" classname="lab_memory" time="0.00403258" status="run">
+		<system-out>PASS lab_memory checks=76
+</system-out>
+	</testcase>
+	<testcase name="lab_protocols" classname="lab_protocols" time="0.0117528" status="run">
+		<system-out>PASS 768 lab protocol checks
+</system-out>
+	</testcase>
+	<testcase name="core_performance" classname="core_performance" time="0.584805" status="run">
+		<system-out>PASS core_performance exact_checks=70153 word_boundaries=63,64,65,127,128,129,256 packed_export=PASS direct_cz=PASS signed_elimination=PASS
+</system-out>
+	</testcase>
+	<testcase name="core_60" classname="core_60" time="0.295846" status="run">
+		<system-out>PASS core_60 qubits=60 oracle_qubits=6 physical_indices=0,1,31,32,53,59 checks=91243 oracle_comparisons=39744 measurement_branches=34 max_oracle_error=5.5511151231257827e-16 tolerance=1e-10 ghz60_phase=PASS ghz60_t=PASS snapshot_bridge=PASS q60_rejection=PASS
+</system-out>
+	</testcase>
+	<testcase name="core_1000" classname="core_1000" time="0.440931" status="run">
+		<system-out>PASS core_1000 qubits=1000 oracle_qubits=8 physical_indices=0,31,32,63,64,511,512,999 checks=30721 oracle_comparisons=11304 measurement_branches=8 max_oracle_error=5.5511151231257778e-17 tolerance=1e-10 ghz1000_phase=PASS snapshot_bridge=PASS q1000_rejection=PASS dense1000_allocated=false backend=compact-clifford
+</system-out>
+	</testcase>
+	<testcase name="xasm_60" classname="xasm_60" time="0.0372393" status="run">
+		<system-out>checks=43 failures=0
+</system-out>
+	</testcase>
+	<testcase name="infinite_address" classname="infinite_address" time="0.00203692" status="run">
+		<system-out>infinite_address checks=494 failures=0
+</system-out>
+	</testcase>
+	<testcase name="infinite_core" classname="infinite_core" time="0.170926" status="run">
+		<system-out>{"ok":true,"checks":220377,"oracle_comparisons":146438,"gates":3456,"measurements":202,"allocation_failures":35}
+</system-out>
+	</testcase>
+	<testcase name="infinite_tensor" classname="infinite_tensor" time="0.0067903" status="run">
+		<system-out>{"ok":true,"checks":106805,"dense_comparisons":1534,"tensor_cases":115}
+</system-out>
+	</testcase>
+	<testcase name="infinite_session" classname="infinite_session" time="0.19988" status="run">
+		<system-out>{"suite":"infinite_session","ok":true,"checks":31269,"packed_states":9,"rng_full64_draws":7500,"rejected_imports":17,"request_rollbacks":8,"concurrent_observations":1000}
+</system-out>
+	</testcase>
+	<testcase name="infinite_bridge" classname="infinite_bridge" time="0.00298818" status="run">
+		<system-out>{"suite":"infinite_bridge","ok":true,"checks":100,"allocation_failures":34,"shared_state_and_owner_lifetime":true}
+</system-out>
+	</testcase>
+	<testcase name="ether_core" classname="ether_core" time="0.295945" status="run">
+		<system-out>{"ok":true,"checks":522,"rules":2,"address_digits":1001,"oracle_paulis":256,"queries":100000,"elapsed_ms":293.869,"us_per_query":2.93869,"peak_query_sites":3}
+</system-out>
+	</testcase>
+	<testcase name="ether_frame" classname="ether_frame" time="0.0024195" status="run">
+		<system-out>ether_frame: 54 checks passed
+</system-out>
+	</testcase>
+	<testcase name="ether_fusion" classname="ether_fusion" time="0.262743" status="run">
+		<system-out>{"suite":"ether_fusion","ok":true,"checks":17759,"comparison_checks":10477,"independent_complex_oracle_comparisons":10444,"dense_matrix_operations":590,"max_error":2.22045e-16,"max_norm_error":2.22045e-16,"verified_projection_cases":46,"transaction_rollbacks":18,"allocation_failure_rollbacks":120,"physical_left_boundary":true,"interior_address_digits":101,"zero_and_bell_backgrounds":true,"session_and_pc_port_causality":true}
+</system-out>
+	</testcase>
+	<testcase name="ether_rules" classname="ether_rules" time="0.317805" status="run">
+		<system-out>ether_rules: 799838 checks passed; seed=42
+</system-out>
+	</testcase>
+	<testcase name="quantum_algorithms" classname="quantum_algorithms" time="0.00639848" status="run">
+		<system-out>{"ok":true,"checks":1032,"bv_input_qubits":512,"dj_input_qubits":256,"bv_state_bytes":74385,"non_clifford":"H-T-H","non_clifford_expected_z":0.707107,"ether_address_digits":1001,"elapsed_ms":3.98285}
+</system-out>
+	</testcase>
+	<testcase name="infinite_extreme" classname="infinite_extreme" time="0.551369" status="run">
+		<system-out>{"suite":"infinite_extreme","ok":true,"checks":4399,"ghz_qubits":1024,"batch_observables":256,"remote_observables":4096,"remote_address_digits":1001,"remote_active_after":0,"stress_gates":65536}
+</system-out>
+	</testcase>
+	<testcase name="physics3d_cli" classname="physics3d_cli" time="0.00205368" status="run">
+		<system-out>{"engine":"rule-physics-3d","body_state":"explicit_finite","bodies":256,"steps":4,"dt_seconds":0.0083333333333333332,"revision":260,"contacts":1,"body_payload_bytes":18432,"scratch_capacity_bytes":73648,"checksum":27815.57318222235,"first_positions":[[-0.52499999999999991,9.993189826388889,0],[0.52499999999999991,9.993189826388889,0],[6,9.993189826388889,0],[9,9.993189826388889,0],[12,9.993189826388889,0],[15,9.993189826388889,0],[18,9.993189826388889,0],[21,9.993189826388889,0]]}
+</system-out>
+	</testcase>
+	<testcase name="ether_batch" classname="ether_batch" time="0.257095" status="run">
+		<system-out>PASS ether_batch 15238 checks
+</system-out>
+	</testcase>
+	<testcase name="ether_example" classname="ether_example" time="0.00208887" status="run">
+		<system-out>{"type":"postselection","address":"0","outcome_one":true,"probability":0.5}
+{"type":"stats","background":"zero","domain":"nonnegative_decimal_addresses","active_qubits":1,"components":1,"largest_component":1,"tableau_bytes":17,"address_bytes":1,"ether_rules":1,"revision":5,"limits":{"max_active_qubits":4096,"max_component_qubits":1024,"max_state_bytes":67108864,"max_address_digits":4096,"max_query_terms":4096,"max_ether_rules":4096,"max_ether_query_sites":4096}}
+</system-out>
+	</testcase>
+	<testcase name="infinite_example_zero" classname="infinite_example_zero" time="0.00197814" status="run">
+		<system-out>{"type":"stats","background":"zero","domain":"nonnegative_decimal_addresses","active_qubits":0,"components":0,"largest_component":0,"tableau_bytes":0,"address_bytes":0,"ether_rules":0,"revision":0,"limits":{"max_active_qubits":4096,"max_component_qubits":1024,"max_state_bytes":67108864,"max_address_digits":4096,"max_query_terms":4096,"max_ether_rules":4096,"max_ether_query_sites":4096}}
+{"type":"stats","background":"zero","domain":"nonnegative_decimal_addresses","active_qubits":2,"components":1,"largest_component":2,"tableau_bytes":34,"address_bytes":102,"ether_rules":0,"revision":1,"limits":{"max_active_qubits":4096,"max_component_qubits":1024,"max_state_bytes":67108864,"max_address_digits":4096,"max_query_terms":4096,"max_ether_rules":4096,"max_ether_query_sites":4096}}
+{"type":"compact","released_qubits":2}
+{"type":"stats","background":"zero","domain":"nonnegative_decimal_addresses","active_qubits":0,"components":0,"largest_component":0,"tableau_bytes":0,"address_bytes":0,"ether_rules":0,"revision":3,"limi...
+The rest of the test output was removed since it exceeds the threshold of 1024 bytes.
+</system-out>
+	</testcase>
+	<testcase name="infinite_example_bell" classname="infinite_example_bell" time="0.00153383" status="run">
+		<system-out>{"type":"stats","background":"bell","domain":"nonnegative_decimal_addresses","active_qubits":0,"components":0,"largest_component":0,"tableau_bytes":0,"address_bytes":0,"ether_rules":0,"revision":0,"limits":{"max_active_qubits":4096,"max_component_qubits":1024,"max_state_bytes":67108864,"max_address_digits":4096,"max_query_terms":4096,"max_ether_rules":4096,"max_ether_query_sites":4096}}
+{"type":"stats","background":"bell","domain":"nonnegative_decimal_addresses","active_qubits":2,"components":1,"largest_component":2,"tableau_bytes":34,"address_bytes":38,"ether_rules":0,"revision":1,"limits":{"max_active_qubits":4096,"max_component_qubits":1024,"max_state_bytes":67108864,"max_address_digits":4096,"max_query_terms":4096,"max_ether_rules":4096,"max_ether_query_sites":4096}}
+{"type":"compact","released_qubits":2}
+{"type":"stats","background":"bell","domain":"nonnegative_decimal_addresses","active_qubits":0,"components":0,"largest_component":0,"tableau_bytes":0,"address_bytes":0,"ether_rules":0,"revision":3,"limit...
+The rest of the test output was removed since it exceeds the threshold of 1024 bytes.
+</system-out>
+	</testcase>
+	<testcase name="infinite_cli_contract" classname="infinite_cli_contract" time="0.193115" status="run">
+		<system-out>{"suite": "infinite_cli", "status": "passed", "cases": 51, "checks": 125}
+</system-out>
+	</testcase>
+	<testcase name="basis_vm" classname="basis_vm" time="0.261862" status="run">
+		<system-out>PASS 14248 checks; 32x32 pairs, boundary pairs, 2048 seeded pairs; elapsed_ms=259.788
+</system-out>
+	</testcase>
+	<testcase name="quantum_echo" classname="quantum_echo" time="0.204536" status="run">
+		<system-out>PASS quantum_echo 6483 checks
+</system-out>
+	</testcase>
+	<testcase name="sparse_observable" classname="sparse_observable" time="0.438372" status="run">
+		<system-out>PASS 337230 sparse observable, independent double oracle, limit and cancellation checks
+</system-out>
+	</testcase>
+	<testcase name="native_original_exams" classname="native_original_exams" time="0.0634027" status="run">
+		<system-out>{"event":"progress","phase":"construction_start","elapsed_ms":0,"gates_completed":0,"components":0}
+{"event":"initialized","logical_payload_bytes":34,"initialization_ms":0.00031}
+{"event":"evolution_complete","evolution_ms":0.00056999999999999998,"gate_count":2,"logical_payload_bytes":34}
+{"event":"progress","phase":"selected_validation_complete","elapsed_ms":0.18354100000000001,"gates_completed":2,"components":0}
+{"event":"result","status":"pass","core":"CompactCore","family":"ghz","n":2,"seed":20261018,"requested_depth":0,"gate_count":2,"initialization_ms":0.00031,"evolution_ms":0.00056999999999999998,"selected_validation_ms":0.18354100000000001,"full_validation_ms":0.00092100000000000005,"validation_scope":"full_ghz_signature_and_selected_generators","logical_payload_bytes":34}
+{"event":"progress","phase":"construction_start","elapsed_ms":0,"gates_completed":0,"components":0}
+{"event":"initialized","logical_payload_bytes":34,"initialization_ms":0.0001}
+{"event":"evolution_complete","evolution_ms":0.0001910...
+The rest of the test output was removed since it exceeds the threshold of 1024 bytes.
+</system-out>
+	</testcase>
+	<testcase name="factorized_diversity" classname="factorized_diversity" time="0.00405729" status="run">
+		<system-out>{"phase":"initialized","elapsed_ms":1.23121}
+{"phase":"evolved","elapsed_ms":1.33244}
+{"phase":"all_local_probabilities_validated","elapsed_ms":1.51876}
+{"phase":"global_queries_validated","elapsed_ms":1.68748}
+{"status":"ok","family":"independent_random_clifford_t_products","n":128,"depth":32,"seed":5572446169236791108,"production_gates":4096,"reference_gates":4096,"reference":"generic complex&lt;long double&gt; 2x2 matrix-vector multiplication","long_double_mantissa_bits":64,"thresholds":{"local_probability":3e-11,"log_magnitude_and_phase":1e-7,"legacy_log_magnitude_and_phase":1e-8,"global_threshold_is_heuristic":true},"all_local_probabilities_checked":128,"local_failures":0,"max_local_probability_abs_error":3.33121117496171237349e-16,"worst_local_qubit":43,"worst_local_reference":0.500000000000000000054,"worst_local_actual":0.499999999999999666933,"max_reference_norm_abs_error":1.51788304147970620761e-18,"alternative_query_flipped_bits":110,"alternative_query_protected_near_zero_bits":18,"minimum_selected_refere...
+The rest of the test output was removed since it exceeds the threshold of 1024 bytes.
+</system-out>
+	</testcase>
+	<testcase name="native_core_and_xasm" classname="native_core_and_xasm" time="0.0256879" status="run">
+		<system-out>PASS compact compatibility
+PASS reduced XASM
+PASS T phase identities
+PASS seeded Clifford+T circuits
+PASS parser diagnostics
+PASS limits and failed assertions
+</system-out>
+	</testcase>
+	<testcase name="xasm_hello" classname="xasm_hello" time="0.00190807" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/hello.x
+qubits=1 instructions=3 state_bytes=17 ms=0.156
+STATE
+-Z
+STATE_BYTES 17
+ASSERT one PASS
+</system-out>
+	</testcase>
+	<testcase name="xasm_bell" classname="xasm_bell" time="0.00155025" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/bell.x
+qubits=2 instructions=2 state_bytes=34 ms=0.071
+STATE
++XX
++ZZ
+STATE_BYTES 34
+ASSERT ghz PASS
+</system-out>
+	</testcase>
+	<testcase name="xasm_ghz4" classname="xasm_ghz4" time="0.00199764" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/ghz4.x
+qubits=4 instructions=4 state_bytes=68 ms=0.073
+STATE
++XXXX
++ZZII
++IZZI
++IIZZ
+STATE_BYTES 68
+ASSERT ghz PASS
+</system-out>
+	</testcase>
+	<testcase name="xasm_magic_t" classname="xasm_magic_t" time="0.00160726" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/magic_t.x
+qubits=1 instructions=2 backend=reduced components=2 t_gates=1 logical_payload_bytes=99 ms=0.078
+STATE
+backend=reduced
+components=2
+t_gates=1
+logical_payload_bytes=99
+LOGICAL_PAYLOAD_BYTES 99
+ASSERT fidelity PASS
+ASSERT norm PASS
+</system-out>
+	</testcase>
+	<testcase name="xasm_clifford_t" classname="xasm_clifford_t" time="0.00160722" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/clifford_t.x
+qubits=3 instructions=13 backend=reduced components=4 t_gates=3 logical_payload_bytes=317 ms=0.092
+STATE
+backend=reduced
+components=4
+t_gates=3
+logical_payload_bytes=317
+LOGICAL_PAYLOAD_BYTES 317
+ASSERT fidelity PASS
+ASSERT norm PASS
+</system-out>
+	</testcase>
+	<testcase name="xasm_ghz1000" classname="xasm_ghz1000" time="0.0102899" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/ghz1000.x
+qubits=1000 instructions=1001 state_bytes=257000 ms=8.743
+ASSERT ghz PASS
+ASSERT expectation PASS pauli=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...
+The rest of the test output was removed since it exceeds the threshold of 1024 bytes.
+</system-out>
+	</testcase>
+	<testcase name="xasm_t60" classname="xasm_t60" time="0.00478298" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/t60.x
+qubits=60 instructions=61 backend=reduced components=2 t_gates=1 logical_payload_bytes=1810 ms=3.247
+ASSERT norm PASS
+ASSERT expectation PASS pauli=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX value=0.70710678118654746 expected=0.70710678118654757 tolerance=1e-10
+ASSERT expectation PASS pauli=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXY value=0.70710678118654746 expected=0.70710678118654757 tolerance=1e-10
+STATE
+backend=reduced
+components=2
+t_gates=1
+logical_payload_bytes=1810
+LOGICAL_PAYLOAD_BYTES 1810
+</system-out>
+	</testcase>
+	<testcase name="xasm_reduced_magic" classname="xasm_reduced_magic" time="0.00369328" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/closure/core/build/xasm_reduced_magic.x
+qubits=2 instructions=6 backend=reduced components=2 t_gates=1 logical_payload_bytes=164 ms=0.092
+ASSERT fidelity PASS
+ASSERT norm PASS
+STATE
+backend=reduced
+components=2
+t_gates=1
+logical_payload_bytes=164
+LOGICAL_PAYLOAD_BYTES 164
+</system-out>
+	</testcase>
+	<testcase name="xasm_failed_assert_exit" classname="xasm_failed_assert_exit" time="0.00184792" status="run">
+		<system-out>XASM program=/workspace/scratch/d0e1d0a0e3a1/closure/core/build/xasm_failed_assert.x
+qubits=1 instructions=0 state_bytes=17 ms=0.102
+ASSERT one FAIL
+</system-out>
+	</testcase>
+	<testcase name="xasm_invalid_program_exit" classname="xasm_invalid_program_exit" time="0.00182757" status="run">
+		<system-out>XASM ERROR: line 2: expected h &lt;q&gt; (unsigned decimal integer)
+</system-out>
+	</testcase>
+	<testcase name="mxlang_compiler" classname="mxlang_compiler" time="0.0138694" status="run">
+		<system-out>PASS manual GHZ expansion
+PASS reduced circuit expansion
+PASS lexical scopes and parameter types
+PASS source diagnostics and compile-only behavior
+PASS checked arithmetic and backend limits
+PASS bounded expansion
+</system-out>
+	</testcase>
+	<testcase name="mx_bell" classname="mx_bell" time="0.00250752" status="run">
+		<system-out>MX program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/mx_bell.mx
+qubits=2 instructions=2 state_bytes=34 ms=0.135
+STATE
++XX
++ZZ
+STATE_BYTES 34
+ASSERT ghz PASS
+</system-out>
+	</testcase>
+	<testcase name="mx_magic" classname="mx_magic" time="0.00465289" status="run">
+		<system-out>MX program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/mx_magic.mx
+qubits=1 instructions=2 backend=reduced components=2 t_gates=1 logical_payload_bytes=99 ms=0.115
+STATE
+backend=reduced
+components=2
+t_gates=1
+logical_payload_bytes=99
+LOGICAL_PAYLOAD_BYTES 99
+ASSERT fidelity PASS
+ASSERT norm PASS
+</system-out>
+	</testcase>
+	<testcase name="mx_layers" classname="mx_layers" time="0.0019099" status="run">
+		<system-out>MX program=/workspace/scratch/d0e1d0a0e3a1/mundo-X/examples/mx_layers.mx
+qubits=3 instructions=28 backend=reduced components=4 t_gates=8 logical_payload_bytes=467 ms=0.154
+STATE
+backend=reduced
+components=4
+t_gates=8
+logical_payload_bytes=467
+LOGICAL_PAYLOAD_BYTES 467
+ASSERT fidelity PASS
+ASSERT norm PASS
+</system-out>
+	</testcase>
+	<testcase name="mxlang_cli_contract" classname="mxlang_cli_contract" time="0.0091588" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="sparse_ram" classname="sparse_ram" time="0.00421667" status="run">
+		<system-out>Sparse RAM: 15/15 cases passed (63 assertions).
+</system-out>
+	</testcase>
+	<testcase name="x86_cpu" classname="x86_cpu" time="0.087817" status="run">
+		<system-out>PASS x86 CPU: 5914373 checks, including 655360 exhaustive 8-bit ALU executions
+</system-out>
+	</testcase>
+	<testcase name="x86_long_mode" classname="x86_long_mode" time="0.022785" status="run">
+		<system-out>PASS x86 long-mode: 45273 assertions; real guest transition, high64 arithmetic, paging and explicit faults
+</system-out>
+	</testcase>
+	<testcase name="x86_alu64_oracle" classname="x86_alu64_oracle" time="0.0172132" status="run">
+		<system-out>x86-64 ALU native oracle: 7872 instruction vectors passed (ADD/ADC/SUB/SBB/CMP; CF/PF/AF/ZF/SF/OF; IMUL CF/OF).
+SHLD/SHRD native oracle: 38912 instruction vectors passed (16/32/64-bit, imm8/CL, defined flags only).
+</system-out>
+	</testcase>
+	<testcase name="x86_enter_oracle" classname="x86_enter_oracle" time="0.232274" status="run">
+		<system-out>x86_enter_oracle_test: 9280 native ENTER/LEAVE comparisons and 40 native final-SP page-protection vectors passed
+</system-out>
+	</testcase>
+	<testcase name="boot_media" classname="boot_media" time="0.00536096" status="run">
+		<system-out>BootMedia: 34/34 synthetic cases passed.
+</system-out>
+	</testcase>
+	<testcase name="pc_machine" classname="pc_machine" time="0.00333408" status="run">
+		<system-out>PC machine: 34 checks passed
+</system-out>
+	</testcase>
+	<testcase name="pc_iso" classname="pc_iso" time="0.0126741" status="run">
+		<system-out>PC ISO: 9/9 cases passed (61 assertions).
+</system-out>
+	</testcase>
+	<testcase name="pc_memory" classname="pc_memory" time="0.00231748" status="run">
+		<system-out>PC memory: 34 checks passed
+</system-out>
+	</testcase>
+	<testcase name="pc_video" classname="pc_video" time="0.436744" status="run">
+		<system-out>PC video: 214 checks passed (guest 1280x720 + 7680x4320, VBE, tiles, memory budget)
+</system-out>
+	</testcase>
+	<testcase name="pc_quantum" classname="pc_quantum" time="0.00510912" status="run">
+		<system-out>{"suite":"pc_quantum","checks":232,"guest_modes":["real16","long64"],"success_and_failure_guests":4,"failures":0}
+</system-out>
+	</testcase>
+</testsuite>

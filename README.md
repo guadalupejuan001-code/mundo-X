@@ -4,9 +4,9 @@
 
 COSMIC X Engine es el título del conjunto. Dentro se conserva la computación cuántica de Mundo X, sus representaciones originales y el motor gráfico que observa el estado compartido. La idea, creación y dirección del proyecto corresponden a **X, titular del repositorio**; el historial documenta el desarrollo con asistencia de IA. La simulación se ejecuta por software y el motor gráfico utiliza OpenGL ES.
 
-**Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 20 de octubre de 2026.
+**Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 21 de octubre de 2026.
 
-Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: el perfil de **1.000 qubits**, Graphics **4K/8K**, **Solar 4K con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. Los módulos comparten código donde corresponde y mantienen sus aplicaciones y formatos propios.
+Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: **Ether**, el perfil finito de **1.000 qubits**, Graphics **4K/8K con espejos**, **Solar con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. La [consolidación del repositorio](docs/repository-unification-2026-10-21.md) identifica los aportes recuperados, los borradores superados y la evidencia de cada plataforma.
 
 **InfiniteCore integrado.** El [dominio por reglas y componentes finitos](docs/infinite_core.md)
 dispone de una [sesión compartida con el emulador y el motor gráfico](docs/infinite_integration.md).
@@ -40,10 +40,46 @@ mismo estado; el huésped PC y su visor conservan la misma sesión. El
 [contrato técnico y sus pruebas](docs/ether-fusion.md) detalla la representación
 `Ψ = U_Ether φ`, las migraciones y los límites comprobados.
 
+La [compactación exacta de reglas](docs/ether-rule-compaction.md) guarda la
+secuencia global mediante una regla y su longitud. Incluye evaluación algebraica
+de consultas de Pauli y comparaciones reproducibles con la versión anterior.
+
+La [evaluación por intervalos y su recorrido gráfico](docs/ether-evaluation-render.md)
+extiende ese ahorro a productos mixtos y evita reconstrucciones que se cancelan.
+Incluye comparaciones de píxeles y del recorrido Ether–escena–imagen con un
+presupuesto de 2 GiB por proceso en el anfitrión.
+
+La [optimización conjunta de Ether, física y selección](docs/ether-system-optimization.md)
+y el [índice compacto de excepciones del renderizador](docs/ether-render-optimization.md)
+conservan los resultados mediante comparaciones antes/después. El segundo evita
+buscar repetidamente todas las ediciones por cada candidato de un rayo y se
+comparte entre escritorio, Graphics Android, COSMIC y el visor de PC. Sus
+mediciones son del anfitrión; no certifican FPS de una APK en un teléfono.
+
 Los modelos orbitales, la CPU/RAM x86, la escena procedural y GLES mantienen sus
 algoritmos y recursos actuales. Su representación integral mediante Ether sigue
 siendo parte del objetivo de arquitectura. Los proyectos finitos y otros núcleos
 conservan sus contratos propios y no reciben un Ether auxiliar oculto.
+
+### Espejos sobre un solo mundo
+
+El [observador con espejos](docs/ether-mirrors.md) calcula reflejos sobre las
+mismas reglas, coeficientes e IDs. Una imagen reflejada conserva el objeto de
+origen: seleccionarlo, editarlo u ocultarlo actualiza sus reflejos. Los tramos
+periódicos que cumplen las condiciones geométricas se resuelven por composición;
+los demás siguen un recorrido explícito con presupuesto. El coste no equivale a
+copiar una escena por cada reflejo.
+
+**Graphics → Espejos** y **COSMIC → Motor → Escena → Espejos del mismo mundo**
+permiten usar suelo reflectante o dos espejos enfrentados. La sesión privada
+conserva esos ajustes. El formato portable `.cosmic` todavía no transporta la
+configuración óptica; abrir un proyecto conserva el contrato del formato actual.
+
+Android reutiliza el framebuffer completado cuando todas las entradas visuales
+son exactamente iguales. Cámara, núcleo, ediciones, resolución, selección y
+parámetros ópticos invalidan esa reutilización. La medición sincronizada fuerza
+un dibujo real. La interfaz identifica una imagen conservada sin presentarla
+como un dibujo instantáneo ni como una cifra de FPS.
 
 ## Qué incluye el código integrado
 
@@ -57,6 +93,7 @@ conservan sus contratos propios y no reciben un Ether auxiliar oculto.
 | COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3; dispositivo InfiniteCore y viewport sobre la sesión cuántica compartida. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
 | Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
+| Física nativa 2D y 3D | Modelos clásicos finitos con recuperación de fallos; el CLI `physics3d` ejecuta la base 3D rescatada. Sus cuerpos aún no son estado Ether ni alimentan las órbitas de Solar. | [Auditoría del núcleo](docs/repository-core-review-2026-10-21.md) |
 | Bridge X y Transformer X | Codificación de bytes en modos y modelo PyTorch entrenable. Se conserva como línea independiente; todavía no alimenta CompactCore. | [Bridge X](src/bridge_x.py), [Transformer X](src/transformer_x.py), [entrenamiento](experiments/train_file_v0_1.py) |
 
 La APK principal `com.mundox.cosmic` reúne el motor, el núcleo y los laboratorios. **Solar y PC son aplicaciones separadas dentro del mismo código fuente.** La VM didáctica de 8 bits está incluida en COSMIC; el emulador x86/x64 de PC conserva su propio destino de compilación.
@@ -94,6 +131,7 @@ ctest --test-dir build --output-on-failure
 ./build/mundo_x run examples/t60.x
 ./build/mundo_x run-mx examples/mx_layers.mx
 ./build/mundo_x_phase examples/adder50.qx adaptive
+./build/mundo_x physics3d 256 120
 ./build/mundo_x_vm --self-test
 ./build/pc-android/cosmic_pc_cli --demo64 --ram-mib 2048 --resident-mib 1024
 ```
@@ -122,8 +160,9 @@ Requisitos de construcción declarados: **Java 17, Gradle 8.9, AGP 8.7.3, SDK 35
 | Graphics | `com.mundox.graphics` · 0.4.0 | `gradle -p graphics-android :app:assembleDebug` |
 | Graphics 4K | `com.mundox.graphics.uhd` · 0.4.0 | `gradle -p graphics-android -Pcosmic4kStandalone=true :app:assembleDebug` |
 | Graphics 8K | `com.mundox.graphics.ultra` · 0.4.0 | `gradle -p graphics-android -Pcosmic8kStandalone=true :app:assembleDebug` |
-| Solar | `com.cosmicx.solar` · 1.1.0 | `gradle -p solar-android :app:assembleDebug` |
-| Solar 4K | `com.cosmicx.solar.uhd` · 1.1.0 | `gradle -p solar-android -Psolar4kStandalone=true :app:assembleDebug` |
+| Solar | `com.cosmicx.solar` · 1.3.0 | `gradle -p solar-android :app:assembleDebug` |
+| Solar 4K | `com.cosmicx.solar.uhd` · 1.3.0 | `gradle -p solar-android -Psolar4kStandalone=true :app:assembleDebug` |
+| Solar 8K | `com.cosmicx.solar.ultra` · 1.3.0 | `gradle -p solar-android -Psolar8kStandalone=true :app:assembleDebug` |
 | PC propia | `com.cosmicx.pc` · 0.4.0 | `gradle -p pc-android :app:assembleDebug` |
 | XLab original | Proyecto Android de la raíz | `gradle :app:assembleDebug` |
 

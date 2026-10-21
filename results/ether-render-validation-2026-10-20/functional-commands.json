@@ -1,0 +1,84 @@
+[
+  {
+    "case": "pc-java",
+    "exit": 0,
+    "command": [
+      "java",
+      "-jar",
+      "../mirror-build/deps/ecj.jar",
+      "-8",
+      "-warn:none",
+      "-cp",
+      "../mirror-build/deps/android.jar",
+      "-d",
+      "../render-build/pc-classes",
+      "@../render-build/pc-graphics-sources.txt"
+    ]
+  },
+  {
+    "case": "ctest",
+    "exit": 0,
+    "command": [
+      "../ether-build/deps/cmake/data/bin/ctest",
+      "--test-dir",
+      "../system-build/release",
+      "--output-on-failure"
+    ]
+  },
+  {
+    "case": "raster",
+    "exit": 0,
+    "command": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+      "tools/render_route_check.py",
+      "--output",
+      "/workspace/scratch/7def14e3f3d9/mundo-X/results/ether-render-validation-2026-10-20/raster.json"
+    ]
+  },
+  {
+    "case": "geometry",
+    "exit": 0,
+    "command": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+      "graphics-desktop/validate.py"
+    ]
+  },
+  {
+    "case": "contract",
+    "exit": 0,
+    "command": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+      "graphics-desktop/validate_contract.py"
+    ]
+  },
+  {
+    "case": "projects",
+    "exit": 0,
+    "command": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+      "graphics-desktop/validate_projects.py",
+      "--output",
+      "/workspace/scratch/7def14e3f3d9/mundo-X/results/ether-render-validation-2026-10-20/projects.json"
+    ]
+  },
+  {
+    "case": "infinite",
+    "exit": 0,
+    "command": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+      "graphics-desktop/validate_infinite.py",
+      "--output",
+      "/workspace/scratch/7def14e3f3d9/mundo-X/results/ether-render-validation-2026-10-20/infinite.json"
+    ]
+  },
+  {
+    "case": "picking",
+    "exit": 0,
+    "command": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+      "tools/system_graphics_check.py",
+      "--output",
+      "/workspace/scratch/7def14e3f3d9/mundo-X/results/ether-render-validation-2026-10-20/picking.json"
+    ]
+  }
+]

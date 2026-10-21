@@ -1,0 +1,1141 @@
+{
+  "status": "blocked_or_failed",
+  "error": "AssertionError: Before/after capture changed",
+  "stage": "finished",
+  "ram_mb": 2048,
+  "system_image": "system-images;android-29;default;x86_64",
+  "virtualization": "TCG",
+  "art_compile": "speed",
+  "swiftshader_threads": 1,
+  "driver_config_read_observed": true,
+  "driver_configuration_sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0",
+  "boot_seconds": 147.877072289004,
+  "exact_capture_matches": 7,
+  "scope": "Android emulator only; corrected frozen reference versus candidate; zero RGBA tolerance; ART speed requested, actual AOT coverage not inferred.",
+  "versions": {
+    "before": {
+      "status": "passed",
+      "error": null,
+      "renderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+      "gles": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+      "frames": 65,
+      "sessionLifetimes": 128,
+      "repeatCaptureFailures": 0,
+      "cases": [
+        {
+          "case": 0,
+          "body": 3,
+          "entry": false,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25783272,
+          "javaUsedBytes": 24564056
+        },
+        {
+          "case": 1,
+          "body": 3,
+          "entry": false,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+            "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25881832,
+          "javaUsedBytes": 5561328
+        },
+        {
+          "case": 2,
+          "body": 6,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+            "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25921688,
+          "javaUsedBytes": 10544520
+        },
+        {
+          "case": 3,
+          "body": 0,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25964168,
+          "javaUsedBytes": 8759120
+        },
+        {
+          "case": 4,
+          "body": 3,
+          "entry": true,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 26107192,
+          "javaUsedBytes": 15621680
+        },
+        {
+          "case": 5,
+          "body": 5,
+          "entry": true,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25926216,
+          "javaUsedBytes": 11705944
+        },
+        {
+          "case": 6,
+          "body": 9,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25924920,
+          "javaUsedBytes": 10982848
+        },
+        {
+          "case": 7,
+          "body": 7,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "07c00c47e7aaffb97a2492661368d9c63867fe51305624c689c1b05f4d8e6df1",
+            "07c00c47e7aaffb97a2492661368d9c63867fe51305624c689c1b05f4d8e6df1"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 25911480,
+          "javaUsedBytes": 9357024
+        }
+      ]
+    },
+    "after": {
+      "status": "passed",
+      "error": null,
+      "renderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+      "gles": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+      "frames": 66,
+      "sessionLifetimes": 128,
+      "repeatCaptureFailures": 0,
+      "cases": [
+        {
+          "case": 0,
+          "body": 3,
+          "entry": false,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+            "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 30700608,
+          "javaUsedBytes": 22055328
+        },
+        {
+          "case": 1,
+          "body": 3,
+          "entry": false,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+            "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 30804992,
+          "javaUsedBytes": 8164904
+        },
+        {
+          "case": 2,
+          "body": 6,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+            "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31194096,
+          "javaUsedBytes": 13275664
+        },
+        {
+          "case": 3,
+          "body": 0,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+            "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31155488,
+          "javaUsedBytes": 10155944
+        },
+        {
+          "case": 4,
+          "body": 3,
+          "entry": true,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+            "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31275664,
+          "javaUsedBytes": 12718600
+        },
+        {
+          "case": 5,
+          "body": 5,
+          "entry": true,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+            "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31071680,
+          "javaUsedBytes": 11348432
+        },
+        {
+          "case": 6,
+          "body": 9,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+            "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31070288,
+          "javaUsedBytes": 9453520
+        },
+        {
+          "case": 7,
+          "body": 7,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "recorded_input_fields": 29,
+          "changed_input_fields": [],
+          "capture_sha256": [
+            "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+            "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a"
+          ],
+          "repeat": {
+            "pixels": 73080,
+            "different_pixels": 0,
+            "different_channels": 0,
+            "max_channel_delta": 0,
+            "absolute_channel_delta_sum": 0,
+            "mean_absolute_channel_delta": 0.0,
+            "alpha_differences": 0,
+            "bounds_gl_row_order": null,
+            "changed_coordinates_gl_row_order": []
+          },
+          "nativeHeapBytes": 31054544,
+          "javaUsedBytes": 11602208
+        }
+      ]
+    }
+  },
+  "paired": [
+    {
+      "case": 0,
+      "body": 3,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 1,
+      "body": 3,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 2,
+      "body": 6,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 3,
+      "body": 0,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 4,
+      "body": 3,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 5,
+      "body": 5,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 6,
+      "body": 9,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 0,
+        "different_channels": 0,
+        "max_channel_delta": 0,
+        "absolute_channel_delta_sum": 0,
+        "mean_absolute_channel_delta": 0.0,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": null,
+        "changed_coordinates_gl_row_order": []
+      }
+    },
+    {
+      "case": 7,
+      "body": 7,
+      "changed_input_fields": [],
+      "changed_repeat_input_fields": [],
+      "first_captures": {
+        "pixels": 73080,
+        "different_pixels": 53,
+        "different_channels": 136,
+        "max_channel_delta": 13,
+        "absolute_channel_delta_sum": 346,
+        "mean_absolute_channel_delta": 0.0011836343732895458,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": [
+          153,
+          101,
+          205,
+          101
+        ],
+        "changed_coordinates_gl_row_order": [
+          [
+            153,
+            101
+          ],
+          [
+            154,
+            101
+          ],
+          [
+            155,
+            101
+          ],
+          [
+            156,
+            101
+          ],
+          [
+            157,
+            101
+          ],
+          [
+            158,
+            101
+          ],
+          [
+            159,
+            101
+          ],
+          [
+            160,
+            101
+          ],
+          [
+            161,
+            101
+          ],
+          [
+            162,
+            101
+          ],
+          [
+            163,
+            101
+          ],
+          [
+            164,
+            101
+          ],
+          [
+            165,
+            101
+          ],
+          [
+            166,
+            101
+          ],
+          [
+            167,
+            101
+          ],
+          [
+            168,
+            101
+          ],
+          [
+            169,
+            101
+          ],
+          [
+            170,
+            101
+          ],
+          [
+            171,
+            101
+          ],
+          [
+            172,
+            101
+          ],
+          [
+            173,
+            101
+          ],
+          [
+            174,
+            101
+          ],
+          [
+            175,
+            101
+          ],
+          [
+            176,
+            101
+          ],
+          [
+            177,
+            101
+          ],
+          [
+            178,
+            101
+          ],
+          [
+            179,
+            101
+          ],
+          [
+            180,
+            101
+          ],
+          [
+            181,
+            101
+          ],
+          [
+            182,
+            101
+          ],
+          [
+            183,
+            101
+          ],
+          [
+            184,
+            101
+          ],
+          [
+            185,
+            101
+          ],
+          [
+            186,
+            101
+          ],
+          [
+            187,
+            101
+          ],
+          [
+            188,
+            101
+          ],
+          [
+            189,
+            101
+          ],
+          [
+            190,
+            101
+          ],
+          [
+            191,
+            101
+          ],
+          [
+            192,
+            101
+          ],
+          [
+            193,
+            101
+          ],
+          [
+            194,
+            101
+          ],
+          [
+            195,
+            101
+          ],
+          [
+            196,
+            101
+          ],
+          [
+            197,
+            101
+          ],
+          [
+            198,
+            101
+          ],
+          [
+            199,
+            101
+          ],
+          [
+            200,
+            101
+          ],
+          [
+            201,
+            101
+          ],
+          [
+            202,
+            101
+          ],
+          [
+            203,
+            101
+          ],
+          [
+            204,
+            101
+          ],
+          [
+            205,
+            101
+          ]
+        ]
+      },
+      "repeat_captures": {
+        "pixels": 73080,
+        "different_pixels": 53,
+        "different_channels": 136,
+        "max_channel_delta": 13,
+        "absolute_channel_delta_sum": 346,
+        "mean_absolute_channel_delta": 0.0011836343732895458,
+        "alpha_differences": 0,
+        "bounds_gl_row_order": [
+          153,
+          101,
+          205,
+          101
+        ],
+        "changed_coordinates_gl_row_order": [
+          [
+            153,
+            101
+          ],
+          [
+            154,
+            101
+          ],
+          [
+            155,
+            101
+          ],
+          [
+            156,
+            101
+          ],
+          [
+            157,
+            101
+          ],
+          [
+            158,
+            101
+          ],
+          [
+            159,
+            101
+          ],
+          [
+            160,
+            101
+          ],
+          [
+            161,
+            101
+          ],
+          [
+            162,
+            101
+          ],
+          [
+            163,
+            101
+          ],
+          [
+            164,
+            101
+          ],
+          [
+            165,
+            101
+          ],
+          [
+            166,
+            101
+          ],
+          [
+            167,
+            101
+          ],
+          [
+            168,
+            101
+          ],
+          [
+            169,
+            101
+          ],
+          [
+            170,
+            101
+          ],
+          [
+            171,
+            101
+          ],
+          [
+            172,
+            101
+          ],
+          [
+            173,
+            101
+          ],
+          [
+            174,
+            101
+          ],
+          [
+            175,
+            101
+          ],
+          [
+            176,
+            101
+          ],
+          [
+            177,
+            101
+          ],
+          [
+            178,
+            101
+          ],
+          [
+            179,
+            101
+          ],
+          [
+            180,
+            101
+          ],
+          [
+            181,
+            101
+          ],
+          [
+            182,
+            101
+          ],
+          [
+            183,
+            101
+          ],
+          [
+            184,
+            101
+          ],
+          [
+            185,
+            101
+          ],
+          [
+            186,
+            101
+          ],
+          [
+            187,
+            101
+          ],
+          [
+            188,
+            101
+          ],
+          [
+            189,
+            101
+          ],
+          [
+            190,
+            101
+          ],
+          [
+            191,
+            101
+          ],
+          [
+            192,
+            101
+          ],
+          [
+            193,
+            101
+          ],
+          [
+            194,
+            101
+          ],
+          [
+            195,
+            101
+          ],
+          [
+            196,
+            101
+          ],
+          [
+            197,
+            101
+          ],
+          [
+            198,
+            101
+          ],
+          [
+            199,
+            101
+          ],
+          [
+            200,
+            101
+          ],
+          [
+            201,
+            101
+          ],
+          [
+            202,
+            101
+          ],
+          [
+            203,
+            101
+          ],
+          [
+            204,
+            101
+          ],
+          [
+            205,
+            101
+          ]
+        ]
+      }
+    }
+  ],
+  "paired_total": {
+    "pixels": 584640,
+    "different_pixels": 53,
+    "different_channels": 136,
+    "absolute_channel_delta_sum": 346,
+    "alpha_differences": 0,
+    "all_recorded_input_hashes_equal": true
+  }
+}

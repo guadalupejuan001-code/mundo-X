@@ -1,0 +1,186 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    1920,
+    1080
+  ],
+  "results": [
+    {
+      "scene": 0,
+      "selected": 0,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          315.983201,
+          318.152619,
+          331.287423,
+          345.154506,
+          324.880838
+        ],
+        "before": [
+          323.907501,
+          317.978618,
+          318.230741,
+          315.048668,
+          322.666469
+        ]
+      },
+      "fresh_ms": {
+        "after": 342.120644,
+        "before": 326.581668
+      },
+      "median_ms": {
+        "after": 324.880838,
+        "before": 318.230741
+      },
+      "eclipse_candidates": 38
+    },
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          373.151538,
+          362.968824,
+          370.328156,
+          384.250584,
+          382.402473
+        ],
+        "before": [
+          373.357912,
+          385.672254,
+          375.537636,
+          375.675579,
+          372.425608
+        ]
+      },
+      "fresh_ms": {
+        "after": 358.495287,
+        "before": 363.143351
+      },
+      "median_ms": {
+        "after": 373.151538,
+        "before": 375.537636
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 17,
+      "selected": 16,
+      "entry": false,
+      "samples_ms": {
+        "before": [
+          387.136089,
+          384.800814,
+          384.824459,
+          384.599278,
+          377.625314
+        ],
+        "after": [
+          380.257957,
+          381.044708,
+          377.231485,
+          377.964496,
+          384.752975
+        ]
+      },
+      "fresh_ms": {
+        "before": 387.672038,
+        "after": 373.655823
+      },
+      "median_ms": {
+        "before": 384.800814,
+        "after": 380.257957
+      },
+      "eclipse_candidates": 29
+    },
+    {
+      "scene": 24,
+      "selected": 3,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          661.063083,
+          651.170206,
+          678.048172,
+          663.781557,
+          692.358823
+        ],
+        "before": [
+          828.623885,
+          823.800303,
+          783.344136,
+          772.839186,
+          773.66249
+        ]
+      },
+      "fresh_ms": {
+        "after": 710.830088,
+        "before": 816.982084
+      },
+      "median_ms": {
+        "after": 663.781557,
+        "before": 783.344136
+      },
+      "eclipse_candidates": 22
+    },
+    {
+      "scene": 29,
+      "selected": 14,
+      "entry": true,
+      "samples_ms": {
+        "before": [
+          593.225109,
+          607.523487,
+          582.133539,
+          607.509207,
+          715.956651
+        ],
+        "after": [
+          689.284946,
+          587.107955,
+          579.489037,
+          633.212725,
+          649.046633
+        ]
+      },
+      "fresh_ms": {
+        "before": 630.285765,
+        "after": 672.525107
+      },
+      "median_ms": {
+        "before": 607.509207,
+        "after": 633.212725
+      },
+      "eclipse_candidates": 20
+    }
+  ],
+  "compared_pixels": 31104000,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 384.800814,
+    "after": 380.257957
+  },
+  "rss_peak_kib": 208732,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "9ddc92c717481eb2e0e93028fbeeb2966aab88e5",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; catalogue fixtures; not Android FPS",
+  "experimental_candidate": false,
+  "shader_sha256": "6628945f9a06de759ac0f56a96c0a6ecb7ac9457b6960eed2e1ccb6243cc9d61",
+  "fixtures_sha256": "05bc848a0a44d0c0047635932f41f5d401785f54214f117dc7c0dd36ef702cbb"
+}

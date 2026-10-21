@@ -1,0 +1,398 @@
+{
+  "ram_mb": 2048,
+  "software_gles": "swiftshader",
+  "virtualization": "TCG",
+  "system_image": "system-images;android-29;default;x86_64",
+  "status": "blocked_or_failed",
+  "cases": [
+    {
+      "version": "before",
+      "apks": {
+        "app-debug.apk": "433ef4f6f4265f5c3de1355adeda2eafd590e7871d066c4c153b6689600a37cc",
+        "app-debug-androidTest.apk": "6c3364e8d59bfbb2698262e8abb0912c7df9ca75d29d04b87a4c928c4a54759a"
+      },
+      "result": {
+        "cases": [
+          {
+            "case": 0,
+            "body": 3,
+            "entry": false,
+            "preset": 0,
+            "nativeRevision": 2,
+            "nativeEpoch": 1,
+            "activeSites": 0,
+            "stateBytes": 0,
+            "samplesMs": [
+              116.644516,
+              215.910618,
+              208.991695,
+              273.729155,
+              208.423894
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "93b4ccd1b9b10dfd25a0b33dde0b677628d9d8a7cf2a4f418559e209c9d9648e",
+            "nativeHeapBytes": 25442072,
+            "javaUsedBytes": 22954608
+          },
+          {
+            "case": 1,
+            "body": 3,
+            "entry": false,
+            "preset": 1,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              348.742435,
+              262.223139,
+              438.992638,
+              248.807844,
+              274.608342
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "f9516d3c8c12a4e0fee8c79cfbba7e253987d9b81cd974a5ed035919b93113c2",
+            "nativeHeapBytes": 25571336,
+            "javaUsedBytes": 25504880
+          },
+          {
+            "case": 2,
+            "body": 6,
+            "entry": false,
+            "preset": 2,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              110.626573,
+              168.966672,
+              157.164607,
+              153.663226,
+              219.684062
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "87b31a80451974440738c1b08eb6ab621438ceda0191e2d1943f69e9a11a5dfb",
+            "nativeHeapBytes": 25586144,
+            "javaUsedBytes": 20881520
+          },
+          {
+            "case": 3,
+            "body": 0,
+            "entry": false,
+            "preset": 3,
+            "nativeRevision": 14,
+            "nativeEpoch": 13,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              196.54198,
+              215.768312,
+              134.571559,
+              119.769515,
+              100.087564
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "619e3b89c9279f2aa414eb17a89abfda289d2407fbd819cc73e3c0fe023ea1e6",
+            "nativeHeapBytes": 25588832,
+            "javaUsedBytes": 22579824
+          },
+          {
+            "case": 4,
+            "body": 3,
+            "entry": true,
+            "preset": 0,
+            "nativeRevision": 2,
+            "nativeEpoch": 1,
+            "activeSites": 0,
+            "stateBytes": 0,
+            "samplesMs": [
+              267.928549,
+              115.604026,
+              136.82066,
+              113.808386,
+              121.859721
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "297e441f494ace827ea3078de4c18f477b9a25bd18f79f13aa4a846a15e9a52a",
+            "nativeHeapBytes": 25793160,
+            "javaUsedBytes": 23283120
+          },
+          {
+            "case": 5,
+            "body": 5,
+            "entry": true,
+            "preset": 1,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              145.345326,
+              110.397634,
+              136.910263,
+              105.201558,
+              104.149199
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "27e8448c5a8affe3e7dda5432753deabc74cadebece604b65ed8b0e8961bf727",
+            "nativeHeapBytes": 25713480,
+            "javaUsedBytes": 23986224
+          },
+          {
+            "case": 6,
+            "body": 9,
+            "entry": false,
+            "preset": 2,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              177.501243,
+              158.61873,
+              425.030052,
+              127.407583,
+              127.594139
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "55f4a821bd381090d515b58cf357f4a7ea720bcdd8f4ae114a4d606d31e36298",
+            "nativeHeapBytes": 25764896,
+            "javaUsedBytes": 25701680
+          },
+          {
+            "case": 7,
+            "body": 7,
+            "entry": false,
+            "preset": 3,
+            "nativeRevision": 14,
+            "nativeEpoch": 13,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              293.192448,
+              125.261269,
+              106.524177,
+              250.543819,
+              147.202878
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "1ec01de5ed9014e24b766fee4896364102330f6730a32a7c510deb2e04fc0739",
+            "nativeHeapBytes": 25661168,
+            "javaUsedBytes": 21928304
+          }
+        ],
+        "renderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+        "gles": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+        "scope": "Android runtime; GPU/virtualization recorded separately; not physical Samsung FPS",
+        "sessionLifetimes": 128,
+        "frames": 57,
+        "status": "passed"
+      }
+    },
+    {
+      "version": "after",
+      "apks": {
+        "app-debug.apk": "e3f11f1b7cc99ea7557dcbcc09b16850442caef61e5375b921e6897631923758",
+        "app-debug-androidTest.apk": "a03b07102f3846e1c4cf955c58a9537096c582c34e6c7c2e1b197216eae2ae1e"
+      },
+      "result": {
+        "cases": [
+          {
+            "case": 0,
+            "body": 3,
+            "entry": false,
+            "preset": 0,
+            "nativeRevision": 2,
+            "nativeEpoch": 1,
+            "activeSites": 0,
+            "stateBytes": 0,
+            "samplesMs": [
+              152.223754,
+              147.237314,
+              129.523642,
+              167.649992,
+              136.491472
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "9d2049c482b0298039f5c9e8c3dc793d57778329a72b2140fe5d0e9e6f522f59",
+            "nativeHeapBytes": 25133120,
+            "javaUsedBytes": 22678672
+          },
+          {
+            "case": 1,
+            "body": 3,
+            "entry": false,
+            "preset": 1,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              266.95747,
+              254.267675,
+              210.029993,
+              239.855799,
+              243.200233
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "46595cc16ba8714a6e8038bc24f7f5f6fc4e05c11254c97a9b8f5592d8bdc203",
+            "nativeHeapBytes": 25194568,
+            "javaUsedBytes": 25146576
+          },
+          {
+            "case": 2,
+            "body": 6,
+            "entry": false,
+            "preset": 2,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              98.899284,
+              108.34275,
+              107.415317,
+              95.378989,
+              89.928527
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "cc0b4f00f895b09d2c20a86cc46660dcb1cd9620dfdfd68b511794262ad36e21",
+            "nativeHeapBytes": 25204072,
+            "javaUsedBytes": 20753280
+          },
+          {
+            "case": 3,
+            "body": 0,
+            "entry": false,
+            "preset": 3,
+            "nativeRevision": 14,
+            "nativeEpoch": 13,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              109.658839,
+              105.633708,
+              83.405174,
+              91.337303,
+              108.251626
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "0e2854ecfe1627f61f3fb2e5f5118dccfa87a670d6498bafe3ef6cde483a94a0",
+            "nativeHeapBytes": 25230184,
+            "javaUsedBytes": 22401984
+          },
+          {
+            "case": 4,
+            "body": 3,
+            "entry": true,
+            "preset": 0,
+            "nativeRevision": 2,
+            "nativeEpoch": 1,
+            "activeSites": 0,
+            "stateBytes": 0,
+            "samplesMs": [
+              97.038738,
+              117.621394,
+              106.709121,
+              107.580226,
+              98.772861
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "297e441f494ace827ea3078de4c18f477b9a25bd18f79f13aa4a846a15e9a52a",
+            "nativeHeapBytes": 30449016,
+            "javaUsedBytes": 23022528
+          },
+          {
+            "case": 5,
+            "body": 5,
+            "entry": true,
+            "preset": 1,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              108.957882,
+              85.527608,
+              115.331372,
+              86.579996,
+              100.165629
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "c80228a18a3a42da3994ea4c315ab390ea98a2932a20939b50aea77ad1375f75",
+            "nativeHeapBytes": 25424168,
+            "javaUsedBytes": 23643264
+          },
+          {
+            "case": 6,
+            "body": 9,
+            "entry": false,
+            "preset": 2,
+            "nativeRevision": 10,
+            "nativeEpoch": 9,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              138.000327,
+              138.348002,
+              155.720123,
+              99.030618,
+              152.596215
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "b9a3a13377a4a9e5cd78a2eb5a42472b6bedd4d065ea7fb275f740bf84781894",
+            "nativeHeapBytes": 25342792,
+            "javaUsedBytes": 25308736
+          },
+          {
+            "case": 7,
+            "body": 7,
+            "entry": false,
+            "preset": 3,
+            "nativeRevision": 14,
+            "nativeEpoch": 13,
+            "activeSites": 8,
+            "stateBytes": 136,
+            "samplesMs": [
+              93.75253,
+              109.617659,
+              86.051944,
+              125.020332,
+              121.914907
+            ],
+            "width": 360,
+            "height": 203,
+            "rgbaSha256": "2800d565d8386aef466b853af143ce780dc83309b0151120e210742ccd07fc44",
+            "nativeHeapBytes": 25255656,
+            "javaUsedBytes": 20978480
+          }
+        ],
+        "renderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+        "gles": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+        "scope": "Android runtime; GPU/virtualization recorded separately; not physical Samsung FPS",
+        "sessionLifetimes": 128,
+        "frames": 58,
+        "status": "passed"
+      }
+    }
+  ],
+  "boot_seconds": 139.6825426960022,
+  "exact_capture_matches": 1,
+  "error": "AssertionError: Before/after capture changed"
+}

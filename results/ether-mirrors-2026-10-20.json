@@ -1,0 +1,1356 @@
+{
+  "base": "d7592bb87ae4285161b958939efa292850158726",
+  "head": "95721e741a587ecafe39da87f47538050bf9fdcb",
+  "seed": 42,
+  "status": "passed",
+  "measurements": "Host EGL software; no Android or phone FPS claim",
+  "checks": {
+    "geometry": {
+      "status": "passed",
+      "driver": {
+        "vendor": "Mesa",
+        "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+        "glsl": "OpenGL ES GLSL ES 3.20",
+        "hardware_gpu_available": false,
+        "timer_query_supported": true
+      },
+      "cases": [
+        {
+          "case": 0,
+          "objects": 1,
+          "mode": 1,
+          "seed": 2026,
+          "time": 0,
+          "oracle_rays": 549,
+          "reflected_object_rays": 210,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 1,
+          "objects": 9,
+          "mode": 2,
+          "seed": 2207,
+          "time": 1.1,
+          "oracle_rays": 548,
+          "reflected_object_rays": 211,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 1,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 2,
+          "objects": 64,
+          "mode": 1,
+          "seed": 2388,
+          "time": 3.7,
+          "oracle_rays": 492,
+          "reflected_object_rays": 195,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 3,
+          "objects": 257,
+          "mode": 2,
+          "seed": 2569,
+          "time": 12.3,
+          "oracle_rays": 374,
+          "reflected_object_rays": 24,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 4,
+          "objects": 1,
+          "mode": 1,
+          "seed": 2750,
+          "time": 0,
+          "oracle_rays": 618,
+          "reflected_object_rays": 280,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 5,
+          "objects": 9,
+          "mode": 2,
+          "seed": 2931,
+          "time": 1.1,
+          "oracle_rays": 536,
+          "reflected_object_rays": 202,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 1,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 6,
+          "objects": 64,
+          "mode": 1,
+          "seed": 3112,
+          "time": 3.7,
+          "oracle_rays": 507,
+          "reflected_object_rays": 185,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 7,
+          "objects": 257,
+          "mode": 2,
+          "seed": 3293,
+          "time": 12.3,
+          "oracle_rays": 383,
+          "reflected_object_rays": 37,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 8,
+          "objects": 1,
+          "mode": 1,
+          "seed": 3474,
+          "time": 0,
+          "oracle_rays": 480,
+          "reflected_object_rays": 138,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 9,
+          "objects": 9,
+          "mode": 2,
+          "seed": 3655,
+          "time": 1.1,
+          "oracle_rays": 526,
+          "reflected_object_rays": 194,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 1,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 10,
+          "objects": 64,
+          "mode": 1,
+          "seed": 3836,
+          "time": 3.7,
+          "oracle_rays": 497,
+          "reflected_object_rays": 189,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 11,
+          "objects": 257,
+          "mode": 2,
+          "seed": 4017,
+          "time": 12.3,
+          "oracle_rays": 364,
+          "reflected_object_rays": 23,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 12,
+          "objects": 1,
+          "mode": 1,
+          "seed": 4198,
+          "time": 0,
+          "oracle_rays": 511,
+          "reflected_object_rays": 178,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 13,
+          "objects": 9,
+          "mode": 2,
+          "seed": 4379,
+          "time": 1.1,
+          "oracle_rays": 543,
+          "reflected_object_rays": 208,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 14,
+          "objects": 64,
+          "mode": 1,
+          "seed": 4560,
+          "time": 3.7,
+          "oracle_rays": 507,
+          "reflected_object_rays": 211,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        },
+        {
+          "case": 15,
+          "objects": 257,
+          "mode": 2,
+          "seed": 4741,
+          "time": 12.3,
+          "oracle_rays": 379,
+          "reflected_object_rays": 36,
+          "id_mismatches": [],
+          "bounce_mismatches": [],
+          "fold_max_channel_delta": 0,
+          "folded_budget_exhausted_pixels": 0,
+          "oracle_verified_work_limits": 0,
+          "iterated_budget_exhausted_pixels": 0,
+          "fold_changed_pixels": 0
+        }
+      ],
+      "oracle_rays": 7814,
+      "reflected_object_rays": 2521,
+      "explicit_object_arrays": "oracle only",
+      "wall_ms": 1804.111622,
+      "rss_peak_kib": 137044,
+      "address_space_limit_bytes": 2147483648
+    },
+    "limits": {
+      "status": "passed",
+      "cases": [
+        {
+          "dy": 0.004,
+          "reflections": 42,
+          "compacted": 41,
+          "scene_queries": 2,
+          "fold_draw_ms": 8.552664,
+          "sequential_reference_ms": 0.011517,
+          "iterated_gpu": "completed",
+          "iterated_gpu_ms": 0.018487,
+          "max_channel_delta": 0
+        },
+        {
+          "dy": 0.0004,
+          "reflections": 417,
+          "compacted": 416,
+          "scene_queries": 2,
+          "fold_draw_ms": 0.029353,
+          "sequential_reference_ms": 0.071696,
+          "iterated_gpu": "budget_exceeded",
+          "iterated_gpu_ms": null,
+          "max_channel_delta": null
+        },
+        {
+          "dy": 4e-05,
+          "reflections": 4167,
+          "compacted": 4166,
+          "scene_queries": 2,
+          "fold_draw_ms": 0.026889,
+          "sequential_reference_ms": 0.716307,
+          "iterated_gpu": "budget_exceeded",
+          "iterated_gpu_ms": null,
+          "max_channel_delta": null
+        },
+        {
+          "dy": 4e-06,
+          "reflections": 41667,
+          "compacted": 41666,
+          "scene_queries": 2,
+          "fold_draw_ms": 0.053469,
+          "sequential_reference_ms": 7.164966,
+          "iterated_gpu": "budget_exceeded",
+          "iterated_gpu_ms": null,
+          "max_channel_delta": null
+        },
+        {
+          "dy": 1.6e-06,
+          "reflections": 104167,
+          "compacted": 104165,
+          "scene_queries": 3,
+          "fold_draw_ms": 0.076653,
+          "sequential_reference_ms": 18.770664,
+          "iterated_gpu": "budget_exceeded",
+          "iterated_gpu_ms": null,
+          "max_channel_delta": null
+        }
+      ],
+      "closed_orbit": "black least-radiance solution",
+      "invalid_settings_rejected_atomically": 11,
+      "work_limit_visible": true,
+      "wall_ms": 142.740705,
+      "rss_peak_kib": 97180,
+      "address_space_limit_bytes": 2147483648
+    },
+    "periodic_hits": {
+      "status": "passed",
+      "cases": [
+        {
+          "dy": 0.001,
+          "hidden": false,
+          "hit_id": 0,
+          "reflections": 171,
+          "termination": "object",
+          "scene_queries": 2,
+          "oracle_ms": 4.509901
+        },
+        {
+          "dy": 0.0001,
+          "hidden": false,
+          "hit_id": 0,
+          "reflections": 1710,
+          "termination": "object",
+          "scene_queries": 2,
+          "oracle_ms": 43.713101
+        },
+        {
+          "dy": 1e-05,
+          "hidden": false,
+          "hit_id": 0,
+          "reflections": 17093,
+          "termination": "object",
+          "scene_queries": 2,
+          "oracle_ms": 443.992491
+        },
+        {
+          "dy": 4e-06,
+          "hidden": false,
+          "hit_id": 0,
+          "reflections": 42732,
+          "termination": "object",
+          "scene_queries": 2,
+          "oracle_ms": 1099.726639
+        },
+        {
+          "dy": 4e-06,
+          "hidden": true,
+          "hit_id": -1,
+          "reflections": 114583,
+          "termination": "ground",
+          "scene_queries": 2,
+          "oracle_ms": 3040.11219
+        }
+      ],
+      "oracle": "sequential float64 slab intersections, all physical boxes",
+      "wall_ms": 4748.192691,
+      "rss_peak_kib": 97332,
+      "address_space_limit_bytes": 2147483648
+    },
+    "virtual": {
+      "status": "passed",
+      "cases": [
+        {
+          "case": 0,
+          "compared_reflection_pixels": 9951,
+          "different_ids": 0,
+          "max_channel_delta": 1
+        },
+        {
+          "case": 1,
+          "compared_reflection_pixels": 7730,
+          "different_ids": 0,
+          "max_channel_delta": 0
+        },
+        {
+          "case": 2,
+          "compared_reflection_pixels": 9375,
+          "different_ids": 0,
+          "max_channel_delta": 1
+        },
+        {
+          "case": 3,
+          "compared_reflection_pixels": 9777,
+          "different_ids": 0,
+          "max_channel_delta": 0
+        }
+      ],
+      "reference": "primary-only traversal with a reflected camera and the same surface-consistent material; no bounce code",
+      "wall_ms": 352.083632,
+      "rss_peak_kib": 105448,
+      "address_space_limit_bytes": 2147483648
+    },
+    "pipeline": {
+      "status": "passed",
+      "read_only": true,
+      "exact_reuse": true,
+      "forced_pixels_identical": true,
+      "reflected_pick_hide_restore": true,
+      "picked_id": 30,
+      "reflected_pixels": 1235,
+      "gate_changed_pixels": 6259,
+      "restore_invalidates": true,
+      "optics_and_presentation_in_cache_key": true,
+      "same_core_snapshot_for_all_bounces": true,
+      "wall_ms": 194.640887,
+      "rss_peak_kib": 100364,
+      "address_space_limit_bytes": 2147483648
+    },
+    "tiles": {
+      "status": "passed",
+      "images": [
+        {
+          "mode": 1,
+          "debug": 0,
+          "pixels": 12740,
+          "different_pixels": 0
+        },
+        {
+          "mode": 1,
+          "debug": 1,
+          "pixels": 12740,
+          "different_pixels": 0
+        },
+        {
+          "mode": 2,
+          "debug": 0,
+          "pixels": 12740,
+          "different_pixels": 0
+        },
+        {
+          "mode": 2,
+          "debug": 1,
+          "pixels": 12740,
+          "different_pixels": 0
+        }
+      ],
+      "derivatives_inside_bounce_loop": false,
+      "wall_ms": 138.542966,
+      "rss_peak_kib": 97516,
+      "address_space_limit_bytes": 2147483648
+    },
+    "benchmark": {
+      "status": "passed",
+      "driver": {
+        "vendor": "Mesa",
+        "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+        "glsl": "OpenGL ES GLSL ES 3.20",
+        "hardware_gpu_available": false,
+        "timer_query_supported": true
+      },
+      "records": [
+        {
+          "objects": 1024,
+          "width": 320,
+          "height": 180,
+          "mode": 0,
+          "draw_ms": [
+            11.387174,
+            4.475361,
+            4.553556,
+            4.103662,
+            3.870238,
+            4.000581,
+            3.915324
+          ],
+          "median_warm_ms": 4.0521215,
+          "explicit_object_bytes": 0,
+          "mirror_framebuffer_bytes": 0,
+          "rss_peak_kib": 93100
+        },
+        {
+          "objects": 1024,
+          "width": 320,
+          "height": 180,
+          "mode": 1,
+          "draw_ms": [
+            7.135424,
+            4.970471,
+            5.190035,
+            5.384962,
+            4.926626,
+            4.833819,
+            5.468364
+          ],
+          "median_warm_ms": 5.080253,
+          "explicit_object_bytes": 0,
+          "mirror_framebuffer_bytes": 0,
+          "rss_peak_kib": 97860
+        },
+        {
+          "objects": 1024,
+          "width": 320,
+          "height": 180,
+          "mode": 2,
+          "draw_ms": [
+            7.129876,
+            5.85868,
+            5.271514,
+            5.684865,
+            5.307347,
+            5.910697,
+            5.413243
+          ],
+          "median_warm_ms": 5.549054,
+          "explicit_object_bytes": 0,
+          "mirror_framebuffer_bytes": 0,
+          "rss_peak_kib": 97860
+        },
+        {
+          "objects": 1048576,
+          "width": 640,
+          "height": 360,
+          "mode": 0,
+          "draw_ms": [
+            22.348711,
+            22.961946,
+            21.878556,
+            21.829325,
+            23.831496,
+            22.803061,
+            20.898722
+          ],
+          "median_warm_ms": 22.3408085,
+          "explicit_object_bytes": 0,
+          "mirror_framebuffer_bytes": 0,
+          "rss_peak_kib": 101444
+        },
+        {
+          "objects": 1048576,
+          "width": 640,
+          "height": 360,
+          "mode": 1,
+          "draw_ms": [
+            25.584563,
+            26.333226,
+            25.55549,
+            27.782184,
+            26.816449,
+            27.868592,
+            26.122758
+          ],
+          "median_warm_ms": 26.5748375,
+          "explicit_object_bytes": 0,
+          "mirror_framebuffer_bytes": 0,
+          "rss_peak_kib": 101444
+        },
+        {
+          "objects": 1048576,
+          "width": 640,
+          "height": 360,
+          "mode": 2,
+          "draw_ms": [
+            25.039408,
+            24.141656,
+            25.020741,
+            25.309297,
+            24.787618,
+            26.396099,
+            24.061126
+          ],
+          "median_warm_ms": 24.904179499999998,
+          "explicit_object_bytes": 0,
+          "mirror_framebuffer_bytes": 0,
+          "rss_peak_kib": 101444
+        }
+      ],
+      "new_camera_and_time_each_frame": true,
+      "same_image_comparison": {
+        "different_pixels": 0,
+        "compared_pixels": 518400,
+        "samples": [
+          {
+            "view": 0,
+            "fold": false,
+            "wall_draw_finish_ms": 12.122389,
+            "driver_elapsed_ms": 12.072766,
+            "raw_driver_elapsed_ms": 12.072766,
+            "timer_disjoint": false
+          },
+          {
+            "view": 0,
+            "fold": true,
+            "wall_draw_finish_ms": 2.926606,
+            "driver_elapsed_ms": 0.16253,
+            "raw_driver_elapsed_ms": 0.16253,
+            "timer_disjoint": false
+          },
+          {
+            "view": 1,
+            "fold": true,
+            "wall_draw_finish_ms": 2.743836,
+            "driver_elapsed_ms": 0.149391,
+            "raw_driver_elapsed_ms": 0.149391,
+            "timer_disjoint": false
+          },
+          {
+            "view": 1,
+            "fold": false,
+            "wall_draw_finish_ms": 11.708387,
+            "driver_elapsed_ms": 0.566505,
+            "raw_driver_elapsed_ms": 0.566505,
+            "timer_disjoint": false
+          },
+          {
+            "view": 2,
+            "fold": false,
+            "wall_draw_finish_ms": 11.435836,
+            "driver_elapsed_ms": 0.383135,
+            "raw_driver_elapsed_ms": 0.383135,
+            "timer_disjoint": false
+          },
+          {
+            "view": 2,
+            "fold": true,
+            "wall_draw_finish_ms": 2.959826,
+            "driver_elapsed_ms": 0.150292,
+            "raw_driver_elapsed_ms": 0.150292,
+            "timer_disjoint": false
+          },
+          {
+            "view": 3,
+            "fold": true,
+            "wall_draw_finish_ms": 2.665862,
+            "driver_elapsed_ms": 0.149731,
+            "raw_driver_elapsed_ms": 0.149731,
+            "timer_disjoint": false
+          },
+          {
+            "view": 3,
+            "fold": false,
+            "wall_draw_finish_ms": 11.067122,
+            "driver_elapsed_ms": 0.537253,
+            "raw_driver_elapsed_ms": 0.537253,
+            "timer_disjoint": false
+          },
+          {
+            "view": 4,
+            "fold": false,
+            "wall_draw_finish_ms": 11.061233,
+            "driver_elapsed_ms": 0.40639,
+            "raw_driver_elapsed_ms": 0.40639,
+            "timer_disjoint": false
+          },
+          {
+            "view": 4,
+            "fold": true,
+            "wall_draw_finish_ms": 2.598161,
+            "driver_elapsed_ms": 0.149401,
+            "raw_driver_elapsed_ms": 0.149401,
+            "timer_disjoint": false
+          },
+          {
+            "view": 5,
+            "fold": true,
+            "wall_draw_finish_ms": 2.68513,
+            "driver_elapsed_ms": 0.16298,
+            "raw_driver_elapsed_ms": 0.16298,
+            "timer_disjoint": false
+          },
+          {
+            "view": 5,
+            "fold": false,
+            "wall_draw_finish_ms": 11.577596,
+            "driver_elapsed_ms": 0.375845,
+            "raw_driver_elapsed_ms": 0.375845,
+            "timer_disjoint": false
+          },
+          {
+            "view": 6,
+            "fold": false,
+            "wall_draw_finish_ms": 11.09309,
+            "driver_elapsed_ms": 0.468041,
+            "raw_driver_elapsed_ms": 0.468041,
+            "timer_disjoint": false
+          },
+          {
+            "view": 6,
+            "fold": true,
+            "wall_draw_finish_ms": 2.930001,
+            "driver_elapsed_ms": 0.149601,
+            "raw_driver_elapsed_ms": 0.149601,
+            "timer_disjoint": false
+          },
+          {
+            "view": 7,
+            "fold": true,
+            "wall_draw_finish_ms": 2.728394,
+            "driver_elapsed_ms": 0.149611,
+            "raw_driver_elapsed_ms": 0.149611,
+            "timer_disjoint": false
+          },
+          {
+            "view": 7,
+            "fold": false,
+            "wall_draw_finish_ms": 10.601125,
+            "driver_elapsed_ms": 0.427991,
+            "raw_driver_elapsed_ms": 0.427991,
+            "timer_disjoint": false
+          },
+          {
+            "view": 8,
+            "fold": false,
+            "wall_draw_finish_ms": 11.117337,
+            "driver_elapsed_ms": 0.398037,
+            "raw_driver_elapsed_ms": 0.398037,
+            "timer_disjoint": false
+          },
+          {
+            "view": 8,
+            "fold": true,
+            "wall_draw_finish_ms": 3.579168,
+            "driver_elapsed_ms": 0.150222,
+            "raw_driver_elapsed_ms": 0.150222,
+            "timer_disjoint": false
+          }
+        ],
+        "median_ms": {
+          "False": 11.1052135,
+          "True": 2.736115
+        }
+      },
+      "wall_ms": 1077.402753,
+      "rss_peak_kib": 101444,
+      "address_space_limit_bytes": 2147483648
+    },
+    "legacy": {
+      "status": "passed",
+      "preprocessed_shader_identical": true,
+      "comparisons": [
+        {
+          "status": "passed",
+          "driver": {
+            "vendor": "Mesa",
+            "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+            "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+            "glsl": "OpenGL ES GLSL ES 3.20",
+            "hardware_gpu_available": false,
+            "timer_query_supported": true
+          },
+          "views": 12,
+          "compared_pixels": 691200,
+          "different_pixels": 0,
+          "samples": [
+            {
+              "view": 0,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": true,
+              "wall_draw_finish_ms": 9.229732,
+              "driver_elapsed_ms": null,
+              "raw_driver_elapsed_ms": 13841464.084345,
+              "timer_disjoint": false
+            },
+            {
+              "view": 0,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": true,
+              "wall_draw_finish_ms": 2.946906,
+              "driver_elapsed_ms": 0.038787,
+              "raw_driver_elapsed_ms": 0.038787,
+              "timer_disjoint": false
+            },
+            {
+              "view": 1,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 7.077367,
+              "driver_elapsed_ms": 0.050985,
+              "raw_driver_elapsed_ms": 0.050985,
+              "timer_disjoint": false
+            },
+            {
+              "view": 1,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 6.687474,
+              "driver_elapsed_ms": 0.051076,
+              "raw_driver_elapsed_ms": 0.051076,
+              "timer_disjoint": false
+            },
+            {
+              "view": 2,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 5.74983,
+              "driver_elapsed_ms": 0.051696,
+              "raw_driver_elapsed_ms": 0.051696,
+              "timer_disjoint": false
+            },
+            {
+              "view": 2,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 5.37724,
+              "driver_elapsed_ms": 0.038707,
+              "raw_driver_elapsed_ms": 0.038707,
+              "timer_disjoint": false
+            },
+            {
+              "view": 3,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 2.06129,
+              "driver_elapsed_ms": 0.050745,
+              "raw_driver_elapsed_ms": 0.050745,
+              "timer_disjoint": false
+            },
+            {
+              "view": 3,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 1.808316,
+              "driver_elapsed_ms": 0.050334,
+              "raw_driver_elapsed_ms": 0.050334,
+              "timer_disjoint": false
+            },
+            {
+              "view": 4,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 3.9942,
+              "driver_elapsed_ms": 0.207567,
+              "raw_driver_elapsed_ms": 0.207567,
+              "timer_disjoint": false
+            },
+            {
+              "view": 4,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 4.06138,
+              "driver_elapsed_ms": 0.180917,
+              "raw_driver_elapsed_ms": 0.180917,
+              "timer_disjoint": false
+            },
+            {
+              "view": 5,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 7.066522,
+              "driver_elapsed_ms": 0.050515,
+              "raw_driver_elapsed_ms": 0.050515,
+              "timer_disjoint": false
+            },
+            {
+              "view": 5,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 6.536711,
+              "driver_elapsed_ms": 0.050785,
+              "raw_driver_elapsed_ms": 0.050785,
+              "timer_disjoint": false
+            },
+            {
+              "view": 6,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 4.845987,
+              "driver_elapsed_ms": 0.039809,
+              "raw_driver_elapsed_ms": 0.039809,
+              "timer_disjoint": false
+            },
+            {
+              "view": 6,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 159.760239,
+              "driver_elapsed_ms": 0.056053,
+              "raw_driver_elapsed_ms": 0.056053,
+              "timer_disjoint": false
+            },
+            {
+              "view": 7,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 35.931193,
+              "driver_elapsed_ms": 0.076292,
+              "raw_driver_elapsed_ms": 0.076292,
+              "timer_disjoint": false
+            },
+            {
+              "view": 7,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 32.242873,
+              "driver_elapsed_ms": 0.050635,
+              "raw_driver_elapsed_ms": 0.050635,
+              "timer_disjoint": false
+            },
+            {
+              "view": 8,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 30.460804,
+              "driver_elapsed_ms": 0.04067,
+              "raw_driver_elapsed_ms": 0.04067,
+              "timer_disjoint": false
+            },
+            {
+              "view": 8,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 27.952145,
+              "driver_elapsed_ms": 0.039498,
+              "raw_driver_elapsed_ms": 0.039498,
+              "timer_disjoint": false
+            },
+            {
+              "view": 9,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 4.026248,
+              "driver_elapsed_ms": 0.050885,
+              "raw_driver_elapsed_ms": 0.050885,
+              "timer_disjoint": false
+            },
+            {
+              "view": 9,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 4.736345,
+              "driver_elapsed_ms": 0.052037,
+              "raw_driver_elapsed_ms": 0.052037,
+              "timer_disjoint": false
+            },
+            {
+              "view": 10,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 30.564998,
+              "driver_elapsed_ms": 0.0407,
+              "raw_driver_elapsed_ms": 0.0407,
+              "timer_disjoint": false
+            },
+            {
+              "view": 10,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 28.592138,
+              "driver_elapsed_ms": 0.040009,
+              "raw_driver_elapsed_ms": 0.040009,
+              "timer_disjoint": false
+            },
+            {
+              "view": 11,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 30.441457,
+              "driver_elapsed_ms": 0.098104,
+              "raw_driver_elapsed_ms": 0.098104,
+              "timer_disjoint": false
+            },
+            {
+              "view": 11,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 30.477368,
+              "driver_elapsed_ms": 0.086458,
+              "raw_driver_elapsed_ms": 0.086458,
+              "timer_disjoint": false
+            }
+          ],
+          "median_ms": {
+            "before": 6.536711,
+            "after": 7.077367
+          }
+        },
+        {
+          "status": "passed",
+          "driver": {
+            "vendor": "Mesa",
+            "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+            "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+            "glsl": "OpenGL ES GLSL ES 3.20",
+            "hardware_gpu_available": false,
+            "timer_query_supported": true
+          },
+          "views": 12,
+          "compared_pixels": 6220800,
+          "different_pixels": 0,
+          "samples": [
+            {
+              "view": 0,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": true,
+              "wall_draw_finish_ms": 23.809595,
+              "driver_elapsed_ms": null,
+              "raw_driver_elapsed_ms": 13842035.353999,
+              "timer_disjoint": false
+            },
+            {
+              "view": 0,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": true,
+              "wall_draw_finish_ms": 20.598228,
+              "driver_elapsed_ms": 0.021351,
+              "raw_driver_elapsed_ms": 0.021351,
+              "timer_disjoint": false
+            },
+            {
+              "view": 1,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 91.423473,
+              "driver_elapsed_ms": 0.028352,
+              "raw_driver_elapsed_ms": 0.028352,
+              "timer_disjoint": false
+            },
+            {
+              "view": 1,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 109.150319,
+              "driver_elapsed_ms": 0.028562,
+              "raw_driver_elapsed_ms": 0.028562,
+              "timer_disjoint": false
+            },
+            {
+              "view": 2,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 79.51384,
+              "driver_elapsed_ms": 0.022283,
+              "raw_driver_elapsed_ms": 0.022283,
+              "timer_disjoint": false
+            },
+            {
+              "view": 2,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 89.798597,
+              "driver_elapsed_ms": 0.022102,
+              "raw_driver_elapsed_ms": 0.022102,
+              "timer_disjoint": false
+            },
+            {
+              "view": 3,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 19.81189,
+              "driver_elapsed_ms": 0.029273,
+              "raw_driver_elapsed_ms": 0.029273,
+              "timer_disjoint": false
+            },
+            {
+              "view": 3,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 16.541816,
+              "driver_elapsed_ms": 0.029314,
+              "raw_driver_elapsed_ms": 0.029314,
+              "timer_disjoint": false
+            },
+            {
+              "view": 4,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 28.719076,
+              "driver_elapsed_ms": 0.085085,
+              "raw_driver_elapsed_ms": 0.085085,
+              "timer_disjoint": false
+            },
+            {
+              "view": 4,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 27.98257,
+              "driver_elapsed_ms": 0.084675,
+              "raw_driver_elapsed_ms": 0.084675,
+              "timer_disjoint": false
+            },
+            {
+              "view": 5,
+              "version": "after",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 91.059387,
+              "driver_elapsed_ms": 0.037405,
+              "raw_driver_elapsed_ms": 0.037405,
+              "timer_disjoint": false
+            },
+            {
+              "view": 5,
+              "version": "before",
+              "edits": 0,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 95.847609,
+              "driver_elapsed_ms": 0.028762,
+              "raw_driver_elapsed_ms": 0.028762,
+              "timer_disjoint": false
+            },
+            {
+              "view": 6,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 34.0853,
+              "driver_elapsed_ms": 0.022073,
+              "raw_driver_elapsed_ms": 0.022073,
+              "timer_disjoint": false
+            },
+            {
+              "view": 6,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 33.554927,
+              "driver_elapsed_ms": 0.037055,
+              "raw_driver_elapsed_ms": 0.037055,
+              "timer_disjoint": false
+            },
+            {
+              "view": 7,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 565.637267,
+              "driver_elapsed_ms": 0.029123,
+              "raw_driver_elapsed_ms": 0.029123,
+              "timer_disjoint": false
+            },
+            {
+              "view": 7,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 591.057255,
+              "driver_elapsed_ms": 0.028582,
+              "raw_driver_elapsed_ms": 0.028582,
+              "timer_disjoint": false
+            },
+            {
+              "view": 8,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 634.936271,
+              "driver_elapsed_ms": 0.021622,
+              "raw_driver_elapsed_ms": 0.021622,
+              "timer_disjoint": false
+            },
+            {
+              "view": 8,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 637.872401,
+              "driver_elapsed_ms": 0.021241,
+              "raw_driver_elapsed_ms": 0.021241,
+              "timer_disjoint": false
+            },
+            {
+              "view": 9,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 39.075785,
+              "driver_elapsed_ms": 0.028903,
+              "raw_driver_elapsed_ms": 0.028903,
+              "timer_disjoint": false
+            },
+            {
+              "view": 9,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 40.656521,
+              "driver_elapsed_ms": 0.029303,
+              "raw_driver_elapsed_ms": 0.029303,
+              "timer_disjoint": false
+            },
+            {
+              "view": 10,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 637.005153,
+              "driver_elapsed_ms": 0.022213,
+              "raw_driver_elapsed_ms": 0.022213,
+              "timer_disjoint": false
+            },
+            {
+              "view": 10,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 611.151445,
+              "driver_elapsed_ms": 0.022383,
+              "raw_driver_elapsed_ms": 0.022383,
+              "timer_disjoint": false
+            },
+            {
+              "view": 11,
+              "version": "after",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 624.274604,
+              "driver_elapsed_ms": 0.028732,
+              "raw_driver_elapsed_ms": 0.028732,
+              "timer_disjoint": false
+            },
+            {
+              "view": 11,
+              "version": "before",
+              "edits": 300,
+              "cold_shader": false,
+              "wall_draw_finish_ms": 640.161378,
+              "driver_elapsed_ms": 0.028372,
+              "raw_driver_elapsed_ms": 0.028372,
+              "timer_disjoint": false
+            }
+          ],
+          "median_ms": {
+            "before": 95.847609,
+            "after": 91.059387
+          }
+        }
+      ],
+      "wall_ms": 6761.301748,
+      "rss_peak_kib": 122640,
+      "address_space_limit_bytes": 2147483648
+    },
+    "lifetime": {
+      "status": "passed",
+      "core_and_gl_lifetimes": 8,
+      "records": [
+        {
+          "iteration": 0,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 98784
+        },
+        {
+          "iteration": 1,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 110632
+        },
+        {
+          "iteration": 2,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 115152
+        },
+        {
+          "iteration": 3,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 116816
+        },
+        {
+          "iteration": 4,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 117388
+        },
+        {
+          "iteration": 5,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 117772
+        },
+        {
+          "iteration": 6,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 118028
+        },
+        {
+          "iteration": 7,
+          "sha256": "6789ea044a83d3e466b40e1ff425b1a2bcb91e8417f628be7d424f4e2d173525",
+          "rss_peak_kib": 118796
+        }
+      ],
+      "wall_ms": 478.339491,
+      "rss_peak_kib": 118796,
+      "address_space_limit_bytes": 2147483648
+    }
+  },
+  "source_sha256": {
+    "graphics-desktop/shaders/eye.frag": "de1a2f17a0e922514f7e73a9afa2abf2f09349eb013be885d5c0cb7c3aa9cb7c",
+    "graphics-desktop/shaders/common.glsl": "0fa2dc90a9472a8354420e6332ff9553fa270b3da01f61b3086e2eb1a90c8c85",
+    "graphics-desktop/renderer.py": "bef47154c6a361651d220f8257f7e8a55262376b9a94ddadcd810c79b4c034f1",
+    "graphics-desktop/engine.py": "c3390ff2c28b572909265b4a368166b384bf05e3db98ff0e1b7314e09dd6a3e7",
+    "tools/ether_mirror_check.py": "1777002989eccff2d81f1aa3bb337f39dff642cd82bc5cde8f946a3f575e4402"
+  }
+}

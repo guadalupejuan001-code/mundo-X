@@ -1,0 +1,417 @@
+{
+  "baseline": "c13e78f91887b45d735c5fe3d8a07a000bd03d34",
+  "ram_limit_bytes": 2147483648,
+  "wall_limit_seconds": 60,
+  "cases": [
+    {
+      "driver": {
+        "vendor": "Mesa",
+        "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+        "glsl": "OpenGL ES GLSL ES 3.20",
+        "hardware_gpu_available": false,
+        "timer_query_supported": true
+      },
+      "case": [
+        320,
+        180,
+        1024
+      ],
+      "checked_pixels": 207,
+      "reflected_pick_cases": 18,
+      "id_mismatches": 0,
+      "post_pick_image_mismatches": 0,
+      "readback_bytes": {
+        "before": 230400,
+        "after": 4
+      },
+      "samples": [
+        {
+          "view": 0,
+          "mirror": 0,
+          "before": 3.431033,
+          "after": 0.154548
+        },
+        {
+          "view": 0,
+          "mirror": 1,
+          "before": 5.399277,
+          "after": 0.141979
+        },
+        {
+          "view": 0,
+          "mirror": 2,
+          "before": 4.14766,
+          "after": 0.118876
+        },
+        {
+          "view": 1,
+          "mirror": 0,
+          "after": 0.148289,
+          "before": 6.375597
+        },
+        {
+          "view": 1,
+          "mirror": 1,
+          "after": 0.179365,
+          "before": 8.502757
+        },
+        {
+          "view": 1,
+          "mirror": 2,
+          "after": 0.141258,
+          "before": 7.999684
+        },
+        {
+          "view": 2,
+          "mirror": 0,
+          "before": 6.422727,
+          "after": 0.138645
+        },
+        {
+          "view": 2,
+          "mirror": 1,
+          "before": 8.088915,
+          "after": 0.129441
+        },
+        {
+          "view": 2,
+          "mirror": 2,
+          "before": 9.523643,
+          "after": 0.194908
+        },
+        {
+          "view": 3,
+          "mirror": 0,
+          "after": 0.153036,
+          "before": 6.775328
+        },
+        {
+          "view": 3,
+          "mirror": 1,
+          "after": 0.213996,
+          "before": 10.04364
+        },
+        {
+          "view": 3,
+          "mirror": 2,
+          "after": 0.145535,
+          "before": 8.348829
+        },
+        {
+          "view": 4,
+          "mirror": 0,
+          "before": 30.859534,
+          "after": 0.243469
+        },
+        {
+          "view": 4,
+          "mirror": 1,
+          "before": 36.492597,
+          "after": 0.29152
+        },
+        {
+          "view": 4,
+          "mirror": 2,
+          "before": 35.224736,
+          "after": 0.432188
+        },
+        {
+          "view": 5,
+          "mirror": 0,
+          "after": 0.326071,
+          "before": 28.352324
+        },
+        {
+          "view": 5,
+          "mirror": 1,
+          "after": 0.281866,
+          "before": 33.147431
+        },
+        {
+          "view": 5,
+          "mirror": 2,
+          "after": 0.224211,
+          "before": 31.200897
+        },
+        {
+          "view": 6,
+          "mirror": 0,
+          "before": 6.020654,
+          "after": 0.158204
+        },
+        {
+          "view": 6,
+          "mirror": 1,
+          "before": 8.006053,
+          "after": 0.15535
+        },
+        {
+          "view": 6,
+          "mirror": 2,
+          "before": 6.298543,
+          "after": 0.134538
+        },
+        {
+          "view": 7,
+          "mirror": 0,
+          "after": 0.29159,
+          "before": 27.877995
+        },
+        {
+          "view": 7,
+          "mirror": 1,
+          "after": 0.392369,
+          "before": 32.60513
+        },
+        {
+          "view": 7,
+          "mirror": 2,
+          "after": 0.299682,
+          "before": 31.861503
+        },
+        {
+          "view": 8,
+          "mirror": 0,
+          "before": 28.500734,
+          "after": 0.305982
+        },
+        {
+          "view": 8,
+          "mirror": 1,
+          "before": 31.403697,
+          "after": 0.265342
+        },
+        {
+          "view": 8,
+          "mirror": 2,
+          "before": 33.177635,
+          "after": 0.249058
+        }
+      ],
+      "median_ms": {
+        "0": {
+          "before": 17.3266615,
+          "after": 0.2008365
+        },
+        "1": {
+          "before": 20.723668500000002,
+          "after": 0.23966900000000002
+        },
+        "2": {
+          "before": 20.362270000000002,
+          "after": 0.2095595
+        }
+      },
+      "rss_kib": 106156
+    },
+    {
+      "driver": {
+        "vendor": "Mesa",
+        "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+        "glsl": "OpenGL ES GLSL ES 3.20",
+        "hardware_gpu_available": false,
+        "timer_query_supported": true
+      },
+      "case": [
+        960,
+        540,
+        1048576
+      ],
+      "checked_pixels": 206,
+      "reflected_pick_cases": 17,
+      "id_mismatches": 0,
+      "post_pick_image_mismatches": 0,
+      "readback_bytes": {
+        "before": 2073600,
+        "after": 4
+      },
+      "samples": [
+        {
+          "view": 0,
+          "mirror": 0,
+          "before": 30.655463,
+          "after": 0.404908
+        },
+        {
+          "view": 0,
+          "mirror": 1,
+          "before": 51.504106,
+          "after": 0.357737
+        },
+        {
+          "view": 0,
+          "mirror": 2,
+          "before": 40.329417,
+          "after": 0.313232
+        },
+        {
+          "view": 1,
+          "mirror": 0,
+          "after": 0.314564,
+          "before": 89.631004
+        },
+        {
+          "view": 1,
+          "mirror": 1,
+          "after": 0.337438,
+          "before": 111.769128
+        },
+        {
+          "view": 1,
+          "mirror": 2,
+          "after": 0.356716,
+          "before": 106.332718
+        },
+        {
+          "view": 2,
+          "mirror": 0,
+          "before": 86.471742,
+          "after": 0.320583
+        },
+        {
+          "view": 2,
+          "mirror": 1,
+          "before": 106.794028,
+          "after": 0.309287
+        },
+        {
+          "view": 2,
+          "mirror": 2,
+          "before": 102.647109,
+          "after": 0.31208
+        },
+        {
+          "view": 3,
+          "mirror": 0,
+          "after": 0.366461,
+          "before": 56.030535
+        },
+        {
+          "view": 3,
+          "mirror": 1,
+          "after": 0.350007,
+          "before": 95.362731
+        },
+        {
+          "view": 3,
+          "mirror": 2,
+          "after": 0.459097,
+          "before": 73.624475
+        },
+        {
+          "view": 4,
+          "mirror": 0,
+          "before": 570.095712,
+          "after": 0.333472
+        },
+        {
+          "view": 4,
+          "mirror": 1,
+          "before": 637.547351,
+          "after": 0.523282
+        },
+        {
+          "view": 4,
+          "mirror": 2,
+          "before": 607.107521,
+          "after": 0.768003
+        },
+        {
+          "view": 5,
+          "mirror": 0,
+          "after": 0.356896,
+          "before": 594.733467
+        },
+        {
+          "view": 5,
+          "mirror": 1,
+          "after": 0.370426,
+          "before": 628.700766
+        },
+        {
+          "view": 5,
+          "mirror": 2,
+          "after": 0.869133,
+          "before": 622.246965
+        },
+        {
+          "view": 6,
+          "mirror": 0,
+          "before": 48.300903,
+          "after": 0.48185
+        },
+        {
+          "view": 6,
+          "mirror": 1,
+          "before": 74.368637,
+          "after": 0.346391
+        },
+        {
+          "view": 6,
+          "mirror": 2,
+          "before": 60.487706,
+          "after": 0.590071
+        },
+        {
+          "view": 7,
+          "mirror": 0,
+          "after": 0.404747,
+          "before": 610.245248
+        },
+        {
+          "view": 7,
+          "mirror": 1,
+          "after": 0.77221,
+          "before": 672.867541
+        },
+        {
+          "view": 7,
+          "mirror": 2,
+          "after": 0.577422,
+          "before": 625.022923
+        },
+        {
+          "view": 8,
+          "mirror": 0,
+          "before": 601.426582,
+          "after": 0.326142
+        },
+        {
+          "view": 8,
+          "mirror": 1,
+          "before": 627.587254,
+          "after": 0.334133
+        },
+        {
+          "view": 8,
+          "mirror": 2,
+          "before": 649.835662,
+          "after": 0.524744
+        }
+      ],
+      "median_ms": {
+        "0": {
+          "before": 329.863358,
+          "after": 0.345184
+        },
+        "1": {
+          "before": 369.678191,
+          "after": 0.34819900000000004
+        },
+        "2": {
+          "before": 356.7201195,
+          "after": 0.551083
+        }
+      },
+      "rss_kib": 138036
+    }
+  ],
+  "sha256": {
+    "graphics-desktop/renderer.py": "fc5d759a9841f092730e1751bf49aa2909e5d2701df7f25e6d76e9f0819d84c1",
+    "graphics-desktop/egl_runtime.py": "6cd8dd3cb15cc56536d76c370f1ed209009d7e04b7d9570ddebca9d8c49b1442",
+    "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java": "1f7c5eed0a1bdec5453f6a82d462af53e834865f9f4b680d194f7f6783881bc3",
+    "tools/system_graphics_check.py": "5b0bddb19f681d560e07f811b1eddf5b527df51149883aaf1662c03f1e2f8e9a"
+  }
+}

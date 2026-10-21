@@ -1,0 +1,527 @@
+[  0%] Building CXX object CMakeFiles/mundo_x_graphics_core.dir/native/src/graphics_core_bridge.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/engine_session.hpp:5,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/src/graphics_core_bridge.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[  1%] Building CXX object CMakeFiles/mundo_x_graphics_core.dir/native/src/infinite_bridge.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/src/infinite_bridge.cpp:2:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[  2%] Linking CXX static library libmundo_x_graphics_core.a
+[  2%] Built target mundo_x_graphics_core
+[  3%] Building CXX object CMakeFiles/mundo_x.dir/native/src/main.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/src/main.cpp:21:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[  4%] Linking CXX executable mundo_x
+[  4%] Built target mundo_x
+[  4%] Building CXX object CMakeFiles/mundo_x_phase.dir/native/src/phase_runner.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/adaptive_phase_core.hpp:11,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/src/phase_runner.cpp:7:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[  5%] Linking CXX executable mundo_x_phase
+[  5%] Built target mundo_x_phase
+[  6%] Building CXX object CMakeFiles/mundo_x_vm.dir/native/src/basis_vm_main.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/android-experiments/native/include/mundo_x/basis_vm.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/src/basis_vm_main.cpp:7:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[  7%] Linking CXX executable mundo_x_vm
+[  7%] Built target mundo_x_vm
+[  8%] Building CXX object CMakeFiles/mundo_x_infinite.dir/native/src/infinite_runner.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/src/infinite_runner.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[  9%] Linking CXX executable mundo_x_infinite
+[  9%] Built target mundo_x_infinite
+[  9%] Building CXX object CMakeFiles/test_phase_core.dir/tests/test_phase_core.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/adaptive_phase_core.hpp:11,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/tests/test_phase_core.cpp:5:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 10%] Linking CXX executable test_phase_core
+[ 10%] Built target test_phase_core
+[ 11%] Building CXX object CMakeFiles/test_state_transfer.dir/tests/test_state_transfer.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/adaptive_phase_core.hpp:11,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/tests/test_state_transfer.cpp:8:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 11%] Linking CXX executable test_state_transfer
+[ 11%] Built target test_state_transfer
+[ 11%] Building CXX object CMakeFiles/test_physics_world.dir/native/tests/physics_world.cpp.o
+[ 12%] Linking CXX executable test_physics_world
+[ 12%] Built target test_physics_world
+[ 13%] Building CXX object CMakeFiles/test_physics_allocation.dir/native/tests/physics_allocation.cpp.o
+[ 14%] Linking CXX executable test_physics_allocation
+[ 14%] Built target test_physics_allocation
+[ 14%] Building CXX object CMakeFiles/test_rule_physics.dir/native/tests/rule_physics.cpp.o
+[ 15%] Linking CXX executable test_rule_physics
+[ 15%] Built target test_rule_physics
+[ 16%] Building CXX object CMakeFiles/test_reduced_optimization.dir/native/tests/reduced_optimization.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/reduced_optimization.cpp:15:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/reduced_optimization.cpp: In member function ‘void {anonymous}::Reference::apply({anonymous}::Op, std::size_t, std::size_t)’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/reduced_optimization.cpp:34:14: warning: enumeration value ‘P’ not handled in switch [-Wswitch]
+   34 |       switch (op) {
+      |              ^
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/reduced_optimization.cpp:34:14: warning: enumeration value ‘TDagger’ not handled in switch [-Wswitch]
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/reduced_optimization.cpp: In function ‘void {anonymous}::apply(mundo_x::ReducedExactTRepresentation&, Op, std::size_t, std::size_t)’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/reduced_optimization.cpp:71:10: warning: enumeration value ‘P’ not handled in switch [-Wswitch]
+   71 |   switch (op) {
+      |          ^
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/reduced_optimization.cpp:71:10: warning: enumeration value ‘TDagger’ not handled in switch [-Wswitch]
+[ 17%] Linking CXX executable test_reduced_optimization
+[ 17%] Built target test_reduced_optimization
+[ 18%] Building CXX object CMakeFiles/test_boundaries.dir/native/tests/boundaries.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/boundaries.cpp:8:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 18%] Linking CXX executable test_boundaries
+[ 18%] Built target test_boundaries
+[ 19%] Building CXX object CMakeFiles/test_dense_precision.dir/native/tests/dense_precision.cpp.o
+[ 20%] Linking CXX executable test_dense_precision
+[ 20%] Built target test_dense_precision
+[ 21%] Building CXX object CMakeFiles/test_factorized_core.dir/native/tests/factorized_core.cpp.o
+[ 22%] Linking CXX executable test_factorized_core
+[ 22%] Built target test_factorized_core
+[ 22%] Building CXX object CMakeFiles/test_factorized_storage.dir/native/tests/factorized_storage.cpp.o
+[ 23%] Linking CXX executable test_factorized_storage
+[ 23%] Built target test_factorized_storage
+[ 24%] Building CXX object CMakeFiles/test_factorized_structure.dir/native/tests/factorized_structure.cpp.o
+[ 25%] Linking CXX executable test_factorized_structure
+[ 25%] Built target test_factorized_structure
+[ 26%] Building CXX object CMakeFiles/test_micro_lab.dir/native/tests/micro_lab.cpp.o
+[ 27%] Linking CXX executable test_micro_lab
+[ 27%] Built target test_micro_lab
+[ 28%] Building CXX object CMakeFiles/test_compact_measurement.dir/native/tests/compact_measurement.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/compact_measurement.cpp:13:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 29%] Linking CXX executable test_compact_measurement
+[ 29%] Built target test_compact_measurement
+[ 30%] Building CXX object CMakeFiles/test_xasm_measurement.dir/native/tests/xasm_measurement.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/xasm.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/xasm_measurement.cpp:6:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 31%] Linking CXX executable test_xasm_measurement
+[ 31%] Built target test_xasm_measurement
+[ 32%] Building CXX object CMakeFiles/test_visual_scene.dir/native/tests/visual_scene.cpp.o
+[ 33%] Linking CXX executable test_visual_scene
+[ 33%] Built target test_visual_scene
+[ 34%] Building CXX object CMakeFiles/test_xasm_visual.dir/native/tests/xasm_visual.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/xasm.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/xasm_visual.cpp:11:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 34%] Linking CXX executable test_xasm_visual
+[ 34%] Built target test_xasm_visual
+[ 35%] Building CXX object CMakeFiles/test_integrated_runtime.dir/native/tests/integrated_runtime.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/adaptive_phase_core.hpp:11,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/integrated_runtime.cpp:10:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 35%] Linking CXX executable test_integrated_runtime
+[ 35%] Built target test_integrated_runtime
+[ 36%] Building CXX object CMakeFiles/test_engine_session.dir/native/tests/engine_session.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/engine_session.hpp:5,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/engine_session.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 37%] Linking CXX executable test_engine_session
+[ 37%] Built target test_engine_session
+[ 38%] Building CXX object CMakeFiles/test_lab_circuit.dir/native/tests/lab_circuit.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/lab_circuit.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/lab_circuit.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 39%] Linking CXX executable test_lab_circuit
+[ 39%] Built target test_lab_circuit
+[ 40%] Building CXX object CMakeFiles/test_lab_memory.dir/native/tests/lab_memory.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/lab_memory.hpp:16,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/lab_memory.cpp:11:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 40%] Linking CXX executable test_lab_memory
+[ 40%] Built target test_lab_memory
+[ 41%] Building CXX object CMakeFiles/test_lab_protocols.dir/native/tests/lab_protocols.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/lab_circuit.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/lab_protocols.hpp:11,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/lab_protocols.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 42%] Linking CXX executable test_lab_protocols
+[ 42%] Built target test_lab_protocols
+[ 43%] Building CXX object CMakeFiles/test_core_performance.dir/native/tests/core_performance.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/core_performance.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 43%] Linking CXX executable test_core_performance
+[ 43%] Built target test_core_performance
+[ 44%] Building CXX object CMakeFiles/test_core_60.dir/native/tests/core_60.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/core_60.cpp:6:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 45%] Linking CXX executable test_core_60
+[ 45%] Built target test_core_60
+[ 46%] Building CXX object CMakeFiles/test_core_1000.dir/native/tests/core_1000.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/core_1000.cpp:5:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 46%] Linking CXX executable test_core_1000
+[ 46%] Built target test_core_1000
+[ 47%] Building CXX object CMakeFiles/test_xasm_60.dir/native/tests/xasm_60.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/xasm.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/xasm_60.cpp:8:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 47%] Linking CXX executable test_xasm_60
+[ 47%] Built target test_xasm_60
+[ 48%] Building CXX object CMakeFiles/test_infinite_address.dir/native/tests/infinite_address.cpp.o
+[ 48%] Linking CXX executable test_infinite_address
+[ 48%] Built target test_infinite_address
+[ 49%] Building CXX object CMakeFiles/test_infinite_core.dir/native/tests/infinite_core.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/infinite_core.cpp:18:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 49%] Linking CXX executable test_infinite_core
+[ 49%] Built target test_infinite_core
+[ 50%] Building CXX object CMakeFiles/test_infinite_tensor.dir/native/tests/infinite_tensor.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/infinite_tensor.cpp:13:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 51%] Linking CXX executable test_infinite_tensor
+[ 51%] Built target test_infinite_tensor
+[ 52%] Building CXX object CMakeFiles/test_infinite_session.dir/native/tests/infinite_session.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/infinite_session.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 52%] Linking CXX executable test_infinite_session
+[ 52%] Built target test_infinite_session
+[ 53%] Building CXX object CMakeFiles/test_infinite_bridge.dir/native/tests/infinite_bridge.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/infinite_bridge.cpp:2:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 54%] Linking CXX executable test_infinite_bridge
+[ 54%] Built target test_infinite_bridge
+[ 55%] Building CXX object CMakeFiles/test_ether_core.dir/native/tests/ether_core.cpp.o
+[ 56%] Linking CXX executable test_ether_core
+[ 56%] Built target test_ether_core
+[ 56%] Building CXX object CMakeFiles/test_ether_frame.dir/native/tests/ether_frame.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/ether_frame.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 57%] Linking CXX executable test_ether_frame
+[ 57%] Built target test_ether_frame
+[ 58%] Building CXX object CMakeFiles/test_ether_fusion.dir/native/tests/ether_fusion.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/ether_fusion.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 59%] Linking CXX executable test_ether_fusion
+[ 59%] Built target test_ether_fusion
+[ 59%] Building CXX object CMakeFiles/test_ether_rules.dir/native/tests/ether_rules.cpp.o
+[ 60%] Linking CXX executable test_ether_rules
+[ 60%] Built target test_ether_rules
+[ 61%] Building CXX object CMakeFiles/test_quantum_algorithms.dir/native/tests/quantum_algorithms.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/quantum_algorithms.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/quantum_algorithms.cpp: In lambda function:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/quantum_algorithms.cpp:99:5: warning: this ‘if’ clause does not guard... [-Wmisleading-indentation]
+   99 |     if(x.size()>1&&x.front()=='0')x.erase(x.begin());return x;
+      |     ^~
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/quantum_algorithms.cpp:99:54: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the ‘if’
+   99 |     if(x.size()>1&&x.front()=='0')x.erase(x.begin());return x;
+      |                                                      ^~~~~~
+[ 62%] Linking CXX executable test_quantum_algorithms
+[ 62%] Built target test_quantum_algorithms
+[ 63%] Building CXX object CMakeFiles/test_infinite_extreme.dir/native/tests/infinite_extreme.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/infinite_extreme.cpp:3:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 64%] Linking CXX executable test_infinite_extreme
+[ 64%] Built target test_infinite_extreme
+[ 64%] Building CXX object CMakeFiles/test_ether_batch.dir/native/tests/ether_batch.cpp.o
+[ 65%] Linking CXX executable test_ether_batch
+[ 65%] Built target test_ether_batch
+[ 66%] Building CXX object CMakeFiles/ether_stress.dir/native/tests/ether_stress.cpp.o
+[ 67%] Linking CXX executable ether_stress
+[ 67%] Built target ether_stress
+[ 68%] Building CXX object CMakeFiles/core_1000_benchmark.dir/native/tests/core_1000_benchmark.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/engine_session.hpp:5,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/core_1000_benchmark.cpp:5:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 69%] Linking CXX executable core_1000_benchmark
+[ 69%] Built target core_1000_benchmark
+[ 69%] Building CXX object CMakeFiles/infinite_scale.dir/native/tests/infinite_scale.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/infinite_scale.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 70%] Linking CXX executable infinite_scale
+[ 70%] Built target infinite_scale
+[ 71%] Building CXX object CMakeFiles/test_basis_vm.dir/android-experiments/native/tests/basis_vm_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/android-experiments/native/include/mundo_x/basis_vm.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/android-experiments/native/tests/basis_vm_test.cpp:6:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 72%] Linking CXX executable test_basis_vm
+[ 72%] Built target test_basis_vm
+[ 72%] Building CXX object CMakeFiles/test_quantum_echo.dir/android-experiments/native/tests/quantum_echo_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/android-experiments/native/include/mundo_x/quantum_echo.hpp:20,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/android-experiments/native/tests/quantum_echo_test.cpp:7:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 73%] Linking CXX executable test_quantum_echo
+[ 73%] Built target test_quantum_echo
+[ 74%] Building CXX object CMakeFiles/test_sparse_observable.dir/android-experiments/native/tests/sparse_observable_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/android-experiments/native/tests/sparse_observable_test.cpp:9:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 75%] Linking CXX executable test_sparse_observable
+[ 75%] Built target test_sparse_observable
+[ 75%] Building CXX object CMakeFiles/native_original_exams.dir/native/tests/native_original_exams.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/tests/native_original_exams.cpp:19:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 76%] Linking CXX executable native_original_exams
+[ 76%] Built target native_original_exams
+[ 76%] Building CXX object CMakeFiles/factorized_diversity.dir/native/tests/factorized_diversity.cpp.o
+[ 77%] Linking CXX executable factorized_diversity
+[ 77%] Built target factorized_diversity
+[ 78%] Building CXX object CMakeFiles/factorized_stream_benchmark.dir/native/tests/factorized_stream_benchmark.cpp.o
+[ 79%] Linking CXX executable factorized_stream_benchmark
+[ 79%] Built target factorized_stream_benchmark
+[ 80%] Building CXX object CMakeFiles/mundo_x_native_tests.dir/tests/native_tests.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/tests/native_tests.cpp:14:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 81%] Linking CXX executable mundo_x_native_tests
+[ 81%] Built target mundo_x_native_tests
+[ 81%] Building CXX object CMakeFiles/mundo_x_mxlang_tests.dir/tests/mxlang_tests.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/xasm.hpp:17,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/tests/mxlang_tests.cpp:11:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 82%] Linking CXX executable mundo_x_mxlang_tests
+[ 82%] Built target mundo_x_mxlang_tests
+[ 82%] Building CXX object pc-android/CMakeFiles/cosmic_pc_cli.dir/native/pc_cli.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/quantum_device.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/pc_machine.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/pc_cli.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 83%] Linking CXX executable cosmic_pc_cli
+[ 83%] Built target cosmic_pc_cli
+[ 84%] Building CXX object pc-android/CMakeFiles/sparse_ram_test.dir/native/tests/sparse_ram_test.cpp.o
+[ 84%] Linking CXX executable sparse_ram_test
+[ 84%] Built target sparse_ram_test
+[ 85%] Building CXX object pc-android/CMakeFiles/x86_cpu_test.dir/native/tests/x86_cpu_test.cpp.o
+[ 85%] Linking CXX executable x86_cpu_test
+[ 85%] Built target x86_cpu_test
+[ 86%] Building CXX object pc-android/CMakeFiles/x86_long_mode_test.dir/native/tests/x86_long_mode_test.cpp.o
+[ 87%] Linking CXX executable x86_long_mode_test
+[ 87%] Built target x86_long_mode_test
+[ 88%] Building CXX object pc-android/CMakeFiles/x86_alu64_oracle_test.dir/native/tests/x86_alu64_oracle_test.cpp.o
+[ 89%] Linking CXX executable x86_alu64_oracle_test
+[ 89%] Built target x86_alu64_oracle_test
+[ 90%] Building CXX object pc-android/CMakeFiles/x86_enter_oracle_test.dir/native/tests/x86_enter_oracle_test.cpp.o
+[ 91%] Linking CXX executable x86_enter_oracle_test
+[ 91%] Built target x86_enter_oracle_test
+[ 91%] Building CXX object pc-android/CMakeFiles/boot_media_test.dir/native/tests/boot_media_test.cpp.o
+[ 92%] Linking CXX executable boot_media_test
+[ 92%] Built target boot_media_test
+[ 92%] Building CXX object pc-android/CMakeFiles/pc_machine_test.dir/native/tests/pc_machine_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../quantum_device.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../pc_machine.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/pc_machine_test.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 93%] Linking CXX executable pc_machine_test
+[ 93%] Built target pc_machine_test
+[ 94%] Building CXX object pc-android/CMakeFiles/pc_iso_test.dir/native/tests/pc_iso_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../quantum_device.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../pc_machine.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/pc_iso_test.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 95%] Linking CXX executable pc_iso_test
+[ 95%] Built target pc_iso_test
+[ 96%] Building CXX object pc-android/CMakeFiles/pc_memory_test.dir/native/tests/pc_memory_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../quantum_device.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../pc_machine.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/pc_memory_test.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 97%] Linking CXX executable pc_memory_test
+[ 97%] Built target pc_memory_test
+[ 98%] Building CXX object pc-android/CMakeFiles/pc_video_test.dir/native/tests/pc_video_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../quantum_device.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../pc_machine.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/pc_video_test.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[ 99%] Linking CXX executable pc_video_test
+[ 99%] Built target pc_video_test
+[100%] Building CXX object pc-android/CMakeFiles/pc_quantum_test.dir/native/tests/pc_quantum_test.cpp.o
+In file included from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/pauli_observer.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_core.hpp:4,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_program.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/infinite_session.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../quantum_device.hpp:3,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/../pc_machine.hpp:6,
+                 from /workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/native/tests/pc_quantum_test.cpp:1:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+/workspace/scratch/d0e1d0a0e3a1/mundo-X/pc-android/../native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+  357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+[100%] Linking CXX executable pc_quantum_test
+[100%] Built target pc_quantum_test

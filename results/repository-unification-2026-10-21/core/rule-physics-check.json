@@ -1,0 +1,7 @@
+{
+  "test": "rule_physics_3d",
+  "returncode": 0,
+  "stdout": "{\"suite\":\"rule_physics\",\"ok\":true,\"checks\":442462,\"reference_scenes\":64,\"reference_steps\":256,\"sparse_pairs_4096\":0}\n",
+  "stderr": "",
+  "rlimit_as_bytes": 2147483648
+}

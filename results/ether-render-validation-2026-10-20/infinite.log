@@ -1,0 +1,42 @@
+{
+  "status": "passed",
+  "checks": {
+    "implicit_101_digit_bell_observed_without_materializing": true,
+    "ray_projection_change_invalidates_frame_cache_exactly": true,
+    "camera_and_render_preserve_state_and_rng": true,
+    "gate_on_same_owner_changes_real_pixels": {
+      "changed_pixels": 3322,
+      "resolution": [
+        192,
+        108
+      ]
+    },
+    "second_z_restores_exact_same_driver_image": true,
+    "zero_coupling_control": {
+      "changed_pixels": 0,
+      "observable_changed": true
+    },
+    "same_revision_restore_invalidates_visual_epoch": true,
+    "program_change_invalidates_coefficients_without_changing_core": true,
+    "closing_borrowed_scene_preserves_owner": true,
+    "invalid_requests_preserve_state_rng_epoch": {
+      "cases": 10
+    },
+    "post_measurement_project_preserves_state_rng_world_and_image": true,
+    "failed_v2_import_preserves_existing_project": 5,
+    "v2_codec_preserves_full_decimal_strings": true,
+    "desktop_cli_edits_and_exports_101_digit_address": true
+  },
+  "scope": "Same InfiniteSession and existing GLES renderer; .cosmic v2 current state",
+  "physical_phone_benchmark": false,
+  "cross_driver_pixel_identity_claimed": false,
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "checkpoint_sha256": "189380f329eea4b1b746adeb9ddf52eca756a785d7fac8e028a63c541f719c61"
+}

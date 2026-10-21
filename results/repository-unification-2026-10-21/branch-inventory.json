@@ -1,0 +1,2566 @@
+{
+  "schema_version": 1,
+  "scope": "Complete remote branch and pull-request disposition against recovered integrated HEAD; read-only remote inventory",
+  "captured_at_utc": "2026-10-21T00:01:25.574Z",
+  "integration_reference": "52150dfa928c088a32e69ce32f53c1e5a3b558c3",
+  "remote_main": "7b028db2344912b2ab86a0affa2a1fe56180922b",
+  "sources": [
+    "https://api.github.com/repos/guadalupejuan001-code/mundo-X/branches?per_page=100",
+    "https://api.github.com/repos/guadalupejuan001-code/mundo-X/pulls?state=all&per_page=100&sort=created&direction=desc"
+  ],
+  "branches": [
+    {
+      "name": "build/android-apk-v0.1",
+      "sha": "7b674f5261bc01f007c004eb1aef5b67b9f23ab4",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 2,
+      "behind_integration": 339,
+      "merge_base": "d5e20a042465cabad8e84ad19e06f08ec893a153",
+      "related_prs": [
+        3
+      ],
+      "unique_commits": [
+        {
+          "sha": "7b793bb9beaf1afb4114d21b5bfb12a3f0b94a5d",
+          "subject": "Trigger first Mundo X Lab APK build",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "app/BUILD_TRIGGER.md"
+          ]
+        },
+        {
+          "sha": "7b674f5261bc01f007c004eb1aef5b67b9f23ab4",
+          "subject": "Retry Android APK build",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "app/BUILD_TRIGGER.md"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        "app/BUILD_TRIGGER.md"
+      ],
+      "file_comparisons": [
+        {
+          "path": "app/BUILD_TRIGGER.md",
+          "branch_blob": "9d66cf65d730910a73c8edf9df2ac62302557868",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        }
+      ],
+      "classification": "obsolete_trigger",
+      "recommended_action": "Conservar historia; no integrar app/BUILD_TRIGGER.md. PR3 ya cerrado.",
+      "evidence_summary": "Sólo dos disparadores de compilación; ningún cambio funcional.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/7b674f5261bc01f007c004eb1aef5b67b9f23ab4"
+    },
+    {
+      "name": "codex/basis-vm-android",
+      "sha": "58dd035a6f16e66c52bf313682065c2bb7630025",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 198,
+      "merge_base": "58dd035a6f16e66c52bf313682065c2bb7630025",
+      "related_prs": [],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/58dd035a6f16e66c52bf313682065c2bb7630025"
+    },
+    {
+      "name": "codex/core-1000-qubits-20261019",
+      "sha": "ef4636240af73351a18710e988346791fbdc3b58",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 152,
+      "merge_base": "ef4636240af73351a18710e988346791fbdc3b58",
+      "related_prs": [
+        15
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/ef4636240af73351a18710e988346791fbdc3b58"
+    },
+    {
+      "name": "codex/cosmic-android-unified-20261019",
+      "sha": "339fb9bd7bfb4e6e950a23f30719a98261914d98",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 155,
+      "merge_base": "339fb9bd7bfb4e6e950a23f30719a98261914d98",
+      "related_prs": [
+        13
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/339fb9bd7bfb4e6e950a23f30719a98261914d98"
+    },
+    {
+      "name": "codex/cosmic-engine-4k-20261019",
+      "sha": "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 153,
+      "merge_base": "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac",
+      "related_prs": [],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac"
+    },
+    {
+      "name": "codex/cosmic-engine-8k-20261019",
+      "sha": "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 150,
+      "merge_base": "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6",
+      "related_prs": [
+        14
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6"
+    },
+    {
+      "name": "codex/cosmic-solar-4k-atmospheres-20261019",
+      "sha": "b6a324f7d9a13709771f4589c8c082883607b788",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 146,
+      "merge_base": "b6a324f7d9a13709771f4589c8c082883607b788",
+      "related_prs": [],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/b6a324f7d9a13709771f4589c8c082883607b788"
+    },
+    {
+      "name": "codex/cosmic-solar-explorer",
+      "sha": "1deb00b8ae618940cbc6b1195059eab37f923b3f",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 157,
+      "merge_base": "1deb00b8ae618940cbc6b1195059eab37f923b3f",
+      "related_prs": [],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/1deb00b8ae618940cbc6b1195059eab37f923b3f"
+    },
+    {
+      "name": "codex/cosmic-x-engine-20261019",
+      "sha": "d701f5c052363e8880eba4a614b54cc6fdf8fbc0",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 162,
+      "merge_base": "d701f5c052363e8880eba4a614b54cc6fdf8fbc0",
+      "related_prs": [
+        12
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/d701f5c052363e8880eba4a614b54cc6fdf8fbc0"
+    },
+    {
+      "name": "codex/ether-audit-stress-20261020",
+      "sha": "aab0930378796ebfd42f9629e2575108ca94fcff",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 42,
+      "merge_base": "aab0930378796ebfd42f9629e2575108ca94fcff",
+      "related_prs": [
+        25
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "Actualizar PR25 con un descendiente consolidado de su head; evita un borrador paralelo.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/aab0930378796ebfd42f9629e2575108ca94fcff"
+    },
+    {
+      "name": "codex/ether-core-v0-1-20261019",
+      "sha": "e49125dcd1b6c784d005bfd41c8fe2b8e318281a",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 60,
+      "merge_base": "e49125dcd1b6c784d005bfd41c8fe2b8e318281a",
+      "related_prs": [
+        23
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/e49125dcd1b6c784d005bfd41c8fe2b8e318281a"
+    },
+    {
+      "name": "codex/ether-fusion-pc-check-20261020",
+      "sha": "f2528050d86a3c251e763f918062cf7138a3bd2a",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 1,
+      "behind_integration": 56,
+      "merge_base": "9b3e17d3b50e3fc13de7818cc18a329628a1e0e9",
+      "related_prs": [],
+      "unique_commits": [
+        {
+          "sha": "f2528050d86a3c251e763f918062cf7138a3bd2a",
+          "subject": "Run the unchanged PC validation job on the isolated Ether test branch",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            ".github/workflows/own-pc-android.yml"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        ".github/workflows/own-pc-android.yml"
+      ],
+      "file_comparisons": [
+        {
+          "path": ".github/workflows/own-pc-android.yml",
+          "branch_blob": "0d76eb14885b8bd90ec4a7a566463e1318cdd421",
+          "integration_blob": "b4b85af385bd3a65a5892a0e8b53f7f8a4d4dea0",
+          "identical": false,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "obsolete_trigger",
+      "recommended_action": "No integrar el disparador de rama aislada.",
+      "evidence_summary": "El único commit cambia el filtro de own-pc-android.yml; su fuente funcional ya es ancestro.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/f2528050d86a3c251e763f918062cf7138a3bd2a"
+    },
+    {
+      "name": "codex/ether-fusion-session-20261020",
+      "sha": "d5937f08cdea67dcdfa3259a09dd2bd221f9f325",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 55,
+      "merge_base": "d5937f08cdea67dcdfa3259a09dd2bd221f9f325",
+      "related_prs": [
+        24
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/d5937f08cdea67dcdfa3259a09dd2bd221f9f325"
+    },
+    {
+      "name": "codex/factorized-exact-structure-20261018",
+      "sha": "462a686be00fb07d7d3fa8347cd086c9ef71d10b",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 178,
+      "merge_base": "462a686be00fb07d7d3fa8347cd086c9ef71d10b",
+      "related_prs": [
+        6
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/462a686be00fb07d7d3fa8347cd086c9ef71d10b"
+    },
+    {
+      "name": "codex/graphics-spatial-20261018",
+      "sha": "775f5a65ac360c5c3a7f3e974d6f67bc39428051",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 173,
+      "merge_base": "775f5a65ac360c5c3a7f3e974d6f67bc39428051",
+      "related_prs": [
+        8
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/775f5a65ac360c5c3a7f3e974d6f67bc39428051"
+    },
+    {
+      "name": "codex/infinite-8k-extreme-20261019",
+      "sha": "d4de6d0b86aca08450eb76d61cd9add2b4b7d097",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 15,
+      "behind_integration": 118,
+      "merge_base": "05595a150d6956a5535e8618ffd94017020d5289",
+      "related_prs": [
+        20
+      ],
+      "unique_commits": [
+        {
+          "sha": "6eb48ef326015469fccddd8f3da4b754057ef695",
+          "subject": "Reuse observers across InfiniteCore batch queries",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_core.hpp"
+          ]
+        },
+        {
+          "sha": "1ba09e8c53c7fb0a063835a0e2d8bbc492709c0d",
+          "subject": "Batch InfiniteCore observations through shared preparation",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_session.hpp"
+          ]
+        },
+        {
+          "sha": "964db0e4e1d0fc2e6fe8f58741566971091eb7a8",
+          "subject": "Cull empty legacy fragments exactly before 8K shading",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java"
+          ]
+        },
+        {
+          "sha": "14b00e2d0cf922353ce0abf5462786a48934f377",
+          "subject": "Add extreme InfiniteCore throughput and rollback probe",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/infinite_extreme.cpp"
+          ]
+        },
+        {
+          "sha": "8dce0345c30a112e486759affc2c5e62b610f791",
+          "subject": "Build the extreme InfiniteCore stress probe",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "CMakeLists.txt"
+          ]
+        },
+        {
+          "sha": "63a01567884449356805292b4a357841c21a47d7",
+          "subject": "Benchmark exact 8K culling against the identical scene",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java"
+          ]
+        },
+        {
+          "sha": "ad02d2c6681908f3019c4cae177becc8fa72b6e9",
+          "subject": "Record the extreme InfiniteCore benchmark in CI",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            ".github/workflows/infinite-core.yml"
+          ]
+        },
+        {
+          "sha": "9767a9f1669b8a460ce0c415bbb2ba1e6652abec",
+          "subject": "Pin the extreme InfiniteCore optimization source",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/cosmic_source_provenance.py"
+          ]
+        },
+        {
+          "sha": "ea1626ca3b2ea90c3052b04d62142e608e3b3e8f",
+          "subject": "Fix the extreme observable fixture construction",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/infinite_extreme.cpp"
+          ]
+        },
+        {
+          "sha": "682e50fe92d8b1c766434450456ad426128f3fd4",
+          "subject": "Advance the extreme source pin after fixture correction",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/cosmic_source_provenance.py"
+          ]
+        },
+        {
+          "sha": "6a09fe90b31f33a5899f94feb9f7a7b5e7c07ad9",
+          "subject": "Require exact pixels and measured 8K completion improvement",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/graphics-verify-ultra.py"
+          ]
+        },
+        {
+          "sha": "bceac8f3cc7536fc18d585cc3040ee9b698fa2cc",
+          "subject": "Index shared InfiniteCore observers directly by component",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_core.hpp"
+          ]
+        },
+        {
+          "sha": "8a7a6ae7af08f40cc9ca822789226a38f4d9f852",
+          "subject": "Pin direct-index InfiniteCore observer reuse",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/cosmic_source_provenance.py"
+          ]
+        },
+        {
+          "sha": "37b5f36caed27e3307e5fb39105751b1712bc36e",
+          "subject": "Exercise InfiniteCore as the live owner of the 8K framebuffer",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java"
+          ]
+        },
+        {
+          "sha": "d4de6d0b86aca08450eb76d61cd9add2b4b7d097",
+          "subject": "Require live InfiniteCore ownership in 8K evidence",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/graphics-verify-ultra.py"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        ".github/workflows/infinite-core.yml",
+        "CMakeLists.txt",
+        "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java",
+        "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java",
+        "native/include/mundo_x/infinite_core.hpp",
+        "native/include/mundo_x/infinite_session.hpp",
+        "native/tests/infinite_extreme.cpp",
+        "tools/cosmic_source_provenance.py",
+        "tools/graphics-verify-ultra.py"
+      ],
+      "file_comparisons": [
+        {
+          "path": ".github/workflows/infinite-core.yml",
+          "branch_blob": "3b156510a10d81eb70ff3af61f868c53de36c8d6",
+          "integration_blob": "8ccaaf3bab6fe15e1e4d99e3eb45af56bbbeba13",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "CMakeLists.txt",
+          "branch_blob": "e83aba33d787deeea55d8ea5b63116f27bd0032f",
+          "integration_blob": "fd293d4e701f835b2eae6cbf606d4cebfef035ec",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java",
+          "branch_blob": "a71e1f8a97e6ae8ea4aa8915836999d5d85ce942",
+          "integration_blob": "7f63c6840031b2d059d7b03ad2eb73845904336b",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java",
+          "branch_blob": "8fffb0c8a36ed5bffae3d70f96bb85782ddb36a8",
+          "integration_blob": "2760af3c730d2593e6f5b60297619672868bf205",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/include/mundo_x/infinite_core.hpp",
+          "branch_blob": "6b0be1a2b6fc532ffbdbacef0eb05eed7e9d2dd5",
+          "integration_blob": "fa2f85647bf7c2b5418a745dc99c40fd7c41a838",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/include/mundo_x/infinite_session.hpp",
+          "branch_blob": "42e9770e4f909cb215b6a32bd414cc3a95cba04c",
+          "integration_blob": "43086dbaa1a05416052cddaf0f1124c0d1d7f778",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/tests/infinite_extreme.cpp",
+          "branch_blob": "5d92b24b29647dc3977061fd7f389a2821650059",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "tools/cosmic_source_provenance.py",
+          "branch_blob": "476ceb13a16d0e9a5612e542cf61b1c837541576",
+          "integration_blob": "309ba566326c355da33a4fecdd4132403cd79e7f",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "tools/graphics-verify-ultra.py",
+          "branch_blob": "81c29f526c319756d1ed91317ae741e1f9be8438",
+          "integration_blob": "5b7eaf82a0c850eb347825abdbc7cb9a54bd730a",
+          "identical": false,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "selective_recovery_required",
+      "recommended_action": "Adaptar infinite_extreme al ObserverCache actual; documentar el culling antiguo como incompatible con espejos y conservar las pruebas útiles. Cerrar PR20 tras la integración validada.",
+      "evidence_summary": "El test extremo falta; observadores antiguos están superados. El scissor Android limita la proyección directa y desconoce reflejos.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/d4de6d0b86aca08450eb76d61cd9add2b4b7d097"
+    },
+    {
+      "name": "codex/infinite-core-rules-20261019",
+      "sha": "2e6d367ca2cae86aa3d92892c000c29cc6d5113d",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 119,
+      "merge_base": "2e6d367ca2cae86aa3d92892c000c29cc6d5113d",
+      "related_prs": [
+        17
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/2e6d367ca2cae86aa3d92892c000c29cc6d5113d"
+    },
+    {
+      "name": "codex/integrate-cosmic-projects-20261019",
+      "sha": "849c7001056c7b5838e94604a77a51ab9e6a5f62",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 129,
+      "merge_base": "849c7001056c7b5838e94604a77a51ab9e6a5f62",
+      "related_prs": [
+        16
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/849c7001056c7b5838e94604a77a51ab9e6a5f62"
+    },
+    {
+      "name": "codex/motor-x-visual-20261018",
+      "sha": "eca35f159320859e5ce873d59adeed982d6e0c30",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 172,
+      "merge_base": "eca35f159320859e5ce873d59adeed982d6e0c30",
+      "related_prs": [
+        9
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/eca35f159320859e5ce873d59adeed982d6e0c30"
+    },
+    {
+      "name": "codex/mundo-x-graphics-android-20261019",
+      "sha": "141937a068124177e32c212fc2942a3c10da12b1",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 176,
+      "merge_base": "141937a068124177e32c212fc2942a3c10da12b1",
+      "related_prs": [
+        10
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/141937a068124177e32c212fc2942a3c10da12b1"
+    },
+    {
+      "name": "codex/own-pc-x86-20261019",
+      "sha": "155f954a79027a1cb3f2b9c1a43e5da8661b3303",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 171,
+      "merge_base": "155f954a79027a1cb3f2b9c1a43e5da8661b3303",
+      "related_prs": [
+        11
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/155f954a79027a1cb3f2b9c1a43e5da8661b3303"
+    },
+    {
+      "name": "codex/pc-enter-iso-fix-20261019",
+      "sha": "57a8b339f9580ff7a41d3da25ca4636aef5e2388",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 1,
+      "behind_integration": 118,
+      "merge_base": "05595a150d6956a5535e8618ffd94017020d5289",
+      "related_prs": [
+        19
+      ],
+      "unique_commits": [
+        {
+          "sha": "57a8b339f9580ff7a41d3da25ca4636aef5e2388",
+          "subject": "Corrige ENTER al abrir ISOs y prepara COSMIC X PC 0.4.1",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            ".github/workflows/own-pc-android.yml",
+            "README.md",
+            "pc-android/CMakeLists.txt",
+            "pc-android/README.md",
+            "pc-android/app/build.gradle",
+            "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java",
+            "pc-android/native/tests/x86_cpu_test.cpp",
+            "pc-android/native/tests/x86_enter_oracle_test.cpp",
+            "pc-android/native/tests/x86_long_mode_test.cpp",
+            "pc-android/native/x86_cpu.hpp",
+            "pc-android/tools/android-test.sh",
+            "pc-android/tools/test-native.sh"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        ".github/workflows/own-pc-android.yml",
+        "README.md",
+        "pc-android/CMakeLists.txt",
+        "pc-android/README.md",
+        "pc-android/app/build.gradle",
+        "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java",
+        "pc-android/native/tests/x86_cpu_test.cpp",
+        "pc-android/native/tests/x86_enter_oracle_test.cpp",
+        "pc-android/native/tests/x86_long_mode_test.cpp",
+        "pc-android/native/x86_cpu.hpp",
+        "pc-android/tools/android-test.sh",
+        "pc-android/tools/test-native.sh"
+      ],
+      "file_comparisons": [
+        {
+          "path": ".github/workflows/own-pc-android.yml",
+          "branch_blob": "b1c34ff0b2768406878097a77ff1d7788f3a568d",
+          "integration_blob": "b4b85af385bd3a65a5892a0e8b53f7f8a4d4dea0",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "README.md",
+          "branch_blob": "8a6fccd7f7fb32fce998f1db85bbcfaab63b19bc",
+          "integration_blob": "7f012cb744acf930fb22500dcf88027c4e201b74",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/CMakeLists.txt",
+          "branch_blob": "5923b6fa554cc2e2ee1ab8be0013f315470189e8",
+          "integration_blob": "5923b6fa554cc2e2ee1ab8be0013f315470189e8",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/README.md",
+          "branch_blob": "583bacdc8f79a53f8dc79233d111de8a91cbaad5",
+          "integration_blob": "2d2a378f73abe78d8b1b132f6e63a550b375d39d",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/app/build.gradle",
+          "branch_blob": "0d7e83b8332ee4a529736823d267adb4c573090f",
+          "integration_blob": "d6169d17676a51622cac215b712b94d68eb7127c",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java",
+          "branch_blob": "f34eea557cdaf9cb9136e1d75c869a3ec578818a",
+          "integration_blob": "f6cded62a5b5f525d8a0a523180c26508c88fd36",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/native/tests/x86_cpu_test.cpp",
+          "branch_blob": "f985183038434286e123a8a3f760209aa6b798e1",
+          "integration_blob": "f985183038434286e123a8a3f760209aa6b798e1",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/native/tests/x86_enter_oracle_test.cpp",
+          "branch_blob": "a5e8e8a9fb58c722dd4f900dfcde5131c4595550",
+          "integration_blob": "a5e8e8a9fb58c722dd4f900dfcde5131c4595550",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/native/tests/x86_long_mode_test.cpp",
+          "branch_blob": "41eb30b3cb28636b07170cf355aa7981bf5e8e09",
+          "integration_blob": "fcac86165942fa5b7c8fd8bb96f6881be267c6f7",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/native/x86_cpu.hpp",
+          "branch_blob": "2c722518ee6930ab67d4448fdba81f24910944ff",
+          "integration_blob": "7721b281f04b7d113436bdf6332c859e3a47f0a4",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/tools/android-test.sh",
+          "branch_blob": "67acefd0e80eed44369aa577000659b02dceac1c",
+          "integration_blob": "f872db284c0968a3db4b81f3a0409da23c49eb93",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "pc-android/tools/test-native.sh",
+          "branch_blob": "2bdfedd316422c20409cba643e69a7d85837b682",
+          "integration_blob": "2bdfedd316422c20409cba643e69a7d85837b682",
+          "identical": true,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "selective_test_recovery_required",
+      "recommended_action": "Recuperar sólo la regresión Android ENTER/LEAVE y su evidencia; mantener Ether. Cerrar PR19 tras validar/publicar.",
+      "evidence_summary": "ENTER nativo y oráculo ya recuperados por 2d22061; falta el caso ISO Android. La rama también contiene versiones anteriores de instrumentación Ether.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/57a8b339f9580ff7a41d3da25ca4636aef5e2388"
+    },
+    {
+      "name": "codex/pc-graphics-iso-fix-20261019",
+      "sha": "acc430068cd7414c06f050e6485714d566805e55",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 127,
+      "merge_base": "acc430068cd7414c06f050e6485714d566805e55",
+      "related_prs": [
+        18
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/acc430068cd7414c06f050e6485714d566805e55"
+    },
+    {
+      "name": "codex/physics-foundation-20261019",
+      "sha": "c7e78948ea95080d0603608696da221f02bf4584",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 27,
+      "behind_integration": 118,
+      "merge_base": "05595a150d6956a5535e8618ffd94017020d5289",
+      "related_prs": [
+        22
+      ],
+      "unique_commits": [
+        {
+          "sha": "03deb245deb12be5551d45f137a5a0735a007e93",
+          "subject": "Add isolated deterministic 2D physics foundation",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/physics_world.hpp"
+          ]
+        },
+        {
+          "sha": "04d48c01cbf766770d1e819c9767560ac75f7456",
+          "subject": "Add physics foundation smoke checks",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/physics_world_smoke.cpp"
+          ]
+        },
+        {
+          "sha": "1abf4302cf24e4631045080d0cc7bb54da7fdf90",
+          "subject": "Document upgrade validation and scope",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "docs/physics-renderer-upgrade-plan.md"
+          ]
+        },
+        {
+          "sha": "e7db96072f3737db762568586a5709b0307f6682",
+          "subject": "Run physics foundation in native CI",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "CMakeLists.txt"
+          ]
+        },
+        {
+          "sha": "f9753d997423053ed903a237df6dd00ebf45dcc5",
+          "subject": "Reuse Pauli observers within infinite query batches",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_core.hpp"
+          ]
+        },
+        {
+          "sha": "24cb1d55712972587522eaad790feaf8ca1e8935",
+          "subject": "Share observer work across infinite query batches",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_session.hpp"
+          ]
+        },
+        {
+          "sha": "5d4bf89676b8a7f0055f9f288998f139c704b055",
+          "subject": "Expose exact observer reuse telemetry",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_session.hpp"
+          ]
+        },
+        {
+          "sha": "b822cfd5ef9c250e628f34f4e63c1cf9f5e33080",
+          "subject": "Verify one observer build per queried component",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/infinite_session.cpp"
+          ]
+        },
+        {
+          "sha": "64fd3bfddabfbd6809fa22296d62b65b847cf026",
+          "subject": "Strengthen deterministic physics contracts",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/physics_world_smoke.cpp"
+          ]
+        },
+        {
+          "sha": "fd816d59fcec1d285cd8434d4eb596b09d91021c",
+          "subject": "Rename physics test to match CMake target",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/physics_world.cpp"
+          ]
+        },
+        {
+          "sha": "726eacd6869fd9c21944009f3d6115ca93e3372a",
+          "subject": "Remove superseded physics smoke filename",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/physics_world_smoke.cpp"
+          ]
+        },
+        {
+          "sha": "7887a33dd7543efa2ab826491734980d5c65406d",
+          "subject": "Declare reviewed physics and observer-cache sources",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/cosmic_source_provenance.py"
+          ]
+        },
+        {
+          "sha": "278188fee6ec7d12b6da44fb176e33f9eb76a19f",
+          "subject": "Make physics checks active in Release builds",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/physics_world.cpp"
+          ]
+        },
+        {
+          "sha": "019bf468c6fac70b3aac4e6ffc1f7d8ff7737eca",
+          "subject": "Pin active Release physics checks",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/cosmic_source_provenance.py"
+          ]
+        },
+        {
+          "sha": "cdb918e9613d7ae173a7fd92b7a67c9eeec0018e",
+          "subject": "Move Solar visual bridge to rules-based InfiniteCore",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java"
+          ]
+        },
+        {
+          "sha": "e4e1158093b0d7a599bd580fd886d3dead8e342a",
+          "subject": "Add true 8K resolution mode to Solar renderer",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java"
+          ]
+        },
+        {
+          "sha": "cdf8ad76c9dc4df618200962bb3f9eac2c9b7b3a",
+          "subject": "Expose Solar 8K UI and persist shared resolution mode",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java"
+          ]
+        },
+        {
+          "sha": "0421c78f69fceae93ed1c71ed795c737bd6a7331",
+          "subject": "Add independently installable Solar 8K profile",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "solar-android/app/build.gradle"
+          ]
+        },
+        {
+          "sha": "a79abb441330a4f685f49c805461902c8034555f",
+          "subject": "Test Solar InfiniteCore and actual 8K framebuffer",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java"
+          ]
+        },
+        {
+          "sha": "72bab0051c7df8f61c91478ef72524406c45e2c0",
+          "subject": "Update Solar 4K packaging audit for 1.2.0",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/solar-stage-4k.py"
+          ]
+        },
+        {
+          "sha": "5e2eba56f9bbde62321f9f8023a6559b0d084a0f",
+          "subject": "Validate Solar 8K and InfiniteCore evidence",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/solar-verify-evidence.py"
+          ]
+        },
+        {
+          "sha": "13734ec5ddef8b0d4701c3f755fa91627b073870",
+          "subject": "Add Solar 8K Android validation profile",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/solar-emulator-test.sh"
+          ]
+        },
+        {
+          "sha": "d17fe56403ddf858575f14ae8ea21b6088c40d0d",
+          "subject": "Add Solar 8K APK packaging audit",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/solar-stage-8k.py"
+          ]
+        },
+        {
+          "sha": "624280bf48d69903b52234661e7b6d9973949691",
+          "subject": "Add Solar 8K and InfiniteCore validation workflow",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            ".github/workflows/solar-8k.yml"
+          ]
+        },
+        {
+          "sha": "3a89f7f1e7a7b783716308020f4e093f6add614b",
+          "subject": "Document Solar 8K and InfiniteCore integration",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "solar-android/README.md"
+          ]
+        },
+        {
+          "sha": "f1e146e3bdd2c76be2c08edde55d6b0043649fa6",
+          "subject": "Update root documentation for Solar 8K InfiniteCore",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "README.md"
+          ]
+        },
+        {
+          "sha": "c7e78948ea95080d0603608696da221f02bf4584",
+          "subject": "Fix Solar renderer release state after resolution modes",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        ".github/workflows/solar-8k.yml",
+        "CMakeLists.txt",
+        "README.md",
+        "docs/physics-renderer-upgrade-plan.md",
+        "native/include/mundo_x/infinite_core.hpp",
+        "native/include/mundo_x/infinite_session.hpp",
+        "native/include/mundo_x/physics_world.hpp",
+        "native/tests/infinite_session.cpp",
+        "native/tests/physics_world.cpp",
+        "solar-android/README.md",
+        "solar-android/app/build.gradle",
+        "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java",
+        "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java",
+        "solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java",
+        "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+        "tools/cosmic_source_provenance.py",
+        "tools/solar-emulator-test.sh",
+        "tools/solar-stage-4k.py",
+        "tools/solar-stage-8k.py",
+        "tools/solar-verify-evidence.py"
+      ],
+      "file_comparisons": [
+        {
+          "path": ".github/workflows/solar-8k.yml",
+          "branch_blob": "8e80fc8b3679eca957d09bafe462cb225d2dd7ee",
+          "integration_blob": "b949981d9bc869f499cf7b5f9bee7b32e62aebd8",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "CMakeLists.txt",
+          "branch_blob": "d14b7fbe4787483dfc5cbbaf11be7c2cd7a6b542",
+          "integration_blob": "fd293d4e701f835b2eae6cbf606d4cebfef035ec",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "README.md",
+          "branch_blob": "8a99bd4cf98a3e4fe2a094309943418a6091755a",
+          "integration_blob": "7f012cb744acf930fb22500dcf88027c4e201b74",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "docs/physics-renderer-upgrade-plan.md",
+          "branch_blob": "cc4709d83f196d0bfa5d093119044d4f75a56b88",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "native/include/mundo_x/infinite_core.hpp",
+          "branch_blob": "578e656c0f2b1ff7f316e0fa68bd5e8c3e14d3ac",
+          "integration_blob": "fa2f85647bf7c2b5418a745dc99c40fd7c41a838",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/include/mundo_x/infinite_session.hpp",
+          "branch_blob": "cc06fed637e8b390ab57f11189e11cbc73b47e39",
+          "integration_blob": "43086dbaa1a05416052cddaf0f1124c0d1d7f778",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/include/mundo_x/physics_world.hpp",
+          "branch_blob": "641782eabcd55b0d45421cde5b70059706942901",
+          "integration_blob": "d44bb4a530303dcbd8b78ea770eb5f10fc0f7e1e",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/tests/infinite_session.cpp",
+          "branch_blob": "1906ce4f84bfcfd32ec40b29e8e47bc78f1df0a4",
+          "integration_blob": "cdc7be84a6838dc5a306faa8eb292fe9b42ffb42",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/tests/physics_world.cpp",
+          "branch_blob": "b9ab5d43a24237bd85b6b13f38770698b6b0874c",
+          "integration_blob": "fecbe2c06d300090cbb0e6596190ee0a4b6299b9",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "solar-android/README.md",
+          "branch_blob": "0153b6b729eecaa0e04cc375161729bda4af7662",
+          "integration_blob": "13ef0e40c9f0137eedf2e78150c1bb34c488baf7",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "solar-android/app/build.gradle",
+          "branch_blob": "b13a0ce300a2d65b6b6d7a1174936e882ef21a5f",
+          "integration_blob": "fa255b0e30878a7db101b2db62609598f7f66d01",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java",
+          "branch_blob": "b1168260f1b7348b2ff18b124a12bfe250afa048",
+          "integration_blob": "58da03c7e01dc1ee19cb96276ef86cdc76f4af8c",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java",
+          "branch_blob": "ea4f4d955dc4e24ba42e26d0ffe8454677bfae78",
+          "integration_blob": "550ae93c79d2575f28c21d87888b3e8c70b8a840",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java",
+          "branch_blob": "5c6ba256106c4c91a94517aff24dac334cec8ccb",
+          "integration_blob": "3e07d351282634b4edd80f19ffe9c42343369923",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+          "branch_blob": "970d96f4a6479a9f6aa0dd3ef6cfa585f131596c",
+          "integration_blob": "5539f383ccd5703c788f29a51d675957627bad32",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "tools/cosmic_source_provenance.py",
+          "branch_blob": "76a9034e79c14241e11f06df7c508e3c37ef518c",
+          "integration_blob": "309ba566326c355da33a4fecdd4132403cd79e7f",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "tools/solar-emulator-test.sh",
+          "branch_blob": "698c745bab494f02b7ccbb2c87d0eb1434947b6e",
+          "integration_blob": "f1e3c645403878266755f1d539ec70b4c3bdf1fe",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "tools/solar-stage-4k.py",
+          "branch_blob": "063b8fbca4b671975a70585517a3aa73ea4650a9",
+          "integration_blob": "215c9bcf9954f59a3bc68685db4f12539b288c81",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "tools/solar-stage-8k.py",
+          "branch_blob": "434770a5ef412c7bbb49c50552136a83281765fa",
+          "integration_blob": "b43fdbbf6ed9ac7c1ba0838f96c89f1888d6e9f2",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "tools/solar-verify-evidence.py",
+          "branch_blob": "db589cd6ecab0db744d387a70e783803042a11e4",
+          "integration_blob": "11ea88e3508769f6d930c8f124b8e104da160813",
+          "identical": false,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "integrated_selectively_and_superseded",
+      "recommended_action": "Conservar PhysicsWorld actual; cerrar PR22 tras confirmar la integración consolidada. No importar el plan obsoleto ni los pins antiguos.",
+      "evidence_summary": "PhysicsWorld se recuperó en 6c171ad y se corrigió/optimizó después; Solar y Ether actuales sustituyen las variantes de la rama.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/c7e78948ea95080d0603608696da221f02bf4584"
+    },
+    {
+      "name": "codex/quantum-echo-android",
+      "sha": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 196,
+      "merge_base": "9d095a81b3820f4c50fc48fecd9c7ff08bd22b40",
+      "related_prs": [],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/9d095a81b3820f4c50fc48fecd9c7ff08bd22b40"
+    },
+    {
+      "name": "codex/rule-render-physics-20261019",
+      "sha": "fd0bd14dc5a9709703ced7fb61fe031a1c266b75",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 11,
+      "behind_integration": 118,
+      "merge_base": "05595a150d6956a5535e8618ffd94017020d5289",
+      "related_prs": [
+        21
+      ],
+      "unique_commits": [
+        {
+          "sha": "eab60ec863b2c10f7002128c775faf5bfd49281b",
+          "subject": "Reuse stabilizer observers across InfiniteCore query batches",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_core.hpp"
+          ]
+        },
+        {
+          "sha": "cf583346b4ce7d8fdefc9fc6c5533e078ba6bfc3",
+          "subject": "Batch InfiniteSession observations through shared component observers",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/infinite_session.hpp"
+          ]
+        },
+        {
+          "sha": "9031aebe16f7cf68a7972c31be6b17049f28f217",
+          "subject": "Add rule-driven deterministic physics core",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/include/mundo_x/rule_physics.hpp"
+          ]
+        },
+        {
+          "sha": "e293be5a2c746d3213dd821d7abda1d8bc341cce",
+          "subject": "Test rule physics gravity and collisions",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/rule_physics.cpp"
+          ]
+        },
+        {
+          "sha": "7aef3cb8b6363791f353f6eadf0791481dc3087c",
+          "subject": "Build rule physics validation with native suite",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "CMakeLists.txt"
+          ]
+        },
+        {
+          "sha": "87629f7bdcec4ff9c75f1a29a1ba24efe767e23e",
+          "subject": "Reuse exact unchanged 8K frames instead of redrawing",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java"
+          ]
+        },
+        {
+          "sha": "83e5faee209f30b53453d13646417ef733db6356",
+          "subject": "Measure shared observer reuse on 1000-qubit batches",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/infinite_scale.cpp"
+          ]
+        },
+        {
+          "sha": "ea5f35ea806b388e5075919dee20cd1ab0e39219",
+          "subject": "Verify unchanged 8K frames reuse the completed framebuffer",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java"
+          ]
+        },
+        {
+          "sha": "faf086efe6add45ff6b41254b1db86f8c1df1625",
+          "subject": "Pin rule-efficiency native sources to reviewed update commit",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "tools/cosmic_source_provenance.py"
+          ]
+        },
+        {
+          "sha": "ba4522edbc349dcbcd9ef03a8bb113d680fb2904",
+          "subject": "Run rule physics in InfiniteCore cross-platform contracts",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            ".github/workflows/infinite-core.yml"
+          ]
+        },
+        {
+          "sha": "fd0bd14dc5a9709703ced7fb61fe031a1c266b75",
+          "subject": "Invalidate 8K reuse after framebuffer or debug-target changes",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        ".github/workflows/infinite-core.yml",
+        "CMakeLists.txt",
+        "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java",
+        "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java",
+        "native/include/mundo_x/infinite_core.hpp",
+        "native/include/mundo_x/infinite_session.hpp",
+        "native/include/mundo_x/rule_physics.hpp",
+        "native/tests/infinite_scale.cpp",
+        "native/tests/rule_physics.cpp",
+        "tools/cosmic_source_provenance.py"
+      ],
+      "file_comparisons": [
+        {
+          "path": ".github/workflows/infinite-core.yml",
+          "branch_blob": "3b795e50679515870ce2e7756ea2853352296201",
+          "integration_blob": "8ccaaf3bab6fe15e1e4d99e3eb45af56bbbeba13",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "CMakeLists.txt",
+          "branch_blob": "07e11fe93576b7c01f99b748466edbf86bec89bf",
+          "integration_blob": "fd293d4e701f835b2eae6cbf606d4cebfef035ec",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java",
+          "branch_blob": "6116eda978ef580bab8308248ff11e66fab72a7f",
+          "integration_blob": "7f63c6840031b2d059d7b03ad2eb73845904336b",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java",
+          "branch_blob": "30d7245a32e6d82eabf1ca4b7f28c8c963a59312",
+          "integration_blob": "2760af3c730d2593e6f5b60297619672868bf205",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/include/mundo_x/infinite_core.hpp",
+          "branch_blob": "5430c13c49b3022b122a489493b097d803983bbc",
+          "integration_blob": "fa2f85647bf7c2b5418a745dc99c40fd7c41a838",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/include/mundo_x/infinite_session.hpp",
+          "branch_blob": "688ea356cb1b828909b25457b73cab40c9f21365",
+          "integration_blob": "43086dbaa1a05416052cddaf0f1124c0d1d7f778",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/include/mundo_x/rule_physics.hpp",
+          "branch_blob": "644815b617917431a2c9ac0bbeab99acfe4f9663",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "native/tests/infinite_scale.cpp",
+          "branch_blob": "99db14a2fc1eec7fecb2977c395beb1a7c7847c1",
+          "integration_blob": "d25badeb8f3c1e73bf4f8491685c10eef8ded5a6",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/tests/rule_physics.cpp",
+          "branch_blob": "ad3be74228db78a817dfbd2dfcebe832d0821e4d",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "tools/cosmic_source_provenance.py",
+          "branch_blob": "c7ccc572df30a5f1cd024a77326824a6f95d6d93",
+          "integration_blob": "309ba566326c355da33a4fecdd4132403cd79e7f",
+          "identical": false,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "selective_recovery_required",
+      "recommended_action": "Recuperar RulePhysics3D corregido y aislado; adaptar reutilización Android con igualdad exacta y espejos; conservar carga GHZ 1000/24 como evidencia. Cerrar PR21 al validar/publicar.",
+      "evidence_summary": "Faltan RulePhysics3D, su test y la reutilización Android. Los observadores y pins de esa rama son anteriores al Ether vigente.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/fd0bd14dc5a9709703ced7fb61fe031a1c266b75"
+    },
+    {
+      "name": "codex/visual-microlab-20261018",
+      "sha": "bf5f3c6687bea8e23f87609ec72634422d1e288a",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 176,
+      "merge_base": "bf5f3c6687bea8e23f87609ec72634422d1e288a",
+      "related_prs": [
+        7
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/bf5f3c6687bea8e23f87609ec72634422d1e288a"
+    },
+    {
+      "name": "codex/windows-reference-diagnostics-20261018",
+      "sha": "5ff550d5cb664f4cb218ec96aa401c1b227686cf",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 3,
+      "behind_integration": 199,
+      "merge_base": "f6c5614e110e4e99b4e69466bb9d5e0abe4abdb8",
+      "related_prs": [],
+      "unique_commits": [
+        {
+          "sha": "3b7bb37f9e4c8b8ca079f5edc4ab1e1a912faf39",
+          "subject": "Include circuit context in reduced-state comparison failures",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "native/tests/reduced_optimization.cpp"
+          ]
+        },
+        {
+          "sha": "5d8eb90b7d739809d3699d43dc2b71c9f196adca",
+          "subject": "Compare Windows optimizer settings on identical reference tests",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            ".github/workflows/windows-x64.yml"
+          ]
+        },
+        {
+          "sha": "5ff550d5cb664f4cb218ec96aa401c1b227686cf",
+          "subject": "Fetch the comparison baseline in the shallow CI checkout",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            ".github/workflows/windows-x64.yml"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        ".github/workflows/windows-x64.yml",
+        "native/tests/reduced_optimization.cpp"
+      ],
+      "file_comparisons": [
+        {
+          "path": ".github/workflows/windows-x64.yml",
+          "branch_blob": "7c6bdc217b35a9e28d769cbb3736f998c5d82fea",
+          "integration_blob": "1ac0601568cd61d4838805305ad9dbd446464cb7",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "native/tests/reduced_optimization.cpp",
+          "branch_blob": "ae2ca18053b8a0d21573e31a9bfed9637ecc9844",
+          "integration_blob": "ae2ca18053b8a0d21573e31a9bfed9637ecc9844",
+          "identical": true,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "diagnostics_absorbed_workflow_obsolete",
+      "recommended_action": "Mantener reduced_optimization actual y la CI Windows con gates; archivar sólo la rama diagnóstica.",
+      "evidence_summary": "El archivo de diagnóstico es byte a byte idéntico. La matriz temporal sustituiría tests actuales por ejecuciones que terminan con exit 0.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/5ff550d5cb664f4cb218ec96aa401c1b227686cf"
+    },
+    {
+      "name": "codex/xasm-reduced-t",
+      "sha": "d68a6d76d7045d77973296345810cc2633b47b30",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 198,
+      "merge_base": "d68a6d76d7045d77973296345810cc2633b47b30",
+      "related_prs": [
+        4
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/d68a6d76d7045d77973296345810cc2633b47b30"
+    },
+    {
+      "name": "delivery/xlab-0.3.1",
+      "sha": "dd56120f37bf80035a5f4b7a79f2b953aaad2cf5",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 2,
+      "behind_integration": 183,
+      "merge_base": "52c9dc98c4676ff9bd5b8cbd23594a020477a7fb",
+      "related_prs": [],
+      "unique_commits": [
+        {
+          "sha": "8100ee2d15dae6099cbb4f8d2d45fc78afd85373",
+          "subject": "Stage verified project-signed XLab 0.3.1 delivery assets",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "dist/XLab-Objetos-0.3.1-SHA256.txt",
+            "dist/XLab-Objetos-0.3.1-firma.json",
+            "dist/XLab-Objetos-0.3.1.apk"
+          ]
+        },
+        {
+          "sha": "dd56120f37bf80035a5f4b7a79f2b953aaad2cf5",
+          "subject": "Stage ZIP delivery with unchanged signed APK and installation guide",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "dist/XLab-Objetos-0.3.1-ZIP-SHA256.txt",
+            "dist/XLab-Objetos-0.3.1.zip"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        "dist/XLab-Objetos-0.3.1-SHA256.txt",
+        "dist/XLab-Objetos-0.3.1-ZIP-SHA256.txt",
+        "dist/XLab-Objetos-0.3.1-firma.json",
+        "dist/XLab-Objetos-0.3.1.apk",
+        "dist/XLab-Objetos-0.3.1.zip"
+      ],
+      "file_comparisons": [
+        {
+          "path": "dist/XLab-Objetos-0.3.1-SHA256.txt",
+          "branch_blob": "651f45317e6ff76767788bb0005e51acb849cff5",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.1-ZIP-SHA256.txt",
+          "branch_blob": "a315df701b2b4000b0c0e1e3bb7dbd5d930cd61d",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.1-firma.json",
+          "branch_blob": "7f7601e975e2bf0e25986dbfc6ca356c0b2977d1",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.1.apk",
+          "branch_blob": "1ea241c9006ae8afe097d500af461e7368a5b9f5",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.1.zip",
+          "branch_blob": "6ffb8765380193c5cbea278a760e5b42461d6ebf",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        }
+      ],
+      "classification": "historical_binary_delivery",
+      "recommended_action": "Conservar SHA/artefactos históricos; no mezclar binarios antiguos en main.",
+      "evidence_summary": "Sólo APK, ZIP, checksums y firma; sin funcionalidad fuente exclusiva.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/dd56120f37bf80035a5f4b7a79f2b953aaad2cf5"
+    },
+    {
+      "name": "delivery/xlab-0.3.2",
+      "sha": "6b206566022afa8b7b20b9e6dd3153ce8dad9182",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 1,
+      "behind_integration": 178,
+      "merge_base": "e3cebb5fe1056913fcfacd811785566b8a6b40fe",
+      "related_prs": [],
+      "unique_commits": [
+        {
+          "sha": "6b206566022afa8b7b20b9e6dd3153ce8dad9182",
+          "subject": "Stage signed XLab 0.3.2 ZIP delivery with unchanged tested payload",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "dist/XLab-Objetos-0.3.2-SHA256.txt",
+            "dist/XLab-Objetos-0.3.2-ZIP-SHA256.txt",
+            "dist/XLab-Objetos-0.3.2-firma.json",
+            "dist/XLab-Objetos-0.3.2.apk",
+            "dist/XLab-Objetos-0.3.2.zip"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        "dist/XLab-Objetos-0.3.2-SHA256.txt",
+        "dist/XLab-Objetos-0.3.2-ZIP-SHA256.txt",
+        "dist/XLab-Objetos-0.3.2-firma.json",
+        "dist/XLab-Objetos-0.3.2.apk",
+        "dist/XLab-Objetos-0.3.2.zip"
+      ],
+      "file_comparisons": [
+        {
+          "path": "dist/XLab-Objetos-0.3.2-SHA256.txt",
+          "branch_blob": "75a7e88ee9edffd10dff7b53c83c37de8ffbdb0e",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.2-ZIP-SHA256.txt",
+          "branch_blob": "c089173dae1ee5595caea19976b0bd2c0e9c84b3",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.2-firma.json",
+          "branch_blob": "9d3e52531c49f1b5ae578ad6cd96939507db2501",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.2.apk",
+          "branch_blob": "b533659642f0bda7e25c5a9d077761a112c7841b",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        },
+        {
+          "path": "dist/XLab-Objetos-0.3.2.zip",
+          "branch_blob": "7b1b87afd377fa0e44951d893e71025d7d10433c",
+          "integration_blob": null,
+          "identical": false,
+          "missing_from_integration": true
+        }
+      ],
+      "classification": "historical_binary_delivery",
+      "recommended_action": "Conservar SHA/artefactos históricos; no mezclar binarios antiguos en main.",
+      "evidence_summary": "Sólo APK, ZIP, checksums y firma; sin funcionalidad fuente exclusiva.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/6b206566022afa8b7b20b9e6dd3153ce8dad9182"
+    },
+    {
+      "name": "experiment/quantum-core-v0.1",
+      "sha": "4f8d212cba7f1fce4ebd1a1e2a8cca3ce6044bca",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 1,
+      "behind_integration": 352,
+      "merge_base": "4cc75ef25bef266efca5f522139b249c9b2d74a2",
+      "related_prs": [
+        2
+      ],
+      "unique_commits": [
+        {
+          "sha": "4f8d212cba7f1fce4ebd1a1e2a8cca3ce6044bca",
+          "subject": "Add Quantum Core X v0.1",
+          "patch_equivalent_in_integration": true,
+          "files": [
+            "README.md",
+            "docs/quantum_core_v0_1.md",
+            "experiments/quantum_interference_v0_1.py",
+            "src/quantum_core.py",
+            "tests/test_quantum_core.py"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        "README.md",
+        "docs/quantum_core_v0_1.md",
+        "experiments/quantum_interference_v0_1.py",
+        "src/quantum_core.py",
+        "tests/test_quantum_core.py"
+      ],
+      "file_comparisons": [
+        {
+          "path": "README.md",
+          "branch_blob": "af71804c17c2cbe85cac5991cd8d23a1becb9d82",
+          "integration_blob": "7f012cb744acf930fb22500dcf88027c4e201b74",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "docs/quantum_core_v0_1.md",
+          "branch_blob": "e841280a01cd6fb91caea2ec34274df67abb5a13",
+          "integration_blob": "7ebc27f01eb2d96225cb2f0d553e6fd54c3bc301",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "experiments/quantum_interference_v0_1.py",
+          "branch_blob": "d53524fe8b570e34b0c0077efd1d44c191361d4d",
+          "integration_blob": "d53524fe8b570e34b0c0077efd1d44c191361d4d",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "src/quantum_core.py",
+          "branch_blob": "4f3957f1e0370e0b05c787af59ebc0dae837e479",
+          "integration_blob": "4f3957f1e0370e0b05c787af59ebc0dae837e479",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "tests/test_quantum_core.py",
+          "branch_blob": "628204cf504d05544bac1d1b73bacb7829ddd228",
+          "integration_blob": "628204cf504d05544bac1d1b73bacb7829ddd228",
+          "identical": true,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "integrated_by_squash_and_content",
+      "recommended_action": "Conservar implementación y tests actuales; no repetir el merge.",
+      "evidence_summary": "git cherry identifica patch equivalente; runtime, experimento y test tienen blobs idénticos.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/4f8d212cba7f1fce4ebd1a1e2a8cca3ce6044bca"
+    },
+    {
+      "name": "experiment/transformer-x-v0.1",
+      "sha": "71433b2a466b77e73761de86b670207d639c29ff",
+      "included_by_ancestry": false,
+      "ahead_of_integration": 6,
+      "behind_integration": 353,
+      "merge_base": "a45ed16d47dbbfebb0bd0a885d7fcbdbf7b94733",
+      "related_prs": [
+        1
+      ],
+      "unique_commits": [
+        {
+          "sha": "bd2d0288ebcfce428c5c94d23035059f658a37ec",
+          "subject": "Define Mundo X and Transformer X v0.1",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "README.md"
+          ]
+        },
+        {
+          "sha": "6a3d8f87708405290dae437a36f2a8c5bc30a787",
+          "subject": "Add compact Transformer X core",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "src/transformer_x.py"
+          ]
+        },
+        {
+          "sha": "ce336f6c355241f72bf9dc012d0d98bd7aac5721",
+          "subject": "Add Bridge X byte-to-wave adapter",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "src/bridge_x.py"
+          ]
+        },
+        {
+          "sha": "874063bbaf1c6465ab7848460a667890f0c388bb",
+          "subject": "Add real-file training experiment",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "experiments/train_file_v0_1.py"
+          ]
+        },
+        {
+          "sha": "d51679a7568e46f845797bb6032346455d2e87f6",
+          "subject": "Add PyTorch dependency",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "requirements.txt"
+          ]
+        },
+        {
+          "sha": "71433b2a466b77e73761de86b670207d639c29ff",
+          "subject": "Make mobile training script resolve src directly",
+          "patch_equivalent_in_integration": false,
+          "files": [
+            "experiments/train_file_v0_1.py"
+          ]
+        }
+      ],
+      "branch_diff_files": [
+        "README.md",
+        "experiments/train_file_v0_1.py",
+        "requirements.txt",
+        "src/bridge_x.py",
+        "src/transformer_x.py"
+      ],
+      "file_comparisons": [
+        {
+          "path": "README.md",
+          "branch_blob": "6ccc6b3a4b23439475627366b05f529c828785ce",
+          "integration_blob": "7f012cb744acf930fb22500dcf88027c4e201b74",
+          "identical": false,
+          "missing_from_integration": false
+        },
+        {
+          "path": "experiments/train_file_v0_1.py",
+          "branch_blob": "e8d09efa9b8b01f7628a2da53272f1ae405b4063",
+          "integration_blob": "e8d09efa9b8b01f7628a2da53272f1ae405b4063",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "requirements.txt",
+          "branch_blob": "657e282eebed1bd4e3338fb34aa18603a0d22419",
+          "integration_blob": "657e282eebed1bd4e3338fb34aa18603a0d22419",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "src/bridge_x.py",
+          "branch_blob": "950c69e1e63c4bbdaab854876a71c3d11ca40e5c",
+          "integration_blob": "950c69e1e63c4bbdaab854876a71c3d11ca40e5c",
+          "identical": true,
+          "missing_from_integration": false
+        },
+        {
+          "path": "src/transformer_x.py",
+          "branch_blob": "8980d37dfc45e341953c662f2f06047e5d2d53c9",
+          "integration_blob": "8980d37dfc45e341953c662f2f06047e5d2d53c9",
+          "identical": true,
+          "missing_from_integration": false
+        }
+      ],
+      "classification": "integrated_by_squash_and_content",
+      "recommended_action": "Conservar Transformer/Bridge como módulo existente; no repetir el merge.",
+      "evidence_summary": "Seis commits fueron integrados mediante squash; runtime, Bridge, script de entrenamiento y requirements tienen blobs idénticos.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/71433b2a466b77e73761de86b670207d639c29ff"
+    },
+    {
+      "name": "main",
+      "sha": "7b028db2344912b2ab86a0affa2a1fe56180922b",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 54,
+      "merge_base": "7b028db2344912b2ab86a0affa2a1fe56180922b",
+      "related_prs": [],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "Publicar la consolidación desde un descendiente validado.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/7b028db2344912b2ab86a0affa2a1fe56180922b"
+    },
+    {
+      "name": "phase-performance-trial",
+      "sha": "a6c403ac4d403dbc5e2e26fb5d9883ac9ab341f1",
+      "included_by_ancestry": true,
+      "ahead_of_integration": 0,
+      "behind_integration": 198,
+      "merge_base": "a6c403ac4d403dbc5e2e26fb5d9883ac9ab341f1",
+      "related_prs": [
+        5
+      ],
+      "unique_commits": [],
+      "classification": "integrated_by_ancestry",
+      "recommended_action": "No volver a integrar; conservar la referencia histórica.",
+      "evidence_summary": "El head remoto completo es ancestro de la referencia auditada.",
+      "source_url": "https://github.com/guadalupejuan001-code/mundo-X/tree/a6c403ac4d403dbc5e2e26fb5d9883ac9ab341f1"
+    }
+  ],
+  "pull_requests": [
+    {
+      "number": 25,
+      "title": "Ether Core: auditoría reproducible, reutilización exacta y correcciones gráficas",
+      "state": "open",
+      "draft": true,
+      "head": {
+        "ref": "codex/ether-audit-stress-20261020",
+        "sha": "aab0930378796ebfd42f9629e2575108ca94fcff"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "7b028db2344912b2ab86a0affa2a1fe56180922b"
+      },
+      "merge_commit_sha": "653d2e4fda4a6d939133d46fbc85fcdeb328b206",
+      "merged_at": null,
+      "created_at": "2026-10-20T15:34:13Z",
+      "updated_at": "2026-10-20T15:34:13Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/25",
+      "body": "## Alcance\nRama aislada sobre `7b028db2344912b2ab86a0affa2a1fe56180922b` (PR #24), sin modificar main. Recupera exactamente siete commits de código de la auditoría interrumpida, hasta `b7f57afabc7d4d73b48790988799a8777b752ed4`; los archivos temporales de recuperación ya fueron eliminados. Árbol de código verificado: `2e55c08b89ec04aed10003c9bd8b6bd242c0e1c7`.\n\n## Cambios\n- Reutilizar PauliObserver por componente dentro de un lote coherente; no cachear respuestas obsoletas.\n- Evitar materializar operaciones CX/CZ que son identidad demostrable sobre el fondo implícito.\n- Propagar CZ sin copias temporales de soporte/direcciones, conservando signos.\n- Corregir el recorte de esferas oblicuas de Solar y la invalidación de caché por todos los uniformes de cámara del escritorio.\n- Recuperar selectivamente ENTER del PR #19, conservando las integraciones Ether posteriores.\n- Añadir campañas acotadas de estrés, referencias independientes y registro de cobertura.\n\n## Verificación nueva del 20 de octubre\n- Local: 72/72 CTest, 59 comprobaciones Java/JNI host, 2.500 pullbacks con signo sin discrepancias.\n- Oráculo complejo independiente: 10.444 comparaciones, error máximo 2,22045e-16; 137 rollbacks ante fallos de asignación verificados.\n- GitHub Actions 39448609783: compilación, 72/72 CTest, oráculos, procedencia y JNI aprobados. Ese run quedó rojo exclusivamente en la publicación por permisos de workflows; la actualización de esta rama se completó posteriormente mediante el conector GitHub autorizado.\n- Misma carga/semilla/compilación: 49 casos por versión, límite virtual de 2 GiB y presupuesto temporal. Antes: 33 terminados, 11 rechazos por presupuesto, 5 timeouts. Después: 39 terminados, 10 rechazos, 0 timeouts.\n- Cinco repeticiones alternadas: lote de 1.280 consultas sobre 256 sitios, mediana 466,615 ms → 4,416 ms. Se conservan tableau y resultados; no es una promesa de aceleración universal.\n\n## Límites de aprobación\nBorrador hasta resolver los controles Android/emulador y las revisiones restantes. JNI host no valida ART ni GPU física. No se afirma rendimiento móvil, arranque de cualquier Windows/ISO, física universal en Ether ni RAM infinita. El límite de componente activo, el transporte de snapshots de 16 MiB y el bloqueo por sesión siguen documentados. El informe de continuación y las evidencias nuevas se agregan a esta misma rama.\n\nNo fusionar automáticamente; conservar main como referencia recuperable.",
+      "included_by_ancestry": true,
+      "disposition": "update_existing_consolidation_pr",
+      "recommended_action": "Actualizar su rama con la integración validada: aab0930 ya es ancestro de 52150df. El estado abierto/borrador es metadato, no prueba de ausencia del código."
+    },
+    {
+      "number": 24,
+      "title": "Ether: fusionar reglas globales y cambios locales en una sola sesión",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/ether-fusion-session-20261020",
+        "sha": "d5937f08cdea67dcdfa3259a09dd2bd221f9f325"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "4d31c0620111b9e2f0f0b759e5032c55ee371e37"
+      },
+      "merge_commit_sha": "7b028db2344912b2ab86a0affa2a1fe56180922b",
+      "merged_at": "2026-10-20T05:47:58Z",
+      "created_at": "2026-10-20T05:25:04Z",
+      "updated_at": "2026-10-20T05:47:58Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/24",
+      "body": "## Problema y resultado\n\nEther estaba conectado como un núcleo auxiliar. Sus consultas podían describir un estado distinto del que modificaban las puertas locales y los consumidores del proyecto.\n\nAhora cada sesión representa un único estado físico `Ψ = U_Ether φ`. Reglas globales, modificaciones finitas, mediciones, observaciones, snapshots y RNG participan en la misma `InfiniteSession`.\n\n- Graphics y COSMIC crean mundos nuevos con Ether; los proyectos anteriores conservan su backend.\n- PC comparte su estado con editor y visor. Abrir o consultar el visor conserva el estado; las reglas globales se aplican explícitamente.\n- Solar prepara ocho direcciones y obtiene sus trece señales de una sola observación, con revisión y época comunes.\n- MXI2 conserva el marco junto con componentes y RNG; MXI1 continúa para marcos vacíos. El perfil finito mantiene su compatibilidad.\n- Se añadieron contratos independientes de causalidad, fases, persistencia y rollback, además de verificaciones de imagen con controles desacoplados e inversión exacta.\n\n## Verificación completada\n\n| Conjunto | Resultado |\n| --- | --- |\n| Contratos nativos completos en CI | 70/70 CTest y 69 comprobaciones CLI visual |\n| Ether Linux y Windows | 16/16 CTest en cada sistema |\n| Java/JNI de producción en Linux | 59 comprobaciones con `-Xcheck:jni` |\n| Oráculo complejo independiente | 10.444 comparaciones; error máximo 2,22×10⁻¹⁶ |\n| Graphics normal / 4K / 8K en Android | 21/21, 25/25 y 29/29 |\n| COSMIC | Suites micro, graphics y cosmic aprobadas; cosmic 26/26 |\n| Solar normal / 4K / 8K en Android | 13/13, 19/19 y 15/15 |\n| PC en Android, contrato corregido | 29/29; reglas 0→2→0, mismo propietario, causalidad y restauración exacta de píxeles |\n\nAndroid/GLES se ejecutó en Android 15 con SwiftShader. Los casos 8K verifican framebuffer real de clase 7680×4320; no son un benchmark de teléfono.\n\n## Atribución exacta de las fuentes\n\nLos contratos nativos, de escritorio y de las siete aplicaciones restantes aprobaron en `3867db6e`. Su código de producción es idéntico al entregado.\n\nEl test de PC aún esperaba dos reglas auxiliares preparadas al abrir el visor. `9b3e17d3` corrigió únicamente esa instrumentación y su verificador, conservando los 29 casos y añadiendo las condiciones de sesión compartida. Pasaron en [la ejecución PC39376224889](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39376224889) de `f2528050`, cuya única diferencia es añadir la rama aislada al trigger push del workflow. Todos los pasos del workflow permanecieron iguales. Ese trigger temporal no forma parte de esta PR.\n\nEl commit final `d5937f0` añade el informe. La [evidencia y los hashes](https://github.com/guadalupejuan001-code/mundo-X/blob/d5937f08cdea67dcdfa3259a09dd2bd221f9f325/results/ether_fusion_2026-10-20.json) permiten verificar la correspondencia de las fuentes sin atribuir resultados a código distinto. El fallo anterior de PC queda registrado.\n\n## Alcance\n\nCPU/RAM x86, IDs y geometría de escena, GLES y modelos astronómicos conservan sus implementaciones. Esta revisión fusiona el estado cuántico y sus consumidores; no declara la migración integral de esos subsistemas, memoria física infinita ni una mejora garantizada de velocidad.\n\nSe conserva la base `e49125d` de #23 y la documentación de arquitectura de `main`. El código inicial de fusión está fijado en `d4b9893`; el manifiesto verifica 74 fuentes nativas/JNI contra commits inmutables.\n\n[Contrato implementado](https://github.com/guadalupejuan001-code/mundo-X/blob/d5937f08cdea67dcdfa3259a09dd2bd221f9f325/docs/ether-fusion.md) · [Arquitectura](https://github.com/guadalupejuan001-code/mundo-X/blob/d5937f08cdea67dcdfa3259a09dd2bd221f9f325/docs/ether-architecture.md)",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 23,
+      "title": "COSMIC X: EtherCore + Visual Ether + Solar 8K + PC + pruebas cuánticas",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/ether-core-v0-1-20261019",
+        "sha": "e49125dcd1b6c784d005bfd41c8fe2b8e318281a"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "05595a150d6956a5535e8618ffd94017020d5289"
+      },
+      "merge_commit_sha": "d4b9893ddec9c6fbce3911f3db349b1011686538",
+      "merged_at": "2026-10-20T05:48:00Z",
+      "created_at": "2026-10-20T02:21:59Z",
+      "updated_at": "2026-10-20T05:48:00Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/23",
+      "body": "## COSMIC X · EtherCore + Visual Ether + Solar/PC/quantum work\n\nEsta rama reúne el trabajo actual sin sustituir silenciosamente las rutas estables de `main`.\n\n### EtherCore\n- Dominio lógico `q0,q1,q2,...` sin `qubit_count`.\n- Estado descrito por reglas globales, no por un registro por qubit.\n- `HAll` y `CZNeighbors` exactos para la familia Clifford cubierta por v0.1.\n- Observables locales evaluados por propagación inversa del cono causal.\n- Prueba con dirección `10^1000` sin recorrer índices intermedios.\n- Oracle independiente contra statevector finito para 256 productos Pauli.\n- Wrapper Android `EtherCoreNative` compartido por Graphics/COSMIC/Solar/PC.\n\n### Visual Ether · Solar\n- Nuevo `SolarVisualEther`.\n- 8K se organiza en tiles de 128 px; a 7680×4320 son 60×34 = 2.040 regiones.\n- Cada región mantiene una máscara conservadora de cuerpos candidatos.\n- El shader evita pruebas de cuerpos/anillos/atmósferas que matemáticamente no pueden tocar esa región.\n- La máscara puede incluir falsos positivos, pero la prueba exige que nunca omita una intersección real.\n- Se añadieron 20.000 rayos de oracle para comprobar conservadurismo.\n- La estructura `eye.frag` original no fue reemplazada.\n\n### Solar\n- Modo 8K independiente.\n- PBR/microfacet, atmósferas con Rayleigh/Mie aproximado, detalle procedural cercano y tono ACES.\n- Físicas locales de vuelo con gravedad esférica y Velocity-Verlet.\n- Órbitas/JPL, lunas, anillos y campos existentes se conservan.\n- EtherCore aporta observables de solo lectura; no modifica efemérides ni constantes físicas.\n\n### PC\n- EtherCore queda disponible desde el mismo backend nativo compartido.\n- Cambios de CPU/emulador permanecen bajo sus propias pruebas; no se declara Windows/juegos completos.\n\n### Experimentos cuánticos\n- Workflow dedicado `COSMIC X quantum algorithm experiments`.\n- Se mantienen separados de las afirmaciones de rendimiento gráfico.\n\n### Estado de validación en head e49125d\nYa aprobados en este head:\n- InfiniteCore rules and finite components.\n- COSMIC X Engine contracts.\n- Verify Motor X visual integration.\n- Build Mundo X Windows 10 x64.\n- MicroLab Android preview.\n- COSMIC X quantum algorithm experiments.\n\nEn ejecución al momento de esta actualización:\n- Solar normal / 4K / 8K.\n- PC Android.\n- Graphics normal / 4K / 8K.\n- COSMIC unificado.\n- Mundo X Lab APK.\n\n### Regla del proyecto\nEficiencia antes que potencia: ninguna mejora de FPS, carga instantánea o ventaja cuántica se declara sin una comparación A/B verificable.\n\n`main` permanece intacto hasta cerrar las pruebas pendientes.\n",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 22,
+      "title": "Solar 8K + InfiniteCore por reglas + base física verificada",
+      "state": "open",
+      "draft": true,
+      "head": {
+        "ref": "codex/physics-foundation-20261019",
+        "sha": "c7e78948ea95080d0603608696da221f02bf4584"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "05595a150d6956a5535e8618ffd94017020d5289"
+      },
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "created_at": "2026-10-19T22:25:49Z",
+      "updated_at": "2026-10-20T00:03:26Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/22",
+      "body": "## Estado final de esta revisión\n\n### Núcleo\n- InfiniteCore reutiliza un PauliObserver por componente dentro de cada lote de consultas.\n- Solar migró de su puente finito de 8 qubits a NativeCore.infinite / InfiniteSession.\n- Los presets Solar sólo materializan hasta 8 direcciones activas; el dominio lógico no tiene último índice.\n\n### Solar 8K\n- Nuevo paquete: `com.cosmicx.solar.ultra` · versión 1.2.0.\n- Modo 8K real: 7680×4320 o 4320×7680 según orientación.\n- Conserva 4K y modos adaptativos, con rollback seguro si la GPU rechaza la reserva.\n- APK y tests instrumentados auditados: firma APK v2, ARM64 + x86_64, Android 26–35.\n- 511 comprobaciones astronómicas siguen pasando.\n\n### Android 15\nWorkflow Solar 8K: https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39343785757\n- build: success\n- android-validation: success\n- 20/20 tests, 0 fallos\n- framebuffer 8K observado: 4320×7680 = 33,177,600 píxeles\n- `nativeInfinite=true`\n- soporte activo del preset: 8 direcciones\n- tabla nativa observada: 136 bytes\n- el test `ultra_8k_framebuffer_and_infinite_core` confirma que dibujar 8K no muta InfiniteCore\n- Solar normal también pasó su validación Android en la misma revisión\n\n### Física\n- PhysicsWorld 2D determinista permanece como base aislada y probada; no se presenta como física 3D/N-body/MHD completa.\n\n### Alcance\nLas pruebas 8K Android usan SwiftShader en emulador con 2 GB configurados. Demuestran corrección e integración, no FPS sostenidos en un Samsung A16 físico.\n",
+      "included_by_ancestry": false,
+      "disposition": "close_after_confirmed_absorption",
+      "recommended_action": "Conservar PhysicsWorld actual; cerrar PR22 tras confirmar la integración consolidada. No importar el plan obsoleto ni los pins antiguos."
+    },
+    {
+      "number": 21,
+      "title": "Actualiza InfiniteCore, reuso 8K y base física por reglas",
+      "state": "open",
+      "draft": true,
+      "head": {
+        "ref": "codex/rule-render-physics-20261019",
+        "sha": "fd0bd14dc5a9709703ced7fb61fe031a1c266b75"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "05595a150d6956a5535e8618ffd94017020d5289"
+      },
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "created_at": "2026-10-19T21:16:17Z",
+      "updated_at": "2026-10-19T21:18:10Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/21",
+      "body": "Optimiza observación batched de InfiniteCore reutilizando la eliminación estabilizadora por componente; añade reuso exacto de framebuffer cuando un frame 8K no cambió; incorpora un núcleo físico determinista por reglas con gravedad, gravedad por pares opcional y colisiones de esferas, más pruebas nativas. Incluye medición extrema de 24 observables sobre GHZ1000 y una comprobación Android de que un segundo frame 8K idéntico no repite el recorrido completo. Rama de trabajo: no fusionar hasta cerrar CI y medir resultados.",
+      "included_by_ancestry": false,
+      "disposition": "close_after_selective_recovery",
+      "recommended_action": "Recuperar RulePhysics3D corregido y aislado; adaptar reutilización Android con igualdad exacta y espejos; conservar carga GHZ 1000/24 como evidencia. Cerrar PR21 al validar/publicar."
+    },
+    {
+      "number": 20,
+      "title": "Extreme InfiniteCore + exact 8K work culling",
+      "state": "open",
+      "draft": true,
+      "head": {
+        "ref": "codex/infinite-8k-extreme-20261019",
+        "sha": "d4de6d0b86aca08450eb76d61cd9add2b4b7d097"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "05595a150d6956a5535e8618ffd94017020d5289"
+      },
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "created_at": "2026-10-19T20:32:15Z",
+      "updated_at": "2026-10-19T20:38:32Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/20",
+      "body": "Stress branch for the rule-defined infinite core and exact 8K rendering. Reuses one Pauli observer per active component across a query batch, adds a 1024-active/4096-remote/65536-gate extreme probe, and removes legacy 8K fragment work outside the conservative projected scene bounds without reducing resolution or changing project state. Draft until Linux/Windows/native/Android 8K evidence confirms exact pixels and measured synchronized completion improvement.",
+      "included_by_ancestry": false,
+      "disposition": "close_after_selective_recovery",
+      "recommended_action": "Adaptar infinite_extreme al ObserverCache actual; documentar el culling antiguo como incompatible con espejos y conservar las pruebas útiles. Cerrar PR20 tras la integración validada."
+    },
+    {
+      "number": 19,
+      "title": "PC 0.4.1: corrige ENTER C8 que detiene el arranque ISO",
+      "state": "open",
+      "draft": false,
+      "head": {
+        "ref": "codex/pc-enter-iso-fix-20261019",
+        "sha": "57a8b339f9580ff7a41d3da25ca4636aef5e2388"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "05595a150d6956a5535e8618ffd94017020d5289"
+      },
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "created_at": "2026-10-19T17:36:26Z",
+      "updated_at": "2026-10-19T17:36:26Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/19",
+      "body": "## Problema\n\nAl abrir su ISO, el usuario encontró `2000:056c opcode=c8 (opcode is not implemented)` después de 2.767 pasos en modo real. El huésped se detenía antes de producir texto porque faltaba ENTER en el intérprete.\n\n## Cambio\n\n- Implementa ENTER `C8 imm16 imm8` para operandos de 16, 32 y 64 bits, con pila independiente del ancho del operando, anidación, prefijos, conservación de banderas y rollback ante fallos.\n- Comprueba el acceso al final de la reserva sin escribir las variables locales. Audita LEAVE y conserva su implementación existente.\n- Añade una ISO El Torito de control que ejecuta ENTER exactamente en `2000:056c`, comprueba su cadena de pila y LEAVE, e imprime `ENTER/LEAVE: OK` desde el huésped.\n- Publica la identidad **0.4.1 / versionCode 5** y actualiza los README. Conserva la integración InfiniteCore de main, SHRD/SHLD y VBE/GLES hasta 8K.\n\n## Validación\n\n- CPU Release y UBSan: **5.914.373 comprobaciones**.\n- Modo largo Release y UBSan: **45.271 aserciones**.\n- Oráculo independiente Linux x86_64: **9.280 comparaciones ENTER/LEAVE** y **40 vectores de protección de la pila** contra el procesador anfitrión.\n- ISO de control ejecutada localmente: dirección, registros, pila y texto correctos; termina en HLT.\n- CI configurada para compilar ambas ABI, verificar APK/firma/procedencia y ejecutar **30 pruebas Android**, incluidas InfiniteCore, salida 8K y la nueva evidencia `pc-enter-state.json`. Resultado de CI pendiente al crear esta PR.\n\nLa ISO original no fue adjuntada. Esta corrección acredita la instrucción y los huéspedes de prueba; no declara un arranque completo de ese sistema operativo ni de Windows.",
+      "included_by_ancestry": false,
+      "disposition": "close_after_selective_recovery",
+      "recommended_action": "Recuperar sólo la regresión Android ENTER/LEAVE y su evidencia; mantener Ether. Cerrar PR19 tras validar/publicar."
+    },
+    {
+      "number": 18,
+      "title": "PC 0.3.0: corrige SHRD de ISO y conecta vídeo real hasta 8K",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/pc-graphics-iso-fix-20261019",
+        "sha": "acc430068cd7414c06f050e6485714d566805e55"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "7fd001c524ca234d98f07ba46fb074f9f4572a97"
+      },
+      "merge_commit_sha": "bab0dd54e88f57191067a4e2b960291f16640acf",
+      "merged_at": "2026-10-19T12:57:25Z",
+      "created_at": "2026-10-19T12:48:41Z",
+      "updated_at": "2026-10-19T12:57:25Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/18",
+      "body": "## Problema\n\nLa APK 0.2.0 podía detenerse al empezar a ejecutar una ISO con `0F AD` en `07c0:039c`, porque faltaba SHRD. Además, PC mostraba únicamente texto 80×25: la integración del repositorio no conectaba su memoria de vídeo al renderizado 4K/8K.\n\n## Cambios\n\n- Implementa SHRD `0F AC/AD` y SHLD `0F A4/A5` para operandos de 16, 32 y 64 bits, con pruebas de banderas, memoria, rollback y comparación contra instrucciones nativas.\n- Añade un framebuffer BGRX que escribe la CPU invitada, un subconjunto VBE `4F00–4F03` y ocho modos hasta 7680×4320. E820 reserva su apertura de 128 MiB.\n- Conecta VRAM → instantánea JNI inmutable → presentador GLES 3 propio, utilizando la misma clase `RenderResolution` de Graphics. Comprueba límites y presupuesto antes de cambiar la salida.\n- Muestra la versión 0.3.0, la fuente y la salida gráfica por separado; coloca el diagnóstico encima del vídeo. La prueba gráfica ejecuta código x86 que dibuja y verifica sus píxeles.\n- Conserva las 12 pruebas Android anteriores y añade ocho para ISO SHRD, JNI, píxeles 4K/8K, rechazo de modo y recuperación del contexto. Actualiza README y procedencia del APK.\n\n## Verificación realizada\n\n- CMake Release: **56/56 pruebas aprobadas**, incluido el núcleo de 1.000 qubits y las nueve suites del PC.\n- CPU: **5.902.496 comprobaciones**, **304 aserciones de modo largo** y **38.912 vectores SHLD/SHRD** del oráculo nativo, además de los 7.872 vectores ALU existentes.\n- Vídeo nativo: **214 comprobaciones**, con invitado 720p/8K y arranque gráfico por ISO; AddressSanitizer y UBSan aprobados (LeakSanitizer no disponible en este entorno).\n- Aplicación y pruebas instrumentales: **20/20 aprobadas en Android 15**, con lectura de píxeles de los FBO reales 4K/8K y recuperación tras perder el contexto EGL. [Ejecución y artefactos](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39254974767). Los cuatro workflows de esta revisión terminaron correctamente.\n\n## Alcance\n\nLa corrección acredita las instrucciones indicadas; la ISO concreta del usuario todavía no se ha probado completa. El framebuffer VBE proporciona salida lineal básica. Windows completo, Direct3D y una GPU virtual 3D siguen pendientes. El núcleo de 1.000 qubits conserva sus contratos y no se presenta como ejecutor de instrucciones x86.\n\n## APK verificada\n\n- Versión **0.3.0**, código **3**, paquete `com.cosmicx.pc`.\n- SHA-256: `a7eb886f39a06e8daf6bd064ee0fb8ae4ad620dc1f3975eda09b3bee04e771e5`.\n- Fuente huésped y salida comprobadas: **7680 × 4320**; los cinco colores muestreados coinciden.\n- La firma de desarrollo difiere de la APK 0.2.0 entregada antes. Android requiere retirar esa instalación para instalar este paquete; se reinician sus ajustes locales. Los archivos ISO externos permanecen en su ubicación.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 17,
+      "title": "Integra InfiniteCore con PC x86/x64, estado persistente y motor gráfico",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/infinite-core-rules-20261019",
+        "sha": "2e6d367ca2cae86aa3d92892c000c29cc6d5113d"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "bab0dd54e88f57191067a4e2b960291f16640acf"
+      },
+      "merge_commit_sha": "05595a150d6956a5535e8618ffd94017020d5289",
+      "merged_at": "2026-10-19T14:22:13Z",
+      "created_at": "2026-10-19T12:23:12Z",
+      "updated_at": "2026-10-19T14:22:13Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/17",
+      "body": "## Problema y resultado\nInfiniteCore estaba desarrollado como núcleo independiente. Esta integración lo conecta al emulador propio x86/x64 y a los renderizadores existentes mediante una sesión viva compartida. Una operación del huésped cambia el estado que consulta el visor del PC.\n\n## Cambios\n- Añade `InfiniteSession`, un puente C/JNI acotado, consultas atómicas con revisión/época y el mismo parser `.xi` para CLI, PC y aplicaciones.\n- Conserva el estado actual después de medir mediante snapshots portables `MXI1`, incluido el generador aleatorio. La importación valida direcciones, componentes, tableau y presupuestos antes de publicar el candidato.\n- Conecta el PC por puertos `0x5850`/`0x5851`, con huéspedes x86/x64 que envían operaciones y comprueban sus respuestas. El panel y el visor GLES comparten esa sesión y conservan canales de respuesta separados.\n- Integra las mejoras recientes de `main` (`bab0dd54`): corrección SHLD/SHRD para ISO, vídeo VBE/GLES propio hasta 8K, resolución del invitado y pruebas de ciclo de vida. PC pasa a 0.4.0.\n- Añade los modos Infinite de fondo cero y parejas Bell a Graphics y Cosmic, direcciones decimales completas, puertas, medición, guardado y observación. El renderer conserva sus shaders y consulta un programa Pauli estable.\n- Añade `.cosmic` v2 para el snapshot Infinite y conserva v1 y el perfil finito de 1.000 qubits. El escritorio comparte el puente nativo y verifica continuidad de estado/RNG con Android.\n- Mantiene la verificación estricta de procedencia por archivo. Las fuentes cambiadas se fijan al commit de integración y las demás conservan sus referencias históricas.\n\n## Validación\n\nFuentes de producción verificadas; las dos últimas revisiones sólo corrigen la instrumentación y la recolección de evidencia. En la revisión final `2e6d367` aprobaron:\n\n- [Contratos nativos y escritorio](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39266790141): 65/65 pruebas nativas y 13 grupos de integración Infinite en escritorio.\n- [InfiniteCore en Linux y Windows](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39266789940): 12/12 pruebas en cada plataforma.\n- [PC Android](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39266789914): 29/29 casos, incluidos huéspedes x86/x64, sesión compartida, guardado, vídeo VBE y ciclo de vida.\n- [Graphics Android](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39266789925): 20/20 casos y portabilidad con escritorio; [4K](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39266790094) y [8K](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39266790371) también aprobaron.\n- [Cosmic integrado](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39266790078): build, Cosmic, Graphics y Micro aprobados. La suite Cosmic exige 26/26 casos, con selección real de direcciones de 101 dígitos, puertas, efecto gráfico, exportación/importación SAF y recreación de la Activity.\n\nLas comprobaciones verifican snapshots MXI1 exactos después de medir, continuidad del RNG, programa observable y proyecto portátil completos, píxeles restaurados y control con acoplamiento cero. La prueba SAF compara los campos que el formato lookAt guarda; la recreación privada verifica además las preferencias internas del mundo importado.\n\nLa recolección Android rechaza un TAR truncado aunque adb devuelva éxito y reintenta hasta tres veces antes de ejecutar el mismo verificador estricto. Ese caso se reprodujo con el archivo real truncado y se comprobó la recuperación completa.\n\nLas pruebas Android usan Android 15 con SwiftShader. GLES de escritorio usa Mesa/llvmpipe. La medición en un teléfono físico queda pendiente.\n\n## Alcance\nEl fondo describe un dominio sin último índice y cada petición tiene soporte y presupuestos finitos. Este backend admite Clifford con fondos cero/Bell; no añade puertas T ni recursos físicos ilimitados. El vídeo y las instrucciones del emulador conservan sus propios límites.\n\n[Integración y uso](https://github.com/guadalupejuan001-code/mundo-X/blob/codex/infinite-core-rules-20261019/docs/infinite_integration.md) · [Contrato del núcleo](https://github.com/guadalupejuan001-code/mundo-X/blob/codex/infinite-core-rules-20261019/docs/infinite_core.md)\n",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 16,
+      "title": "Integra los proyectos COSMIC y actualiza el README para 1.000 qubits",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/integrate-cosmic-projects-20261019",
+        "sha": "849c7001056c7b5838e94604a77a51ab9e6a5f62"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf"
+      },
+      "merge_commit_sha": "7fd001c524ca234d98f07ba46fb074f9f4572a97",
+      "merged_at": "2026-10-19T11:44:43Z",
+      "created_at": "2026-10-19T11:17:07Z",
+      "updated_at": "2026-10-19T11:46:18Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/16",
+      "body": "## Motivo\n\nEl núcleo de 1.000 qubits, Graphics 4K/8K, Solar con atmósferas y la PC propia estaban repartidos entre ramas. Sus verificadores todavía fijaban fuentes antiguas, y la compilación principal no incluía la PC ni la consola original de la VM.\n\n## Cambios\n\n- Integra #15, #14 y #11, Solar 4K y la CLI original `.mxvm`, conservando los historiales de origen y los motores propios.\n- Mantiene el registro gráfico de 1.000 qubits y la ampliación de proyectos anteriores. La ampliación conserva estado, historial y modo de resolución; coordina la exportación PNG y la sustitución de sesión.\n- Conserva Graphics adaptativo/4K/8K, el mapa y los ambientes de Solar y el intérprete x86/x64 con RAM por demanda. Solar mantiene su demostración específica de ocho qubits.\n- Incorpora las ocho suites de PC y `mundo_x_vm` a CMake. Sustituye una operación exclusiva de GCC por multiplicación portable, contrastada con la ALU del anfitrión; los ejecutables siguen disponibles al desactivar los tests.\n- Verifica 53 archivos de procedencia frente a sus revisiones exactas y declara las 12 diferencias reales respecto a la base 4K.\n- Activa la validación de los proyectos integrados en PR y `main`, añade PC/VM al paquete Windows y reorganiza el README con módulos, comandos, versiones, pruebas, límites e historial.\n\nLa APK principal COSMIC conserva sus 14 laboratorios. Solar y PC mantienen aplicaciones separadas dentro del repositorio. El registro de 1.000 qubits utiliza el simulador Clifford; la PC aún no ejecuta Windows completo ni juegos. Las pruebas de resolución no son mediciones de FPS en un teléfono físico.\n\n## Correcciones encontradas durante la validación\n\nLa segunda revisión modifica únicamente tres archivos de instrumentación Android. Micro espera una instantánea nueva después de pausar; Graphics 8K completa la restauración del framebuffer adaptativo antes de capturarlo; XLab sigue la actividad vigente cuando Android la recrea y comprueba la conservación del circuito. Se mantienen las comprobaciones de paso exacto, píxeles, estado y límites de memoria.\n\n## Validación de la revisión final\n\nLos 13 flujos de validación de la revisión `849c7001056c7b5838e94604a77a51ab9e6a5f62` terminaron correctamente. La fusión `7fd001c524ca234d98f07ba46fb074f9f4572a97` en `main` conserva exactamente el mismo árbol Git validado: `7a6727bd1c3b2c048e5e43164223e5ae4be321f6`.\n\n| Componente | Resultado |\n|---|---|\n| [Contratos nativos y escritorio](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380258) | 55/55 CTest; exportación visual 69 comprobaciones; ampliación desde 2, 8, 20 y 60 hasta 1.000 conserva los proyectos |\n| [Windows x64](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380237) | 52 PASS y 1 SKIP esperado del oráculo exclusivo de Linux; VM CLI 23/23 y demos PC correctas |\n| [COSMIC unificado](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380198) | 51/51: 25 propias, 18 Graphics y 8 Micro |\n| [Graphics](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380254), [4K](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380307) y [8K](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380170) | 18/18, 22/22 y 26/26; framebuffer 8K completo y comparaciones diferenciales exactas |\n| [Solar](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380381) y [Solar 4K](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380280) | 13/13 y 19/19 Android; 511 comprobaciones analíticas; Solar 4K verifica 62 PNG |\n| [PC propia](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380364) | 12/12 pruebas Android; pruebas nativas y límites de memoria correctos |\n| [Micro preview](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380171) y [XLab](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380294) | 8/8 y 21/21; preservación del circuito durante la recreación de XLab comprobada |\n\nTambién pasan [gráficos procedurales](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380252) y la [integración visual Linux/Windows](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39245380315). Los verificadores de PNG y mosaicos completan 851.357 comprobaciones; se contrastaron 7.872 vectores ALU64, incluidos 1.312 de IMUL. Procedencia, sintaxis y enlaces del README verificados.\n",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 15,
+      "title": "COSMIC X: núcleo Compact de 1.000 qubits y ampliación de proyectos",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/core-1000-qubits-20261019",
+        "sha": "ef4636240af73351a18710e988346791fbdc3b58"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf"
+      },
+      "merge_commit_sha": "33dabc29ac904db05f9a00aa50f8fa027ab01540",
+      "merged_at": "2026-10-19T11:44:45Z",
+      "created_at": "2026-10-19T09:59:22Z",
+      "updated_at": "2026-10-19T11:44:45Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/15",
+      "body": "## Motivo\n\nEl perfil gráfico se iniciaba con 20 qubits y Java/JNI y el formato de proyecto limitaban los registros a 256. El usuario pidió **1.000 qubits exactos**.\n\n## Cambios y comportamiento\n\n- Configura 1.000 qubits y 3.000 observables iniciales en Android y escritorio; el registro completo q0–q999 admite puertas, observación, historial y persistencia.\n- Añade **Ampliar a 1000** para proyectos existentes. Reproduce su historial, añade qubits en |0⟩ y extiende observables con identidades. Conserva estado, revisión, semilla, cámara, objetos, ediciones y parámetros del renderer; bloquea escrituras durante la preparación.\n- Reutiliza operaciones empaquetadas y el observador del propio motor, procedentes de `bbefd97841828a4cbd130b5501d6086980144e77`.\n- Añade expectativas Pauli en XASM y expone Reduced de 1 a 63 con presupuestos explícitos. El perfil de 1.000 corresponde a **Compact/Clifford**; la ruta T mantiene su límite de 63.\n- Publica el instalador de prueba **COSMIC X Engine 0.3.1**, mismo paquete `com.mundox.cosmic`, versionCode 2, ARM64 y x86_64.\n\nDocumentación y comandos: [docs/core_1000_qubits.md](https://github.com/guadalupejuan001-code/mundo-X/blob/ef4636240af73351a18710e988346791fbdc3b58/docs/core_1000_qubits.md).\n\n## Validación del commit ef46362\n\nLos **seis workflows terminaron correctamente**.\n\n| Comprobación | Resultado | Evidencia |\n|---|---:|---|\n| Nativo Linux | 46/46 | [Integración](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155650) |\n| Nativo Windows | 44/44 | [Integración](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155650) |\n| Núcleo, ABI y escritorio | Correcto | [Contratos](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155692) |\n| APK unificada: COSMIC / Graphics / MicroLab | 25/25 + 18/18 + 8/8 | [51 casos Android](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155634) |\n| Graphics separado | 18/18; codec 147; 3 proyectos / 192 expectativas | [Graphics](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155734) |\n| Micro preview separado | 8/8 | [Micro](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155682) |\n| XLab | 21/21 | [Laboratorio](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155737) |\n\nEl contrato de 1.000 realiza **30.721 comprobaciones**, incluyendo GHZ con los 1.000 sitios, correlaciones globales y operaciones sobre q999. Las 11.304 comparaciones con oráculo denso usan ocho sitios activos y un oráculo de ocho qubits; el GHZ completo se verifica mediante sus relaciones estabilizadoras. La regresión de 60 realiza 91.243 comprobaciones e incluye T.\n\nLas pruebas Android cubren ampliación, persistencia, carreras de escritura y los 14 experimentos incluidos. Las capturas muestran el registro de 1.000 activo. Se probaron en Android 15 emulado; las medidas de rendimiento locales no se atribuyen al Samsung A16.\n\nLa primera ronda detectó que MSVC aceptaba un literal hexadecimal donde XASM exige decimal. El segundo commit corrige el parser y conserva la prueba que lo detectó. También se observaron fallos intermitentes en los harness antiguos de Micro y XLab: snapshot desfasado probable y referencia a Activity recreada, respectivamente. Sus archivos permanecieron intactos y ambas suites pasaron en la ejecución definitiva.\n\n## Instalador y memoria\n\n[Artefacto de APK del commit comprobado](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39235155634/artifacts/12177429735)\n\n- Archivo: `COSMIC-X-Engine-0.3.1.apk`, 8,851,684 bytes.\n- SHA-256: `b7a2aa51f85c0d5388161f8ea2c7bf4c14e4c34634a0f1488a3cd862556747c5`.\n- La firma debug de este build está auditada. No se ha demostrado continuidad de certificado con una instalación anterior de 0.3.0; no se debe pedir que se borren datos para instalarla.\n- El tableau de 1.000 usa **257.000 bytes**. El observador, historial, observables, Java/JNI y gráficos añaden memoria; esta cifra no representa la RAM total de la app.\n\nEvidencia local reproducible: `results/core_1000_local_2026-10-19.json` y `results/core_1000_benchmark_2026-10-19.json`.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 14,
+      "title": "COSMIC X Engine: salida 8K y optimización exacta del núcleo",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/cosmic-engine-8k-20261019",
+        "sha": "9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf"
+      },
+      "merge_commit_sha": "33dabc29ac904db05f9a00aa50f8fa027ab01540",
+      "merged_at": "2026-10-19T11:44:45Z",
+      "created_at": "2026-10-19T08:58:54Z",
+      "updated_at": "2026-10-19T11:44:45Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/14",
+      "body": "## Necesidad\nEl motor 4K necesitaba una ruta de salida mayor que no reservara otra imagen completa en la memoria Java. El núcleo también reconstruía el observador mediante una conversión intermedia a texto, y el renderizador esperaba a la GPU en cada fotograma para medirlo.\n\n## Cambios\n- Parte de la versión 4K `403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac` y conserva sus proyectos, edición, cámara y sesión compartida.\n- Añade **8K real: 7680 × 4320 / 4320 × 7680**, comprobando límites GLES y reserva transaccional del framebuffer.\n- Añade **PNG 8K por regiones**, con coordenadas globales, cámara y estado fijos, codificador propio sin Bitmap completo, cancelación y guardado atómico. El conteo explícito de buffers y framebuffer temporal horizontal es 2.816.001 bytes; excluye escena, proceso y reservas internas.\n- Optimiza CZ, productos firmados de filas y reconstrucción del observador compacto. Conserva JNI, ABI de sesión e historial.\n- El dibujo normal evita glFinish; la interfaz distingue envío CPU de una medición sincronizada explícita.\n- Compila una aplicación independiente **COSMIC X Engine 8K**, versión 0.4.0, `com.mundox.graphics.ultra`, ARM64/x86_64, Android 8+.\n\n## Validación local\n- 70.153 comprobaciones específicas del núcleo, 8.317 de medición y 87.296 comparaciones de observables con referencia densa, aprobadas.\n- UBSan: pruebas específicas y de medición, aprobadas.\n- Misma huella de estado y resultados contra la base: 8.292 puertas, 10.398 consultas y 289 mediciones.\n- Java de producción e instrumentación compilado; 851.357 comprobaciones de geometría y PNG con decodificación independiente aprobadas.\n- En este host, con 20 qubits: preparación del observador **25,328 → 5,858 µs**; actualización y 32 consultas **42,128 → 22,442 µs**, medianas de siete muestras alternadas. Las consultas ya almacenadas en caché no mejoran de forma consistente. Datos y hashes completos en `results/core_performance_2026-10-19.json`.\n\n## Validación Android y entrega\n\nLa [ejecución 8K 39228436074](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39228436074) terminó **aprobada** sobre `9fd8fc7865cfee6f91430ad4726d6ed841f2b3f6`:\n\n- **41/41 contratos nativos**, UBSan y comparación contra la base congelada, aprobados.\n- **23/23 casos Android**, en Android 15 con 2 GB y GLES SwiftShader, aprobados.\n- Framebuffer nativo de **7680 × 4320** dibujado con espera explícita de GPU.\n- Cuatro comparaciones exactas de color e IDs, **321 × 181 y 181 × 321**, con selección y edición: **0 píxeles diferentes**, incluidos los límites de las regiones. El sombreado del suelo calcula sus derivadas antes de descartar rayos.\n- PNG real **7680 × 4320**: 4320 filas, 33.177.600 píxeles opacos, CRC y flujo zlib completo verificados de forma independiente. 544 regiones; 2.816.001 bytes de buffers explícitos y framebuffer temporal estimado.\n- Cancelación previa, durante la exportación y al pausar la Activity; error de escritura; recuperación exacta de escena, selección, estado y archivo completo anterior, aprobados.\n- Tres proyectos exportados por Android y reproducidos independientemente en escritorio, aprobados.\n- Los bytes de la APK descargada, los 46 hashes de fuentes canónicas, las bibliotecas nativas y el shader incluido coinciden con la procedencia de esta ejecución.\n\n**APK:** [COSMIC-X-Engine-8K.apk, dentro del artefacto del build](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39228436074/artifacts/12175946210), **2115087 bytes**, versión 0.4.0, ARM64/x86_64, firma de desarrollo Android verificada.\n\n```text\nSHA-256: e6536b69ca8cd524eab03860bccf2c52803b24f546b61fe431a2a9f7f2081057\n```\n\nEl framebuffer y el PNG 8K completos se comprobaron con una escena de un objeto; las pruebas de igualdad por regiones usan 64 objetos. Las pruebas previas de un millón de objetos en sus resoluciones declaradas siguen pasando. Los tiempos del núcleo corresponden a CPU del entorno de desarrollo, y los del renderizado a SwiftShader; no acreditan FPS 8K ni rendimiento del Samsung A16. El presupuesto de adjuntos gráficos y de exportación excluye el resto de la RAM del proceso.\n\n## Otros checks del repositorio\n\nTambién pasan los contratos gráficos de escritorio, la APK gráfica normal, MicroLab y los verificadores visuales. **Toda la CI del repositorio no está verde**:\n\n- XLab presenta fallos de controles ocultos/etiquetas ausentes en [esta ejecución](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39228441289/job/117981189013), de la misma familia observada en [main antes de estas optimizaciones](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39216801516/job/117943364973). Con las mismas cabeceras optimizadas y la misma instrumentación, [el primer head de este PR pasó 21/21](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39226655777/job/117975156007); otra ejecución tuvo un timeout aislado al cargar objetos. La causa de esa variación sigue sin determinar.\n- Unified Cosmic prueba el head exacto de la rama 4K, donde el juego conserva un defecto de presentación [ya observado antes de esta revisión](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39213816082/job/117933551178). Su [corrección con transferencia directa de framebuffer](https://github.com/guadalupejuan001-code/mundo-X/commit/339fb9bd7bfb4e6e950a23f30719a98261914d98) ya está en main. Este PR no modifica ese archivo; los árboles de fusión temporales de CI conservan el arreglo de main.\n\nEstos fallos se investigaron sin encontrar una regresión atribuible a las dos cabeceras optimizadas en sus rutas de renderizado Java/GLES. La APK 8K independiente tiene su propia validación completa aprobada. El PR permanece **en borrador y sin fusionar**.\n",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 13,
+      "title": "COSMIC X Engine 0.3.0: app Android nueva con los 14 experimentos propios",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/cosmic-android-unified-20261019",
+        "sha": "339fb9bd7bfb4e6e950a23f30719a98261914d98"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "3663e93f667e4d4a2c30f3c900293e9f60265b9f"
+      },
+      "merge_commit_sha": "e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf",
+      "merged_at": "2026-10-19T07:33:54Z",
+      "created_at": "2026-10-19T06:13:56Z",
+      "updated_at": "2026-10-19T07:51:54Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/13",
+      "body": "## Qué cambia\nLa app gráfica anterior y los experimentos de Android estaban separados. Esta actualización crea una app nueva, `com.mundox.cosmic`, con una interfaz propia de cuatro vistas: Motor, Núcleo, Laboratorios y Proyectos. Abre una ciudad cercana y legible, con presentación COSMIC sobre el motor original.\n\nMotor y Núcleo comparten la misma sesión nativa. Las puertas modifican el estado que observa el motor; cámara y selección lo conservan. Los proyectos `.cosmic` mantienen importación/exportación y se añade guardado privado completo, incluidas cámara e intensidad recordada del campo.\n\nLos 14 experimentos originales están empaquetados dentro de la APK. Ecos y la VM didáctica de 8 bits se recuperan de las fuentes propias y se reconcilian con el núcleo canónico actual. El proyecto COSMIC X PC, su emulador x86 y el intento de ejecutar Windows quedan excluidos. La ABI Android x86_64 se mantiene para dispositivos y emuladores compatibles.\n\nLa comprobación visual detectó que el juego original dibujaba su escena fuera de pantalla pero presentaba una superficie negra en Android. Su último paso se reemplaza por una transferencia GLES directa con escalado lineal. Conserva geometría, materiales, cámara y controles; se elimina el filtro final de enfoque y saturación.\n\n## Validación realizada\n- 40/40 CTest del núcleo combinado.\n- VM: 14.248 comprobaciones; Ecos: 6.483; observables dispersos: 337.230.\n- Contrato GLES real de escritorio: IDs idénticos entre presentaciones, estado conservado, 3.345 píxeles cambiados con puerta y campo conectado, cero con campo apagado.\n- Procedencia actualizada conservando los hashes históricos.\n- Android: auditoría de clases, actividades, bibliotecas y certificado; instalación junto a la app anterior; pruebas de estado, cámara, puertas y archivos SAF; restauración al volver, recrear y reabrir la aplicación.\n- Las pruebas se ejecutan en Android 15 con GLES por software. No representan un benchmark de un teléfono físico.\n\n## Resultado Android final\n[Workflow de la APK unificada, sobre `339fb9bd7bfb4e6e950a23f30719a98261914d98`](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39215715831): **SUCCESS**.\n\n- **47/47 comprobaciones Android:** integración COSMIC 24, Graphics original 15 y MicroLab 8.\n- **59 PNG reales:** 32 de COSMIC, 24 de Graphics y 3 de MicroLab.\n- Los 14 experimentos abren y permiten volver al proyecto conservado.\n- El juego pasa la lectura directa de su GLSurfaceView real con PixelCopy: superficie en horizontal, píxeles visibles y variedad de color. La prueba no acepta una captura negra aunque el HUD esté activo.\n- En Android, una puerta cambia 1.840 píxeles con el campo conectado y cero con el campo desconectado.\n- Exportar/importar por SAF, pasar a segundo plano, recrear la Activity y cerrar/reabrir preservan la imagen de los proyectos de prueba.\n- La aplicación nueva se instala junto a `com.mundox.graphics` sin alterar sus datos privados.\n- Las otras cinco verificaciones de la rama también finalizan correctamente, incluido el laboratorio Android original.\n\nLa APK nueva se publica con el identificador `com.mundox.cosmic`, versión 0.3.0, Android 8.0+, ARM64/x86_64 y GLES 3.0. El flujo de main utiliza la configuración de firma persistente existente cuando está disponible.\n\n## Estado exacto de la APK entregada desde main\nLa APK instalable se construyó desde `e06ba2a19d2f7287f7f9d8f4f806f521fb7f8fcf`, con el mismo árbol validado `fe9b21df5ed5c2e1be53d5e78e6b909f6ce63e31`.\n\n- Archivo: `COSMIC-X-Engine-0.3.0.apk`, 8.833.920 bytes.\n- SHA-256: `0ef629bf96ae4fc5032e85282d0f3fc06b6568d078b53f7b19b35fa359d978c7`.\n- La firma se verificó correctamente, pero es de prueba: no está configurada la firma persistente del proyecto.\n- [Ejecución del APK de main](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39216801324): build/auditoría, COSMIC 24/24 y Graphics 15/15 aprobados.\n- MicroLab pasó 7/8. `single_step` agotó su espera tanto en la primera ejecución como en el único reintento sobre el mismo APK. Los otros siete casos aprobaron. No se modificaron aserciones ni código entre intentos.\n- La lectura del código muestra que `latestSnapshot` puede quedar atrasado al pausar porque su publicación se limita a cada 250 ms; esto puede invalidar el contador inicial usado por `single_step`. Los logs no registran ese contador inicial, por lo que la causa exacta de cada timeout sigue pendiente de confirmar.\n\nEl resultado 47/47 anterior corresponde a la ejecución de la rama antes de integrar, sobre el mismo código fuente. El estado de main se documenta aquí por separado para no ocultar la salvedad de MicroLab.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 12,
+      "title": "COSMIC X Engine: integrar núcleo propio, motor gráfico y proyectos portables",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/cosmic-x-engine-20261019",
+        "sha": "d701f5c052363e8880eba4a614b54cc6fdf8fbc0"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "272c8b5e7c2b73526e053f68ff00cd75d9aabda3"
+      },
+      "merge_commit_sha": "3663e93f667e4d4a2c30f3c900293e9f60265b9f",
+      "merged_at": "2026-10-19T05:20:11Z",
+      "created_at": "2026-10-19T05:08:23Z",
+      "updated_at": "2026-10-19T05:20:11Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/12",
+      "body": "## Propósito\n\nIntegrar los avances propios de Mundo X y continuar la APK, manteniendo la estructura indicada por X: **COSMIC X Engine es el título; dentro está Computación cuántica, con el núcleo cuántico y el motor gráfico cuántico integrado**.\n\n## Cambios\n\n- Reúne las PR #4–9 conservando sus seis heads originales como ancestros. Mantiene medición con semilla, la referencia FP64 y las optimizaciones actuales.\n- Android y escritorio compilan la misma sesión nativa: estado, historial, observación Pauli, restauración transaccional e invalidación de caché por restauración.\n- Añade `.cosmic` v1, codec estricto en Java y Python, proyectos Bell/GHZ y controles Nuevo/Abrir/Guardar/Ejemplos. Conserva observables, semilla unsigned, cámara y ediciones fuera del rango temporalmente visible.\n- Continúa el motor gráfico original; elimina copias duplicadas de las cabeceras. Documenta hashes y procedencia.\n- Actualiza la APK a 0.2.0 manteniendo `com.mundox.graphics` y compatibilidad de lectura de sesiones anteriores.\n\n## Verificación\n\nCompletado localmente: **37/37 CTest**, 87.296 comparaciones de Pauli, contratos gráficos de escritorio, proyectos portables y límites con 100.000 puertas/ediciones. La exportación/reimportación conserva exactamente la imagen en el mismo controlador.\n\nLa [CI Android](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39202985462) aprobó **15/15 casos, 24 capturas y 99 comprobaciones del codec**. Tres proyectos exportados desde Android se reprodujeron en escritorio: **192 comparaciones Pauli** contra la referencia densa, con historial, generadores y expectativas coincidentes. Las comparaciones visuales dieron **1.838 píxeles modificados con acoplamiento y 0 sin él**; reimportación y recreación de la Activity mantuvieron **0 píxeles distintos** en SwiftShader.\n\nLa [CI del núcleo y escritorio](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39202985467) pasó completa: **37/37 CTest**, 69 comprobaciones del CLI visual y los tres validadores de escritorio. Todos estos resultados corresponden al head `d701f5c052363e8880eba4a614b54cc6fdf8fbc0` (árbol `9427fec359267f3d2d1e959f064587088a8a7f74`).\n\nAPK verificada: **2.095.331 bytes**, SHA-256 `3d7064d45da975b4378e3ae57b1894631985ec8bdd919b6eddb819b4b9ba5dc4`.\n\n## Alcance\n\nEl perfil gráfico portable v1 es CompactCore Clifford y cajas opacas. Reduced, Factorized y fases generales conservan sus herramientas dentro del repositorio; no se anuncian como nuevos perfiles de la interfaz gráfica. Los resultados de emulador corresponden a SwiftShader, sin atribuirlos al Samsung A16. La APK usa firma de depuración. Se comprobó que su certificado difiere del de Graphics 0.1.1; Android no permite instalarla directamente encima de aquella versión. Conservar la instalación anterior si contiene una sesión necesaria, hasta resolver la firma o la conservación de sus datos.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 11,
+      "title": "COSMIC X PC: motor x86/x64 propio y RAM por demanda en Android",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/own-pc-x86-20261019",
+        "sha": "155f954a79027a1cb3f2b9c1a43e5da8661b3303"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "272c8b5e7c2b73526e053f68ff00cd75d9aabda3"
+      },
+      "merge_commit_sha": "33dabc29ac904db05f9a00aa50f8fa027ab01540",
+      "merged_at": "2026-10-19T11:44:45Z",
+      "created_at": "2026-10-19T05:06:15Z",
+      "updated_at": "2026-10-19T11:44:45Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/11",
+      "body": "## Problema\nCOSMIC X necesita una CPU y un modelo de PC propios para avanzar hacia Windows en Android. Con un presupuesto disponible de 2 GB, reservar toda la RAM anunciada al invitado al iniciar la app deja demasiado poco margen para el proceso Android.\n\n## Cambio\nAñade `pc-android/` con un intérprete x86/x64 original en C++17, servicios BIOS de texto, teclado, memoria y lectura de disco raw/El Torito, y una app Android que ejecuta el motor mediante JNI.\n\nLa versión 0.2 incorpora:\n\n- Un invitado propio que configura GDT, registros de control y tablas de páginas, pasa de modo real a protegido y a `long64`, comprueba `0x2345678922222223` en registros y RAM, escribe `COSMIC PC x64: OK` en vídeo y ejecuta HLT. El anfitrión no inyecta el cambio de modo ni el resultado.\n- Registros de 64 bits, R8–R15, REX y paginación de cuatro niveles con páginas de 4 KiB y 2 MiB, dentro del subconjunto de ring 0 implementado.\n- RAM por demanda: 2048 MiB lógicos y un límite de 1024 MiB para el respaldo de páginas del invitado. Las asignaciones respetan el presupuesto y el rollback restaura bytes sin asignar memoria adicional.\n- Diagnóstico que distingue RAM lógica, respaldo del invitado y PSS real del proceso Android; los registros de 64 bits se conservan exactamente en hexadecimal.\n- Apertura de imágenes locales en lectura mediante descriptor, sin copiar la ISO completa a RAM.\n\nEl APK contiene el motor propio `libcosmic_pc.so` y su biblioteca estándar C++; no incorpora otro motor de emulación.\n\n## Validación\n- CPU anterior: 5.899.338 comprobaciones, incluidas 655.360 ejecuciones exhaustivas de ALU de 8 bits.\n- Modo largo: 71 aserciones; arranque real, operaciones de 64 bits, paginación y fallos. Suite final también aprobada con UBSan.\n- Oráculo ALU64 independiente: 6.560 vectores coinciden con instrucciones ejecutadas por el procesador x86-64 anfitrión, incluidos los seis flags aritméticos.\n- RAM: 15 casos / 63 aserciones; integración del presupuesto y E820: 24 comprobaciones.\n- Medios: 34 casos; PC/BIOS: 34 comprobaciones; ISO: 8 casos / 55 aserciones.\n- **Android 15: 12/12 pruebas instrumentales aprobadas**, incluyendo JNI, el arranque real a x64, reinicio y la interfaz con PSS medido. La muestra del proceso con Activity fue 37,15 MiB; corresponde al Android virtual de CI, no al Samsung A16. [Compilación y evidencias](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39209005102).\n\nEn un benchmark sintético Linux, dos procesos con 2 GiB lógicos y los mismos 8 MiB de datos dispersos consumieron 2049,75 MiB de RSS con almacenamiento denso y 13,79 MiB por demanda. Ambos verificaron los bytes y el mismo hash. La escritura posterior a inicializar pasó de 3,90 ms a 14,67 ms: la búsqueda y asignación de páginas añaden trabajo. Son mediciones del entorno de desarrollo, no del teléfono ni de juegos; CI conserva además su propia ejecución reproducible.\n\n## Límites\n**Todavía no arranca ni instala Windows completo, ni ejecuta juegos de PC.** Faltan privilegios de usuario, entrega de excepciones/IRQ al invitado, más ISA, dispositivos completos, almacenamiento escribible y gráficos 3D. Las operaciones no implementadas se detienen con un diagnóstico; `windows_ready=false` y `graphics_3d_ready=false` siguen explícitos.\n\nEl límite de páginas del invitado no garantiza un límite total de 2 GB para el proceso Android, ni crea RAM física adicional. Esta revisión no acredita FPS ni aceleración cuántica.\n\n## APK verificado\n- Versión: **0.2.0**, ARM64 y x86_64; 3.022.985 bytes.\n- Commit: `155f954a79027a1cb3f2b9c1a43e5da8661b3303`.\n- SHA-256: `0a7e2f6f111cb76773897987e1e902fa7d0f81871d7c308919ec4f0e6f9c2326`.\n- Firma APK v2 verificada. El certificado de desarrollo difiere del APK anterior, por lo que no permite actualizar esa instalación directamente.\n- El workflow conserva APK, firma, procedencia, resultados nativos/Android, captura, estado x64 y benchmark reproducible.\n\nEl PR permanece en borrador, sin fusionar. El Android virtual del workflow se utiliza únicamente como infraestructura de pruebas.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 10,
+      "title": "Mundo X Graphics 0.1.1: APK Android con núcleo compartido y sesión persistente",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "codex/mundo-x-graphics-android-20261019",
+        "sha": "141937a068124177e32c212fc2942a3c10da12b1"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "ebd53fca714e7afaeeaa0044981df3565061022d"
+      },
+      "merge_commit_sha": "272c8b5e7c2b73526e053f68ff00cd75d9aabda3",
+      "merged_at": "2026-10-19T03:48:32Z",
+      "created_at": "2026-10-19T03:40:17Z",
+      "updated_at": "2026-10-19T03:48:32Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/10",
+      "body": "## Motivo\nEl trabajo de Mundo X Graphics 0.1 quedó en un paquete de escritorio y una integración Android incompleta: faltaban la Activity, la persistencia y la compilación verificable de la APK.\n\n## Cambios\nCompleta `graphics-android` como aplicación independiente `com.mundox.graphics`, con el observador GLES 3, el CompactCore original y controles de cámara, población, puertas, acoplamiento y edición por ID. La escena conserva su programa de observación y el historial del núcleo al restaurar la sesión. Reducir la población mantiene las ediciones fuera del rango activo. Se corrigen la selección pendiente, el reinicio transaccional y el manejo del contexto gráfico.\n\nAñade un workflow que compila APK ARM64/x86-64, verifica firma y contenido, y ejecuta diez comprobaciones reales de JNI/GLES/edición/ciclo de vida en Android 15 con SwiftShader. Incluye capturas, JSON, JUnit, checksums y commit de compilación. Actualiza el README con la nueva aplicación y su documentación.\n\n## Verificación\nLas cabeceras originales coinciden con sus hashes del commit ebd53fc. La verificación local del puente y los shaders pasa: 768 comparaciones del contrato, 71.680 expectativas Pauli adicionales frente a Dense y 914 rayos geométricos frente a una referencia independiente. La compilación y las diez pruebas Android pasaron al primer intento: [ejecución 39195792844](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39195792844). Se verificaron 16 capturas, selección/edición y pausa/reanudación. La puerta Z cambió 1.838 píxeles con acoplamiento y 0 sin él. También pasó el workflow existente del laboratorio, [39195792802](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39195792802).\n\nAPK 0.1.1: 1.972.204 bytes, ARM64/x86-64, firma v2 de depuración verificada. SHA-256: `525b699742ca45c85480c49f1224d357811587ff5a32c2a8887e401b4a3f8146`. Código compilado y probado: `141937a068124177e32c212fc2942a3c10da12b1`. [Artefacto de APK](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39195792844/artifacts/12161527405) y [evidencia Android](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39195792844/artifacts/12161897958).\n\nEl límite de 1.048.576 se refiere a cajas procedurales con IDs. Las pruebas de software/emulador no establecen rendimiento del Samsung A16. La idea y dirección de Mundo X corresponden a X.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 9,
+      "title": "Integra escenas visuales por reglas en el runtime de Mundo X",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/motor-x-visual-20261018",
+        "sha": "eca35f159320859e5ce873d59adeed982d6e0c30"
+      },
+      "base": {
+        "ref": "codex/graphics-spatial-20261018",
+        "sha": "775f5a65ac360c5c3a7f3e974d6f67bc39428051"
+      },
+      "merge_commit_sha": "12d4b6156dd7d43501079fc5bbf4ba546882f8c7",
+      "merged_at": null,
+      "created_at": "2026-10-18T19:41:52Z",
+      "updated_at": "2026-10-19T05:22:14Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/9",
+      "body": "**Integrada en `main` mediante [PR #12](https://github.com/guadalupejuan001-code/mundo-X/pull/12), commit `3663e93f667e4d4a2c30f3c900293e9f60265b9f`.** El head original de esta rama, `eca35f159320859e5ce873d59adeed982d6e0c30`, permanece como ancestro y su código se validó junto con las demás ramas propias. Se cierra esta PR apilada porque su base era la rama espacial de #8 y el contenido completo ya está integrado en la rama principal.\n\n---\n\nLos programas de Mundo X podían calcular mientras las escenas por reglas se creaban en Android. Esta rama incorpora `VisualScene` al mismo runtime: un archivo `.x` puede declarar una escena, editar objetos por ID y copiar explícitamente una probabilidad Z a un estado visual, conservando los algoritmos de los núcleos de cálculo.\n\n`mundo_x run examples/visual_interference.x --scene-stdout` produce una escena `MUNDOX_OBJECTS_V1` compatible con **Restaurar escena** de XLab. La consulta visual es una instantánea sin medición ni consumo del RNG. El modo de exportación conserva LF en Windows y sólo publica después de completar el programa y aprobar sus aserciones; un error de lectura no puede exportar el prefijo del programa.\n\nValidación local: 14 pruebas CTest aprobadas, 7.559 comprobaciones del modelo visual, 671 de XASM visual y 69 del CLI. La comparación de los modelos C++ y Java reales revisó 11 casos, 1.346.595 IDs y 5.386.380 valores float32: cero diferencias de bytes. Incluye todos los IDs de una escena de 1.048.576 objetos. El modelo también pasó ASan/UBSan.\n\nEsta es una primera integración programable; la transferencia a Android es explícita por formato/portapapeles. No añade sincronización continua, un renderizador de escritorio ni un algoritmo de absorción universal. La descripción y los resultados están en `docs/motor_x_visual.md` y `results/motor_x_visual_2026-10-18.md`.\n\nLa rama parte de #8 para conservar sus avances gráficos sin sobrescribir el trabajo paralelo. El workflow `visual-runtime.yml` verifica Linux, Windows y la compatibilidad C++/Java.\n\nCI confirmada en [`eca35f1`](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39159927260): Linux 14/14 CTest y 69 comprobaciones CLI; Windows 12/12 CTest y 69 CLI, incluidos los bytes LF de exportación. Los 11 casos de compatibilidad C++/Java también pasaron sin diferencias.\n\n[Descargar código ZIP de la revisión comprobada](https://codeload.github.com/guadalupejuan001-code/mundo-X/zip/eca35f159320859e5ce873d59adeed982d6e0c30). SHA-256: `8493188c0ad42e61f4b5427c5369a14ef3679a9e3776984660d93171ee2eef37`.\n",
+      "included_by_ancestry": true,
+      "disposition": "closed_absorbed_aggregate",
+      "recommended_action": "Conservar cerrado: head exacto incluido aunque merged_at sea null."
+    },
+    {
+      "number": 8,
+      "title": "Optimiza los gráficos procedurales con malla indexada y descarte por regiones",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/graphics-spatial-20261018",
+        "sha": "775f5a65ac360c5c3a7f3e974d6f67bc39428051"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "ebd53fca714e7afaeeaa0044981df3565061022d"
+      },
+      "merge_commit_sha": "844681fb8d04c55690e4e6494278391a5b70b313",
+      "merged_at": "2026-10-19T05:20:12Z",
+      "created_at": "2026-10-18T18:45:42Z",
+      "updated_at": "2026-10-19T05:20:13Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/8",
+      "body": "El laboratorio enviaba 36 vértices por objeto en una llamada para toda la población, incluso para regiones fuera de cámara. Esta rama conserva la regla, los IDs y las ediciones, y añade cubos indexados de 24 vértices, lotes de hasta 16.384 instancias y descarte conservador de regiones. La interfaz permite desactivar el descarte y muestra las instancias realmente enviadas.\n\nLa verificación compara ambas representaciones con una referencia que dibuja toda la población, exige píxeles visibles y comprueba IDs en los límites de lote. La herramienta GLES independiente compara también contra el renderizador original. Las estadísticas reservan un alto fijo: las transiciones de visibilidad ya no pueden redimensionar el viewport y desencadenar nuevos dibujos en modo quieto.\n\nValidación local: compilación Java completa; 448 comprobaciones del modelo y 1.542 del planificador; ocho casos GLES en llvmpipe con cero diferencias de píxeles. En la vista cercana y girada del millón se enviaron 170.752 instancias (83,72 % menos), conservando la imagen. Se verificaron todos los 1.048.576 IDs y transformaciones en ambas rutas.\n\nAndroid: [21 pruebas aprobadas y cero fallos](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39157764614) en `775f5a6`, incluyendo 65.536 objetos, zoom, descarte, edición, recuperación de errores y campo quieto. La [prueba dedicada de 1.048.576 objetos](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39157885075) también pasó en esa revisión: tres imágenes RGBA8 de 128 × 128 con 3.420 píxeles de objetos y cero diferencias; 1.151 muestras de transformaciones e IDs sin diferencias; viewport de 996 × 745 estable y contador de cuadros 14 → 14 durante 600 ms; recuperación visible a 1.024 objetos. La cámara centrada envió toda la población en 64 lotes, sin descarte. Es Android emulado con SwiftShader, no hardware Mali.\n\nLas pruebas Android usan AOSP Android 15 para evitar que diálogos ANR de aplicaciones Google ajenas al proyecto roben el foco a las comprobaciones del portapapeles. Se exige estabilidad de dimensiones y del contador de cuadros en modo quieto, además de las comparaciones de píxeles y la conservación de ediciones.\n\nLas cifras de envío no garantizan FPS; la reparación de la pantalla vacía en el Mali-G68 del usuario requiere comprobarse en ese dispositivo. Se mantiene como borrador para integrar esta ruta gráfica con el trabajo paralelo.\n\nGuía: `docs/graphics_spatial.md`. Evidencia: `results/graphics_spatial_2026-10-18.md`.\n\nCódigo descargable: [ZIP de la revisión verificada `775f5a6`](https://codeload.github.com/guadalupejuan001-code/mundo-X/zip/775f5a65ac360c5c3a7f3e974d6f67bc39428051). SHA-256: `b16cad7bc17c08d7c52ff29397130c56914fd26f849d7b561101f36bd0e3800b`.\n",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 7,
+      "title": "MicroLab: partículas, colonias y control visual del núcleo cuántico",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/visual-microlab-20261018",
+        "sha": "bf5f3c6687bea8e23f87609ec72634422d1e288a"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "ebd53fca714e7afaeeaa0044981df3565061022d"
+      },
+      "merge_commit_sha": "844681fb8d04c55690e4e6494278391a5b70b313",
+      "merged_at": "2026-10-19T05:20:12Z",
+      "created_at": "2026-10-18T18:42:28Z",
+      "updated_at": "2026-10-19T05:20:13Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/7",
+      "body": "La app necesita una escena interactiva donde los cambios del núcleo tengan un efecto observable y puedan compararse con la misma semilla.\n\nEste borrador añade un laboratorio Android nativo con trazadores brownianos, una colonia de agentes con nutrientes y cuatro qubits calculados por FactorizedCore. Incluye puertas, medición conjunta, vectores de Bloch, entropía y probabilidades. Un campo externo definido explícitamente conecta los observables cuánticos con los modelos clásicos y puede desactivarse.\n\nLa GPU dibuja un lote reutilizable de puntos; los modelos se calculan en C++. Pausa, paso fijo, semilla, intervención táctil y límites visibles permiten repetir y explorar el experimento. Son modelos adimensionales exploratorios: no representan simulación molecular ni una especie bacteriana calibrada.\n\nValidación del commit bf5f3c6: micro_lab pasa 33.628 comprobaciones locales; los 14 ejecutables nativos pasan en Linux. La preview compila para arm64-v8a y x86_64 y supera 8/8 pruebas instrumentadas en Android 15: JNI, dibujo, pausa/paso, 16.384 trazadores, puertas/medición, colonia, semilla y ciclo de vida. Se revisaron las tres capturas reales. La prueba de crecimiento llegó a 696 células y 636 divisiones; es tiempo adimensional del modelo, no una predicción biológica.\n\nEjecución y artefactos de la preview: https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39155395051\n\nAPK verificada por SHA-256: 0991ed57d525bef5264e5a75d2522592c84b605bb7ef277eeb4805ee84d978d9. Las pruebas de la interfaz histórica de XLab continúan en su workflow independiente; no se ha fusionado el borrador.\n\nLa APK de preview usa com.mundox.micropreview y se instala junto a la app habitual. Ver docs/micro-lab.md para controles, ecuaciones, alcance y límites.\n\nEste cambio incluye las correcciones de estructura exacta de #6, todavía sin integrar, sobre main ebd53fc. No fusionar ambos cambios a ciegas: revisar la dependencia al integrar.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 6,
+      "title": "Evitar fusiones innecesarias y estabilizar la escala de FactorizedCore",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/factorized-exact-structure-20261018",
+        "sha": "462a686be00fb07d7d3fa8347cd086c9ef71d10b"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "e3cebb5fe1056913fcfacd811785566b8a6b40fe"
+      },
+      "merge_commit_sha": "844681fb8d04c55690e4e6494278391a5b70b313",
+      "merged_at": "2026-10-19T05:20:12Z",
+      "created_at": "2026-10-18T18:19:40Z",
+      "updated_at": "2026-10-19T05:20:13Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/6",
+      "body": "FactorizedCore podía construir bloques exponenciales al aplicar CX/CZ que no entrelazaban un destino independiente. Además, sucesivas separaciones trasladaban la escala a un solo factor y provocaban una norma numérica cero.\n\nEste cambio:\n- Reconoce destinos singleton |+>/|-> para CX y |0>/|1> para CZ, conserva la fase y evita fusiones y asignaciones innecesarias.\n- Equilibra ambos lados de una separación mediante potencias de dos recíprocas; exige reversibilidad y reconstrucción exacta de cada coeficiente.\n- Escala las consultas de probabilidad antes de elevar al cuadrado.\n- Añade regresiones, comparación A/B reproducible y resultados documentados.\n\nResultados frente a d4f5520, con el mismo programa y los mismos presupuestos:\n- Circuito producto de 20 qubits: 16 MiB → 640 bytes de amplitudes; memoria propia estimada 16.778.880 → 1.456 bytes.\n- El mismo patrón completa 100.000 qubits; antes rechazaba el compañero 20 al intentar superar el bloque de 20 qubits.\n- La regresión de escala fallaba en el compañero 1.074; ahora completa 8.191 separaciones, comprobadas también reteniendo el lado opuesto.\n\nValidación: 13/13 ejecutables nativos de Linux aprobados, compilados directamente con GCC 13.3 (-O3); CMake no estaba instalado. Nuevas regresiones: 94.726 comprobaciones. Se mantienen 51 rechazos de asignación inyectados y las comparaciones de amplitudes con fase. No se relajan tolerancias.\n\nLos circuitos medidos tienen estructura producto y referencia analítica. Este resultado no elimina el crecimiento exponencial de bloques generales, no constituye una comparación con otros simuladores y no integra FactorizedCore en Android. Informe y reproducción: results/factorized_structure_2026-10-18.md.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 5,
+      "title": "Add general phases and transfer product states without replaying gate history",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "phase-performance-trial",
+        "sha": "a6c403ac4d403dbc5e2e26fb5d9883ac9ab341f1"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "f858053bf0a47e6c760428f3526ec74ff89e40c3"
+      },
+      "merge_commit_sha": "844681fb8d04c55690e4e6494278391a5b70b313",
+      "merged_at": "2026-10-19T05:20:12Z",
+      "created_at": "2026-10-16T18:28:07Z",
+      "updated_at": "2026-10-19T05:20:13Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/5",
+      "body": "El motor reducido no exponía las fases generales necesarias para ejecutar el sumador de 50 qubits. Esta PR añade fases de un qubit y controladas, junto con observables X/Y/Z calculados directamente en la representación compacta.\n\nAdaptivePhaseCore conserva dos amplitudes por qubit mientras el estado sea producto. La transición predeterminada ahora importa el estado ya calculado al motor reducido y aplica la puerta que produce entrelazamiento, sin guardar ni repetir el circuito anterior. adaptive-replay conserva el comportamiento de reconstrucción original. La importación conserva fase y norma dentro del redondeo numérico y solo omite coeficientes exactamente cero.\n\nResultados dentro de Mundo X:\n- Sumador de 50 qubits: carga lógica del motor de 33.600 a 1.600 bytes.\n- Caso con 10.000 fases y transición tardía: cero puertas repetidas; se comprobó la fase acumulada tras deshacer el entrelazamiento.\n- Las cifras de memoria excluyen asignador, circuito de entrada y runtime; no representan RAM total.\n\nValidación:\n- 131 circuitos por tres rutas: 393 ejecuciones aprobadas, con referencia numérica Qulacs FP64.\n- Error máximo en observables: 3,56e-15; error máximo de norma: 5,33e-15.\n- 16 entradas adicionales de 50 qubits verificadas contra aritmética.\n- Pruebas de importación con fase compleja, norma, índices hasta 62, presupuestos y conservación del residuo aceptado.\n- Compilación CMake y cinco pruebas CTest aprobadas.\n\nLa transferencia conserva las aproximaciones producto aceptadas y su contador de residuos; adaptive-replay reconstruye desde las puertas originales. Se mantienen el límite de 63 qubits, el presupuesto predeterminado de 65.536 componentes y la posibilidad de crecimiento exponencial. La transición aún es unidireccional. Esta funcionalidad nativa todavía no está conectada a la interfaz Android.\n\nDocumentación actual: docs/state-transfer.md y docs/state-transfer-results-2026-10-16.json. Los resultados de la primera versión permanecen en docs/phase-engine.md, identificados con el commit 40a9c82.",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 4,
+      "title": "Añade lenguaje .mx con circuitos reutilizables y XASM reducido",
+      "state": "closed",
+      "draft": true,
+      "head": {
+        "ref": "codex/xasm-reduced-t",
+        "sha": "d68a6d76d7045d77973296345810cc2633b47b30"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "f858053bf0a47e6c760428f3526ec74ff89e40c3"
+      },
+      "merge_commit_sha": "844681fb8d04c55690e4e6494278391a5b70b313",
+      "merged_at": "2026-10-19T05:20:12Z",
+      "created_at": "2026-10-16T11:58:25Z",
+      "updated_at": "2026-10-19T05:20:13Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/4",
+      "body": "Mundo X necesitaba expresar circuitos reutilizables sin enumerar manualmente todas sus instrucciones. El nuevo frontend `.mx` incorpora constantes, aritmética comprobada, repeticiones con índice y circuitos con parámetros tipados; compila a XASM y reutiliza los motores C++ existentes.\n\nPor ejemplo, `repeat N as i { h(q[i]); }` describe una operación sobre todo un registro. Un bloque `circuit bell(a: qubit, b: qubit)` se define una sola vez y se aplica a distintos qubits.\n\n- Añade `mundo_x compile archivo.mx`, que emite XASM sin ejecutar, y `mundo_x run-mx archivo.mx`, que completa la compilación antes de ejecutar. Los errores incluyen la ubicación del código fuente.\n- Comprueba tipos `count`/`qubit`, alcance léxico, aritmética, llamadas, índices y compatibilidad con el motor. Rechaza recursión y acota entrada, profundidad, trabajo de expansión y salida.\n- Integra la capa XASM reducida: puertas T programables, CZ, estadísticas y comprobaciones de fidelidad y norma. Mantiene Compact Core como motor predeterminado.\n- Incluye guías de ambos formatos, programas de ejemplo y pruebas CTest del núcleo, compilador y CLI. Los artefactos Windows incluyen los ejemplos `.x` y `.mx`.\n\nEl frontend es un prototipo estático: las repeticiones y llamadas se expanden antes de ejecutar. No añade paralelismo al motor ni elimina el crecimiento de la simulación. El modo reducido mantiene 1..12 qubits y 128 T; el frontend compacto limita el registro a 10,000 qubits. Las comprobaciones densas siguen siendo explícitas y la memoria reducida se informa como carga lógica estimada.\n\nValidación local: compilación C++17 Release y 14/14 pruebas CTest correctas. Incluye comparación exacta con expansión XASM manual, equivalencia de ejecución, alcance léxico, tipos, aritmética, mapa de origen, presupuestos de expansión y contrato CLI. Conserva la suite de 72 circuitos reproducibles contrastados con Dense Core y las pruebas de fase T²=S/T⁸=I.\n\nValidación remota del commit `d68a6d7`: 14/14 CTest y smoke tests correctos en Windows y Linux; compilación Windows x64 y APK Android correctas.\n\n- [Windows x64 y pruebas](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/38900479634)\n- [Linux y compilación Android](https://github.com/guadalupejuan001-code/mundo-X/actions/runs/38900473143)\n",
+      "included_by_ancestry": true,
+      "disposition": "closed_integrated_ancestry",
+      "recommended_action": "Conservar cerrado; head exacto incluido."
+    },
+    {
+      "number": 3,
+      "title": "Build Mundo X Lab Android APK v0.1",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "build/android-apk-v0.1",
+        "sha": "7b674f5261bc01f007c004eb1aef5b67b9f23ab4"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "d5e20a042465cabad8e84ad19e06f08ec893a153"
+      },
+      "merge_commit_sha": "1d6225f72a88f590831456ff25f7a4e55e471f6d",
+      "merged_at": null,
+      "created_at": "2026-10-14T02:58:02Z",
+      "updated_at": "2026-10-14T03:01:44Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/3",
+      "body": "Build completed successfully in GitHub Actions run #5. Artifact Mundo-X-Lab-APK was generated and verified. The trigger-only PR is closed without merge because the Android project and workflow are already on main.",
+      "included_by_ancestry": false,
+      "disposition": "closed_obsolete_trigger",
+      "recommended_action": "No reabrir ni importar el disparador de compilación."
+    },
+    {
+      "number": 2,
+      "title": "Quantum Core X v0.1: superposición, fase, interferencia y entrelazamiento",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "experiment/quantum-core-v0.1",
+        "sha": "4f8d212cba7f1fce4ebd1a1e2a8cca3ce6044bca"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "4cc75ef25bef266efca5f522139b249c9b2d74a2"
+      },
+      "merge_commit_sha": "4744607ac3e4e1feac70e3dab6f3e73cf42e6ef3",
+      "merged_at": "2026-10-14T02:09:16Z",
+      "created_at": "2026-10-14T02:09:06Z",
+      "updated_at": "2026-10-14T02:09:16Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/2",
+      "body": "Mueve Mundo X a una base cuántica verificable antes de seguir con Transformer X.\n\nIncluye:\n- vector de estado complejo normalizado;\n- Hadamard;\n- fase;\n- Pauli-X;\n- CNOT;\n- estado de Bell;\n- medición;\n- experimento de interferencia;\n- pruebas de validación;\n- README reordenado para poner Quantum Core X antes de Transformer X.\n\nEsto sigue siendo simulación clásica de matemáticas cuánticas; no afirma hardware cuántico ni ventaja cuántica.",
+      "included_by_ancestry": false,
+      "disposition": "closed_integrated_squash",
+      "recommended_action": "Conservar; equivalencia de contenido verificada."
+    },
+    {
+      "number": 1,
+      "title": "Transformer X v0.1: Bridge X + real-file training",
+      "state": "closed",
+      "draft": false,
+      "head": {
+        "ref": "experiment/transformer-x-v0.1",
+        "sha": "71433b2a466b77e73761de86b670207d639c29ff"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "a45ed16d47dbbfebb0bd0a885d7fcbdbf7b94733"
+      },
+      "merge_commit_sha": "4cc75ef25bef266efca5f522139b249c9b2d74a2",
+      "merged_at": "2026-10-14T01:55:59Z",
+      "created_at": "2026-10-14T01:54:37Z",
+      "updated_at": "2026-10-14T01:55:59Z",
+      "url": "https://github.com/guadalupejuan001-code/mundo-X/pull/1",
+      "body": "Primera implementación experimental de Mundo X.\n\nIncluye:\n- Transformer X compacto basado en modos + estado complejo z.\n- Bridge X para traducir bytes actuales a un campo de modos.\n- Experimento que lee un archivo real y predice el estado de la siguiente ventana.\n- Baseline de identidad para exigir una mejora medible.\n- README con límites científicos explícitos.\n\nObjetivo de esta fase: comprobar si Transformer X aprende dinámica útil sobre datos de computación actual antes de añadir memoria, pliegue o hardware físico.",
+      "included_by_ancestry": false,
+      "disposition": "closed_integrated_squash",
+      "recommended_action": "Conservar; equivalencia de contenido verificada."
+    }
+  ],
+  "status": "inventory_complete_at_fixed_reference",
+  "integration_candidates": [
+    {
+      "id": "pc_enter_android_regression",
+      "source_pr": 19,
+      "source_commits": [
+        "57a8b339f9580ff7a41d3da25ca4636aef5e2388"
+      ],
+      "files": [
+        "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java",
+        "pc-android/tools/android-test.sh"
+      ],
+      "at_reference": "missing",
+      "action": "port_selective_test",
+      "owner": "remote_baseline",
+      "requirements": [
+        "Conservar graphicsOwner, etherProgramRoundtrip y las afirmaciones de lectura sin mutaciones.",
+        "Añadir ISO sintética El Torito 2000:056c C8 10 00 02, comprobaciones de marco y LEAVE.",
+        "Añadir pc-enter-state.json y actualizar el inventario 29 a 30."
+      ],
+      "implementation_status": "selectively_ported_in_working_tree",
+      "verification": {
+        "bash_syntax": "passed",
+        "embedded_python_ast": "passed_both_heredocs",
+        "android_compilation": "passed_api35_java17_14_sources_47_classes",
+        "android_instrumentation": "not_run",
+        "core_or_production_changes": false,
+        "retained_ether_checks": [
+          "graphicsOwner",
+          "etherProgramRoundtrip",
+          "graphics_bridge_read_only",
+          "graphics_open_read_only",
+          "ether_fusion"
+        ],
+        "compilation_report": "pc-java-compile.json"
+      },
+      "working_tree_file_sha256": {
+        "pc-android/app/src/androidTest/java/com/cosmicx/pc/PcInstrumentation.java": "06a36dda97173b62572a5df5f971a429a7115c93489de936560be75d82e5b39f",
+        "pc-android/tools/android-test.sh": "a0191007c3409dabd1d716fe7e5caf9c9b1ea75e2658dc9c38921c6023e71b0a"
+      }
+    },
+    {
+      "id": "infinite_extreme_probe",
+      "source_pr": 20,
+      "source_commits": [
+        "14b00e2d0cf922353ce0abf5462786a48934f377",
+        "ea1626ca3b2ea90c3052b04d62142e608e3b3e8f"
+      ],
+      "files": [
+        "native/tests/infinite_extreme.cpp",
+        "CMakeLists.txt",
+        ".github/workflows/infinite-core.yml"
+      ],
+      "at_reference": "missing",
+      "action": "adapt_probe_to_current_observer_cache",
+      "owner": "core_agent",
+      "requirements": [
+        "Mantener GHZ 1024/256, 4096 consultas con direcciones de 1001 dígitos y 65536 operaciones con rollback.",
+        "Verificar equivalencia del estado, sin exigir el viejo detalle interno active_qubits==1 tras una identidad.",
+        "Medir tiempos sin convertir speedup>1 en gate universal."
+      ],
+      "implementation_status": "planned_in_consolidation"
+    },
+    {
+      "id": "rule_physics_3d",
+      "source_pr": 21,
+      "source_commits": [
+        "9031aebe16f7cf68a7972c31be6b17049f28f217",
+        "e293be5a2c746d3213dd821d7abda1d8bc341cce",
+        "7aef3cb8b6363791f353f6eadf0791481dc3087c"
+      ],
+      "files": [
+        "native/include/mundo_x/rule_physics.hpp",
+        "native/tests/rule_physics.cpp",
+        "CMakeLists.txt"
+      ],
+      "at_reference": "missing",
+      "action": "repair_isolated_module_and_tests",
+      "owner": "core_agent",
+      "requirements": [
+        "No sustituir PhysicsWorld 2D ni afirmar que el módulo 3D ya alimenta un renderer.",
+        "Validar el presupuesto de subpasos antes de convertir double a unsigned.",
+        "Evitar acceso mutable sin validación y efectos parciales si el paso falla.",
+        "Documentar O(n^2) de gravedad por pares y límites de integración/collisions."
+      ],
+      "implementation_status": "planned_in_consolidation"
+    },
+    {
+      "id": "android_exact_frame_reuse",
+      "source_pr": 21,
+      "source_commits": [
+        "87629f7bdcec4ff9c75f1a29a1ba24efe767e23e",
+        "fd0bd14dc5a9709703ced7fb61fe031a1c266b75",
+        "ea5f35ea806b388e5075919dee20cd1ab0e39219"
+      ],
+      "files": [
+        "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java",
+        "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java"
+      ],
+      "at_reference": "missing_in_android_desktop_already_has_exact_reuse",
+      "action": "adapt_with_exact_state_equality",
+      "owner": "root",
+      "requirements": [
+        "La igualdad de hash FNV de 64 bits no basta como prueba de igualdad de estado.",
+        "Incluir espejos, cámara, escala y tamaño de render, core/edits, contexto GL y cambios de debug/picking.",
+        "Conservar captura y tiempo sincronizado explícitos."
+      ],
+      "implementation_status": "planned_in_consolidation"
+    },
+    {
+      "id": "ghz1000_batch_workload",
+      "source_pr": 21,
+      "source_commits": [
+        "83e5faee209f30b53453d13646417ef733db6356"
+      ],
+      "files": [
+        "native/tests/infinite_scale.cpp"
+      ],
+      "at_reference": "workload_hunk_missing",
+      "action": "preserve_as_adapted_benchmark_or_explicit_coverage_mapping",
+      "owner": "core_agent",
+      "requirements": [
+        "1000 qubits GHZ, 24 observables ZZ, cinco repeticiones, igualdad scalar/batch.",
+        "No copiar API Query/expectations obsoleta."
+      ],
+      "implementation_status": "mapped_to_existing_ether_stress_batch_1000_24_pending_recorded_run",
+      "coverage_mapping": {
+        "command": "ether_stress batch 1000 24",
+        "owner_confirmation": "core agent confirms five InfiniteSession batches, exact ZZ values, snapshot and RNG checks",
+        "comparison_limit": "Does not reproduce old scalar-vs-batch speedup report; preserve as correctness/resource workload, no speedup claim."
+      }
+    },
+    {
+      "id": "legacy_android_scissor_cull",
+      "source_pr": 20,
+      "source_commits": [
+        "964db0e4e1d0fc2e6fe8f58741566971091eb7a8",
+        "63a01567884449356805292b4a357841c21a47d7",
+        "6a09fe90b31f33a5899f94feb9f7a7b5e7c07ad9"
+      ],
+      "files": [
+        "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java",
+        "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java",
+        "tools/graphics-verify-ultra.py"
+      ],
+      "at_reference": "not_imported",
+      "action": "do_not_import_old_implementation",
+      "requirements": [
+        "La caja proyectada directa no cubre automáticamente geometría reflejada.",
+        "Cualquier adaptación debe cubrir mirrors off/on, coordenadas de exportación y el scissor de picking.",
+        "Conservar el gate native_ether_contracts actual y no imponer mejora temporal universal."
+      ],
+      "implementation_status": "old_patch_rejected_for_incompatibility"
+    },
+    {
+      "id": "live_infinite_8k_ownership_test",
+      "source_pr": 20,
+      "source_commits": [
+        "37b5f36caed27e3307e5fb39105751b1712bc36e",
+        "d4de6d0b86aca08450eb76d61cd9add2b4b7d097"
+      ],
+      "files": [
+        "graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java",
+        "tools/graphics-verify-ultra.py"
+      ],
+      "at_reference": "old_named_metrics_absent_current_ether_contracts_exist",
+      "action": "map_coverage_or_port_only_current_owner_assertions",
+      "requirements": [
+        "No sustituir el backend Ether actual por una sesión InfiniteCore antigua.",
+        "Conservar verificación de revision/epoch y rendering read-only."
+      ],
+      "implementation_status": "decision_pending"
+    }
+  ],
+  "summary": {
+    "remote_branches": 35,
+    "all_pull_requests": 25,
+    "open_pull_requests": [
+      25,
+      22,
+      21,
+      20,
+      19
+    ],
+    "ancestor_branch_heads": 24,
+    "nonancestor_branch_heads": 11,
+    "distinct_nonancestor_commits": 70,
+    "local_commits_ahead_of_main": 54,
+    "local_commits_ahead_of_pr25": 42
+  },
+  "methodology": {
+    "scope": "All 35 remote branches and all 25 pull requests returned in single 100-item pages; root refreshed origin --prune before local comparison.",
+    "ancestry": "git merge-base --is-ancestor <branch-head> 52150df; unique ranges via git rev-list and git log.",
+    "patch_equivalence": "git cherry 52150df <branch-head>; stable patch equivalence is recorded for each unique non-merge commit.",
+    "content": "Compare branch and reference blob object IDs for every path changed since merge base; inspect changed hunks in native, graphics, PC and workflow consumers.",
+    "caveat": "A negative whole-commit patch-id does not prove all content is missing: squashes, selective imports and later corrections require content/ancestry analysis. A positive ancestor includes history but does not itself assert current tests passed.",
+    "mutation_boundary": "This inventory performs no remote writes, branch checkout/fetch, build or emulator campaign. Candidate implementation and publication are separate root-owned operations."
+  },
+  "post_reference_status": "Consolidation is authorized and in progress. ENTER Android regression selectively ported; bash/Python syntax and real API35/Java17 compilation passed (see pc-java-compile.json for source hashes). Android device instrumentation and complete APK validation are not claimed. Other candidates remain in progress until their owners record results. No remote mutation by this inventory."
+}

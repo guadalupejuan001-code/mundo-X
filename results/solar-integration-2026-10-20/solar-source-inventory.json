@@ -1,0 +1,240 @@
+{
+  "source_commit": "ce001aa336bdde72bdc6536ec26cf4ea1601b723",
+  "scope": "Inventario completo del m\u00f3dulo Solar; cobertura funcional y pendientes en docs/solar-integration-performance.md",
+  "files": [
+    {
+      "path": "solar-android/README.md",
+      "sha256": "979e1f3f78735092a3d436a3f7370c0be62ea2783dcc2e6c80ba7f45e6a8c34d",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/build.gradle",
+      "sha256": "0a81e7e86c6454bab14b9fff7c1fbad017deffc660f303d4ccfb7c3bc070b342",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java",
+      "sha256": "7e73391c848ee366f8b05d60c4343676e283cb7e011c3d7d14afb3121909b79d",
+      "changed_this_round": true,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarPerformanceChecks.java",
+      "sha256": "b7f2d038cf9254a95e814def422e41bf2e37517cc6566ecaf4010ddc09657266",
+      "changed_this_round": true,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/app/src/main/AndroidManifest.xml",
+      "sha256": "52fd87ee7ab27f694bd8e026854760c44e123cb5ba53cde82171ace59dbcde7b",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/science-assets.json",
+      "sha256": "1a31c8730ef2b3731735e2126b7888eed884c09a513311a7b729ea2de428ef39",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/shaders/overlay.frag",
+      "sha256": "87a9a3151488892ee1886b9675bf538d2ea1a934bd751f9e68044dcd2d75f6f0",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/shaders/overlay.vert",
+      "sha256": "a19bd0b3e34688e3dc19ca80e93c2facebdee6fceeb6456bc6c61ea1a8bda6b0",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/shaders/solar.frag",
+      "sha256": "6628945f9a06de759ac0f56a96c0a6ecb7ac9457b6960eed2e1ccb6243cc9d61",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/shaders/solar.vert",
+      "sha256": "4aa83969dbe3d003f855da2a9cae8879f4b73d5edf0b4fe442d2a37bf56121c3",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/textures/earth.png",
+      "sha256": "ae6214b078ed0864c96f74bcb10ae3021f6eb116f8059797efe0fa9ea8b89d35",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/textures/jupiter.jpg",
+      "sha256": "5a90685bf97006b2e0ca262653feccff01aa48629ceca17561dacd8fc45d8cf6",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/assets/textures/moon.jpg",
+      "sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/cpp/CMakeLists.txt",
+      "sha256": "b21f424cde581f371418bd78982815e4f2582a47659aa32da0ae60895e2a1937",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/QuantumSolarBridge.java",
+      "sha256": "96e4b46786751aa96e4b667a16c65fdaf1d6b82d6a9be04300dbd2451fb657e5",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarActivity.java",
+      "sha256": "63983ffa4309d4e82534f36a555638c89487a0d65166ed09ec17bddd3ef8ba8d",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarData.java",
+      "sha256": "94466c2dc78db0e45adba20f96900d8a115065bab2c793e96ac89212f200b626",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java",
+      "sha256": "351d8e7a91d7b09d6788db6bc8f2c110456d7d9d089d55bf80dfe33bf7c9ff27",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java",
+      "sha256": "a0ee47cdef9954013849505346f8cc6076d4a9c16b54ff65e5302a4013176417",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarMapView.java",
+      "sha256": "25ea584ec2d2cc01633da864206b2fdb12c542c2f222c56fce86222ea438404f",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarOcclusion.java",
+      "sha256": "cb545c121162c90470fdf976cf4f9b518c7c3924f90f6e66c9bcbbcf3a88024a",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarPng.java",
+      "sha256": "116f1444ed6a3be54d4138b9485b0f813d071b952d9b82f6ec34ee33fc0f2c27",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarRenderer.java",
+      "sha256": "4f0c8096611bae785309901c86cb48da2938c23d66680a5a87161506241355bc",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarSurface.java",
+      "sha256": "daf55763b91616938925ab46a825ae422591d59c6e12a2ee39ac36b9046be18e",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java",
+      "sha256": "22a73ed255ccb144985831f096aa2291ce528d96802c96fc8c20f62404feecd3",
+      "changed_this_round": true,
+      "coverage": "Cambio con revisi\u00f3n focal y validaci\u00f3n descrita en informe"
+    },
+    {
+      "path": "solar-android/app/src/main/res/drawable/ic_solar.xml",
+      "sha256": "d65582524cb28acb65327788c7830c320f2a72564717b28d07ba897d7a1de6a4",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/app/src/main/res/values/styles.xml",
+      "sha256": "a52a3a416d750c53b28519fdf3dc9177147a0d8991496d5923712ba5df817958",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/build.gradle",
+      "sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/docs/atmosphere-science.md",
+      "sha256": "97ae58c45c88764b56ba7bbe2e0d39ef7cab7ddf7688a37ff351b257ae00db7c",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/docs/solar-science.md",
+      "sha256": "f3f364e30ea140926e1f60d0d8b023911cbb1e9d2092f89a6d77aca79e3f3643",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/gradle.properties",
+      "sha256": "ece37fb746cbdc858afd70e1a03f355799d0510f5566ad0895fcbf24a1bb6918",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/settings.gradle",
+      "sha256": "2bbe0d3f7aec3797ef71e471d3822d0209305d9603e3fd7ed289534940d5525f",
+      "changed_this_round": false,
+      "coverage": "Compilaci\u00f3n/empaquetado o dependencia inspeccionada; sin afirmar cobertura exhaustiva de l\u00edneas"
+    },
+    {
+      "path": "solar-android/tests/SolarBridgeChecks.java",
+      "sha256": "9355116344d45ac6a3290c8d2e64fa0a319a5cd34078be2f4453b50105e96b73",
+      "changed_this_round": true,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/tests/SolarDataChecks.java",
+      "sha256": "83081dbfa248ccb91c8f3f07bf476442380b5dd39743b731d6afc5aae568e600",
+      "changed_this_round": false,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/tests/SolarOptimizationChecks.java",
+      "sha256": "9e8d4e056b160a278ca51eaacd0c96dc45e06f039ff25e2d852e7b193b0dcd0e",
+      "changed_this_round": true,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/tests/SolarPhysicsComparison.java",
+      "sha256": "1399dfbbd860af37c97e795077c632231ddcbef3f924d0321cb6e5135bd270c2",
+      "changed_this_round": true,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/tests/SolarPngChecks.java",
+      "sha256": "86bf3541df4b24aff0fd687818f970fe6a583adad0657c050d58d3b25480362b",
+      "changed_this_round": true,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/tests/SolarRenderFixtures.java",
+      "sha256": "7210572be1938d9ace7ae6a0fd9a6962b77899ba3c668600fa26c4402ef56873",
+      "changed_this_round": true,
+      "coverage": "Pruebas/fixtures"
+    },
+    {
+      "path": "solar-android/tests/SolarVisualEtherChecks.java",
+      "sha256": "7cf948e6c63329bd50ee796fa037f81173e242bc535f0141a3968f2d40cf6e22",
+      "changed_this_round": false,
+      "coverage": "Pruebas/fixtures"
+    }
+  ]
+}

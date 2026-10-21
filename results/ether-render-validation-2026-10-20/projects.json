@@ -1,0 +1,54 @@
+{
+  "title": "COSMIC X Engine",
+  "profile": "cosmic-x-engine-project v1 / compact-clifford / opaque-grid-v1",
+  "checks": {
+    "two_projects_one_unmodified_engine": [
+      {
+        "project": "bell-observer.cosmic",
+        "objects": 1024,
+        "qubits": 2,
+        "observables": 7,
+        "state_history_observables_and_world_equal": true,
+        "same_driver_pixel_differences": 0
+      },
+      {
+        "project": "ghz-city.cosmic",
+        "objects": 1000000,
+        "qubits": 3,
+        "observables": 11,
+        "state_history_observables_and_world_equal": true,
+        "same_driver_pixel_differences": 0
+      }
+    ],
+    "camera_preserves_state_history_and_cached_observables": true,
+    "same_revision_restore_invalidates_live_observer": {
+      "changed_pixels": 2551
+    },
+    "zero_coupling_gate_control": {
+      "changed_pixels": 0
+    },
+    "lowered_population_retains_original_channels_and_inactive_edits": true,
+    "malformed_projects_rejected_without_active_state_or_file_mutation": {
+      "rejected_cases": 24
+    },
+    "unicode_name_counts_codepoints_and_accepts_valid_supplementary_characters": true,
+    "portable_revision_boundary_rejects_gate_without_mutation": true,
+    "desktop_cli_uses_portable_gate_guard": true,
+    "general_core_remains_unrestricted_and_bad_export_preserves_file": true,
+    "portable_gate_history_boundary_uses_real_100000_gate_state": true,
+    "portable_edit_boundary_allows_replacement_but_rejects_growth": true,
+    "portable_time_boundary_rejects_without_core_or_time_mutation": true,
+    "external_gate_history_y_and_original_observables_survive_export": true
+  },
+  "cross_device_pixel_identity_claimed": false,
+  "physical_phone_benchmark": false,
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "status": "passed"
+}

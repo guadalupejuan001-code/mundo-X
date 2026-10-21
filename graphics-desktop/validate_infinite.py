@@ -49,6 +49,16 @@ def run():
         try:
             before, _ = engine.observe(cam)
             assert core.snapshot() == original
+            # The shader also consumes ray parameters outside the VP matrix.
+            changed_camera = dict(cam)
+            changed_camera["tan_half_fov"] *= .7
+            cached, camera_metrics = engine.observe(changed_camera)
+            exact, _ = engine.observe(changed_camera, force=True)
+            assert not camera_metrics["reused"]
+            assert np.array_equal(cached, exact)
+            assert not np.array_equal(before, exact)
+            assert core.snapshot() == original
+            checks["ray_projection_change_invalidates_frame_cache_exactly"] = True
             batches = scene.observable_batches
             engine.observe(street(192, 108, .2), read=False)
             assert scene.observable_batches == batches and core.snapshot() == original

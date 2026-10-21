@@ -1,0 +1,481 @@
+{
+  "scope": "Android 10 x86_64 emulator, 2048 MiB guest RAM, SwiftShader, TCG; requested ART speed, instrumentation log shows class-loader fallback. Not phone FPS.",
+  "runner_status": "blocked_or_failed",
+  "runner_error": "AssertionError: Instrumentation failed: before, after",
+  "exact_capture_matches": 1,
+  "versions": {
+    "before": {
+      "status": "failed",
+      "repeat_failures": 5,
+      "session_lifetimes": 128,
+      "frames": 66,
+      "cases": [
+        {
+          "case": 0,
+          "body": 3,
+          "entry": false,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 6,
+            "different_pixel_percent": 0.008210180623973728,
+            "different_channels": 15,
+            "max_channel_difference": 80,
+            "mean_absolute_channel_difference": 0.0009441707717569787,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 1,
+          "body": 3,
+          "entry": false,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 1,
+            "different_pixel_percent": 0.0013683634373289546,
+            "different_channels": 1,
+            "max_channel_difference": 1,
+            "mean_absolute_channel_difference": 3.4209085933223865e-06,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 2,
+          "body": 6,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 6,
+            "different_pixel_percent": 0.008210180623973728,
+            "different_channels": 18,
+            "max_channel_difference": 36,
+            "mean_absolute_channel_difference": 0.0009304871373836891,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 3,
+          "body": 0,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 33,
+            "different_pixel_percent": 0.0451559934318555,
+            "different_channels": 87,
+            "max_channel_difference": 57,
+            "mean_absolute_channel_difference": 0.0021209633278598795,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 4,
+          "body": 3,
+          "entry": true,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 0,
+            "different_pixel_percent": 0.0,
+            "different_channels": 0,
+            "max_channel_difference": 0,
+            "mean_absolute_channel_difference": 0.0,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 5,
+          "body": 5,
+          "entry": true,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 0,
+            "different_pixel_percent": 0.0,
+            "different_channels": 0,
+            "max_channel_difference": 0,
+            "mean_absolute_channel_difference": 0.0,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 6,
+          "body": 9,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 5,
+            "different_pixel_percent": 0.0068418171866447735,
+            "different_channels": 5,
+            "max_channel_difference": 1,
+            "mean_absolute_channel_difference": 1.7104542966611933e-05,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 7,
+          "body": 7,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 0,
+            "different_pixel_percent": 0.0,
+            "different_channels": 0,
+            "max_channel_difference": 0,
+            "mean_absolute_channel_difference": 0.0,
+            "alpha_differences": 0
+          }
+        }
+      ]
+    },
+    "after": {
+      "status": "failed",
+      "repeat_failures": 5,
+      "session_lifetimes": 128,
+      "frames": 66,
+      "cases": [
+        {
+          "case": 0,
+          "body": 3,
+          "entry": false,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 12,
+            "different_pixel_percent": 0.016420361247947456,
+            "different_channels": 35,
+            "max_channel_difference": 83,
+            "mean_absolute_channel_difference": 0.0027640941434044883,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 1,
+          "body": 3,
+          "entry": false,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 1,
+            "different_pixel_percent": 0.0013683634373289546,
+            "different_channels": 2,
+            "max_channel_difference": 1,
+            "mean_absolute_channel_difference": 6.841817186644773e-06,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 2,
+          "body": 6,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 3,
+            "different_pixel_percent": 0.004105090311986864,
+            "different_channels": 9,
+            "max_channel_difference": 96,
+            "mean_absolute_channel_difference": 0.0008415435139573071,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 3,
+          "body": 0,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 24,
+            "different_pixel_percent": 0.03284072249589491,
+            "different_channels": 61,
+            "max_channel_difference": 96,
+            "mean_absolute_channel_difference": 0.0022612205801860975,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 4,
+          "body": 3,
+          "entry": true,
+          "preset": 0,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 0,
+            "different_pixel_percent": 0.0,
+            "different_channels": 0,
+            "max_channel_difference": 0,
+            "mean_absolute_channel_difference": 0.0,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 5,
+          "body": 5,
+          "entry": true,
+          "preset": 1,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 0,
+            "different_pixel_percent": 0.0,
+            "different_channels": 0,
+            "max_channel_difference": 0,
+            "mean_absolute_channel_difference": 0.0,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 6,
+          "body": 9,
+          "entry": false,
+          "preset": 2,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 2,
+            "different_pixel_percent": 0.002736726874657909,
+            "different_channels": 2,
+            "max_channel_difference": 1,
+            "mean_absolute_channel_difference": 6.841817186644773e-06,
+            "alpha_differences": 0
+          }
+        },
+        {
+          "case": 7,
+          "body": 7,
+          "entry": false,
+          "preset": 3,
+          "width": 360,
+          "height": 203,
+          "same_input_fields": true,
+          "different_input_fields": [],
+          "comparison": {
+            "pixel_count": 73080,
+            "different_pixels": 0,
+            "different_pixel_percent": 0.0,
+            "different_channels": 0,
+            "max_channel_difference": 0,
+            "mean_absolute_channel_difference": 0.0,
+            "alpha_differences": 0
+          }
+        }
+      ]
+    }
+  },
+  "paired": [
+    {
+      "case": 0,
+      "body": 3,
+      "entry": false,
+      "preset": 0,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 7,
+        "different_pixel_percent": 0.009578544061302683,
+        "different_channels": 20,
+        "max_channel_difference": 73,
+        "mean_absolute_channel_difference": 0.0014504652435686919,
+        "alpha_differences": 0
+      }
+    },
+    {
+      "case": 1,
+      "body": 3,
+      "entry": false,
+      "preset": 1,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 2,
+        "different_pixel_percent": 0.002736726874657909,
+        "different_channels": 4,
+        "max_channel_difference": 2,
+        "mean_absolute_channel_difference": 1.7104542966611933e-05,
+        "alpha_differences": 0
+      }
+    },
+    {
+      "case": 2,
+      "body": 6,
+      "entry": false,
+      "preset": 2,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 4,
+        "different_pixel_percent": 0.005473453749315818,
+        "different_channels": 12,
+        "max_channel_difference": 96,
+        "mean_absolute_channel_difference": 0.000992063492063492,
+        "alpha_differences": 0
+      }
+    },
+    {
+      "case": 3,
+      "body": 0,
+      "entry": false,
+      "preset": 3,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 24,
+        "different_pixel_percent": 0.03284072249589491,
+        "different_channels": 63,
+        "max_channel_difference": 96,
+        "mean_absolute_channel_difference": 0.002661466885604817,
+        "alpha_differences": 0
+      }
+    },
+    {
+      "case": 4,
+      "body": 3,
+      "entry": true,
+      "preset": 0,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 0,
+        "different_pixel_percent": 0.0,
+        "different_channels": 0,
+        "max_channel_difference": 0,
+        "mean_absolute_channel_difference": 0.0,
+        "alpha_differences": 0
+      }
+    },
+    {
+      "case": 5,
+      "body": 5,
+      "entry": true,
+      "preset": 1,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 8,
+        "different_pixel_percent": 0.010946907498631636,
+        "different_channels": 24,
+        "max_channel_difference": 76,
+        "mean_absolute_channel_difference": 0.004084564860426929,
+        "alpha_differences": 0
+      }
+    },
+    {
+      "case": 6,
+      "body": 9,
+      "entry": false,
+      "preset": 2,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 1,
+        "different_pixel_percent": 0.0013683634373289546,
+        "different_channels": 2,
+        "max_channel_difference": 1,
+        "mean_absolute_channel_difference": 6.841817186644773e-06,
+        "alpha_differences": 0
+      }
+    },
+    {
+      "case": 7,
+      "body": 7,
+      "entry": false,
+      "preset": 3,
+      "same_input_fields": true,
+      "different_input_fields": [],
+      "comparison": {
+        "pixel_count": 73080,
+        "different_pixels": 53,
+        "different_pixel_percent": 0.07252326217843459,
+        "different_channels": 136,
+        "max_channel_difference": 13,
+        "mean_absolute_channel_difference": 0.0011836343732895458,
+        "alpha_differences": 0
+      }
+    }
+  ],
+  "paired_total": {
+    "pixels": 584640,
+    "different_pixels": 99,
+    "different_channels": 261,
+    "max_channel_difference": 96,
+    "mean_absolute_channel_difference": 0.0012995176518883415,
+    "all_recorded_input_hashes_equal": true
+  },
+  "interpretation": [
+    "Strict Android exactness gate failed and remains failed; no tolerance override was applied.",
+    "Five scenes vary on immediate repeat within each APK despite equal recorded input hashes.",
+    "Cases 5 and 7 are exact on immediate repeat within each APK but differ between versions; baseline variability alone does not establish the cause of every A/B difference.",
+    "ART speed was requested successfully, but logcat records class-loader-context mismatch and fallback; actual full-AOT execution is not established.",
+    "The run does not establish physical-device FPS, power consumption or absence of a visual regression."
+  ]
+}

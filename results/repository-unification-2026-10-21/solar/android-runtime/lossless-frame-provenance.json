@@ -1,0 +1,308 @@
+{
+  "purpose": "Lossless preservation of all original failed-pair readbacks without duplicating raw RGBA and transport tar archives in Git. PNG decoding with the recorded orientation reconstructs every RGBA byte. Original raw files remain in the local diagnostic workspace.",
+  "frames": [
+    {
+      "raw_path": "after/solar-performance/case-0-repeat.rgba",
+      "png_path": "after/solar-performance/case-0-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-0.rgba",
+      "png_path": "after/solar-performance/case-0.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-1-repeat.rgba",
+      "png_path": "after/solar-performance/case-1-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "png_sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-1.rgba",
+      "png_path": "after/solar-performance/case-1.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "png_sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-2-repeat.rgba",
+      "png_path": "after/solar-performance/case-2-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "png_sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-2.rgba",
+      "png_path": "after/solar-performance/case-2.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "png_sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-3-repeat.rgba",
+      "png_path": "after/solar-performance/case-3-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-3.rgba",
+      "png_path": "after/solar-performance/case-3.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-4-repeat.rgba",
+      "png_path": "after/solar-performance/case-4-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-4.rgba",
+      "png_path": "after/solar-performance/case-4.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-5-repeat.rgba",
+      "png_path": "after/solar-performance/case-5-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-5.rgba",
+      "png_path": "after/solar-performance/case-5.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-6-repeat.rgba",
+      "png_path": "after/solar-performance/case-6-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-6.rgba",
+      "png_path": "after/solar-performance/case-6.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-7-repeat.rgba",
+      "png_path": "after/solar-performance/case-7-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "png_sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "after/solar-performance/case-7.rgba",
+      "png_path": "after/solar-performance/case-7.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "b2f5afd76c3f6212658ee28c0c31ebdcbda05dc7634bef6d3ef70ef6289f7c4a",
+      "png_sha256": "67d4f268d741763a7d5e704725c784b6db690529bbba3b21b640ce7d8e7d30b4",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-0-repeat.rgba",
+      "png_path": "before/solar-performance/case-0-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-0.rgba",
+      "png_path": "before/solar-performance/case-0.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "8b969f2e7d649c48eb844db99e85693d62ccf00ddb35af5b6a2a6fcaaa0733e8",
+      "png_sha256": "e6dcfe0ef0bc2f61b7d9dd60e0f36414fad04c0c45a1a49a3200968dd1eabe94",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-1-repeat.rgba",
+      "png_path": "before/solar-performance/case-1-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "png_sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-1.rgba",
+      "png_path": "before/solar-performance/case-1.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "aec39211ccf48f7374683f65180c70a5cbffe6f04775c87f3eb4788976ce4728",
+      "png_sha256": "6c4449527e75afdd7419138e8bcc7cdc13ac57dabed6b5b9ab9397289a4a88e0",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-2-repeat.rgba",
+      "png_path": "before/solar-performance/case-2-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "png_sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-2.rgba",
+      "png_path": "before/solar-performance/case-2.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "177f7bf16cde23092ff66451a5ebb1f8863df8ee9a43ed6d0c668de63ed1ebc7",
+      "png_sha256": "177c0b1948ae7df02864faa02d483d211abd4e2b3491a1341672d747c5c4c5c3",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-3-repeat.rgba",
+      "png_path": "before/solar-performance/case-3-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-3.rgba",
+      "png_path": "before/solar-performance/case-3.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "9f0e544adbe7261e30ac82bedfd42b71f9eceedb77f2cdc73f6611e8190761ed",
+      "png_sha256": "92e0b1300467115f97d5c12d8c408060bbc4359241a5b2898e495fe8fbbb8ddc",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-4-repeat.rgba",
+      "png_path": "before/solar-performance/case-4-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-4.rgba",
+      "png_path": "before/solar-performance/case-4.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "89f5d771ca4e5ef6f87b63e024701f48f7a3a78b23f687b97193c791bd19e9f5",
+      "png_sha256": "a39be61bcb2b93e2e6e88d8888edd4b336149333f21ed2683def63e6dd27f72a",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-5-repeat.rgba",
+      "png_path": "before/solar-performance/case-5-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-5.rgba",
+      "png_path": "before/solar-performance/case-5.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "e9efd6fcc1277e0f56347947261d8007aee5fe1e71185505ce0cf13bf29acecf",
+      "png_sha256": "0960be39c318846982b7b0abfc906872515b750f882b12c88061d10c7459b734",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-6-repeat.rgba",
+      "png_path": "before/solar-performance/case-6-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-6.rgba",
+      "png_path": "before/solar-performance/case-6.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "620e092589f4a304d0bed1e981bd5e1db932e3b810f861a0c49185163d6951fa",
+      "png_sha256": "e0399ea6a2a2909da9d377277e1594d015d9fc9028d3e82e89271c49c6d3c54c",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-7-repeat.rgba",
+      "png_path": "before/solar-performance/case-7-repeat.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "07c00c47e7aaffb97a2492661368d9c63867fe51305624c689c1b05f4d8e6df1",
+      "png_sha256": "51eac8daac645bfa409290906499d7c1c610e73c5ab3d1491f7346fc8c38bc0a",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    },
+    {
+      "raw_path": "before/solar-performance/case-7.rgba",
+      "png_path": "before/solar-performance/case-7.png",
+      "raw_bytes": 292320,
+      "raw_sha256": "07c00c47e7aaffb97a2492661368d9c63867fe51305624c689c1b05f4d8e6df1",
+      "png_sha256": "51eac8daac645bfa409290906499d7c1c610e73c5ab3d1491f7346fc8c38bc0a",
+      "raw_reconstruction": "png is vertically flipped from GL readback",
+      "exact": true
+    }
+  ],
+  "all_exact": true,
+  "transport_archives": [
+    {
+      "path": "after/evidence.tar",
+      "bytes": 4734464,
+      "sha256": "7c7265931142bc6c3df5ab27b2af624b4dd3f1766fbbcc168e03ba424edf31d8",
+      "contents": "Extracted under the same before/after directory; the archive duplicates those files."
+    },
+    {
+      "path": "before/evidence.tar",
+      "bytes": 4734464,
+      "sha256": "fdcf71fc55a8fa4cf9db50c8ab4c5ef46667cef2ae32a8d753fef20ff9208a53",
+      "contents": "Extracted under the same before/after directory; the archive duplicates those files."
+    }
+  ]
+}

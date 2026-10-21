@@ -1,0 +1,15 @@
+2026-10-21T01:29:54.7855638Z COSMIC_SOLAR_TESTS_PASSED tests=13 failures=0
+2026-10-21T01:29:54.7857162Z INSTRUMENTATION_RESULT: tests_failed=0
+2026-10-21T01:29:54.7858150Z INSTRUMENTATION_RESULT: tests_run=13
+2026-10-21T01:29:54.7858790Z INSTRUMENTATION_CODE: -1
+2026-10-21T01:29:59.8931162Z tar: Unexpected EOF in archive
+2026-10-21T01:29:59.8932166Z tar: rmtlseek not stopped at a record boundary
+2026-10-21T01:29:59.8932898Z tar: Error is not recoverable: exiting now
+2026-10-21T01:30:00.4530268Z FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/mundo-X/mundo-X/solar-evidence/report.json'
+2026-10-21T01:30:00.4695986Z ##[error]Process completed with exit code 1.
+2026-10-21T01:30:01.6094610Z SHA256 digest of uploaded artifact zip is 8469dfd3bb9a7b3266cb7b0b89f0b1611fbddd3f1e2fd466e00f8ab879be5596
+2026-10-21T01:30:01.8413231Z Artifact COSMIC-X-Solar-Android-Evidence.zip successfully finalized. Artifact ID 12312938941
+
+Android termination after successful instrumentation:
+10-21 01:29:54.577   559  1668 I ActivityManager: Force stopping com.cosmicx.solar appid=10209 user=0: finished inst
+10-21 01:29:54.644   559  1668 I ActivityManager: Killing 2140:com.cosmicx.solar/u0a209 (adj 0): stop com.cosmicx.solar due to finished inst

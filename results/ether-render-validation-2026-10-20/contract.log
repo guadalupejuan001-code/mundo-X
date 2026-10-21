@@ -1,0 +1,46 @@
+{
+  "scope": "COSMIC X Engine shared native session and Mundo X graphic observer",
+  "checks": {
+    "signed_pauli_reference": {
+      "comparisons": 768,
+      "maximum_absolute_error": 6.661338147750939e-16,
+      "state_unchanged": true
+    },
+    "existing_core_not_reset_cloned_or_measured": true,
+    "cosmic_presentation": {
+      "same_id_pixels": true,
+      "deterministic": true,
+      "changed_color_pixels": 20736,
+      "selection_stays_on_id": true,
+      "core_unchanged": true,
+      "gate_changes_pixels": 3345,
+      "zero_coupling_changed_pixels": 0
+    },
+    "external_gate_changes_image": {
+      "changed_pixels": 3322,
+      "resolution": [
+        192,
+        108
+      ]
+    },
+    "camera_and_source_edits_preserve_quantum_state": true,
+    "all_73_requested_channels_uploaded": true,
+    "invalid_observable_batch_preserves_previous_program": true,
+    "closing_scene_preserves_borrowed_core": true,
+    "zero_coupling_control": {
+      "changed_pixels": 0,
+      "quantum_observables_changed": true
+    },
+    "canonical_native_headers_match_provenance": true
+  },
+  "new_performance_benchmark": false,
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "status": "passed"
+}

@@ -1,0 +1,83 @@
+{
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "resolution": [
+    3840,
+    2160
+  ],
+  "results": [
+    {
+      "scene": 4,
+      "selected": 3,
+      "entry": false,
+      "samples_ms": {
+        "after": [
+          1595.588596,
+          1550.603477
+        ],
+        "before": [
+          1744.912765,
+          1576.848768
+        ]
+      },
+      "fresh_ms": {
+        "after": 1548.722456,
+        "before": 1587.306409
+      },
+      "median_ms": {
+        "after": 1573.0960365,
+        "before": 1660.8807665
+      },
+      "eclipse_candidates": 32
+    },
+    {
+      "scene": 24,
+      "selected": 3,
+      "entry": true,
+      "samples_ms": {
+        "after": [
+          2584.04521,
+          2831.401326
+        ],
+        "before": [
+          3234.967907,
+          3223.033101
+        ]
+      },
+      "fresh_ms": {
+        "after": 2702.647993,
+        "before": 3418.498374
+      },
+      "median_ms": {
+        "after": 2707.723268,
+        "before": 3229.000504
+      },
+      "eclipse_candidates": 22
+    }
+  ],
+  "compared_pixels": 49766400,
+  "different_pixels": {
+    "color": 0,
+    "id": 0,
+    "depth": 0
+  },
+  "max_color_channel_delta": 0,
+  "median_ms": {
+    "before": 2444.94063525,
+    "after": 2140.4096522500004
+  },
+  "rss_peak_kib": 387376,
+  "baseline": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_commit": "b647940e3faa01e17fdb63b304efd7b0db8b32ba",
+  "ram_budget_bytes": 2147483648,
+  "cpu_budget_seconds": 180,
+  "scope": "Host software GLES; production shader, catalogue fixtures; not Android FPS",
+  "shader_sha256": "6628945f9a06de759ac0f56a96c0a6ecb7ac9457b6960eed2e1ccb6243cc9d61",
+  "fixtures_sha256": "e1bcc4e4be0dfe5af2ee7f60e5969172cf5830f0dbc77a42d822847013553a76"
+}

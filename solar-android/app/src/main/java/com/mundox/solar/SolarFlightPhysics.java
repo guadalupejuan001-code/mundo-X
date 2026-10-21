@@ -28,25 +28,31 @@ public final class SolarFlightPhysics {
      */
     public static void step(int body,SolarEnvironment environment,State state,
                             double thrustMs2,double dtSeconds){
-        if(environment==null||state==null||!Double.isFinite(thrustMs2)
+        if(environment==null||state==null||body<0||body>=SolarData.BODIES.length||environment.id!=body
+                ||!Double.isFinite(state.altitudeKm)||!Double.isFinite(state.radialVelocityKmS)||!Double.isFinite(thrustMs2)
                 ||!Double.isFinite(dtSeconds)||dtSeconds<0||dtSeconds>.25)
             throw new IllegalArgumentException("Paso físico inválido");
+        if(!(SolarData.BODIES[body].radiusKm+state.altitudeKm>0))
+            throw new IllegalArgumentException("Radio físico inválido");
         if(dtSeconds==0)return;
         int steps=Math.max(1,(int)Math.ceil(dtSeconds/.01));
         double h=dtSeconds/steps;
+        double altitude=state.altitudeKm,velocity=state.radialVelocityKmS;
         for(int i=0;i<steps;i++){
-            double a0=thrustMs2/1000.0-SolarData.gravityMs2(body,state.altitudeKm)/1000.0;
-            double next=state.altitudeKm+state.radialVelocityKmS*h+.5*a0*h*h;
+            double a0=thrustMs2/1000.0-SolarData.gravityMs2(body,altitude)/1000.0;
+            double next=altitude+velocity*h+.5*a0*h*h;
             next=environment.clampAltitudeKm(next);
             double a1=thrustMs2/1000.0-SolarData.gravityMs2(body,next)/1000.0;
-            state.radialVelocityKmS+=.5*(a0+a1)*h;
-            state.altitudeKm=next;
+            velocity+=.5*(a0+a1)*h;
+            altitude=next;
             if((next<=environment.minAltitudeKm+1e-12
                     || next>=environment.maxAltitudeKm-1e-12)
-                    && ((next<=environment.minAltitudeKm&&state.radialVelocityKmS<0)
-                    || (next>=environment.maxAltitudeKm&&state.radialVelocityKmS>0)))
-                state.radialVelocityKmS=0;
+                    && ((next<=environment.minAltitudeKm&&velocity<0)
+                    || (next>=environment.maxAltitudeKm&&velocity>0)))
+                velocity=0;
+            if(!Double.isFinite(velocity))throw new IllegalArgumentException("Velocidad fuera de rango");
         }
+        state.altitudeKm=altitude;state.radialVelocityKmS=velocity;
     }
 
     /** Specific two-body mechanical energy, km^2/s^2, for regression checks. */

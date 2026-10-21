@@ -58,7 +58,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private final JSONObject captureSamples = new JSONObject();
     private boolean testUhd;
     private boolean testUltra;
-    private int expectedTests = LEGACY_TESTS + 2;
+    private boolean testMirrors;
+    private int expectedTests = LEGACY_TESTS + 3;
     private String portableName;
 
     private interface Checked { void run() throws Exception; }
@@ -96,6 +97,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        testMirrors = arguments != null && "true".equals(arguments.getString("mirrors"));
+        if(testMirrors)expectedTests++;
         testUltra = arguments != null && "true".equals(arguments.getString("ultra8k"));
         testUhd = testUltra || (arguments != null && "true".equals(arguments.getString("uhd4k")));
         if (testUhd) expectedTests += 4;
@@ -113,6 +116,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             metrics.put("performanceScope", "Software GLES emulator; not phone performance measurements");
             metrics.put("uhd4kSuite", testUhd);
             metrics.put("ultra8kSuite", testUltra);
+            metrics.put("mirrorSuite", testMirrors);
             metrics.put("applicationId", getTargetContext().getPackageName());
 
             Intent launch = new Intent(getTargetContext(), MainActivity.class);
@@ -134,6 +138,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("selection_and_individual_edits", this::selectionAndEdits);
             runCase("edit_restoration", this::editRestoration);
             runCase("pause_resume_preserves_state", this::pauseResume);
+            runCase("frame_reuse_exact_inputs_and_invalidation", this::frameReuseContracts);
 
             // The default Ether test explicitly installed a finite compatibility
             // fixture for the established 1000-qubit rendering/migration suite.
@@ -163,6 +168,7 @@ public final class GraphicsInstrumentation extends Instrumentation {
             runCase("portable_invalid_import_preserves_session", this::portableInvalidImport);
             runCase("portable_activity_recreation", this::portableRecreation);
             runCase("infinite_live_renderer_and_portability", this::infiniteRenderer);
+            if(testMirrors)runCase("mirrors_selection_snapshot_and_tiled_export", this::mirrorContracts);
 
             metrics.put("portableFinalQubits", activity.core.qubits);
             metrics.put("portableFinalStateBytes", activity.core.stateBytes());
@@ -1074,6 +1080,145 @@ public final class GraphicsInstrumentation extends Instrumentation {
         metrics.put("ultra8kPerformanceScope", "One-object scene on recorded GLES device; synchronized wall time, not FPS or phone results");
     }
 
+    private void reuseAfterChange(String name, Runnable change, JSONArray checks) throws Exception {
+        long before = activity.renderer.frameStats().renderNumber;
+        gl(change);
+        QuantumRenderer.Capture automatic = frame(false);
+        long updated = activity.renderer.frameStats().renderNumber;
+        expect(updated > before, "Changed " + name + " reused a stale framebuffer");
+        gl(() -> activity.renderer.setFrameReuseEnabled(false));
+        QuantumRenderer.Capture forced = frame(false);
+        expect(automatic.changed(forced) == 0, "Frame reuse changed pixels for " + name);
+        gl(() -> activity.renderer.setFrameReuseEnabled(true));
+        QuantumRenderer.Capture first = frame(false);
+        long rendered = activity.renderer.frameStats().renderNumber;
+        QuantumRenderer.Capture second = frame(false);
+        QuantumRenderer.FrameStats reused = activity.renderer.frameStats();
+        expect(first.changed(second) == 0 && reused.frameReused && reused.renderNumber == rendered,
+                "Unchanged " + name + " did not reuse the exact completed image");
+        checks.put(new JSONObject().put("input", name).put("invalidated", true)
+                .put("forcedDifferentPixels", automatic.changed(forced)).put("repeatDifferentPixels", first.changed(second))
+                .put("reusedWithoutDrawing", true));
+    }
+
+    private void frameReuseContracts() throws Exception {
+        scene(64);
+        long originalSeed = visualSnapshot().seed;
+        JSONArray checks = new JSONArray();
+        try {
+            gl(() -> { activity.renderer.setSynchronousTiming(false);activity.renderer.setFrameReuseEnabled(true); });
+            QuantumRenderer.Capture first = frame(false);
+            long rendered = activity.renderer.frameStats().renderNumber;
+            QuantumRenderer.Capture second = frame(false);
+            expect(first.changed(second) == 0 && activity.renderer.frameStats().frameReused
+                    && activity.renderer.frameStats().renderNumber == rendered, "Identical inputs were redrawn or changed");
+            reuseAfterChange("time", () -> activity.renderer.setTime(.75f), checks);
+            reuseAfterChange("seed", () -> activity.renderer.worldSeed(2027), checks);
+            reuseAfterChange("camera", () -> activity.renderer.testCamera(new float[]{14,15,19},new float[]{0,1,0}), checks);
+            reuseAfterChange("coupling", () -> activity.renderer.coupling(true), checks);
+            reuseAfterChange("native_epoch", () -> activity.renderer.gate(3,0,0), checks);
+            reuseAfterChange("resolution", () -> activity.renderer.resolution(256), checks);
+            reuseAfterChange("object_count", () -> activity.renderer.objectCount(81), checks);
+            reuseAfterChange("presentation", () -> activity.renderer.setPresentation(QuantumRenderer.PRESENTATION_COSMIC), checks);
+            QuantumRenderer.Capture ids = frame(true);
+            Pick pick = choose(ids);
+            if (pick.id == 0) {
+                search: for (int y=1;y<ids.height-1;y++) for(int x=1;x<ids.width-1;x++) {
+                    int id=ids.idAt(x,y);
+                    if(id>0&&ids.idAt(x-1,y)==id&&ids.idAt(x+1,y)==id&&ids.idAt(x,y-1)==id&&ids.idAt(x,y+1)==id){
+                        pick=new Pick(id,x,y,1);break search;
+                    }
+                }
+            }
+            expect(pick.id>0,"No nonzero ID available for retained-edit regression");
+            select(pick,ids);
+            QuantumRenderer.Capture selected = frame(false);
+            long beforePick = activity.renderer.frameStats().renderNumber;
+            select(pick,ids); // A same-ID pick still overwrites one framebuffer pixel in debug mode.
+            expect(selected.changed(frame(false)) == 0 && activity.renderer.frameStats().renderNumber > beforePick,
+                    "Same-ID picking left the ID pass in the cached color image");
+            reuseAfterChange("edit", () -> activity.renderer.editSelected(1), checks);
+            QuantumRenderer.Snapshot edited=visualSnapshot();
+            QuantumRenderer.Capture editedImage=frame(false);
+            reuseAfterChange("population_shrink", () -> activity.renderer.objectCount(1), checks);
+            expect(Arrays.equals(edited.editIds,visualSnapshot().editIds)
+                    &&Arrays.equals(edited.editValues,visualSnapshot().editValues),"Smaller view discarded an inactive edit");
+            reuseAfterChange("population_restore", () -> activity.renderer.objectCount(81), checks);
+            select(pick,ids);
+            expect(editedImage.changed(frame(false))==0,"Restored population lost its exact edited image");
+            reuseAfterChange("edit_restore", () -> activity.renderer.editSelected(0), checks);
+            gl(() -> activity.renderer.setSynchronousTiming(true));
+            frame(false);long timed = activity.renderer.frameStats().renderNumber;
+            frame(false);
+            expect(!activity.renderer.frameStats().frameReused && activity.renderer.frameStats().renderNumber > timed,
+                    "Completion-time measurement reused an old frame");
+            metrics.put("frameReuse", new JSONObject().put("checks",checks).put("samePickRestored",true)
+                    .put("timingForcesDrawing",true).put("exactComparison",true));
+        } finally {
+            gl(() -> { activity.renderer.setSynchronousTiming(false);activity.renderer.setFrameReuseEnabled(true);
+                activity.renderer.worldSeed(originalSeed);
+                activity.renderer.setPresentation(QuantumRenderer.PRESENTATION_LEGACY); });
+        }
+    }
+
+    /** Opt in with -e mirrors true. Runs shipping GLES/JNI, never a host substitute. */
+    private void mirrorContracts() throws Exception {
+        scene(64);
+        gl(() -> {
+            activity.renderer.worldSeed(2026);activity.renderer.setPresentation(QuantumRenderer.PRESENTATION_COSMIC);
+            activity.renderer.testCamera(new float[]{0,3.8f,7},new float[]{11,1.2f,-2});
+            activity.renderer.setReflections(QuantumRenderer.MIRRORS_OFF,64,true,1f);
+        });
+        QuantumRenderer.Capture originalIds=frame(true),originalColor=frame(false);
+        NativeCore.Snapshot before=activity.core.snapshot();
+        try {
+            gl(() -> activity.renderer.setReflections(QuantumRenderer.MIRRORS_PAIR,64,true,1f));
+            QuantumRenderer.Capture ids=frame(true),color=frame(false);
+            expect(originalColor.changed(color)>0,"Mirrors did not change the image");
+            Pick reflected=null;
+            for(int y=2;y<ids.height-2&&reflected==null;y++)for(int x=2;x<ids.width-2;x++){
+                int id=ids.idAt(x,y);
+                if(originalIds.idAt(x,y)<0&&id>=0&&ids.idAt(x-1,y)==id&&ids.idAt(x+1,y)==id
+                        &&ids.idAt(x,y-1)==id&&ids.idAt(x,y+1)==id){reflected=new Pick(id,x,y,1);break;}
+            }
+            expect(reflected!=null,"No object outside the direct view was reflected");
+            select(reflected,ids);
+            gl(() -> activity.renderer.editSelected(-1));
+            expect(frame(true).idAt(reflected.x,reflected.y)!=reflected.id,"Hidden object remains in its reflection");
+            gl(() -> activity.renderer.editSelected(0));
+            expect(frame(true).changed(ids)==0,"Restoring source did not restore all reflected IDs");
+            QuantumRenderer.Snapshot optical=visualSnapshot();
+            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+            try(ObjectOutputStream output=new ObjectOutputStream(bytes)){output.writeObject(optical);}
+            QuantumRenderer.Snapshot restored;
+            try(ObjectInputStream input=new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))){
+                restored=(QuantumRenderer.Snapshot)input.readObject();
+            }
+            expect(restored.mirrorMode==2&&restored.mirrorBudget==64&&restored.mirrorFold
+                    &&restored.mirrorReflectance==1f,"Optical session settings were lost");
+            QuantumRenderer candidate=new QuantumRenderer(getTargetContext(),activity.core,text -> {},restored);
+            expect(candidate.mirrorMode()==2&&candidate.mirrorBudget()==64,"Optical snapshot did not restore");
+            QuantumRenderer.Capture reference=frame(false);
+            JSONArray reuseChecks=new JSONArray();
+            reuseAfterChange("mirror_reflectance",() -> activity.renderer.setReflections(2,64,true,.8f),reuseChecks);
+            reuseAfterChange("mirror_fold",() -> activity.renderer.setReflections(2,64,false,.8f),reuseChecks);
+            reuseAfterChange("mirror_budget",() -> activity.renderer.setReflections(2,63,false,.8f),reuseChecks);
+            reuseAfterChange("mirror_restore",() -> activity.renderer.setReflections(2,64,true,1f),reuseChecks);
+            expect(reference.changed(frame(false))==0,"Restoring optical inputs changed the completed image");
+            QuantumRenderer.ExportResult export=stream("mirror-tiled.png",new RenderResolution.Size(reference.width,reference.height),0,
+                    new QuantumRenderer.ExportControl(64,32,null));
+            int[] differences=comparePng(new File(evidence,"mirror-tiled.png"),reference,export.tileWidth,export.tileRows);
+            expect(differences[0]==0,"Mirror tiles differ from full framebuffer");
+            sameCore(before,activity.core.snapshot(),"Reflections mutated the native core");
+            metrics.put("mirrors",new JSONObject().put("reflectedPickId",reflected.id)
+                    .put("changedPixels",originalColor.changed(color)).put("snapshotRestored",true)
+                    .put("readOnly",true).put("tileDifferentPixels",differences[0]).put("reuseChecks",reuseChecks));
+        } finally {
+            gl(() -> activity.renderer.setReflections(QuantumRenderer.MIRRORS_OFF,16,true,1f));
+        }
+        expect(originalIds.changed(frame(true))==0,"Turning mirrors off changed original object IDs");
+    }
+
     private void ultraDifferential() throws Exception {
         scene(64);
         gl(() -> {
@@ -1138,6 +1283,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
     private void ultraStreamed() throws Exception {
         scene(1);
         gl(() -> {
+            // The visibility threshold belongs to this fixed geometry, independent of earlier tests.
+            activity.renderer.worldSeed(2026);
             activity.renderer.coupling(true);
             activity.renderer.gate(NativeCore.Z, 0, 0);
             activity.renderer.setTime(.875f);
@@ -1172,6 +1319,9 @@ public final class GraphicsInstrumentation extends Instrumentation {
             int different = 0, first = preview.getPixel(0, 0);
             for (int y = 0; y < preview.getHeight(); y += 7) for (int x = 0; x < preview.getWidth(); x += 7)
                 if (preview.getPixel(x, y) != first) different++;
+            metrics.put("ultra8kStreamedPreview", new JSONObject().put("seed", logical.seed)
+                    .put("width", preview.getWidth()).put("height", preview.getHeight())
+                    .put("sampleStride", 7).put("differentSamples", different).put("minimumExclusive", 100));
             expect(different > 100, "8K PNG contains no substantive rendered geometry");
         } finally { preview.recycle(); }
         sameGraphics(logical, visualSnapshot(), "8K export changed the active scene");

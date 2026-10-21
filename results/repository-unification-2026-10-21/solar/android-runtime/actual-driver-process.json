@@ -1,0 +1,15 @@
+{
+  "cwd": "/tmp/solar-avd-tw6ny39b",
+  "exe": "/workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/qemu/linux-x86_64/qemu-system-x86_64-headless",
+  "status": "Name:\tqemu-system-x86\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t49826\nNgid:\t0\nPid:\t49826\nPPid:\t49822\nTracerPid:\t49822\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t256\nGroups:\t \nNStgid:\t49826\nNSpid:\t49826\nNSpgid:\t49822\nNSsid:\t49822\nKthread:\t0\nVmPeak:\t 4265100 kB\nVmSize:\t 4265084 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t 3698632 kB\nVmRSS:\t 3698632 kB\nRssAnon:\t 3643736 kB\nRssFile:\t   54896 kB\nRssShmem:\t       0 kB\nVmData:\t 4151852 kB\nVmStk:\t     136 kB\nVmExe:\t   13828 kB\nVmLib:\t   54368 kB\nVmPTE:\t    7848 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffffff\nThreads:\t61\nSigQ:\t0/39792\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000001000\nSigCgt:\t00000001418044fb\nCapInh:\t0000000000000000\nCapPrm:\t00000000800405fb\nCapEff:\t00000000800405fb\nCapBnd:\t00000000800405fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t0\nSeccomp_filters:\t0\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\talways enabled\nCpus_allowed:\t1ff\nCpus_allowed_list:\t0-8\nMems_allowed:\t00000000,00000001\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t4857\nnonvoluntary_ctxt_switches:\t2\n",
+  "maps": [
+    "7fa2778f4000-7fa277e94000 r-xp 00000000 00:1b 395315                     /workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libGLES_CM.so",
+    "7fa277e94000-7fa277ee6000 rw-p 0059f000 00:1b 395315                     /workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libGLES_CM.so",
+    "7fa277f33000-7fa277f40000 r-xp 00000000 00:1b 395314                     /workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libEGL.so",
+    "7fa277f40000-7fa277f41000 rw-p 0000d000 00:1b 395314                     /workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libEGL.so",
+    "7fa277f41000-7fa278568000 r-xp 00000000 00:1b 395316                     /workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libGLESv2.so",
+    "7fa278568000-7fa2785bd000 rw-p 00627000 00:1b 395316                     /workspace/scratch/7def14e3f3d9/solar-build/sdk/emulator/lib64/gles_swiftshader/libGLESv2.so"
+  ],
+  "config_contents": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+  "config_sha256": "261f730bc4c69ab022d8b5fe6fb8eb0117c808b2720f3a716c55ca59f7a1ddc0"
+}

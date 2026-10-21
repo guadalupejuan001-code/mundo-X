@@ -1,7 +1,7 @@
 // ObjectSceneModel rules, with an optional explicitly bounded quantum control.
 uniform int uCount,uSide,uEditCount,uSelected,uDebug,uPresentation;
 uniform highp uvec4 uSeedBytes;
-uniform highp isampler2D uEdits;
+uniform highp usampler2D uEdits;
 uniform float uTime,uFogDistance,uQuantumStrength,uPixelAngle;
 uniform highp sampler2D uQuantum;
 uniform int uQuantumCount;
@@ -23,11 +23,15 @@ highp uvec4 mxHashBytes(highp int id,highp uvec4 seed){
   x=mxMulBytes(x,uvec4(139u,166u,108u,132u));return x^uvec4(x.z,x.w,0u,0u);
 }
 int editState(int id){
-  int lo=0,hi=uEditCount-1,width=textureSize(uEdits,0).x;
-  for(int j=0;j<21;j++){if(lo>hi)break;int mid=(lo+hi)/2;
-    ivec2 item=texelFetch(uEdits,ivec2(mid%width,mid/width),0).rg;
-    if(item.x==id)return item.y;if(item.x<id)lo=mid+1;else hi=mid-1;}
-  return 0;
+  // One directory lookup rejects untouched blocks; a second reads the exact
+  // 4-bit state. No search loop and no materialized transforms or frame cache.
+  // The private GPU format has 256-word rows (desktop and Android encoders).
+  int page=id>>8;
+  uint offset=texelFetch(uEdits,ivec2(page&255,page>>8),0).r;
+  if(offset==0u)return 0;
+  int word=int(offset)+((id&255)>>3);
+  uint states=texelFetch(uEdits,ivec2(word&255,word>>8),0).r;
+  return int((states>>uint((id&7)*4))&7u);
 }
 void objectData(int id,out vec2 center,out float height,out float tone){
   uvec4 h=mxHashBytes(id,uSeedBytes);
@@ -48,6 +52,65 @@ vec3 cosmicAccent(float tone){
   vec3 cyan=vec3(.20,.83,.94),violet=vec3(.62,.48,.95),gold=vec3(1.0,.72,.33);
   return tone<.48?mix(cyan,violet,tone/.48):mix(violet,gold,(tone-.48)/.52);
 }
+#ifdef MX_MIRRORS
+vec4 cosmicShadeFromRay(vec3 normal,vec3 world,float tone,int id,vec3 view,float distanceToEye){
+  vec3 n=normalize(normal);
+  vec3 key=normalize(vec3(-.55,.82,.22)),fill=normalize(vec3(.8,.35,-.3));
+  vec3 accent=cosmicAccent(tone);
+  if(id==uSelected)accent=vec3(1.0,.86,.46);
+  vec3 albedo=mix(vec3(.105,.16,.25),accent,.52);
+  float diffuse=.42+.58*max(dot(n,key),0.0);
+  vec3 color=albedo*diffuse+accent*max(dot(n,fill),0.0)*.12;
+  color+=vec3(.60,.82,1.0)*pow(max(dot(reflect(-key,n),view),0.0),32.0)*.32;
+  color+=accent*pow(1.0-max(dot(n,view),0.0),3.0)*.16;
+  mat3 inverseRot=transpose(rotation());
+  vec3 local=inverseRot*world,localNormal=inverseRot*n;
+  // A downward box face is exactly y=0. Roundoff around signed zero must not
+  // select a different procedural facade row when seen through a mirror.
+  if(localNormal.y<-.5)local.y=0.0;
+  vec2 center=(vec2(id%uSide,id/uSide)-float(uSide-1)*.5)*2.2;
+  vec2 localXZ=local.xz-center;
+  float footprint=max(.002,distanceToEye*uPixelAngle);
+  if(localNormal.y>.5){
+    float edgeDistance=min(.38-abs(localXZ.x),.38-abs(localXZ.y));
+    float edge=1.0-smoothstep(.008,.018+footprint*.7,edgeDistance);
+    color=mix(color,accent*.83+vec3(.11),edge*.62);
+  }else{
+    float across=abs(localNormal.x)>.5?localXZ.y:localXZ.x;
+    float column=abs(fract((across+.38)*5.0)-.5);
+    float row=abs(fract(local.y*3.1)-.5);
+    float aa=min(.20,footprint*3.1);
+    float windows=(1.0-smoothstep(.16,.20+aa,column))*(1.0-smoothstep(.12,.20+aa,row));
+    float occupied=step(.27,fract(tone*17.0+floor(local.y*3.1)*.381));
+    // Subpixel facade detail fades continuously instead of shimmering at distance.
+    float detail=1.0-smoothstep(.035,.15,footprint);
+    color+=windows*occupied*detail*(accent*.38+vec3(.075,.07,.04));
+    float edge=1.0-smoothstep(.008,.019+footprint*.7,.38-abs(across));
+    color+=edge*accent*.15;
+    color*=.80+.20*smoothstep(0.0,.55,local.y);
+  }
+  if(id==uSelected)color=mix(color,vec3(1.0,.86,.46),.35);
+  float fogEnd=clamp(uFogDistance*.55,75.0,220.0);
+  float fog=smoothstep(fogEnd*.24,fogEnd,distanceToEye)*.84;
+  return vec4(clamp(mix(color,vec3(.105,.145,.235),fog),0.0,.97),1.0);
+}
+vec4 shadeFromRay(vec3 normal,vec3 world,float tone,int id,vec3 view,float distanceToEye){
+  if(uDebug==1)return encodeId(id);
+  if(uDebug==6)return vec4(normalize(normal)*.5+.5,1);
+  if(uPresentation==1)return cosmicShadeFromRay(normal,world,tone,id,view,distanceToEye);
+  vec3 bone=vec3(.925,.902,.839),lime=vec3(.839,.929,.404);
+  vec3 coral=vec3(.875,.506,.424),ink=vec3(.067,.086,.075);
+  vec3 color=tone<.65?mix(bone,lime,tone*.55):mix(bone,coral,(tone-.65)/.35);
+  if(id==uSelected)color=lime;
+  float light=.32+.68*max(dot(normalize(normal),normalize(vec3(-.6,1,.3))),0.0);
+  float fog=smoothstep(uFogDistance*.45,uFogDistance*1.5,distanceToEye)*.7;
+  return vec4(mix(color*light,ink,fog),1);
+}
+
+vec4 shade(vec3 normal,vec3 world,float tone,int id){
+  return shadeFromRay(normal,world,tone,id,normalize(uEye-world),distance(uEye,world));
+}
+#else
 vec4 cosmicShade(vec3 normal,vec3 world,float tone,int id){
   vec3 n=normalize(normal),view=normalize(uEye-world);
   vec3 key=normalize(vec3(-.55,.82,.22)),fill=normalize(vec3(.8,.35,-.3));
@@ -97,3 +160,4 @@ vec4 shade(vec3 normal,vec3 world,float tone,int id){
   float fog=smoothstep(uFogDistance*.45,uFogDistance*1.5,distance(uEye,world))*.7;
   return vec4(mix(color*light,ink,fog),1);
 }
+#endif

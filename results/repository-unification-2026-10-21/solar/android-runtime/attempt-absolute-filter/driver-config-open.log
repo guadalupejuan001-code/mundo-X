@@ -1,0 +1,63 @@
+48887 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=48889, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+48895 +++ killed by SIGKILL +++
+48894 +++ killed by SIGKILL +++
+48893 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=48894, si_uid=0, si_status=SIGKILL, si_utime=0, si_stime=0} ---
+48887 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=48902, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+48887 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=48904, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+48887 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=48906, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+48887 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=48908, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+48887 --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=48800, si_uid=0} ---
+48887 --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=48887, si_uid=0} ---
+48923 +++ killed by SIGUSR1 +++
+49545 +++ killed by SIGUSR1 +++
+49511 +++ killed by SIGUSR1 +++
+49508 +++ killed by SIGUSR1 +++
+49504 +++ killed by SIGUSR1 +++
+49502 +++ killed by SIGUSR1 +++
+49500 +++ killed by SIGUSR1 +++
+49200 +++ killed by SIGUSR1 +++
+49516 +++ killed by SIGUSR1 +++
+49194 +++ killed by SIGUSR1 +++
+49514 +++ killed by SIGUSR1 +++
+49509 +++ killed by SIGUSR1 +++
+49124 +++ killed by SIGUSR1 +++
+49122 +++ killed by SIGUSR1 +++
+49121 +++ killed by SIGUSR1 +++
+49120 +++ killed by SIGUSR1 +++
+49095 +++ killed by SIGUSR1 +++
+49094 +++ killed by SIGUSR1 +++
+49092 +++ killed by SIGUSR1 +++
+49091 +++ killed by SIGUSR1 +++
+49090 +++ killed by SIGUSR1 +++
+49089 +++ killed by SIGUSR1 +++
+49088 +++ killed by SIGUSR1 +++
+49087 +++ killed by SIGUSR1 +++
+49086 +++ killed by SIGUSR1 +++
+49085 +++ killed by SIGUSR1 +++
+48962 +++ killed by SIGUSR1 +++
+48961 +++ killed by SIGUSR1 +++
+48958 +++ killed by SIGUSR1 +++
+48922 +++ killed by SIGUSR1 +++
+48920 +++ killed by SIGUSR1 +++
+48919 +++ killed by SIGUSR1 +++
+48916 +++ killed by SIGUSR1 +++
+48914 +++ killed by SIGUSR1 +++
+48912 +++ killed by SIGUSR1 +++
+48911 +++ killed by SIGUSR1 +++
+48910 +++ killed by SIGUSR1 +++
+48901 +++ killed by SIGUSR1 +++
+48900 +++ killed by SIGUSR1 +++
+48892 +++ killed by SIGUSR1 +++
+48888 +++ killed by SIGUSR1 +++
+49093 +++ killed by SIGUSR1 +++
+48960 +++ killed by SIGUSR1 +++
+48929 +++ killed by SIGUSR1 +++
+48917 +++ killed by SIGUSR1 +++
+48915 +++ killed by SIGUSR1 +++
+48913 +++ killed by SIGUSR1 +++
+49505 +++ killed by SIGUSR1 +++
+49123 +++ killed by SIGUSR1 +++
+49510 +++ killed by SIGUSR1 +++
+49515 +++ killed by SIGUSR1 +++
+49546 +++ killed by SIGUSR1 +++
+48887 +++ killed by SIGUSR1 +++

@@ -1,0 +1,173 @@
+{
+  "started_utc": "2026-10-21T00:14:11.281884+00:00",
+  "base_commit": "52150dfa928c088a32e69ce32f53c1e5a3b558c3",
+  "scope": "Fresh build and sequential correctness/resource gates; timings are elapsed diagnostics, not an A/B benchmark.",
+  "rlimit_as_bytes": 2147483648,
+  "phases": [
+    {
+      "name": "configure",
+      "command": [
+        "/workspace/scratch/7def14e3f3d9/solar-build/sdk/cmake/3.22.1/bin/cmake",
+        "-S",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X",
+        "-B",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build",
+        "-DCMAKE_BUILD_TYPE=Release"
+      ],
+      "returncode": 0,
+      "wall_seconds": 0.7041494570003124,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/configure.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/configure.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3"
+    },
+    {
+      "name": "build",
+      "command": [
+        "/workspace/scratch/7def14e3f3d9/solar-build/sdk/cmake/3.22.1/bin/cmake",
+        "--build",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build",
+        "--parallel",
+        "1"
+      ],
+      "returncode": 0,
+      "wall_seconds": 235.17909245000192,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/build.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/build.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3"
+    },
+    {
+      "name": "ctest-initial",
+      "command": [
+        "/workspace/scratch/7def14e3f3d9/solar-build/sdk/cmake/3.22.1/bin/ctest",
+        "--test-dir",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build",
+        "--parallel",
+        "1",
+        "--output-on-failure",
+        "--output-junit",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest.xml"
+      ],
+      "returncode": 8,
+      "wall_seconds": 6.621587708003062,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest-initial.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest-initial.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3"
+    },
+    {
+      "name": "ctest-second-launch",
+      "command": [
+        "/workspace/scratch/7def14e3f3d9/solar-build/sdk/cmake/3.22.1/bin/ctest",
+        "--test-dir",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build",
+        "--parallel",
+        "1",
+        "--output-on-failure",
+        "--output-junit",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest.xml"
+      ],
+      "returncode": 8,
+      "wall_seconds": 6.627295063000929,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest-second-launch.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest-second-launch.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3"
+    },
+    {
+      "name": "ctest",
+      "command": [
+        "/workspace/scratch/7def14e3f3d9/solar-build/sdk/cmake/3.22.1/bin/ctest",
+        "--test-dir",
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build",
+        "--parallel",
+        "1",
+        "--output-on-failure",
+        "--output-junit",
+        "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest.xml"
+      ],
+      "returncode": 0,
+      "wall_seconds": 6.311523345000751,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ctest.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3",
+      "test_input_manifest_sha256": "ef4adcd0513495e051c1f5f6bd3687ee376205d094cb846f32ae9ad9b715e515"
+    },
+    {
+      "name": "physics3d-65536",
+      "command": [
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build/mundo_x",
+        "physics3d",
+        "65536",
+        "1"
+      ],
+      "returncode": 0,
+      "wall_seconds": 0.10201060499821324,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/physics3d-65536.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/physics3d-65536.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3"
+    },
+    {
+      "name": "infinite-extreme",
+      "command": [
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build/test_infinite_extreme"
+      ],
+      "returncode": 0,
+      "wall_seconds": 0.6036396259951289,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/infinite-extreme.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/infinite-extreme.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3"
+    },
+    {
+      "name": "ether-batch-1000-24",
+      "command": [
+        "/workspace/scratch/d0e1d0a0e3a1/closure/core/build/ether_stress",
+        "batch",
+        "1000",
+        "24"
+      ],
+      "returncode": 0,
+      "wall_seconds": 0.2027507329985383,
+      "output": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ether-batch-1000-24.log",
+      "resources": "/workspace/scratch/d0e1d0a0e3a1/mundo-X/results/repository-unification-2026-10-21/core/ether-batch-1000-24.resources.json",
+      "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3"
+    }
+  ],
+  "build_artifact_repair": {
+    "path": "/workspace/scratch/d0e1d0a0e3a1/closure/core/build/test_infinite_tensor",
+    "before_mode": "0o644",
+    "after_mode": "0o755",
+    "sha256_unchanged": "e1abf70ccc094a9ad78736cf07b8f19de1117db8e5c1433b0f5c5fb8ccb57b05",
+    "reason": "CTest could not launch the locally generated ELF (permission denied). Corrected only the generated executable permission; initial failed log preserved. Source unchanged.",
+    "followup": "The mode reverted to 0644 between separate command invocations. Same-invocation chmod and execution passed infinite_tensor: 106805 checks, 1534 dense comparisons, 115 tensor cases. Final runner sets the generated ELF mode immediately before CTest."
+  },
+  "resumed_utc": "2026-10-21T00:20:21.929659+00:00",
+  "finished_utc": "2026-10-21T00:20:29.151229+00:00",
+  "passed": true,
+  "source_manifest_sha256": "eb14b8ae45f2c1898b8370ec7a74ff1354e050dfa5ed9ee764472f60a9e1b4e3",
+  "test_input_manifest_sha256": "ef4adcd0513495e051c1f5f6bd3687ee376205d094cb846f32ae9ad9b715e515",
+  "all_source_hashes_unchanged_after_gates": true,
+  "source_file_count": 144,
+  "ctest_summary": {
+    "name": "Linux-c++",
+    "tests": "78",
+    "failures": "0",
+    "disabled": "0",
+    "skipped": "0",
+    "hostname": "7b4ea78fb4ce",
+    "time": "6",
+    "timestamp": "2026-10-21T02:20:21"
+  },
+  "toolchain": {
+    "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+    "cmake": "cmake version 3.22.1-g37088a8",
+    "architecture": "x86_64"
+  },
+  "tested_binary_sha256": {
+    "mundo_x": "a3bb05b6bd4ae26297db8446f36840b5bf5070f4bbf54239a06bb760c390c45d",
+    "test_physics_world": "8855ed502c5dfa9ecf1a09f8c9dc61aea5bb01b3adffb8fc2e6f5993d0ca87ec",
+    "test_physics_allocation": "1594cdf49f5e2a3a499a1cd72d4ea84b4277f114a78a9048df30919047b4ed7c",
+    "test_rule_physics": "1e836098a2be8a98fb6dfe37f53d6b2768e9a09ad1085b8070885f5869eb63ce",
+    "test_infinite_extreme": "5e4195e6b79a7165f6b64a93c84648126fd4776d208f7f936ac637c01f5f4008",
+    "test_infinite_tensor": "e1abf70ccc094a9ad78736cf07b8f19de1117db8e5c1433b0f5c5fb8ccb57b05",
+    "ether_stress": "5ef52bee9cf4de0833362fbe2756b8b276e10cd2b18ac0b035bc3209bb011be1"
+  },
+  "source_commit_recorded_after_tests": "02e69b81f18329e38d5f0e32a5a082be27bffa3c"
+}

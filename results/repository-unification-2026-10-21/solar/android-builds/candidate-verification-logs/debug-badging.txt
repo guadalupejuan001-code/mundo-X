@@ -1,0 +1,18 @@
+package: name='com.cosmicx.solar' versionCode='4' versionName='1.3.0' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+minSdkVersion:'26'
+targetSdkVersion:'35'
+application-label:'COSMIC X Solar'
+application-icon-160:'res/drawable/ic_solar.xml'
+application: label='COSMIC X Solar' icon='res/drawable/ic_solar.xml'
+application-debuggable
+launchable-activity: name='com.mundox.solar.SolarActivity'  label='' icon=''
+feature-group: label=''
+  uses-gl-es: '0x30000'
+  uses-feature: name='android.hardware.faketouch'
+  uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+main
+supports-screens: 'small' 'normal' 'large' 'xlarge'
+supports-any-density: 'true'
+locales: '--_--'
+densities: '160'
+native-code: 'arm64-v8a' 'x86_64'

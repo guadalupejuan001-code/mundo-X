@@ -1,0 +1,534 @@
+﻿2026-10-21T00:46:10.2229740Z Current runner version: '2.337.0'
+2026-10-21T00:46:10.2258904Z ##[group]Runner Image Provisioner
+2026-10-21T00:46:10.2260056Z Hosted Compute Agent
+2026-10-21T00:46:10.2260843Z Version: 20261015.610
+2026-10-21T00:46:10.2261621Z Commit: 267fdb4e8bbec4ab5ea31367f3a00d5c480c7656
+2026-10-21T00:46:10.2262797Z Build Date: 2026-10-14T17:06:54Z
+2026-10-21T00:46:10.2263627Z Worker ID: {ea7f9f0e-0e6e-4f1e-9f72-e3fea86863f6}
+2026-10-21T00:46:10.2264623Z Region: eastus
+2026-10-21T00:46:10.2265338Z Cloud: Azure
+2026-10-21T00:46:10.2266060Z ##[endgroup]
+2026-10-21T00:46:10.2268428Z ##[group]Operating System
+2026-10-21T00:46:10.2269200Z Ubuntu
+2026-10-21T00:46:10.2269982Z 24.04.5
+2026-10-21T00:46:10.2270676Z LTS
+2026-10-21T00:46:10.2271425Z ##[endgroup]
+2026-10-21T00:46:10.2272192Z ##[group]Runner Image
+2026-10-21T00:46:10.2272970Z Image: ubuntu-24.04
+2026-10-21T00:46:10.2273698Z Version: 20261018.339.1
+2026-10-21T00:46:10.2275427Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261018.339/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-21T00:46:10.2277653Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261018.339
+2026-10-21T00:46:10.2279014Z ##[endgroup]
+2026-10-21T00:46:10.2280433Z ##[group]GITHUB_TOKEN Permissions
+2026-10-21T00:46:10.2282959Z Contents: read
+2026-10-21T00:46:10.2283711Z Metadata: read
+2026-10-21T00:46:10.2284577Z ##[endgroup]
+2026-10-21T00:46:10.2287081Z Secret source: Actions
+2026-10-21T00:46:10.2288539Z Cache mode: write
+2026-10-21T00:46:10.2289848Z Prepare workflow directory
+2026-10-21T00:46:10.2738655Z Prepare all required actions
+2026-10-21T00:46:10.2795220Z Getting action download info
+2026-10-21T00:46:10.4191341Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-21T00:46:10.5357970Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-21T00:46:10.6362323Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-21T00:46:10.8672436Z Complete job name: InfiniteCore / ubuntu-latest
+2026-10-21T00:46:10.9209590Z ##[group]Run git config --global core.autocrlf false
+2026-10-21T00:46:10.9210241Z [36;1mgit config --global core.autocrlf false[0m
+2026-10-21T00:46:10.9657041Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:46:10.9658009Z ##[endgroup]
+2026-10-21T00:46:11.0154911Z ##[group]Run actions/checkout@v4
+2026-10-21T00:46:11.0155371Z with:
+2026-10-21T00:46:11.0155745Z   ref: 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:11.0156209Z   fetch-depth: 0
+2026-10-21T00:46:11.0156574Z   persist-credentials: false
+2026-10-21T00:46:11.0157017Z   repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:46:11.0160206Z   token: ***
+2026-10-21T00:46:11.0160558Z   ssh-strict: true
+2026-10-21T00:46:11.0160906Z   ssh-user: git
+2026-10-21T00:46:11.0161241Z   clean: true
+2026-10-21T00:46:11.0161597Z   sparse-checkout-cone-mode: true
+2026-10-21T00:46:11.0162008Z   fetch-tags: false
+2026-10-21T00:46:11.0162389Z   show-progress: true
+2026-10-21T00:46:11.0162749Z   lfs: false
+2026-10-21T00:46:11.0163090Z   submodules: false
+2026-10-21T00:46:11.0163450Z   set-safe-directory: true
+2026-10-21T00:46:11.0163851Z   allow-unsafe-pr-checkout: false
+2026-10-21T00:46:11.0164256Z ##[endgroup]
+2026-10-21T00:46:11.1004642Z Syncing repository: guadalupejuan001-code/mundo-X
+2026-10-21T00:46:11.1007131Z ##[group]Getting Git version info
+2026-10-21T00:46:11.1008202Z Working directory is '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:46:11.1009475Z [command]/usr/bin/git version
+2026-10-21T00:46:11.1010102Z git version 2.55.0
+2026-10-21T00:46:11.1012072Z ##[endgroup]
+2026-10-21T00:46:11.1017018Z Copying '/home/runner/.gitconfig' to '/home/runner/work/_temp/830e841e-7807-4fb5-84a2-542ad6024b65/.gitconfig'
+2026-10-21T00:46:11.1023416Z Temporarily overriding HOME='/home/runner/work/_temp/830e841e-7807-4fb5-84a2-542ad6024b65' before making global git config changes
+2026-10-21T00:46:11.1025203Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:46:11.1027001Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:46:11.1064387Z Deleting the contents of '/home/runner/work/mundo-X/mundo-X'
+2026-10-21T00:46:11.1068756Z ##[group]Initializing the repository
+2026-10-21T00:46:11.1072154Z [command]/usr/bin/git init /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:46:11.1190018Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-21T00:46:11.1191758Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-21T00:46:11.1193269Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-21T00:46:11.1194468Z hint: call:
+2026-10-21T00:46:11.1195198Z hint:
+2026-10-21T00:46:11.1196117Z hint: 	git config --global init.defaultBranch <name>
+2026-10-21T00:46:11.1197135Z hint:
+2026-10-21T00:46:11.1198176Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-21T00:46:11.1199593Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-21T00:46:11.1200697Z hint:
+2026-10-21T00:46:11.1201365Z hint: 	git branch -m <name>
+2026-10-21T00:46:11.1202136Z hint:
+2026-10-21T00:46:11.1291093Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-21T00:46:11.1292806Z Initialized empty Git repository in /home/runner/work/mundo-X/mundo-X/.git/
+2026-10-21T00:46:11.1295393Z [command]/usr/bin/git remote add origin https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:46:11.1298591Z ##[endgroup]
+2026-10-21T00:46:11.1299697Z ##[group]Disabling automatic garbage collection
+2026-10-21T00:46:11.1300697Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-21T00:46:11.1302943Z ##[endgroup]
+2026-10-21T00:46:11.1303995Z ##[group]Setting up auth
+2026-10-21T00:46:11.1308387Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:46:11.1351738Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:46:11.1735503Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:46:11.1780125Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:46:11.2008939Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:46:11.2047075Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:46:11.2264093Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-21T00:46:11.2315150Z ##[endgroup]
+2026-10-21T00:46:11.2316023Z ##[group]Fetching the repository
+2026-10-21T00:46:11.2328025Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-10-21T00:46:12.1270269Z From https://github.com/guadalupejuan001-code/mundo-X
+2026-10-21T00:46:12.1271457Z  * [new branch]      build/android-apk-v0.1  -> origin/build/android-apk-v0.1
+2026-10-21T00:46:12.1272332Z  * [new branch]      codex/basis-vm-android  -> origin/codex/basis-vm-android
+2026-10-21T00:46:12.1273202Z  * [new branch]      codex/core-1000-qubits-20261019 -> origin/codex/core-1000-qubits-20261019
+2026-10-21T00:46:12.1274253Z  * [new branch]      codex/cosmic-android-unified-20261019 -> origin/codex/cosmic-android-unified-20261019
+2026-10-21T00:46:12.1275270Z  * [new branch]      codex/cosmic-engine-4k-20261019 -> origin/codex/cosmic-engine-4k-20261019
+2026-10-21T00:46:12.1276326Z  * [new branch]      codex/cosmic-engine-8k-20261019 -> origin/codex/cosmic-engine-8k-20261019
+2026-10-21T00:46:12.1278065Z  * [new branch]      codex/cosmic-solar-4k-atmospheres-20261019 -> origin/codex/cosmic-solar-4k-atmospheres-20261019
+2026-10-21T00:46:12.1279670Z  * [new branch]      codex/cosmic-solar-explorer -> origin/codex/cosmic-solar-explorer
+2026-10-21T00:46:12.1281049Z  * [new branch]      codex/cosmic-x-engine-20261019 -> origin/codex/cosmic-x-engine-20261019
+2026-10-21T00:46:12.1282201Z  * [new branch]      codex/ether-audit-stress-20261020 -> origin/codex/ether-audit-stress-20261020
+2026-10-21T00:46:12.1283159Z  * [new branch]      codex/ether-core-v0-1-20261019 -> origin/codex/ether-core-v0-1-20261019
+2026-10-21T00:46:12.1284173Z  * [new branch]      codex/ether-fusion-pc-check-20261020 -> origin/codex/ether-fusion-pc-check-20261020
+2026-10-21T00:46:12.1285226Z  * [new branch]      codex/ether-fusion-session-20261020 -> origin/codex/ether-fusion-session-20261020
+2026-10-21T00:46:12.1286434Z  * [new branch]      codex/factorized-exact-structure-20261018 -> origin/codex/factorized-exact-structure-20261018
+2026-10-21T00:46:12.1287931Z  * [new branch]      codex/graphics-spatial-20261018 -> origin/codex/graphics-spatial-20261018
+2026-10-21T00:46:12.1288957Z  * [new branch]      codex/infinite-8k-extreme-20261019 -> origin/codex/infinite-8k-extreme-20261019
+2026-10-21T00:46:12.1290001Z  * [new branch]      codex/infinite-core-rules-20261019 -> origin/codex/infinite-core-rules-20261019
+2026-10-21T00:46:12.1291116Z  * [new branch]      codex/integrate-cosmic-projects-20261019 -> origin/codex/integrate-cosmic-projects-20261019
+2026-10-21T00:46:12.1292317Z  * [new branch]      codex/motor-x-visual-20261018 -> origin/codex/motor-x-visual-20261018
+2026-10-21T00:46:12.1293494Z  * [new branch]      codex/mundo-x-graphics-android-20261019 -> origin/codex/mundo-x-graphics-android-20261019
+2026-10-21T00:46:12.1295022Z  * [new branch]      codex/own-pc-x86-20261019 -> origin/codex/own-pc-x86-20261019
+2026-10-21T00:46:12.1296388Z  * [new branch]      codex/pc-enter-iso-fix-20261019 -> origin/codex/pc-enter-iso-fix-20261019
+2026-10-21T00:46:12.1297881Z  * [new branch]      codex/pc-graphics-iso-fix-20261019 -> origin/codex/pc-graphics-iso-fix-20261019
+2026-10-21T00:46:12.1298890Z  * [new branch]      codex/physics-foundation-20261019 -> origin/codex/physics-foundation-20261019
+2026-10-21T00:46:12.1299981Z  * [new branch]      codex/quantum-echo-android -> origin/codex/quantum-echo-android
+2026-10-21T00:46:12.1300921Z  * [new branch]      codex/rule-render-physics-20261019 -> origin/codex/rule-render-physics-20261019
+2026-10-21T00:46:12.1301874Z  * [new branch]      codex/visual-microlab-20261018 -> origin/codex/visual-microlab-20261018
+2026-10-21T00:46:12.1302970Z  * [new branch]      codex/windows-reference-diagnostics-20261018 -> origin/codex/windows-reference-diagnostics-20261018
+2026-10-21T00:46:12.1304073Z  * [new branch]      codex/xasm-reduced-t    -> origin/codex/xasm-reduced-t
+2026-10-21T00:46:12.1305078Z  * [new branch]      delivery/xlab-0.3.1     -> origin/delivery/xlab-0.3.1
+2026-10-21T00:46:12.1305804Z  * [new branch]      delivery/xlab-0.3.2     -> origin/delivery/xlab-0.3.2
+2026-10-21T00:46:12.1306608Z  * [new branch]      experiment/quantum-core-v0.1 -> origin/experiment/quantum-core-v0.1
+2026-10-21T00:46:12.1308038Z  * [new branch]      experiment/transformer-x-v0.1 -> origin/experiment/transformer-x-v0.1
+2026-10-21T00:46:12.1309198Z  * [new branch]      main                    -> origin/main
+2026-10-21T00:46:12.1310176Z  * [new branch]      phase-performance-trial -> origin/phase-performance-trial
+2026-10-21T00:46:12.1311045Z  * [new tag]         v0.3.1                  -> v0.3.1
+2026-10-21T00:46:12.1311839Z  * [new tag]         v0.3.2                  -> v0.3.2
+2026-10-21T00:46:12.1313997Z [command]/usr/bin/git rev-parse --verify --quiet 2be39f7915001c46b63246b9a9502071b599475d^{object}
+2026-10-21T00:46:12.1334084Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:12.1337359Z ##[endgroup]
+2026-10-21T00:46:12.1338190Z ##[group]Determining the checkout info
+2026-10-21T00:46:12.1339417Z ##[endgroup]
+2026-10-21T00:46:12.1344200Z [command]/usr/bin/git sparse-checkout disable
+2026-10-21T00:46:12.1403342Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-21T00:46:12.1439161Z ##[group]Checking out the ref
+2026-10-21T00:46:12.1441209Z [command]/usr/bin/git checkout --progress --force 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:12.2168100Z Note: switching to '2be39f7915001c46b63246b9a9502071b599475d'.
+2026-10-21T00:46:12.2169011Z 
+2026-10-21T00:46:12.2169640Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-21T00:46:12.2170860Z changes and commit them, and you can discard any commits you make in this
+2026-10-21T00:46:12.2171855Z state without impacting any branches by switching back to a branch.
+2026-10-21T00:46:12.2172435Z 
+2026-10-21T00:46:12.2172838Z If you want to create a new branch to retain commits you create, you may
+2026-10-21T00:46:12.2173914Z do so (now or later) by using -c with the switch command. Example:
+2026-10-21T00:46:12.2174565Z 
+2026-10-21T00:46:12.2174843Z   git switch -c <new-branch-name>
+2026-10-21T00:46:12.2175299Z 
+2026-10-21T00:46:12.2175573Z Or undo this operation with:
+2026-10-21T00:46:12.2175978Z 
+2026-10-21T00:46:12.2176242Z   git switch -
+2026-10-21T00:46:12.2176585Z 
+2026-10-21T00:46:12.2177179Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-21T00:46:12.2178136Z 
+2026-10-21T00:46:12.2178732Z HEAD is now at 2be39f7 fix: define Solar filtering and verify exact reference replays
+2026-10-21T00:46:12.2477522Z ##[endgroup]
+2026-10-21T00:46:12.2923348Z [command]/usr/bin/git log -1 --format=%H
+2026-10-21T00:46:12.2954461Z 2be39f7915001c46b63246b9a9502071b599475d
+2026-10-21T00:46:12.2963189Z ##[group]Removing auth
+2026-10-21T00:46:12.2966121Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:46:12.3000574Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:46:12.3204203Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:46:12.3234152Z http.https://github.com/.extraheader
+2026-10-21T00:46:12.3241676Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-21T00:46:12.3278226Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:46:12.3482386Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:46:12.3518041Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:46:12.3719451Z ##[endgroup]
+2026-10-21T00:46:12.3970798Z ##[group]Run actions/setup-python@v5
+2026-10-21T00:46:12.3971746Z with:
+2026-10-21T00:46:12.3972430Z   python-version: 3.12
+2026-10-21T00:46:12.3973225Z   check-latest: false
+2026-10-21T00:46:12.3980647Z   token: ***
+2026-10-21T00:46:12.3981376Z   update-environment: true
+2026-10-21T00:46:12.3982253Z   allow-prereleases: false
+2026-10-21T00:46:12.3983087Z   freethreaded: false
+2026-10-21T00:46:12.3983859Z ##[endgroup]
+2026-10-21T00:46:12.5099872Z ##[group]Installed versions
+2026-10-21T00:46:12.5431150Z (node:2188) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:46:12.5433533Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:46:12.5434896Z Successfully set up CPython (3.12.15)
+2026-10-21T00:46:12.5436390Z ##[endgroup]
+2026-10-21T00:46:12.5673285Z ##[group]Run mkdir -p infinite-evidence
+2026-10-21T00:46:12.5674344Z [36;1mmkdir -p infinite-evidence[0m
+2026-10-21T00:46:12.5675551Z [36;1mgit rev-parse HEAD > infinite-evidence/source-commit.txt[0m
+2026-10-21T00:46:12.5677493Z [36;1mcmake -S . -B infinite-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON[0m
+2026-10-21T00:46:12.5761096Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:46:12.5762697Z env:
+2026-10-21T00:46:12.5764238Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:12.5766480Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:46:12.5768754Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:12.5770706Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:12.5772940Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:12.5775047Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:46:12.5776788Z ##[endgroup]
+2026-10-21T00:46:14.9856839Z -- The CXX compiler identification is GNU 13.3.0
+2026-10-21T00:46:14.9999867Z -- Detecting CXX compiler ABI info
+2026-10-21T00:46:15.1114646Z -- Detecting CXX compiler ABI info - done
+2026-10-21T00:46:15.1249761Z -- Check for working CXX compiler: /usr/bin/c++ - skipped
+2026-10-21T00:46:15.1255039Z -- Detecting CXX compile features
+2026-10-21T00:46:15.1262943Z -- Detecting CXX compile features - done
+2026-10-21T00:46:15.1412518Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+2026-10-21T00:46:15.3320409Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+2026-10-21T00:46:15.3339510Z -- Found Threads: TRUE
+2026-10-21T00:46:15.5191066Z -- Configuring done (2.7s)
+2026-10-21T00:46:15.5986836Z -- Generating done (0.1s)
+2026-10-21T00:46:15.5988780Z -- Build files have been written to: /home/runner/work/mundo-X/mundo-X/infinite-build
+2026-10-21T00:46:15.6078753Z ##[group]Run python tools/cosmic_source_provenance.py > infinite-evidence/source-provenance.json
+2026-10-21T00:46:15.6079367Z [36;1mpython tools/cosmic_source_provenance.py > infinite-evidence/source-provenance.json[0m
+2026-10-21T00:46:15.6131628Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:46:15.6131946Z env:
+2026-10-21T00:46:15.6132174Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.6132553Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:46:15.6132926Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.6133232Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.6133531Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.6133834Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:46:15.6134098Z ##[endgroup]
+2026-10-21T00:46:15.9495347Z ##[group]Run cmake --build infinite-build --config Release --parallel 2 --target \
+2026-10-21T00:46:15.9495829Z [36;1mcmake --build infinite-build --config Release --parallel 2 --target \[0m
+2026-10-21T00:46:15.9496212Z [36;1m  mundo_x_infinite test_infinite_address test_infinite_core \[0m
+2026-10-21T00:46:15.9496618Z [36;1m  test_infinite_tensor test_infinite_session test_infinite_bridge infinite_scale \[0m
+2026-10-21T00:46:15.9497077Z [36;1m  test_ether_core test_ether_frame test_ether_fusion test_ether_batch \[0m
+2026-10-21T00:46:15.9497681Z [36;1m  test_compact_measurement mundo_x_native_tests \[0m
+2026-10-21T00:46:15.9498042Z [36;1m  test_core_1000 test_engine_session \[0m
+2026-10-21T00:46:15.9498295Z [36;1m  2>&1 | tee infinite-evidence/build.log[0m
+2026-10-21T00:46:15.9545752Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:46:15.9546031Z env:
+2026-10-21T00:46:15.9546250Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.9546653Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:46:15.9546997Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.9547502Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.9547935Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:46:15.9548352Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:46:15.9548855Z ##[endgroup]
+2026-10-21T00:46:15.9837188Z [ 50%] Building CXX object CMakeFiles/mundo_x_infinite.dir/native/src/infinite_runner.cpp.o
+2026-10-21T00:46:17.0179380Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:17.0180075Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:17.0180559Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+2026-10-21T00:46:17.0181066Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+2026-10-21T00:46:17.0181501Z                  from /home/runner/work/mundo-X/mundo-X/native/src/infinite_runner.cpp:1:
+2026-10-21T00:46:17.0182884Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:20.5452833Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:20.5453544Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:20.5453833Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:20.5454237Z [100%] Linking CXX executable mundo_x_infinite
+2026-10-21T00:46:20.5961246Z [100%] Built target mundo_x_infinite
+2026-10-21T00:46:20.6249925Z [100%] Building CXX object CMakeFiles/test_infinite_address.dir/native/tests/infinite_address.cpp.o
+2026-10-21T00:46:21.6480372Z [100%] Linking CXX executable test_infinite_address
+2026-10-21T00:46:21.6956922Z [100%] Built target test_infinite_address
+2026-10-21T00:46:21.7134986Z [100%] Building CXX object CMakeFiles/test_infinite_core.dir/native/tests/infinite_core.cpp.o
+2026-10-21T00:46:22.1422601Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:22.1423554Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:22.1424278Z                  from /home/runner/work/mundo-X/mundo-X/native/tests/infinite_core.cpp:18:
+2026-10-21T00:46:22.1426111Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:22.1454683Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:22.1455662Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:22.1456101Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:26.6180207Z [100%] Linking CXX executable test_infinite_core
+2026-10-21T00:46:26.6723051Z [100%] Built target test_infinite_core
+2026-10-21T00:46:26.6901860Z [ 50%] Building CXX object CMakeFiles/test_infinite_tensor.dir/native/tests/infinite_tensor.cpp.o
+2026-10-21T00:46:27.0050506Z In file included from /home/runner/work/mundo-X/mundo-X/native/tests/infinite_tensor.cpp:13:
+2026-10-21T00:46:27.0051850Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:27.0052853Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:27.0053415Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:27.0053689Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:28.1501443Z [100%] Linking CXX executable test_infinite_tensor
+2026-10-21T00:46:28.1987964Z [100%] Built target test_infinite_tensor
+2026-10-21T00:46:28.3021945Z [100%] Building CXX object CMakeFiles/test_infinite_session.dir/native/tests/infinite_session.cpp.o
+2026-10-21T00:46:28.5918657Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:28.5919571Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:28.5920338Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+2026-10-21T00:46:28.5921117Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+2026-10-21T00:46:28.5921848Z                  from /home/runner/work/mundo-X/mundo-X/native/tests/infinite_session.cpp:1:
+2026-10-21T00:46:28.5923585Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:28.5925080Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:28.5926003Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:28.5926496Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:32.7455908Z [100%] Linking CXX executable test_infinite_session
+2026-10-21T00:46:32.7961811Z [100%] Built target test_infinite_session
+2026-10-21T00:46:32.8137638Z [  0%] Building CXX object CMakeFiles/mundo_x_graphics_core.dir/native/src/graphics_core_bridge.cpp.o
+2026-10-21T00:46:32.8139843Z [ 25%] Building CXX object CMakeFiles/mundo_x_graphics_core.dir/native/src/infinite_bridge.cpp.o
+2026-10-21T00:46:33.2315489Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:33.2316665Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/engine_session.hpp:5,
+2026-10-21T00:46:33.2317782Z                  from /home/runner/work/mundo-X/mundo-X/native/src/graphics_core_bridge.cpp:1:
+2026-10-21T00:46:33.2319594Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:33.2321080Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:33.2321929Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:33.2322799Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:33.2509623Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:33.2510566Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:33.2511333Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+2026-10-21T00:46:33.2512110Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+2026-10-21T00:46:33.2512779Z                  from /home/runner/work/mundo-X/mundo-X/native/src/infinite_bridge.cpp:2:
+2026-10-21T00:46:33.2514483Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:33.2515994Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:33.2516858Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:33.2517448Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:37.0135127Z [ 50%] Linking CXX static library libmundo_x_graphics_core.a
+2026-10-21T00:46:39.1481255Z [ 50%] Built target mundo_x_graphics_core
+2026-10-21T00:46:39.1548581Z [ 75%] Building CXX object CMakeFiles/test_infinite_bridge.dir/native/tests/infinite_bridge.cpp.o
+2026-10-21T00:46:39.4796409Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:39.4797520Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:39.4798307Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_program.hpp:3,
+2026-10-21T00:46:39.4799078Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_session.hpp:3,
+2026-10-21T00:46:39.4799828Z                  from /home/runner/work/mundo-X/mundo-X/native/tests/infinite_bridge.cpp:2:
+2026-10-21T00:46:39.4801494Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:39.4803028Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:39.4803924Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:39.4804330Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:43.1018024Z [100%] Linking CXX executable test_infinite_bridge
+2026-10-21T00:46:43.1542012Z [100%] Built target test_infinite_bridge
+2026-10-21T00:46:43.1723042Z [  0%] Building CXX object CMakeFiles/infinite_scale.dir/native/tests/infinite_scale.cpp.o
+2026-10-21T00:46:43.5046420Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:43.5047021Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:43.5047644Z                  from /home/runner/work/mundo-X/mundo-X/native/tests/infinite_scale.cpp:1:
+2026-10-21T00:46:43.5048814Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:43.5049775Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:43.5050333Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:43.5050610Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:46.5537050Z [100%] Linking CXX executable infinite_scale
+2026-10-21T00:46:46.6074397Z [100%] Built target infinite_scale
+2026-10-21T00:46:46.6257546Z [ 50%] Building CXX object CMakeFiles/test_ether_core.dir/native/tests/ether_core.cpp.o
+2026-10-21T00:46:48.5520109Z [100%] Linking CXX executable test_ether_core
+2026-10-21T00:46:48.6012824Z [100%] Built target test_ether_core
+2026-10-21T00:46:48.6189319Z [  0%] Building CXX object CMakeFiles/test_ether_frame.dir/native/tests/ether_frame.cpp.o
+2026-10-21T00:46:48.8998494Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:48.8999113Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:48.8999558Z                  from /home/runner/work/mundo-X/mundo-X/native/tests/ether_frame.cpp:1:
+2026-10-21T00:46:48.9000833Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:48.9001812Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:48.9002367Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:48.9002640Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:52.2945340Z [100%] Linking CXX executable test_ether_frame
+2026-10-21T00:46:52.3458863Z [100%] Built target test_ether_frame
+2026-10-21T00:46:52.3635440Z [ 50%] Building CXX object CMakeFiles/test_ether_fusion.dir/native/tests/ether_fusion.cpp.o
+2026-10-21T00:46:52.7085800Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:46:52.7086716Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/infinite_core.hpp:4,
+2026-10-21T00:46:52.7087622Z                  from /home/runner/work/mundo-X/mundo-X/native/tests/ether_fusion.cpp:1:
+2026-10-21T00:46:52.7089366Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:46:52.7090916Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:46:52.7091817Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:46:52.7092218Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:46:57.9498994Z [100%] Linking CXX executable test_ether_fusion
+2026-10-21T00:46:58.0072121Z [100%] Built target test_ether_fusion
+2026-10-21T00:46:58.0249599Z [  0%] Building CXX object CMakeFiles/test_ether_batch.dir/native/tests/ether_batch.cpp.o
+2026-10-21T00:47:01.8487075Z [100%] Linking CXX executable test_ether_batch
+2026-10-21T00:47:01.9004946Z [100%] Built target test_ether_batch
+2026-10-21T00:47:01.9183276Z [ 50%] Building CXX object CMakeFiles/test_compact_measurement.dir/native/tests/compact_measurement.cpp.o
+2026-10-21T00:47:02.2358393Z In file included from /home/runner/work/mundo-X/mundo-X/native/tests/compact_measurement.cpp:13:
+2026-10-21T00:47:02.2360244Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:47:02.2361761Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:47:02.2362680Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:47:02.2363079Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:47:03.2205463Z [100%] Linking CXX executable test_compact_measurement
+2026-10-21T00:47:03.2745425Z [100%] Built target test_compact_measurement
+2026-10-21T00:47:03.2924124Z [ 50%] Building CXX object CMakeFiles/mundo_x_native_tests.dir/tests/native_tests.cpp.o
+2026-10-21T00:47:03.7073293Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/exact_t_experiment.hpp:21,
+2026-10-21T00:47:03.7074137Z                  from /home/runner/work/mundo-X/mundo-X/tests/native_tests.cpp:14:
+2026-10-21T00:47:03.7075789Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:47:03.7077532Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:47:03.7078448Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:47:03.7078860Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:47:06.4856422Z [100%] Linking CXX executable mundo_x_native_tests
+2026-10-21T00:47:06.5424392Z [100%] Built target mundo_x_native_tests
+2026-10-21T00:47:06.5649202Z [ 66%] Built target mundo_x_graphics_core
+2026-10-21T00:47:06.5711487Z [100%] Building CXX object CMakeFiles/test_core_1000.dir/native/tests/core_1000.cpp.o
+2026-10-21T00:47:06.8692357Z In file included from /home/runner/work/mundo-X/mundo-X/native/tests/core_1000.cpp:5:
+2026-10-21T00:47:06.8694170Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:47:06.8695704Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:47:06.8696990Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:47:06.8697656Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:47:08.9614416Z [100%] Linking CXX executable test_core_1000
+2026-10-21T00:47:09.0125401Z [100%] Built target test_core_1000
+2026-10-21T00:47:09.0324405Z [ 50%] Built target mundo_x_graphics_core
+2026-10-21T00:47:09.0386057Z [ 75%] Building CXX object CMakeFiles/test_engine_session.dir/native/tests/engine_session.cpp.o
+2026-10-21T00:47:09.3464175Z In file included from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/pauli_observer.hpp:6,
+2026-10-21T00:47:09.3464773Z                  from /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/engine_session.hpp:5,
+2026-10-21T00:47:09.3465230Z                  from /home/runner/work/mundo-X/mundo-X/native/tests/engine_session.cpp:1:
+2026-10-21T00:47:09.3466547Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp: In member function ‘std::array<float, 8> mundo_x::CompactCore::visual_metrics() const’:
+2026-10-21T00:47:09.3467738Z /home/runner/work/mundo-X/mundo-X/native/include/mundo_x/compact_core.hpp:357:34: warning: suggest parentheses around arithmetic in operand of ‘|’ [-Wparentheses]
+2026-10-21T00:47:09.3468298Z   357 |             ((r + 1ULL) << 2ULL) ^ ((q + 1ULL) << 17ULL);
+2026-10-21T00:47:09.3468570Z       |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+2026-10-21T00:47:10.9503350Z [100%] Linking CXX executable test_engine_session
+2026-10-21T00:47:10.9969813Z [100%] Built target test_engine_session
+2026-10-21T00:47:11.0307464Z ##[group]Run ctest --test-dir infinite-build -C Release --output-on-failure \
+2026-10-21T00:47:11.0308043Z [36;1mctest --test-dir infinite-build -C Release --output-on-failure \[0m
+2026-10-21T00:47:11.0308509Z [36;1m  -R '^(infinite_|ether_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \[0m
+2026-10-21T00:47:11.0309025Z [36;1m  --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \[0m
+2026-10-21T00:47:11.0309350Z [36;1m  | tee infinite-evidence/ctest.log[0m
+2026-10-21T00:47:11.0355760Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-21T00:47:11.0356047Z env:
+2026-10-21T00:47:11.0356279Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:11.0356650Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:47:11.0357018Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:11.0357490Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:11.0357847Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:11.0358160Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:47:11.0358427Z ##[endgroup]
+2026-10-21T00:47:11.1570958Z Internal ctest changing into directory: /home/runner/work/mundo-X/mundo-X/infinite-build
+2026-10-21T00:47:11.1632433Z Test project /home/runner/work/mundo-X/mundo-X/infinite-build
+2026-10-21T00:47:11.1684243Z       Start 17: compact_measurement
+2026-10-21T00:47:11.1724985Z  1/19 Test #17: compact_measurement ..............   Passed    0.00 sec
+2026-10-21T00:47:11.1725468Z       Start 22: engine_session
+2026-10-21T00:47:11.2387581Z  2/19 Test #22: engine_session ...................   Passed    0.07 sec
+2026-10-21T00:47:11.2392254Z       Start 28: core_1000
+2026-10-21T00:47:11.6588860Z  3/19 Test #28: core_1000 ........................   Passed    0.42 sec
+2026-10-21T00:47:11.6591210Z       Start 30: infinite_address
+2026-10-21T00:47:11.6610180Z  4/19 Test #30: infinite_address .................   Passed    0.00 sec
+2026-10-21T00:47:11.6610656Z       Start 31: infinite_core
+2026-10-21T00:47:11.8187510Z  5/19 Test #31: infinite_core ....................   Passed    0.16 sec
+2026-10-21T00:47:11.8188071Z       Start 32: infinite_tensor
+2026-10-21T00:47:11.8254156Z  6/19 Test #32: infinite_tensor ..................   Passed    0.01 sec
+2026-10-21T00:47:11.8254640Z       Start 33: infinite_session
+2026-10-21T00:47:12.0167582Z  7/19 Test #33: infinite_session .................   Passed    0.19 sec
+2026-10-21T00:47:12.0167994Z       Start 34: infinite_bridge
+2026-10-21T00:47:12.0203735Z  8/19 Test #34: infinite_bridge ..................   Passed    0.00 sec
+2026-10-21T00:47:12.0204194Z       Start 35: ether_core
+2026-10-21T00:47:12.2978307Z  9/19 Test #35: ether_core .......................   Passed    0.28 sec
+2026-10-21T00:47:12.2982208Z       Start 36: ether_frame
+2026-10-21T00:47:12.3005618Z 10/19 Test #36: ether_frame ......................   Passed    0.00 sec
+2026-10-21T00:47:12.3006129Z       Start 37: ether_fusion
+2026-10-21T00:47:12.5474491Z 11/19 Test #37: ether_fusion .....................   Passed    0.25 sec
+2026-10-21T00:47:12.5475055Z Unable to find executable: /home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5475551Z       Start 38: ether_rules
+2026-10-21T00:47:12.5475901Z Unable to find executable: /home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5478602Z Could not find executable /home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5479045Z Looked in the following places:
+2026-10-21T00:47:12.5479335Z /home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5479684Z /home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5480036Z /home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_ether_rules
+2026-10-21T00:47:12.5480707Z /home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_ether_rules
+2026-10-21T00:47:12.5481097Z Release//home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5481472Z Release//home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5481827Z home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5482166Z home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5482672Z home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_ether_rules
+2026-10-21T00:47:12.5483256Z home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_ether_rules
+2026-10-21T00:47:12.5483865Z Release/home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5484474Z Release/home/runner/work/mundo-X/mundo-X/infinite-build/test_ether_rules
+2026-10-21T00:47:12.5484898Z 12/19 Test #38: ether_rules ......................***Not Run   0.00 sec
+2026-10-21T00:47:12.5485182Z       Start 40: infinite_extreme
+2026-10-21T00:47:12.5485535Z Could not find executable /home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5485906Z Looked in the following places:
+2026-10-21T00:47:12.5486187Z /home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5486549Z /home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5486935Z /home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_infinite_extreme
+2026-10-21T00:47:12.5487509Z /home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_infinite_extreme
+2026-10-21T00:47:12.5487907Z Release//home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5488292Z Release//home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5488664Z home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5489015Z home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5489385Z home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_infinite_extreme
+2026-10-21T00:47:12.5489773Z home/runner/work/mundo-X/mundo-X/infinite-build/Release/test_infinite_extreme
+2026-10-21T00:47:12.5490156Z Release/home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5490738Z Release/home/runner/work/mundo-X/mundo-X/infinite-build/test_infinite_extreme
+2026-10-21T00:47:12.5491103Z 13/19 Test #40: infinite_extreme .................***Not Run   0.00 sec
+2026-10-21T00:47:12.5491388Z       Start 42: ether_batch
+2026-10-21T00:47:12.7749745Z 14/19 Test #42: ether_batch ......................   Passed    0.23 sec
+2026-10-21T00:47:12.7752369Z       Start 43: ether_example
+2026-10-21T00:47:12.7770247Z 15/19 Test #43: ether_example ....................   Passed    0.00 sec
+2026-10-21T00:47:12.7772238Z       Start 44: infinite_example_zero
+2026-10-21T00:47:12.7785730Z 16/19 Test #44: infinite_example_zero ............   Passed    0.00 sec
+2026-10-21T00:47:12.7788351Z       Start 45: infinite_example_bell
+2026-10-21T00:47:12.7803054Z 17/19 Test #45: infinite_example_bell ............   Passed    0.00 sec
+2026-10-21T00:47:12.7803521Z       Start 46: infinite_cli_contract
+2026-10-21T00:47:12.9645315Z 18/19 Test #46: infinite_cli_contract ............   Passed    0.18 sec
+2026-10-21T00:47:12.9645862Z       Start 52: native_core_and_xasm
+2026-10-21T00:47:12.9847717Z 19/19 Test #52: native_core_and_xasm .............   Passed    0.02 sec
+2026-10-21T00:47:12.9849564Z 
+2026-10-21T00:47:12.9849853Z 89% tests passed, 2 tests failed out of 19
+2026-10-21T00:47:12.9850115Z 
+2026-10-21T00:47:12.9850237Z Total Test time (real) =   1.82 sec
+2026-10-21T00:47:12.9850448Z 
+2026-10-21T00:47:12.9850546Z The following tests FAILED:
+2026-10-21T00:47:12.9850826Z 	 38 - ether_rules (Not Run)
+2026-10-21T00:47:12.9851042Z 	 40 - infinite_extreme (Not Run)
+2026-10-21T00:47:12.9929417Z Errors while running CTest
+2026-10-21T00:47:13.0914012Z ##[error]Process completed with exit code 8.
+2026-10-21T00:47:13.1005734Z ##[group]Run actions/upload-artifact@v4
+2026-10-21T00:47:13.1005965Z with:
+2026-10-21T00:47:13.1006146Z   name: InfiniteCore-ubuntu-latest
+2026-10-21T00:47:13.1006375Z   path: infinite-evidence/
+2026-10-21T00:47:13.1006570Z   if-no-files-found: warn
+2026-10-21T00:47:13.1006763Z   compression-level: 6
+2026-10-21T00:47:13.1006971Z   overwrite: false
+2026-10-21T00:47:13.1007152Z   include-hidden-files: false
+2026-10-21T00:47:13.1007497Z env:
+2026-10-21T00:47:13.1007711Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:13.1008058Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-10-21T00:47:13.1008412Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:13.1008720Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:13.1009030Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-10-21T00:47:13.1009346Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-10-21T00:47:13.1009648Z ##[endgroup]
+2026-10-21T00:47:13.2440318Z (node:2837) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-21T00:47:13.2441063Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-21T00:47:13.2522482Z With the provided path, there will be 5 files uploaded
+2026-10-21T00:47:13.2523059Z Artifact name is valid!
+2026-10-21T00:47:13.2523325Z Root directory input is valid!
+2026-10-21T00:47:13.4273148Z Beginning upload of artifact content to blob storage
+2026-10-21T00:47:13.4471411Z (node:2837) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-21T00:47:13.4978278Z Uploaded bytes 10680
+2026-10-21T00:47:13.5138532Z Finished uploading artifact content to blob storage!
+2026-10-21T00:47:13.5139450Z SHA256 digest of uploaded artifact zip is fab3e822dc3d3ef6705b556ce610522e81f2d30adbd4826313f02c3e251d5a04
+2026-10-21T00:47:13.5140852Z Finalizing artifact upload
+2026-10-21T00:47:13.7641661Z Artifact InfiniteCore-ubuntu-latest.zip successfully finalized. Artifact ID 12311297923
+2026-10-21T00:47:13.7642733Z Artifact InfiniteCore-ubuntu-latest has been successfully uploaded! Final size is 10680 bytes. Artifact ID is 12311297923
+2026-10-21T00:47:13.7646911Z Artifact download URL: https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264232/artifacts/12311297923
+2026-10-21T00:47:13.7844854Z Post job cleanup.
+2026-10-21T00:47:13.8598070Z [command]/usr/bin/git version
+2026-10-21T00:47:13.8639283Z git version 2.55.0
+2026-10-21T00:47:13.8663754Z Copying '/home/runner/.gitconfig' to '/home/runner/work/_temp/11cb15f0-b16c-4a0f-b93a-3214233362b0/.gitconfig'
+2026-10-21T00:47:13.8671491Z Temporarily overriding HOME='/home/runner/work/_temp/11cb15f0-b16c-4a0f-b93a-3214233362b0' before making global git config changes
+2026-10-21T00:47:13.8673045Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T00:47:13.8676143Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/mundo-X/mundo-X
+2026-10-21T00:47:13.8713860Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T00:47:13.8746148Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T00:47:13.8975720Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T00:47:13.9006482Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T00:47:13.9235410Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T00:47:13.9270598Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T00:47:13.9670580Z Cleaning up orphan processes
+2026-10-21T00:47:13.9937416Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+

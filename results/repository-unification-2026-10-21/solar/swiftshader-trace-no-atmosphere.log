@@ -1,0 +1,5 @@
+{"mismatch_scene": 0, "kind": "color", "pixels": 8}
+{"mismatch_scene": 4, "kind": "color", "pixels": 14}
+{"mismatch_scene": 5, "kind": "color", "pixels": 27}
+{"mismatch_scene": 8, "kind": "color", "pixels": 21}
+{"median_ms": {"before": 116.45334700000001, "after": 114.578899}, "different_pixels": {"color": 70}, "max_color_channel_delta": 178, "rss_peak_kib": 495696}

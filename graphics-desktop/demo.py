@@ -2,6 +2,7 @@
 """Render or edit a .cosmic project with the existing core/observer pair."""
 import argparse
 import json
+import math
 from pathlib import Path
 import time
 
@@ -43,7 +44,7 @@ def main():
                         help="Expand an imported project, adding |0> qubits while preserving its state and world")
     parser.add_argument("--seed", type=int, help="Unsigned 32-bit procedural seed (new project default: 2026)")
     parser.add_argument("--coupling", type=float, help="Graphic coupling -.25...25 (new project default: .25)")
-    parser.add_argument("--view", choices=("overview", "street"), help="Select an orbit camera")
+    parser.add_argument("--view", choices=("overview", "street", "mirror"), help="Select an orbit camera or the mirror starting view")
     parser.add_argument("--gate", action="append", default=[], type=gate, help="Apply gate, e.g. H:0 or CX:0:1; repeatable")
     parser.add_argument("--edit", action="append", default=[], type=edit, help="Edit ID:STATE; states 1..6 raise,7 hide,0 restore")
     parser.add_argument("--time", type=float, help="Fixed animation time stored in the project")
@@ -51,6 +52,12 @@ def main():
     parser.add_argument("--height", type=int, default=360)
     parser.add_argument("--output", type=Path, default=Path("cosmic-observation.png"))
     parser.add_argument("--no-render", action="store_true", help="Edit/export without creating a GLES context")
+    parser.add_argument("--mirrors", choices=("off","floor","pair"), default="off",
+                        help="Observer optics, separate from .cosmic: floor or facing mirrors")
+    parser.add_argument("--mirror-budget", type=int, default=16, help="Explicit bounce work budget 1..64")
+    parser.add_argument("--mirror-reflectance", type=float, default=1., help="Reflection weight 0..1")
+    parser.add_argument("--no-mirror-fold", action="store_true", help="Reference path: evaluate every bounce")
+    parser.add_argument("--cosmic-style", action="store_true", help="Use COSMIC materials and sky")
     args = parser.parse_args()
     if args.infinite and (args.project or args.qubits is not None or args.expand_qubits is not None):
         parser.error("--infinite creates a new addressed project; omit --project/--qubits/--expand-qubits")
@@ -97,7 +104,12 @@ def main():
             if args.coupling is not None:
                 session.scene.coupling = args.coupling
             if args.view:
-                session.camera = {"mode": "orbit", "overview": args.view == "overview", "yaw": .67, "pitch": .65, "zoom": 1.}
+                if args.view=="mirror":
+                    extent=math.ceil(math.sqrt(session.scene.count))*1.1+2.2
+                    session.camera={"mode":"lookAt","eye":[0,3.8,extent*7/11],"target":[extent,1.2,-extent*2/11],
+                                    "near":.02,"far":10000.,"fov":72.}
+                else:
+                    session.camera = {"mode": "orbit", "overview": args.view == "overview", "yaw": .67, "pitch": .65, "zoom": 1.}
             if args.time is not None:
                 session.set_time(args.time)
             if args.address is not None:
@@ -122,9 +134,15 @@ def main():
                 from PIL import Image
                 engine = QuantumGraphicsEngine(session.scene, args.width, args.height)
                 try:
+                    engine.renderer.set_reflections(("off","floor","pair").index(args.mirrors),
+                        budget=args.mirror_budget,fold=not args.no_mirror_fold,reflectance=args.mirror_reflectance)
                     before = session.core.snapshot()
                     frame, timing = engine.observe(session.camera_for(args.width, args.height),
-                                                   t=session.time, selected=session.selected_id)
+                                                   t=session.time, selected=session.selected_id,
+                                                   presentation=int(args.cosmic_style))
+                    report["observer_optics"]={"mode":args.mirrors,"budget":args.mirror_budget,
+                        "fold":not args.no_mirror_fold,"reflectance":args.mirror_reflectance,
+                        "saved_in_cosmic":False}
                     if session.core.snapshot() != before:
                         raise RuntimeError("Observing changed the authoritative core")
                     Image.fromarray(frame).save(args.output)

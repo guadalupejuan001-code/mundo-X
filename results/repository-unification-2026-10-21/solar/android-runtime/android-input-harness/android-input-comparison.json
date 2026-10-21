@@ -1,0 +1,646 @@
+{
+  "scope": "All recorded Android input fields compared individually, exact IEEE-bit encoding copied from unchanged instrumentation; only preparation, no GL calls",
+  "cases": [
+    {
+      "case": 0,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "89444ec7430ced497a739ddb5df50906d67521ac37268e6c958152e74c5aec38",
+            "android": "c99650f623c3f8df325842606f377fb28b4049fa1bd08d13061bcc9ffefafaa5"
+          }
+        }
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "89444ec7430ced497a739ddb5df50906d67521ac37268e6c958152e74c5aec38",
+            "android": "c99650f623c3f8df325842606f377fb28b4049fa1bd08d13061bcc9ffefafaa5"
+          }
+        }
+      }
+    },
+    {
+      "case": 1,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "e40c152fd42729fe12ae6b0b2418fcd170e20697a86175b82b5aa839928699c6",
+            "android": "d4d50dec86a9873f5484cd8d911e1a85b0b277793a5150dc6b389faabe59c1ff"
+          },
+          "cameraEye": {
+            "host": "b33a214a52b1862f3ba8282b8868fb94f2d6a35e7e643ea873a9b195ec1dcdea",
+            "android": "685bbf8ef23f62ffc3711c83e2788a9836401259b977cec4f2a998fce3d53f10"
+          }
+        }
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "e40c152fd42729fe12ae6b0b2418fcd170e20697a86175b82b5aa839928699c6",
+            "android": "d4d50dec86a9873f5484cd8d911e1a85b0b277793a5150dc6b389faabe59c1ff"
+          },
+          "cameraEye": {
+            "host": "b33a214a52b1862f3ba8282b8868fb94f2d6a35e7e643ea873a9b195ec1dcdea",
+            "android": "685bbf8ef23f62ffc3711c83e2788a9836401259b977cec4f2a998fce3d53f10"
+          }
+        }
+      }
+    },
+    {
+      "case": 2,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "f30f5e3b704784dd9cccca0504ba2a4577e364c24515e4801f6cb1bbce9a3875",
+            "android": "aa818dcf050f38074e7c8dd190e40a9ca4317bda8b9664f625033190a2c99b07"
+          }
+        }
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "f30f5e3b704784dd9cccca0504ba2a4577e364c24515e4801f6cb1bbce9a3875",
+            "android": "aa818dcf050f38074e7c8dd190e40a9ca4317bda8b9664f625033190a2c99b07"
+          }
+        }
+      }
+    },
+    {
+      "case": 3,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "c451291c74169d1004936ed8744dc7791447b17ca8029bdc19bd02cf22bf387c",
+            "android": "ea28d231ed8c96798f88a9d07811af08b2785677125b037c56274dd1ba5bbb88"
+          }
+        }
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "c451291c74169d1004936ed8744dc7791447b17ca8029bdc19bd02cf22bf387c",
+            "android": "ea28d231ed8c96798f88a9d07811af08b2785677125b037c56274dd1ba5bbb88"
+          }
+        }
+      }
+    },
+    {
+      "case": 4,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "c451291c74169d1004936ed8744dc7791447b17ca8029bdc19bd02cf22bf387c",
+            "android": "ea28d231ed8c96798f88a9d07811af08b2785677125b037c56274dd1ba5bbb88"
+          }
+        }
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "c451291c74169d1004936ed8744dc7791447b17ca8029bdc19bd02cf22bf387c",
+            "android": "ea28d231ed8c96798f88a9d07811af08b2785677125b037c56274dd1ba5bbb88"
+          }
+        }
+      }
+    },
+    {
+      "case": 5,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "c451291c74169d1004936ed8744dc7791447b17ca8029bdc19bd02cf22bf387c",
+            "android": "ea28d231ed8c96798f88a9d07811af08b2785677125b037c56274dd1ba5bbb88"
+          }
+        }
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "c451291c74169d1004936ed8744dc7791447b17ca8029bdc19bd02cf22bf387c",
+            "android": "ea28d231ed8c96798f88a9d07811af08b2785677125b037c56274dd1ba5bbb88"
+          }
+        }
+      }
+    },
+    {
+      "case": 6,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "orbitCache",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {}
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "orbitCache",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {}
+      }
+    },
+    {
+      "case": 7,
+      "field_count": 29,
+      "before": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "d8a0c3bed186859899df68177d2df31d63e4df840ee66c2ffed1d3f1c384b5d8",
+            "android": "58407aa91f8e3f6bcc2083bb2533955c79d432b94fe8ab41fa19995043c6137f"
+          }
+        }
+      },
+      "after": {
+        "matched": [
+          "packedBodies",
+          "appearance",
+          "colors",
+          "axes",
+          "poleBasis",
+          "atmosphere",
+          "atmosphereColors",
+          "layers",
+          "quantum",
+          "ether",
+          "forward",
+          "right",
+          "up",
+          "vp",
+          "cameraEye",
+          "jd",
+          "clockSeconds",
+          "entryAltitude",
+          "near",
+          "far",
+          "aspect",
+          "lines",
+          "points",
+          "paused",
+          "fields",
+          "wind",
+          "orbits",
+          "entryMode"
+        ],
+        "differed": {
+          "orbitCache": {
+            "host": "d8a0c3bed186859899df68177d2df31d63e4df840ee66c2ffed1d3f1c384b5d8",
+            "android": "58407aa91f8e3f6bcc2083bb2533955c79d432b94fe8ab41fa19995043c6137f"
+          }
+        }
+      }
+    }
+  ],
+  "fixture_sha256": "2071930394ffc1cce2b46693fd350e92531569936f5c6efe43882ce72746afe1",
+  "case7_shader_and_overlay_inputs_exact": true,
+  "case7_remaining_difference": "orbitCache stores double intermediates; rendered float line buffer matches exactly. Not silently treated as full CPU state equality."
+}

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="CosmicXSolar" tests="16" failures="2" errors="0">
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="native_gles_launch_and_textures" time="207.792"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="astronomy_and_magnetic_classification" time="0.011"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="native_ether_fusion_and_readonly_observation" time="2.327"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="quantum_coupled_and_uncoupled_frames" time="6.034"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="intrinsic_and_induced_field_frames" time="15.897"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="solar_wind_layer" time="3.435"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="saturn_rings_and_moon_navigation" time="12.943"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="forward_reverse_and_paused_time" time="9.071"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="real_scale_earth_focus" time="15.007"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="camera_rotation_zoom_pan_and_flight" time="9.430"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="resolution_budget" time="5.950"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="background_resume_preserves_state" time="7.704"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="recreation_and_orientation_preserve_state" time="97.672"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="ultra8k_framebuffer_return_preserves_scene" time="95.320"></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="ultra8k_earth_entry_atmosphere" time="160.349"><failure message="java.lang.AssertionError: Actual GLES framebuffer capture timed out">java.lang.AssertionError: Actual GLES framebuffer capture timed out
+	at com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1134)
+	at com.mundox.solar.SolarInstrumentation.await(SolarInstrumentation.java:980)
+	at com.mundox.solar.SolarInstrumentation.frame(SolarInstrumentation.java:967)
+	at com.mundox.solar.SolarInstrumentation.ultraEntry(SolarInstrumentation.java:851)
+	at com.mundox.solar.SolarInstrumentation.$r8$lambda$UPqC1OEgeJB9T5Mzi3BACcf0QfQ(Unknown Source:0)
+	at com.mundox.solar.SolarInstrumentation$$ExternalSyntheticLambda21.run(D8$$SyntheticClass:0)
+	at com.mundox.solar.SolarInstrumentation.runCase(SolarInstrumentation.java:1093)
+	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:119)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+</failure></testcase>
+  <testcase classname="com.mundox.solar.SolarInstrumentation" name="instrumentation_setup_or_reporting" time="0.000"><failure message="java.lang.AssertionError: GL command timed out">java.lang.AssertionError: GL command timed out
+	at com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1134)
+	at com.mundox.solar.SolarInstrumentation.await(SolarInstrumentation.java:980)
+	at com.mundox.solar.SolarInstrumentation.gl(SolarInstrumentation.java:946)
+	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:133)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+</failure></testcase>
+</testsuite>

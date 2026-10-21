@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "case": "exact_rgba",
+      "passed": true
+    },
+    {
+      "case": "one_alpha_byte_rejected",
+      "passed": true
+    },
+    {
+      "case": "unstable_replay_rejected",
+      "passed": true
+    },
+    {
+      "case": "driver_mismatch_rejected",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-10-21T00:18:37.461Z",
+  "repository": "guadalupejuan001-code/mundo-X",
+  "branch": "main",
+  "branch_metadata": {
+    "url": "https://api.github.com/repos/guadalupejuan001-code/mundo-X/branches/main",
+    "name": "main",
+    "sha": "7b028db2344912b2ab86a0affa2a1fe56180922b",
+    "protected": false,
+    "protection": {
+      "enabled": false,
+      "required_status_checks": {
+        "enforcement_level": "off",
+        "contexts": [],
+        "checks": []
+      }
+    }
+  },
+  "rulesets": {
+    "url": "https://api.github.com/repos/guadalupejuan001-code/mundo-X/rulesets?includes_parents=true&per_page=100",
+    "includes_parents": true,
+    "records": []
+  },
+  "administrative_protection_read": {
+    "url": "https://api.github.com/repos/guadalupejuan001-code/mundo-X/branches/main/protection",
+    "error_code": "FORBIDDEN",
+    "error_data": {
+      "message": "Resource not accessible by integration",
+      "documentation_url": "https://docs.github.com/rest/branches/branch-protection#get-branch-protection",
+      "status": "403"
+    }
+  },
+  "effective_branch_rules_read": {
+    "url": "https://api.github.com/repos/guadalupejuan001-code/mundo-X/rules/branches/main",
+    "error_code": "INVALID_ARGUMENT",
+    "message": "The connector does not allow this endpoint; no alternate access attempted."
+  },
+  "required_contexts_from_branch_metadata": [],
+  "required_checks_from_branch_metadata": [],
+  "conclusion": "Readable branch metadata marks main unprotected, required status enforcement off, and no required contexts/checks; repository rulesets including parents return an empty list. These sources expose no mandatory status checks.",
+  "limitation": "The administrative branch-protection endpoint returns 403 Resource not accessible by integration. This inventory does not claim access to that endpoint or change repository protection.",
+  "mutation_performed": false
+}

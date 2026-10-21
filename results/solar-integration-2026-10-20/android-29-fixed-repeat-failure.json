@@ -1,0 +1,27 @@
+{
+  "ram_mb": 2048,
+  "software_gles": "swiftshader",
+  "virtualization": "TCG",
+  "system_image": "system-images;android-29;default;x86_64",
+  "status": "blocked_or_failed",
+  "cases": [
+    {
+      "version": "before",
+      "apks": {
+        "app-debug.apk": "433ef4f6f4265f5c3de1355adeda2eafd590e7871d066c4c153b6689600a37cc",
+        "app-debug-androidTest.apk": "bcae85309861c467a57c6e723c70c95d759083ded7ae300954b755bd07204458"
+      },
+      "result": {
+        "cases": [],
+        "renderer": "Android Emulator OpenGL ES Translator (Google SwiftShader)",
+        "gles": "OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)",
+        "scope": "Android runtime; GPU/virtualization recorded separately; not physical Samsung FPS",
+        "moonPoleFixtureJulianDate": 2461331,
+        "status": "failed",
+        "error": "java.lang.AssertionError: GL work failed\n\tat com.mundox.solar.SolarPerformanceChecks.gl(SolarPerformanceChecks.java:33)\n\tat com.mundox.solar.SolarPerformanceChecks.run(SolarPerformanceChecks.java:91)\n\tat com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:79)\n\tat android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2189)\nCaused by: java.lang.AssertionError: Repeated fixed scene changed\n\tat com.mundox.solar.SolarPerformanceChecks.lambda$run$3(SolarPerformanceChecks.java:116)\n\tat com.mundox.solar.SolarPerformanceChecks$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)\n\tat com.mundox.solar.SolarPerformanceChecks.lambda$gl$0(SolarPerformanceChecks.java:31)\n\tat com.mundox.solar.SolarPerformanceChecks$$ExternalSyntheticLambda5.run(D8$$SyntheticClass:0)\n\tat android.opengl.GLSurfaceView$GLThread.guardedRun(GLSurfaceView.java:1502)\n\tat android.opengl.GLSurfaceView$GLThread.run(GLSurfaceView.java:1272)\n"
+      }
+    }
+  ],
+  "boot_seconds": 151.8660034530003,
+  "error": "RuntimeError: Instrumentation failed for before"
+}

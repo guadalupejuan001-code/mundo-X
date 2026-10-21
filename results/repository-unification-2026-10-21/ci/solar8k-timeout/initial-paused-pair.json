@@ -1,0 +1,12 @@
+{
+  "format": "RGBA8, bottom row first",
+  "firstWidth": 320,
+  "firstHeight": 640,
+  "secondWidth": 320,
+  "secondHeight": 640,
+  "changedPixels": 0,
+  "firstJulianDate": 2461331,
+  "secondJulianDate": 2461331,
+  "paused": true,
+  "qualityLimit": 640
+}

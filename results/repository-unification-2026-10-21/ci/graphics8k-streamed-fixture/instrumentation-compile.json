@@ -1,0 +1,22 @@
+{
+  "scope": "Java compilation of changed instrumentation against previously compiled current Graphics main classes and Android35 API; not an APK build or Android execution",
+  "command": [
+    "/workspace/scratch/7def14e3f3d9/solar-build/jdk/jdk-17.0.20.1+1/bin/javac",
+    "-J-Xmx256m",
+    "-encoding",
+    "UTF-8",
+    "-cp",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/graphics-java/classes:/workspace/scratch/7def14e3f3d9/solar-build/sdk/platforms/android-35/android.jar",
+    "-d",
+    "/workspace/scratch/d0e1d0a0e3a1/closure/unification/graphics8k-test-classes",
+    "/workspace/scratch/d0e1d0a0e3a1/mundo-X/graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java"
+  ],
+  "returncode": 0,
+  "wall_seconds": 1.48568018500373,
+  "source_sha256": "1bb0e31b550da8c8dbc3a862353e4cd587017cd0157a523f7f95ac3ba73f4bee",
+  "existing_main_class_sha256": "1b3ef301ed940d9fce3c11044c4f4504c1444bcef1b2bf3c78afcfe32c5985dd",
+  "source_dependencies": {
+    "graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java": "dae0db33c3a03849a9a81e1201ec4d2fee2c0fdc7240258743d0b4696c703bfe",
+    "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": "0c600015e4ca74fb9a68a5d9678322da3ccc3aa4d5f1b829c64be42039ee84e9"
+  }
+}

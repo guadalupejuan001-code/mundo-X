@@ -1,0 +1,1302 @@
+{
+  "baseline": "c13e78f91887b45d735c5fe3d8a07a000bd03d34",
+  "physics_baseline": "c7e78948ea95080d0603608696da221f02bf4584",
+  "ram_limit_bytes": 2147483648,
+  "wall_seconds": 60,
+  "scope": "Synthetic co-scheduled workload: PhysicsWorld 4096 + MicroLab 16384 + live Ether 256 sites/512 observables + 1M procedural boxes. PhysicsWorld is not yet wired to the 3D scene.",
+  "repetitions": [
+    {
+      "before": {
+        "records": [
+          {
+            "tick": 0,
+            "mirror": 0,
+            "warmup": true,
+            "physical_checksum": "3060092857179803845",
+            "image_sha256": "52e1e1206c9a3e2e23fc79cb6ff1094d5df497be7502fd0f3b0e2070104edaf8",
+            "physics_and_micro_ms": 11.259052,
+            "total_ms": 106.115075,
+            "sync_ms": 4.913756,
+            "draw_ms": 87.554449
+          },
+          {
+            "tick": 1,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "13856201194167430325",
+            "image_sha256": "102de560f997e4045a108adc05027563d3a7ea6a60c5cfab685be57320fb08c7",
+            "physics_and_micro_ms": 12.807598,
+            "total_ms": 100.604983,
+            "sync_ms": 5.670521,
+            "draw_ms": 79.962095
+          },
+          {
+            "tick": 2,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "6317075265890006815",
+            "image_sha256": "a9bc6f3ce2e8bf8fb740e65eccd3d397645aaaae769acb131bec2bce000b95f5",
+            "physics_and_micro_ms": 12.80933,
+            "total_ms": 96.110182,
+            "sync_ms": 5.185953,
+            "draw_ms": 76.201771
+          },
+          {
+            "tick": 3,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "12461460890504312490",
+            "image_sha256": "e7910dd3c673abf085ce997f3dff211e5c361576af128f35f68c29cd14333f13",
+            "physics_and_micro_ms": 14.084143,
+            "total_ms": 107.274318,
+            "sync_ms": 5.25135,
+            "draw_ms": 86.022042
+          },
+          {
+            "tick": 4,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "10364067215319228364",
+            "image_sha256": "841f54b545383bfefb661845c92ba94399f0e218858ed96b62b7a2ba5ba04839",
+            "physics_and_micro_ms": 12.290493,
+            "total_ms": 94.030377,
+            "sync_ms": 5.031705,
+            "draw_ms": 74.912084
+          },
+          {
+            "tick": 5,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "17791551766864917156",
+            "image_sha256": "1a1dac166aa263139ca291c851789e115b6f9a3c084ed14c9eaf384d608b5681",
+            "physics_and_micro_ms": 16.486594,
+            "total_ms": 105.199562,
+            "sync_ms": 7.99231,
+            "draw_ms": 78.729886
+          },
+          {
+            "tick": 6,
+            "mirror": 1,
+            "warmup": true,
+            "physical_checksum": "17568737570705719344",
+            "image_sha256": "b571493eae204d3018ba65e40f178777758c773bbe53a8e5fdcb54f34adb77eb",
+            "physics_and_micro_ms": 17.783309,
+            "total_ms": 113.734024,
+            "sync_ms": 4.754265,
+            "draw_ms": 78.085864
+          },
+          {
+            "tick": 7,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15245768917424180031",
+            "image_sha256": "58fe93dab0115b519101a28ccf53a0c55a748f7bc5b021ce67ccacd5a8dcd8c3",
+            "physics_and_micro_ms": 11.063559,
+            "total_ms": 96.413779,
+            "sync_ms": 4.633218,
+            "draw_ms": 78.822092
+          },
+          {
+            "tick": 8,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "491862961929522722",
+            "image_sha256": "8cce7dfea4a62d70916ccc10e08ae252f83ce856aa9e289791b22b16cfa9bf06",
+            "physics_and_micro_ms": 12.83691,
+            "total_ms": 110.064361,
+            "sync_ms": 5.022593,
+            "draw_ms": 90.349005
+          },
+          {
+            "tick": 9,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15871804940561180875",
+            "image_sha256": "2ef181952e6e9492db2fb4690dd1aa8dfc2ae9f78bcacc9c0a615ec7872cecfd",
+            "physics_and_micro_ms": 11.718447,
+            "total_ms": 96.944493,
+            "sync_ms": 6.084271,
+            "draw_ms": 77.529512
+          },
+          {
+            "tick": 10,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "17188035863612965544",
+            "image_sha256": "2bd32dd74707d8fbf15590ac8ee61589510c397577c2b605e3fa29d49828e23e",
+            "physics_and_micro_ms": 12.306006,
+            "total_ms": 97.949456,
+            "sync_ms": 4.244042,
+            "draw_ms": 79.358567
+          },
+          {
+            "tick": 11,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "4903969351237592589",
+            "image_sha256": "7df63715196098ddc3d6dfbd906451a526c7a8f08b3d27a9335a9f2fda0e5a9a",
+            "physics_and_micro_ms": 12.049589,
+            "total_ms": 107.029379,
+            "sync_ms": 5.077958,
+            "draw_ms": 88.234523
+          },
+          {
+            "tick": 12,
+            "mirror": 2,
+            "warmup": true,
+            "physical_checksum": "5787429453663078749",
+            "image_sha256": "5cf5d293eda0b2c076c27c0d71dd194ea41e1ab0aaa948f9c8c00389dc75f406",
+            "physics_and_micro_ms": 12.208966,
+            "total_ms": 99.416396,
+            "sync_ms": 5.264253,
+            "draw_ms": 80.292653
+          },
+          {
+            "tick": 13,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "7642579239363646731",
+            "image_sha256": "b74ac25cade147bba74dedbe87d62d99255772e33efbc52e494f5a03871924ec",
+            "physics_and_micro_ms": 13.936654,
+            "total_ms": 101.966962,
+            "sync_ms": 4.327853,
+            "draw_ms": 81.418848
+          },
+          {
+            "tick": 14,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "10170033942458530346",
+            "image_sha256": "dd4eedde8bc6631f8cacef831eab1e9611adbe4724dcf8dae26d958d5037eb8c",
+            "physics_and_micro_ms": 15.292353,
+            "total_ms": 98.994244,
+            "sync_ms": 4.654234,
+            "draw_ms": 77.152521
+          },
+          {
+            "tick": 15,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "8085591517590517652",
+            "image_sha256": "43e42d5f1bb81bb2b0cdf3c69dbc89e45e4c097cf246dcc88a2ca576499021cd",
+            "physics_and_micro_ms": 12.108928,
+            "total_ms": 98.595731,
+            "sync_ms": 5.693827,
+            "draw_ms": 78.889479
+          },
+          {
+            "tick": 16,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "2066220100314513021",
+            "image_sha256": "bef7ba704d139177653e80878b72aca40843abf674e5a286abd6dc55fe93322a",
+            "physics_and_micro_ms": 12.655914,
+            "total_ms": 110.971066,
+            "sync_ms": 4.470003,
+            "draw_ms": 90.00769
+          },
+          {
+            "tick": 17,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "17701698873713486550",
+            "image_sha256": "785ba495a9d6ce092d4aa24906bef2a993689913457ff96cd5c24486db46fc97",
+            "physics_and_micro_ms": 17.046289,
+            "total_ms": 102.934654,
+            "sync_ms": 5.787405,
+            "draw_ms": 78.261476
+          }
+        ],
+        "final_core_sha256": "31b3aaf5251bec3da2a62e281d68d206c729373cb20f2f65813a1cb9de1bcdbb",
+        "driver": {
+          "vendor": "Mesa",
+          "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+          "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+          "glsl": "OpenGL ES GLSL ES 3.20",
+          "hardware_gpu_available": false,
+          "timer_query_supported": true
+        },
+        "median_ms": 100.604983,
+        "rss_kib": 99212
+      },
+      "after": {
+        "records": [
+          {
+            "tick": 0,
+            "mirror": 0,
+            "warmup": true,
+            "physical_checksum": "3060092857179803845",
+            "image_sha256": "52e1e1206c9a3e2e23fc79cb6ff1094d5df497be7502fd0f3b0e2070104edaf8",
+            "physics_and_micro_ms": 4.226473,
+            "total_ms": 81.913353,
+            "sync_ms": 3.809558,
+            "draw_ms": 72.01865
+          },
+          {
+            "tick": 1,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "13856201194167430325",
+            "image_sha256": "102de560f997e4045a108adc05027563d3a7ea6a60c5cfab685be57320fb08c7",
+            "physics_and_micro_ms": 3.035556,
+            "total_ms": 79.323443,
+            "sync_ms": 3.845341,
+            "draw_ms": 70.771642
+          },
+          {
+            "tick": 2,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "6317075265890006815",
+            "image_sha256": "a9bc6f3ce2e8bf8fb740e65eccd3d397645aaaae769acb131bec2bce000b95f5",
+            "physics_and_micro_ms": 3.3019,
+            "total_ms": 72.793994,
+            "sync_ms": 3.599188,
+            "draw_ms": 64.218577
+          },
+          {
+            "tick": 3,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "12461460890504312490",
+            "image_sha256": "e7910dd3c673abf085ce997f3dff211e5c361576af128f35f68c29cd14333f13",
+            "physics_and_micro_ms": 3.061054,
+            "total_ms": 78.326904,
+            "sync_ms": 3.592708,
+            "draw_ms": 70.02419
+          },
+          {
+            "tick": 4,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "10364067215319228364",
+            "image_sha256": "841f54b545383bfefb661845c92ba94399f0e218858ed96b62b7a2ba5ba04839",
+            "physics_and_micro_ms": 3.025792,
+            "total_ms": 72.15424,
+            "sync_ms": 3.914593,
+            "draw_ms": 63.606515
+          },
+          {
+            "tick": 5,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "17791551766864917156",
+            "image_sha256": "1a1dac166aa263139ca291c851789e115b6f9a3c084ed14c9eaf384d608b5681",
+            "physics_and_micro_ms": 3.069787,
+            "total_ms": 72.035926,
+            "sync_ms": 3.609133,
+            "draw_ms": 63.643288
+          },
+          {
+            "tick": 6,
+            "mirror": 1,
+            "warmup": true,
+            "physical_checksum": "17568737570705719344",
+            "image_sha256": "b571493eae204d3018ba65e40f178777758c773bbe53a8e5fdcb54f34adb77eb",
+            "physics_and_micro_ms": 3.058691,
+            "total_ms": 88.755004,
+            "sync_ms": 3.655471,
+            "draw_ms": 69.166684
+          },
+          {
+            "tick": 7,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15245768917424180031",
+            "image_sha256": "58fe93dab0115b519101a28ccf53a0c55a748f7bc5b021ce67ccacd5a8dcd8c3",
+            "physics_and_micro_ms": 3.041286,
+            "total_ms": 75.167244,
+            "sync_ms": 3.622192,
+            "draw_ms": 66.840064
+          },
+          {
+            "tick": 8,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "491862961929522722",
+            "image_sha256": "8cce7dfea4a62d70916ccc10e08ae252f83ce856aa9e289791b22b16cfa9bf06",
+            "physics_and_micro_ms": 3.368498,
+            "total_ms": 82.600607,
+            "sync_ms": 3.935144,
+            "draw_ms": 73.612752
+          },
+          {
+            "tick": 9,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15871804940561180875",
+            "image_sha256": "2ef181952e6e9492db2fb4690dd1aa8dfc2ae9f78bcacc9c0a615ec7872cecfd",
+            "physics_and_micro_ms": 3.05147,
+            "total_ms": 76.346984,
+            "sync_ms": 4.03451,
+            "draw_ms": 67.695655
+          },
+          {
+            "tick": 10,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "17188035863612965544",
+            "image_sha256": "2bd32dd74707d8fbf15590ac8ee61589510c397577c2b605e3fa29d49828e23e",
+            "physics_and_micro_ms": 3.084438,
+            "total_ms": 77.464862,
+            "sync_ms": 3.723802,
+            "draw_ms": 68.769308
+          },
+          {
+            "tick": 11,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "4903969351237592589",
+            "image_sha256": "7df63715196098ddc3d6dfbd906451a526c7a8f08b3d27a9335a9f2fda0e5a9a",
+            "physics_and_micro_ms": 3.210645,
+            "total_ms": 85.615714,
+            "sync_ms": 4.213765,
+            "draw_ms": 76.54027
+          },
+          {
+            "tick": 12,
+            "mirror": 2,
+            "warmup": true,
+            "physical_checksum": "5787429453663078749",
+            "image_sha256": "5cf5d293eda0b2c076c27c0d71dd194ea41e1ab0aaa948f9c8c00389dc75f406",
+            "physics_and_micro_ms": 3.138168,
+            "total_ms": 82.174148,
+            "sync_ms": 3.881515,
+            "draw_ms": 73.484863
+          },
+          {
+            "tick": 13,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "7642579239363646731",
+            "image_sha256": "b74ac25cade147bba74dedbe87d62d99255772e33efbc52e494f5a03871924ec",
+            "physics_and_micro_ms": 3.49855,
+            "total_ms": 81.783081,
+            "sync_ms": 3.65516,
+            "draw_ms": 73.038165
+          },
+          {
+            "tick": 14,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "10170033942458530346",
+            "image_sha256": "dd4eedde8bc6631f8cacef831eab1e9611adbe4724dcf8dae26d958d5037eb8c",
+            "physics_and_micro_ms": 3.08501,
+            "total_ms": 79.396081,
+            "sync_ms": 3.821325,
+            "draw_ms": 70.684283
+          },
+          {
+            "tick": 15,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "8085591517590517652",
+            "image_sha256": "43e42d5f1bb81bb2b0cdf3c69dbc89e45e4c097cf246dcc88a2ca576499021cd",
+            "physics_and_micro_ms": 3.233139,
+            "total_ms": 78.245293,
+            "sync_ms": 4.012317,
+            "draw_ms": 69.23119
+          },
+          {
+            "tick": 16,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "2066220100314513021",
+            "image_sha256": "bef7ba704d139177653e80878b72aca40843abf674e5a286abd6dc55fe93322a",
+            "physics_and_micro_ms": 3.127692,
+            "total_ms": 88.266603,
+            "sync_ms": 4.911593,
+            "draw_ms": 78.653746
+          },
+          {
+            "tick": 17,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "17701698873713486550",
+            "image_sha256": "785ba495a9d6ce092d4aa24906bef2a993689913457ff96cd5c24486db46fc97",
+            "physics_and_micro_ms": 3.341989,
+            "total_ms": 79.990386,
+            "sync_ms": 3.705806,
+            "draw_ms": 71.359578
+          }
+        ],
+        "final_core_sha256": "31b3aaf5251bec3da2a62e281d68d206c729373cb20f2f65813a1cb9de1bcdbb",
+        "driver": {
+          "vendor": "Mesa",
+          "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+          "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+          "glsl": "OpenGL ES GLSL ES 3.20",
+          "hardware_gpu_available": false,
+          "timer_query_supported": true
+        },
+        "median_ms": 78.326904,
+        "rss_kib": 100032
+      }
+    },
+    {
+      "after": {
+        "records": [
+          {
+            "tick": 0,
+            "mirror": 0,
+            "warmup": true,
+            "physical_checksum": "3060092857179803845",
+            "image_sha256": "52e1e1206c9a3e2e23fc79cb6ff1094d5df497be7502fd0f3b0e2070104edaf8",
+            "physics_and_micro_ms": 4.294984,
+            "total_ms": 86.873218,
+            "sync_ms": 4.194175,
+            "draw_ms": 76.431559
+          },
+          {
+            "tick": 1,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "13856201194167430325",
+            "image_sha256": "102de560f997e4045a108adc05027563d3a7ea6a60c5cfab685be57320fb08c7",
+            "physics_and_micro_ms": 3.133161,
+            "total_ms": 81.453014,
+            "sync_ms": 4.253303,
+            "draw_ms": 72.379172
+          },
+          {
+            "tick": 2,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "6317075265890006815",
+            "image_sha256": "a9bc6f3ce2e8bf8fb740e65eccd3d397645aaaae769acb131bec2bce000b95f5",
+            "physics_and_micro_ms": 3.157396,
+            "total_ms": 73.034879,
+            "sync_ms": 3.650424,
+            "draw_ms": 64.551729
+          },
+          {
+            "tick": 3,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "12461460890504312490",
+            "image_sha256": "e7910dd3c673abf085ce997f3dff211e5c361576af128f35f68c29cd14333f13",
+            "physics_and_micro_ms": 3.103197,
+            "total_ms": 81.419095,
+            "sync_ms": 3.73599,
+            "draw_ms": 72.874903
+          },
+          {
+            "tick": 4,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "10364067215319228364",
+            "image_sha256": "841f54b545383bfefb661845c92ba94399f0e218858ed96b62b7a2ba5ba04839",
+            "physics_and_micro_ms": 3.625637,
+            "total_ms": 73.621084,
+            "sync_ms": 3.708489,
+            "draw_ms": 64.573541
+          },
+          {
+            "tick": 5,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "17791551766864917156",
+            "image_sha256": "1a1dac166aa263139ca291c851789e115b6f9a3c084ed14c9eaf384d608b5681",
+            "physics_and_micro_ms": 3.311053,
+            "total_ms": 74.535001,
+            "sync_ms": 4.090853,
+            "draw_ms": 64.992859
+          },
+          {
+            "tick": 6,
+            "mirror": 1,
+            "warmup": true,
+            "physical_checksum": "17568737570705719344",
+            "image_sha256": "b571493eae204d3018ba65e40f178777758c773bbe53a8e5fdcb54f34adb77eb",
+            "physics_and_micro_ms": 3.138038,
+            "total_ms": 94.387901,
+            "sync_ms": 3.890518,
+            "draw_ms": 74.200028
+          },
+          {
+            "tick": 7,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15245768917424180031",
+            "image_sha256": "58fe93dab0115b519101a28ccf53a0c55a748f7bc5b021ce67ccacd5a8dcd8c3",
+            "physics_and_micro_ms": 3.122796,
+            "total_ms": 77.959091,
+            "sync_ms": 3.837749,
+            "draw_ms": 69.294873
+          },
+          {
+            "tick": 8,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "491862961929522722",
+            "image_sha256": "8cce7dfea4a62d70916ccc10e08ae252f83ce856aa9e289791b22b16cfa9bf06",
+            "physics_and_micro_ms": 3.314818,
+            "total_ms": 85.166741,
+            "sync_ms": 4.147336,
+            "draw_ms": 76.024088
+          },
+          {
+            "tick": 9,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15871804940561180875",
+            "image_sha256": "2ef181952e6e9492db2fb4690dd1aa8dfc2ae9f78bcacc9c0a615ec7872cecfd",
+            "physics_and_micro_ms": 3.434545,
+            "total_ms": 78.577172,
+            "sync_ms": 3.768678,
+            "draw_ms": 69.786709
+          },
+          {
+            "tick": 10,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "17188035863612965544",
+            "image_sha256": "2bd32dd74707d8fbf15590ac8ee61589510c397577c2b605e3fa29d49828e23e",
+            "physics_and_micro_ms": 3.328339,
+            "total_ms": 77.255043,
+            "sync_ms": 4.047029,
+            "draw_ms": 68.265055
+          },
+          {
+            "tick": 11,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "4903969351237592589",
+            "image_sha256": "7df63715196098ddc3d6dfbd906451a526c7a8f08b3d27a9335a9f2fda0e5a9a",
+            "physics_and_micro_ms": 3.056567,
+            "total_ms": 84.069463,
+            "sync_ms": 3.605598,
+            "draw_ms": 75.522248
+          },
+          {
+            "tick": 12,
+            "mirror": 2,
+            "warmup": true,
+            "physical_checksum": "5787429453663078749",
+            "image_sha256": "5cf5d293eda0b2c076c27c0d71dd194ea41e1ab0aaa948f9c8c00389dc75f406",
+            "physics_and_micro_ms": 3.174752,
+            "total_ms": 83.917598,
+            "sync_ms": 3.833354,
+            "draw_ms": 75.302572
+          },
+          {
+            "tick": 13,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "7642579239363646731",
+            "image_sha256": "b74ac25cade147bba74dedbe87d62d99255772e33efbc52e494f5a03871924ec",
+            "physics_and_micro_ms": 3.365954,
+            "total_ms": 83.610466,
+            "sync_ms": 3.83068,
+            "draw_ms": 74.744761
+          },
+          {
+            "tick": 14,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "10170033942458530346",
+            "image_sha256": "dd4eedde8bc6631f8cacef831eab1e9611adbe4724dcf8dae26d958d5037eb8c",
+            "physics_and_micro_ms": 3.195513,
+            "total_ms": 80.023225,
+            "sync_ms": 3.931037,
+            "draw_ms": 71.251299
+          },
+          {
+            "tick": 15,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "8085591517590517652",
+            "image_sha256": "43e42d5f1bb81bb2b0cdf3c69dbc89e45e4c097cf246dcc88a2ca576499021cd",
+            "physics_and_micro_ms": 3.430849,
+            "total_ms": 82.343417,
+            "sync_ms": 3.769309,
+            "draw_ms": 73.291548
+          },
+          {
+            "tick": 16,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "2066220100314513021",
+            "image_sha256": "bef7ba704d139177653e80878b72aca40843abf674e5a286abd6dc55fe93322a",
+            "physics_and_micro_ms": 4.0009,
+            "total_ms": 86.704948,
+            "sync_ms": 3.847935,
+            "draw_ms": 77.115817
+          },
+          {
+            "tick": 17,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "17701698873713486550",
+            "image_sha256": "785ba495a9d6ce092d4aa24906bef2a993689913457ff96cd5c24486db46fc97",
+            "physics_and_micro_ms": 3.251005,
+            "total_ms": 78.895012,
+            "sync_ms": 3.965929,
+            "draw_ms": 70.040824
+          }
+        ],
+        "final_core_sha256": "31b3aaf5251bec3da2a62e281d68d206c729373cb20f2f65813a1cb9de1bcdbb",
+        "driver": {
+          "vendor": "Mesa",
+          "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+          "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+          "glsl": "OpenGL ES GLSL ES 3.20",
+          "hardware_gpu_available": false,
+          "timer_query_supported": true
+        },
+        "median_ms": 80.023225,
+        "rss_kib": 100156
+      },
+      "before": {
+        "records": [
+          {
+            "tick": 0,
+            "mirror": 0,
+            "warmup": true,
+            "physical_checksum": "3060092857179803845",
+            "image_sha256": "52e1e1206c9a3e2e23fc79cb6ff1094d5df497be7502fd0f3b0e2070104edaf8",
+            "physics_and_micro_ms": 12.463951,
+            "total_ms": 94.735122,
+            "sync_ms": 4.267193,
+            "draw_ms": 75.856171
+          },
+          {
+            "tick": 1,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "13856201194167430325",
+            "image_sha256": "102de560f997e4045a108adc05027563d3a7ea6a60c5cfab685be57320fb08c7",
+            "physics_and_micro_ms": 11.004129,
+            "total_ms": 89.934842,
+            "sync_ms": 4.97751,
+            "draw_ms": 72.141983
+          },
+          {
+            "tick": 2,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "6317075265890006815",
+            "image_sha256": "a9bc6f3ce2e8bf8fb740e65eccd3d397645aaaae769acb131bec2bce000b95f5",
+            "physics_and_micro_ms": 10.817794,
+            "total_ms": 84.068252,
+            "sync_ms": 4.791917,
+            "draw_ms": 66.773335
+          },
+          {
+            "tick": 3,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "12461460890504312490",
+            "image_sha256": "e7910dd3c673abf085ce997f3dff211e5c361576af128f35f68c29cd14333f13",
+            "physics_and_micro_ms": 10.417022,
+            "total_ms": 91.545007,
+            "sync_ms": 4.418877,
+            "draw_ms": 74.988671
+          },
+          {
+            "tick": 4,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "10364067215319228364",
+            "image_sha256": "841f54b545383bfefb661845c92ba94399f0e218858ed96b62b7a2ba5ba04839",
+            "physics_and_micro_ms": 11.470497,
+            "total_ms": 84.513057,
+            "sync_ms": 4.584962,
+            "draw_ms": 66.533231
+          },
+          {
+            "tick": 5,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "17791551766864917156",
+            "image_sha256": "1a1dac166aa263139ca291c851789e115b6f9a3c084ed14c9eaf384d608b5681",
+            "physics_and_micro_ms": 12.534545,
+            "total_ms": 84.12192,
+            "sync_ms": 4.455581,
+            "draw_ms": 65.417465
+          },
+          {
+            "tick": 6,
+            "mirror": 1,
+            "warmup": true,
+            "physical_checksum": "17568737570705719344",
+            "image_sha256": "b571493eae204d3018ba65e40f178777758c773bbe53a8e5fdcb54f34adb77eb",
+            "physics_and_micro_ms": 12.214875,
+            "total_ms": 102.786657,
+            "sync_ms": 4.370345,
+            "draw_ms": 73.461989
+          },
+          {
+            "tick": 7,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15245768917424180031",
+            "image_sha256": "58fe93dab0115b519101a28ccf53a0c55a748f7bc5b021ce67ccacd5a8dcd8c3",
+            "physics_and_micro_ms": 11.777008,
+            "total_ms": 87.420174,
+            "sync_ms": 4.145844,
+            "draw_ms": 69.738387
+          },
+          {
+            "tick": 8,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "491862961929522722",
+            "image_sha256": "8cce7dfea4a62d70916ccc10e08ae252f83ce856aa9e289791b22b16cfa9bf06",
+            "physics_and_micro_ms": 11.307145,
+            "total_ms": 91.6958,
+            "sync_ms": 4.309656,
+            "draw_ms": 73.863311
+          },
+          {
+            "tick": 9,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15871804940561180875",
+            "image_sha256": "2ef181952e6e9492db2fb4690dd1aa8dfc2ae9f78bcacc9c0a615ec7872cecfd",
+            "physics_and_micro_ms": 12.347949,
+            "total_ms": 88.327261,
+            "sync_ms": 4.823193,
+            "draw_ms": 69.406027
+          },
+          {
+            "tick": 10,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "17188035863612965544",
+            "image_sha256": "2bd32dd74707d8fbf15590ac8ee61589510c397577c2b605e3fa29d49828e23e",
+            "physics_and_micro_ms": 12.6927,
+            "total_ms": 86.794412,
+            "sync_ms": 4.141649,
+            "draw_ms": 68.210435
+          },
+          {
+            "tick": 11,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "4903969351237592589",
+            "image_sha256": "7df63715196098ddc3d6dfbd906451a526c7a8f08b3d27a9335a9f2fda0e5a9a",
+            "physics_and_micro_ms": 11.64949,
+            "total_ms": 92.72659,
+            "sync_ms": 4.139334,
+            "draw_ms": 75.31377
+          },
+          {
+            "tick": 12,
+            "mirror": 2,
+            "warmup": true,
+            "physical_checksum": "5787429453663078749",
+            "image_sha256": "5cf5d293eda0b2c076c27c0d71dd194ea41e1ab0aaa948f9c8c00389dc75f406",
+            "physics_and_micro_ms": 11.25652,
+            "total_ms": 89.204795,
+            "sync_ms": 4.191781,
+            "draw_ms": 72.117997
+          },
+          {
+            "tick": 13,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "7642579239363646731",
+            "image_sha256": "b74ac25cade147bba74dedbe87d62d99255772e33efbc52e494f5a03871924ec",
+            "physics_and_micro_ms": 10.762102,
+            "total_ms": 88.703467,
+            "sync_ms": 4.05454,
+            "draw_ms": 72.242181
+          },
+          {
+            "tick": 14,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "10170033942458530346",
+            "image_sha256": "dd4eedde8bc6631f8cacef831eab1e9611adbe4724dcf8dae26d958d5037eb8c",
+            "physics_and_micro_ms": 10.019786,
+            "total_ms": 82.914709,
+            "sync_ms": 4.288975,
+            "draw_ms": 66.907543
+          },
+          {
+            "tick": 15,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "8085591517590517652",
+            "image_sha256": "43e42d5f1bb81bb2b0cdf3c69dbc89e45e4c097cf246dcc88a2ca576499021cd",
+            "physics_and_micro_ms": 10.617799,
+            "total_ms": 84.911986,
+            "sync_ms": 4.307543,
+            "draw_ms": 68.357551
+          },
+          {
+            "tick": 16,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "2066220100314513021",
+            "image_sha256": "bef7ba704d139177653e80878b72aca40843abf674e5a286abd6dc55fe93322a",
+            "physics_and_micro_ms": 11.348787,
+            "total_ms": 93.66861,
+            "sync_ms": 4.575698,
+            "draw_ms": 76.128242
+          },
+          {
+            "tick": 17,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "17701698873713486550",
+            "image_sha256": "785ba495a9d6ce092d4aa24906bef2a993689913457ff96cd5c24486db46fc97",
+            "physics_and_micro_ms": 10.81549,
+            "total_ms": 86.023584,
+            "sync_ms": 4.023283,
+            "draw_ms": 69.527888
+          }
+        ],
+        "final_core_sha256": "31b3aaf5251bec3da2a62e281d68d206c729373cb20f2f65813a1cb9de1bcdbb",
+        "driver": {
+          "vendor": "Mesa",
+          "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+          "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+          "glsl": "OpenGL ES GLSL ES 3.20",
+          "hardware_gpu_available": false,
+          "timer_query_supported": true
+        },
+        "median_ms": 87.420174,
+        "rss_kib": 99092
+      }
+    },
+    {
+      "before": {
+        "records": [
+          {
+            "tick": 0,
+            "mirror": 0,
+            "warmup": true,
+            "physical_checksum": "3060092857179803845",
+            "image_sha256": "52e1e1206c9a3e2e23fc79cb6ff1094d5df497be7502fd0f3b0e2070104edaf8",
+            "physics_and_micro_ms": 10.326249,
+            "total_ms": 89.273678,
+            "sync_ms": 4.210229,
+            "draw_ms": 72.878639
+          },
+          {
+            "tick": 1,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "13856201194167430325",
+            "image_sha256": "102de560f997e4045a108adc05027563d3a7ea6a60c5cfab685be57320fb08c7",
+            "physics_and_micro_ms": 11.478858,
+            "total_ms": 87.996313,
+            "sync_ms": 4.08261,
+            "draw_ms": 70.741597
+          },
+          {
+            "tick": 2,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "6317075265890006815",
+            "image_sha256": "a9bc6f3ce2e8bf8fb740e65eccd3d397645aaaae769acb131bec2bce000b95f5",
+            "physics_and_micro_ms": 9.928022,
+            "total_ms": 78.049505,
+            "sync_ms": 4.47525,
+            "draw_ms": 62.053644
+          },
+          {
+            "tick": 3,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "12461460890504312490",
+            "image_sha256": "e7910dd3c673abf085ce997f3dff211e5c361576af128f35f68c29cd14333f13",
+            "physics_and_micro_ms": 9.951075,
+            "total_ms": 84.884754,
+            "sync_ms": 4.123631,
+            "draw_ms": 69.179393
+          },
+          {
+            "tick": 4,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "10364067215319228364",
+            "image_sha256": "841f54b545383bfefb661845c92ba94399f0e218858ed96b62b7a2ba5ba04839",
+            "physics_and_micro_ms": 9.885149,
+            "total_ms": 78.461944,
+            "sync_ms": 4.083092,
+            "draw_ms": 62.891871
+          },
+          {
+            "tick": 5,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "17791551766864917156",
+            "image_sha256": "1a1dac166aa263139ca291c851789e115b6f9a3c084ed14c9eaf384d608b5681",
+            "physics_and_micro_ms": 9.922304,
+            "total_ms": 78.687707,
+            "sync_ms": 4.067168,
+            "draw_ms": 63.01291
+          },
+          {
+            "tick": 6,
+            "mirror": 1,
+            "warmup": true,
+            "physical_checksum": "17568737570705719344",
+            "image_sha256": "b571493eae204d3018ba65e40f178777758c773bbe53a8e5fdcb54f34adb77eb",
+            "physics_and_micro_ms": 9.894021,
+            "total_ms": 97.275398,
+            "sync_ms": 4.12283,
+            "draw_ms": 71.035041
+          },
+          {
+            "tick": 7,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15245768917424180031",
+            "image_sha256": "58fe93dab0115b519101a28ccf53a0c55a748f7bc5b021ce67ccacd5a8dcd8c3",
+            "physics_and_micro_ms": 12.533233,
+            "total_ms": 86.858685,
+            "sync_ms": 4.566444,
+            "draw_ms": 68.107893
+          },
+          {
+            "tick": 8,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "491862961929522722",
+            "image_sha256": "8cce7dfea4a62d70916ccc10e08ae252f83ce856aa9e289791b22b16cfa9bf06",
+            "physics_and_micro_ms": 11.705383,
+            "total_ms": 94.029736,
+            "sync_ms": 4.471645,
+            "draw_ms": 76.108567
+          },
+          {
+            "tick": 9,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15871804940561180875",
+            "image_sha256": "2ef181952e6e9492db2fb4690dd1aa8dfc2ae9f78bcacc9c0a615ec7872cecfd",
+            "physics_and_micro_ms": 11.462864,
+            "total_ms": 86.933315,
+            "sync_ms": 4.701784,
+            "draw_ms": 69.029913
+          },
+          {
+            "tick": 10,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "17188035863612965544",
+            "image_sha256": "2bd32dd74707d8fbf15590ac8ee61589510c397577c2b605e3fa29d49828e23e",
+            "physics_and_micro_ms": 11.1417,
+            "total_ms": 86.744085,
+            "sync_ms": 4.262505,
+            "draw_ms": 69.698139
+          },
+          {
+            "tick": 11,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "4903969351237592589",
+            "image_sha256": "7df63715196098ddc3d6dfbd906451a526c7a8f08b3d27a9335a9f2fda0e5a9a",
+            "physics_and_micro_ms": 12.967843,
+            "total_ms": 96.58611,
+            "sync_ms": 4.986003,
+            "draw_ms": 76.90048
+          },
+          {
+            "tick": 12,
+            "mirror": 2,
+            "warmup": true,
+            "physical_checksum": "5787429453663078749",
+            "image_sha256": "5cf5d293eda0b2c076c27c0d71dd194ea41e1ab0aaa948f9c8c00389dc75f406",
+            "physics_and_micro_ms": 11.005549,
+            "total_ms": 91.467361,
+            "sync_ms": 4.383133,
+            "draw_ms": 74.37837
+          },
+          {
+            "tick": 13,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "7642579239363646731",
+            "image_sha256": "b74ac25cade147bba74dedbe87d62d99255772e33efbc52e494f5a03871924ec",
+            "physics_and_micro_ms": 12.013957,
+            "total_ms": 92.78861,
+            "sync_ms": 4.53659,
+            "draw_ms": 74.585997
+          },
+          {
+            "tick": 14,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "10170033942458530346",
+            "image_sha256": "dd4eedde8bc6631f8cacef831eab1e9611adbe4724dcf8dae26d958d5037eb8c",
+            "physics_and_micro_ms": 11.466319,
+            "total_ms": 86.633142,
+            "sync_ms": 4.339699,
+            "draw_ms": 69.252132
+          },
+          {
+            "tick": 15,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "8085591517590517652",
+            "image_sha256": "43e42d5f1bb81bb2b0cdf3c69dbc89e45e4c097cf246dcc88a2ca576499021cd",
+            "physics_and_micro_ms": 9.878406,
+            "total_ms": 84.961967,
+            "sync_ms": 4.060077,
+            "draw_ms": 69.411987
+          },
+          {
+            "tick": 16,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "2066220100314513021",
+            "image_sha256": "bef7ba704d139177653e80878b72aca40843abf674e5a286abd6dc55fe93322a",
+            "physics_and_micro_ms": 10.643365,
+            "total_ms": 93.200756,
+            "sync_ms": 4.096871,
+            "draw_ms": 76.848013
+          },
+          {
+            "tick": 17,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "17701698873713486550",
+            "image_sha256": "785ba495a9d6ce092d4aa24906bef2a993689913457ff96cd5c24486db46fc97",
+            "physics_and_micro_ms": 10.517259,
+            "total_ms": 84.275285,
+            "sync_ms": 4.154607,
+            "draw_ms": 68.020505
+          }
+        ],
+        "final_core_sha256": "31b3aaf5251bec3da2a62e281d68d206c729373cb20f2f65813a1cb9de1bcdbb",
+        "driver": {
+          "vendor": "Mesa",
+          "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+          "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+          "glsl": "OpenGL ES GLSL ES 3.20",
+          "hardware_gpu_available": false,
+          "timer_query_supported": true
+        },
+        "median_ms": 86.744085,
+        "rss_kib": 99216
+      },
+      "after": {
+        "records": [
+          {
+            "tick": 0,
+            "mirror": 0,
+            "warmup": true,
+            "physical_checksum": "3060092857179803845",
+            "image_sha256": "52e1e1206c9a3e2e23fc79cb6ff1094d5df497be7502fd0f3b0e2070104edaf8",
+            "physics_and_micro_ms": 4.420689,
+            "total_ms": 90.740009,
+            "sync_ms": 3.942634,
+            "draw_ms": 80.110393
+          },
+          {
+            "tick": 1,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "13856201194167430325",
+            "image_sha256": "102de560f997e4045a108adc05027563d3a7ea6a60c5cfab685be57320fb08c7",
+            "physics_and_micro_ms": 3.260208,
+            "total_ms": 80.749205,
+            "sync_ms": 3.584475,
+            "draw_ms": 72.193459
+          },
+          {
+            "tick": 2,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "6317075265890006815",
+            "image_sha256": "a9bc6f3ce2e8bf8fb740e65eccd3d397645aaaae769acb131bec2bce000b95f5",
+            "physics_and_micro_ms": 3.053212,
+            "total_ms": 71.352418,
+            "sync_ms": 4.141297,
+            "draw_ms": 62.495157
+          },
+          {
+            "tick": 3,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "12461460890504312490",
+            "image_sha256": "e7910dd3c673abf085ce997f3dff211e5c361576af128f35f68c29cd14333f13",
+            "physics_and_micro_ms": 3.384901,
+            "total_ms": 81.362429,
+            "sync_ms": 3.921343,
+            "draw_ms": 72.346284
+          },
+          {
+            "tick": 4,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "10364067215319228364",
+            "image_sha256": "841f54b545383bfefb661845c92ba94399f0e218858ed96b62b7a2ba5ba04839",
+            "physics_and_micro_ms": 3.124428,
+            "total_ms": 75.812961,
+            "sync_ms": 3.924157,
+            "draw_ms": 67.038662
+          },
+          {
+            "tick": 5,
+            "mirror": 0,
+            "warmup": false,
+            "physical_checksum": "17791551766864917156",
+            "image_sha256": "1a1dac166aa263139ca291c851789e115b6f9a3c084ed14c9eaf384d608b5681",
+            "physics_and_micro_ms": 3.477989,
+            "total_ms": 77.020768,
+            "sync_ms": 4.378326,
+            "draw_ms": 67.541809
+          },
+          {
+            "tick": 6,
+            "mirror": 1,
+            "warmup": true,
+            "physical_checksum": "17568737570705719344",
+            "image_sha256": "b571493eae204d3018ba65e40f178777758c773bbe53a8e5fdcb54f34adb77eb",
+            "physics_and_micro_ms": 3.428566,
+            "total_ms": 95.279573,
+            "sync_ms": 3.973289,
+            "draw_ms": 75.407919
+          },
+          {
+            "tick": 7,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15245768917424180031",
+            "image_sha256": "58fe93dab0115b519101a28ccf53a0c55a748f7bc5b021ce67ccacd5a8dcd8c3",
+            "physics_and_micro_ms": 3.355288,
+            "total_ms": 83.909776,
+            "sync_ms": 4.391556,
+            "draw_ms": 73.991019
+          },
+          {
+            "tick": 8,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "491862961929522722",
+            "image_sha256": "8cce7dfea4a62d70916ccc10e08ae252f83ce856aa9e289791b22b16cfa9bf06",
+            "physics_and_micro_ms": 3.318304,
+            "total_ms": 90.036962,
+            "sync_ms": 3.923135,
+            "draw_ms": 80.914099
+          },
+          {
+            "tick": 9,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "15871804940561180875",
+            "image_sha256": "2ef181952e6e9492db2fb4690dd1aa8dfc2ae9f78bcacc9c0a615ec7872cecfd",
+            "physics_and_micro_ms": 3.682891,
+            "total_ms": 87.886871,
+            "sync_ms": 4.775572,
+            "draw_ms": 77.687941
+          },
+          {
+            "tick": 10,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "17188035863612965544",
+            "image_sha256": "2bd32dd74707d8fbf15590ac8ee61589510c397577c2b605e3fa29d49828e23e",
+            "physics_and_micro_ms": 3.737101,
+            "total_ms": 82.12211,
+            "sync_ms": 4.090732,
+            "draw_ms": 72.564306
+          },
+          {
+            "tick": 11,
+            "mirror": 1,
+            "warmup": false,
+            "physical_checksum": "4903969351237592589",
+            "image_sha256": "7df63715196098ddc3d6dfbd906451a526c7a8f08b3d27a9335a9f2fda0e5a9a",
+            "physics_and_micro_ms": 3.416668,
+            "total_ms": 90.676664,
+            "sync_ms": 3.99455,
+            "draw_ms": 81.411492
+          },
+          {
+            "tick": 12,
+            "mirror": 2,
+            "warmup": true,
+            "physical_checksum": "5787429453663078749",
+            "image_sha256": "5cf5d293eda0b2c076c27c0d71dd194ea41e1ab0aaa948f9c8c00389dc75f406",
+            "physics_and_micro_ms": 3.175953,
+            "total_ms": 87.535592,
+            "sync_ms": 4.906966,
+            "draw_ms": 77.563217
+          },
+          {
+            "tick": 13,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "7642579239363646731",
+            "image_sha256": "b74ac25cade147bba74dedbe87d62d99255772e33efbc52e494f5a03871924ec",
+            "physics_and_micro_ms": 3.560139,
+            "total_ms": 90.072473,
+            "sync_ms": 4.147756,
+            "draw_ms": 80.639103
+          },
+          {
+            "tick": 14,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "10170033942458530346",
+            "image_sha256": "dd4eedde8bc6631f8cacef831eab1e9611adbe4724dcf8dae26d958d5037eb8c",
+            "physics_and_micro_ms": 3.52642,
+            "total_ms": 81.861615,
+            "sync_ms": 4.234194,
+            "draw_ms": 72.319044
+          },
+          {
+            "tick": 15,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "8085591517590517652",
+            "image_sha256": "43e42d5f1bb81bb2b0cdf3c69dbc89e45e4c097cf246dcc88a2ca576499021cd",
+            "physics_and_micro_ms": 4.594636,
+            "total_ms": 85.069547,
+            "sync_ms": 4.047378,
+            "draw_ms": 74.511597
+          },
+          {
+            "tick": 16,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "2066220100314513021",
+            "image_sha256": "bef7ba704d139177653e80878b72aca40843abf674e5a286abd6dc55fe93322a",
+            "physics_and_micro_ms": 3.325904,
+            "total_ms": 87.216738,
+            "sync_ms": 3.944867,
+            "draw_ms": 78.292788
+          },
+          {
+            "tick": 17,
+            "mirror": 2,
+            "warmup": false,
+            "physical_checksum": "17701698873713486550",
+            "image_sha256": "785ba495a9d6ce092d4aa24906bef2a993689913457ff96cd5c24486db46fc97",
+            "physics_and_micro_ms": 3.210484,
+            "total_ms": 80.647039,
+            "sync_ms": 4.065825,
+            "draw_ms": 71.658114
+          }
+        ],
+        "final_core_sha256": "31b3aaf5251bec3da2a62e281d68d206c729373cb20f2f65813a1cb9de1bcdbb",
+        "driver": {
+          "vendor": "Mesa",
+          "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+          "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+          "glsl": "OpenGL ES GLSL ES 3.20",
+          "hardware_gpu_available": false,
+          "timer_query_supported": true
+        },
+        "median_ms": 82.12211,
+        "rss_kib": 100140
+      }
+    }
+  ],
+  "sha256": {
+    "native/include/mundo_x/physics_world.hpp": "8c0186252730b92fa7a916b5de5565509eab303c2ab9104ace4af6e46e50f5f9",
+    "native/include/mundo_x/micro_lab.hpp": "a91f012321aff977efd7e08d37dd0c9cedc91f440c6a2954bc9b427f3d872c08",
+    "native/include/mundo_x/pauli_observer.hpp": "68aff494a5c5976779dea942b6134fe452fb85556000947f822e19cb9f781b8d",
+    "graphics-desktop/engine.py": "5f8ba374a91618a337ab8e9f25b3b19994418d7a7d3e7d0cb76c30a17990c022",
+    "graphics-desktop/renderer.py": "fc5d759a9841f092730e1751bf49aa2909e5d2701df7f25e6d76e9f0819d84c1",
+    "tools/system_workload.cpp": "1d7b6acab6bd93024a3605f35e90a62cc8e13c41ab09b3c80e1db37c3bef7f34",
+    "tools/system_combined_check.py": "bd4eaaaaae8e87cd7d6723475b4091b3d3a7a17ceafa07b0c419af3181ed6c77"
+  }
+}

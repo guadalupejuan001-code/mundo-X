@@ -1,0 +1,57 @@
+{
+  "status": "passed",
+  "lifetimes": 64,
+  "records": [
+    {
+      "batch": 0,
+      "lifetimes": 8,
+      "rss_after_close_kib": 115708,
+      "rss_peak_kib": 115860
+    },
+    {
+      "batch": 1,
+      "lifetimes": 8,
+      "rss_after_close_kib": 116280,
+      "rss_peak_kib": 116504
+    },
+    {
+      "batch": 2,
+      "lifetimes": 8,
+      "rss_after_close_kib": 117568,
+      "rss_peak_kib": 117784
+    },
+    {
+      "batch": 3,
+      "lifetimes": 8,
+      "rss_after_close_kib": 117728,
+      "rss_peak_kib": 117912
+    },
+    {
+      "batch": 4,
+      "lifetimes": 8,
+      "rss_after_close_kib": 118096,
+      "rss_peak_kib": 118296
+    },
+    {
+      "batch": 5,
+      "lifetimes": 8,
+      "rss_after_close_kib": 118280,
+      "rss_peak_kib": 118424
+    },
+    {
+      "batch": 6,
+      "lifetimes": 8,
+      "rss_after_close_kib": 118284,
+      "rss_peak_kib": 118424
+    },
+    {
+      "batch": 7,
+      "lifetimes": 8,
+      "rss_after_close_kib": 118300,
+      "rss_peak_kib": 118424
+    }
+  ],
+  "rss_before_gc_kib": 118300,
+  "rss_after_gc_kib": 118300,
+  "address_space_limit_bytes": 2147483648
+}

@@ -147,8 +147,10 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
 
-      - name: Validate actual JNI, GLES, selection and saved state
+      - name: Validate actual JNI, GLES, mirrors, frame reuse and saved state
         shell: bash
+        env:
+          GRAPHICS_MIRRORS: 'true'
         run: bash tools/graphics-emulator-test.sh
 
       - name: Check Android exports with the desktop project codec

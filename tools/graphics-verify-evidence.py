@@ -20,9 +20,11 @@ def require(condition, message):
 
 def main():
     directory = Path(sys.argv[1] if len(sys.argv) > 1 else "graphics-evidence")
-    ultra = len(sys.argv) > 2 and sys.argv[2] == "--ultra8k"
-    uhd = ultra or (len(sys.argv) > 2 and sys.argv[2] == "--uhd4k")
-    require(len(sys.argv) <= 3 and (len(sys.argv) < 3 or uhd), "Unexpected verification arguments")
+    flags=set(sys.argv[2:])
+    require(len(flags)==len(sys.argv[2:]) and flags<={"--ultra8k","--uhd4k","--mirrors"}, "Unexpected verification arguments")
+    ultra = "--ultra8k" in flags
+    uhd = ultra or "--uhd4k" in flags
+    mirrors = "--mirrors" in flags
     output = (directory / "instrumentation.txt").read_text()
     require("MUNDOX_GRAPHICS_TESTS_PASSED" in output, "Instrumentation success marker missing")
     require("INSTRUMENTATION_CODE: -1" in output, "Instrumentation did not finish successfully")
@@ -32,7 +34,7 @@ def main():
         "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
         "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
         "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration",
-        "pause_resume_preserves_state",
+        "pause_resume_preserves_state", "frame_reuse_exact_inputs_and_invalidation",
         "portable_codec_strict_validation", "portable_desktop_fixtures_import",
         "portable_mutation_export_reimport", "portable_invalid_import_preserves_session",
         "portable_activity_recreation",
@@ -46,6 +48,7 @@ def main():
                          "ultra8k_tiles_match_monolithic_color_and_ids",
                          "ultra8k_streamed_png_dimensions_and_rows",
                          "ultra8k_failure_preserves_scene_and_native_state"})
+    if mirrors:expected.add("mirrors_selection_snapshot_and_tiled_export")
     report = json.loads((directory / "report.json").read_text())
     tests = report["tests"]
     require(report["schemaVersion"] == 1, "Unsupported report schema")
@@ -57,6 +60,27 @@ def main():
     require(int(xml.attrib["tests"]) == len(expected) and int(xml.attrib["failures"]) == 0,
             "JUnit report disagrees with JSON results")
     metrics = report["metrics"]
+    reuse = metrics.get("frameReuse", {})
+    require(all(reuse.get(name) is True for name in ("samePickRestored", "timingForcesDrawing", "exactComparison")),
+            "Frame reuse did not preserve picking, timing or exact comparison")
+    expected_reuse = {"time", "seed", "camera", "coupling", "native_epoch", "resolution", "object_count", "presentation", "edit", "population_shrink", "population_restore", "edit_restore"}
+    reuse_checks = reuse.get("checks", [])
+    require(len(reuse_checks) == len(expected_reuse) and {row.get("input") for row in reuse_checks} == expected_reuse
+            and all(row.get("invalidated") is True and row.get("reusedWithoutDrawing") is True
+                    and row.get("forcedDifferentPixels") == 0 and row.get("repeatDifferentPixels") == 0 for row in reuse_checks),
+            "Missing or failed exact frame reuse input coverage")
+    require(metrics.get("mirrorSuite",False) is mirrors,"Wrong mirror test profile")
+    if mirrors:
+        optical=metrics.get("mirrors",{})
+        require(optical.get("readOnly") is True and optical.get("snapshotRestored") is True
+                and optical.get("tileDifferentPixels")==0 and optical.get("changedPixels",0)>0
+                and 0<=optical.get("reflectedPickId",-1)<64,"Missing or invalid mirror evidence")
+        optical_reuse = optical.get("reuseChecks", [])
+        require(len(optical_reuse) == 4 and {row.get("input") for row in optical_reuse}
+                == {"mirror_reflectance", "mirror_fold", "mirror_budget", "mirror_restore"}
+                and all(row.get("invalidated") is True and row.get("reusedWithoutDrawing") is True
+                        and row.get("forcedDifferentPixels") == 0 and row.get("repeatDifferentPixels") == 0 for row in optical_reuse),
+                "Mirror inputs did not invalidate the reused framebuffer exactly")
     infinite_device_evidence.verify_graphics_metrics(metrics, require)
     require(metrics.get("uhd4kSuite", False) is uhd, "Wrong UHD/legacy test profile")
     require(metrics.get("ultra8kSuite", False) is ultra, "Wrong 8K test profile")

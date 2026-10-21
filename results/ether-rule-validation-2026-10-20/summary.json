@@ -1,0 +1,26 @@
+{
+  "code_commit": "35a82f88c88e40e9c2fcba7453b33fc91f51ffca",
+  "baseline": "aab0930378796ebfd42f9629e2575108ca94fcff",
+  "source_sha256": {
+    "native/include/mundo_x/ether_core.hpp": "052f74bc4ad3904e902581162e00f46ade00e4440775b4ccc6ce82beca64fc88",
+    "native/include/mundo_x/infinite_core.hpp": "6572a6c6937a622e30165de43d49223b529727ef27ddf4ec9dd35beb498e1144"
+  },
+  "ctest": {
+    "passed": 73,
+    "total": 73
+  },
+  "rule_checks": 720792,
+  "sanitizers": [
+    "ASan",
+    "UBSan"
+  ],
+  "leak_detection": false,
+  "jni_host": "blocked: JDK 17 headers absent",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "cpu_affinity": [
+    0
+  ],
+  "benchmark_samples": 60,
+  "physical_device": false,
+  "apk_built": false
+}

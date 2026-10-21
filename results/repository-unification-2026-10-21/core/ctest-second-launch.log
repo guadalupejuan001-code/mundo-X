@@ -1,0 +1,169 @@
+Internal ctest changing into directory: /workspace/scratch/d0e1d0a0e3a1/closure/core/build
+Test project /workspace/scratch/d0e1d0a0e3a1/closure/core/build
+      Start  1: basis_vm_cli_selftest
+ 1/78 Test  #1: basis_vm_cli_selftest ............   Passed    0.01 sec
+      Start  2: phase_core
+ 2/78 Test  #2: phase_core .......................   Passed    0.00 sec
+      Start  3: state_transfer
+ 3/78 Test  #3: state_transfer ...................   Passed    0.37 sec
+      Start  4: existing_hello
+ 4/78 Test  #4: existing_hello ...................   Passed    0.00 sec
+      Start  5: existing_teleport
+ 5/78 Test  #5: existing_teleport ................   Passed    0.00 sec
+      Start  6: existing_magic
+ 6/78 Test  #6: existing_magic ...................   Passed    0.00 sec
+      Start  7: physics_world
+ 7/78 Test  #7: physics_world ....................   Passed    0.00 sec
+      Start  8: physics_allocation
+ 8/78 Test  #8: physics_allocation ...............   Passed    0.00 sec
+      Start  9: rule_physics
+ 9/78 Test  #9: rule_physics .....................   Passed    0.05 sec
+      Start 10: reduced_optimization
+10/78 Test #10: reduced_optimization .............   Passed    0.05 sec
+      Start 11: boundaries
+11/78 Test #11: boundaries .......................   Passed    0.00 sec
+      Start 12: dense_precision
+12/78 Test #12: dense_precision ..................   Passed    0.00 sec
+      Start 13: factorized_core
+13/78 Test #13: factorized_core ..................   Passed    0.02 sec
+      Start 14: factorized_storage
+14/78 Test #14: factorized_storage ...............   Passed    0.01 sec
+      Start 15: factorized_structure
+15/78 Test #15: factorized_structure .............   Passed    0.02 sec
+      Start 16: micro_lab
+16/78 Test #16: micro_lab ........................   Passed    0.15 sec
+      Start 17: compact_measurement
+17/78 Test #17: compact_measurement ..............   Passed    0.00 sec
+      Start 18: xasm_measurement
+18/78 Test #18: xasm_measurement .................   Passed    0.00 sec
+      Start 19: visual_scene
+19/78 Test #19: visual_scene .....................   Passed    0.00 sec
+      Start 20: xasm_visual
+20/78 Test #20: xasm_visual ......................   Passed    0.01 sec
+      Start 21: integrated_runtime
+21/78 Test #21: integrated_runtime ...............   Passed    0.00 sec
+      Start 22: engine_session
+22/78 Test #22: engine_session ...................   Passed    0.07 sec
+      Start 23: lab_circuit
+23/78 Test #23: lab_circuit ......................   Passed    0.00 sec
+      Start 24: lab_memory
+24/78 Test #24: lab_memory .......................   Passed    0.00 sec
+      Start 25: lab_protocols
+25/78 Test #25: lab_protocols ....................   Passed    0.01 sec
+      Start 26: core_performance
+26/78 Test #26: core_performance .................   Passed    0.57 sec
+      Start 27: core_60
+27/78 Test #27: core_60 ..........................   Passed    0.27 sec
+      Start 28: core_1000
+28/78 Test #28: core_1000 ........................   Passed    0.50 sec
+      Start 29: xasm_60
+29/78 Test #29: xasm_60 ..........................   Passed    0.04 sec
+      Start 30: infinite_address
+30/78 Test #30: infinite_address .................   Passed    0.00 sec
+      Start 31: infinite_core
+31/78 Test #31: infinite_core ....................   Passed    0.17 sec
+      Start 32: infinite_tensor
+Process not started
+ /workspace/scratch/d0e1d0a0e3a1/closure/core/build/test_infinite_tensor
+[permission denied]
+32/78 Test #32: infinite_tensor ..................***Not Run   0.00 sec
+      Start 33: infinite_session
+33/78 Test #33: infinite_session .................   Passed    0.22 sec
+      Start 34: infinite_bridge
+34/78 Test #34: infinite_bridge ..................   Passed    0.01 sec
+      Start 35: ether_core
+35/78 Test #35: ether_core .......................   Passed    0.30 sec
+      Start 36: ether_frame
+36/78 Test #36: ether_frame ......................   Passed    0.00 sec
+      Start 37: ether_fusion
+37/78 Test #37: ether_fusion .....................   Passed    0.27 sec
+      Start 38: ether_rules
+38/78 Test #38: ether_rules ......................   Passed    0.27 sec
+      Start 39: quantum_algorithms
+39/78 Test #39: quantum_algorithms ...............   Passed    0.01 sec
+      Start 40: infinite_extreme
+40/78 Test #40: infinite_extreme .................   Passed    0.57 sec
+      Start 41: physics3d_cli
+41/78 Test #41: physics3d_cli ....................   Passed    0.00 sec
+      Start 42: ether_batch
+42/78 Test #42: ether_batch ......................   Passed    0.28 sec
+      Start 43: ether_example
+43/78 Test #43: ether_example ....................   Passed    0.00 sec
+      Start 44: infinite_example_zero
+44/78 Test #44: infinite_example_zero ............   Passed    0.00 sec
+      Start 45: infinite_example_bell
+45/78 Test #45: infinite_example_bell ............   Passed    0.00 sec
+      Start 46: infinite_cli_contract
+46/78 Test #46: infinite_cli_contract ............   Passed    0.20 sec
+      Start 47: basis_vm
+47/78 Test #47: basis_vm .........................   Passed    0.26 sec
+      Start 48: quantum_echo
+48/78 Test #48: quantum_echo .....................   Passed    0.23 sec
+      Start 49: sparse_observable
+49/78 Test #49: sparse_observable ................   Passed    0.51 sec
+      Start 50: native_original_exams
+50/78 Test #50: native_original_exams ............   Passed    0.07 sec
+      Start 51: factorized_diversity
+51/78 Test #51: factorized_diversity .............   Passed    0.01 sec
+      Start 52: native_core_and_xasm
+52/78 Test #52: native_core_and_xasm .............   Passed    0.05 sec
+      Start 53: xasm_hello
+53/78 Test #53: xasm_hello .......................   Passed    0.00 sec
+      Start 54: xasm_bell
+54/78 Test #54: xasm_bell ........................   Passed    0.00 sec
+      Start 55: xasm_ghz4
+55/78 Test #55: xasm_ghz4 ........................   Passed    0.00 sec
+      Start 56: xasm_magic_t
+56/78 Test #56: xasm_magic_t .....................   Passed    0.00 sec
+      Start 57: xasm_clifford_t
+57/78 Test #57: xasm_clifford_t ..................   Passed    0.00 sec
+      Start 58: xasm_ghz1000
+58/78 Test #58: xasm_ghz1000 .....................   Passed    0.01 sec
+      Start 59: xasm_t60
+59/78 Test #59: xasm_t60 .........................   Passed    0.01 sec
+      Start 60: xasm_reduced_magic
+60/78 Test #60: xasm_reduced_magic ...............   Passed    0.00 sec
+      Start 61: xasm_failed_assert_exit
+61/78 Test #61: xasm_failed_assert_exit ..........   Passed    0.00 sec
+      Start 62: xasm_invalid_program_exit
+62/78 Test #62: xasm_invalid_program_exit ........   Passed    0.00 sec
+      Start 63: mxlang_compiler
+63/78 Test #63: mxlang_compiler ..................   Passed    0.02 sec
+      Start 64: mx_bell
+64/78 Test #64: mx_bell ..........................   Passed    0.00 sec
+      Start 65: mx_magic
+65/78 Test #65: mx_magic .........................   Passed    0.00 sec
+      Start 66: mx_layers
+66/78 Test #66: mx_layers ........................   Passed    0.00 sec
+      Start 67: mxlang_cli_contract
+67/78 Test #67: mxlang_cli_contract ..............   Passed    0.01 sec
+      Start 68: sparse_ram
+68/78 Test #68: sparse_ram .......................   Passed    0.00 sec
+      Start 69: x86_cpu
+69/78 Test #69: x86_cpu ..........................   Passed    0.10 sec
+      Start 70: x86_long_mode
+70/78 Test #70: x86_long_mode ....................   Passed    0.02 sec
+      Start 71: x86_alu64_oracle
+71/78 Test #71: x86_alu64_oracle .................   Passed    0.02 sec
+      Start 72: x86_enter_oracle
+72/78 Test #72: x86_enter_oracle .................   Passed    0.25 sec
+      Start 73: boot_media
+73/78 Test #73: boot_media .......................   Passed    0.00 sec
+      Start 74: pc_machine
+74/78 Test #74: pc_machine .......................   Passed    0.00 sec
+      Start 75: pc_iso
+75/78 Test #75: pc_iso ...........................   Passed    0.01 sec
+      Start 76: pc_memory
+76/78 Test #76: pc_memory ........................   Passed    0.00 sec
+      Start 77: pc_video
+77/78 Test #77: pc_video .........................   Passed    0.46 sec
+      Start 78: pc_quantum
+78/78 Test #78: pc_quantum .......................   Passed    0.01 sec
+
+99% tests passed, 1 tests failed out of 78
+
+Total Test time (real) =   6.59 sec
+
+The following tests FAILED:
+	 32 - infinite_tensor (BAD_COMMAND)
+Errors while running CTest

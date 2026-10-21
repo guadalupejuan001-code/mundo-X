@@ -1,0 +1,12 @@
+{
+  "base_commit": "52150dfa928c088a32e69ce32f53c1e5a3b558c3",
+  "test": "retry PhysicsWorld after node index allocation fails",
+  "returncode": -11,
+  "stdout": "allocation_rejected=1 first_body_unchanged=1\n",
+  "stderr": "",
+  "rlimit_as_bytes": 2147483648,
+  "probe_source_sha256": "132e82815469c282dc982a4a32e86a8f4edd88462082714caa7e908d8af1f5a1",
+  "baseline_physics_world_sha256": "8c0186252730b92fa7a916b5de5565509eab303c2ab9104ace4af6e46e50f5f9",
+  "probe_source": "physics-allocation-probe.cpp",
+  "scope": "Controlled one-allocation failure on baseline; first step rejected without publishing body state, retry crashed. New production test exercises recovery."
+}

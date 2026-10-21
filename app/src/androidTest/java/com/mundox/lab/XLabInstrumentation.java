@@ -361,6 +361,14 @@ public final class XLabInstrumentation extends Instrumentation {
             });
 
             check("objects_65536_visible_and_max_zoom_uses_real_framebuffer", () -> {
+                // This is a fixed-time image/coverage regression. Continuous
+                // animation can keep software GLES and Android's UI renderer
+                // busy during screenshots and restoration, after both exact
+                // framebuffer comparisons have already succeeded.
+                boolean resumeAnimation = text("objects_animate").contains("activo");
+                if (resumeAnimation) click("objects_animate");
+                awaitObjectAnimation(false, SystemClock.uptimeMillis() + DEADLINE_MS);
+                Throwable primaryFailure = null;
                 try {
                     loadObjects(3, "2026", SystemClock.uptimeMillis() + 90_000L);
                     click("objects_verify");
@@ -395,9 +403,19 @@ public final class XLabInstrumentation extends Instrumentation {
                     far.put("screenshot_captured", farCapture.getBoolean("captured"));
                     far.put("screenshot_diagnostic", farCapture);
                     saveEvidence("xlab-65536-maxzoom.json", far.toString(2));
+                } catch (Exception | Error failure) {
+                    primaryFailure = failure;
+                    throw failure;
                 } finally {
-                    // Never leave this larger workload running after an assertion.
-                    loadObjects(0, "2026", SystemClock.uptimeMillis() + 90_000L);
+                    // Preserve the actual image failure if cleanup also fails.
+                    try {
+                        loadObjects(0, "2026", SystemClock.uptimeMillis() + 90_000L);
+                        if (resumeAnimation) click("objects_animate");
+                        awaitObjectAnimation(resumeAnimation, SystemClock.uptimeMillis() + DEADLINE_MS);
+                    } catch (Exception | Error cleanupFailure) {
+                        if (primaryFailure != null) primaryFailure.addSuppressed(cleanupFailure);
+                        else throw cleanupFailure;
+                    }
                 }
             });
 

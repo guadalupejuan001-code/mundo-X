@@ -13,6 +13,17 @@ forma explícita y los proyectos existentes conservan su backend al abrirse.
 
 [Uso de 8K, memoria, mediciones y alcance](docs/8k.md).
 
+El renderizador compartido incorpora un [índice exacto de excepciones por páginas](../docs/ether-render-optimization.md).
+Conserva IDs, alturas, reflejos y archivos `.cosmic`; cambia la consulta interna
+de la GPU. La [consolidación del 21 de octubre](../docs/repository-unification-2026-10-21.md)
+registra por separado la compilación, la ejecución Android y las mediciones.
+
+La reutilización del framebuffer compara las entradas visuales exactamente,
+incluidos los espejos y las revisiones de las texturas. Una captura ID invalida
+el color anterior, y medir el tiempo sincronizado siempre vuelve a dibujar.
+Reducir la población conserva las ediciones de IDs temporalmente inactivos;
+sólo las ediciones visibles se suben al índice de la GPU.
+
 **COSMIC X Engine es el título. Dentro está la computación cuántica de Mundo X,
 con su núcleo cuántico y su motor gráfico cuántico integrado.**
 
@@ -61,6 +72,12 @@ actual. El formato v1 conserva el perfil `compact-clifford`. El v2 identifica `i
   de vista. La preparación muestra su progreso y puede cancelarse.
 - **Estilo** permite alternar entre la presentación original y la presentación
   cósmica que ya forma parte del motor. Ambas conservan los mismos objetos e IDs.
+- **Espejos** activa suelo reflectante o una vista entre dos espejos enfrentados.
+  Los reflejos consultan el mismo mundo y conservan los IDs de sus objetos.
+  El presupuesto limita los rebotes explícitos; los tramos que se pueden resolver
+  por composición no requieren copiar el mundo. Un recorrido incompleto se
+  muestra en magenta y la exportación lo rechaza. La sesión privada conserva
+  los ajustes ópticos; el formato `.cosmic` actual todavía no los transporta.
 - **Qubit** elige el control; H, S, X, Y y Z actúan sobre él. CX y CZ conectan
   el control con el siguiente qubit, circularmente; requieren al menos dos.
 - **Acoplamiento** conecta o desconecta el efecto del núcleo en la imagen.
@@ -97,11 +114,11 @@ objeto: la cámara y el dibujo conservan el estado y el historial. La caché se
 invalida al operar o restaurar, incluso si el proyecto restaurado tiene el
 mismo número de revisión.
 
-El mundo inicial usa 1.000 qubits, 1.000.000 de objetos y 3.000 observables:
-los generadores iniciales y las consultas locales X/Z. Los proyectos
-importados conservan su propio conjunto de observables, incluso cuando
-hay menos objetos que canales. El observador obtiene valores esperados
-de Pauli sin medición proyectiva.
+El mundo inicial usa Ether con cinco observables dispersos. El perfil finito
+explícito de 1.000 qubits conserva sus 3.000 observables iniciales: generadores
+y consultas locales X/Z. Los proyectos importados conservan su propio conjunto
+de observables, incluso cuando hay menos objetos que canales. El observador
+obtiene valores esperados de Pauli sin medición proyectiva.
 
 ## Construir
 

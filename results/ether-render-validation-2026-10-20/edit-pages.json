@@ -1,0 +1,223 @@
+{
+  "status": "passed",
+  "cpu_and_gpu_ids_each": 3163206,
+  "java_byte_exact": true,
+  "fixtures": [
+    {
+      "case": 0,
+      "count": 1,
+      "edits": 0,
+      "bytes": 4,
+      "shape": [
+        1,
+        1
+      ],
+      "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "packing_samples_ms": {
+        "before": [
+          0.025708,
+          0.006079,
+          0.002905
+        ],
+        "after": [
+          0.023925,
+          0.003425,
+          0.002454
+        ]
+      },
+      "packing_median_ms": {
+        "before": 0.006079,
+        "after": 0.003425
+      },
+      "tracked_packing_allocations": {}
+    },
+    {
+      "case": 1,
+      "count": 257,
+      "edits": 2,
+      "bytes": 1024,
+      "shape": [
+        1,
+        256
+      ],
+      "sha256": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+      "packing_samples_ms": {
+        "before": [
+          0.09458,
+          0.011968,
+          0.009995
+        ],
+        "after": [
+          0.02687,
+          0.030836,
+          0.024386
+        ]
+      },
+      "packing_median_ms": {
+        "before": 0.011968,
+        "after": 0.02687
+      },
+      "tracked_packing_allocations": {}
+    },
+    {
+      "case": 2,
+      "count": 257,
+      "edits": 5,
+      "bytes": 1024,
+      "shape": [
+        1,
+        256
+      ],
+      "sha256": "f059853dd7fd43bf4ac0af6b24f7e3562b97ff231b10d76048051e854f3aa2e5",
+      "packing_samples_ms": {
+        "before": [
+          0.030475,
+          0.00692,
+          0.005658
+        ],
+        "after": [
+          0.04084,
+          0.009284,
+          0.006279
+        ]
+      },
+      "packing_median_ms": {
+        "before": 0.00692,
+        "after": 0.009284
+      },
+      "tracked_packing_allocations": {}
+    },
+    {
+      "case": 3,
+      "count": 1048576,
+      "edits": 64,
+      "bytes": 17408,
+      "shape": [
+        17,
+        256
+      ],
+      "sha256": "ef4c58b159a62847ea6b33cd507defb4024a3539ed89a958fd2c5c7b19a70ebd",
+      "packing_samples_ms": {
+        "before": [
+          0.068851,
+          0.032899,
+          0.029844
+        ],
+        "after": [
+          0.077164,
+          0.108961,
+          0.042593
+        ]
+      },
+      "packing_median_ms": {
+        "before": 0.032899,
+        "after": 0.077164
+      },
+      "tracked_packing_allocations": {}
+    },
+    {
+      "case": 4,
+      "count": 1000003,
+      "edits": 4096,
+      "bytes": 397312,
+      "shape": [
+        388,
+        256
+      ],
+      "sha256": "db0bf3ee7ce682853fdc9d001947276c7c1f3614b45ea0a535dd4bab256cf12b",
+      "packing_samples_ms": {
+        "before": [
+          2.395035,
+          2.348165,
+          1.878543
+        ],
+        "after": [
+          2.048983,
+          1.737344,
+          1.741701
+        ]
+      },
+      "packing_median_ms": {
+        "before": 2.348165,
+        "after": 1.741701
+      },
+      "tracked_packing_allocations": {}
+    },
+    {
+      "case": 5,
+      "count": 65536,
+      "edits": 65536,
+      "bytes": 33792,
+      "shape": [
+        33,
+        256
+      ],
+      "sha256": "24cabc30b10965018c56fb14cd93fec77f2937e02111d6c53fc31ecd3f983551",
+      "packing_samples_ms": {
+        "before": [
+          28.703118,
+          28.359911,
+          29.066023
+        ],
+        "after": [
+          21.716107,
+          21.163842,
+          25.347336
+        ]
+      },
+      "packing_median_ms": {
+        "before": 28.703118,
+        "after": 21.716107
+      },
+      "tracked_packing_allocations": {}
+    },
+    {
+      "case": 6,
+      "count": 1048576,
+      "edits": 1048576,
+      "bytes": 540672,
+      "shape": [
+        528,
+        256
+      ],
+      "sha256": "2551e998ba4b6a81dc863829324a9f8b96cd6cf5a75ea03ffa331e317eefa7bb",
+      "packing_samples_ms": {
+        "before": [
+          523.184779,
+          502.169069,
+          606.252132
+        ],
+        "after": [
+          369.924617,
+          413.962238,
+          393.060556
+        ]
+      },
+      "packing_median_ms": {
+        "before": 523.184779,
+        "after": 393.060556
+      },
+      "tracked_packing_allocations": {
+        "before": {
+          "current_bytes": 8500704,
+          "peak_bytes": 75386076,
+          "buffer_bytes": 8388608
+        },
+        "after": {
+          "current_bytes": 652824,
+          "peak_bytes": 1278460,
+          "buffer_bytes": 540672
+        }
+      }
+    }
+  ],
+  "driver": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "OpenGL ES 3.2 Mesa 25.2.8-0ubuntu0.24.04.2",
+    "glsl": "OpenGL ES GLSL ES 3.20",
+    "hardware_gpu_available": false,
+    "timer_query_supported": true
+  },
+  "rss_peak_kib": 434464
+}

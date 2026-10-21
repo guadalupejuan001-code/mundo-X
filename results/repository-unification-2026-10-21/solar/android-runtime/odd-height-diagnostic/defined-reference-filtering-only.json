@@ -1,0 +1,18 @@
+{
+  "source_commit": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "source_path": "solar-android/app/src/main/assets/shaders/solar.frag",
+  "source_sha256": "e99a3064ca1e0111d4e909382bf8c81cc44288398b0253d804bf433aab10156d",
+  "reference_path": "solar-android/tests/fixtures/solar-defined-reference.frag",
+  "reference_sha256": "7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6",
+  "candidate_shader_sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50",
+  "corrections": "Defined analytic filter gradients and explicit LOD gradients; longitude at poles; clamp rounded negative pow bases. The original full material/cloud evaluation and tile lookup remain.",
+  "specification": "https://registry.khronos.org/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf",
+  "sections": [
+    "3.10.2",
+    "8.1",
+    "8.2",
+    "8.8",
+    "8.9"
+  ],
+  "comparison_scope": "Equivalence of optimizations after correcting filtering, not color equality with the undefined af0b reference."
+}

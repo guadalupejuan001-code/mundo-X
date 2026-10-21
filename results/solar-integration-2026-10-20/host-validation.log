@@ -1,0 +1,6 @@
+SolarDataChecks PASS: 567 checks; 23 bodies; Kepler, moon and dipole invariants.
+SolarVisualEtherChecks PASS: 41567 checks; candidate ratio=0.0170076726342711; max candidates=4; tiles=2040
+eclipse_omission_checks=9956160
+SolarOptimizationChecks PASS: 10239383
+SolarPhysicsComparison PASS: 588800 bitwise state checks; overflow rollback passed
+SolarBridgeChecks PASS: 301014; 2205 session constructions, 100000 concurrent observations

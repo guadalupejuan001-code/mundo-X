@@ -222,7 +222,10 @@ class MicroLab {
   static float coordinate(std::size_t i) { return -1.0f + 2.0f * i / (grid - 1); }
   static float reflect(float x) {
     // Fold arbitrary finite overshoots into the reflecting interval.
-    float t = std::fmod(x + 1, 4.0f);
+    float t = x + 1;
+    // Preserve the old float additions/subtractions and arbitrary overshoot
+    // semantics. The common interval needs no remainder operation.
+    if (!(t >= 0 && t < 4.0f)) t = std::fmod(t, 4.0f);
     if (t < 0) t += 4;
     return t <= 2 ? t - 1 : 3 - t;
   }

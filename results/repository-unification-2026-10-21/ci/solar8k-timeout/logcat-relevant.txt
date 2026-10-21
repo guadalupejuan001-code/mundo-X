@@ -1,0 +1,43 @@
+40470: 10-21 00:55:40.898  2440  2524 D EGL_emulation: app_time_stats: avg=4456.86ms min=35.72ms max=16809.10ms count=4
+40491: 10-21 00:55:42.631  2440  2524 D EGL_emulation: app_time_stats: avg=575.34ms min=23.80ms max=1640.68ms count=3
+40496: 10-21 00:55:44.027  2440  2524 D EGL_emulation: app_time_stats: avg=1395.59ms min=1395.59ms max=1395.59ms count=1
+40508: 10-21 00:55:45.325  2440  2524 D EGL_emulation: app_time_stats: avg=640.68ms min=59.72ms max=1221.63ms count=2
+40514: 10-21 00:55:45.460  2440  4512 D EGL_emulation: app_time_stats: avg=1422.28ms min=1419.78ms max=1424.79ms count=2
+40522: 10-21 00:55:46.808  2440  2524 D EGL_emulation: app_time_stats: avg=731.22ms min=180.05ms max=1282.40ms count=2
+40523: 10-21 00:55:46.809  2440  4512 D EGL_emulation: app_time_stats: avg=1349.01ms min=1349.01ms max=1349.01ms count=1
+40568: 10-21 00:55:48.289  2440  4512 D EGL_emulation: app_time_stats: avg=1479.84ms min=1479.84ms max=1479.84ms count=1
+40569: 10-21 00:55:48.325  2440  2524 D EGL_emulation: app_time_stats: avg=758.63ms min=43.95ms max=1473.32ms count=2
+40592: 10-21 00:55:49.681  2440  4512 D EGL_emulation: app_time_stats: avg=1391.96ms min=1391.96ms max=1391.96ms count=1
+40601: 10-21 00:55:49.714  2440  2524 D EGL_emulation: app_time_stats: avg=1388.14ms min=1388.14ms max=1388.14ms count=1
+40692: 10-21 00:55:50.857  2440  2473 I icx.solar.ultra: Background concurrent mark compact GC freed 2692KB AllocSpace bytes, 14(26MB) LOS objects, 15% free, 135MB/159MB, paused 114us,8.299ms total 184.007ms
+46077: 10-21 00:57:19.847  2440  2524 D EGL_emulation: app_time_stats: avg=12865.83ms min=10.66ms max=89175.00ms count=7
+46278: 10-21 00:57:20.436  2440  4512 D EGL_emulation: app_time_stats: avg=45377.47ms min=889.16ms max=89865.78ms count=2
+46381: 10-21 00:57:20.865  2440  2524 D EGL_emulation: app_time_stats: avg=245.87ms min=6.84ms max=500.90ms count=4
+46866: 10-21 00:57:21.900  2440  2524 D EGL_emulation: app_time_stats: avg=516.80ms min=497.45ms max=536.14ms count=2
+47541: 10-21 00:57:23.522  2440  2524 D EGL_emulation: app_time_stats: avg=540.52ms min=482.17ms max=638.54ms count=3
+47589: 10-21 00:57:23.678  2440  4512 D EGL_emulation: app_time_stats: avg=3241.63ms min=3241.63ms max=3241.63ms count=1
+47676: 10-21 00:57:24.204  2440  4512 I icx.solar.ultra: Alloc concurrent mark compact GC freed 1696KB AllocSpace bytes, 11(131MB) LOS objects, 49% free, 4118KB/8236KB, paused 82us,5.441ms total 99.233ms
+47706: 10-21 00:57:24.369  2440  2473 I icx.solar.ultra: Background concurrent mark compact GC freed 148KB AllocSpace bytes, 0(0B) LOS objects, 15% free, 132MB/156MB, paused 70us,31.418ms total 164.950ms
+47982: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: ultra8k_earth_entry_atmosphere
+47983: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: java.lang.AssertionError: Actual GLES framebuffer capture timed out
+47984: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1134)
+47985: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.await(SolarInstrumentation.java:980)
+47986: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.frame(SolarInstrumentation.java:967)
+47987: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.ultraEntry(SolarInstrumentation.java:851)
+47988: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.$r8$lambda$UPqC1OEgeJB9T5Mzi3BACcf0QfQ(Unknown Source:0)
+47989: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation$$ExternalSyntheticLambda21.run(D8$$SyntheticClass:0)
+47990: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.runCase(SolarInstrumentation.java:1093)
+47991: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:119)
+47992: 10-21 00:59:54.062  2440  2509 E CosmicSolarTests: 	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+48181: 10-21 01:00:03.090  2440  2524 D EGL_emulation: app_time_stats: avg=17728.99ms min=14.38ms max=158890.70ms count=9
+48193: 10-21 01:00:03.559  2440  4512 D EGL_emulation: app_time_stats: avg=159880.88ms min=159880.88ms max=159880.88ms count=1
+48204: 10-21 01:00:03.717   550  4939 E ActivityManager: ANR in com.google.android.ext.services
+52286: 10-21 01:02:34.019  2440  2509 E CosmicSolarTests: Solar setup/reporting failed
+52287: 10-21 01:02:34.019  2440  2509 E CosmicSolarTests: java.lang.AssertionError: GL command timed out
+52288: 10-21 01:02:34.019  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1134)
+52289: 10-21 01:02:34.019  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.await(SolarInstrumentation.java:980)
+52290: 10-21 01:02:34.019  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.gl(SolarInstrumentation.java:946)
+52291: 10-21 01:02:34.019  2440  2509 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:133)
+52292: 10-21 01:02:34.019  2440  2509 E CosmicSolarTests: 	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+52354: 10-21 01:02:34.134   550  1752 I ActivityManager: Killing 2440:com.cosmicx.solar.ultra/u0a210 (adj 0): stop com.cosmicx.solar.ultra due to finished inst
+52371: 10-21 01:02:34.485   361   361 I Zygote  : Process 2440 exited due to signal 9 (Killed)

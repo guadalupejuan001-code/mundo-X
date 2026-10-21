@@ -1,0 +1,3689 @@
+{
+  "schemaVersion": 1,
+  "testsRun": 16,
+  "testsFailed": 2,
+  "tests": [
+    {
+      "name": "native_gles_launch_and_textures",
+      "passed": true,
+      "durationSeconds": 207.792
+    },
+    {
+      "name": "astronomy_and_magnetic_classification",
+      "passed": true,
+      "durationSeconds": 0.011
+    },
+    {
+      "name": "native_ether_fusion_and_readonly_observation",
+      "passed": true,
+      "durationSeconds": 2.327
+    },
+    {
+      "name": "quantum_coupled_and_uncoupled_frames",
+      "passed": true,
+      "durationSeconds": 6.034
+    },
+    {
+      "name": "intrinsic_and_induced_field_frames",
+      "passed": true,
+      "durationSeconds": 15.897
+    },
+    {
+      "name": "solar_wind_layer",
+      "passed": true,
+      "durationSeconds": 3.435
+    },
+    {
+      "name": "saturn_rings_and_moon_navigation",
+      "passed": true,
+      "durationSeconds": 12.943
+    },
+    {
+      "name": "forward_reverse_and_paused_time",
+      "passed": true,
+      "durationSeconds": 9.071
+    },
+    {
+      "name": "real_scale_earth_focus",
+      "passed": true,
+      "durationSeconds": 15.007
+    },
+    {
+      "name": "camera_rotation_zoom_pan_and_flight",
+      "passed": true,
+      "durationSeconds": 9.43
+    },
+    {
+      "name": "resolution_budget",
+      "passed": true,
+      "durationSeconds": 5.95
+    },
+    {
+      "name": "background_resume_preserves_state",
+      "passed": true,
+      "durationSeconds": 7.704
+    },
+    {
+      "name": "recreation_and_orientation_preserve_state",
+      "passed": true,
+      "durationSeconds": 97.672
+    },
+    {
+      "name": "ultra8k_framebuffer_return_preserves_scene",
+      "passed": true,
+      "durationSeconds": 95.32
+    },
+    {
+      "name": "ultra8k_earth_entry_atmosphere",
+      "passed": false,
+      "durationSeconds": 160.349,
+      "error": "java.lang.AssertionError: Actual GLES framebuffer capture timed out\n\tat com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1134)\n\tat com.mundox.solar.SolarInstrumentation.await(SolarInstrumentation.java:980)\n\tat com.mundox.solar.SolarInstrumentation.frame(SolarInstrumentation.java:967)\n\tat com.mundox.solar.SolarInstrumentation.ultraEntry(SolarInstrumentation.java:851)\n\tat com.mundox.solar.SolarInstrumentation.$r8$lambda$UPqC1OEgeJB9T5Mzi3BACcf0QfQ(Unknown Source:0)\n\tat com.mundox.solar.SolarInstrumentation$$ExternalSyntheticLambda21.run(D8$$SyntheticClass:0)\n\tat com.mundox.solar.SolarInstrumentation.runCase(SolarInstrumentation.java:1093)\n\tat com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:119)\n\tat android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)\n"
+    },
+    {
+      "name": "instrumentation_setup_or_reporting",
+      "passed": false,
+      "durationSeconds": 0,
+      "error": "java.lang.AssertionError: GL command timed out\n\tat com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1134)\n\tat com.mundox.solar.SolarInstrumentation.await(SolarInstrumentation.java:980)\n\tat com.mundox.solar.SolarInstrumentation.gl(SolarInstrumentation.java:946)\n\tat com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:133)\n\tat android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)\n"
+    }
+  ],
+  "metrics": {
+    "androidSdk": 35,
+    "androidRelease": "15",
+    "abis": [
+      "x86_64",
+      "arm64-v8a"
+    ],
+    "performanceScope": "Software GLES emulator; not Samsung A16 performance measurements",
+    "physicalScope": "JPL analytical orbits + JPL-GM local gravity; illustrative moon phases and magnetic geometries",
+    "uhd4kSuite": false,
+    "ultra8kSuite": true,
+    "applicationId": "com.cosmicx.solar.ultra",
+    "initialWindowFocused": true,
+    "startupViewportSamples": 3,
+    "startupViewport": [
+      320,
+      640
+    ],
+    "deterministicPausedChangedPixels": 0,
+    "packagedNasaTextures": [
+      {
+        "asset": "textures\/earth.png",
+        "width": 2048,
+        "height": 1024
+      },
+      {
+        "asset": "textures\/moon.jpg",
+        "width": 2048,
+        "height": 1024
+      },
+      {
+        "asset": "textures\/jupiter.jpg",
+        "width": 1280,
+        "height": 640
+      }
+    ],
+    "uploadedNasaTextures": 3,
+    "initialBrightPixels": 41237,
+    "bodyCount": 23,
+    "planetCount": 8,
+    "moonCount": 14,
+    "earthJ2000DistanceAU": 0.9832807741841619,
+    "earthMoonDistanceKm": 390454.9638979259,
+    "earthGravityMs2": 9.820224448725423,
+    "earthEscapeKmS": 11.186128235695765,
+    "oneSecondFallAltitudeKm": 99.99524047126627,
+    "oneSecondFallVelocityKmS": -0.009519059801961759,
+    "fieldTypes": {
+      "earth": 1,
+      "venus": 2,
+      "mars": 3,
+      "moon": 0,
+      "ganymede": 1
+    },
+    "etherFusionPresets": [
+      {
+        "preset": 0,
+        "local": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "ether": [
+          1,
+          1,
+          0,
+          0,
+          0
+        ],
+        "activeSites": 0,
+        "rules": 2,
+        "revision": 2,
+        "epoch": 1
+      },
+      {
+        "preset": 1,
+        "local": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        "ether": [
+          0,
+          0,
+          0,
+          1,
+          1
+        ],
+        "activeSites": 8,
+        "rules": 2,
+        "revision": 10,
+        "epoch": 9
+      },
+      {
+        "preset": 2,
+        "local": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1
+        ],
+        "ether": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "activeSites": 8,
+        "rules": 2,
+        "revision": 10,
+        "epoch": 9
+      },
+      {
+        "preset": 3,
+        "local": [
+          0,
+          -1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "ether": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "activeSites": 8,
+        "rules": 2,
+        "revision": 14,
+        "epoch": 13
+      }
+    ],
+    "etherFusionSingleObservation": true,
+    "framedBellExpectations": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1
+    ],
+    "etherExpectations": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "etherRules": 2,
+    "observationPreservedNativeRevision": true,
+    "observationPreservedNativeEpoch": true,
+    "etherObservationReadOnly": true,
+    "coupledChangedPixels": 2067,
+    "uncoupledChangedPixels": 0,
+    "coupledComparisonPresets": [
+      0,
+      3
+    ],
+    "quantumPreparationOrbitalDeltaAU": 0,
+    "fieldToggleChangedPixels": {
+      "earth": 11014,
+      "venus": 8266,
+      "mars": 8486
+    },
+    "windToggleChangedPixels": 84440,
+    "saturnBrightPixels": 16097,
+    "moonBrightPixels": 38828,
+    "navigationDestinationChangedPixels": 115409,
+    "systemOverviewRendered": true,
+    "forwardDaysAdvanced": 0.20000000018626451,
+    "reverseDaysAdvanced": -0.20000000018626451,
+    "pausedDatePreserved": true,
+    "dateBoundsEnforced": true,
+    "realScaleEarthBrightPixels": 41329,
+    "cameraChangedPixels": {
+      "rotation": 95731,
+      "zoom": 26800,
+      "pan": 29232,
+      "flight": 29974
+    },
+    "lowResolution": [
+      240,
+      480
+    ],
+    "highResolution": [
+      480,
+      960
+    ],
+    "backgroundResumeChangedPixels": 0,
+    "backgroundPreservedNativeOwner": true,
+    "activityScreenshotAttempts": {
+      "activity-portrait.png": 1,
+      "activity-landscape.png": 1,
+      "failure-ultra8k_earth_entry_atmosphere.png": 1
+    },
+    "recreationChangedPixels": 0,
+    "recreationPreservedPreset": 3,
+    "recreationPreservedDate": 2461331,
+    "recreationPreservedAdaptiveMode": true,
+    "orientationRoundtripPassed": true,
+    "uhdPixels": 33177600,
+    "uhdReturnChangedPixels": 0,
+    "uhdNativeOwnerPreserved": true
+  },
+  "images": [
+    "earth-surface.png",
+    "earth-fields-base.png",
+    "earth-fields-phase.png",
+    "venus-magnetic-environment.png",
+    "mars-magnetic-environment.png",
+    "sun-solar-wind.png",
+    "saturn-rings.png",
+    "moon-surface.png",
+    "solar-system-overview.png",
+    "earth-real-scale.png",
+    "activity-portrait.png",
+    "activity-landscape.png",
+    "uhd-adaptive-before.png",
+    "ultra8k-earth-orbit.png",
+    "uhd-adaptive-after.png",
+    "failure-ultra8k_earth_entry_atmosphere.png"
+  ],
+  "captureSamples": {
+    "earth-surface.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "e0bca5ec0d9ab6aad2396bbb27f5ade25216470ff9a3a2bd5929d0517f34e43b",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            21,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            14,
+            18,
+            29,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            11,
+            14,
+            22,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            112,
+            139,
+            170,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            108,
+            145,
+            140,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            220,
+            223,
+            226,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "earth-fields-base.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "917c780c27c0168bab3538fb1bb80b02934efead6982a9a9996eeaa41d008a7e",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            21,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            14,
+            18,
+            29,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            11,
+            14,
+            22,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            108,
+            145,
+            142,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            206,
+            202,
+            194,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            44,
+            39,
+            33,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "earth-fields-phase.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "b6edde4c44e6fb372db2b47986321b1bf8176196a569a45a47ac5139defb7c8a",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            21,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            14,
+            18,
+            29,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            11,
+            14,
+            22,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            108,
+            145,
+            142,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            206,
+            202,
+            194,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            44,
+            39,
+            33,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "venus-magnetic-environment.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "82311c222820d29fb3e78e3fc022981a606aced6561f154b8b155b6a9a7326fa",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            8,
+            11,
+            17,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            13,
+            17,
+            28,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            11,
+            15,
+            24,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            8,
+            11,
+            17,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            7,
+            10,
+            15,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            9,
+            12,
+            19,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            229,
+            224,
+            215,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "mars-magnetic-environment.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "6ce418cf2cab0cce0dd0707248f59c7d232fed5a0104437bf7e64a49ecf31066",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            144,
+            70,
+            52,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            7,
+            6,
+            5,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "sun-solar-wind.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "92fff9d42c2335e1193c7283a7378c18eede0d9abb5ff1977a18481de23a7e44",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            7,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            9,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            9,
+            9,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            9,
+            9,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            8,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            21,
+            14,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            47,
+            25,
+            15,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            68,
+            35,
+            17,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            48,
+            25,
+            15,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            20,
+            13,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            69,
+            35,
+            17,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            237,
+            203,
+            103,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            242,
+            224,
+            147,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            235,
+            186,
+            73,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            68,
+            34,
+            17,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            23,
+            14,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            49,
+            26,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            72,
+            36,
+            18,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            50,
+            26,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            22,
+            14,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            8,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            8,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            10,
+            9,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            8,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            9,
+            8,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "saturn-rings.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "f5384b7cffef1567786b8e6b13f8ebe819354d123c21f8a5ae270a9b17707217",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            13,
+            17,
+            26,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            20,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            7,
+            10,
+            15,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            6,
+            8,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            11,
+            15,
+            24,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            11,
+            15,
+            23,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            114,
+            103,
+            79,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            228,
+            225,
+            217,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "moon-surface.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "690e77b498e27bd22af5ceafc5268e0f4d844d68de4f22a53b3d1f92e6751b51",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            9,
+            12,
+            18,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            12,
+            16,
+            26,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            12,
+            15,
+            25,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            9,
+            11,
+            18,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            15,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            214,
+            212,
+            212,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            220,
+            219,
+            219,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            150,
+            147,
+            145,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "solar-system-overview.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "6d2c385588bc86720747adab009f2cbefba9def2b62a8622a2a7801e43eb63c6",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            242,
+            226,
+            151,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "earth-real-scale.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "1bd8a4868b371982f3effbfeec7962f85c9612cce6be2fea6278f0894990aac6",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            21,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            14,
+            18,
+            29,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            11,
+            14,
+            22,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            113,
+            139,
+            171,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            109,
+            146,
+            141,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            220,
+            223,
+            226,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "uhd-adaptive-before.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "e0bca5ec0d9ab6aad2396bbb27f5ade25216470ff9a3a2bd5929d0517f34e43b",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            21,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            14,
+            18,
+            29,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            11,
+            14,
+            22,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            112,
+            139,
+            170,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            108,
+            145,
+            140,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            220,
+            223,
+            226,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "ultra8k-earth-orbit.png": {
+      "width": 4320,
+      "height": 7680,
+      "rgbaSha256": "98346ede8ce51d0140f80ddc6cd61a44a600880252d3b4e2d96239df643d0853",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            7,
+            9,
+            15,
+            255
+          ]
+        },
+        {
+          "x": 1079,
+          "y": 0,
+          "rgba": [
+            9,
+            12,
+            20,
+            255
+          ]
+        },
+        {
+          "x": 2159,
+          "y": 0,
+          "rgba": [
+            14,
+            18,
+            28,
+            255
+          ]
+        },
+        {
+          "x": 3239,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            20,
+            255
+          ]
+        },
+        {
+          "x": 4319,
+          "y": 0,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 1919,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 1079,
+          "y": 1919,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 2159,
+          "y": 1919,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 3239,
+          "y": 1919,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 4319,
+          "y": 1919,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 3839,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 1079,
+          "y": 3839,
+          "rgba": [
+            110,
+            142,
+            181,
+            255
+          ]
+        },
+        {
+          "x": 2159,
+          "y": 3839,
+          "rgba": [
+            93,
+            132,
+            138,
+            255
+          ]
+        },
+        {
+          "x": 3239,
+          "y": 3839,
+          "rgba": [
+            76,
+            121,
+            163,
+            255
+          ]
+        },
+        {
+          "x": 4319,
+          "y": 3839,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 5759,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 1079,
+          "y": 5759,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 2159,
+          "y": 5759,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 3239,
+          "y": 5759,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 4319,
+          "y": 5759,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 7679,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 1079,
+          "y": 7679,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 2159,
+          "y": 7679,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 3239,
+          "y": 7679,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 4319,
+          "y": 7679,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    },
+    "uhd-adaptive-after.png": {
+      "width": 320,
+      "height": 640,
+      "rgbaSha256": "e0bca5ec0d9ab6aad2396bbb27f5ade25216470ff9a3a2bd5929d0517f34e43b",
+      "points": [
+        {
+          "x": 0,
+          "y": 0,
+          "rgba": [
+            8,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 0,
+          "rgba": [
+            10,
+            13,
+            21,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 0,
+          "rgba": [
+            14,
+            18,
+            29,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 0,
+          "rgba": [
+            11,
+            14,
+            22,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 0,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 159,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 159,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 159,
+          "rgba": [
+            7,
+            9,
+            14,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 159,
+          "rgba": [
+            7,
+            10,
+            16,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 319,
+          "rgba": [
+            112,
+            139,
+            170,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 319,
+          "rgba": [
+            108,
+            145,
+            140,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 319,
+          "rgba": [
+            220,
+            223,
+            226,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 319,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 479,
+          "rgba": [
+            6,
+            8,
+            13,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 479,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 0,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 79,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 159,
+          "y": 639,
+          "rgba": [
+            6,
+            8,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 239,
+          "y": 639,
+          "rgba": [
+            6,
+            7,
+            12,
+            255
+          ]
+        },
+        {
+          "x": 319,
+          "y": 639,
+          "rgba": [
+            5,
+            7,
+            12,
+            255
+          ]
+        }
+      ],
+      "decodedPngSamplesVerified": true
+    }
+  }
+}

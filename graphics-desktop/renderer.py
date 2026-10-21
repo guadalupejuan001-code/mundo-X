@@ -3,6 +3,7 @@ import ctypes as C
 import math,time
 import numpy as np
 from egl_runtime import GL,U,I,F,P
+from edit_pages import pack_edits
 
 ROOT=Path(__file__).resolve().parent
 
@@ -71,6 +72,7 @@ class Renderer:
         self.query=g.object('glGenQueries') if g.timer else None
         self.count=0;self.edits={};self.explicit_bytes=0
         self.quantum=np.zeros(1,dtype=np.float32);self.quantum_strength=0.
+        self.mirror_settings=(0,16,True,1.)
         self.set_quantum(self.quantum,0.)
         self.resize(width,height)
         g.glDisable(0x0BD0);g.glDisable(0x0BE2);g.glDisable(0x0B44)
@@ -103,12 +105,9 @@ class Renderer:
         self.count=count;self.seed=seed;self.side=math.ceil(math.sqrt(count));self.edits=edits
         g=self.gl
         maximum=I();g.glGetIntegerv(0x0D33,C.byref(maximum))
-        width=min(4096,maximum.value,max(1,len(edits)));height=max(1,math.ceil(len(edits)/width))
-        if height>maximum.value:raise ValueError('Edit texture exceeds this device capability')
-        data=np.full((height,width,2),-1,dtype=np.int32)
-        for i,(id,state) in enumerate(sorted(edits.items())):data.reshape(-1,2)[i]=(id,state)
+        data=pack_edits(count,edits,maximum.value);height,width=data.shape
         g.glActiveTexture(0x84C0);g.glBindTexture(0x0DE1,self.edits_texture)
-        g.glTexImage2D(0x0DE1,0,0x823B,width,height,0,0x8228,0x1404,data.ctypes.data)
+        g.glTexImage2D(0x0DE1,0,0x8236,width,height,0,0x8D94,0x1405,data.ctypes.data)
         g.glTexParameteri(0x0DE1,0x2801,0x2600);g.glTexParameteri(0x0DE1,0x2800,0x2600)
         g.glTexParameteri(0x0DE1,0x2802,0x812F);g.glTexParameteri(0x0DE1,0x2803,0x812F)
         g.glFinish();compact_ms=(time.perf_counter_ns()-start)/1e6
@@ -141,18 +140,47 @@ class Renderer:
         g.glTexParameteri(0x0DE1,0x2802,0x812F);g.glTexParameteri(0x0DE1,0x2803,0x812F)
         g.glActiveTexture(0x84C0);g.check('quantum texture')
 
-    def draw(self,route,cam,t=0.,debug=0,selected=-1,read=False,presentation=0):
+    def set_reflections(self,mode=0,*,budget=16,fold=True,reflectance=1.):
+        """0 off, 1 floor mirror, 2 facing mirrors; one shared scene snapshot.
+
+        Budget counts explicit bounces, not algebraically composed crossings.
+        An unfinished ray is magenta and readback fails rather than hiding it.
+        These observer settings are separate from the portable .cosmic world.
+        """
+        if type(mode) is not int or mode not in (0,1,2):raise ValueError('Mirror mode must be 0, 1 or 2')
+        if type(budget) is not int or not 1<=budget<=64:raise ValueError('Explicit mirror budget must be 1..64')
+        if type(fold) is not bool:raise ValueError('Mirror folding must be boolean')
+        if type(reflectance) not in (float,int) or not math.isfinite(reflectance) or not 0<=reflectance<=1:
+            raise ValueError('Mirror reflectance must be finite in [0,1]')
+        self.mirror_settings=(mode,budget,fold,float(reflectance))
+
+    def draw(self,route,cam,t=0.,debug=0,selected=-1,read=False,presentation=0,*,pixel=None):
         if route not in ('eye','procedural','explicit'):raise ValueError(route)
         if presentation not in (0,1):raise ValueError('Unknown observer presentation')
+        if self.mirror_settings[0] and route!='eye':raise ValueError('Reflections require the eye ray route')
         if route=='explicit' and not self.explicit_ready:raise ValueError('Explicit reference not prepared')
         if not math.isfinite(t):raise ValueError('Nonfinite time')
-        g=self.gl;p=self.programs['eye' if route=='eye' else 'raster']
+        if pixel is not None:
+            if (route!='eye' or debug!=1 or not read or len(pixel)!=2 or
+                any(type(v) is not int for v in pixel) or
+                not (0<=pixel[0]<self.width and 0<=pixel[1]<self.height)):
+                raise ValueError('Picking requires one integer pixel inside the eye image')
+        g=self.gl
+        if self.mirror_settings[0] and 'mirrors' not in self.programs:
+            fragment=source('eye.frag').replace('#version 300 es','#version 300 es\n#define MX_MIRRORS 1',1)
+            p=g.program(source('eye.vert'),fragment)
+            self.programs['mirrors']=p;self.locations[p]={}
+        p=self.programs['mirrors' if self.mirror_settings[0] else 'eye' if route=='eye' else 'raster']
         g.glBindFramebuffer(0x8D40,self.fbo);g.glViewport(0,0,self.width,self.height)
         g.glUseProgram(p);g.glBindVertexArray(self.vao)
         for name,value in [('uCount',self.count),('uSide',self.side),('uEditCount',len(self.edits)),
                            ('uSelected',selected),('uDebug',debug),('uEdits',0),('uExplicit',int(route=='explicit')),
                            ('uQuantum',1),('uQuantumCount',len(self.quantum)),('uPresentation',presentation)]:
             g.glUniform1i(self.loc(p,name),value)
+        mode,budget,fold,reflectance=self.mirror_settings
+        for name,value in [('uMirrorMode',mode),('uMirrorBudget',budget),('uMirrorFold',int(fold))]:
+            g.glUniform1i(self.loc(p,name),value)
+        g.glUniform1f(self.loc(p,'uMirrorReflectance'),reflectance)
         for name,value in [('uTime',t),('uFogDistance',max(50,self.side*2.2)),('uQuantumStrength',self.quantum_strength),
                            ('uNear',cam['near']),('uFar',cam['far']),('uAspect',cam['aspect']),('uTanHalfFov',cam['tan_half_fov']),
                            ('uPixelAngle',2*cam['tan_half_fov']/self.height)]:
@@ -179,9 +207,14 @@ class Renderer:
         if g.timer:g.glGetIntegerv(0x8FBB,C.byref(disjoint))
         start=time.perf_counter_ns()
         if g.timer:g.glBeginQuery(0x88BF,self.query)
-        g.glClear(0x4000|0x0100)
-        if route=='eye':g.glDrawArrays(4,0,3)
-        else:g.glDrawArraysInstanced(4,0,36,self.count)
+        if pixel is not None:
+            g.glEnable(0x0C11);g.glScissor(pixel[0],self.height-1-pixel[1],1,1)
+        else:g.glDisable(0x0C11)
+        try:
+            g.glClear(0x4000|0x0100)
+            if route=='eye':g.glDrawArrays(4,0,3)
+            else:g.glDrawArraysInstanced(4,0,36,self.count)
+        finally:g.glDisable(0x0C11)
         if g.timer:g.glEndQuery(0x88BF)
         g.glFinish();wall_ms=(time.perf_counter_ns()-start)/1e6
         query_ms=None;raw_query_ms=None
@@ -195,10 +228,15 @@ class Renderer:
             if not disjoint.value and 0<=raw_query_ms<=wall_ms*2+1:query_ms=raw_query_ms
         rgba=None
         if read:
-            rgba=np.empty((self.height,self.width,4),dtype=np.uint8)
-            g.glReadPixels(0,0,self.width,self.height,0x1908,0x1401,rgba.ctypes.data)
-            rgba=np.flipud(rgba).copy()
-            if np.any(np.all(rgba==[255,0,255,255],axis=2)):raise RuntimeError('Traversal exhaustion sentinel')
+            if pixel is None:
+                rgba=np.empty((self.height,self.width,4),dtype=np.uint8)
+                g.glReadPixels(0,0,self.width,self.height,0x1908,0x1401,rgba.ctypes.data)
+                rgba=np.flipud(rgba).copy()
+            else:
+                rgba=np.empty((1,1,4),dtype=np.uint8)
+                g.glReadPixels(pixel[0],self.height-1-pixel[1],1,1,0x1908,0x1401,rgba.ctypes.data)
+            if np.any(np.all(rgba==[255,0,255,255],axis=2)):
+                raise RuntimeError('Incomplete ray: grid traversal or explicit mirror budget exhausted')
         g.check('draw '+route)
         return {'wall_draw_finish_ms':wall_ms,'driver_elapsed_ms':query_ms,
                 'raw_driver_elapsed_ms':raw_query_ms,'timer_disjoint':bool(disjoint.value)},rgba

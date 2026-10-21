@@ -296,6 +296,31 @@ public final class SolarData {
         return toRenderer(positionEcliptic(id,boundedDate(jd)));
     }
 
+    /** One exact catalogue observation. Shared parent positions are evaluated
+     * once in the original ecliptic frame before the same renderer conversion.
+     * Scratch belongs to the caller's GL thread, never a global mutable cache. */
+    public static final class Ephemeris {
+        private final double[][] ecliptic=new double[BODIES.length][3];
+        public void positions(double jd,double[][] out) {
+            double date=boundedDate(jd);
+            if(out==null||out.length<BODIES.length)throw new IllegalArgumentException("Incomplete position output");
+            for(int i=0;i<BODIES.length;i++)if(out[i]==null||out[i].length<3)
+                throw new IllegalArgumentException("Incomplete position vector");
+            for(int id=0;id<BODIES.length;id++) {
+                double[] p;
+                if(id==0)p=ecliptic[0];
+                else if(id<=8){p=planetPositionEcliptic(id,date,0,false);if(id==3)subtractEarthBarycentricOffset(p,date);}
+                else{
+                    p=moonRelativeEcliptic(id,date,0,false);
+                    double[] parent=ecliptic[BODIES[id].parent];
+                    for(int k=0;k<3;k++)p[k]=parent[k]+p[k];
+                }
+                System.arraycopy(p,0,ecliptic[id],0,3);
+                out[id][0]=p[0];out[id][1]=p[2];out[id][2]=-p[1];
+            }
+        }
+    }
+
     /**
      * Heliocentric point on the instantaneous orbital ellipse, fraction in turns.
      * The parent remains at its position at jd. Phase zero is the periapsis.

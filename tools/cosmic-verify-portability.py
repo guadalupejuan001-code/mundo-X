@@ -33,7 +33,7 @@ LEGACY_DEVICE_TESTS = {
     "native_bell_invariants", "renderer_borrows_native_state", "gles_one_million_objects",
     "gles_maximum_object_limit", "render_observes_without_mutating", "gate_changes_coupled_image",
     "gate_preserves_uncoupled_image", "selection_and_individual_edits", "edit_restoration",
-    "pause_resume_preserves_state", "portable_codec_strict_validation",
+    "pause_resume_preserves_state", "frame_reuse_exact_inputs_and_invalidation", "portable_codec_strict_validation",
     "portable_desktop_fixtures_import", "portable_mutation_export_reimport",
     "portable_invalid_import_preserves_session", "portable_activity_recreation",
 }
@@ -283,8 +283,12 @@ def verify_directory(directory):
     report = evidence_json(directory / "report.json")
     uhd = report.get("metrics", {}).get("uhd4kSuite", False)
     ultra = report.get("metrics", {}).get("ultra8kSuite", False)
+    mirrors = report.get("metrics", {}).get("mirrorSuite", False)
+    require(type(mirrors) is bool, "Invalid mirror test profile")
     require(type(uhd) is bool and type(ultra) is bool and (not ultra or uhd), "Unknown Android test profile")
     expected = LEGACY_DEVICE_TESTS | (UHD_DEVICE_TESTS if uhd else set()) | (ULTRA_DEVICE_TESTS if ultra else set())
+    if mirrors:
+        expected.add("mirrors_selection_snapshot_and_tiled_export")
     tests = report["tests"]
     require(report["testsRun"] == len(expected) and report["testsFailed"] == 0,
             "Portable device tests did not all pass")

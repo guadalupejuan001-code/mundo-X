@@ -1,4 +1,4 @@
-# COSMIC X Solar 4K
+# COSMIC X Solar
 
 Explorador del sistema solar para Android, construido como una nueva aplicación
 de **COSMIC X Engine**. Integra el núcleo original de Mundo X y amplía su
@@ -6,6 +6,13 @@ observador gráfico con planetas esféricos, anillos, órbitas y capas magnétic
 Esta versión comparte la infraestructura de resolución del motor **4K/8K** y
 ofrece un modo **Solar 4K UHD**, un mapa orbital interactivo y una cámara de
 descenso para los ocho planetas y las catorce lunas del catálogo.
+
+La integración **1.3.0** publica observaciones atómicas de Ether, comparte las
+efemérides, reutiliza las máscaras de visibilidad y evita evaluar material
+procedural cuyo resultado no se usa. La exportación usa el `StreamPng`
+original de Graphics sin crear un segundo Bitmap completo. Véase el
+[informe de integración y rendimiento](../docs/solar-integration-performance.md)
+para resultados, límites, procedencia y comandos de repetición.
 
 ## Explorar
 
@@ -124,6 +131,10 @@ están `⟨Z₀X₁Z₂⟩` y `⟨X₀Z₁⟩`: ambas valen 1 en Base y cambian 
 preparaciones. Esas señales proceden del mismo estado que las puertas locales;
 no existe un segundo cluster independiente para alimentar al observador.
 Consultar, dibujar o cambiar la cámara no añade reglas ni mide el estado.
+Coeficientes y metadatos se publican juntos en una `Observation` inmutable;
+el renderer consume ocho coeficientes locales y cuatro globales de esa misma
+observación, sin arrays nuevos por cuadro. La quinta señal global sigue
+disponible para consulta y verificación.
 
 Base conserva cero sitios materializados y dos reglas globales; las otras
 preparaciones materializan ocho sitios. El dominio implícito no hace infinita
@@ -157,15 +168,22 @@ Requisitos de la compilación reproducible:
 | ABI | arm64-v8a y x86_64 |
 
 ```sh
-gradle -p solar-android --no-daemon -Psolar4kStandalone=true \
+gradle -p solar-android --no-daemon \
   :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-La variante entregada tiene paquete `com.cosmicx.solar.uhd`, versión **1.1.0**
-y nombre **COSMIC X Solar 4K**. Puede instalarse junto al Solar anterior
-(`com.cosmicx.solar`) y al motor gráfico independiente. Omitir la propiedad
-`solar4kStandalone` construye la identidad solar original. Las compilaciones
-de desarrollo usan firma debug.
+La variante normal tiene paquete `com.cosmicx.solar`, versión **1.3.0**, código
+de versión 4. `-Psolar4kStandalone=true` y `-Psolar8kStandalone=true` conservan
+las identidades `.uhd` y `.ultra`. `-PsolarReview=true` añade `.review` al
+paquete elegido y «Pruebas» al nombre; permite instalar esta revisión junto a
+la original. Las compilaciones de desarrollo usan firma debug; actualizar un
+paquete existente requiere la misma clave con la que se firmó su instalación.
+
+La nueva [workflow de comparación](../.github/workflows/solar-performance.yml)
+compila la referencia af0b179 y esta versión con instrumentación idéntica.
+No se ejecutó remotamente en esta ronda: la publicación GitHub fue bloqueada
+por la revisión automática de permisos. Las pruebas locales ejecutadas se
+distinguen de las pruebas disponibles en el informe.
 
 El workflow [solar-4k.yml](../.github/workflows/solar-4k.yml) construye
 el APK, verifica firma y ABI, registra SHA-256 y procedencia del núcleo, y lo

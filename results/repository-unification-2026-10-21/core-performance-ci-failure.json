@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-21T01:01:14.527233+00:00",
+  "status": "driver_fix_verified_locally; full_CI_comparison_pending",
+  "failure": {
+    "repository": "guadalupejuan001-code/mundo-X",
+    "candidate_commit": "2be39f7915001c46b63246b9a9502071b599475d",
+    "baseline_commit": "403bdd7311e6d6b37e849fbe2c85375a9a2cd2ac",
+    "run_id": 39523264180,
+    "job_id": 118971899533,
+    "job_url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264180/job/118971899533",
+    "artifact_id": 12312522448,
+    "artifact_name": "COSMIC-X-Engine-8K-Native-Evidence",
+    "artifact_url": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/39523264180/artifacts/12312522448",
+    "artifact_zip_sha256": "c786323776e17fca975037ab8be02e3d5049099f3aa9a0edb29c16b9bb391ec4",
+    "case": "observer_build",
+    "qubits": 20,
+    "iterations": 3276,
+    "checksum_by_version": {
+      "baseline": "2ef75bca5e20bfd6",
+      "candidate": "2ef75bca5e20bfd6"
+    },
+    "core_payload_bytes_by_version": {
+      "baseline": 340,
+      "candidate": 340
+    },
+    "observer_payload_bytes_by_version": {
+      "baseline": 560,
+      "candidate": 880
+    },
+    "observer_payload_delta_bytes": 320,
+    "observer_payload_increase_percent": 57.142857142857146,
+    "original_failure": "The cross-version fingerprint included observer_payload_bytes, so a measured representation cost was treated as a mathematical result mismatch.",
+    "preceding_validation": {
+      "ctest_passed": 78,
+      "ctest_failed": 0,
+      "ubsan_exact_checks": 70153,
+      "baseline_candidate_full_state_identical": true,
+      "full_state": {
+        "checksum": "594604927b53e79b",
+        "gates": 8292,
+        "queries": 10398,
+        "measurements": 289
+      }
+    },
+    "log_excerpts": [
+      "2026-10-21T00:48:08.9728563Z 100% tests passed, 0 tests failed out of 78",
+      "2026-10-21T00:48:11.8631840Z PASS core_performance exact_checks=70153 word_boundaries=63,64,65,127,128,129,256 packed_export=PASS direct_cz=PASS signed_elimination=PASS",
+      "2026-10-21T00:48:24.3604797Z Identical baseline/candidate full-state validation: {'checksum': '594604927b53e79b', 'gates': 8292, 'queries': 10398, 'measurements': 289}",
+      "2026-10-21T00:48:24.4600538Z RuntimeError: Different results for observer_build/20: {'case': 'observer_build', 'qubits': 20, 'iterations': 3276, 'checksum': '2ef75bca5e20bfd6', 'core_payload_bytes': 340, 'observer_payload_bytes': 880} versus {'case': 'observer_build', 'qubits': 20, 'iterations': 3276, 'checksum': '2ef75bca5e20bfd6', 'core_payload_bytes': 340, 'observer_payload_bytes': 560}"
+    ]
+  },
+  "representation_origin": {
+    "commit": "00e2f014186d9db9d2d87b3f7aabee3338d2b2a5",
+    "commit_url": "https://github.com/guadalupejuan001-code/mundo-X/commit/00e2f014186d9db9d2d87b3f7aabee3338d2b2a5",
+    "path": "native/include/mundo_x/pauli_observer.hpp",
+    "purpose": "Index each X/Z pivot column by row, allowing expectation to traverse actual pivot support.",
+    "allocation": "pivot_rows_.assign(2 * n_, n_)",
+    "accounting": "(pivots_.size() + pivot_rows_.size()) * sizeof(std::size_t), plus unchanged Pauli row payload",
+    "x64_n20_breakdown_bytes": {
+      "rows": 400,
+      "original_pivots": 160,
+      "new_pivot_column_index": 320
+    },
+    "payload_scope": "Logical payload; excludes vector objects, spare capacities and allocator overhead. No RSS measurement is claimed."
+  },
+  "correction": {
+    "mathematical_identity": "Full state checksum/gates/queries/measurements remain exactly equal. Every timed repetition keeps case/qubits/iterations/checksum/core_payload_bytes and every other non-timing, non-observer-payload field exactly equal.",
+    "observer_resources": "Measure every repetition, require stable storage within each version and equal sample counts; record both values and candidate minus baseline.",
+    "growth_budget": "At most 2 * qubits * sizeof(size_t), tied to pivot_rows_; no observer storage permitted in cases without an observer.",
+    "abi": "Obtain sizeof(size_t) from the same C++ compiler and flags as the two benchmark binaries.",
+    "json_compatibility": "Keep schema=1 and the numeric observer_payload_bytes field (explicitly candidate). Add observer_payload_bytes_by_version, raw resource samples, delta, budget and ratio. Existing timing, validation and core fields keep their types.",
+    "existing_consumer_search": "Repository-wide rg found benchmark producer/driver, historical result JSON and separate engine/infinite-session metrics using the name; no in-repository result reader assumes a changed type. Existing output remains additive.",
+    "same_workload": "No native benchmark source, seed, case, iteration count, sample default, comparison order or compiler flags changed.",
+    "native_process_budget": {
+      "requested_rlimit_as_bytes": 2147483648,
+      "respects_stricter_inherited_limit": true,
+      "sets_soft_and_hard_limits": true,
+      "default_deadline_seconds_per_invocation": 120,
+      "scope": "Linux ABI probe, full validation and every baseline/candidate native sample. Not the whole CTest suite, compiler or emulator. RLIMIT_AS limits virtual address space and is not RSS.",
+      "compile_deadline_seconds": 120,
+      "violation_result": "Nonzero failure; failed/partial JSON is saved, no timeout or resource failure becomes pass."
+    },
+    "previous_native_budget": "The prior Python driver had no RLIMIT_AS. Native workloads were limited to at most256 qubits and the workflow job had a20-minute timeout; other emulator/tiling limits did not bound these benchmark subprocesses."
+  },
+  "small_verification": {
+    "command": "python3 -m unittest -v tools/test_core_performance.py",
+    "exit_code": 0,
+    "tests_passed": 6,
+    "tests_failed": 0,
+    "cases": [
+      "Known560-to880 index growth retains exact identity and numeric legacy JSON field",
+      "Changed checksum and changed core payload are rejected",
+      "Growth beyond320 bytes and unstable per-version payload are rejected",
+      "Child process observes both enforced RLIMIT_AS values",
+      "A finite deadline terminates an unfinished process",
+      "A3GiB virtual mapping is rejected under the2GiB cap without attempting physical3GiB allocation"
+    ],
+    "diff_check_exit_code": 0,
+    "full_benchmark_rerun": false,
+    "performance_claim": "None; the original run stopped at its first timed comparison. A complete new CI run is still required."
+  },
+  "local_revision_before_commit": "2be39f7915001c46b63246b9a9502071b599475d",
+  "file_sha256": {
+    "tools/core-performance.py": "9b0093ad374e1e127c9270c6585410893f55279a66f4a4c27863175acb2add06",
+    "tools/test_core_performance.py": "68b19dd4ce1f51eca0c2bfb484bf36e0d178242c186323e24e7966a54c22e13c"
+  }
+}

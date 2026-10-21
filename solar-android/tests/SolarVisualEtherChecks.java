@@ -41,7 +41,52 @@ public final class SolarVisualEtherChecks {
                 if(d2<=rad*rad)check((mask&(1<<id))!=0,"planner missed an exact ray/sphere candidate");
             }
         }
+        adversarial();
         System.out.println("SolarVisualEtherChecks PASS: "+checks+" checks; candidate ratio="+plan.referenceRatio()
                 +"; max candidates="+plan.maxCandidates+"; tiles="+plan.masks.length);
+    }
+
+    private static void adversarial(){
+        float[] f={0,0,1},r={1,0,0},u={0,1,0};
+        float[] a=new float[4],at=new float[4];
+        float[] body={5.7694357f,0,2.9868784f,1.3490111f};
+        float tan=3.9869144f;
+        SolarVisualEther.Plan p=SolarVisualEther.plan(7680,4320,128,tan,1,f,r,u,body,a,at,1);
+        ray(p,7680,4320,0.832957819,0,tan,1,body);
+        java.util.Random random=new java.util.Random(42);
+        for(int scene=0;scene<1200;scene++){
+            int w=scene%2==0?7680:1920,h=scene%2==0?4320:1080;
+            float aspect=(float)w/h;
+            tan=(float)(.2+random.nextDouble()*2.8);
+            double z=.5+random.nextDouble()*10;
+            body[0]=(float)((random.nextDouble()*8-4)*z);
+            body[1]=(float)((random.nextDouble()*4-2)*z);
+            body[2]=(float)z;body[3]=(float)(z*(.01+random.nextDouble()*1.1));
+            p=SolarVisualEther.plan(w,h,128,tan,aspect,f,r,u,body,a,at,1);
+            for(int sample=0;sample<512;sample++)
+                ray(p,w,h,random.nextDouble()*2-1,random.nextDouble()*2-1,tan,aspect,body);
+        }
+        boolean rejected=false;
+        try{SolarVisualEther.plan(7680,4320,128,Float.POSITIVE_INFINITY,1,f,r,u,body,a,at,1);}
+        catch(IllegalArgumentException e){rejected=true;}
+        check(rejected,"infinite projection accepted");
+        f[0]=Float.NaN;rejected=false;
+        try{SolarVisualEther.plan(7680,4320,128,1,1,f,r,u,body,a,at,1);}
+        catch(IllegalArgumentException e){rejected=true;}
+        check(rejected,"NaN camera accepted");
+    }
+
+    private static void ray(SolarVisualEther.Plan p,int w,int h,double nx,double ny,
+                            float tan,float aspect,float[] body){
+        // Independent ray/sphere intersection; no projected-bound calculation.
+        double x=nx*tan*aspect,y=ny*tan,inv=1/Math.sqrt(1+x*x+y*y);
+        x*=inv;y*=inv;double z=inv;
+        double along=body[0]*x+body[1]*y+body[2]*z;
+        double d2=(double)body[0]*body[0]+(double)body[1]*body[1]+(double)body[2]*body[2]-along*along;
+        if(along>0&&d2<=(double)body[3]*body[3]){
+            int px=Math.max(0,Math.min(w-1,(int)((nx*.5+.5)*w)));
+            int py=Math.max(0,Math.min(h-1,(int)((ny*.5+.5)*h)));
+            check((SolarVisualEther.maskAt(p,px,py)&1)!=0,"off-axis ray omitted from candidate mask");
+        }
     }
 }

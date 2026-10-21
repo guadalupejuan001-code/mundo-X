@@ -1,0 +1,38 @@
+{
+  "scope": "Actual shell collector functions; fake adb; no emulator, GLES, Gradle or APK execution",
+  "source_sha256": "6ec1933635c4f6b9e56fc8b7051b294352e70a5143607c1d855d1a95c00a4845",
+  "original_truncated_archive_sha256": "753c74d4924c9386582734d6cc5a5b251437c398bdcef87d6a6de7acd54daf20",
+  "cases": [
+    {
+      "case": "truncated_then_complete_preserves_failed_report",
+      "passed": true,
+      "adb_tar_attempts": 2,
+      "expected_exit_status": 0,
+      "actual_exit_status": 0,
+      "temporary_extraction_directories_left": 0,
+      "stderr": "",
+      "transport_log": "Runtime evidence attempt 1/3 (solar-evidence)\ntar: Unexpected EOF in archive\ntar: Error is not recoverable: exiting now\nIncomplete runtime evidence; report.json and a valid archive are required.\nRuntime evidence attempt 2/3 (solar-evidence)\n"
+    },
+    {
+      "case": "three_truncated_preserve_primary_and_cleanup_failure",
+      "passed": true,
+      "adb_tar_attempts": 3,
+      "expected_exit_status": 37,
+      "actual_exit_status": 37,
+      "temporary_extraction_directories_left": 0,
+      "stderr": "Could not collect complete runtime evidence after three attempts.\nInstrumentation process failed: 37\n",
+      "transport_log": "Runtime evidence attempt 1/3 (solar-evidence)\ntar: Unexpected EOF in archive\ntar: Error is not recoverable: exiting now\nIncomplete runtime evidence; report.json and a valid archive are required.\nRuntime evidence attempt 2/3 (solar-evidence)\ntar: Unexpected EOF in archive\ntar: Error is not recoverable: exiting now\nIncomplete runtime evidence; report.json and a valid archive are required.\nRuntime evidence attempt 3/3 (solar-evidence)\ntar: Unexpected EOF in archive\ntar: Error is not recoverable: exiting now\nIncomplete runtime evidence; report.json and a valid archive are required.\n"
+    },
+    {
+      "case": "complete_archive_without_report_rejected",
+      "passed": true,
+      "adb_tar_attempts": 3,
+      "expected_exit_status": 1,
+      "actual_exit_status": 1,
+      "temporary_extraction_directories_left": 0,
+      "stderr": "Could not collect complete runtime evidence after three attempts.\nRuntime evidence collection failed.\n",
+      "transport_log": "Runtime evidence attempt 1/3 (solar-evidence)\nIncomplete runtime evidence; report.json and a valid archive are required.\nRuntime evidence attempt 2/3 (solar-evidence)\nIncomplete runtime evidence; report.json and a valid archive are required.\nRuntime evidence attempt 3/3 (solar-evidence)\nIncomplete runtime evidence; report.json and a valid archive are required.\n"
+    }
+  ],
+  "passed": true
+}

@@ -43,6 +43,11 @@ public final class SolarInstrumentation extends Instrumentation {
     private static final int LEGACY_TESTS = 13;
     private static final int TEST_QUALITY = 640;
     private static final long FRAME_TIMEOUT_MS = 30_000;
+    private static final long UHD_FRAME_TIMEOUT_MS = 150_000;
+    // CI 39523264220 recorded 159880.88 ms between GL swaps for the software
+    // 8K atmospheric capture. Allow 1.5x that interval for these two captures;
+    // this is an operation deadline, not an interactive 8K performance claim.
+    private static final long ULTRA_FRAME_TIMEOUT_MS = 240_000;
     private static final double TEST_JD = 2461331.0;
     private SolarActivity activity;
     private File evidence;
@@ -51,7 +56,9 @@ public final class SolarInstrumentation extends Instrumentation {
     private final JSONArray images = new JSONArray();
     private final JSONObject captureSamples = new JSONObject();
     private boolean uhdSuite,ultraSuite;
+    private boolean performanceSuite;
     private volatile boolean onDemandFrames;
+    private boolean glOperationTimedOut;
     private int expectedTests = LEGACY_TESTS;
 
     private interface Checked { void run() throws Exception; }
@@ -66,6 +73,7 @@ public final class SolarInstrumentation extends Instrumentation {
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        performanceSuite=arguments!=null&&"true".equals(arguments.getString("performance"));
         ultraSuite = arguments != null && "true".equals(arguments.getString("ultra8k"));
         uhdSuite = ultraSuite || (arguments != null && "true".equals(arguments.getString("uhd4k")));
         if (ultraSuite) expectedTests += 2;
@@ -74,6 +82,7 @@ public final class SolarInstrumentation extends Instrumentation {
     }
 
     @Override public void onStart() {
+        if(performanceSuite){SolarPerformanceChecks.run(this);return;}
         try {
             evidence = new File(getTargetContext().getFilesDir(), "solar-evidence");
             expect(evidence.isDirectory() || evidence.mkdirs(), "Cannot create solar evidence directory");
@@ -110,24 +119,23 @@ public final class SolarInstrumentation extends Instrumentation {
                 // same 4K/8K framebuffer while assertions run on the CPU.
                 onDemandFrames = true;
                 main(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY));
-                try {
-                    runCase(ultraSuite?"ultra8k_framebuffer_return_preserves_scene":"uhd_framebuffer_return_preserves_scene", this::uhdReturn);
-                    if (ultraSuite) {
-                        runCase("ultra8k_earth_entry_atmosphere", this::ultraEntry);
-                    } else {
-                        runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
-                        runCase("entry_all_planets_and_moons", this::entryCatalogue);
-                        runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
-                        runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
-                        runCase("map_ui_planet_and_moon_selection", this::mapSelection);
-                    }
-                } finally {
-                    runOnMainSync(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY));
-                    onDemandFrames = false;
+                runCase(ultraSuite?"ultra8k_framebuffer_return_preserves_scene":"uhd_framebuffer_return_preserves_scene", this::uhdReturn);
+                if (ultraSuite) {
+                    runCase("ultra8k_earth_entry_atmosphere", this::ultraEntry);
+                } else {
+                    runCase("uhd_fit_picking_preserves_scene", this::uhdPicking);
+                    runCase("entry_all_planets_and_moons", this::entryCatalogue);
+                    runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
+                    runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
+                    runCase("map_ui_planet_and_moon_selection", this::mapSelection);
                 }
+                // Keep demand mode through reporting. Restoring continuous mode
+                // here queued another 8K entry draw after the failed capture,
+                // delaying the reporting command by a second 150-second wait.
             }
 
-            gl(() -> {
+            if (glOperationTimedOut) metrics.put("glReportingSkippedAfterTimeout", true);
+            else gl(() -> {
                 try {
                     metrics.put("glRenderer", GLES30.glGetString(GLES30.GL_RENDERER));
                     metrics.put("glVersion", GLES30.glGetString(GLES30.GL_VERSION));
@@ -823,7 +831,7 @@ public final class SolarInstrumentation extends Instrumentation {
     }
 
     private String saveUhd(String name, boolean landscape) throws Exception {
-        SolarRenderer.Capture image = frame();
+        SolarRenderer.Capture image = frame(ultraSuite ? ULTRA_FRAME_TIMEOUT_MS : UHD_FRAME_TIMEOUT_MS);
         int longEdge=ultraSuite?7680:3840,shortEdge=ultraSuite?4320:2160;
         int width = landscape ? longEdge : shortEdge, height = landscape ? shortEdge : longEdge;
         long expectedBytes=(long)width*height*4;
@@ -845,7 +853,7 @@ public final class SolarInstrumentation extends Instrumentation {
         main(() -> activity.enterSelectedBody());
         main(() -> activity.setEntryAltitude(25));
         setUhdMode(true);
-        SolarRenderer.Capture image=frame();
+        SolarRenderer.Capture image=frame(ULTRA_FRAME_TIMEOUT_MS);
         expect(image.width==4320&&image.height==7680&&activity.renderer().isUhd8k(),
                 "Earth entry did not use the real portrait 8K target");
         substantial(image,"8K Earth atmospheric entry");
@@ -944,24 +952,43 @@ public final class SolarInstrumentation extends Instrumentation {
     }
 
     private SolarRenderer.Capture frame() throws Exception {
+        return frame(uhdSuite ? UHD_FRAME_TIMEOUT_MS : FRAME_TIMEOUT_MS);
+    }
+
+    private SolarRenderer.Capture frame(long timeoutMs) throws Exception {
+        long started = SystemClock.elapsedRealtime();
         CountDownLatch done = new CountDownLatch(1);
         AtomicReference<Throwable> error = new AtomicReference<>();
         AtomicReference<SolarRenderer.Capture> result = new AtomicReference<>();
+        AtomicReference<String> phase = new AtomicReference<>("queued");
         activity.surface().queueEvent(() -> {
-            try { activity.renderer().requestCapture(image -> {
-                try {
-                    // This callback runs on the GL thread after readback and blit.
-                    // Check the same frame without queuing another UHD draw.
-                    if (onDemandFrames)
-                        expect(GLES30.glGetError() == GLES30.GL_NO_ERROR, "GLES reported an error after drawing");
-                    result.set(image);
-                } catch (Throwable caught) { error.set(caught); }
-                finally { done.countDown(); }
-            }); }
-            catch (Throwable caught) { error.set(caught); done.countDown(); }
+            try {
+                phase.set("capture requested; awaiting draw, readback and blit");
+                activity.renderer().requestCapture(image -> {
+                    try {
+                        // This callback runs on the GL thread after readback and blit.
+                        // Check the same frame without queuing another UHD draw.
+                        if (onDemandFrames)
+                            expect(GLES30.glGetError() == GLES30.GL_NO_ERROR, "GLES reported an error after drawing");
+                        result.set(image);
+                        phase.set("capture callback completed");
+                    } catch (Throwable caught) { error.set(caught); }
+                    finally { done.countDown(); }
+                });
+            } catch (Throwable caught) { error.set(caught); done.countDown(); }
         });
         activity.surface().requestRender();
-        await(done, error, "Actual GLES framebuffer capture");
+        try { await(done, error, "Actual GLES framebuffer capture", timeoutMs); }
+        finally {
+            if (timeoutMs == ULTRA_FRAME_TIMEOUT_MS) {
+                JSONArray waits = metrics.optJSONArray("ultraCaptureWaits");
+                if (waits == null) { waits = new JSONArray(); metrics.put("ultraCaptureWaits", waits); }
+                waits.put(new JSONObject().put("deadlineMs", timeoutMs)
+                        .put("elapsedMs", SystemClock.elapsedRealtime() - started).put("phase", phase.get())
+                        .put("width", activity.renderer().renderedWidth()).put("height", activity.renderer().renderedHeight())
+                        .put("callbackCompleted", result.get() != null && error.get() == null));
+            }
+        }
         SolarRenderer.Capture capture = result.get();
         expect(capture != null && capture.width > 0 && capture.height > 0
                 && capture.rgba.length == capture.width * capture.height * 4, "Invalid GLES framebuffer");
@@ -971,10 +998,17 @@ public final class SolarInstrumentation extends Instrumentation {
     }
 
     private void await(CountDownLatch done, AtomicReference<Throwable> error, String operation) throws Exception {
-        long deadline = SystemClock.elapsedRealtime() + (uhdSuite ? 150_000 : FRAME_TIMEOUT_MS);
+        await(done, error, operation, uhdSuite ? UHD_FRAME_TIMEOUT_MS : FRAME_TIMEOUT_MS);
+    }
+
+    private void await(CountDownLatch done, AtomicReference<Throwable> error, String operation, long timeoutMs) throws Exception {
+        long deadline = SystemClock.elapsedRealtime() + timeoutMs;
         while (!done.await(50, TimeUnit.MILLISECONDS)) {
             expect(activity.renderer().failure == null, "Renderer failed: " + activity.renderer().failure);
-            expect(SystemClock.elapsedRealtime() < deadline, operation + " timed out");
+            if (SystemClock.elapsedRealtime() >= deadline) {
+                glOperationTimedOut = true;
+                throw new AssertionError(operation + " timed out after " + timeoutMs + " ms");
+            }
         }
         if (error.get() != null) throw new AssertionError(operation, error.get());
         expect(activity.renderer().failure == null, "Renderer failed: " + activity.renderer().failure);

@@ -1,0 +1,41 @@
+{
+  "recorded_at_utc": "2026-10-21T00:52:17.288310+00:00",
+  "production_commit": "2be39f7915001c46b63246b9a9502071b599475d",
+  "baseline_source_commit": "af0b1797573b55a739dcaef7b784eb98825ff07c",
+  "comparison_scope": "Optimization equivalence after applying the same defined filtering correction to both shaders",
+  "system_image": "system-images;android-29;default;x86_64",
+  "guest_ram_mib": 2048,
+  "guest_cores": 2,
+  "virtualization": "TCG",
+  "swiftshader_threads_requested": 1,
+  "art_compile_requested": "speed",
+  "boot_deadline_seconds": 300,
+  "instrumentation_deadline_seconds_per_apk": 600,
+  "image_tolerance": 0,
+  "paths_sha256": {
+    "runner": {
+      "path": "tools/solar_performance_android.py",
+      "sha256": "ce4719a28177747e180691acf85cf41de2a4a7eb655ee56b6b479af83720d885"
+    },
+    "production_shader": {
+      "path": "solar-android/app/src/main/assets/shaders/solar.frag",
+      "sha256": "361676e4882e9d5560c05d098f9f2092425d579323002082d779ff4c2b72bc50"
+    },
+    "reference_shader": {
+      "path": "solar-android/tests/fixtures/solar-defined-reference.frag",
+      "sha256": "7aae77f535f053be36065bb1ed22a8e9956bf2107d39d9760b38e760c5feacf6"
+    },
+    "instrumentation": {
+      "path": "solar-android/app/src/androidTest/java/com/mundox/solar/SolarPerformanceChecks.java",
+      "sha256": "16cdeca64840f7c6e00c903b1591044dce14e8b2a8c8d0503e3b07a609e61809"
+    }
+  },
+  "first_attempt": "attempt-absolute-filter/runner.json",
+  "strace_filter_defect_proof": "strace-path-filter-probes.json",
+  "notes": [
+    "The first attempt completed boot but failed the config-observation gate before installing an APK.",
+    "The second attempt adds relative and absolute strace path filters for the same isolated file; application and shader sources are unchanged.",
+    "Requested ART speed does not by itself establish complete AOT execution.",
+    "This campaign measures an emulator, not a physical mobile device."
+  ]
+}

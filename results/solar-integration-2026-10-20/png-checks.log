@@ -1,0 +1,4 @@
+SolarPngChecks PASS: 553061 exact independently decoded pixels; output failure preserved
+Exception in thread "main" java.lang.OutOfMemoryError: Java heap space
+	at com.mundox.solar.SolarPngChecks.pixels(SolarPngChecks.java:14)
+	at com.mundox.solar.SolarPngChecks.main(SolarPngChecks.java:34)

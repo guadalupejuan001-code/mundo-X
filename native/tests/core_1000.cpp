@@ -327,7 +327,7 @@ void session_bridge_and_restore() {
   require(mx_query(target.pointer, words.data(), words.size(), values.data()) == 0 && values == expected,
           "C ABI1000 restored signed expectations");
   require(mx_state_bytes(target.pointer) == 257000 &&
-          mx_observer_bytes(target.pointer) == width * (32 * sizeof(std::uint64_t) + sizeof(unsigned) + sizeof(std::size_t)) &&
+          mx_observer_bytes(target.pointer) == width * (32 * sizeof(std::uint64_t) + sizeof(unsigned) + 3 * sizeof(std::size_t)) &&
           mx_history_bytes(target.pointer) == count * sizeof(Gate),
           "C ABI1000 separate logical payload accounting");
   const auto epoch = mx_epoch(target.pointer), rebuilds = mx_rebuilds(target.pointer);

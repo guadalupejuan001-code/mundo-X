@@ -1,0 +1,12 @@
+{"run":0,"batch":true,"ms":182.914224,"allocatedBytes":25824872,"checksum":-7243.556931604401}
+{"run":0,"batch":false,"ms":172.066296,"allocatedBytes":43780640,"checksum":-7243.556931604401}
+{"run":1,"batch":false,"ms":129.796919,"allocatedBytes":41856000,"checksum":-7243.556931604401}
+{"run":1,"batch":true,"ms":83.656303,"allocatedBytes":23424000,"checksum":-7243.556931604401}
+{"run":2,"batch":true,"ms":94.81521,"allocatedBytes":23424000,"checksum":-7243.556931604401}
+{"run":2,"batch":false,"ms":128.165563,"allocatedBytes":41856000,"checksum":-7243.556931604401}
+{"run":3,"batch":false,"ms":126.827941,"allocatedBytes":41856000,"checksum":-7243.556931604401}
+{"run":3,"batch":true,"ms":84.904433,"allocatedBytes":23424000,"checksum":-7243.556931604401}
+{"run":4,"batch":true,"ms":89.147071,"allocatedBytes":23424000,"checksum":-7243.556931604401}
+{"run":4,"batch":false,"ms":127.549975,"allocatedBytes":41856000,"checksum":-7243.556931604401}
+{"run":5,"batch":false,"ms":125.201471,"allocatedBytes":41856000,"checksum":-7243.556931604401}
+{"run":5,"batch":true,"ms":83.264905,"allocatedBytes":23424000,"checksum":-7243.556931604401}

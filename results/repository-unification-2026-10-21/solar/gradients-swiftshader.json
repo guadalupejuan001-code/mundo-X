@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "driver": {
+    "vendor": "Google Inc.",
+    "renderer": "Google SwiftShader",
+    "version": "OpenGL ES 3.0 SwiftShader 4.0.0.1",
+    "glsl": "OpenGL ES GLSL ES 3.00 SwiftShader 4.0.0.1",
+    "hardware_gpu_available": false,
+    "timer_query_supported": false
+  },
+  "seed": 20261021,
+  "cases_per_family": 128,
+  "statistics": {
+    "sphere_normal": {
+      "values": 384,
+      "failures": 0,
+      "max_absolute_error": 1.567138530056411e-08,
+      "max_error_over_limit": 0.0011608664348926206
+    },
+    "angular_coordinates": {
+      "values": 256,
+      "failures": 0,
+      "max_absolute_error": 1.2137091331965166e-10,
+      "max_error_over_limit": 3.821822437210791e-05
+    },
+    "ring_plane_radius": {
+      "values": 128,
+      "failures": 0,
+      "max_absolute_error": 1.5043595702479706e-08,
+      "max_error_over_limit": 0.0007794439762650544
+    },
+    "ring_shadow_radius": {
+      "values": 128,
+      "failures": 0,
+      "max_absolute_error": 1.3597869497061765e-09,
+      "max_error_over_limit": 0.00025659337725287304
+    }
+  },
+  "oracle": "Double precision central differences of independently re-intersected geometry",
+  "oracle_step_pixels": 0.001,
+  "absolute_tolerance": 3e-06,
+  "relative_tolerance": 0.0003,
+  "finite_tangent_and_poles": true,
+  "shader_sha256": "795e111afbd5e8c6dd6f740e2937f5dcb8abe7ed32eb2cabcdeea7cc927e21bb",
+  "helper_sha256": "76b506163a625ad02932a5b8c44ff58ae0cbb8f19dbf5d9b91de39df45e74cbe",
+  "rss_peak_kib": 55336
+}
