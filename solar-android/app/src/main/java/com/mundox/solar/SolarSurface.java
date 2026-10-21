@@ -25,25 +25,30 @@ public final class SolarSurface extends GLSurfaceView {
         scale=new ScaleGestureDetector(context,new ScaleGestureDetector.SimpleOnScaleGestureListener(){
             @Override public boolean onScale(ScaleGestureDetector detector){
                 final float f=detector.getScaleFactor();
-                queueEvent(()->observer.zoom(f));return true;
+                mutate(()->observer.zoom(f));return true;
             }
         });
         gestures=new GestureDetector(context,new GestureDetector.SimpleOnGestureListener(){
             @Override public boolean onDown(MotionEvent event){return true;}
             @Override public boolean onSingleTapConfirmed(MotionEvent event){
                 final float x=event.getX(),y=event.getY();
-                queueEvent(()->observer.pick(x,y));performClick();return true;
+                mutate(()->observer.pick(x,y));performClick();return true;
             }
             @Override public boolean onDoubleTap(MotionEvent event){
-                queueEvent(()->{if(observer.isEntryMode())observer.exitAtmosphere();else observer.focus(Math.max(0,observer.selectedBody()));});return true;
+                mutate(()->{if(observer.isEntryMode())observer.exitAtmosphere();else observer.focus(Math.max(0,observer.selectedBody()));});return true;
             }
             @Override public boolean onScroll(MotionEvent first,MotionEvent last,float dx,float dy){
                 if(last.getPointerCount()==1&&!scale.isInProgress()&&!twoFingers){
-                    queueEvent(()->observer.rotate(dx,dy));
+                    mutate(()->observer.rotate(dx,dy));
                 }
                 return true;
             }
         });
+    }
+    private void mutate(Runnable action){queueEvent(action);requestRender();}
+    public void setPausedRendering(boolean paused){
+        setRenderMode(paused?RENDERMODE_WHEN_DIRTY:RENDERMODE_CONTINUOUSLY);
+        if(paused)requestRender();
     }
     @Override public boolean onTouchEvent(MotionEvent event){
         scale.onTouchEvent(event);
@@ -53,7 +58,7 @@ public final class SolarSurface extends GLSurfaceView {
             float y=(event.getY(0)+event.getY(1))*.5f;
             if(twoFingers&&action==MotionEvent.ACTION_MOVE){
                 float dx=x-previousX,dy=y-previousY;
-                queueEvent(()->observer.pan(dx,dy));
+                mutate(()->observer.pan(dx,dy));
             }
             previousX=x;previousY=y;twoFingers=true;
         }
