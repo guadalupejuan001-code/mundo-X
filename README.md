@@ -32,6 +32,34 @@ El [contrato de arquitectura Ether](docs/ether-architecture.md) fija las
 responsabilidades por componente, la conservación del estado, la coherencia de
 las observaciones y los criterios de integración y rendimiento.
 
+### Ruta cuántica pura · Inverse Ether Memory
+
+Para simulación cuántica, el repositorio dispone ahora de una ruta de compilación
+aislada en `quantum-runtime/`. Esa ruta compila Ether/InfiniteCore/CompactCore,
+el lenguaje XI y **Inverse Ether Memory**; no configura PC, Graphics, Solar,
+física, GLES ni JNI.
+
+Inverse Ether Memory invierte el modelo de RAM: una regla global describe el
+fondo del dominio lógico, se almacenan únicamente diferencias finitas y los
+enlaces a qubits son explícitos. No existe un arreglo denso de bytes ni una
+fórmula global de ocho qubits por byte. Un byte cuántico no determinista se
+devuelve como handle; convertirlo a clásico requiere una operación explícita,
+nunca una medición oculta.
+
+Los borradores `codex/ether-memory-20261021` y
+`codex/ether-memory-fabric-20261021` se conservan como antecedentes pero quedan
+sustituidos como dirección principal por este modelo. El contrato, comandos XI
+y límites están en [Inverse Ether Memory](docs/inverse-ether-memory.md).
+
+Compilación aislada:
+
+```sh
+cmake -S quantum-runtime -B quantum-build -DCMAKE_BUILD_TYPE=Release
+cmake --build quantum-build --parallel 2
+ctest --test-dir quantum-build --output-on-failure
+./quantum-build/mundo_x_quantum examples/inverse_memory.xi
+```
+
 **Fusión implementada:** Ether y los componentes finitos ahora describen un
 único estado cuántico por sesión. Las reglas globales, puertas locales,
 mediciones, consultas y snapshots usan esa misma autoridad. Graphics y COSMIC
