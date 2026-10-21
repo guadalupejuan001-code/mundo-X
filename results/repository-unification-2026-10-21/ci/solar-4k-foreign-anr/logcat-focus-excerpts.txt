@@ -1,0 +1,90 @@
+Original log line 17445
+10-21 01:28:09.115   557  3234 I ActivityManager: dumpStackTraces extraPids=[]
+10-21 01:28:09.116   557  3234 I ActivityManager: Done dumping
+10-21 01:28:09.124   557  3234 E ActivityManager: ANR in com.google.android.apps.wellbeing
+10-21 01:28:09.124   557  3234 E ActivityManager: PID: 1362
+10-21 01:28:09.124   557  3234 E ActivityManager: Reason: Broadcast of Intent { act=android.intent.action.BOOT_COMPLETED flg=0x89000010 cmp=com.google.android.apps.wellbeing/.common.receiver.coalescedreceivers.BootCompletedCoalescedBroadcast_Receiver (has extras) }
+10-21 01:28:09.124   557  3234 E ActivityManager: ErrorId: 1ce5f252-8308-48a3-a39d-98a67e5ca1b7
+10-21 01:28:09.124   557  3234 E ActivityManager: Frozen: false
+10-21 01:28:09.124   557  3234 E ActivityManager: Load: 43.89 / 14.79 / 5.25
+10-21 01:28:09.124   557  3234 E ActivityManager: ----- Output from /proc/pressure/memory -----
+10-21 01:28:09.124   557  3234 E ActivityManager: some avg10=46.78 avg60=31.36 avg300=9.75 total=32646452
+10-21 01:28:09.124   557  3234 E ActivityManager: full avg10=0.00 avg60=0.15 avg300=0.07 total=466301
+
+Original log line 17658
+10-21 01:28:10.951  1180  1385 D nativeloader: Load /product/priv-app/PrebuiltGmsCore/PrebuiltGmsCore.apk!/lib/x86_64/libbrotli_native.so using ns product-clns-9 from class loader (caller=/product/priv-app/PrebuiltGmsCore/PrebuiltGmsCore.apk!classes3.dex): ok
+10-21 01:28:10.959  3292  3292 D SpaEnvironment: reset
+10-21 01:28:10.966   557   578 D CoreBackPreview: Window{2c9a585 u0 Application Not Responding: com.google.android.apps.wellbeing}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.WindowOnBackInvokedDispatcher$OnBackInvokedCallbackWrapper@f1c003d, mPriority=0, mIsAnimationCallback=false}
+10-21 01:28:11.038  1512  1923 D SharedPreferencesImpl: Time required to fsync /data/user/0/com.google.android.as/shared_prefs/gms_icing_mdd_group_key_properties.xml: [<1: 0, <2: 0, <4: 0, <8: 0, <16: 0, <32: 0, <64: 0, <128: 0, <256: 0, <512: 0, <1024: 1, <2048: 0, <4096: 0, <8192: 0, <16384: 0, >=16384: 0]
+10-21 01:28:11.068   557  3321 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+10-21 01:28:11.069   557  3321 I EGL_emulation: Opening libGLESv2_emulation.so
+10-21 01:28:11.099  2262  2325 D EGL_emulation: app_time_stats: avg=408.35ms min=2.56ms max=719.75ms count=3
+10-21 01:28:11.133  1651  2234 W SearchServiceCore: Abort, client detached.
+10-21 01:28:11.133  1651  2234 W SearchServiceCore: Abort, client detached.
+10-21 01:28:11.148  1651  3113 I IPCThreadState: oneway function results for code 2 on binder at 0x7c8528443850 will be dropped but finished with status UNKNOWN_TRANSACTION
+10-21 01:28:11.178   355   355 I netd    : bandwidthSetGlobalAlert(2097152) <0.14ms>
+
+Original log line 36281
+10-21 01:29:20.443  1480  2117 I MediaProvider: Scanned internal due to REASON_MOUNTED, found 227 items in 150749ms, 221 inserts 6 updates 0 deletes
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: background_resume_preserves_state
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: java.lang.AssertionError: Activity did not return to the foreground
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1165)
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.waitUntil(SolarInstrumentation.java:1020)
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.backgroundResume(SolarInstrumentation.java:497)
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.$r8$lambda$lTctiz7UwgNR2gm-HpxmdAQ2e7E(Unknown Source:0)
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation$$ExternalSyntheticLambda16.run(D8$$SyntheticClass:0)
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.runCase(SolarInstrumentation.java:1124)
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:115)
+10-21 01:29:20.447  2262  2308 E CosmicSolarTests: 	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)
+
+Original log line 49059
+10-21 01:30:04.963   557  1472 I ExplicitHealthCheckController: Explicit health check service is unbound
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: recreation_and_orientation_preserve_state
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: java.lang.AssertionError: Cannot capture an Activity obscured by another window
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.expect(SolarInstrumentation.java:1165)
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.waitUntil(SolarInstrumentation.java:1020)
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.saveScreen(SolarInstrumentation.java:1094)
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.recreationAndOrientation(SolarInstrumentation.java:525)
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.$r8$lambda$JgfFXl25v2NhnC09dzvCr0m5ic8(Unknown Source:0)
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation$$ExternalSyntheticLambda17.run(D8$$SyntheticClass:0)
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.runCase(SolarInstrumentation.java:1124)
+10-21 01:30:05.012  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:116)
+
+Original log line 51314
+10-21 01:33:36.435  1319  4411 I DownloadManager: DownloadManager.downloadInternal():390 Download for __KLP_delight__en-840 scheduled with params DownloadParams{allowMetered=false, requireCharging=false, foreground=false, immediately=false, priority=500}
+10-21 01:33:36.436  1512  2107 I AiAiAutofill: Disconnected AiAiAugmentedAutofillService.
+10-21 01:33:36.445   557   578 I WindowManager: finishDrawing of orientation change: Window{2c9a585 u0 Application Not Responding: com.google.android.apps.wellbeing} 305ms
+10-21 01:33:36.445   557   578 W Looper  : Slow delivery took 270ms android.ui h=android.view.ViewRootImpl$ViewRootHandler c=null m=5
+10-21 01:33:36.446   557   583 I ActivityManager: Collecting stacks for native pid 402
+10-21 01:33:36.455  1193  1193 D b/254119092: DisplayController#onConfigurationChanged: {1.0 310mcc260mnc [en_US] ldltr sw480dp w960dp h480dp 320dpi lrg long land finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1920, 960) mAppBounds=Rect(0, 0 - 1920, 960) mMaxBounds=Rect(0, 0 - 1920, 960) mDisplayRotation=ROTATION_90 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_90} as.2 s.82 fontWeightAdjustment=0}
+10-21 01:33:36.456   557  1811 I WindowManager: finishDrawing of relaunch: Window{669df18 u0 com.cosmicx.solar.uhd/com.mundox.solar.SolarActivity} 319ms
+10-21 01:33:36.460   901  1162 V WindowManagerShell: onTransitionReady(transaction=2392296784760)
+10-21 01:33:36.461   557   577 V WindowManager: Sent Transition (#28) createdAt=10-21 01:33:35.986 via request=TransitionRequestInfo { type = CHANGE, triggerTask = null, pipTask = null, remoteTransition = null, displayChange = DisplayChange { displayId = 0, startAbsBounds = null, endAbsBounds = null, startRotation = 0, endRotation = 1, physicalDisplayChanged = false }, flags = 0, debugId = 28 }
+10-21 01:33:36.461   557   577 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+10-21 01:33:36.461   557   577 V WindowManager:     info={id=28 t=CHANGE f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+
+Original log line 52984
+10-21 01:35:23.759  1319  1643 I SP      : Scheduling job with delay of 0s for {W:b:u:l, bg}, 1 candidates
+10-21 01:35:23.789   557   578 W Looper  : Slow dispatch took 200ms android.ui h=android.view.Choreographer$FrameHandler c=android.view.Choreographer$FrameDisplayEventReceiver@db52130 m=0
+10-21 01:35:23.790   557   578 I WindowManager: finishDrawing of orientation change: Window{2c9a585 u0 Application Not Responding: com.google.android.apps.wellbeing} 232ms
+10-21 01:35:23.817   427   500 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+10-21 01:35:23.873   901   916 W ndroid.systemui: Missing inline cache for void com.android.systemui.statusbar.policy.Clock$2$$ExternalSyntheticLambda0.run()
+10-21 01:35:23.887   557  1809 I WindowManager: finishDrawing of relaunch: Window{f321402 u0 com.cosmicx.solar.uhd/com.mundox.solar.SolarActivity} 336ms
+10-21 01:35:23.898   901  1162 V WindowManagerShell: onTransitionReady(transaction=2392296784890)
+10-21 01:35:23.898   901   945 V WindowManagerShell: onTransitionReady (#32) android.os.BinderProxy@cc52c30: {id=32 t=CHANGE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@2477b74} m=CHANGE f=NONE p=WCT{android.window.IWindowContainerToken$Stub$Proxy@fc5189d} leash=Surface(name=Task=8)/@0x23aaf6b sb=Rect(0, 0 - 1920, 960) eb=Rect(0, 0 - 960, 1920) d=0 r=1->0:0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@ad98112} m=CHANGE f=NONE p=WCT{android.window.IWindowContainerToken$Stub$Proxy@9dba0e3} leash=Surface(name=DefaultTaskDisplayArea)/@0xc317ac8 sb=Rect(0, 0 - 1920, 960) eb=Rect(0, 0 - 960, 1920) d=0 r=1->0:-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@1adae0} m=CHANGE f=IS_DISPLAY|DISPLAY_HAS_ALERT_WINDOWS leash=Surface(name=WindowedMagnification:0:31)/@0x32a6761 sb=Rect(0, 0 - 1920, 960) eb=Rect(0, 0 - 960, 1920) d=0 r=1->0:-1 snapshot=Surface(name=RotationLayer)/@0xa93c286}]}
+10-21 01:35:23.898   901   945 V WindowManagerShell: Playing animation for (#32) android.os.BinderProxy@cc52c30@0
+10-21 01:35:23.898   901   945 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultMixedHandler@4e53d73
+10-21 01:35:23.898   901   945 V WindowManagerShell:  try handler com.android.wm.shell.keyguard.KeyguardTransitionHandler@8466430
+
+Original log line 53124
+10-21 01:37:19.403  2262  2325 D EGL_emulation: app_time_stats: avg=500.00ms min=499.72ms max=500.27ms count=2
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: map_ui_planet_and_moon_selection
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: java.lang.AssertionError: Map has no focused, stable visible target for body 8
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.awaitMapTarget(SolarInstrumentation.java:830)
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.tapMapBody(SolarInstrumentation.java:775)
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.mapSelection(SolarInstrumentation.java:760)
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.$r8$lambda$Uj5A-oMOOsa4NPJgO1PP_uEh3ck(Unknown Source:0)
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation$$ExternalSyntheticLambda27.run(D8$$SyntheticClass:0)
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.runCase(SolarInstrumentation.java:1124)
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at com.mundox.solar.SolarInstrumentation.onStart(SolarInstrumentation.java:130)
+10-21 01:37:19.569  2262  2308 E CosmicSolarTests: 	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2594)

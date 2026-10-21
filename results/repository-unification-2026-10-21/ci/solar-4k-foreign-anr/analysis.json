@@ -1,0 +1,26 @@
+{
+  "sourceCommit": "3954b0008db6b61acb1700b8201d75f1f18623e2",
+  "workflowRun": 39526904153,
+  "job": 118984418114,
+  "artifactId": 12314915038,
+  "artifactSha256": "0591ff898385fe5d1dfdff331823789371a83a5ee8e80fcceb671fcd976e742f",
+  "tests": 19,
+  "failures": 3,
+  "foreignPackage": "com.google.android.apps.wellbeing",
+  "anrTime": "2026-10-21T01:28:09.124Z",
+  "anrDialogTime": "2026-10-21T01:28:10.966Z",
+  "finding": "The unrelated Digital Wellbeing ANR dialog obscured Solar, before background/resume and through later recreation and map assertions. Screenshot and WindowManager records agree.",
+  "repair": "Disable only the optional Digital Wellbeing package, if installed, in this disposable AVD; verify disabled state before instrumentation. Solar lifecycle/focus/pixel assertions remain unchanged.",
+  "validation": [
+    "bash -n tools/solar-emulator-test.sh",
+    "git diff --check -- tools/solar-emulator-test.sh"
+  ],
+  "scope": "Emulator fixture only. No product or APK source changes.",
+  "evidence": {
+    "failure-background_resume_preserves_state.png": "128ce05e015ed683c42889d8175cc0fbd8c120327d7e3cebc1519dc6a0b01f3a",
+    "failure-map_ui_planet_and_moon_selection.png": "a196cac4756bd9539ad6bd4012c87116b6cb8c7a284e63f5639ffcab4f4da83f",
+    "failure-recreation_and_orientation_preserve_state.png": "b12a04c6d50a3dcefaabf327803c79c1ea9d0090cad1276f9444425d5cbfa0ce",
+    "logcat-focus-excerpts.txt": "65009e300b4f7ce553e0836a5bd0b8edfad5507819f2fcff28ff9a46430de2d4"
+  },
+  "excerptFormatting": "Trailing whitespace normalized in excerpt; original full log remains in the Actions artifact."
+}

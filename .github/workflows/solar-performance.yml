@@ -46,6 +46,10 @@ jobs:
             --fixtures solar-android/tests/fixtures/solar-android-case-7.json \
             --baseline-shader solar-android/tests/fixtures/solar-defined-reference.frag \
             --warmup-frames 2 --repeats 3 --output solar-exact-android-host.json
+          /usr/bin/python3 tools/solar_shader_check.py \
+            --fixtures solar-android/tests/fixtures/solar-android-cases-1-2.json \
+            --baseline-shader solar-android/tests/fixtures/solar-defined-reference.frag \
+            --warmup-frames 2 --repeats 3 --output solar-exact-android-cases12.json
       - name: Android toolchain and 2 GB emulator
         run: |
           sudo chmod 666 /dev/kvm
@@ -85,6 +89,7 @@ jobs:
             solar-gradients.json
             solar-defined-host.json
             solar-exact-android-host.json
+            solar-exact-android-cases12.json
             solar-android/tests/fixtures/solar-defined-reference.frag
             solar-android/app/build/outputs/apk/debug/*.apk
             solar-android/app/build/outputs/apk/androidTest/debug/*.apk

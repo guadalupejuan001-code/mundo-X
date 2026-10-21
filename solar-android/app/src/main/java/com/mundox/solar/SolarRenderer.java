@@ -756,7 +756,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · éter visual %.1f%%%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,visualPlan==null?100.0:visualPlan.referenceRatio()*100.0,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }

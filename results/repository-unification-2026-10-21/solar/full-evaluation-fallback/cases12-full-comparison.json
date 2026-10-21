@@ -1,0 +1,62 @@
+{
+  "status": "passed",
+  "pixel_tolerance": 0,
+  "scope": "Optimization equivalence after correcting filtering; independent single-program processes",
+  "compared_pixels": 146160,
+  "different_pixels": 0,
+  "exact_scenes": 2,
+  "cases": [
+    {
+      "scene": 1,
+      "pixels": 73080,
+      "different_pixels": 0,
+      "different_channels": 0,
+      "maximum_channel_delta": 0,
+      "mean_absolute_channel_error": 0.0,
+      "before_rgba_sha256": "4c68dc314659c31bb22b603e795e96bc89b337e3cedb5db39b29919cb63dfeed",
+      "after_rgba_sha256": "4c68dc314659c31bb22b603e795e96bc89b337e3cedb5db39b29919cb63dfeed"
+    },
+    {
+      "scene": 2,
+      "pixels": 73080,
+      "different_pixels": 0,
+      "different_channels": 0,
+      "maximum_channel_delta": 0,
+      "mean_absolute_channel_error": 0.0,
+      "before_rgba_sha256": "f0d323122c889f6113efd1eace5a7281dc14c74ec21dab27f54bf74931244019",
+      "after_rgba_sha256": "f0d323122c889f6113efd1eace5a7281dc14c74ec21dab27f54bf74931244019"
+    }
+  ],
+  "before_shader_sha256": "1c978eab12807d2f791bebe4167564027e7ef705947a58f16313461224cc2753",
+  "after_shader_sha256": "e36370ee7997d2f903529247b75a716c59fda679bfd4543b2c0c5c3ba2d6d02b",
+  "fixtures_sha256": "7ff9aaf2f146ca0342467fecdf46df997be248d18c1a3b4d7800185e28072987",
+  "driver": {
+    "vendor": "Google Inc.",
+    "renderer": "Google SwiftShader",
+    "version": "OpenGL ES 3.0 SwiftShader 4.0.0.1",
+    "glsl": "OpenGL ES GLSL ES 3.00 SwiftShader 4.0.0.1",
+    "hardware_gpu_available": false,
+    "timer_query_supported": false
+  },
+  "swiftshader_threads": 1,
+  "driver_configuration": "[Processor]\nThreadCount=1\n[Testing]\nDisableServer=1\n",
+  "warmup_frames": 2,
+  "warmup_different_pixels": {
+    "before": {
+      "before": 0,
+      "after": 4
+    },
+    "after": {
+      "before": 0,
+      "after": 4
+    }
+  },
+  "rss_peak_kib": {
+    "before": 664796,
+    "after": 722488
+  },
+  "report_sha256": {
+    "before": "dcbc40936f085050fe47c6682d8f4c42b8bb0b31688b17fb5aee127284b1aeef",
+    "after": "02527622794782b6ad1e4be1721cc056c54d2485bed4dd57d61fbe2346e3f9a6"
+  }
+}

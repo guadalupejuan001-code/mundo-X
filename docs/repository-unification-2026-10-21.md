@@ -140,10 +140,26 @@ en y=101; el productor utiliza tiles reales de 128 píxeles. El oráculo que eva
 los 23 cuerpos, sin descartar ninguno por tile, coincide exactamente con la
 producción: cero diferencias en los 73.080 píxeles de ese caso, también con los
 materiales y nubes completos de la referencia. Por ello la referencia final
-evalúa todos los cuerpos y comprueba de forma independiente el descarte de
-candidatos del motor. El shader de producción conserva sus optimizaciones y
-sus bytes; no se revierte su particionado correcto para imitar la referencia
-antigua. El caso exacto se incorpora a la regresión.
+evalúa todos los cuerpos. Ese arreglo de la referencia, publicado en `3954b000`,
+conservó entonces los bytes del shader de producción. El caso exacto se
+incorporó a la regresión.
+
+La comparación Android completa contra ese oráculo encontró después ocho
+píxeles diferentes: cuatro en Tierra y cuatro en Saturno. El emulador remoto
+API35 y el local API29 reprodujeron la misma diferencia, con entradas iguales
+y repeticiones estables. Una revisión geométrica de esos rayos no encontró
+contribuyentes ausentes en sus máscaras; por ello no se atribuye el fallo a una
+causa del planificador que la evidencia no demuestra.
+
+La consolidación retira el descarte GPU por tiles y evalúa los 23 cuerpos en
+el shader, conservando las otras mejoras de materiales, nubes y cachés. La
+referencia independiente permanece sin cambios. El replay de las entradas
+Android exactas de Tierra y Saturno compara **146.160 píxeles, cero diferencias**,
+con repeticiones exactas en ambos programas ejecutados por separado. La
+interfaz deja de presentar el porcentaje del planificador como trabajo GPU
+ahorrado. El planificador permanece como infraestructura comprobable; ese
+ahorro ya no se atribuye al renderer publicado. La comparación Android de
+ocho escenas sigue siendo obligatoria para este nuevo candidato.
 
 Son pruebas de equivalencia después de corregir el filtrado y definir el
 oráculo completo; no afirman igualdad con el color indefinido anterior.
@@ -190,11 +206,13 @@ conservan los intentos iniciales y el hash del binario; corregir sólo su modo d
 ejecución permitió completar el gate sin cambiar las fuentes ni sus bytes.
 Los manifiestos comprueban 144 entradas antes y después de las pruebas.
 
-Los resultados Android posteriores deben consultarse en los checks de PR25,
-vinculados a su propio commit y APK. La campaña local Android del shader
-corregido está pendiente en este corte. Su runner exige observar que el emulador
-leyó la configuración de SwiftShader antes de atribuirle el número de trabajadores
-solicitado; después exige ocho escenas y todas sus repeticiones exactas.
+Los resultados Android se consultan en los checks de PR25, vinculados a su
+propio commit y APK. La campaña local del candidato `3954b000` terminó con
+seis de ocho escenas exactas y los ocho píxeles diferentes descritos arriba;
+no se registra como aprobada. El nuevo candidato exige repetir ese gate.
+Su runner observa que el emulador leyó la configuración de SwiftShader antes
+de atribuirle el número de trabajadores solicitado; después exige ocho escenas
+y todas sus repeticiones exactas.
 
 ## Cierre de los fallos encontrados por el CI
 
@@ -219,7 +237,9 @@ Windows. Los checks del PR identifican el estado posterior de cada campaña.
   ahorro de memoria.
 - **Solar exacto:** se observa la lectura real de la configuración del
   controlador, tanto con ruta relativa como absoluta. El caso de Urano se
-  resuelve mediante el oráculo completo descrito arriba.
+  resuelve mediante el oráculo completo descrito arriba. La comparación
+  posterior de Tierra y Saturno exige retirar el descarte GPU por tiles;
+  conserva la referencia independiente y el criterio de cero diferencias.
 - **Solar 8K:** el hilo gráfico completó un intervalo de 159.880,88 ms frente
   a un plazo de captura de 150 segundos. La instrumentación asigna 240 segundos
   sólo a las dos capturas 8K y conserva los plazos de los demás perfiles. Mantiene
@@ -227,6 +247,26 @@ Windows. Los checks del PR identifican el estado posterior de cada campaña.
   limpiar un fallo. El framebuffer, el PNG, su contenido, sus muestras y la
   restauración exacta siguen siendo obligatorios. El tiempo observado no es una
   medición de tiempo GPU ni acredita rendimiento interactivo a 8K.
+- **Transferencia de evidencia Solar:** una ejecución terminó sus 13 pruebas
+  Android correctamente, pero ADB devolvió éxito con un archivo tar truncado.
+  El colector valida archivo y extracción, exige `report.json` y permite tres
+  intentos acotados antes de fallar. Conserva el error primario de instrumentación
+  y los archivos incompletos para diagnóstico; la limpieza no vuelve a ejecutar
+  la colección ni sustituye el resultado. Tres regresiones con el archivo
+  truncado real comprueban recuperación, agotamiento de intentos y rechazo de
+  un archivo íntegro que carece de informe.
+
+En `3954b000` aprobaron Graphics normal (23/23), Graphics 8K (30/30),
+sus 78 tests nativos y 70.153 comprobaciones UBSan, los contratos de espejos,
+los tres perfiles COSMIC, PC, XLab y Solar 8K (15/15). La campaña Solar 4K
+terminó con tres fallos de foco al volver al primer plano y las comprobaciones
+dependientes de ese estado. El log del gestor de ventanas y la captura del
+dispositivo muestran el cuadro de aplicación bloqueada de Google Digital
+Wellbeing cubriendo Solar. El runner deshabilita ese paquete ajeno a la prueba
+en el emulador desechable y comprueba su estado antes de instrumentar; no oculta
+diálogos de bloqueo de Solar. Los resultados fallidos se conservan por separado
+del gate exacto y de las nuevas ejecuciones; no se sustituyen por un resultado
+de otra resolución.
 
 La [evidencia de CI](../results/repository-unification-2026-10-21/ci/) conserva
 los fallos originales y sus diagnósticos. La compilación conjunta y la ejecución

@@ -86,27 +86,56 @@ printf 'no\n' | "$solar_avdmanager" create avd --force --name cosmic-solar \
   > "$solar_evidence/emulator.log" 2>&1 &
 solar_emulator_pid=$!
 solar_collected=false
+solar_collection_attempted=false
 
 solar_collect() {
-  # Keep the first evidence snapshot: a second EXIT collection can overwrite
-  # an already complete archive or screenshot after the app has terminated.
+  # A completed snapshot is immutable. A failed collection also gets only
+  # three bounded attempts; EXIT cleanup must not repeat or hide that failure.
   [[ "$solar_collected" == false ]] || return 0
-  solar_collected=true
+  [[ "$solar_collection_attempted" == false ]] || return 1
+  solar_collection_attempted=true
   timeout 15 "$solar_adb" -s "$solar_serial" logcat -d > "$solar_evidence/logcat.txt" 2>&1 || true
   timeout 15 "$solar_adb" -s "$solar_serial" shell dumpsys meminfo "$solar_package" \
     > "$solar_evidence/app-memory.txt" 2>&1 || true
   timeout 15 "$solar_adb" -s "$solar_serial" exec-out screencap -p \
     > "$solar_evidence/device-screen.png" 2>/dev/null || true
-  if timeout 60 "$solar_adb" -s "$solar_serial" exec-out run-as "$solar_package" \
-      tar -C files -cf - solar-evidence > "$solar_evidence/runtime-evidence.tar" \
-      2> "$solar_evidence/evidence-pull.log"; then
-    tar -xf "$solar_evidence/runtime-evidence.tar" -C "$solar_evidence" --strip-components=1 || true
-  fi
+  local solar_copy_attempt solar_extract solar_partial
+  # adb can return success with a truncated stream. Match the existing COSMIC
+  # collector: validate and extract a complete attempt before running any gate.
+  for solar_copy_attempt in 1 2 3; do
+    printf 'Runtime evidence attempt %s/3 (solar-evidence)\n' "$solar_copy_attempt" \
+      >> "$solar_evidence/evidence-pull.log"
+    solar_extract="$(mktemp -d "$solar_evidence/runtime-extract.XXXXXX")" || return 1
+    solar_partial="$solar_evidence/runtime-evidence-attempt-$solar_copy_attempt.tar.partial"
+    if timeout 60 "$solar_adb" -s "$solar_serial" exec-out run-as "$solar_package" \
+        tar -C files -cf - solar-evidence > "$solar_partial" \
+        2>> "$solar_evidence/evidence-pull.log" \
+        && tar -tf "$solar_partial" >/dev/null \
+          2>> "$solar_evidence/evidence-pull.log" \
+        && tar -xf "$solar_partial" -C "$solar_extract" --strip-components=1 --no-same-owner \
+          2>> "$solar_evidence/evidence-pull.log" \
+        && [[ -s "$solar_extract/report.json" ]] \
+        && cp -a "$solar_extract/." "$solar_evidence/" \
+        && mv "$solar_partial" "$solar_evidence/runtime-evidence.tar"; then
+      rm -rf -- "$solar_extract"
+      solar_collected=true
+      return 0
+    fi
+    rm -rf -- "$solar_extract"
+    printf 'Incomplete runtime evidence; report.json and a valid archive are required.\n' \
+      >> "$solar_evidence/evidence-pull.log"
+    if [[ "$solar_copy_attempt" != 3 ]]; then sleep 2; fi
+  done
+  echo 'Could not collect complete runtime evidence after three attempts.' >&2
+  return 1
 }
 solar_cleanup() {
-  solar_collect
+  local solar_exit_status=$?
+  trap - EXIT
+  solar_collect || true
   timeout 10 "$solar_adb" -s "$solar_serial" emu kill >/dev/null 2>&1 \
     || kill "$solar_emulator_pid" 2>/dev/null || true
+  exit "$solar_exit_status"
 }
 trap solar_cleanup EXIT
 
@@ -143,6 +172,20 @@ fi
   | tr -d '\r' > "$solar_evidence/immersive-tutorial-setting.txt"
 [[ $(cat "$solar_evidence/immersive-tutorial-setting.txt") == confirmed ]] \
   || { echo 'Could not acknowledge the emulator full-screen tutorial.' >&2; exit 1; }
+# The disposable Google APIs image starts Digital Wellbeing during first boot.
+# Its unrelated ANR dialog obscured Solar in run 39526904153. Isolate that
+# optional service, while leaving Solar lifecycle and window-focus checks intact.
+solar_wellbeing=com.google.android.apps.wellbeing
+timeout 30 "$solar_adb" -s "$solar_serial" shell pm list packages --user 0 "$solar_wellbeing" \
+  | tr -d '\r' > "$solar_evidence/wellbeing-installed.txt"
+if [[ $(cat "$solar_evidence/wellbeing-installed.txt") == "package:$solar_wellbeing" ]]; then
+  timeout 30 "$solar_adb" -s "$solar_serial" shell pm disable-user --user 0 "$solar_wellbeing" \
+    > "$solar_evidence/wellbeing-disable.txt"
+  timeout 30 "$solar_adb" -s "$solar_serial" shell pm list packages -d --user 0 "$solar_wellbeing" \
+    | tr -d '\r' > "$solar_evidence/wellbeing-disabled.txt"
+  [[ $(cat "$solar_evidence/wellbeing-disabled.txt") == "package:$solar_wellbeing" ]] \
+    || { echo 'Could not isolate the emulator Digital Wellbeing service.' >&2; exit 1; }
+fi
 if [[ "$solar_profile" != normal ]]; then
   "$solar_adb" -s "$solar_serial" install -r "$solar_apks/COSMIC-X-Solar-coexist.apk"
 fi
@@ -162,6 +205,8 @@ timeout "$solar_instrument_timeout" "$solar_adb" -s "$solar_serial" shell am ins
   | tee "$solar_evidence/instrumentation.txt"
 solar_status=${PIPESTATUS[0]}
 set -e
-solar_collect
-[[ "$solar_status" == 0 ]] || { echo "Instrumentation process failed: $solar_status" >&2; exit 1; }
+solar_collection_status=0
+solar_collect || solar_collection_status=$?
+[[ "$solar_status" == 0 ]] || { echo "Instrumentation process failed: $solar_status" >&2; exit "$solar_status"; }
+[[ "$solar_collection_status" == 0 ]] || { echo 'Runtime evidence collection failed.' >&2; exit "$solar_collection_status"; }
 python3 tools/solar-verify-evidence.py "$solar_evidence" "${solar_verify_args[@]}"

@@ -377,11 +377,8 @@ void atmosphereVolume(vec3 rd,int id,float maximum,bool background,inout vec3 co
     if(background&&entering(id)&&!star)color*=1.0-daylight*smoothstep(.005,.12,1.0-transmission)*.998;
     color=color*transmission+accumulated;
 }
-uint visualCandidates(){
-    ivec2 grid=max(uBodyTileGrid,ivec2(1));
-    ivec2 tile=clamp(ivec2(gl_FragCoord.xy)/max(uBodyTileSize,1),ivec2(0),grid-1);
-    return texelFetch(uBodyTiles,tile,0).r;
-}
+uint visualCandidates(){ return (1u<<uint(uCount))-1u; }
+
 void main(){
     vec2 ndc=2.0*gl_FragCoord.xy/uResolution-1.0;
     vec3 ray=uForward+ndc.x*uAspect*uTanHalfFov*uRight+ndc.y*uTanHalfFov*uUp;
