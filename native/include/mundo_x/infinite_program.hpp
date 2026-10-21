@@ -2,6 +2,8 @@
 
 #include "mundo_x/infinite_core.hpp"
 
+#include <array>
+#include <cstdint>
 #include <iomanip>
 #include <locale>
 #include <sstream>
@@ -44,6 +46,69 @@ inline UInt decimal(const std::string& text, const char* name) {
     value = static_cast<UInt>(value * 10 + digit);
   }
   return value;
+}
+
+// Ether Memory v0.1 maps one logical byte to eight consecutive qubit addresses.
+// Byte a uses q(8a+0)..q(8a+7), little-endian by bit. Decimal arithmetic stays
+// textual so large logical addresses preserve InfiniteCore's exact addressing.
+inline std::string qbyte_address(std::string byte_address, unsigned bit,
+                                 std::size_t max_digits) {
+  if (bit >= 8) throw std::out_of_range("qbyte bit index");
+  byte_address = infinite_detail::canonical_address(byte_address, max_digits);
+  unsigned carry = bit;
+  for (std::size_t i = byte_address.size(); i-- > 0;) {
+    const unsigned value = static_cast<unsigned>(byte_address[i] - '0') * 8U + carry;
+    byte_address[i] = static_cast<char>('0' + value % 10U);
+    carry = value / 10U;
+  }
+  while (carry) {
+    byte_address.insert(byte_address.begin(), static_cast<char>('0' + carry % 10U));
+    carry /= 10U;
+  }
+  return infinite_detail::canonical_address(byte_address, max_digits);
+}
+
+inline std::array<std::string, 8> qbyte_addresses(const InfiniteCore& core,
+                                                  const std::string& byte_address) {
+  std::array<std::string, 8> result;
+  for (unsigned bit = 0; bit < result.size(); ++bit)
+    result[bit] = qbyte_address(byte_address, bit, core.limits().max_address_digits);
+  return result;
+}
+
+// Non-destructive classical read. A superposed/entangled bit is rejected
+// instead of being measured silently by a CPU-like load.
+inline std::uint8_t qload8(const InfiniteCore& core, const std::string& byte_address) {
+  const auto addresses = qbyte_addresses(core, byte_address);
+  std::uint8_t value = 0;
+  for (unsigned bit = 0; bit < addresses.size(); ++bit) {
+    const double one = core.probability_one(addresses[bit]);
+    if (one != 0.0 && one != 1.0)
+      throw std::runtime_error("qload8 requires a classical byte; bit " +
+                               std::to_string(bit) + " is quantum");
+    if (one == 1.0) value = static_cast<std::uint8_t>(value | (1U << bit));
+  }
+  return value;
+}
+
+// Exact classical store over Ether. It never measures a quantum bit. All eight
+// bits are checked first; then the necessary X gates commit as one core batch.
+// Untouched zero-background bytes therefore require no materialized qubits.
+inline void qstore8(InfiniteCore& core, const std::string& byte_address,
+                    std::uint8_t value) {
+  const auto addresses = qbyte_addresses(core, byte_address);
+  std::vector<InfiniteCore::Gate> flips;
+  flips.reserve(8);
+  for (unsigned bit = 0; bit < addresses.size(); ++bit) {
+    const double one = core.probability_one(addresses[bit]);
+    if (one != 0.0 && one != 1.0)
+      throw std::runtime_error("qstore8 requires a classical byte; bit " +
+                               std::to_string(bit) + " is quantum");
+    const bool desired = (value & (1U << bit)) != 0;
+    if ((one == 1.0) != desired)
+      flips.push_back({'X', addresses[bit], {}});
+  }
+  core.apply(flips);
 }
 
 inline InfiniteCore::Background parse_background(const std::string& text) {
@@ -169,6 +234,25 @@ inline void execute_line(const std::vector<std::string>& words, InfiniteCore& co
     const auto probability = core.probability_one(address);
     out << "{\"type\":\"probz\",\"address\":\"" << address
         << "\",\"probability_one\":" << probability << "}\n";
+    return;
+  }
+  if (command == "qload8") {
+    require_count(words, 2);
+    const auto address = canonical(core, words[1]);
+    const auto value = qload8(core, address);
+    out << "{\"type\":\"qload8\",\"address\":\"" << address
+        << "\",\"value\":" << static_cast<unsigned>(value) << "}\n";
+    return;
+  }
+  if (command == "qstore8") {
+    require_count(words, 3);
+    const auto address = canonical(core, words[1]);
+    const auto parsed = decimal<unsigned>(words[2], "qstore8 value");
+    if (parsed > 255U) throw std::out_of_range("qstore8 value exceeds 255");
+    qstore8(core, address, static_cast<std::uint8_t>(parsed));
+    out << "{\"type\":\"qstore8\",\"address\":\"" << address
+        << "\",\"value\":" << parsed
+        << ",\"active_qubits\":" << core.stats().active_qubits << "}\n";
     return;
   }
   if (command == "measure") {

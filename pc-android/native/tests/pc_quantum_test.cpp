@@ -130,6 +130,46 @@ void protocol_and_host_cases(){
   need(pc.quantum_json().find(huge)!=std::string::npos,"panel preserves decimal address");
   need(original!=pc.quantum_snapshot(),"work was performed on live state");
 }
+void ether_memory_cases(){
+  Machine pc;
+  auto& device=pc.quantum_device;
+  send(device,"qload8 12345\n");
+  auto output=receive(device);
+  need(output.find("\"type\":\"qload8\"")!=std::string::npos&&
+       output.find("\"value\":0")!=std::string::npos,
+       "untouched Ether byte reads as zero");
+  need(pc.quantum_session->stats().active_qubits==0,
+       "zero-background qload must not materialize memory");
+
+  send(device,"qstore8 12345 165\nqload8 12345\n");
+  output=receive(device);
+  need(!(device.status()&Device::request_error)&&output.find("\"value\":165")!=std::string::npos,
+       "guest transport round-trips an Ether byte");
+  need(pc.quantum_session->stats().active_qubits==4,
+       "0xA5 materializes only its four one bits");
+
+  send(device,"qstore8 12345 0\ncompact\nqload8 12345\n");
+  output=receive(device);
+  need(output.find("\"value\":0")!=std::string::npos,
+       "Ether byte can return to its zero rule");
+  need(pc.quantum_session->stats().active_qubits==0,
+       "explicit compact releases bytes that returned exactly to the background");
+
+  const auto before=pc.quantum_session->snapshot();
+  send(device,"h 98760\nqload8 12345\n");
+  need(device.status()&Device::request_error,
+       "classical qload rejects a superposed memory bit");
+  receive(device);
+  need(pc.quantum_session->snapshot()==before,
+       "failed mixed quantum/classical memory request rolls back atomically");
+
+  const std::string huge="1"+std::string(100,'0');
+  send(device,"qstore8 "+huge+" 3\nqload8 "+huge+"\n");
+  output=receive(device);
+  need(output.find("\"value\":3")!=std::string::npos,
+       "Ether byte addresses keep arbitrary decimal precision");
+}
+
 void preservation_cases(){
   Machine pc;pc.boot_demo();drain(pc);
   const auto screen=pc.screen();const auto steps=pc.cpu.instructions;const auto disk_reads=pc.disk_reads;
@@ -160,7 +200,7 @@ void preservation_cases(){
 }
 }
 int main(){try{
-  guest_cases();protocol_and_host_cases();preservation_cases();
+  guest_cases();protocol_and_host_cases();ether_memory_cases();preservation_cases();
   std::cout<<"{\"suite\":\"pc_quantum\",\"checks\":"<<checks<<",\"guest_modes\":[\"real16\",\"long64\"],\"success_and_failure_guests\":4,\"failures\":0}\n";
   return 0;
 }catch(const std::exception& error){std::cerr<<"FAIL PC quantum: "<<error.what()<<'\n';return 1;}}
