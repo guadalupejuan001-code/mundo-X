@@ -476,16 +476,24 @@ void main(){
         }
     }
     if(uAtmosphereEnabled==1){
-        // Only these catalogue entries have a non-zero global scattering
-        // volume. The ids are validated by SolarOptimizationChecks.
-        const int atmosphereIds[11]=int[11](0,2,3,4,5,6,7,8,10,14,16);
-        for(int k=0;k<11;k++){
-            int j=atmosphereIds[k];
-            if(j>=uCount)continue;
-            // Entry resolves the local medium; distant bodies keep their
-            // orbital shading without paying for another local ray march.
-            if(uEntry.w>.5&&!entering(j))continue;
+        // Entry resolves only its local medium. Outside entry, preserve the
+        // catalogue order but call only bodies with a non-zero scattering
+        // volume. Explicit calls avoid driver-dependent local array lowering.
+        if(uEntry.w>.5){
+            int j=clamp(int(uEntry.x+.5),0,uCount-1);
             atmosphereVolume(rd,j,closest,id<0,color);
+        }else{
+            atmosphereVolume(rd,0,closest,id<0,color);
+            atmosphereVolume(rd,2,closest,id<0,color);
+            atmosphereVolume(rd,3,closest,id<0,color);
+            atmosphereVolume(rd,4,closest,id<0,color);
+            atmosphereVolume(rd,5,closest,id<0,color);
+            atmosphereVolume(rd,6,closest,id<0,color);
+            atmosphereVolume(rd,7,closest,id<0,color);
+            atmosphereVolume(rd,8,closest,id<0,color);
+            atmosphereVolume(rd,10,closest,id<0,color);
+            atmosphereVolume(rd,14,closest,id<0,color);
+            atmosphereVolume(rd,16,closest,id<0,color);
         }
     }
     // Filmic highlight compression preserves solar/atmospheric dynamic range
