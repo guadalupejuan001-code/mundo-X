@@ -9,11 +9,12 @@ Esta revisión sustituye como arquitectura principal dos borradores anteriores:
 - `codex/ether-memory-fabric-20261021`: conectaba una ventana física x86 de
   256 bytes a ese mapeo.
 
-Esos experimentos se conservan en su historial como antecedentes, pero no se
-fusionan en esta ruta. Ambos seguían pensando desde una dirección clásica hacia
-qubits. **Inverse Ether Memory invierte la autoridad:** primero existe la regla,
-el estado y sus relaciones; los bytes clásicos aparecen solo cuando un
-consumidor pide una proyección determinista.
+Esos experimentos ya forman parte del historial integrado del repositorio y
+MemoryFabric continúa disponible para la app PC como compatibilidad. **No forman
+parte del grafo de compilación cuántico aislado.** Ambos seguían pensando desde
+una dirección clásica hacia qubits. **Inverse Ether Memory invierte la
+autoridad:** primero existe la regla, el estado y sus relaciones; los bytes
+clásicos aparecen solo cuando un consumidor pide una proyección determinista.
 
 ## Modelo implementado
 
