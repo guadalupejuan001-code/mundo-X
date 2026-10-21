@@ -14,7 +14,7 @@ concurrency:
 jobs:
   exact-solar:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
@@ -50,6 +50,22 @@ jobs:
             --fixtures solar-android/tests/fixtures/solar-android-cases-1-2.json \
             --baseline-shader solar-android/tests/fixtures/solar-defined-reference.frag \
             --warmup-frames 2 --repeats 3 --output solar-exact-android-cases12.json
+      - name: Exact 4K and 8K timing stability against full reference
+        run: |
+          /usr/bin/python3 tools/solar_shader_check.py \
+            --fixtures results/solar-integration-2026-10-20/shipping/fixtures-native-3840.json \
+            --baseline-shader solar-android/tests/fixtures/solar-defined-reference.frag \
+            --color-only --warmup-frames 2 --repeats 5 --scenes 4 24 \
+            --output solar-stability-4k.json
+          /usr/bin/python3 tools/solar_shader_check.py \
+            --fixtures results/solar-integration-2026-10-20/shipping/fixtures-native-7680.json \
+            --baseline-shader solar-android/tests/fixtures/solar-defined-reference.frag \
+            --color-only --warmup-frames 2 --repeats 3 --scenes 4 \
+            --output solar-stability-8k.json
+          /usr/bin/python3 tools/solar_stability_gate.py \
+            solar-stability-4k.json solar-stability-8k.json \
+            --output solar-stability-summary.json
+
       - name: Android toolchain and 2 GB emulator
         run: |
           sudo chmod 666 /dev/kvm
@@ -90,6 +106,9 @@ jobs:
             solar-defined-host.json
             solar-exact-android-host.json
             solar-exact-android-cases12.json
+            solar-stability-4k.json
+            solar-stability-8k.json
+            solar-stability-summary.json
             solar-android/tests/fixtures/solar-defined-reference.frag
             solar-android/app/build/outputs/apk/debug/*.apk
             solar-android/app/build/outputs/apk/androidTest/debug/*.apk
