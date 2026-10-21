@@ -37,7 +37,7 @@ jobs:
         run: cmake -S . -B quantum-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 
       - name: Build algorithm experiment
-        run: cmake --build quantum-build --config Release --target test_quantum_algorithms -j 2
+        run: cmake --build quantum-build --config Release --target test_quantum_algorithms test_quantum_visibility -j 2
 
       - name: Run algorithms
         shell: bash
@@ -57,10 +57,29 @@ jobs:
           print("Quantum algorithm evidence verified:", row)
           PY
 
+      - name: Run quantum visibility oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./quantum-build/test_quantum_visibility | tee quantum-visibility.json
+          python3 - <<'PY'
+          import json
+          row=json.load(open("quantum-visibility.json"))
+          assert row["suite"] == "quantum_visibility"
+          assert row["states"] == 32 and row["catalogue_bodies"] == 24
+          assert row["single_target_success_gt"] >= .999
+          assert row["benchmark_samples"] == 100000
+          assert row["classical_ms"] > 0 and row["quantum_ms"] > 0
+          assert row["production_enabled"] is False
+          print("Quantum visibility evidence verified:", row)
+          PY
+
       - name: Upload exact algorithm evidence
         uses: actions/upload-artifact@v4
         with:
           name: COSMIC-X-Quantum-Algorithms
-          path: quantum-algorithms.json
+          path: |
+            quantum-algorithms.json
+            quantum-visibility.json
           if-no-files-found: error
           retention-days: 14
