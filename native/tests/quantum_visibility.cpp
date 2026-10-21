@@ -25,10 +25,15 @@ std::size_t first_classical(std::uint32_t mask) {
   return Oracle::kStates;
 }
 
+unsigned count_bits(std::uint32_t value) {
+  unsigned count = 0;
+  while (value) { value &= value - 1U; ++count; }
+  return count;
+}
 std::uint32_t random_sparse_mask(std::mt19937_64& rng) {
   std::uint32_t mask = 0;
   const unsigned wanted = 1U + static_cast<unsigned>(rng() % 4U);
-  while (static_cast<unsigned>(__builtin_popcount(mask)) < wanted)
+  while (count_bits(mask) < wanted)
     mask |= std::uint32_t{1} << static_cast<unsigned>(rng() % Oracle::kMaxBodies);
   return mask;
 }
