@@ -37,6 +37,9 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Standalone, offline isotope/fusion research desk for Android.
@@ -59,6 +62,20 @@ public final class FusionActivity extends Activity {
     private static final String DOE="https://www.energy.gov/science/doe-explainsfusion-reactions";
 
     private final Handler ui=new Handler(Looper.getMainLooper());
+    private final ExecutorService milWorker=Executors.newSingleThreadExecutor(r->{
+        Thread t=new Thread(r,"Mundo-X-MIL-Radial");
+        t.setPriority(Thread.NORM_PRIORITY-1);
+        return t;
+    });
+    private volatile boolean closed=false;
+    private boolean milRunning=false;
+    private long milModelRevision=0;
+    private int milQubits=3;
+    private Button milRunButton,milSizeButton;
+    private SeekBar milTimeControl;
+    private TextView milTimeLabel,milSummary;
+    private MilProbabilityView milChart;
+    private MilRadialEvolver.Result lastMilResult;
     private final Runnable frameStepper=new Runnable() {
         @Override public void run(){
             if(!playing)return;
@@ -187,6 +204,10 @@ public final class FusionActivity extends Activity {
             energyBar.setProgress(state.getInt("energy",CollisionModel.energyToSlider(.02)));
             nuclearDepth.setProgress(state.getInt("nuclear_depth",15));
             timeline.setProgress(state.getInt("timeline",0));
+            milQubits=state.getInt("mil_qubits",3)==2?2:3;
+            milTimeControl.setProgress(state.getInt("mil_time",500));
+            if(milSizeButton!=null)milSizeButton.setText(
+                    milQubits==3?"3 qubits / 8 posiciones":"2 qubits / 4 posiciones");
         }
         updateReport();
     }
@@ -199,6 +220,8 @@ public final class FusionActivity extends Activity {
         out.putBoolean("expert",expert);
         out.putInt("energy",energyBar.getProgress());
         out.putInt("nuclear_depth",nuclearDepth.getProgress());
+        out.putInt("mil_time",milTimeControl.getProgress());
+        out.putInt("mil_qubits",milQubits);
         out.putInt("timeline",timeline.getProgress());
     }
 
