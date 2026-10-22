@@ -328,7 +328,7 @@ public final class QuantumDesktopActivity extends Activity {
                         }
                         program.append("show\nbytes\n");
                         confirmGenerated(true, program.toString(), "GHZ de " + qubits + " qubits");
-                    } catch (NumberFormatException | IllegalArgumentException error) {
+                    } catch (IllegalArgumentException error) {
                         new AlertDialog.Builder(this).setTitle("Cantidad no válida")
                                 .setMessage("Escribe un número entero entre 2 y 1000.")
                                 .setPositiveButton("Entendido", null).show();
