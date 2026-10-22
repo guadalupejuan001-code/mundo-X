@@ -24,13 +24,14 @@ independiente ni una QPU física.
 2. En **Web**, escribe una dirección o una búsqueda. El navegador utiliza la conexión del teléfono. Si una página inicia una descarga, selecciona un archivo de destino; el contenido se copia ahí sin requerir permisos generales de almacenamiento.
 3. En **Notas**, escribe sin pulsar guardar. Los cambios se guardan en el almacenamiento privado; puedes usar **Exportar .txt** para sacar tus notas del dispositivo o **Importar .txt** para reemplazarlas.
 4. En **Archivos**, elige un documento real. Los archivos de texto se muestran en la app; otros formatos pueden abrirse con las apps de Android instaladas. Un permiso de lectura persistente permite reabrir el último documento compatible.
-5. Desde **Inicio**, abre **Quantum Workstation**. Ejecuta XI para acumular cambios persistentes en Ether o XASM para lanzar circuitos nuevos con el perfil Reduced/Compact. Guarda sesiones .mqx para preservar explícitamente los estados XI.
+5. Desde **Inicio**, abre **Quantum Workstation**. Ejecuta XI para acumular cambios persistentes en Ether o XASM para lanzar circuitos nuevos con el perfil Reduced/Compact. La herramienta crea además un autoguardado local del estado XI al salir y trata de restaurarlo al regresar; exporta una sesión .mqx para tener una copia externa.
 6. Desde **Inicio**, abre **COSMIC X PC** para acceder al emulador original.
 
 ## Seguridad y límites
 
 - Android suministra Wi-Fi/red móvil, almacenamiento, teclado, pantalla, WebView y drivers. No se representan como trabajo ejecutado por qubits.
 - El navegador admite páginas HTTP(S), bloquea acceso directo a archivos locales desde WebView, no registra interfaces JavaScript privilegiadas y permite delegar `mailto:` / `tel:` a otras aplicaciones. La navegación usa los servicios de cookies y JS del motor WebView; los sitios visitados pueden recoger información como en otros navegadores.
+- Quantum Workstation intenta recuperar automáticamente la última sesión XI desde un archivo privado guardado de forma atómica. La salida abrupta antes de finalizar el checkpoint puede perder los últimos cambios; los resultados XASM no se serializan como estado.
 - Las notas se guardan sin sincronización en nube. **Desinstalar la aplicación borra los datos privados**; exporta antes cualquier nota importante. Android puede finalizar el proceso y las escrituras pendientes no están garantizadas ante una interrupción eléctrica o cierre abrupto.
 - Las descargas se limitan a **100 MiB** y requieren elegir un destino. Si falla una transferencia, puede quedar un documento incompleto que conviene eliminar.
 - La pestaña Archivos no es un administrador de todo el almacenamiento; abre recursos concedidos por el usuario a través del selector.
