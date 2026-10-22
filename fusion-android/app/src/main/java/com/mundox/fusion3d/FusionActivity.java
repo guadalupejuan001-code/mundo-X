@@ -1000,7 +1000,12 @@ public final class FusionActivity extends Activity {
                             finished.pauliTerms,finished.steps,finished.norm,
                             finished.fidelity,finished.probabilityL1,
                             finished.physicalSeconds,finished.executionMs,
-                            finished.peakComponents,coarse.domainFm));
+                            finished.peakComponents,coarse.domainFm)+
+                            (finished.sites>8?String.format(Locale.US,
+                                "\nPreparación Pauli: %.2f ms; RK4 clásico: %.2f ms.\n"+
+                                "Ambos tiempos se midieron en la CPU del dispositivo; "+
+                                "no demuestran ventaja cuántica.",
+                                finished.pauliPreparationMs,finished.referenceMs):""));
                 });
             });
         }catch(RejectedExecutionException error){
