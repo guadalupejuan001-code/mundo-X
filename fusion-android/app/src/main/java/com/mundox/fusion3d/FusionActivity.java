@@ -658,8 +658,8 @@ public final class FusionActivity extends Activity {
                         "Norma del GHZ = %.9f · ⟨Z0 Z99⟩ = %.5f\n"+
                         "Coherencia calculada ⟨X⊗100⟩ = %.6f\n"+
                         "Componentes MIL = %d · memoria lógica = %d bytes\n"+
-                        "Tiempo de observables = %.1f ms · Ether render = %.1f ms\n"+
-                        "Intersecciones candidatas = %d · discrepancias = %d",
+                        "Observables = %.1f ms · Ether = %.1f ms\n"+
+                        "Rayos candidatos = %d. Oráculo completo: probado en CI.",
                         report.getDouble("norm"),
                         report.getDouble("distant_zz"),
                         report.getDouble("global_x"),
@@ -667,8 +667,7 @@ public final class FusionActivity extends Activity {
                         report.getInt("state_bytes"),
                         report.getDouble("quantum_refresh_ms"),
                         report.getDouble("raster_ms"),
-                        report.getLong("candidate_tests"),
-                        report.getInt("exact_mismatches")));
+                        report.getLong("candidate_tests")));
                 mil100Status.setTextColor(GREEN);
             }catch(Exception failure){
                 mil100Status.setText("No se pudo validar el informe del motor MIL: "+
