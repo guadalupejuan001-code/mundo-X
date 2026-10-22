@@ -2,7 +2,7 @@
 
 **Nombre de Android:** Mundo X Fusion 3D  
 **Paquete:** `com.mundox.fusion3d`  
-**Versión:** 1.2.0  
+**Versión:** 1.3.0  
 **Sin conexión, sin permisos de red, sin acceso general a archivos.**
 
 Este módulo construye una APK **independiente** de `COSMIC X PC`, `MUNDO X Desktop`, `Solar` y de otras apps. Su interfaz está diseñada para el teléfono: pantalla completa, 118 elementos, búsqueda, selección de isótopos, explicación contextual, cálculo físico y una escena 3D orbitable.
@@ -16,11 +16,11 @@ Este módulo construye una APK **independiente** de `COSMIC X PC`, `MUNDO X Desk
 | Energía Ecm | Control logarítmico de 0.1 a 10,000 keV | No fija una velocidad de cámara ni una duración física |
 | Potencial Coulomb | `V_C(r)=1.4399764 Z1 Z2/r` MeV fuera de contacto (y esfera uniformemente cargada dentro) | Modelo electrostático aproximado |
 | Radio de contacto | `R=1.2(A1^(1/3)+A2^(1/3))` fm | Modelo geométrico simplificado, no radio medido específico |
-| Radio clásico de retorno | `rmin=1.4399764 Z1 Z2/Ecm` fm | Idealización de aproximación frontal clásica sin potencial nuclear |\n| Interacción nuclear fenomenológica | `V_N(r)=-V0/[1+exp((r-R)/a)]`, V0 20–60 MeV | No ajustada a datos D–T/D–D; no implica una fuerza microscópica |\n| Penetración sub-barrera WKB | Integral numérica con dos puntos de retorno y comparación analítica Coulomb | Factor semiclasico de barrera; **no es probabilidad de fusión** |\n| Hamiltoniano radial 256 sitios | Matriz tridiagonal real de 256 puntos, exportable como CSV | Operador de investigación, sin propagación de sus 256 sitios |\n| Evolución MIL Core | 2–3 qubits lógicos, malla de 4/8 sitios del mismo potencial; evolución unitaria por puertas y oráculo RK4 | Demostración de dinámica cuántica computada, NO evolución de la malla 256 ni predicción de fusión |
+| Radio clásico de retorno | `rmin=1.4399764 Z1 Z2/Ecm` fm | Idealización de aproximación frontal clásica sin potencial nuclear |\n| Interacción nuclear fenomenológica | `V_N(r)=-V0/[1+exp((r-R)/a)]`, V0 20–60 MeV | No ajustada a datos D–T/D–D; no implica una fuerza microscópica |\n| Penetración sub-barrera WKB | Integral numérica con dos puntos de retorno y comparación analítica Coulomb | Factor semiclasico de barrera; **no es probabilidad de fusión** |\n| Hamiltoniano radial 256 sitios | Matriz tridiagonal real de 256 puntos, exportable como CSV; **evolución en MIL con 8 qubits** | El potencial nuclear es fenomenológico, sin tasas de fusión ni dispersión real |\n| Evolución MIL Core | **2–8 qubits**, mallas de 4 a 256 sitios; Pauli tridiagonal y evolución unitaria contrastada con RK4 independiente | Simulación cuántica por software; no demuestra ventaja frente a otros simuladores ni predice probabilidades de fusión |
 | Vista 3D | El **código original de EtherRenderer (Mundo X)** traza rayos contra esferas tridimensionales y sombrea el fotograma | Posiciones de nucleones y trayectorias son diagramas, no resultados de un Hamiltoniano nuclear |
 | Exportación | Informe de texto con Q, isótopos, dimensiones, fuentes, límites y motor gráfico | No asegura que se haya producido una reacción física |
 
-La versión 1.1 añadió el Hamiltoniano de 256 sitios y la integral WKB. La **versión 1.2** ejecuta con puertas reales de MIL Core una **discretización mucho menor de 4/8 sitios**, y la compara con RK4 independiente. La matriz de 256 sitios **no está evolucionada**. El potencial fenomenológico no está calibrado contra datos nucleares de dispersión ni se calculan secciones eficaces, canales de reacción o tasas de fusión. Detalles: [MIL_RADIAL_EVOLUTION.md](MIL_RADIAL_EVOLUTION.md) y [NUCLEAR_INTERACTION.md](NUCLEAR_INTERACTION.md).
+La versión 1.1 incorporó la integral WKB y el Hamiltoniano radial. La 1.2 ejecutó primero 4/8 posiciones (2/3 qubits). La **versión 1.3 sí ejecuta las 256 posiciones radiales con 8 qubits lógicos en MIL Core**, gracias a una descomposición de Pauli especializada y comprobada contra RK4 independiente. Los pilotos de 4/8 sitios mantienen su dominio L=14 fm; las escalas 16..256 comparten L=96 fm. El potencial Woods–Saxon sigue sin calibrarse contra datos experimentales y esto no calcula secciones eficaces ni tasas de fusión. Detalles: [MIL_RADIAL_SCALING.md](MIL_RADIAL_SCALING.md), [MIL_RADIAL_EVOLUTION.md](MIL_RADIAL_EVOLUTION.md) y [NUCLEAR_INTERACTION.md](NUCLEAR_INTERACTION.md).
 
 ## 2. Reacciones de referencia
 
@@ -63,12 +63,12 @@ El resultado **no** procede de otra librería 3D, motor de juegos o imagen está
 
 Workflow `.github/workflows/fusion-standalone-android.yml`:
 1. Compila los modelos matemáticos con Java sin Android.
-2. Comprueba 118 elementos, canales, Q, invariancia de reactivos, energía y radios; WKB versus Coulomb analítico y Hamiltoniano tridiagonal simétrico. La 1.2 añade evolución MIL versus RK4, unidad de norma, propagación radial y límites del motor.
+2. Comprueba 118 elementos, canales, Q, invariancia de reactivos, energía y radios; WKB versus Coulomb analítico y Hamiltoniano tridiagonal simétrico. La 1.3 valida 4..256 sitios con descomposición Pauli especializada y evolución MIL versus RK4, incluidos límites de memoria, tiempo y número de puertas.
 3. Compila y ejecuta el renderizador C++ original con un oráculo geométrico exhaustivo y comprueba órbita distinta.
 4. Compila y firma APK Android ARM64 y x86_64, revisa clase de lanzador y biblioteca nativa.
 5. Inicia la APK en un emulador Android 15, captura pantalla y revisa errores de inicio.
 
-## 6. Fuentes científicas\n\n- [MIL Core radial evolution v1.2: modelos, métodos y límites](MIL_RADIAL_EVOLUTION.md)\n- [Modelo nuclear/WKB v1.1, ecuaciones y límites](NUCLEAR_INTERACTION.md)
+## 6. Fuentes científicas\n\n- [Escalamiento verificado de MIL Core a 256 sitios, v1.3](MIL_RADIAL_SCALING.md)\n- [MIL Core radial evolution v1.2: modelos, métodos y límites](MIL_RADIAL_EVOLUTION.md)\n- [Modelo nuclear/WKB v1.1, ecuaciones y límites](NUCLEAR_INTERACTION.md)
 
 - [NIST Atomic Weights and Isotopic Compositions](https://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl?all=all&ascii=ascii&ele=&isotype=all)
 - [BNL/NNDC QCalc, evaluación AME 2020](https://www.nndc.bnl.gov/qcalc/)
