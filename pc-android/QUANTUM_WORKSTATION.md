@@ -13,9 +13,9 @@ En **Mundo X Quantum** puedes:
 2. Escribir o pegar un programa `.xi` o `.x` y pulsar **Ejecutar**.
 3. Ejecutar comandos XI breves desde **Terminal**, sobre el mismo estado que el editor XI. XASM ejecuta circuitos independientes.
 4. Abrir y guardar archivos `.xi` y `.x` a través del selector de documentos Android.
-5. Consultar el estado del núcleo XI y la memoria sin medir implícitamente qubits.
-6. Guardar una sesión en un archivo `.mqx` (JSON con versión, borradores XI/XASM, snapshot MXI y snapshot de Inverse Ether Memory). Los circuitos XASM no exportan aquí su estado final.
-7. Reabrir esa sesión después de cerrar la aplicación; la restauración del núcleo XI y la memoria es transaccional.
+5. Consultar el estado del núcleo XI y la memoria sin medir implícitamente qubits. La sesión se guarda localmente al salir y se restaura cuando vuelves a abrir la herramienta.
+6. Exportar una sesión en un archivo `.mqx` para tener una copia fuera de la app (JSON con versión, borradores XI/XASM, snapshot MXI y snapshot de Inverse Ether Memory). Los circuitos XASM no exportan aquí su estado final.
+7. Reabrir una sesión `.mqx` cuando quieras; la restauración del núcleo XI y la memoria es transaccional.
 8. Entrar a COSMIC X PC desde el propio espacio de trabajo.
 
 ## Arquitectura
@@ -33,7 +33,7 @@ Android (QuantumDesktopActivity)
   └── Acceso COSMIC X PC ───> MainActivity (independiente)
 ```
 
-Cada instancia de Workstation posee una única sesión nativa. La ejecución XI opera sobre una copia transaccional; el estado visible no cambia si falla el programa o no cabe la salida de consola. Solo se serializan estados a petición explícita del usuario. Los documentos se escriben y leen en segundo plano, con límites de tamaño.
+Cada instancia de Workstation posee una única sesión nativa. Al pausar o cerrar la Activity, la herramienta encola un checkpoint privado mediante AtomicFile; al iniciarla, recupera ese checkpoint antes de aceptar programas, si existe y es válido. La copia privada se borra al desinstalar la app y no sustituye la exportación manual `.mqx`. Si el proceso es destruido antes del guardado no se garantiza conservar los cambios recientes. La ejecución XI opera sobre una copia transaccional; el estado visible no cambia si falla el programa o no cabe la salida de consola. Solo se serializan estados a petición explícita del usuario. Los documentos se escriben y leen en segundo plano, con límites de tamaño.
 
 - Editor y programa JNI: máximo 1 MiB.
 - Salida JNI: máximo 1 MiB; vista de consola retiene los últimos 100.000 caracteres.
