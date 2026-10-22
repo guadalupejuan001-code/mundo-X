@@ -22,6 +22,12 @@ int main(){
     need(stats.candidate_tests<stats.brute_tests,"region planning did not reduce body tests");
     need(renderer.pixel(160,90).body==0,"central body is not visible");
     need(stats.max_candidates<=3,"candidate count exceeds body count");
+    const auto before_hash=stats.frame_hash;
+    const auto trained=renderer.train_tiles({8,16,32,64});
+    need(trained.exact_mismatches==0,"trained tile path differs from brute-force frame");
+    need(trained.frame_hash==before_hash,"tile training changed the rendered image");
+    need(trained.chosen_tile==8||trained.chosen_tile==16||trained.chosen_tile==32||trained.chosen_tile==64,
+         "tile training selected a non-candidate size");
 
     std::mt19937_64 random(20261021);
     for(int scene=0;scene<100;++scene){
