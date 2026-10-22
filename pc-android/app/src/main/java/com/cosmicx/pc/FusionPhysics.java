@@ -185,7 +185,7 @@ public final class FusionPhysics {
         if (z == 3 || z == 11 || z == 19 || z == 37 || z == 55 || z == 87) return 0;
         if (z == 4 || z == 12 || z == 20 || z == 38 || z == 56 || z == 88) return 1;
         if (z <= 10) return z + 7; // B-Ne -> col 13-18
-        if (z <= 18) return z - 6; // Al-Ar -> col 13-18
+        if (z <= 18) return z - 1; // Al-Ar -> col 13-18
         if (z <= 36) return z - 19; // Sc-Kr -> col 3-18
         if (z <= 54) return z - 37; // Y-Xe -> col 3-18
         if (z <= 86) return z == 57 ? 2 : z - 69; // La, Hf-Rn
