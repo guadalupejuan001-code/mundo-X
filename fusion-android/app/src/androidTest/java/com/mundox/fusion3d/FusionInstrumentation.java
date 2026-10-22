@@ -93,7 +93,9 @@ public final class FusionInstrumentation extends Instrumentation {
                     " r2="+interaction.outerTurningFm+"\n"+
                     "RADIAL_H_ANDROID_PASS sites="+radial.sites+
                     " tridiagonal=true\n"+
-                    "MIL_RADIAL_ANDROID_PASS backend=MIL-Reduced 256-sites 8-qubits Strang-2\n");
+                    "MIL_RADIAL_ANDROID_PASS backend=MIL-Reduced 256-sites 8-qubits Strang-2\n"+
+                    "MIL_ANDROID_MEASUREMENTS "+milText.replace('\n','|')
+                        .substring(0,Math.min(600,milText.length()))+"\n");
             runOnMainSync(activity::finish);
         } catch(Throwable fail) {
             result.putString("stream","FUSION_3D_ANDROID_FAIL "+fail+"\n");
