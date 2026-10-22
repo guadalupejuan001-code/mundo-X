@@ -9,9 +9,11 @@ import java.util.Locale;
 /**
  * Runs actual gates in the repository's MIL ReducedExactTRepresentation engine.
  *
- * 4-site (2 qubits) or 8-site (3 qubits) example ONLY. 256-point operator and
- * many-body nuclear dynamics are not evolved. Reference RK4 is independent,
- * used for validation, never as the MIL execution backend.
+ * The 4/8-site pilot remains untouched. The structured Pauli scaling backend
+ * also supports 16/32/64/128/256 sites, with explicit gate/component budgets.
+ * The 256-site radial operator is now evolved by 8 logical qubits of the
+ * SOFTWARE MIL Reduced backend. This is NOT a many-body nuclear solver.
+ * RK4 is independent validation only, never the MIL execution engine.
  */
 public final class MilRadialEvolver {
     static { System.loadLibrary("mxfusionrender"); }
@@ -25,13 +27,15 @@ public final class MilRadialEvolver {
         public final int qubits,sites,initialSite,steps,pauliTerms,gates,peakComponents;
         public final double tauInverseMev,physicalSeconds,norm,referenceNorm;
         public final double fidelity,probabilityL1,initialProbability;
+        public final double executionMs,pauliPreparationMs,referenceMs;
         public final double[] probabilities,referenceProbabilities;
-        public final String backend,method,oracle;
+        public final String backend,method,oracle,pauliDecomposition;
 
         private Result(JSONObject state) throws JSONException {
             backend=state.getString("backend");
             method=state.getString("method");
             oracle=state.getString("oracle");
+            pauliDecomposition=state.optString("pauli_decomposition","legacy");
             qubits=state.getInt("qubits");
             sites=state.getInt("sites");
             initialSite=state.getInt("initial_site");
@@ -46,10 +50,15 @@ public final class MilRadialEvolver {
             fidelity=state.getDouble("fidelity");
             probabilityL1=state.getDouble("probability_l1");
             initialProbability=state.getDouble("initial_probability");
+            executionMs=state.optDouble("execution_ms",0.);
+            pauliPreparationMs=state.optDouble("pauli_preparation_ms",0.);
+            referenceMs=state.optDouble("reference_ms",0.);
             probabilities=asArray(state.getJSONArray("probabilities"));
             referenceProbabilities=asArray(state.getJSONArray("reference_probabilities"));
             if(!"MIL ReducedExactTRepresentation".equals(backend) || qubits<2||
-                    qubits>3 || sites!=(1<<qubits) ||
+                    qubits>8 || sites!=(1<<qubits) ||
+                    peakComponents<1 || peakComponents>1024 ||
+                    gates<1 || gates>200000 ||
                     probabilities.length!=sites ||
                     referenceProbabilities.length!=sites ||
                     !Double.isFinite(norm)||!Double.isFinite(fidelity) ||
@@ -73,8 +82,10 @@ public final class MilRadialEvolver {
                     "MÉTODO: %s\n"+
                     "Malla: %d posiciones radiales codificadas en %d qubits.\n"+
                     "Estado inicial localizado: sitio %d (de 0 a %d).\n"+
-                    "Tiempo τ=t/ħ = %.4f MeV^-1 (t≈%.3e s).\n"+
+                    "Tiempo τ=t/ħ = %.6g MeV^-1 (t≈%.3e s).\n"+
                     "Evolución: %d pasos Strang, %d términos Pauli, %d puertas MIL.\n"+
+                    "Descomposición Pauli: %s; MIL puertas: %.3f ms.\n"+
+                    "Preparación Pauli: %.3f ms; RK4 independiente: %.3f ms.\n"+
                     "Componentes del motor (máximo): %d.\n"+
                     "Norma MIL = %.10f · norma referencia = %.10f.\n"+
                     "Fidelidad MIL vs. RK4 independiente = %.9f.\n"+
@@ -84,10 +95,12 @@ public final class MilRadialEvolver {
                     "Cálculo independiente (RK4): %s\n"+
                     "ADVERTENCIA: fidelidad = comparación numérica del mismo "+
                     "Hamiltoniano discretizado, no validación de parámetros "+
-                    "nucleares ni probabilidad de fusión. El Hamiltoniano "+
-                    "de 256 puntos NO está propagado por esta demo.",
+                    "nucleares ni probabilidad de fusión. La malla de 256 sitios "+
+                    "solo se evoluciona al seleccionar explícitamente 8 qubits. "+
+                    "No se calculan secciones eficaces ni dinámica de muchos cuerpos.",
                     backend,method,sites,qubits,initialSite,sites-1,
                     tauInverseMev,physicalSeconds,steps,pauliTerms,gates,
+                    pauliDecomposition,executionMs,pauliPreparationMs,referenceMs,
                     peakComponents,norm,referenceNorm,fidelity,probabilityL1,
                     initialSite,initialProbability,display(probabilities),
                     display(referenceProbabilities));
@@ -95,9 +108,22 @@ public final class MilRadialEvolver {
 
         private static String display(double[] values){
             StringBuilder b=new StringBuilder("[");
-            for(int i=0;i<values.length;i++){
-                if(i>0)b.append(", ");
-                b.append(String.format(Locale.US,"%.5f",values[i]));
+            int n=values.length;
+            if(n<=32){
+                for(int i=0;i<n;i++){
+                    if(i>0)b.append(", ");
+                    b.append(String.format(Locale.US,"%.5f",values[i]));
+                }
+            }else{
+                for(int i=0;i<16;i++){
+                    if(i>0)b.append(", ");
+                    b.append(String.format(Locale.US,"%.5f",values[i]));
+                }
+                b.append(", … ").append(n-24).append(" sitios más … ");
+                for(int i=n-8;i<n;i++){
+                    if(i>n-8)b.append(", ");
+                    b.append(String.format(Locale.US,"%.5f",values[i]));
+                }
             }
             return b.append(']').toString();
         }
@@ -106,10 +132,11 @@ public final class MilRadialEvolver {
     public static Result execute(RadialHamiltonian.Grid grid,int initialSite,
                                  double tauInverseMev,int steps) throws JSONException {
         if(grid==null || !grid.hasNuclearPotential ||
-                (grid.sites!=4 && grid.sites!=8) ||
+                grid.sites<4 || grid.sites>256 ||
+                (grid.sites&(grid.sites-1))!=0 ||
                 initialSite<0 || initialSite>=grid.sites)
             throw new IllegalArgumentException("Modelo radial reducido no disponible");
-        if(steps<1||steps>24||tauInverseMev<0||tauInverseMev>.12||
+        if(steps<1||steps>(grid.sites>8?12:24)||tauInverseMev<0||tauInverseMev>.12||
                 !Double.isFinite(tauInverseMev))
             throw new IllegalArgumentException("Parámetros MIL fuera de presupuesto");
         String output=evolveNative(grid.diagonalMeV,grid.offDiagonalMeV,

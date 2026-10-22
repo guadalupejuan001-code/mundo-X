@@ -1,0 +1,74 @@
+name: MIL Core radial scaling 2 to 8 qubits
+on:
+  pull_request:
+    branches: ['main']
+    paths:
+      - 'fusion-android/native/mil_radial_scaling.hpp'
+      - 'fusion-android/tests/mil_radial_scalability.cpp'
+      - '.github/workflows/mil-radial-scalability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mil-radial-scaling-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scaling-mil-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Compile MIL scaling harness on real ReducedExactTRepresentation
+        run: |
+          set -euo pipefail
+          mkdir -p mil-scaling-evidence mil-scaling-build
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+              -I native/include -I fusion-android/native \
+              fusion-android/tests/mil_radial_scalability.cpp \
+              -o mil-scaling-build/mil_radial_scalability
+      - name: Verify exact operator reconstruction for 4..256 sites
+        run: |
+          set -euo pipefail
+          timeout --kill-after=5 90 mil-scaling-build/mil_radial_scalability profile \
+              | tee mil-scaling-evidence/pauli-profiles.txt
+          grep -q 'MIL_RADIAL_SYMBOLIC_DECOMPOSITION_PASS max_sites=256 max_qubits=8' \
+              mil-scaling-evidence/pauli-profiles.txt
+          grep -q 'qubits=8 sites=256' mil-scaling-evidence/pauli-profiles.txt
+      - name: Validate MIL 4..64-site evolution against independent RK4
+        run: |
+          set -euo pipefail
+          for bits in 2 3 4 5 6; do
+            echo "START MIL bits=$bits"
+            timeout --kill-after=5 75 mil-scaling-build/mil_radial_scalability run "$bits" \
+                | tee "mil-scaling-evidence/mil-run-$bits.txt"
+            grep -q 'MIL_RADIAL_SCALED_RUN_PASS' \
+                "mil-scaling-evidence/mil-run-$bits.txt"
+          done
+      - name: Stress MIL 128 and 256 radial sites (diagnostic, no false success)
+        continue-on-error: true
+        run: |
+          set -u
+          for bits in 7 8; do
+            echo "START STRESS MIL bits=$bits"
+            timeout --kill-after=5 95 mil-scaling-build/mil_radial_scalability run "$bits" \
+                > "mil-scaling-evidence/mil-stress-$bits.txt" 2>&1
+            status=$?
+            cat "mil-scaling-evidence/mil-stress-$bits.txt"
+            printf 'qubits=%s exit_code=%s\n' "$bits" "$status" | \
+                tee -a mil-scaling-evidence/stress-status.txt
+          done
+      - name: Preserve exact scaling evidence, including blocked runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MIL-RADIAL-SCALING
+          path: |
+            mil-scaling-evidence/**
+          if-no-files-found: warn
+          retention-days: 14

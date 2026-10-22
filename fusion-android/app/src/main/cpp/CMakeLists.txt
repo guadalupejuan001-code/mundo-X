@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.22.1)
 project(mundo_x_fusion_ether LANGUAGES CXX)
 get_filename_component(MUNDO_X_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
 add_library(mxfusionrender SHARED ether_fusion_jni.cpp mil_radial_jni.cpp)
-target_include_directories(mxfusionrender PRIVATE "${MUNDO_X_ROOT}/native/include")
+target_include_directories(mxfusionrender PRIVATE
+    "${MUNDO_X_ROOT}/native/include"
+    "${MUNDO_X_ROOT}/fusion-android/native")
 target_compile_features(mxfusionrender PRIVATE cxx_std_17)
 target_compile_options(mxfusionrender PRIVATE -O3 -Wall -Wextra -Wpedantic)
 target_link_options(mxfusionrender PRIVATE -Wl,-z,max-page-size=16384)

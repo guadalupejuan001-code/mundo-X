@@ -26,7 +26,7 @@ public final class RadialHamiltonian {
         public final double offDiagonalMeV;
 
         private Grid(int n,double domain,double mu,NuclearInteractionModel.Result model) {
-            if(((n<64||n>512) && n!=4 && n!=8)||
+            if(n<4||n>512||(n&(n-1))!=0||
                     !Double.isFinite(domain)||domain<12||domain>256||
                     !Double.isFinite(mu)||mu<=0)
                 throw new IllegalArgumentException("Malla radial fuera de presupuesto");
@@ -125,16 +125,23 @@ public final class RadialHamiltonian {
 
     /**
      * Low-resolution discretization of THE SAME radial operator for a small
-     * MIL quantum experiment. N=8 => three qubits, L=14 fm.
-     * This does NOT evolve the separate N=256 research grid. Coarse-grid
-     * discretization error is distinct from Trotter and floating-point error.
+     * MIL quantum experiment. N=4/8 (2/3 qubits) keeps the original 14 fm
+     * pilot domain; N=16/32/64/128/256 uses the 96 fm research domain.
+     * The 256-site experiment truly evolves the original 256-point grid
+     * under bounded first/second-order Pauli product formulas. Larger
+     * spatial resolutions carry different numerical errors and costs.
      */
     public static Grid forMil(NuclearInteractionModel.Result result,int qubits){
         if(result==null||!result.hasNuclearModel)
             throw new IllegalArgumentException("No validated model for MIL coarse evolution");
-        if(qubits!=2&&qubits!=3)
-            throw new IllegalArgumentException("MIL radial evolution supports 2 or 3 qubits");
-        return new Grid(1<<qubits,14.0,result.reducedMassMeV,result);
+        if(qubits<2 || qubits>8)
+            throw new IllegalArgumentException("MIL radial evolution supports 2..8 qubits");
+        // Retain the original 4/8-site sandbox (L=14 fm) unchanged. Larger
+        // simulations use the 96 fm domain of the 256-site research operator.
+        // These different physical domains MUST NOT be compared as if they
+        // were a simple resolution refinement of the same interval.
+        final double domain=qubits<=3?14.0:DEFAULT_LENGTH_FM;
+        return new Grid(1<<qubits,domain,result.reducedMassMeV,result);
     }
 
     /** Pure free-particle reference Hamiltonian, used as an analytic oracle. */
