@@ -80,6 +80,7 @@ public final class FusionInstrumentation extends Instrumentation {
                 SystemClock.sleep(200);
             }
             if(!milText.contains("MIL ejecutó ")||
+                    !milText.contains("256 posiciones")||
                     !milText.contains("fidelidad vs RK4"))
                 throw new AssertionError("MIL backend did not execute: "+milText);
             // Real, non-default orbit should redraw an actual raytraced image.
@@ -92,7 +93,7 @@ public final class FusionInstrumentation extends Instrumentation {
                     " r2="+interaction.outerTurningFm+"\n"+
                     "RADIAL_H_ANDROID_PASS sites="+radial.sites+
                     " tridiagonal=true\n"+
-                    "MIL_RADIAL_ANDROID_PASS backend=MIL-Reduced 8-sites Strang-2\n");
+                    "MIL_RADIAL_ANDROID_PASS backend=MIL-Reduced 256-sites 8-qubits Strang-2\n");
             runOnMainSync(activity::finish);
         } catch(Throwable fail) {
             result.putString("stream","FUSION_3D_ANDROID_FAIL "+fail+"\n");
