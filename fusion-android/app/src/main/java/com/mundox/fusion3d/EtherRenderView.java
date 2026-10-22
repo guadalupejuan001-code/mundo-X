@@ -240,6 +240,8 @@ public final class EtherRenderView extends View {
     private int dp(float x){return (int)(x*getResources().getDisplayMetrics().density+.5f);}
     private float sp(float x){return x*getResources().getDisplayMetrics().scaledDensity;}
 
+    public boolean hasNativeFrame(){ return frames>0 && bitmap!=null && !bitmap.isRecycled(); }
+
     public String provenance(){
         return String.format(Locale.US,
                 "Motor: Mundo X EtherRenderer nativo; escena %dx%d, último cuadro %d ms, %d cuadros; "+
