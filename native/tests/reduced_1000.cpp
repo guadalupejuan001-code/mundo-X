@@ -62,6 +62,16 @@ int main() {
     require(q.t_count() == 1, "T count changed");
     require(q.component_count() <= 4, "1000-qubit sparse support grew unexpectedly");
 
+    // Direct controlled-phase must also cross the multiword boundary without
+    // transiently expanding through three separate phase operations.
+    Reduced cp(n, 64);
+    cp.hadamard(0);
+    cp.hadamard(999);
+    cp.controlled_phase(0, 999, 0.23);
+    near(cp.sparse_norm(), 1.0, 1e-12, "q0-q999 controlled-phase norm");
+    require(cp.component_count() <= 4,
+            "direct controlled-phase exceeded four Pauli components");
+
     // The adaptive front-end must also be able to transfer a 1000-qubit
     // product state into the universal reduced engine when entanglement appears.
     Adaptive adaptive(n);
