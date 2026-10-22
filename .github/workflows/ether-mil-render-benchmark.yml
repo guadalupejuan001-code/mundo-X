@@ -1,0 +1,81 @@
+name: MIL Ether Render exact paired CPU benchmark
+on:
+  push:
+    branches: [codex/ether-mil-observer-render-20261021, main]
+    paths:
+      - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/include/mundo_x/ether_mil_bridge.hpp'
+      - 'tools/benchmark_ether_render_native.cpp'
+      - '.github/workflows/ether-mil-render-benchmark.yml'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/include/mundo_x/ether_mil_bridge.hpp'
+      - 'tools/benchmark_ether_render_native.cpp'
+      - '.github/workflows/ether-mil-render-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: current
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 5ad19ae30c1887c8812ddc383cb5841c88d6e426
+          path: reference
+          persist-credentials: false
+      - name: Compile identical harness against baseline and new renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O3 -DNDEBUG -I reference/native/include current/tools/benchmark_ether_render_native.cpp -o render_before
+          g++ -std=c++17 -O3 -DNDEBUG -I current/native/include current/tools/benchmark_ether_render_native.cpp -o render_after
+      - name: Run identical seeded scenes with warmup and seven measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./render_before | tee before.jsonl
+          ./render_after | tee after.jsonl
+      - name: Compare hashes, candidate work, and paired CPU times
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          before=[json.loads(s) for s in Path("before.jsonl").read_text().splitlines()]
+          after=[json.loads(s) for s in Path("after.jsonl").read_text().splitlines()]
+          assert len(before)==len(after)==2
+          rows=[]
+          for old,new in zip(before,after):
+              for key in ("width","height","bodies","hash","candidate_tests","brute_tests","mismatches"):
+                  assert old[key]==new[key],(key,old.get(key),new.get(key))
+              assert new["mismatches"]==0
+              # This is a CPU-only paired comparison on the same GitHub runner.
+              # A large confirmed regression is a rejection, not a speed claim.
+              assert new["median_ms"]<=old["median_ms"]*1.25, (old,new)
+              rows.append({"scene":f'{old["width"]}x{old["height"]}/{old["bodies"]}',
+                           "baseline_ms":old["median_ms"],"new_ms":new["median_ms"],
+                           "speedup":old["median_ms"]/new["median_ms"],
+                           "identical_hash":True})
+          Path("ether_mil_render_comparison.json").write_text(
+              json.dumps({"baseline":"5ad19ae","comparison":rows},indent=2)+"\n")
+          print(json.dumps(rows,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ether-MIL-CPU-Paired
+          path: |
+            before.jsonl
+            after.jsonl
+            ether_mil_render_comparison.json
+          if-no-files-found: error
+          retention-days: 14
