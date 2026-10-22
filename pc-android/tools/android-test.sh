@@ -147,9 +147,13 @@ grep -q 'Status: ok' "$evidence_dir/desktop-start.txt"
 sleep 4
 "$adb_bin" shell pidof com.cosmicx.pc > /dev/null
 grep -q 'Status: ok' "$evidence_dir/quantum-desktop-start.txt"
+"$adb_bin" shell screencap -p /sdcard/mundo-quantum-desktop.png
+"$adb_bin" exec-out cat /sdcard/mundo-quantum-desktop.png > "$evidence_dir/mundo-quantum-desktop.png"
 
 "$adb_bin" shell am start -W -n com.cosmicx.pc/.MundoXDesktopActivity > "$evidence_dir/desktop-return.txt"
-sleep 3
+sleep 4
+"$adb_bin" logcat -d > "$evidence_dir/desktop-quantum-logcat.txt"
+"$adb_bin" shell run-as com.cosmicx.pc ls -la files > "$evidence_dir/desktop-files.txt" || true
 "$adb_bin" exec-out run-as com.cosmicx.pc cat files/mundo_x_quantum_autosave.mqx > "$evidence_dir/quantum-workstation-autosave.mqx"
 python3 - <<'PY'
 import json
