@@ -70,10 +70,10 @@ public final class Mil100EtherView extends View {
     private float yaw=.33f,pitch=.19f,distance=8.7f;
     private float touchX,touchY,pinchDistance;
     private boolean pinching=false;
-    private int frames=0;
+    private volatile int frames=0;
     private long renderRevision=0;
-    private String lastStatus="";
-    private String lastError=null;
+    private volatile String lastStatus="";
+    private volatile String lastError=null;
     private double globalCoherence=Double.NaN;
     private double rasterMs=0,quantumMs=0;
 
