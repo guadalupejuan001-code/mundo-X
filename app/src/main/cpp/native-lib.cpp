@@ -14,9 +14,11 @@
 #include "mundo_x/dense_core.hpp"
 #include "mundo_x/teleport.hpp"
 #include "mundo_x/exact_t_experiment.hpp"
+#include "mundo_x/ether_renderer.hpp"
 
 using mundo_x::CompactCore;
 using mundo_x::DenseCore;
+using mundo_x::EtherRenderer;
 
 static jstring as_jstring(JNIEnv* env, const std::string& s) {
   return env->NewStringUTF(s.c_str());
@@ -280,6 +282,143 @@ Java_com_mundox_lab_NativeCore_practice(JNIEnv* env, jclass, jint qubits,
   }
 }
 
+
+namespace {
+double er_unit(std::uint64_t& state) {
+  state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+  return static_cast<double>((state >> 11) & ((1ULL << 53) - 1)) /
+         static_cast<double>(1ULL << 53);
+}
+
+void er_scene(EtherRenderer& renderer, int scene) {
+  if (scene == 0) {
+    renderer.set_camera({0,0,12},{0,0,-4},47);
+    renderer.add_body({0,{0,0,0},1.6,{{.18,.58,1.0}}});
+    renderer.add_body({1,{3.5,.8,-3.},1.0,{{1.0,.42,.10}}});
+    renderer.add_body({2,{-4.2,-1.1,-9.},2.0,{{.52,.82,.28}}});
+    return;
+  }
+  if (scene == 1) {
+    renderer.set_camera({0,1.5,18},{0,0,-18},52);
+    for (std::uint32_t id=0; id<23; ++id) {
+      const double a=static_cast<double>(id)*2.399963229728653;
+      const double ring=1.3+static_cast<double>(id)*.62;
+      const double z=-static_cast<double>(id)*2.2;
+      const double r=.28+static_cast<double>((id*7)%11)*.055;
+      const double cr=.22+.72*static_cast<double>((id*17)%97)/96.;
+      const double cg=.18+.70*static_cast<double>((id*31)%89)/88.;
+      const double cb=.20+.72*static_cast<double>((id*47)%83)/82.;
+      renderer.add_body({id,{std::cos(a)*ring,std::sin(a)*ring*.36,z},r,{{cr,cg,cb}}});
+    }
+    return;
+  }
+  if (scene == 2) {
+    renderer.set_camera({0,0,16},{0,0,-28},58);
+    std::uint64_t rng=0x455448455252454eULL;
+    for (std::uint32_t id=0; id<64; ++id) {
+      const double x=(er_unit(rng)-.5)*34.;
+      const double y=(er_unit(rng)-.5)*18.;
+      const double z=-2.-er_unit(rng)*62.;
+      const double r=.18+er_unit(rng)*1.55;
+      renderer.add_body({id,{x,y,z},r,{{.15+.85*er_unit(rng),.15+.85*er_unit(rng),.15+.85*er_unit(rng)}}});
+    }
+    return;
+  }
+  renderer.set_camera({0,0,14},{0,0,-20},48);
+  // Occlusion stack: many legal candidates share screen space, so front-to-back
+  // distance pruning can prove that deeper bodies cannot beat the nearest hit.
+  for (std::uint32_t id=0; id<64; ++id) {
+    const double z=-static_cast<double>(id)*1.15;
+    const double r=2.9+.01*static_cast<double>(id%5);
+    renderer.add_body({id,{0,0,z},r,{{.15+.012*id,.42,.85-.008*id}}});
+  }
+}
+
+std::size_t er_dimension(jint value, std::size_t minimum, std::size_t maximum) {
+  if (value < static_cast<jint>(minimum)) return minimum;
+  if (value > static_cast<jint>(maximum)) return maximum;
+  return static_cast<std::size_t>(value);
+}
+}  // namespace
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mundox_lab_NativeCore_etherRenderBenchmark(JNIEnv* env, jclass,
+                                                     jint width_in, jint height_in,
+                                                     jint scene_in, jint tile_in,
+                                                     jboolean train, jboolean exact) {
+  try {
+    const auto width=er_dimension(width_in,64,1920);
+    const auto height=er_dimension(height_in,36,1080);
+    const auto tile=er_dimension(tile_in,8,256);
+    const int scene=std::max(0,std::min(3,static_cast<int>(scene_in)));
+    EtherRenderer renderer(width,height,tile);
+    er_scene(renderer,scene);
+
+    std::size_t chosen_tile=tile;
+    double train_ms=0.;
+    if(train) {
+      const auto begin=std::chrono::steady_clock::now();
+      const auto trained=renderer.train_tiles({8,16,32,64,128,256});
+      const auto end=std::chrono::steady_clock::now();
+      chosen_tile=trained.chosen_tile;
+      train_ms=std::chrono::duration<double,std::milli>(end-begin).count();
+    }
+
+    const auto begin=std::chrono::steady_clock::now();
+    const auto stats=renderer.render(exact);
+    const auto end=std::chrono::steady_clock::now();
+    const double render_ms=std::chrono::duration<double,std::milli>(end-begin).count();
+
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(4)
+        << "{"
+        << "\"engine\":\"Ether Render X\","
+        << "\"scene\":" << scene << ","
+        << "\"width\":" << width << ","
+        << "\"height\":" << height << ","
+        << "\"tile\":" << stats.tile << ","
+        << "\"chosen_tile\":" << chosen_tile << ","
+        << "\"bodies\":" << stats.bodies << ","
+        << "\"regions\":" << stats.tiles_x*stats.tiles_y << ","
+        << "\"candidate_tests\":" << stats.candidate_tests << ","
+        << "\"brute_tests\":" << stats.brute_tests << ","
+        << "\"test_ratio\":" << stats.test_ratio() << ","
+        << "\"distance_pruned\":" << stats.distance_pruned_candidates << ","
+        << "\"max_candidates\":" << stats.max_candidates << ","
+        << "\"exact_mismatches\":" << stats.exact_mismatches << ","
+        << "\"frame_hash\":" << stats.frame_hash << ","
+        << "\"render_ms\":" << render_ms << ","
+        << "\"train_ms\":" << train_ms
+        << "}";
+    return as_jstring(env,out.str());
+  } catch (const std::exception& e) {
+    return as_jstring(env,std::string("{\"error\":\"")+e.what()+"\"}");
+  }
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_mundox_lab_NativeCore_etherRenderFrame(JNIEnv* env, jclass,
+                                                 jint width_in, jint height_in,
+                                                 jint scene_in, jint tile_in) {
+  try {
+    const auto width=er_dimension(width_in,64,1280);
+    const auto height=er_dimension(height_in,36,720);
+    const auto tile=er_dimension(tile_in,8,256);
+    const int scene=std::max(0,std::min(3,static_cast<int>(scene_in)));
+    EtherRenderer renderer(width,height,tile);
+    er_scene(renderer,scene);
+    renderer.render(false);
+    const auto& frame=renderer.frame();
+    std::vector<jint> pixels(width*height);
+    for(std::size_t y=0;y<height;++y)for(std::size_t x=0;x<width;++x)
+      pixels[(height-1-y)*width+x]=static_cast<jint>(frame[y*width+x].rgba);
+    jintArray result=env->NewIntArray(static_cast<jsize>(pixels.size()));
+    if(result) env->SetIntArrayRegion(result,0,static_cast<jsize>(pixels.size()),pixels.data());
+    return result;
+  } catch (...) {
+    return env->NewIntArray(0);
+  }
+}
 
 namespace {
 std::mutex g_visual_mutex;
