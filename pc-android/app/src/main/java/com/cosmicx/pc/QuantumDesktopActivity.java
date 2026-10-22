@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.AtomicFile;
 import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.View;
@@ -24,6 +25,9 @@ import android.widget.TextView;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +53,7 @@ public final class QuantumDesktopActivity extends Activity {
     private static final int MAX_SESSION_BYTES = 32 * 1024 * 1024;
     private static final int MAX_CONSOLE_CHARS = 100_000;
     private static final String SESSION_FORMAT = "MUNDOX-QUANTUM-WORKSTATION-1";
+    private static final String AUTOSAVE_FILE = "mundo_x_quantum_autosave.mqx";
 
     private static final int BACKGROUND = Color.rgb(8, 13, 20);
     private static final int PANEL = Color.rgb(17, 27, 39);
@@ -99,6 +104,7 @@ public final class QuantumDesktopActivity extends Activity {
         work(() -> {
             session = QuantumWorkstation.create();
             if (session == 0) throw new IllegalStateException("No se pudo crear la sesión cuántica");
+            loadAutosave();
             log("Sesión local iniciada.\n" + QuantumWorkstation.status(session));
         });
     }
@@ -216,7 +222,7 @@ public final class QuantumDesktopActivity extends Activity {
 
         LinearLayout memoryCard = card(root);
         memoryCard.addView(heading("MÁQUINA Y ARCHIVOS"));
-        memoryCard.addView(label("Guarda toda tu sesión (programa, núcleo y memoria) en un archivo .mqx. Podrás reabrirla tras cerrar la app.", 12, MUTED));
+        memoryCard.addView(label("Tu espacio de trabajo se guarda localmente al salir. Exporta .mqx para conservar una copia fuera de la app.", 12, MUTED));
         LinearLayout sessionRow = row(memoryCard);
         saveSessionButton = control("Guardar sesión", false);
         openSessionButton = control("Abrir sesión", false);
@@ -268,6 +274,85 @@ public final class QuantumDesktopActivity extends Activity {
             // A provider may omit display-name metadata; manual mode still works.
         }
         return "";
+    }
+
+    /**
+     * Automatic local checkpoint: capture editor on the UI thread, snapshot on
+     * the native worker after all queued commands, and atomically commit to
+     * app-private storage. A partial write never replaces the prior checkpoint.
+     * Export .mqx separately to protect against uninstall or device loss.
+     */
+    private void queueAutosave() {
+        if (session == 0 || closed || editor == null) return;
+        final boolean mode = xasmMode;
+        final String source = editor.getText().toString();
+        final String xi = mode ? xiDraft : source;
+        final String xasm = mode ? source : xasmDraft;
+        try {
+            worker.execute(() -> {
+                FileOutputStream stream = null;
+                AtomicFile atomic = new AtomicFile(new File(getFilesDir(), AUTOSAVE_FILE));
+                try {
+                    String[] snapshots = QuantumWorkstation.snapshot(requireSession());
+                    JSONObject saved = new JSONObject();
+                    saved.put("format", SESSION_FORMAT);
+                    saved.put("program", source);
+                    saved.put("xi_program", xi);
+                    saved.put("xasm_program", xasm);
+                    saved.put("mode", mode ? "xasm" : "xi");
+                    saved.put("core", snapshots[0]);
+                    saved.put("memory", snapshots[1]);
+                    byte[] bytes = saved.toString().getBytes(StandardCharsets.UTF_8);
+                    if (bytes.length > MAX_SESSION_BYTES)
+                        throw new IllegalStateException("El estado supera 32 MiB. Exporta una sesión manual.");
+                    stream = atomic.startWrite();
+                    stream.write(bytes);
+                    atomic.finishWrite(stream);
+                    stream = null;
+                } catch (Exception | LinkageError error) {
+                    if (stream != null) atomic.failWrite(stream);
+                    log("Autoguardado no disponible: " + error.getMessage());
+                }
+            });
+        } catch (RejectedExecutionException ignored) { }
+    }
+
+    private void loadAutosave() {
+        AtomicFile atomic = new AtomicFile(new File(getFilesDir(), AUTOSAVE_FILE));
+        try (InputStream input = atomic.openRead()) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int bytes;
+            while ((bytes = input.read(chunk)) != -1) {
+                if (bytes > MAX_SESSION_BYTES - output.size())
+                    throw new IllegalStateException("Archivo de recuperación demasiado grande");
+                output.write(chunk, 0, bytes);
+            }
+            JSONObject saved = new JSONObject(new String(output.toByteArray(), StandardCharsets.UTF_8));
+            if (!SESSION_FORMAT.equals(saved.getString("format")))
+                throw new IllegalStateException("Formato de recuperación incompatible");
+            // Check complete UI draft metadata before mutating native state.
+            final String source = saved.getString("program");
+            final String xi = saved.optString("xi_program", source);
+            final String xasm = saved.optString("xasm_program", "");
+            final boolean mode = "xasm".equals(saved.optString("mode", "xi"));
+            QuantumWorkstation.restore(requireSession(),
+                    saved.getString("core"), saved.getString("memory"));
+            ui.post(() -> {
+                if (closed) return;
+                xiDraft = xi;
+                xasmDraft = xasm;
+                xasmMode = mode;
+                editor.setText(mode ? xasm : xi);
+                updateModeButtons();
+            });
+            log("Recuperada automáticamente la última sesión local.");
+        } catch (FileNotFoundException missing) {
+            // First use: the default new session remains untouched.
+        } catch (Exception error) {
+            // Malformed private data must never prevent launching a clean session.
+            log("No se pudo recuperar el estado anterior: " + error.getMessage());
+        }
     }
 
     private void execute(String source, String origin) {
@@ -518,7 +603,14 @@ public final class QuantumDesktopActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        queueAutosave();
+        super.onPause();
+    }
+
+    @Override
     protected void onDestroy() {
+        queueAutosave();
         closed = true;
         try {
             worker.execute(() -> {
