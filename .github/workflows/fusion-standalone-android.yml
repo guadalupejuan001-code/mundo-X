@@ -1,0 +1,144 @@
+name: Mundo X Fusion 3D standalone Android
+on:
+  pull_request:
+    branches: ['main']
+    paths: ['fusion-android/**', 'native/include/mundo_x/ether_renderer.hpp', '.github/workflows/fusion-standalone-android.yml']
+  push:
+    branches: ['main']
+    paths: ['fusion-android/**', 'native/include/mundo_x/ether_renderer.hpp', '.github/workflows/fusion-standalone-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fusion-3d-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-fusion-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Validate real nuclear and electrostatic calculations
+        run: |
+          set -euo pipefail
+          mkdir -p fusion-evidence fusion-build/java-tests
+          javac -encoding UTF-8 -d fusion-build/java-tests \
+            fusion-android/app/src/main/java/com/cosmicx/pc/FusionPhysics.java \
+            fusion-android/app/src/main/java/com/mundox/fusion3d/CollisionModel.java \
+            fusion-android/tests/com/cosmicx/pc/FusionPhysicsTest.java \
+            fusion-android/tests/com/mundox/fusion3d/CollisionModelTest.java
+          java -cp fusion-build/java-tests com.cosmicx.pc.FusionPhysicsTest | tee fusion-evidence/physics-test.txt
+          java -cp fusion-build/java-tests com.mundox.fusion3d.CollisionModelTest | tee -a fusion-evidence/physics-test.txt
+      - name: Verify own Ether Render X raytracer versus exhaustive oracle
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O3 -Wall -Wextra -Wpedantic -I native/include \
+            fusion-android/tests/ether_render_smoke.cpp -o fusion-build/ether_render_smoke
+          ./fusion-build/ether_render_smoke | tee fusion-evidence/ether-render-oracle.txt
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Install Android SDK and native toolchain
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1' 'platform-tools' \
+            'emulator' 'system-images;android-35;default;x86_64'
+      - name: Build independent app and instrumented test APK
+        run: |
+          set -euo pipefail
+          gradle -p fusion-android --no-daemon --stacktrace \
+            :app:assembleDebug :app:assembleDebugAndroidTest > fusion-evidence/android-gradle.log 2>&1
+          tail -55 fusion-evidence/android-gradle.log
+      - name: Verify APK signature, permissions, library, package and hash
+        run: |
+          set -euo pipefail
+          mkdir -p fusion-dist
+          cp fusion-android/app/build/outputs/apk/debug/app-debug.apk fusion-dist/MUNDO-X-FUSION-3D.apk
+          cp fusion-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk fusion-dist/MUNDO-X-FUSION-3D-tests.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs fusion-dist/MUNDO-X-FUSION-3D.apk > fusion-dist/signature.txt
+          python3 - <<'PY'
+          import hashlib,json,re,os,subprocess,zipfile
+          from pathlib import Path
+          apk=Path('fusion-dist/MUNDO-X-FUSION-3D.apk')
+          aapt=os.environ['ANDROID_HOME']+'/build-tools/35.0.0/aapt'
+          details=subprocess.check_output([aapt,'dump','badging',str(apk)],text=True)
+          perms=subprocess.check_output([aapt,'dump','permissions',str(apk)],text=True)
+          package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",details)
+          assert package and package.groups()==('com.mundox.fusion3d','1','1.0.0'),details.splitlines()[:4]
+          assert 'FusionActivity' in details, 'Launcher not included'
+          assert 'uses-permission:' not in perms,perms
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None
+              libs={n for n in z.namelist() if n.startswith('lib/')}
+              expected={'lib/'+abi+'/'+library for abi in ('arm64-v8a','x86_64') for library in ('libmxfusionrender.so','libc++_shared.so')}
+              assert libs==expected,(libs,expected)
+          data={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+                'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+                'bytes':apk.stat().st_size,'package':package[1], 'version':package[3],
+                'abis':['arm64-v8a','x86_64'],'permissions':[],
+                'renderer':'repository EtherRenderer::render() C++ own raytracer',
+                'physical_nuclear_solver':False,'signed_debug':True}
+          Path('fusion-dist/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
+          Path('fusion-dist/apk-badging.txt').write_text(details)
+          print(json.dumps(data))
+          PY
+      - name: Validate Android 15 launch and real native Ether raytraced frame
+        run: |
+          set -euo pipefail
+          sudo chmod a+rw /dev/kvm
+          export ANDROID_AVD_HOME="$(mktemp -d /tmp/fusion3d-avd.XXXXXX)"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --force -n fusion-3d-test -p "$ANDROID_AVD_HOME/fusion-3d-test.avd" \
+            -k 'system-images;android-35;default;x86_64'
+          "$ANDROID_HOME/emulator/emulator" -avd fusion-3d-test -no-window -no-audio \
+            -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048 > fusion-evidence/emulator.log 2>&1 &
+          emulator_pid=$!
+          trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
+          adb start-server
+          ready=false
+          for i in $(seq 1 120); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then ready=true; break; fi
+            sleep 2
+          done
+          [[ "$ready" == true ]] || { tail -100 fusion-evidence/emulator.log; exit 1; }
+          adb shell input keyevent 82
+          adb install -r fusion-dist/MUNDO-X-FUSION-3D.apk
+          adb install -r fusion-dist/MUNDO-X-FUSION-3D-tests.apk
+          adb logcat -c
+          timeout --kill-after=15 90 adb shell am instrument -w \
+            com.mundox.fusion3d.test/com.mundox.fusion3d.FusionInstrumentation | tee fusion-evidence/instrumentation.txt
+          grep -q 'FUSION_3D_ANDROID_PASS' fusion-evidence/instrumentation.txt
+          adb shell am start -W -n com.mundox.fusion3d/.FusionActivity > fusion-evidence/app-launch.txt
+          adb shell screencap -p /sdcard/fusion-3d.png
+          adb exec-out cat /sdcard/fusion-3d.png > fusion-evidence/fusion-3d-screen.png
+          adb shell uiautomator dump /sdcard/fusion-window.xml > /dev/null
+          adb exec-out cat /sdcard/fusion-window.xml > fusion-evidence/window.xml
+          adb logcat -d > fusion-evidence/logcat.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          page=ET.parse('fusion-evidence/window.xml').getroot()
+          ui='\n'.join(str(node.attrib) for node in page.iter('node'))
+          assert 'FUSION / 3D' in ui, 'Fusion interface not visible'
+          assert 'fusion-3d-native-ether-renderer' in ui, 'Native 3D view missing'
+          picture=Path('fusion-evidence/fusion-3d-screen.png').read_bytes()
+          assert len(picture)>1000 and picture.startswith(b'\x89PNG\r\n\x1a\n')
+          assert 'FUSION_3D_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
+          print('FUSION_3D_RELEASE_PASS')
+          PY
+      - name: Preserve signed APK, screenshots and audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MUNDO-X-FUSION-3D-APK
+          path: |
+            fusion-dist/**
+            fusion-evidence/**
+          if-no-files-found: warn
+          retention-days: 14
