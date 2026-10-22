@@ -182,6 +182,13 @@ jobs:
           adb exec-out cat /sdcard/fusion-window.xml > fusion-evidence/window.xml
           adb shell screencap -p /sdcard/fusion-3d.png
           adb exec-out cat /sdcard/fusion-3d.png > fusion-evidence/fusion-3d-screen.png
+          # The 100q quantum viewport follows the nuclear 3D viewport in the
+          # same scrollable lab. Capture the actual Android screen there.
+          adb shell input swipe 155 562 155 196 320
+          adb shell input swipe 155 562 155 196 320
+          sleep 3
+          adb shell screencap -p /sdcard/mil-100q.png
+          adb exec-out cat /sdcard/mil-100q.png > fusion-evidence/mil-100q-screen.png
           adb logcat -d > fusion-evidence/logcat.txt
           python3 - <<'PY'
           from pathlib import Path
@@ -192,6 +199,8 @@ jobs:
           assert 'fusion-3d-native-ether-renderer' in ui, 'Native 3D view missing'
           picture=Path('fusion-evidence/fusion-3d-screen.png').read_bytes()
           assert len(picture)>1000 and picture.startswith(b'\x89PNG\r\n\x1a\n')
+          quantum_picture=Path('fusion-evidence/mil-100q-screen.png').read_bytes()
+          assert len(quantum_picture)>1000 and quantum_picture.startswith(b'\x89PNG\r\n\x1a\n')
           assert 'FUSION_3D_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           assert 'NUCLEAR_INTERACTION_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           assert 'RADIAL_H_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
