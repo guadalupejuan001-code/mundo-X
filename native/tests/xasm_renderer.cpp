@@ -17,17 +17,19 @@ int main(){
       "render_body 0 0 0 0 1.5 0.2 0.6 1\n"
       "render_body 1 3 0 -4 1 1 0.4 0.1\n"
       "render_plan\n"
+      "render_train\n"
       "render_frame\n"
       "render_pixel 80 45\n"
       "render_assert_exact\n"
       "render_info\n");
     need(result.qubits==0&&result.scene_objects==0,"render-only XASM allocated another domain");
     need(result.render_width==160&&result.render_height==90&&result.render_bodies==2,"render metadata wrong");
-    need(result.render_instructions==6,"render mutation/execution count wrong");
+    need(result.render_instructions==7,"render mutation/execution count wrong");
     need(result.render_candidate_tests<result.render_brute_tests,"XASM renderer did not reduce tests");
     need(result.assertions_passed,"render exact assertion failed");
     need(result.output.find("PIXEL x=80 y=45 body=0")!=std::string::npos,"center render pixel wrong");
     need(result.output.find("ASSERT render_exact PASS mismatches=0")!=std::string::npos,"exact render assertion missing");
+    need(result.output.find("RENDER_TRAIN tile=")!=std::string::npos,"render training report missing");
     need(result.output.find("RENDER 160x90")!=std::string::npos,"render info missing");
 
     rejects("render 0 90 16\n");
