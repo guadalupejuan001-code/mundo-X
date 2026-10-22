@@ -117,12 +117,12 @@ inline XasmRunResult run_xasm(std::istream& input) {
       if (!observer) observer = std::make_unique<mundo_x_bridge::PauliObserver>(*core);
       return observer->expectation(std::move(pauli));
     }
-    // Reduced supports at most 63 qubits, so its Pauli masks fit one word.
-    // Its raw expectation is unnormalized; expose a physical expectation here.
+    // Reduced uses the same packed multiword Pauli convention as wide
+    // CompactCore observables. Its raw expectation is unnormalized.
     const double norm = reduced->sparse_norm();
     if (!(norm > 0.0) || !std::isfinite(norm))
       throw std::runtime_error("non-finite or zero reduced norm");
-    const auto value = reduced->pauli_expectation(pauli.x[0], pauli.z[0],
+    const auto value = reduced->pauli_expectation(pauli.x, pauli.z,
                                                  static_cast<std::uint8_t>(pauli.phase)) / norm;
     if (!std::isfinite(value.real()) || !std::isfinite(value.imag()) ||
         std::abs(value.imag()) > 1e-10)
@@ -231,8 +231,8 @@ inline XasmRunResult run_xasm(std::istream& input) {
         const auto n = read_size("qubits <n>");
         require_end();
         if (result.backend == "reduced") {
-          if (n == 0 || n > 63)
-            throw std::runtime_error("reduced XASM supports 1..63 qubits");
+          if (n == 0 || n > ReducedExactTRepresentation::kMaxQubits)
+            throw std::runtime_error("reduced XASM supports 1..1000 qubits");
           // Width is independent of non-Clifford component growth. Stop at
           // this explicit budget; never truncate components or fall back dense.
           reduced = std::make_unique<ReducedExactTRepresentation>(n, 65536);
