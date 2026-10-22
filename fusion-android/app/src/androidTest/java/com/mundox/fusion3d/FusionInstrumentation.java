@@ -30,6 +30,9 @@ public final class FusionInstrumentation extends Instrumentation {
             if(!interaction.hasNuclearModel || !interaction.belowBarrier ||
                     !(interaction.log10Wkb<0 && interaction.innerTurningFm>0))
                 throw new AssertionError("Nuclear interaction WKB solver failed");
+            RadialHamiltonian.Grid radial=RadialHamiltonian.from(interaction);
+            if(radial.sites!=256 || !radial.csv().contains("i,r_fm,vc_mev"))
+                throw new AssertionError("Sparse radial Hamiltonian unavailable");
             if(!(model.rContactFm>0&&model.coulombContactMeV>.02&&
                     model.classicalTurningFm>model.rContactFm))
                 throw new AssertionError("Coulomb model invalid");
@@ -41,7 +44,9 @@ public final class FusionInstrumentation extends Instrumentation {
             View workspace=activity.getWindow().getDecorView();
             View physicsPanel=findByDescription(workspace,"nuclear-wkb-model-result");
             View graph=findByDescription(workspace,"nuclear-potential-wkb-plot");
-            if(physicsPanel==null || graph==null)
+            View operatorView=findByDescription(workspace,"radial-hamiltonian-grid-details");
+            View operatorExport=findByDescription(workspace,"export-sparse-nuclear-hamiltonian");
+            if(physicsPanel==null || graph==null || operatorView==null || operatorExport==null)
                 throw new AssertionError("Nuclear interaction results not connected to UI");
             if(!(physicsPanel instanceof android.widget.TextView) ||
                     !((android.widget.TextView)physicsPanel).getText().toString().contains("WKB"))
@@ -64,7 +69,9 @@ public final class FusionInstrumentation extends Instrumentation {
                     " MeV; native "+provenance+"\n"+
                     "NUCLEAR_INTERACTION_ANDROID_PASS WKB_log10="+
                     interaction.log10Wkb+" r1="+interaction.innerTurningFm+
-                    " r2="+interaction.outerTurningFm+"\n");
+                    " r2="+interaction.outerTurningFm+"\n"+
+                    "RADIAL_H_ANDROID_PASS sites="+radial.sites+
+                    " tridiagonal=true\n");
             runOnMainSync(activity::finish);
         } catch(Throwable fail) {
             result.putString("stream","FUSION_3D_ANDROID_FAIL "+fail+"\n");
