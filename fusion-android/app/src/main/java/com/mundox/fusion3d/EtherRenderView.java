@@ -119,7 +119,7 @@ public final class EtherRenderView extends View {
             interactionCaption="Interacción: sin canal nuclear calibrado";
         else if(value.belowBarrier)
             interactionCaption=String.format(Locale.US,
-                "WKB: log10 supresión = %.2f (modelo)",value.log10Wkb);
+                "WKB: 10^(%.2f) [modelo]",value.log10Wkb);
         else
             interactionCaption="WKB sub-barrera: no aplicable";
         invalidate();
