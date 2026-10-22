@@ -61,7 +61,11 @@ int main(){
   auto bothCX=[&](std::size_t a,std::size_t b){wide.cnot(a,b);reduced.cnot(a,b);};
   auto bothT=[&](std::size_t q){wide.phase_t(q);reduced.phase_t(q);};
   auto bothP=[&](std::size_t q,double t){wide.phase(q,t);reduced.phase(q,t);};
-  bothH(0);bothCX(0,7);bothT(7);bothH(3);bothP(3,.231);bothCX(3,4);bothT(4);
+  auto bothCP=[&](std::size_t a,std::size_t b,double t){
+    wide.controlled_phase(a,b,t);reduced.controlled_phase(a,b,t);
+  };
+  bothH(0);bothCX(0,7);bothT(7);bothH(3);bothP(3,.231);
+  bothCX(3,4);bothCP(0,4,-.173);bothT(4);
   for(std::size_t q=0;q<8;++q)for(char axis:{'X','Y','Z'}){
     const double a=wide.pauli_expectation(axis,q);
     const double b=reduced.pauli_expectation(axis,q);
@@ -77,7 +81,7 @@ int main(){
       <<"\"t_q999\":true,"
       <<"\"general_phase_q999\":true,"
       <<"\"post_t_clifford\":true,"
-      <<"\"wide_small_crosscheck\":true,"
+      <<"\"wide_small_crosscheck\":true,\"controlled_phase_crosscheck\":true,"
       <<"\"components\":"<<core.component_count()<<","
       <<"\"payload_bytes\":"<<core.logical_payload_bytes()
       <<"}\n";
