@@ -3,6 +3,7 @@ package com.cosmicx.pc;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -10,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -25,6 +27,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -70,7 +73,10 @@ public final class QuantumDesktopActivity extends Activity {
     private TextView state;
     private Button runButton, sendButton, inspectButton, resetButton;
     private Button openProgramButton, saveProgramButton, newProgramButton;
-    private Button openSessionButton, saveSessionButton;
+    private Button openSessionButton, saveSessionButton, modeButton;
+    private boolean xasmMode;
+    private String xiDraft = "# Programa XI persistente\n# Memoria lógica sin medir qubits\nmem_store 0 88\nmem_read 0\nmem_stats\n";
+    private String xasmDraft = "# XASM: circuito nuevo por ejecución\nbackend reduced\nqubits 1000\nh 0\nt 0\nshow\nbytes\n";
     private final StringBuilder transcript = new StringBuilder();
 
     @Override
@@ -82,7 +88,13 @@ public final class QuantumDesktopActivity extends Activity {
         buildInterface();
         if (saved != null) {
             String program = saved.getString("program");
-            if (program != null) editor.setText(program);
+            xasmMode = saved.getBoolean("xasmMode", false);
+            if (program != null) {
+                if (xasmMode) xasmDraft = program;
+                else xiDraft = program;
+                editor.setText(program);
+            }
+            updateModeButtons();
         }
         work(() -> {
             session = QuantumWorkstation.create();
@@ -97,6 +109,7 @@ public final class QuantumDesktopActivity extends Activity {
         // The saved program is intentionally bounded to avoid Binder's limit.
         String program = editor.getText().toString();
         if (program.length() <= 32_000) out.putString("program", program);
+        out.putBoolean("xasmMode", xasmMode);
     }
 
     private void buildInterface() {
@@ -124,10 +137,13 @@ public final class QuantumDesktopActivity extends Activity {
         root.addView(state);
 
         LinearLayout programCard = card(root);
-        programCard.addView(heading("PROGRAMAS  ·  .xi"));
+        programCard.addView(heading("PROGRAMAS  ·  XI / XASM"));
+        modeButton = control("Modo XI persistente · cambiar", false);
+        programCard.addView(modeButton, spaced(44));
+        modeButton.setOnClickListener(v -> changeMode());
         editor = new EditText(this);
         editor.setContentDescription("quantum-workstation-program");
-        editor.setText("# Programa Mundo X\n# Memoria lógica sin medir qubits\nmem_store 0 88\nmem_read 0\nmem_stats\n");
+        editor.setText(xiDraft);
         editor.setTextColor(TEXT);
         editor.setHintTextColor(MUTED);
         editor.setHint("Escribe un programa XI…");
@@ -142,14 +158,23 @@ public final class QuantumDesktopActivity extends Activity {
 
         runButton = control("Ejecutar programa", true);
         programCard.addView(runButton, spaced(50));
-        runButton.setOnClickListener(v -> execute(editor.getText().toString(), "Programa XI"));
+        runButton.setOnClickListener(v -> {
+            final String source = editor.getText().toString();
+            if (xasmMode) {
+                work(() -> log("Programa XASM ejecutado (circuito independiente).\n"
+                        + QuantumWorkstation.executeXasm(source)));
+            } else {
+                execute(source, "Programa XI");
+            }
+        });
 
         LinearLayout programFiles = row(programCard);
         openProgramButton = control("Abrir .xi", false);
         saveProgramButton = control("Guardar .xi", false);
         pair(programFiles, openProgramButton, saveProgramButton);
         openProgramButton.setOnClickListener(v -> openDocument(OPEN_PROGRAM, "*/*"));
-        saveProgramButton.setOnClickListener(v -> createDocument(SAVE_PROGRAM, "text/plain", "programa.xi"));
+        saveProgramButton.setOnClickListener(v -> createDocument(SAVE_PROGRAM, "text/plain",
+                xasmMode ? "programa.x" : "programa.xi"));
         newProgramButton = control("Nuevo programa", false);
         programCard.addView(newProgramButton, spaced(44));
         newProgramButton.setOnClickListener(v -> new AlertDialog.Builder(this)
@@ -159,8 +184,8 @@ public final class QuantumDesktopActivity extends Activity {
                 .setNegativeButton("Cancelar", null).show());
 
         LinearLayout terminalCard = card(root);
-        terminalCard.addView(heading("TERMINAL  ·  sesión compartida"));
-        terminalCard.addView(label("Envía comandos XI al mismo núcleo que usa tu programa.", 12, MUTED));
+        terminalCard.addView(heading("TERMINAL XI  ·  sesión persistente"));
+        terminalCard.addView(label("La terminal siempre usa XI: el circuito XASM se ejecuta aparte y no modifica esta sesión.", 12, MUTED));
         terminal = new EditText(this);
         terminal.setContentDescription("quantum-workstation-terminal");
         terminal.setTextColor(TEXT);
@@ -222,6 +247,29 @@ public final class QuantumDesktopActivity extends Activity {
         root.addView(label("Motor cuántico de software local. Esta interfaz no representa una QPU física ni arranca Windows.", 11, MUTED));
     }
 
+    private void changeMode() {
+        if (xasmMode) xasmDraft = editor.getText().toString();
+        else xiDraft = editor.getText().toString();
+        xasmMode = !xasmMode;
+        editor.setText(xasmMode ? xasmDraft : xiDraft);
+        updateModeButtons();
+    }
+
+    private void updateModeButtons() {
+        modeButton.setText(xasmMode ? "Modo XASM universal · cambiar" : "Modo XI persistente · cambiar");
+        runButton.setText(xasmMode ? "Ejecutar circuito XASM" : "Ejecutar programa XI");
+    }
+
+    private String documentName(Uri uri) {
+        try (Cursor cursor = getContentResolver().query(uri,
+                new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) return cursor.getString(0);
+        } catch (RuntimeException ignored) {
+            // A provider may omit display-name metadata; manual mode still works.
+        }
+        return "";
+    }
+
     private void execute(String source, String origin) {
         work(() -> {
             String result = QuantumWorkstation.execute(requireSession(), source);
@@ -258,28 +306,38 @@ public final class QuantumDesktopActivity extends Activity {
         if (request == OPEN_PROGRAM) {
             work(() -> {
                 String contents = readText(uri, MAX_PROGRAM_BYTES);
+                String name = documentName(uri).toLowerCase(Locale.ROOT);
                 ui.post(() -> {
-                    if (!closed) editor.setText(contents);
+                    if (closed) return;
+                    if (name.endsWith(".x") && !xasmMode) changeMode();
+                    if (name.endsWith(".xi") && xasmMode) changeMode();
+                    editor.setText(contents);
                 });
-                log("Programa .xi abierto. Pulsa Ejecutar para usarlo.");
+                log("Programa abierto. Pulsa Ejecutar para usarlo.");
             });
         } else if (request == SAVE_PROGRAM) {
             final String contents = editor.getText().toString();
             work(() -> {
                 writeText(uri, contents, MAX_PROGRAM_BYTES);
-                log("Programa .xi guardado.");
+                log("Programa guardado.");
             });
         } else if (request == SAVE_SESSION) {
             final String source = editor.getText().toString();
+            final boolean savedXasmMode = xasmMode;
+            final String savedXi = savedXasmMode ? xiDraft : source;
+            final String savedXasm = savedXasmMode ? source : xasmDraft;
             work(() -> {
                 String[] snapshot = QuantumWorkstation.snapshot(requireSession());
                 JSONObject dataJson = new JSONObject();
                 dataJson.put("format", SESSION_FORMAT);
                 dataJson.put("program", source);
+                dataJson.put("xi_program", savedXi);
+                dataJson.put("xasm_program", savedXasm);
+                dataJson.put("mode", savedXasmMode ? "xasm" : "xi");
                 dataJson.put("core", snapshot[0]);
                 dataJson.put("memory", snapshot[1]);
                 writeText(uri, dataJson.toString(), MAX_SESSION_BYTES);
-                log("Sesión .mqx guardada: programa, núcleo y memoria.");
+                log("Sesión .mqx guardada: programas, núcleo XI y memoria.");
             });
         } else if (request == OPEN_SESSION) {
             work(() -> {
@@ -290,10 +348,18 @@ public final class QuantumDesktopActivity extends Activity {
                 QuantumWorkstation.restore(requireSession(),
                         dataJson.getString("core"), dataJson.getString("memory"));
                 final String source = dataJson.getString("program");
+                final String xi = dataJson.optString("xi_program", source);
+                final String xasm = dataJson.optString("xasm_program", "");
+                final boolean loadXasmMode = "xasm".equals(dataJson.optString("mode", "xi"));
                 ui.post(() -> {
-                    if (!closed) editor.setText(source);
+                    if (closed) return;
+                    xiDraft = xi;
+                    xasmDraft = xasm;
+                    xasmMode = loadXasmMode;
+                    editor.setText(xasmMode ? xasmDraft : xiDraft);
+                    updateModeButtons();
                 });
-                log("Sesión .mqx recuperada. Núcleo y memoria restaurados.");
+                log("Sesión .mqx recuperada. Núcleo XI y memoria restaurados.");
             });
         }
     }
@@ -370,6 +436,7 @@ public final class QuantumDesktopActivity extends Activity {
 
     private void enableControls(boolean enabled) {
         runButton.setEnabled(enabled);
+        modeButton.setEnabled(enabled);
         sendButton.setEnabled(enabled);
         inspectButton.setEnabled(enabled);
         resetButton.setEnabled(enabled);
