@@ -62,7 +62,53 @@ public final class FusionInstrumentation extends Instrumentation {
             String provenance=viewer.provenance();
             if(!provenance.contains("EtherRenderer")||!provenance.contains("escena 344x224"))
                 throw new AssertionError("noncanonical renderer: "+provenance);
-            // Test the new Hamiltonian as actual MIL gates through JNI,
+            // Verify the 100 logical qubit register is actually constructed by
+            // MIL, and that two native Ether frame passes produce 100 objects.
+            View quantum100=findByDescription(workspace,"mil-100q-ether-3d-viewport");
+            View metrics100=findByDescription(workspace,"mil-100q-quantum-status");
+            View phaseSlider100=findByDescription(workspace,"mil-100q-phase-control");
+            if(!(quantum100 instanceof Mil100EtherView) ||
+                metrics100==null || phaseSlider100==null)
+                throw new AssertionError("MIL 100q Ether UI was not connected");
+            Mil100EtherView hundred=(Mil100EtherView)quantum100;
+            long quantumDeadline=SystemClock.elapsedRealtime()+40000;
+            while(SystemClock.elapsedRealtime()<quantumDeadline &&
+                  !hundred.hasNativeFrame()){
+                if(hundred.lastError()!=null)
+                    throw new AssertionError("MIL GHZ100 frame failed: "+hundred.lastError());
+                SystemClock.sleep(180);
+            }
+            if(!hundred.hasNativeFrame())
+                throw new AssertionError("100 logical qubit GHZ/Ether scene did not draw");
+            org.json.JSONObject hundredData=new org.json.JSONObject(hundred.lastStatus());
+            if(hundredData.getInt("qubits")!=100 ||
+                hundredData.getInt("visible_objects")!=100 ||
+                hundredData.getInt("passes")!=2 ||
+                hundredData.getInt("components")>32 ||
+                hundredData.getInt("state_bytes")>200000 ||
+                Math.abs(hundredData.getDouble("norm")-1.)>1e-8 ||
+                Math.abs(hundredData.getDouble("distant_zz")-1.)>1e-9 ||
+                Math.abs(hundredData.getDouble("global_x")-Math.cos(Math.PI/4.))>1e-5)
+                throw new AssertionError("Invalid native MIL GHZ100 correlation: "+
+                        hundred.lastStatus());
+            String initialHash=hundredData.getString("framebuffer_hash");
+            int initialFrameCount=hundred.frameCount();
+            runOnMainSync(()->hundred.setQuantumPhase(0f));
+            long phaseDeadline=SystemClock.elapsedRealtime()+30000;
+            while(SystemClock.elapsedRealtime()<phaseDeadline &&
+                    hundred.frameCount()<=initialFrameCount){
+                if(hundred.lastError()!=null)
+                    throw new AssertionError("MIL100 phase update failed: "+hundred.lastError());
+                SystemClock.sleep(150);
+            }
+            if(hundred.frameCount()<=initialFrameCount)
+                throw new AssertionError("MIL100 non-Clifford phase did not refresh");
+            org.json.JSONObject restored100=new org.json.JSONObject(hundred.lastStatus());
+            if(Math.abs(restored100.getDouble("global_x")-1.)>1e-8 ||
+                initialHash.equals(restored100.getString("framebuffer_hash")))
+                throw new AssertionError("MIL100 global coherence failed to change visual output");
+
+            // Test the radial Hamiltonian as actual MIL gates through JNI,
             // not just the classical reference solver or a fake summary.
             View milRun=findByDescription(workspace,"mil-run-hamiltonian-evolution");
             View milStatus=findByDescription(workspace,"mil-radial-execution-result");
@@ -93,6 +139,11 @@ public final class FusionInstrumentation extends Instrumentation {
                     " r2="+interaction.outerTurningFm+"\n"+
                     "RADIAL_H_ANDROID_PASS sites="+radial.sites+
                     " tridiagonal=true\n"+
+                    "MIL100_ETHER_ANDROID_PASS qubits=100 visible=100 passes=2 "+
+                    "initial_X="+hundredData.getDouble("global_x")+
+                    " restored_X="+restored100.getDouble("global_x")+
+                    " native_ether_ms="+hundredData.getDouble("raster_ms")+
+                    " GHZ_components="+hundredData.getInt("components")+"\n"+
                     "MIL_RADIAL_ANDROID_PASS backend=MIL-Reduced 256-sites 8-qubits Strang-2\n"+
                     "MIL_ANDROID_MEASUREMENTS "+milText.replace('\n','|')
                         .substring(0,Math.min(600,milText.length()))+"\n");
