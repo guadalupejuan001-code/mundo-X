@@ -888,8 +888,39 @@ public final class FusionActivity extends Activity {
                 "03 / Reacción no determinada · sin productos inventados");
     }
 
-    private static double milTimeFromSlider(int progress){
-        return .005 + Math.max(0,Math.min(1000,progress))*.075/1000.;
+    private static String gridLabel(int bits){
+        int positions=1<<bits;
+        return bits+" qubits / "+positions+" posiciones"+
+                (bits==8?" · malla completa":"");
+    }
+
+    private static double milTimeFromSlider(
+            int progress,RadialHamiltonian.Grid grid) {
+        int p=Math.max(0,Math.min(1000,progress));
+        if(grid.sites<=8)
+            return .005+p*.075/1000.;
+        // |H_hopping|*tau stays dimensionless and bounded as grid increases.
+        double scaled=.01+p*.10/1000.;
+        return Math.min(.12,scaled/Math.abs(grid.offDiagonalMeV));
+    }
+
+    private void updateMilTimeLabel(){
+        if(milTimeLabel==null||milTimeControl==null)return;
+        if(nuclearModel==null||!nuclearModel.hasNuclearModel){
+            milTimeLabel.setText("Tiempo MIL: selecciona un canal conocido.");
+            return;
+        }
+        try {
+            RadialHamiltonian.Grid grid=RadialHamiltonian.forMil(nuclearModel,milQubits);
+            double tau=milTimeFromSlider(milTimeControl.getProgress(),grid);
+            milTimeLabel.setText(String.format(Locale.US,
+                    "τ=t/ħ = %.6g MeV^-1 · t=%.3e s\n"+
+                    "Acoplamiento cinético |gτ| = %.4g (adimensional)",
+                    tau,tau*6.582119569e-22,
+                    Math.abs(grid.offDiagonalMeV)*tau));
+        }catch(RuntimeException error){
+            milTimeLabel.setText("No hay tiempo válido para esta malla.");
+        }
     }
 
     private void clearMilResult(){
