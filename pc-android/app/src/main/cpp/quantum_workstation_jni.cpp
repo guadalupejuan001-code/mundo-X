@@ -97,9 +97,14 @@ Java_com_cosmicx_pc_QuantumWorkstation_execute(JNIEnv* env, jclass, jlong id,
     try {
         const std::string source = ascii(env, program, kMaxProgram);
         std::lock_guard<std::mutex> guard(workstation_mutex);
-        // QuantumRuntime commits its core and Inverse Memory atomically only
-        // after the entire program succeeds.
-        return java_text(env, runtime(id).execute(source));
+        // Work on a separate candidate so even a rejected/oversized console
+        // response cannot silently commit an operation the user never saw.
+        Runtime candidate = runtime(id);
+        std::string output = candidate.execute(source);
+        jstring response = java_text(env, output);
+        if (response && !env->ExceptionCheck())
+            runtime(id) = std::move(candidate);
+        return response;
     } catch (const std::exception& error) {
         raise(env, error);
         return nullptr;
