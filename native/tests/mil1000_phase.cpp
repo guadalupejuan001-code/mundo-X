@@ -74,6 +74,34 @@ int main(){
   require(std::abs(wide.coefficient_norm_squared()-reduced.coefficient_norm_squared())<1e-10,
           "wide/reduced norm mismatch");
 
+  // 1000-qubit reversible magic stress. Start from a line-cluster stabilizer,
+  // leave the stabilizer manifold with separated T gates + controlled phase,
+  // mix with H, then execute the exact inverse and verify cluster generators.
+  MilUniversalCore stress(1000,16384);
+  for(std::size_t q=0;q<1000;++q)stress.hadamard(q);
+  for(std::size_t q=0;q+1<1000;++q)stress.controlled_z(q,q+1);
+  const std::size_t magic_sites[]={0,257,613,999};
+  for(auto q:magic_sites)stress.phase_t(q);
+  stress.controlled_phase(123,876,.217);
+  stress.hadamard(500);
+  const auto peak_components=stress.component_count();
+  require(peak_components>1&&peak_components<=16384,"1000q magic stress component budget");
+
+  stress.hadamard(500);
+  stress.controlled_phase(123,876,-.217);
+  for(std::size_t i=4;i-->0;)stress.phase_t_dagger(magic_sites[i]);
+
+  auto cluster_generator=[](std::size_t q){
+    std::string g(1000,'I');
+    g[q]='X';
+    if(q>0)g[q-1]='Z';
+    if(q+1<1000)g[q+1]='Z';
+    return g;
+  };
+  for(auto q:{std::size_t{0},std::size_t{257},std::size_t{500},std::size_t{999}})
+    require(std::abs(stress.expectation(cluster_generator(q))-1.)<1e-9,
+            "reversible 1000q magic stress did not restore cluster stabilizer");
+
   std::cout
       <<"{\"suite\":\"mil1000_universal\","
       <<"\"qubits\":1000,"
@@ -83,6 +111,7 @@ int main(){
       <<"\"post_t_clifford\":true,"
       <<"\"wide_small_crosscheck\":true,\"controlled_phase_crosscheck\":true,"
       <<"\"components\":"<<core.component_count()<<","
+      <<"\"stress_peak_components\":"<<peak_components<<","
       <<"\"payload_bytes\":"<<core.logical_payload_bytes()
       <<"}\n";
 }
