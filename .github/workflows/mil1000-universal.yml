@@ -34,4 +34,17 @@ jobs:
       - name: Build focused tests
         run: cmake --build build --target test_mil1000_phase test_phase_core test_state_transfer test_core_1000 --parallel 2
       - name: Run focused validation
-        run: ctest --test-dir build -R '^(mil1000_phase|phase_core|state_transfer|core_1000)$' --output-on-failure
+        run: ctest --test-dir build -R '^(mil1000_phase|phase_core|state_transfer|core_1000) --output-on-failure
+      - name: Record MIL1000 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v build/test_mil1000_phase > mil1000-evidence.json 2> mil1000-time.txt
+          cat mil1000-evidence.json
+          grep -E 'Elapsed|Maximum resident set size' mil1000-time.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MIL1000-universal-evidence
+          path: |
+            mil1000-evidence.json
+            mil1000-time.txt
