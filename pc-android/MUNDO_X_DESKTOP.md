@@ -1,4 +1,4 @@
-# Mundo X Desktop 0.5.0 — uso cotidiano en Android
+# Mundo X Desktop 0.6.0 — uso cotidiano en Android
 
 Mundo X Desktop es la **pantalla de inicio** de la APK `MUNDO-X-DESKTOP.apk`.
 Al instalarla en un dispositivo Android compatible, aparece una única entrada
@@ -43,7 +43,7 @@ independiente ni una QPU física.
 
 - **APK:** `MUNDO-X-DESKTOP.apk` (el artefacto mantiene también el alias `COSMIC-X-PC.apk` por compatibilidad)
 - **Package:** `com.cosmicx.pc`
-- **Versión:** 0.5.0 (versionCode 5)
+- **Versión:** 0.6.0 (versionCode 6)
 - **Mínimo:** API 26; Android 8.0
 - **ABIs:** ARM64-v8a y x86_64
 - **Entry point:** `MundoXDesktopActivity`
