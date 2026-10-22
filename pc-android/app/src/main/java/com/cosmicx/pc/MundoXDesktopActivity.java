@@ -227,6 +227,8 @@ public final class MundoXDesktopActivity extends Activity {
         title(page, "APLICACIONES");
         tile(page, "Quantum Workstation", "XI persistente · XASM · MIL 1000 · programas", () ->
                 startActivity(new Intent(this, QuantumDesktopActivity.class)));
+        tile(page, "Fusion Lab", "Tabla periódica · isótopos · reacciones nucleares", () ->
+                startActivity(new Intent(this, FusionLabActivity.class)));
         tile(page, "Navegador Web", "Buscar, abrir sitios y guardar archivos", () -> showTab(TAB_BROWSER));
         tile(page, "Notas", "Editor privado con autoguardado y exportación", () -> showTab(TAB_NOTES));
         tile(page, "Archivos", "Abrir documentos reales de Android", () -> showTab(TAB_FILES));
