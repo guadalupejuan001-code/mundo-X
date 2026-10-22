@@ -443,6 +443,9 @@ public final class MainActivity extends Activity {
     private void buildQuantumPanel(LinearLayout content) {
         LinearLayout panel = card(content, 16);
         panel.addView(section("NÚCLEO CUÁNTICO · MOTOR GRÁFICO"));
+        Button fusionLab = button("Fusion Lab · Tabla periódica", false);
+        panel.addView(fusionLab, new LinearLayout.LayoutParams(-1, dp(48)));
+        fusionLab.setOnClickListener(v -> startActivity(new Intent(this, FusionLabActivity.class)));
         quantumStatsView = text("Preparando la sesión del PC…", 11, MUTED);
         quantumStatsView.setContentDescription("pc-quantum-stats");
         quantumStatsView.setPadding(0, dp(8), 0, dp(8));
