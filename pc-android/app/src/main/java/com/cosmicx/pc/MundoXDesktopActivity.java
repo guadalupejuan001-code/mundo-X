@@ -9,10 +9,8 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -24,7 +22,6 @@ import android.provider.OpenableColumns;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.TextWatcher;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -99,6 +96,7 @@ public final class MundoXDesktopActivity extends Activity {
     private FrameLayout content;
     private TextView subtitle, browserProgress, browserTitle, filesInfo, filesPreview, notesStatus;
     private EditText address, notesEditor;
+    private Button recentFileButton;
     private WebView browser;
     private WebChromeClient.FileChooserParams pendingChooserParams;
     private android.webkit.ValueCallback<Uri[]> pendingWebFiles;
@@ -531,6 +529,7 @@ public final class MundoXDesktopActivity extends Activity {
         picker.setOnClickListener(v -> selectDocument(OPEN_FILE));
 
         Button recent = button("Abrir documento reciente", false);
+        recentFileButton = recent;
         LinearLayout.LayoutParams param = new LinearLayout.LayoutParams(-1, dp(48));
         param.topMargin = dp(9);
         page.addView(recent, param);
@@ -651,6 +650,10 @@ public final class MundoXDesktopActivity extends Activity {
                 // Still usable until Android revokes the transient grant.
             }
             showTab(TAB_FILES);
+            if (recentFileButton != null) {
+                recentFileButton.setText("Reciente: " + getDisplayName(uri));
+                recentFileButton.setEnabled(true);
+            }
             preview(uri);
         } else if (request == EXPORT_NOTES) {
             String note = notesEditor == null ? "" : notesEditor.getText().toString();
