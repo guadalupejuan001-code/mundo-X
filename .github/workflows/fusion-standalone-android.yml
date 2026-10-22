@@ -46,6 +46,13 @@ jobs:
           g++ -std=c++17 -O3 -Wall -Wextra -Wpedantic -I native/include \
             fusion-android/tests/ether_render_smoke.cpp -o fusion-build/ether_render_smoke
           ./fusion-build/ether_render_smoke | tee fusion-evidence/ether-render-oracle.txt
+      - name: Verify MIL Reduced quantum evolution against independent sparse RK4
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -I native/include \
+            native/tests/mil_radial_evolution.cpp -o fusion-build/mil_radial_evolution
+          timeout 180 ./fusion-build/mil_radial_evolution | tee fusion-evidence/mil-radial-evolution.txt
+
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
       - name: Install Android SDK and native toolchain
