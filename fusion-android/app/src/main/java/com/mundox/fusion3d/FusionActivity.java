@@ -229,6 +229,12 @@ public final class FusionActivity extends Activity {
         big.setPadding(0,dp(5),0,dp(5));
         body.addView(big);
         body.addView(text("Investiga reacciones nucleares, inspecciona sus modelos físicos y explora una escena 3D calculada con Ether Render X.",13,SUB));
+        TextView newModelInfo=text(
+                "NUEVO v1.1  ·  Interacción Coulomb + Woods–Saxon, penetración WKB "+
+                "y Hamiltoniano radial exportable. Desplázate hasta el panel 03 para estudiarlos.",
+                11,GREEN);
+        newModelInfo.setPadding(0,dp(10),0,0);
+        body.addView(newModelInfo);
 
         LinearLayout viewport=panel(body);
         viewport.addView(section("VISOR ESPACIAL · ETHER RENDER X"));
