@@ -10,7 +10,7 @@ Base de esta migración: Ether Render X v0.2 (`f2dee1f4f074a12b30ba8a31357790d90
 - `.x` XASM: 12 archivos.
 - `.xi`: 5 archivos.
 
-En la primera limpieza se retiraron 7 fuentes/tests Python del prototipo antiguo y el `requirements.txt` raíz, quedando 94 archivos Python. Esos prototipos no estaban en la ruta productiva de Ether/InfiniteCore/Solar/PC.
+En la primera limpieza se retiraron 8 archivos de la línea Python antigua (prototipos/tests/dependencia raíz) y 13 scripts Python conservados dentro de evidencia histórica ejecutable. Quedan **81 archivos Python** y **136 C/C++** como deuda bootstrap. Los prototipos retirados no estaban en la ruta productiva de Ether/InfiniteCore/Solar/PC; los scripts históricos siguen recuperables desde Git.
 
 ## Política
 
