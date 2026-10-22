@@ -252,8 +252,8 @@ public final class FusionActivity extends Activity {
         body.addView(big);
         body.addView(text("Investiga reacciones nucleares, inspecciona sus modelos físicos y explora una escena 3D calculada con Ether Render X.",13,SUB));
         TextView newModelInfo=text(
-                "NUEVO v1.2  ·  Potencial nuclear, WKB y evolución MIL Core "+
-                "de 2–3 qubits. Busca el panel 04 para ejecutar el Hamiltoniano reducido.",
+                "NUEVO v1.3 · MIL Core evoluciona hasta 256 posiciones con 8 qubits. "+
+                "Usa el panel 04 para ejecutar y comparar con RK4 independiente.",
                 11,GREEN);
         newModelInfo.setPadding(0,dp(10),0,0);
         body.addView(newModelInfo);
