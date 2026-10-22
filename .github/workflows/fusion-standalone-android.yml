@@ -30,10 +30,13 @@ jobs:
           javac -encoding UTF-8 -d fusion-build/java-tests \
             fusion-android/app/src/main/java/com/cosmicx/pc/FusionPhysics.java \
             fusion-android/app/src/main/java/com/mundox/fusion3d/CollisionModel.java \
+            fusion-android/app/src/main/java/com/mundox/fusion3d/NuclearInteractionModel.java \
             fusion-android/tests/com/cosmicx/pc/FusionPhysicsTest.java \
-            fusion-android/tests/com/mundox/fusion3d/CollisionModelTest.java
+            fusion-android/tests/com/mundox/fusion3d/CollisionModelTest.java \
+            fusion-android/tests/com/mundox/fusion3d/NuclearInteractionModelTest.java
           java -cp fusion-build/java-tests com.cosmicx.pc.FusionPhysicsTest | tee fusion-evidence/physics-test.txt
           java -cp fusion-build/java-tests com.mundox.fusion3d.CollisionModelTest | tee -a fusion-evidence/physics-test.txt
+          java -cp fusion-build/java-tests com.mundox.fusion3d.NuclearInteractionModelTest | tee -a fusion-evidence/physics-test.txt
       - name: Verify own Ether Render X raytracer versus exhaustive oracle
         run: |
           set -euo pipefail
@@ -70,7 +73,7 @@ jobs:
           details=subprocess.check_output([aapt,'dump','badging',str(apk)],text=True)
           perms=subprocess.check_output([aapt,'dump','permissions',str(apk)],text=True)
           package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",details)
-          assert package and package.groups()==('com.mundox.fusion3d','1','1.0.0'),details.splitlines()[:4]
+          assert package and package.groups()==('com.mundox.fusion3d','2','1.1.0'),details.splitlines()[:4]
           assert 'FusionActivity' in details, 'Launcher not included'
           assert 'uses-permission:' not in perms,perms
           with zipfile.ZipFile(apk) as z:
@@ -83,7 +86,10 @@ jobs:
                 'bytes':apk.stat().st_size,'package':package[1], 'version':package[3],
                 'abis':['arm64-v8a','x86_64'],'permissions':[],
                 'renderer':'repository EtherRenderer::render() C++ own raytracer',
-                'physical_nuclear_solver':False,'signed_debug':True}
+                'phenomenological_nuclear_WKB':True,
+                'many_body_nuclear_solver':False,
+                'MIL_Core_nuclear_evolution':False,
+                'signed_debug':True}
           Path('fusion-dist/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
           Path('fusion-dist/apk-badging.txt').write_text(details)
           print(json.dumps(data))
@@ -115,6 +121,7 @@ jobs:
           timeout --kill-after=15 90 adb shell am instrument -w \
             com.mundox.fusion3d.test/com.mundox.fusion3d.FusionInstrumentation | tee fusion-evidence/instrumentation.txt
           grep -q 'FUSION_3D_ANDROID_PASS' fusion-evidence/instrumentation.txt
+          grep -q 'NUCLEAR_INTERACTION_ANDROID_PASS' fusion-evidence/instrumentation.txt
           adb shell am start -W -n com.mundox.fusion3d/.FusionActivity > fusion-evidence/app-launch.txt
           # Wait for the real workspace frame rather than capturing Android's splash screen.
           sleep 4
@@ -133,6 +140,7 @@ jobs:
           picture=Path('fusion-evidence/fusion-3d-screen.png').read_bytes()
           assert len(picture)>1000 and picture.startswith(b'\x89PNG\r\n\x1a\n')
           assert 'FUSION_3D_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
+          assert 'NUCLEAR_INTERACTION_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           print('FUSION_3D_RELEASE_PASS')
           PY
       - name: Preserve signed APK, screenshots and audit evidence
