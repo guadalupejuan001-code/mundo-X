@@ -305,7 +305,11 @@ public final class MundoXDesktopActivity extends Activity {
             }
 
             @Override public void onPageFinished(WebView view, String url) {
-                if (!closing && address != null && isWebUrl(url)) address.setText(url);
+                if (!closing && address != null && isWebUrl(url)) {
+                    address.setText(url);
+                    if (url.startsWith("http://") && browserProgress != null)
+                        browserProgress.setText("Aviso: conexión HTTP sin cifrar");
+                }
             }
         });
         browser.setWebChromeClient(new WebChromeClient() {
@@ -706,7 +710,8 @@ public final class MundoXDesktopActivity extends Activity {
                         if (download.agent != null && !download.agent.isEmpty())
                             connection.setRequestProperty("User-Agent", download.agent);
                         if (download.cookie != null && !download.cookie.isEmpty() &&
-                                originalHost.equalsIgnoreCase(current.getHost()))
+                                originalHost.equalsIgnoreCase(current.getHost()) &&
+                                "https".equalsIgnoreCase(current.getProtocol()))
                             connection.setRequestProperty("Cookie", download.cookie);
                         int status = connection.getResponseCode();
                         if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
