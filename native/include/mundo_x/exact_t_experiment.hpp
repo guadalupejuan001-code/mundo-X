@@ -759,11 +759,62 @@ class ReducedExactTRepresentation {
     check(control); check(target);
     if (control == target) throw std::invalid_argument("control == target");
     if (!std::isfinite(theta)) throw std::invalid_argument("non-finite phase");
-    phase(control, theta * .5);
-    phase(target, theta * .5);
-    cnot(control, target);
-    phase(target, -theta * .5);
-    cnot(control, target);
+    check_cancelled();
+
+    // diag(1,1,1,e^{i theta}) =
+    // I + (e^{i theta}-1)(I-Zc-Zt+ZcZt)/4.
+    // Apply the four Pauli terms directly so we do not create the transient
+    // component growth caused by three separate phase expansions and two CNOTs.
+    const std::complex<double> e{std::cos(theta), std::sin(theta)};
+    const auto delta = e - std::complex<double>{1.0, 0.0};
+    const auto coeff_i = std::complex<double>{1.0, 0.0} + delta * 0.25;
+    const auto coeff_z = -delta * 0.25;
+    const auto coeff_zz = delta * 0.25;
+
+    const auto basis = stabilizer_basis();
+    const auto zc = pauli_z_op(control);
+    const auto zt = pauli_z_op(target);
+    const auto zczt = multiply(zc, zt);
+
+    ComponentMap next;
+    const std::size_t maximum =
+        components_.size() > max_components_ / 4
+            ? max_components_
+            : std::min(max_components_, components_.size() * 4 + 1);
+    next.reserve(maximum);
+
+    std::size_t visited = 0;
+    for (const auto& entry : components_) {
+      const Pauli p{entry.first.x, entry.first.z, 0};
+      accumulate(next, p, entry.second * coeff_i, basis);
+      accumulate(next, multiply(zc, p), entry.second * coeff_z, basis);
+      accumulate(next, multiply(zt, p), entry.second * coeff_z, basis);
+      accumulate(next, multiply(zczt, p), entry.second * coeff_zz, basis);
+      poll_components(++visited);
+    }
+    check_cancelled();
+
+    // Preserve the existing dense-reference and stabilizer-base replay logs.
+    // This sequence is algebraically identical to the direct four-term update.
+    if (circuit_.capacity() - circuit_.size() < 5)
+      circuit_.reserve(circuit_.size() + 5);
+    if (base_circuit_.capacity() - base_circuit_.size() < 2)
+      base_circuit_.reserve(base_circuit_.size() + 2);
+    if (phase_angles_.capacity() - phase_angles_.size() < 3)
+      phase_angles_.reserve(phase_angles_.size() + 3);
+
+    const auto c = narrow(control), t = narrow(target);
+    components_ = std::move(next);
+    circuit_.push_back({ExactExperimentOp::P, c, 0});
+    phase_angles_.push_back(theta * .5);
+    circuit_.push_back({ExactExperimentOp::P, t, 0});
+    phase_angles_.push_back(theta * .5);
+    circuit_.push_back({ExactExperimentOp::CX, c, t});
+    circuit_.push_back({ExactExperimentOp::P, t, 0});
+    phase_angles_.push_back(-theta * .5);
+    circuit_.push_back({ExactExperimentOp::CX, c, t});
+    base_circuit_.push_back({ExactExperimentOp::CX, c, t});
+    base_circuit_.push_back({ExactExperimentOp::CX, c, t});
   }
 
   // Different canonical cosets of a pure stabilizer are orthogonal. These
