@@ -1,27 +1,32 @@
 name: Ether Render X native integration
-
 on:
   push:
-    branches: [main, codex/ether-render-x-main-20261021]
+    branches: [main, codex/ether-render-x-main-20261021, codex/ether-mil-observer-render-20261021]
     paths:
       - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/include/mundo_x/ether_mil_bridge.hpp'
+      - 'native/include/mundo_x/exact_t_experiment.hpp'
       - 'native/include/mundo_x/xasm.hpp'
-      - 'native/src/main.cpp'
       - 'native/tests/rule_renderer.cpp'
       - 'native/tests/xasm_renderer.cpp'
+      - 'native/tests/ether_mil_renderer.cpp'
       - 'CMakeLists.txt'
       - 'examples/ether_render.x'
+      - 'examples/ether_mil_render.x'
       - 'tools/cosmic_source_provenance.py'
       - '.github/workflows/ether-render-native.yml'
   pull_request:
     paths:
       - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/include/mundo_x/ether_mil_bridge.hpp'
+      - 'native/include/mundo_x/exact_t_experiment.hpp'
       - 'native/include/mundo_x/xasm.hpp'
-      - 'native/src/main.cpp'
       - 'native/tests/rule_renderer.cpp'
       - 'native/tests/xasm_renderer.cpp'
+      - 'native/tests/ether_mil_renderer.cpp'
       - 'CMakeLists.txt'
       - 'examples/ether_render.x'
+      - 'examples/ether_mil_render.x'
       - 'tools/cosmic_source_provenance.py'
       - '.github/workflows/ether-render-native.yml'
   workflow_dispatch:
@@ -41,14 +46,18 @@ jobs:
       - name: Configure native targets
         run: cmake -S . -B render-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Compile renderer, XASM, and 1000-qubit contracts
-        run: cmake --build render-build --target mundo_x test_rule_renderer test_xasm_renderer test_reduced_1000 --parallel 2
+        run: cmake --build render-build --target mundo_x test_rule_renderer test_xasm_renderer test_ether_mil_renderer test_reduced_1000 --parallel 2
       - name: Verify source provenance
         run: python3 tools/cosmic_source_provenance.py --verify .
       - name: Test renderer and universal Reduced regression
-        run: ctest --test-dir render-build -R '^(rule_renderer|xasm_renderer|reduced_1000)$' --output-on-failure
+        run: ctest --test-dir render-build -R '^(rule_renderer|xasm_renderer|ether_mil_renderer|reduced_1000)$' --output-on-failure
       - name: Run real XASM render
+        shell: bash
         run: |
           set -euo pipefail
           render-build/mundo_x run examples/ether_render.x | tee ether-render-result.txt
           grep -q 'ASSERT render_exact PASS mismatches=0' ether-render-result.txt
           grep -q 'RENDER 320x180' ether-render-result.txt
+          render-build/mundo_x run examples/ether_mil_render.x | tee ether-mil-render-result.txt
+          grep -q 'RENDER_QUANTUM id=0 value=1' ether-mil-render-result.txt
+          grep -q 'ASSERT render_exact PASS mismatches=0' ether-mil-render-result.txt

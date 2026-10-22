@@ -17,6 +17,7 @@
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/exact_t_experiment.hpp"
 #include "mundo_x/ether_renderer.hpp"
+#include "mundo_x/ether_mil_bridge.hpp"
 #include "mundo_x/pauli_observer.hpp"
 #include "mundo_x/visual_scene.hpp"
 
@@ -122,6 +123,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
   std::unique_ptr<VisualScene> scene;
   std::unique_ptr<ReducedExactTRepresentation> reduced;
   std::unique_ptr<EtherRenderer> renderer;
+  std::unique_ptr<MilEtherRenderBridge> mil_bridge;
   bool rendered = false;
   std::unique_ptr<mundo_x_bridge::PauliObserver> observer;
   bool backend_declared = false;
@@ -148,6 +150,16 @@ inline XasmRunResult run_xasm(std::istream& input) {
         std::abs(value.imag()) > 1e-10)
       throw std::runtime_error("invalid Hermitian Pauli expectation");
     return value.real();
+  };
+
+  // The MIL source is authoritative; material signals are updated only when
+  // state-changing gates invalidate it, not once per ray or per pixel.
+  const auto refresh_mil_materials = [&]() {
+    if(mil_bridge)mil_bridge->refresh();
+  };
+  const auto invalidate_mil_materials = [&]() {
+    if(mil_bridge)mil_bridge->invalidate();
+    rendered=false;
   };
 
   std::string line;
@@ -213,7 +225,9 @@ inline XasmRunResult run_xasm(std::istream& input) {
 
     if (op == "render" || op == "render_camera" || op == "render_body" ||
         op == "render_clear" || op == "render_plan" || op == "render_frame" ||
-        op == "render_info" || op == "render_pixel" || op == "render_assert_exact" || op == "render_train") {
+        op == "render_info" || op == "render_pixel" || op == "render_assert_exact" || op == "render_train" ||
+        op == "render_bind" || op == "render_bind_pauli" || op == "render_unbind" ||
+        op == "render_quantum") {
       if (op == "render") {
         if (renderer) throw std::runtime_error("line " + std::to_string(line_number) + ": render already declared");
         const auto width=xasm_detail::read_unsigned<std::size_t>(in,line_number,"render <width> <height> <tile>");
@@ -247,19 +261,60 @@ inline XasmRunResult run_xasm(std::istream& input) {
             xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>"),
             xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>")}};
           xasm_detail::require_end(in,line_number);renderer->add_body(body);rendered=false;++result.render_instructions;
+        }else if(op=="render_bind" || op=="render_bind_pauli"){
+          if(!reduced)throw std::runtime_error("line "+std::to_string(line_number)+": render_bind requires MIL backend reduced qubits");
+          const auto id=xasm_detail::read_unsigned<std::uint32_t>(in,line_number,
+              "render_bind <id> <X|Y|Z> <qubit> <strength>");
+          if(!mil_bridge)mil_bridge=std::make_unique<MilEtherRenderBridge>(*reduced,*renderer);
+          if(op=="render_bind"){
+            std::string axis;
+            if(!(in>>axis)||axis.size()!=1||axis.find_first_not_of("XYZ")!=std::string::npos)
+              throw std::runtime_error("line "+std::to_string(line_number)+": expected X, Y, or Z");
+            const auto q=xasm_detail::read_unsigned<std::size_t>(in,line_number,
+                "render_bind <id> <X|Y|Z> <qubit> <strength>");
+            const double strength=xasm_detail::read_finite(in,line_number,"render strength");
+            xasm_detail::require_end(in,line_number);
+            mil_bridge->bind_axis(id,axis[0],q,strength);
+          }else{
+            std::string pauli;
+            if(!(in>>pauli))throw std::runtime_error("line "+std::to_string(line_number)+": expected full Pauli");
+            const double strength=xasm_detail::read_finite(in,line_number,"render strength");
+            xasm_detail::require_end(in,line_number);
+            mil_bridge->bind(id,pauli,strength);
+          }
+          rendered=false;++result.render_instructions;
+        }else if(op=="render_unbind"){
+          const auto id=xasm_detail::read_unsigned<std::uint32_t>(in,line_number,"render_unbind <id>");
+          xasm_detail::require_end(in,line_number);
+          if(!mil_bridge)throw std::runtime_error("line "+std::to_string(line_number)+": no MIL render binding");
+          mil_bridge->unbind(id);rendered=false;++result.render_instructions;
+        }else if(op=="render_quantum"){
+          const auto id=xasm_detail::read_unsigned<std::uint32_t>(in,line_number,"render_quantum <id>");
+          xasm_detail::require_end(in,line_number);
+          if(!mil_bridge)throw std::runtime_error("line "+std::to_string(line_number)+": no MIL render binding");
+          refresh_mil_materials();
+          out<<"RENDER_QUANTUM id="<<id<<" value="
+             <<xasm_detail::precise_value(mil_bridge->signal(id))<<"\n";
         }else if(op=="render_clear"){
-          xasm_detail::require_end(in,line_number);renderer->clear_bodies();rendered=false;++result.render_instructions;
+          xasm_detail::require_end(in,line_number);
+          if(mil_bridge){mil_bridge->clear();mil_bridge.reset();}
+          renderer->clear_bodies();rendered=false;++result.render_instructions;
         }else if(op=="render_plan"){
           xasm_detail::require_end(in,line_number);renderer->plan();rendered=false;++result.render_instructions;
         }else if(op=="render_frame"){
-          xasm_detail::require_end(in,line_number);renderer->render(false);rendered=true;++result.render_instructions;
+          xasm_detail::require_end(in,line_number);
+          refresh_mil_materials();renderer->render(false);
+          rendered=true;++result.render_instructions;
         }else if(op=="render_assert_exact"){
-          xasm_detail::require_end(in,line_number);const auto st=renderer->render(true);rendered=true;++result.render_instructions;
+          xasm_detail::require_end(in,line_number);
+          refresh_mil_materials();const auto st=renderer->render(true);
+          rendered=true;++result.render_instructions;
           const bool ok=st.exact_mismatches==0;result.assertions_passed=result.assertions_passed&&ok;
           out<<"ASSERT render_exact "<<(ok?"PASS":"FAIL")<<" mismatches="<<st.exact_mismatches<<"\n";
         }else if(op=="render_train"){
           xasm_detail::require_end(in,line_number);
-          const auto trained=renderer->train_tiles();rendered=true;++result.render_instructions;
+          refresh_mil_materials();const auto trained=renderer->train_tiles();
+          rendered=true;++result.render_instructions;
           out<<"RENDER_TRAIN tile="<<trained.chosen_tile
              <<" median_ms="<<xasm_detail::precise_value(trained.median_ms)
              <<" candidate_tests="<<trained.candidate_tests
@@ -267,7 +322,8 @@ inline XasmRunResult run_xasm(std::istream& input) {
              <<" mismatches="<<trained.exact_mismatches
              <<" hash="<<trained.frame_hash<<"\n";
         }else if(op=="render_info"){
-          xasm_detail::require_end(in,line_number);if(!rendered)renderer->render(false);
+          xasm_detail::require_end(in,line_number);
+          if(!rendered){refresh_mil_materials();renderer->render(false);}
           const auto& st=renderer->stats();
           out<<"RENDER "<<st.width<<"x"<<st.height<<" tile="<<st.tile
              <<" regions="<<st.tiles_x*st.tiles_y<<" bodies="<<st.bodies
@@ -356,6 +412,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
         if (reduced) apply(*reduced);
         else apply(*core);
         observer.reset();
+        invalidate_mil_materials();
         ++result.instructions;
       } else if (op == "cx" || op == "cz") {
         const auto control = read_size(op + " <control> <target>");
@@ -368,6 +425,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
         if (reduced) apply(*reduced);
         else apply(*core);
         observer.reset();
+        invalidate_mil_materials();
         ++result.instructions;
       } else if (op == "t") {
         const auto q = read_size("t <q>");
@@ -376,6 +434,27 @@ inline XasmRunResult run_xasm(std::istream& input) {
         if (reduced->t_count() >= 128)
           throw std::runtime_error("reduced XASM safety limit is 128 T gates");
         reduced->phase_t(q);
+        invalidate_mil_materials();
+        ++result.instructions;
+      } else if (op == "tdg" || op == "phase" || op == "cphase") {
+        if(!reduced)throw std::runtime_error(op+" requires MIL backend reduced");
+        if(op=="tdg"){
+          const auto q=read_size("tdg <q>");
+          require_end();
+          if(reduced->t_count()>=128)
+            throw std::runtime_error("reduced XASM safety limit is 128 T gates");
+          reduced->phase_t_dagger(q);
+        }else if(op=="phase"){
+          const auto q=read_size("phase <q> <theta>");
+          const auto angle=xasm_detail::read_finite(in,line_number,"phase <q> <theta>");
+          require_end();reduced->phase(q,angle);
+        }else{
+          const auto c=read_size("cphase <control> <target> <theta>");
+          const auto t=read_size("cphase <control> <target> <theta>");
+          const auto angle=xasm_detail::read_finite(in,line_number,"cphase <control> <target> <theta>");
+          require_end();reduced->controlled_phase(c,t,angle);
+        }
+        invalidate_mil_materials();
         ++result.instructions;
       } else if (op == "seed") {
         std::string token;
@@ -400,6 +479,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
         out << "MEASURE_Z q=" << q << " outcome=" << measured.outcome_one
             << " probability=" << measured.probability << " random=" << measured.random << "\n";
         observer.reset();
+        invalidate_mil_materials();
         ++result.instructions;
       } else if (op == "expect") {
         std::string pauli;

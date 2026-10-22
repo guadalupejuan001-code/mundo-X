@@ -62,6 +62,7 @@ class EtherRenderer {
     tiles_x_=1+(width_-1)/tile_;tiles_y_=1+(height_-1)/tile_;
     masks_.assign(tiles_x_*tiles_y_,0);
     frame_.assign(width_*height_,Pixel{});
+    quantum_gain_.fill(1.);
     set_camera({0,0,10},{0,0,0},47.);
   }
 
@@ -95,7 +96,26 @@ class EtherRenderer {
     dirty_=true;
   }
 
-  void clear_bodies(){bodies_.clear();dirty_=true;}
+  void clear_bodies(){bodies_.clear();clear_quantum_materials();dirty_=true;}
+
+  bool has_body(std::uint32_t id) const noexcept {
+    return std::any_of(bodies_.begin(),bodies_.end(),
+                       [id](const Body& body){return body.id==id;});
+  }
+
+  // Visual material only. Neither quantum measurement nor changes to geometry,
+  // candidate masks, intersection order, or the authoritative MIL state.
+  // Values are prepared once per state revision, never inside the pixel loop.
+  void set_quantum_material(std::uint32_t id,double expectation,double strength) {
+    if(id>=quantum_gain_.size()||!has_body(id))
+      throw std::out_of_range("quantum material body does not exist");
+    if(!std::isfinite(expectation)||expectation < -1.-1e-8||expectation > 1.+1e-8||
+       !std::isfinite(strength)||strength<0.||strength>1.)
+      throw std::invalid_argument("invalid quantum material signal or strength");
+    quantum_gain_[id]=1.+strength*std::clamp(expectation,-1.,1.);
+  }
+
+  void clear_quantum_materials() noexcept { quantum_gain_.fill(1.); }
 
   void set_tile(std::size_t tile) {
     if(tile<8||tile>1024)throw std::invalid_argument("render tile must be 8..1024");
@@ -242,6 +262,25 @@ class EtherRenderer {
     const double ny=2.*(static_cast<double>(y)+.5)/static_cast<double>(height_)-1.;
     return normalize(add(forward_,add(mul(right_,nx*aspect_*tan_half_fov_),mul(up_,ny*tan_half_fov_))));
   }
+  Pixel shade(Pixel best,const Body* hit,const Vec3& ray) const {
+    if(!hit){
+      const double v=std::max(0.,std::min(1.,.025+.08*(ray.y*.5+.5)));
+      const auto c=static_cast<std::uint32_t>(std::lround(v*255.));
+      best.rgba=(255u<<24)|(c<<16)|(c<<8)|(std::min<std::uint32_t>(255,c+5));
+      return best;
+    }
+    const Vec3 point=add(eye_,mul(ray,best.depth));
+    const Vec3 normal=normalize(sub(point,hit->center));
+    static const Vec3 light=normalize(Vec3{.37,.74,.56});
+    const double l=.12+.88*std::max(0.,dot(normal,light));
+    const double gain=quantum_gain_[hit->id];
+    auto channel=[&](double c){return static_cast<std::uint32_t>(
+        std::lround(std::max(0.,std::min(1.,c*l*gain))*255.));};
+    const auto red=channel(hit->color[0]),green=channel(hit->color[1]),blue=channel(hit->color[2]);
+    best.rgba=(255u<<24)|(red<<16)|(green<<8)|blue;
+    return best;
+  }
+
   Pixel trace(const Vec3& ray,std::uint64_t mask,std::uint64_t* tests) const {
     Pixel best;const Body* hit=nullptr;
     for(const auto& b:bodies_){
@@ -256,25 +295,20 @@ class EtherRenderer {
       if(t<=1e-6||t>=best.depth)continue;
       best.depth=t;best.body=static_cast<std::int32_t>(b.id);hit=&b;
     }
-    if(!hit){
-      const double v=std::max(0.,std::min(1.,.025+.08*(ray.y*.5+.5)));
-      const auto c=static_cast<std::uint32_t>(std::lround(v*255.));
-      best.rgba=(255u<<24)|(c<<16)|(c<<8)|(std::min<std::uint32_t>(255,c+5));
-      return best;
-    }
-    const Vec3 point=add(eye_,mul(ray,best.depth));
-    const Vec3 normal=normalize(sub(point,hit->center));
-    const Vec3 light=normalize(Vec3{.37,.74,.56});
-    const double l=.12+.88*std::max(0.,dot(normal,light));
-    auto channel=[&](double c){return static_cast<std::uint32_t>(std::lround(std::max(0.,std::min(1.,c*l))*255.));};
-    const auto r=channel(hit->color[0]),g=channel(hit->color[1]),b=channel(hit->color[2]);
-    best.rgba=(255u<<24)|(r<<16)|(g<<8)|b;return best;
+    return shade(best,hit,ray);
   }
   void rebuild_distance_order(){
     distance_order_.clear();distance_lower_bound_.assign(bodies_.size(),0.);
+    cached_center_.resize(bodies_.size());
+    cached_center_squared_.resize(bodies_.size());
+    cached_radius_squared_.resize(bodies_.size());
     distance_order_.reserve(bodies_.size());
     for(std::size_t i=0;i<bodies_.size();++i){
-      distance_lower_bound_[i]=std::max(0.,length(sub(bodies_[i].center,eye_))-bodies_[i].radius);
+      const Vec3 offset=sub(bodies_[i].center,eye_);
+      cached_center_[i]=offset;
+      cached_center_squared_[i]=dot(offset,offset);
+      cached_radius_squared_[i]=bodies_[i].radius*bodies_[i].radius;
+      distance_lower_bound_[i]=std::max(0.,length(offset)-bodies_[i].radius);
       distance_order_.push_back(i);
     }
     std::stable_sort(distance_order_.begin(),distance_order_.end(),[&](std::size_t a,std::size_t b){
@@ -289,9 +323,10 @@ class EtherRenderer {
       const auto& b=bodies_[index];
       if((mask&(std::uint64_t{1}<<b.id))==0)continue;
       if(tests)++*tests;
-      const Vec3 c=sub(b.center,eye_);
+      const Vec3& c=cached_center_[index];
       const double along=dot(c,ray);
-      const double h2=b.radius*b.radius-(dot(c,c)-along*along);
+      const double h2=cached_radius_squared_[index]-
+          (cached_center_squared_[index]-along*along);
       if(h2<0.)continue;
       const double root=std::sqrt(h2);
       double t=along-root;if(t<=1e-6)t=along+root;
@@ -306,19 +341,7 @@ class EtherRenderer {
         if(mask&(std::uint64_t{1}<<bodies_[index].id))++*pruned;
       }
     }
-    if(!hit){
-      const double v=std::max(0.,std::min(1.,.025+.08*(ray.y*.5+.5)));
-      const auto c=static_cast<std::uint32_t>(std::lround(v*255.));
-      best.rgba=(255u<<24)|(c<<16)|(c<<8)|(std::min<std::uint32_t>(255,c+5));
-      return best;
-    }
-    const Vec3 point=add(eye_,mul(ray,best.depth));
-    const Vec3 normal=normalize(sub(point,hit->center));
-    const Vec3 light=normalize(Vec3{.37,.74,.56});
-    const double l=.12+.88*std::max(0.,dot(normal,light));
-    auto channel=[&](double c){return static_cast<std::uint32_t>(std::lround(std::max(0.,std::min(1.,c*l))*255.));};
-    const auto r=channel(hit->color[0]),g=channel(hit->color[1]),b=channel(hit->color[2]);
-    best.rgba=(255u<<24)|(r<<16)|(g<<8)|b;return best;
+    return shade(best,hit,ray);
   }
 
   void hash_pixel(const Pixel& p){
@@ -333,6 +356,9 @@ class EtherRenderer {
   std::vector<std::uint64_t> masks_;
   std::vector<std::size_t> distance_order_;
   std::vector<double> distance_lower_bound_;
+  std::vector<Vec3> cached_center_;
+  std::vector<double> cached_center_squared_,cached_radius_squared_;
+  std::array<double,64> quantum_gain_{};
   std::vector<Pixel> frame_;
   Stats stats_{};
   bool dirty_=true,planned_=false;

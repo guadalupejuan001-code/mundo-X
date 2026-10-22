@@ -40,6 +40,7 @@ UNIVERSAL_1000_EXAMS_REFERENCE = "dc38a5a76ed8a39a415d587b1ee86934063c2240"
 MAGIC_GROWTH_REFERENCE = "6cc71c139394399a92d96b21e03c497c8e548d4a"
 ETHER_RENDER_SOURCE_REFERENCE = "f2dee1f4f074a12b30ba8a31357790d90f934669"
 ETHER_RENDER_INTEGRATION_REFERENCE = "2de68561ef0f2c9208e6f151dd163db996e2133c"
+MIL_RENDER_INTEGRATION_REFERENCE = "0817158c866e5708991355b0464b961e09304307"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -86,16 +87,18 @@ ADDITIONAL_SOURCES = {
     "native/tests/ether_frame.cpp": ETHER_FUSION_REFERENCE,
     "native/tests/ether_fusion.cpp": AUDIT_REFERENCE,
     "native/tests/quantum_algorithms.cpp": QUANTUM_ALGORITHMS_REFERENCE,
-    "native/include/mundo_x/ether_renderer.hpp": ETHER_RENDER_SOURCE_REFERENCE,
+    "native/include/mundo_x/ether_renderer.hpp": MIL_RENDER_INTEGRATION_REFERENCE,
+    "native/include/mundo_x/ether_mil_bridge.hpp": MIL_RENDER_INTEGRATION_REFERENCE,
+    "native/tests/ether_mil_renderer.cpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "native/tests/rule_renderer.cpp": ETHER_RENDER_SOURCE_REFERENCE,
-    "native/tests/xasm_renderer.cpp": ETHER_RENDER_SOURCE_REFERENCE,
+    "native/tests/xasm_renderer.cpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_FUSION_REFERENCE,
 }
 REVISED_SOURCES = {
     "native/tests/native_original_exams.cpp": UNIVERSAL_1000_EXAMS_REFERENCE,
     "native/include/mundo_x/exact_t_experiment.hpp": MAGIC_GROWTH_REFERENCE,
     "native/include/mundo_x/adaptive_phase_core.hpp": UNIVERSAL_1000_REFERENCE,
-    "native/include/mundo_x/xasm.hpp": ETHER_RENDER_INTEGRATION_REFERENCE,
+    "native/include/mundo_x/xasm.hpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "native/src/phase_runner.cpp": UNIVERSAL_1000_REFERENCE,
     "native/tests/boundaries.cpp": UNIVERSAL_1000_REFERENCE,
     "native/tests/xasm_60.cpp": UNIVERSAL_1000_REFERENCE,
