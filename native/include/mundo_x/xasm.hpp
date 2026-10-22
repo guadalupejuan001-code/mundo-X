@@ -213,7 +213,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
 
     if (op == "render" || op == "render_camera" || op == "render_body" ||
         op == "render_clear" || op == "render_plan" || op == "render_frame" ||
-        op == "render_info" || op == "render_pixel" || op == "render_assert_exact") {
+        op == "render_info" || op == "render_pixel" || op == "render_assert_exact" || op == "render_train") {
       if (op == "render") {
         if (renderer) throw std::runtime_error("line " + std::to_string(line_number) + ": render already declared");
         const auto width=xasm_detail::read_unsigned<std::size_t>(in,line_number,"render <width> <height> <tile>");
@@ -257,6 +257,15 @@ inline XasmRunResult run_xasm(std::istream& input) {
           xasm_detail::require_end(in,line_number);const auto st=renderer->render(true);rendered=true;++result.render_instructions;
           const bool ok=st.exact_mismatches==0;result.assertions_passed=result.assertions_passed&&ok;
           out<<"ASSERT render_exact "<<(ok?"PASS":"FAIL")<<" mismatches="<<st.exact_mismatches<<"\n";
+        }else if(op=="render_train"){
+          xasm_detail::require_end(in,line_number);
+          const auto trained=renderer->train_tiles();rendered=true;++result.render_instructions;
+          out<<"RENDER_TRAIN tile="<<trained.chosen_tile
+             <<" median_ms="<<xasm_detail::precise_value(trained.median_ms)
+             <<" candidate_tests="<<trained.candidate_tests
+             <<" distance_pruned="<<trained.distance_pruned_candidates
+             <<" mismatches="<<trained.exact_mismatches
+             <<" hash="<<trained.frame_hash<<"\n";
         }else if(op=="render_info"){
           xasm_detail::require_end(in,line_number);if(!rendered)renderer->render(false);
           const auto& st=renderer->stats();
@@ -264,6 +273,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
              <<" regions="<<st.tiles_x*st.tiles_y<<" bodies="<<st.bodies
              <<" candidate_refs="<<st.candidate_references<<" brute_refs="<<st.brute_references
              <<" candidate_tests="<<st.candidate_tests<<" brute_tests="<<st.brute_tests
+             <<" distance_pruned="<<st.distance_pruned_candidates
              <<" test_ratio="<<xasm_detail::precise_value(st.test_ratio())
              <<" hash="<<st.frame_hash<<"\n";
           rendered=true;
