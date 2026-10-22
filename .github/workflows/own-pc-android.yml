@@ -60,7 +60,7 @@ jobs:
           apk=Path('pc-dist/COSMIC-X-PC.apk')
           badging=subprocess.check_output([os.environ['ANDROID_HOME']+'/build-tools/35.0.0/aapt','dump','badging',str(apk)],text=True)
           package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
-          assert package and package.groups()==('com.cosmicx.pc','5','0.5.0'),badging.splitlines()[:1]
+          assert package and package.groups()==('com.cosmicx.pc','6','0.6.0'),badging.splitlines()[:1]
           Path('pc-dist/apk-badging.txt').write_text(badging)
           with zipfile.ZipFile(apk) as z:
               names={n for n in z.namelist() if n.startswith('lib/')}
