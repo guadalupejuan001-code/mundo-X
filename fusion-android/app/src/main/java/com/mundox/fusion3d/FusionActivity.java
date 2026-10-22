@@ -37,6 +37,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
+import org.json.JSONObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -75,6 +76,9 @@ public final class FusionActivity extends Activity {
     private SeekBar milTimeControl;
     private TextView milTimeLabel,milSummary;
     private MilProbabilityView milChart;
+    private Mil100EtherView mil100View;
+    private SeekBar mil100PhaseSlider;
+    private TextView mil100PhaseText,mil100Status;
     private MilRadialEvolver.Result lastMilResult;
     private final Runnable frameStepper=new Runnable() {
         @Override public void run(){
@@ -207,6 +211,7 @@ public final class FusionActivity extends Activity {
             milQubits=Math.max(2,Math.min(8,state.getInt("mil_qubits",8)));
             milTimeControl.setProgress(state.getInt("mil_time",500));
             if(milSizeButton!=null)milSizeButton.setText(gridLabel(milQubits));
+            mil100PhaseSlider.setProgress(state.getInt("mil100_phase",125));
         }
         updateReport();
     }
@@ -221,6 +226,7 @@ public final class FusionActivity extends Activity {
         out.putInt("nuclear_depth",nuclearDepth.getProgress());
         out.putInt("mil_time",milTimeControl.getProgress());
         out.putInt("mil_qubits",milQubits);
+        out.putInt("mil100_phase",mil100PhaseSlider.getProgress());
         out.putInt("timeline",timeline.getProgress());
     }
 
@@ -252,8 +258,8 @@ public final class FusionActivity extends Activity {
         body.addView(big);
         body.addView(text("Investiga reacciones nucleares, inspecciona sus modelos físicos y explora una escena 3D calculada con Ether Render X.",13,SUB));
         TextView newModelInfo=text(
-                "NUEVO v1.3 · MIL Core evoluciona hasta 256 posiciones con 8 qubits. "+
-                "Usa el panel 04 para ejecutar y comparar con RK4 independiente.",
+                "NUEVO v1.4 · Render 3D de 100 qubits GHZ con MIL Core y Ether Render X. "+
+                "La evolución radial de 256 posiciones (8 qubits) sigue en el panel 04.",
                 11,GREEN);
         newModelInfo.setPadding(0,dp(10),0,0);
         body.addView(newModelInfo);
@@ -295,6 +301,8 @@ public final class FusionActivity extends Activity {
         playButton.setOnClickListener(v->togglePlay());
         rewind.setOnClickListener(v->{stopPlay();timeline.setProgress(0);});
         resetCamera.setOnClickListener(v->renderer.resetCamera());
+
+        buildMil100Panel(body);
 
         LinearLayout choices=panel(body);
         choices.addView(section("01 / SELECCIONA DOS NÚCLEOS"));
@@ -567,6 +575,114 @@ public final class FusionActivity extends Activity {
                 "Esta app no calcula tasas de fusión ni fabrica elementos.",11,ORANGE);
         contract.setPadding(0,dp(11),0,dp(3));
         sources.addView(contract);
+    }
+
+    private void buildMil100Panel(LinearLayout body){
+        LinearLayout scene=panel(body);
+        scene.addView(section("VISOR CUÁNTICO · 100 QUBITS MIL CORE"));
+        scene.addView(text(
+                "Aquí se representan 100 qubits lógicos entrelazados en un estado GHZ, "+
+                "q0…q99. Cada esfera es un marcador tridimensional, no un nucleón. "+
+                "MIL calcula la coherencia global ⟨X⊗100⟩ y Ether Render X cambia "+
+                "el brillo de los 100 objetos según ese valor.",12,SUB));
+
+        mil100View=new Mil100EtherView(this);
+        scene.addView(mil100View,new LinearLayout.LayoutParams(-1,dp(275)));
+        scene.addView(text(
+                "Arrastra para orbitar los 100 objetos; utiliza dos dedos para zoom. "+
+                "El motor original conserva su límite de 64 cuerpos por pasada: "+
+                "esta escena utiliza dos pasadas de 50, combinadas por profundidad.",11,SUB));
+
+        mil100PhaseText=title("Fase en q99 = π/4 · coherencia teórica = 0,7071",12);
+        mil100PhaseText.setPadding(0,dp(13),0,dp(5));
+        scene.addView(mil100PhaseText);
+        mil100PhaseSlider=new SeekBar(this);
+        mil100PhaseSlider.setMax(1000);
+        mil100PhaseSlider.setProgress(125);
+        mil100PhaseSlider.setContentDescription("mil-100q-phase-control");
+        scene.addView(mil100PhaseSlider);
+        mil100PhaseSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onStartTrackingTouch(SeekBar seekBar){}
+            @Override public void onStopTrackingTouch(SeekBar seekBar){}
+            @Override public void onProgressChanged(SeekBar seekBar,int progress,boolean user){
+                float theta=(float)(2.*Math.PI*progress/1000.);
+                mil100PhaseText.setText(String.format(Locale.US,
+                        "Fase en q99 = %.3f rad · coherencia esperada cos(θ) = %.4f",
+                        theta,Math.cos(theta)));
+                if(mil100View!=null)mil100View.setQuantumPhase(theta);
+            }
+        });
+
+        LinearLayout row1=row();
+        scene.addView(row1);
+        Button pure=button("GHZ · θ=0",false);
+        Button magic=button("Fase T · π/4",false);
+        half(row1,pure,magic);
+        pure.setOnClickListener(v->mil100PhaseSlider.setProgress(0));
+        magic.setOnClickListener(v->mil100PhaseSlider.setProgress(125));
+
+        LinearLayout row2=row();
+        scene.addView(row2);
+        Button orthogonal=button("θ=π/2",false);
+        Button orbit=button("Reiniciar cámara",false);
+        half(row2,orthogonal,orbit);
+        orthogonal.setOnClickListener(v->mil100PhaseSlider.setProgress(250));
+        orbit.setOnClickListener(v->mil100View.resetCamera());
+
+        mil100Status=text(
+                "Preparando MIL Reduced 100q y los dos fotogramas Ether Render X...",
+                11,TEXT);
+        mil100Status.setTypeface(Typeface.MONOSPACE);
+        mil100Status.setTextIsSelectable(true);
+        mil100Status.setContentDescription("mil-100q-quantum-status");
+        mil100Status.setPadding(0,dp(13),0,dp(10));
+        scene.addView(mil100Status);
+        mil100View.setFrameListener((json,error)->{
+            if(closed||mil100Status==null)return;
+            if(error!=null){
+                mil100Status.setText("MIL 100Q: no se completó la imagen.\n"+
+                        error+"\nNo se sustituyen resultados por un dibujo falso.");
+                mil100Status.setTextColor(ORANGE);
+                return;
+            }
+            if(json==null||json.isEmpty())return;
+            try{
+                JSONObject report=new JSONObject(json);
+                if(report.getInt("qubits")!=100 ||
+                    report.getInt("visible_objects")!=100 ||
+                    report.getInt("passes")!=2 ||
+                    Math.abs(report.getDouble("norm")-1.)>1e-8)
+                    throw new IllegalStateException("El informe MIL 100Q no pasó los invariantes");
+                mil100Status.setText(String.format(Locale.US,
+                        "MIL: 100 qubits · 100 esferas · 2 pasadas\n"+
+                        "Norma del GHZ = %.9f · ⟨Z0 Z99⟩ = %.5f\n"+
+                        "Coherencia calculada ⟨X⊗100⟩ = %.6f\n"+
+                        "Componentes MIL = %d · memoria lógica = %d bytes\n"+
+                        "Observables = %.1f ms · Ether = %.1f ms\n"+
+                        "Rayos candidatos = %d. Oráculo completo: probado en CI.",
+                        report.getDouble("norm"),
+                        report.getDouble("distant_zz"),
+                        report.getDouble("global_x"),
+                        report.getInt("components"),
+                        report.getInt("state_bytes"),
+                        report.getDouble("quantum_refresh_ms"),
+                        report.getDouble("raster_ms"),
+                        report.getLong("candidate_tests")));
+                mil100Status.setTextColor(GREEN);
+            }catch(Exception failure){
+                mil100Status.setText("No se pudo validar el informe del motor MIL: "+
+                        failure.getMessage());
+                mil100Status.setTextColor(ORANGE);
+            }
+        });
+        scene.addView(text(
+                "FÍSICA DEL VISOR: GHZ de 100 qubits (software), correlación "+
+                "cuántica y fase de q99 calculadas de verdad. "+
+                "GEOMETRÍA: 100 esferas de referencia colocadas "+
+                "artificialmente en el espacio. Esto no usa 100 qubits para "+
+                "evolucionar el Hamiltoniano nuclear: esa evolución sigue "+
+                "usando 8 qubits y 256 posiciones en el panel 04. "+
+                "Tampoco es una GPU cuántica.",11,ORANGE));
     }
 
     private void setPresets(boolean resetTime,int firstZ,int firstA,int secondZ,int secondA){
@@ -1094,6 +1210,7 @@ public final class FusionActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        if(mil100View!=null)mil100View.shutdown();
         closed=true;
         stopPlay();
         milWorker.shutdown();

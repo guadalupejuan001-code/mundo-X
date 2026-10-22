@@ -1,0 +1,52 @@
+name: MIL 100q Ether multipass render
+on:
+  pull_request:
+    branches: ['main']
+    paths:
+      - 'fusion-android/native/mil100_ether_scene.hpp'
+      - 'fusion-android/tests/mil100_ether_render.cpp'
+      - 'fusion-android/app/src/main/cpp/**'
+      - '.github/workflows/mil100-ether-render.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mil100-render-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mil100-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Compile original MIL and Ether 100-qubit render harness
+        run: |
+          set -euo pipefail
+          mkdir -p mil100-evidence mil100-build
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            -I native/include -I fusion-android/native \
+            fusion-android/tests/mil100_ether_render.cpp \
+            -o mil100-build/ghz100_ether
+      - name: Verify GHZ100 non-Clifford coherence and 100-object exact ray oracle
+        run: |
+          set -euo pipefail
+          timeout --kill-after=5 120 mil100-build/ghz100_ether \
+            | tee mil100-evidence/ghz100-evidence.txt
+          grep -q 'MIL_100Q_ETHER_RENDER_PASS qubits=100 visible_objects=100 passes=2' \
+            mil100-evidence/ghz100-evidence.txt
+          grep -q 'ray_oracle=independent_100_bodies' \
+            mil100-evidence/ghz100-evidence.txt
+      - name: Save measurements and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MIL-100Q-ETHER-EVIDENCE
+          path: mil100-evidence/**
+          if-no-files-found: warn
+          retention-days: 14
