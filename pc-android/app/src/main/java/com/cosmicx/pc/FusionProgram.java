@@ -81,6 +81,12 @@ public final class FusionProgram {
         nodes.add(node);
     }
 
+    public void replace(int index, Op op, int a, int b) {
+        Node node = new Node(op, a, b);
+        check(node, qubits);
+        nodes.set(index, node);
+    }
+
     public void remove(int index) {
         nodes.remove(index);
     }
