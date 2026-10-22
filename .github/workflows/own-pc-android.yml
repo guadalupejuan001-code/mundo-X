@@ -30,6 +30,14 @@ jobs:
           cp pc-android/build/native/memory-benchmark.json pc-evidence/memory-benchmark.json
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
+      - name: Validate nuclear fusion physics and periodic table (offline Java)
+        run: |
+          set -euo pipefail
+          testdir="$(mktemp -d)"
+          javac -encoding UTF-8 -d "$testdir" \
+            pc-android/app/src/main/java/com/cosmicx/pc/FusionPhysics.java \
+            pc-android/tools/FusionPhysicsTest.java
+          java -cp "$testdir" com.cosmicx.pc.FusionPhysicsTest
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
       - name: Prepare Android SDK
