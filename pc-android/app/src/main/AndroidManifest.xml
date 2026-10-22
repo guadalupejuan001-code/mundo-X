@@ -21,5 +21,8 @@
                   android:windowSoftInputMode="adjustResize" />
         <activity android:name=".QuantumDesktopActivity" android:exported="false"
                   android:windowSoftInputMode="adjustResize" />
+        <!-- Offline educational isotope and nuclear-reaction calculator. -->
+        <activity android:name=".FusionLabActivity" android:exported="false"
+                  android:label="Mundo X Fusion Lab" android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
