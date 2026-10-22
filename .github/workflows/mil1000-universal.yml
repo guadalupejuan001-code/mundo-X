@@ -1,0 +1,37 @@
+name: MIL Core 1000 universal
+
+on:
+  push:
+    branches: [codex/mil1000-universal-stage1-20261021]
+    paths:
+      - 'native/include/mundo_x/mil_universal_core.hpp'
+      - 'native/include/mundo_x/adaptive_phase_core.hpp'
+      - 'native/tests/mil1000_phase.cpp'
+      - 'tests/test_phase_core.cpp'
+      - 'CMakeLists.txt'
+      - '.github/workflows/mil1000-universal.yml'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/mil_universal_core.hpp'
+      - 'native/include/mundo_x/adaptive_phase_core.hpp'
+      - 'native/tests/mil1000_phase.cpp'
+      - 'tests/test_phase_core.cpp'
+      - 'CMakeLists.txt'
+      - '.github/workflows/mil1000-universal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build focused tests
+        run: cmake --build build --target test_mil1000_phase test_phase_core test_state_transfer test_core_1000 --parallel 2
+      - name: Run focused validation
+        run: ctest --test-dir build -R '^(mil1000_phase|phase_core|state_transfer|core_1000)$' --output-on-failure
