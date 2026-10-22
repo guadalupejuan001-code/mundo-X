@@ -45,6 +45,7 @@ import java.util.Locale;
  */
 public final class FusionActivity extends Activity {
     private static final int EXPORT_RESULT=801;
+    private static final int EXPORT_HAMILTONIAN=802;
     private static final int BG=Color.rgb(8,14,23);
     private static final int PANEL=Color.rgb(15,27,41);
     private static final int BORDER=Color.rgb(49,78,94);
@@ -76,10 +77,11 @@ public final class FusionActivity extends Activity {
     private int z1=1,z2=1,a1=2,a2=3,channel=0;
     private boolean expert=false,playing=false;
     private NuclearInteractionModel.Result nuclearModel;
+    private RadialHamiltonian.Grid radialHamiltonian;
     private NuclearPotentialGraphView nuclearGraph;
-    private TextView nuclearSummary, nuclearDepthCaption;
+    private TextView nuclearSummary, nuclearDepthCaption, hamiltonianSummary;
     private SeekBar nuclearDepth;
-    private Button nuclearZoomButton;
+    private Button nuclearZoomButton, exportHamiltonianButton;
     private Button firstElement,secondElement,channelButton,playButton,exportButton,expertButton;
     private TextView selectedHint,collisionLabel,stageLabel,formulaSummary,reactionSummary,unknownWarning,stepInfo,detailsView;
     private EditText isotopeA,isotopeB;
@@ -394,9 +396,24 @@ public final class FusionActivity extends Activity {
             nuclearZoomButton.setText(zoom?"Ver pozo completo":"Zoom de barrera");
         });
         compareDepth.setOnClickListener(v->compareNuclearDepths());
+        hamiltonianSummary=text(
+                "H radial: sin cálculo. Se prepara una matriz tridiagonal, no una simulación completa.",
+                12,SUB);
+        hamiltonianSummary.setContentDescription("radial-hamiltonian-grid-details");
+        hamiltonianSummary.setPadding(0,dp(10),0,dp(5));
+        interactions.addView(hamiltonianSummary);
+        exportHamiltonianButton=button("Exportar Hamiltoniano radial .CSV",false);
+        exportHamiltonianButton.setContentDescription("export-sparse-nuclear-hamiltonian");
+        exportHamiltonianButton.setEnabled(false);
+        LinearLayout.LayoutParams exportH=new LinearLayout.LayoutParams(-1,dp(46));
+        exportH.topMargin=dp(8);
+        interactions.addView(exportHamiltonianButton,exportH);
+        exportHamiltonianButton.setOnClickListener(v->exportHamiltonian());
         interactions.addView(text(
-                "Las líneas son resultados numéricos del modelo; el visor Ether 3D "+
-                "continúa siendo una representación geométrica ilustrativa.",11,SUB));
+                "Las líneas son resultados numéricos del modelo. El archivo CSV "+
+                "contiene el operador H radial discretizado, listo para investigaciones "+
+                "posteriores; MIL Core todavía no ejecuta esta matriz. "+
+                "El visor Ether 3D continúa siendo una representación ilustrativa.",11,SUB));
 
         LinearLayout output=panel(body);
         output.addView(section("04 / RESULTADOS Y EVIDENCIA"));
@@ -628,6 +645,24 @@ public final class FusionActivity extends Activity {
                 nuclearSummary.setTextColor(ORANGE);
             }
             renderer.setNuclearModel(nuclearModel);
+            radialHamiltonian=null;
+            if(nuclearModel!=null && nuclearModel.hasNuclearModel) {
+                try {
+                    radialHamiltonian=RadialHamiltonian.from(nuclearModel);
+                    hamiltonianSummary.setText(String.format(Locale.US,
+                            "H radial l=0 · %d puntos · Δr=%.4f fm · "+
+                            "matriz tridiagonal real (%d diagonales + %d enlaces).",
+                            radialHamiltonian.sites,radialHamiltonian.stepFm,
+                            radialHamiltonian.sites,radialHamiltonian.sites-1));
+                }catch(RuntimeException operatorFailure){
+                    hamiltonianSummary.setText("No se pudo discretizar H: "+
+                            operatorFailure.getMessage());
+                }
+            }else{
+                hamiltonianSummary.setText(
+                        "Hamiltoniano no parametrizado para esta pareja de núcleos.");
+            }
+            exportHamiltonianButton.setEnabled(radialHamiltonian!=null);
             boolean known=analysis.hasDocumentedChannel();
             channelButton.setEnabled(known&&analysis.documentedChannels.size()>1);
             channelButton.setText(known?(analysis.documentedChannels.size()>1?
@@ -654,13 +689,16 @@ public final class FusionActivity extends Activity {
             renderer.setScene(analysis,channel);
             detailsView.setText(model.summary()+"\n\n"+
                     (nuclearModel==null?"Modelo nuclear sin solución en estos parámetros.":
-                            nuclearModel.explain())+"\n"+renderer.provenance());
+                            nuclearModel.explain())+"\n"+
+                    (radialHamiltonian==null?"No hay operador radial.":
+                            radialHamiltonian.summary())+
+                    "\n"+renderer.provenance());
             hasResult=true;
             exportButton.setEnabled(true);
             showExpert();
             updateStageText();
         }catch(IllegalArgumentException failure){
-            analysis=null;model=null;nuclearModel=null;hasResult=false;
+            analysis=null;model=null;nuclearModel=null;radialHamiltonian=null;hasResult=false;
             formulaSummary.setText("Revisa isótopos: "+failure.getMessage());
             reactionSummary.setText("Datos de entrada incompletos o inválidos");
             unknownWarning.setText("Introduce un A válido para cada núcleo.");
@@ -668,7 +706,9 @@ public final class FusionActivity extends Activity {
             potential.setData(null);
             nuclearGraph.setResult(null);
             nuclearSummary.setText("Datos de interacción nuclear no disponibles.");
+            hamiltonianSummary.setText("No hay operador nuclear para estos datos.");
             renderer.setNuclearModel(null);
+            exportHamiltonianButton.setEnabled(false);
             exportButton.setEnabled(false);
         }
     }
@@ -746,6 +786,20 @@ public final class FusionActivity extends Activity {
                 "03 / Reacción no determinada · sin productos inventados");
     }
 
+    private void exportHamiltonian(){
+        if(radialHamiltonian==null){
+            toast("Selecciona un canal nuclear conocido antes de exportar H.");
+            return;
+        }
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.setType("text/csv");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.putExtra(Intent.EXTRA_TITLE,
+                "Mundo-X-H-radial-"+analysis.first.label()+"-"+analysis.second.label()+".csv");
+        try{startActivityForResult(intent,EXPORT_HAMILTONIAN);}
+        catch(ActivityNotFoundException fail){toast("No hay selector de archivos disponible.");}
+    }
+
     private void saveReport(){
         if(!hasResult||model==null)return;
         Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -757,8 +811,23 @@ public final class FusionActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
-        if(request!=EXPORT_RESULT||result!=RESULT_OK||data==null||data.getData()==null
-                ||model==null||!hasResult)return;
+        if(result!=RESULT_OK||data==null||data.getData()==null)return;
+        if(request==EXPORT_HAMILTONIAN) {
+            if(radialHamiltonian==null)return;
+            String csv=radialHamiltonian.csv();
+            byte[] dataBytes=csv.getBytes(StandardCharsets.UTF_8);
+            if(dataBytes.length>128*1024){
+                toast("Operador fuera de presupuesto CSV (128 KiB)");
+                return;
+            }
+            try(OutputStream stream=getContentResolver().openOutputStream(data.getData(),"wt")){
+                if(stream==null)throw new IllegalStateException("Sin acceso al documento");
+                stream.write(dataBytes);stream.flush();
+                toast("Hamiltoniano radial exportado: "+radialHamiltonian.sites+" puntos");
+            }catch(Exception error){toast("Error exportando H: "+error.getMessage());}
+            return;
+        }
+        if(request!=EXPORT_RESULT||model==null||!hasResult)return;
         String report="MUNDO X / FUSION 3D / REPORTE\n"
                 +"Modelo de masas NIST + Coulomb clásico + render 3D ilustrativo\n"
                 +"Software local · No prueba de síntesis\n\n"
@@ -768,6 +837,9 @@ public final class FusionActivity extends Activity {
                 +"\n\n"+(nuclearModel==null?
                         "MODELO NUCLEAR: sin resultado numérico":
                         nuclearModel.explain())
+                +"\n\n"+(radialHamiltonian==null?
+                        "HAMILTONIANO RADIAL: no disponible":
+                        radialHamiltonian.summary())
                 +"\n\n"+renderer.provenance()
                 +"\n\nREFERENCIAS\nNIST: "+NIST+"\nNNDC QCalc: "+NNDC+"\nDOE: "+DOE+"\n";
         byte[] bytes=report.getBytes(StandardCharsets.UTF_8);
