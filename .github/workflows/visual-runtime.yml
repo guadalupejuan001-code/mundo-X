@@ -40,6 +40,14 @@ jobs:
           cmake --build build --config Release --parallel 2
       - name: Native regressions
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Run Ether Render X example
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          build/mundo_x run examples/ether_render.x | tee ether-render-x.txt
+          grep -q 'ASSERT render_exact PASS mismatches=0' ether-render-x.txt
+          grep -q 'RENDER 320x180' ether-render-x.txt
       - name: Check Linux CLI
         if: runner.os == 'Linux'
         run: python3 tools/visual/check_visual_cli.py --binary build/mundo_x

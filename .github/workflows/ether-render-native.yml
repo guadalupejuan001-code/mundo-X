@@ -1,0 +1,54 @@
+name: Ether Render X native integration
+
+on:
+  push:
+    branches: [main, codex/ether-render-x-main-20261021]
+    paths:
+      - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/include/mundo_x/xasm.hpp'
+      - 'native/src/main.cpp'
+      - 'native/tests/rule_renderer.cpp'
+      - 'native/tests/xasm_renderer.cpp'
+      - 'CMakeLists.txt'
+      - 'examples/ether_render.x'
+      - 'tools/cosmic_source_provenance.py'
+      - '.github/workflows/ether-render-native.yml'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/include/mundo_x/xasm.hpp'
+      - 'native/src/main.cpp'
+      - 'native/tests/rule_renderer.cpp'
+      - 'native/tests/xasm_renderer.cpp'
+      - 'CMakeLists.txt'
+      - 'examples/ether_render.x'
+      - 'tools/cosmic_source_provenance.py'
+      - '.github/workflows/ether-render-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure native targets
+        run: cmake -S . -B render-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Compile renderer, XASM, and 1000-qubit contracts
+        run: cmake --build render-build --target mundo_x test_rule_renderer test_xasm_renderer test_reduced_1000 --parallel 2
+      - name: Verify source provenance
+        run: python3 tools/cosmic_source_provenance.py --verify .
+      - name: Test renderer and universal Reduced regression
+        run: ctest --test-dir render-build -R '^(rule_renderer|xasm_renderer|reduced_1000)$' --output-on-failure
+      - name: Run real XASM render
+        run: |
+          set -euo pipefail
+          render-build/mundo_x run examples/ether_render.x | tee ether-render-result.txt
+          grep -q 'ASSERT render_exact PASS mismatches=0' ether-render-result.txt
+          grep -q 'RENDER 320x180' ether-render-result.txt
