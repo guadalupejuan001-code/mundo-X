@@ -763,6 +763,7 @@ public final class FusionActivity extends Activity {
                         "Hamiltoniano no parametrizado para esta pareja de núcleos.");
             }
             exportHamiltonianButton.setEnabled(radialHamiltonian!=null);
+            updateMilTimeLabel();
             boolean known=analysis.hasDocumentedChannel();
             channelButton.setEnabled(known&&analysis.documentedChannels.size()>1);
             channelButton.setText(known?(analysis.documentedChannels.size()>1?
@@ -812,6 +813,7 @@ public final class FusionActivity extends Activity {
             renderer.setNuclearModel(null);
             exportHamiltonianButton.setEnabled(false);
             exportButton.setEnabled(false);
+            updateMilTimeLabel();
         }
     }
 
@@ -943,8 +945,13 @@ public final class FusionActivity extends Activity {
             toast("No se pudo crear la malla MIL: "+failure.getMessage());
             return;
         }
-        final double tau=milTimeFromSlider(milTimeControl.getProgress());
-        final int initialSite=Math.max(0,coarse.sites/2-1);
+        final double tau=milTimeFromSlider(milTimeControl.getProgress(),coarse);
+        // Near the contact radius for the 96fm research domain.
+        final int initialSite=coarse.sites<=8?
+                Math.max(0,coarse.sites/2-1):
+                Math.max(0,Math.min(coarse.sites-1,
+                        (int)Math.round(nuclearModel.contactRadiusFm/coarse.stepFm)-1));
+        final int steps=milQubits<=3?12:milQubits==4?4:milQubits==5?2:1;
         final long version=milModelRevision;
         milRunning=true;
         milRunButton.setEnabled(false);
@@ -955,7 +962,7 @@ public final class FusionActivity extends Activity {
             milWorker.execute(()->{
                 MilRadialEvolver.Result state=null;
                 String error=null;
-                try {state=MilRadialEvolver.execute(coarse,initialSite,tau,12);}
+                try {state=MilRadialEvolver.execute(coarse,initialSite,tau,steps);}
                 catch(Exception|LinkageError failure){error=failure.getMessage();}
                 final MilRadialEvolver.Result finished=state;
                 final String failureText=error;
