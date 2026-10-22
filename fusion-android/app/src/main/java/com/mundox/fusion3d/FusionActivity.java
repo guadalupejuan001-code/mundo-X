@@ -690,6 +690,8 @@ public final class FusionActivity extends Activity {
             a1=actualA;a2=actualB;
             analysis=FusionPhysics.analyze(z1,a1,z2,a2);
             model=CollisionModel.calculate(analysis,CollisionModel.sliderToMeV(energyBar.getProgress()));
+            milModelRevision++;
+            clearMilResult();
             if(channel>=analysis.documentedChannels.size())channel=0;
             selectedHint.setText(String.format(Locale.US,
                     "%s: %d p + %d n   /   %s: %d p + %d n",
@@ -785,6 +787,8 @@ public final class FusionActivity extends Activity {
             updateStageText();
         }catch(IllegalArgumentException failure){
             analysis=null;model=null;nuclearModel=null;radialHamiltonian=null;hasResult=false;
+            milModelRevision++;
+            clearMilResult();
             formulaSummary.setText("Revisa isótopos: "+failure.getMessage());
             reactionSummary.setText("Datos de entrada incompletos o inválidos");
             unknownWarning.setText("Introduce un A válido para cada núcleo.");
@@ -1006,6 +1010,9 @@ public final class FusionActivity extends Activity {
                 +"\n\n"+(radialHamiltonian==null?
                         "HAMILTONIANO RADIAL: no disponible":
                         radialHamiltonian.summary())
+                +"\n\n"+(lastMilResult==null?
+                        "MIL CORE: no ejecutado con estos parámetros." :
+                        lastMilResult.summary())
                 +"\n\n"+renderer.provenance()
                 +"\n\nREFERENCIAS\nNIST: "+NIST+"\nNNDC QCalc: "+NNDC+"\nDOE: "+DOE+"\n";
         byte[] bytes=report.getBytes(StandardCharsets.UTF_8);
@@ -1027,7 +1034,9 @@ public final class FusionActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        closed=true;
         stopPlay();
+        milWorker.shutdown();
         if(renderer!=null)renderer.shutdown();
         super.onDestroy();
     }
