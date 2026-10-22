@@ -13,7 +13,7 @@ template<class F> void rejects(F f) {
 int main() {
   using mundo_x::AdaptivePhaseCore;
   rejects([] { AdaptivePhaseCore s(0); });
-  rejects([] { AdaptivePhaseCore s(64); });
+  rejects([] { AdaptivePhaseCore s(1001); });
   rejects([] { AdaptivePhaseCore s(2, -1.); });
   rejects([] { AdaptivePhaseCore s(2, 1e-14, 0); });
   AdaptivePhaseCore s(2);
