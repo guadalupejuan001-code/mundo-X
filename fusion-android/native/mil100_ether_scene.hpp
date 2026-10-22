@@ -122,12 +122,13 @@ class Mil100EtherScene {
                  bool check_exact=false){
     if(!std::isfinite(yaw)||!std::isfinite(pitch)||
        !std::isfinite(distance)||!std::isfinite(phase)||
-       distance<4.||distance>18.||phase<0.||phase>2.*kPi)
+       distance<4.||distance>18.||phase<0.||phase>2.*kPi+1e-5)
       throw std::invalid_argument("invalid 100q scene camera or phase");
 
     // Persist the 100-qubit quantum state across camera orbit events; do NOT
     // recompute the GHZ preparation for every rendered frame.
     const auto start_quantum=std::chrono::steady_clock::now();
+    phase=std::clamp(phase,0.,2.*kPi);
     if(!phase_initialized_||phase!=previous_phase_){
       mil_.phase(99,phase-previous_phase_);
       previous_phase_=phase;
