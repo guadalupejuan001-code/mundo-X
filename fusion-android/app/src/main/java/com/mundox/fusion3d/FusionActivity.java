@@ -986,16 +986,21 @@ public final class FusionActivity extends Activity {
                     lastMilResult=finished;
                     milChart.setResult(finished);
                     milSummary.setText(String.format(Locale.US,
-                            "MIL ejecutó %d puertas sobre %d qubits (%d sitios).\n"+
-                            "Norma = %.9f; fidelidad vs RK4 = %.8f.\n"+
+                            "MIL ejecutó %d puertas sobre %d qubits (%d posiciones).\n"+
+                            "Términos Pauli: %d; pasos Strang: %d.\n"+
+                            "Norma = %.9f; fidelidad vs RK4 = %.10f.\n"+
                             "Distancia L1 de poblaciones = %.5g.\n"+
-                            "Tiempo físico = %.3e s.\n"+
-                            "Componentes máximos = %d.\n\n"+
-                            "Estos resultados describen la malla radial reducida, "+
-                            "no un evento de fusión nuclear.",
+                            "Tiempo físico = %.3e s. Tiempo del motor en "+
+                            "este dispositivo = %.1f ms.\n"+
+                            "Componentes máximos = %d.\n"+
+                            "Dominio radial de esta malla: %.0f fm.\n\n"+
+                            "Evolución del Hamiltoniano radial discretizado, "+
+                            "NO probabilidad de una reacción nuclear.",
                             finished.gates,finished.qubits,finished.sites,
-                            finished.norm,finished.fidelity,finished.probabilityL1,
-                            finished.physicalSeconds,finished.peakComponents));
+                            finished.pauliTerms,finished.steps,finished.norm,
+                            finished.fidelity,finished.probabilityL1,
+                            finished.physicalSeconds,finished.executionMs,
+                            finished.peakComponents,coarse.domainFm));
                 });
             });
         }catch(RejectedExecutionException error){
