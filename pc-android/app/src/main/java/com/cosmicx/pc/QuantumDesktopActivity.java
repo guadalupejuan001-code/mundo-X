@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.util.AtomicFile;
 import android.provider.OpenableColumns;
 import android.view.Gravity;
@@ -283,7 +284,11 @@ public final class QuantumDesktopActivity extends Activity {
      * Export .mqx separately to protect against uninstall or device loss.
      */
     private void queueAutosave() {
-        if (session == 0 || closed || editor == null) return;
+        if (session == 0 || closed || editor == null) {
+            Log.w("MundoXQuantum", "Autosave not queued: session=" + session + " closed=" + closed);
+            return;
+        }
+        Log.i("MundoXQuantum", "Queueing private session checkpoint");
         final boolean mode = xasmMode;
         final String source = editor.getText().toString();
         final String xi = mode ? xiDraft : source;
@@ -310,6 +315,7 @@ public final class QuantumDesktopActivity extends Activity {
                     atomic.finishWrite(stream);
                     stream = null;
                 } catch (Exception | LinkageError error) {
+                    Log.e("MundoXQuantum", "Quantum autosave failed", error);
                     if (stream != null) atomic.failWrite(stream);
                     log("Autoguardado no disponible: " + error.getMessage());
                 }
@@ -488,6 +494,7 @@ public final class QuantumDesktopActivity extends Activity {
                 try {
                     job.run();
                 } catch (Exception | LinkageError error) {
+                    Log.e("MundoXQuantum", "Quantum workstation operation failed", error);
                     log("Error: " + error.getMessage()
                             + "\nSi falló la ejecución XI, los cambios del programa se descartan.");
                 } finally {
