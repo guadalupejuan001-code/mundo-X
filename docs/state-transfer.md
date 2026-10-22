@@ -34,9 +34,9 @@ los residuos producto después de una transición exitosa.
 
 Las dos políticas pueden dar representaciones diferentes y consumir distinto
 número de componentes. La transferencia no garantiza una descomposición
-mínima. El motor reducido sigue pudiendo crecer exponencialmente, mantiene
-el presupuesto predeterminado de 65.536 componentes y el límite actual de
-63 qubits. La reconstrucción densa para validación permanece limitada a 23
+mínima. El motor reducido sigue pudiendo crecer exponencialmente y mantiene
+el presupuesto predeterminado de 65.536 componentes. El ancho estructural actual
+es de 1.000 qubits mediante máscaras Pauli multi-palabra. La reconstrucción densa para validación permanece limitada a 23
 qubits y conserva su aritmética heredada `complex64`.
 
 La transición sigue siendo unidireccional: si posteriormente desaparece el
