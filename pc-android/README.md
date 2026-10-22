@@ -10,7 +10,7 @@ La aplicación contiene el intérprete C++ `cosmic_pc`; no contiene QEMU, Limbo,
 
 La misma APK incluye ahora una entrada independiente **Mundo X Quantum** en el lanzador Android. Abre un entorno de trabajo con editor de programas `.xi`, terminal, archivos y sesiones `.mqx` persistentes, conectado directamente a **QuantumRuntime (Ether/InfiniteCore + Inverse Ether Memory)**. No requiere arrancar x86 ni inicializar sus 2 GiB de RAM lógica.
 
-La interfaz ofrece **ejecutar, abrir, guardar y restaurar**. El estado y la memoria se actualizan de forma transaccional y pertenecen a esa sesión independiente. El motor XASM universal sigue disponible en la CLI nativa, pero todavía no está conectado al escritorio. [Manual y límites](QUANTUM_WORKSTATION.md).
+La interfaz ofrece **ejecutar, abrir, guardar y restaurar**. En modo XI, estado y memoria se actualizan transaccionalmente. En modo XASM, se ejecutan circuitos Compact/Reduced (incluidas puertas T) con estado nuevo por programa. No se mezclan silenciosamente las dos rutas. [Manual y límites](QUANTUM_WORKSTATION.md).
 
 ## Usar el núcleo y su motor gráfico desde el PC
 
