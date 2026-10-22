@@ -16,6 +16,8 @@ public final class QuantumWorkstation {
     public static native long create();
     public static native void close(long workstation);
     public static native String execute(long workstation, String xiProgram);
+    /** Standalone XASM Reduced/Compact execution; does not mutate the XI session. */
+    public static native String executeXasm(String xasmProgram);
     public static native String status(long workstation);
     public static native void reset(long workstation);
     /** Atomic export pair: [InfiniteCore MXI snapshot, Inverse Ether Memory snapshot]. */
