@@ -91,6 +91,7 @@ jobs:
       - name: Validate Android 15 launch and real native Ether raytraced frame
         run: |
           set -euo pipefail
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
           sudo chmod a+rw /dev/kvm
           export ANDROID_AVD_HOME="$(mktemp -d /tmp/fusion3d-avd.XXXXXX)"
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
