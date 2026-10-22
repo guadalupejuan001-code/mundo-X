@@ -8,5 +8,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Separate launcher: the quantum workstation needs no x86 PC boot. -->
+        <activity android:name=".QuantumDesktopActivity" android:exported="true"
+                  android:label="Mundo X Quantum" android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>
