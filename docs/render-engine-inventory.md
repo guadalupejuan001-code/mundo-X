@@ -41,3 +41,17 @@ Un componente gráfico activo se retira únicamente cuando se cumplen las cuatro
 ## Resultado de la limpieza
 
 No se eliminaron renderers productivos en esta revisión porque Ether Render X v0.1 todavía perdería capacidades si los sustituyera hoy. En cambio, el repositorio queda con una autoridad clara: **Ether Render X es el núcleo objetivo; los demás son adaptadores, referencias o consumidores temporales.**
+
+## Observación MIL añadida al núcleo objetivo
+
+Ether Render X incorpora una conexión explícita con el perfil **MIL Core
+Reduced/Adaptive de hasta 1.000 qubits** mediante
+`ether_mil_bridge.hpp`. Los observables del registro real determinan
+el material sin modificar su estado ni introducir medición. Este puente
+no sustituye los observadores de Infinite/Ether de COSMIC/Solar, que siguen
+conectados a sus sesiones y fondos propios.
+
+La migración de `QuantumRenderer` a Ether Render X continúa condicionada
+a cubrir su GPU, espejos, un millón de objetos, edición y persistencia.
+El puente MIL actual solo cubre material de esferas nativas; no es un
+cambio encubierto de backend en APK existentes.

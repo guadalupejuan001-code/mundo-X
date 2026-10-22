@@ -107,17 +107,29 @@ parámetros ópticos invalidan esa reutilización. La medición sincronizada fue
 un dibujo real. La interfaz identifica una imagen conservada sin presentarla
 como un dibujo instantáneo ni como una cifra de FPS.
 
-### Ether Render X · núcleo de renderizado nuevo
+### Ether Render X y MIL Core
 
-Esta versión integra **Ether Render X v0.2** como motor nativo basado en reglas
-para los comandos `render*` de XASM. Planifica candidatos conservadores por
-región, traza rayos, selecciona intersecciones y compara píxel/ID/profundidad
-contra el recorrido exhaustivo. La función `render_train` compara tamaños de
-teselas con medianas medidas y valida cero diferencias de imagen.
+**Ether Render X** está integrado como motor nativo de rayos por regiones.
+Ahora también puede observar directamente **MIL Core** mediante
+`MilEtherRenderBridge`: los valores esperados de observables Pauli de hasta
+1.000 qubits afectan al material, sin medición ni duplicación de estado.
+
+El renderizador prepara y reutiliza señales por revisión, evita reconstruir
+geometría para cambiar un material y precalcula datos de intersección por cuerpo.
+Sigue siendo una ruta **CPU de hasta 64 esferas**; `QuantumRenderer` (GLES),
+Solar, PC y sus prestaciones se conservan hasta demostrar equivalencia
+y velocidad con pruebas pareadas.
 
 ```sh
 ./build/mundo_x run examples/ether_render.x
-ctest --test-dir build -R '^(rule_renderer|xasm_renderer)
+./build/mundo_x run examples/ether_mil_render.x
+ctest --test-dir build -R '^(rule_renderer|xasm_renderer|ether_mil_renderer|reduced_1000)$' --output-on-failure
+```
+
+Más información: [Ether Render X y MIL](docs/ether-render-x.md) y
+[inventario gráfico](docs/render-engine-inventory.md).
+
+## Qué incluye el código integrado
 
 | Componente | Función y alcance | Código y documentación |
 | --- | --- | --- |
