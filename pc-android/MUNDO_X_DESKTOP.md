@@ -16,6 +16,7 @@ independiente ni una QPU física.
 | Notas | Editar texto sin red, autoguardado en almacenamiento privado, importación/exportación .txt | Almacenamiento interno Android + SAF |
 | Documentos | Abrir documentos mediante selector Android, previsualizar textos hasta 256 KiB y delegar formatos no compatibles a otras apps | Android Storage Access Framework |
 | Quantum Workstation | Editor, terminal XI con núcleo persistente, circuitos XASM de hasta 1.000 qubits (con puertas T y límites de presupuesto), archivos .xi/.x, sesiones .mqx | C++ propio (QuantumRuntime, InfiniteCore, Inverse Ether Memory, run_xasm) |
+| Fusion Lab | Tabla periódica de 118 elementos, selección de isótopos, canales nucleares conocidos, cálculo de energía Q y simulación visual conceptual | Java offline: FusionPhysics + FusionLabActivity |
 | COSMIC X PC | Emulador x86/x64 original, vídeo, arranque y puente con InfiniteCore | Motor nativo existente |
 
 ## Cómo usarla de verdad
