@@ -1,12 +1,14 @@
 #include <jni.h>
 
 #include "mundo_x/quantum_runtime.hpp"
+#include "mundo_x/xasm.hpp"
 
 #include <cstddef>
 #include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -105,6 +107,31 @@ Java_com_cosmicx_pc_QuantumWorkstation_execute(JNIEnv* env, jclass, jlong id,
         if (response && !env->ExceptionCheck())
             runtime(id) = std::move(candidate);
         return response;
+    } catch (const std::exception& error) {
+        raise(env, error);
+        return nullptr;
+    }
+}
+
+// XASM runs as an independent circuit. Its Reduced Exact T backend may use
+// non-Clifford gates; it does not mutate the persistent XI workspace.
+JNIEXPORT jstring JNICALL
+Java_com_cosmicx_pc_QuantumWorkstation_executeXasm(JNIEnv* env, jclass,
+                                                    jstring program) {
+    try {
+        std::string text = ascii(env, program, kMaxProgram);
+        std::istringstream input(text);
+        const auto result = mundo_x::run_xasm(input);
+        std::ostringstream output;
+        output << "XASM backend=" << result.backend
+               << " qubits=" << result.qubits
+               << " instructions=" << result.instructions
+               << " T=" << result.t_gates
+               << " components=" << result.components
+               << " bytes=" << result.state_bytes << '\n'
+               << "assertions=" << (result.assertions_passed ? "PASS" : "FAIL") << '\n'
+               << result.output;
+        return java_text(env, output.str());
     } catch (const std::exception& error) {
         raise(env, error);
         return nullptr;
