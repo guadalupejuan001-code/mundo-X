@@ -43,6 +43,7 @@ struct Output {
     std::size_t gates=0,peak_components=0;
     double tau=0.,physical_seconds=0.,norm=0.,reference_norm=0.;
     double fidelity=0.,l1=0.,initial_probability=0.,execution_ms=0.;
+    double pauli_preparation_ms=0.,reference_ms=0.;
     bool optimized_decomposition=false;
     std::vector<double> probabilities,reference;
 };
@@ -108,6 +109,8 @@ Java_com_mundox_fusion3d_MilRadialEvolver_evolveNative(
             state.initial_probability=r.mil.at(state.initial_site);
             state.probabilities=r.mil;state.reference=r.reference;
             state.execution_ms=r.time_ms;
+            state.pauli_preparation_ms=r.decomposition_ms;
+            state.reference_ms=r.reference_ms;
             state.optimized_decomposition=true;
         }
 
@@ -130,6 +133,8 @@ Java_com_mundox_fusion3d_MilRadialEvolver_evolveNative(
         field(json,"tau_inverse_mev",state.tau);
         field(json,"physical_seconds",state.physical_seconds);
         field(json,"execution_ms",state.execution_ms);
+        field(json,"pauli_preparation_ms",state.pauli_preparation_ms);
+        field(json,"reference_ms",state.reference_ms);
         field(json,"norm",state.norm);
         field(json,"reference_norm",state.reference_norm);
         field(json,"fidelity",state.fidelity);
