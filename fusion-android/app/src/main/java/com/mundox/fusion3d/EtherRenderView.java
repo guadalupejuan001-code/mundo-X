@@ -63,7 +63,7 @@ public final class EtherRenderView extends View {
     private int pza=2,paa=4,pzb=0,pab=1;
     private boolean products=true,closed=false;
     private float progress=0f;
-    private float yaw=.25f,pitch=.17f,distance=7.3f;
+    private float yaw=.25f,pitch=.17f,distance=5.8f;
     private long revision=0, completedRevision=-1, renderMs=0;
     private int frames=0;
     private float lastX,lastY,lastPinch=0f;
@@ -111,7 +111,7 @@ public final class EtherRenderView extends View {
 
     public float progress(){return progress;}
     public void resetCamera(){
-        yaw=.25f;pitch=.17f;distance=7.3f;
+        yaw=.25f;pitch=.17f;distance=5.8f;
         requestFrame();
     }
 
@@ -176,7 +176,7 @@ public final class EtherRenderView extends View {
         font.setColor(CYAN);
         canvas.drawText("ETHER RENDER X  /  C++",dp(17),dp(25),font);
         font.setColor(MUTED);
-        canvas.drawText("3D trazado de rayos  ·  " + renderMs + " ms / cuadro",dp(17),dp(41),font);
+        canvas.drawText("344×224 · raytracing · " + renderMs + " ms",dp(17),dp(41),font);
         bg.setColor(Color.argb(199,6,14,24));
         canvas.drawRoundRect(new RectF(dp(8),h-dp(53),w-dp(8),h-dp(8)),dp(8),dp(8),bg);
         font.setColor(TEXT);
