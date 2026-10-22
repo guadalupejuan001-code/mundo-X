@@ -4,6 +4,7 @@ plugins {
 
 // A parallel install for the visual laboratory, independent of the official app key.
 def microPreview = project.hasProperty('microPreview')
+def etherRenderPreview = project.hasProperty('etherRenderPreview')
 
 def mundoxSigningStorePath = System.getenv('MUNDOX_SIGNING_STORE')
 def mundoxSigningPasswordFilePath = System.getenv('MUNDOX_SIGNING_PASSWORD_FILE')
@@ -22,13 +23,17 @@ android {
     ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId microPreview ? 'com.mundox.micropreview' : 'com.mundox.xlab'
+        applicationId etherRenderPreview ? 'com.mundox.etherrender' : (microPreview ? 'com.mundox.micropreview' : 'com.mundox.xlab')
         minSdk 26
         targetSdk 35
         versionCode 5
-        versionName microPreview ? '0.4.0-micro-preview' : '0.3.2'
+        versionName etherRenderPreview ? '0.1.0-ether-render-test' : (microPreview ? '0.4.0-micro-preview' : '0.3.2')
         testInstrumentationRunner microPreview ? 'com.mundox.lab.MicroLabInstrumentation' : 'com.mundox.lab.XLabInstrumentation'
-        manifestPlaceholders = [appLabel: microPreview ? 'Mundo X · Micro' : 'XLab · Objetos+']
+        manifestPlaceholders = [
+            appLabel: etherRenderPreview ? 'Ether Render X · Test' : (microPreview ? 'Mundo X · Micro' : 'XLab · Objetos+'),
+            etherRenderEnabled: etherRenderPreview ? 'true' : 'false',
+            xlabEnabled: etherRenderPreview ? 'false' : 'true'
+        ]
 
         ndk {
             abiFilters 'arm64-v8a', 'x86_64'
