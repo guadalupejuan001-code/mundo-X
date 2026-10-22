@@ -43,6 +43,7 @@ jobs:
           set -euo pipefail
           mkdir -p pc-dist
           cp pc-android/app/build/outputs/apk/debug/app-debug.apk pc-dist/COSMIC-X-PC.apk
+          cp pc-dist/COSMIC-X-PC.apk pc-dist/MUNDO-X-DESKTOP.apk
           cp pc-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk pc-dist/COSMIC-X-PC-tests.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs pc-dist/COSMIC-X-PC.apk > pc-dist/signature.txt
           python3 - <<'PY'
@@ -51,7 +52,7 @@ jobs:
           apk=Path('pc-dist/COSMIC-X-PC.apk')
           badging=subprocess.check_output([os.environ['ANDROID_HOME']+'/build-tools/35.0.0/aapt','dump','badging',str(apk)],text=True)
           package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
-          assert package and package.groups()==('com.cosmicx.pc','4','0.4.0'),badging.splitlines()[:1]
+          assert package and package.groups()==('com.cosmicx.pc','5','0.5.0'),badging.splitlines()[:1]
           Path('pc-dist/apk-badging.txt').write_text(badging)
           with zipfile.ZipFile(apk) as z:
               names={n for n in z.namelist() if n.startswith('lib/')}
@@ -59,7 +60,7 @@ jobs:
               assert names==expected,(names,expected)
               assert z.testzip() is None
               dex=b''.join(z.read(n) for n in z.namelist() if re.fullmatch(r'classes\d*\.dex',n))
-              for descriptor in (b'Lcom/cosmicx/pc/PcVideoRenderer;',b'Lcom/cosmicx/pc/PcVideoView;',b'Lcom/mundox/graphics/RenderResolution;',b'Lcom/mundox/graphics/NativeCore;',b'Lcom/mundox/graphics/InfiniteProgram;',b'Lcom/mundox/graphics/QuantumRenderer;'):
+              for descriptor in (b'Lcom/cosmicx/pc/PcVideoRenderer;',b'Lcom/cosmicx/pc/PcVideoView;',b'Lcom/cosmicx/pc/MundoXDesktopActivity;',b'Lcom/cosmicx/pc/QuantumDesktopActivity;',b'Lcom/mundox/graphics/RenderResolution;',b'Lcom/mundox/graphics/NativeCore;',b'Lcom/mundox/graphics/InfiniteProgram;',b'Lcom/mundox/graphics/QuantumRenderer;'):
                   assert descriptor in dex,descriptor
           shared_java=[
               'RenderResolution.java','NativeCore.java','InfiniteProgram.java','QuantumRenderer.java',
@@ -76,6 +77,10 @@ jobs:
               'pc-android/native/memory_fabric.hpp','pc-android/native/pc_machine.hpp',
               'pc-android/native/pc_video.hpp','pc-android/native/graphics_demo.hpp',
               'pc-android/app/src/main/cpp/pc_jni.cpp',
+              'pc-android/app/src/main/cpp/quantum_workstation_jni.cpp',
+              'pc-android/app/src/main/java/com/cosmicx/pc/QuantumWorkstation.java',
+              'pc-android/app/src/main/java/com/cosmicx/pc/QuantumDesktopActivity.java',
+              'pc-android/app/src/main/java/com/cosmicx/pc/MundoXDesktopActivity.java',
               'pc-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java',
               'pc-android/app/src/main/java/com/cosmicx/pc/MainActivity.java',
               'pc-android/app/src/main/java/com/cosmicx/pc/PcVideoRenderer.java',
