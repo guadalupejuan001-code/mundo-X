@@ -35,6 +35,7 @@ GRAPHICS_MANIFEST_REFERENCE = "4f04322eed3b698e4f20081921c5ed1da2c4b721"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 ETHER_MEMORY_REFERENCE = "729994e1e044ad5a4d4ffd4c43dcea2ad638608f"
 ETHER_MEMORY_FABRIC_REFERENCE = "8b9d5d40319ff093ea019156b8b476754ed6d504"
+UNIVERSAL_1000_REFERENCE = "018176d45cf1743256b56761c43b4e8656d3848f"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -56,6 +57,7 @@ ADDITIONAL_SOURCES = {
     "native/src/quantum_runner.cpp": "832f219112000e0a8d33c0482b1b341a0c5d9502",
     "native/tests/inverse_memory.cpp": "2287f2d5ad5964dbb34922845e726d62d6ca5583",
     "native/tests/quantum_runtime.cpp": "8ebffec07e1685d2eca827b68ffc0b221789801f",
+    "native/tests/reduced_1000.cpp": UNIVERSAL_1000_REFERENCE,
     "native/tests/ether_batch.cpp": AUDIT_REFERENCE,
     "native/tests/ether_stress.cpp": AUDIT_REFERENCE,
     "native/tests/core_performance_benchmark.cpp": RESOLUTION_REFERENCE,
@@ -83,6 +85,12 @@ ADDITIONAL_SOURCES = {
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_FUSION_REFERENCE,
 }
 REVISED_SOURCES = {
+    "native/include/mundo_x/exact_t_experiment.hpp": UNIVERSAL_1000_REFERENCE,
+    "native/include/mundo_x/adaptive_phase_core.hpp": UNIVERSAL_1000_REFERENCE,
+    "native/include/mundo_x/xasm.hpp": UNIVERSAL_1000_REFERENCE,
+    "native/src/phase_runner.cpp": UNIVERSAL_1000_REFERENCE,
+    "native/tests/boundaries.cpp": UNIVERSAL_1000_REFERENCE,
+    "native/tests/xasm_60.cpp": UNIVERSAL_1000_REFERENCE,
     "native/src/main.cpp": RECOVERED_PHYSICS_REFERENCE,
     "graphics-android/app/src/main/cpp/PROVENANCE.json": GRAPHICS_MANIFEST_REFERENCE,
     "native/include/mundo_x/pauli_observer.hpp": OBSERVER_PIVOT_REFERENCE,
