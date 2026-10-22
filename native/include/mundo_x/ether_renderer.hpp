@@ -285,7 +285,7 @@ class EtherRenderer {
     Pixel best;const Body* hit=nullptr;std::size_t order_pos=0;
     for(;order_pos<distance_order_.size();++order_pos){
       const auto index=distance_order_[order_pos];
-      if(best.body>=0&&distance_lower_bound_[index]>=best.depth)break;
+      if(best.body>=0&&distance_lower_bound_[index]>best.depth)break;
       const auto& b=bodies_[index];
       if((mask&(std::uint64_t{1}<<b.id))==0)continue;
       if(tests)++*tests;
@@ -295,8 +295,10 @@ class EtherRenderer {
       if(h2<0.)continue;
       const double root=std::sqrt(h2);
       double t=along-root;if(t<=1e-6)t=along+root;
-      if(t<=1e-6||t>=best.depth)continue;
-      best.depth=t;best.body=static_cast<std::int32_t>(b.id);hit=&b;
+      if(t<=1e-6)continue;
+      const auto id=static_cast<std::int32_t>(b.id);
+      if(t>best.depth||(t==best.depth&&best.body>=0&&id>=best.body))continue;
+      best.depth=t;best.body=id;hit=&b;
     }
     if(pruned&&best.body>=0){
       for(;order_pos<distance_order_.size();++order_pos){
