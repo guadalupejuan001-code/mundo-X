@@ -61,7 +61,7 @@ class MilRadialScaling {
   struct Result {
     Profile profile{};
     std::size_t initial_site=0,steps=0,gates=0,peak_components=0;
-    double time_ms=0.,tau_inverse_mev=0.;
+    double time_ms=0.,reference_ms=0.,decomposition_ms=0.,tau_inverse_mev=0.;
     double norm=0.,reference_norm=0.,fidelity=0.,probability_l1=0.;
     std::vector<double> mil,reference;
   };
@@ -161,7 +161,9 @@ class MilRadialScaling {
                        double off, std::size_t initial,
                        double tau, std::size_t steps) {
     Profile profile;
+    const auto plan_begin=std::chrono::steady_clock::now();
     const auto terms=decompose(diagonal,off,&profile);
+    const auto plan_elapsed=std::chrono::steady_clock::now()-plan_begin;
     const auto N=diagonal.size(),n=profile.qubits;
     if(initial>=N)throw std::invalid_argument("invalid initial radial site");
     if(!std::isfinite(tau)||tau<0||tau>.12)
@@ -199,7 +201,9 @@ class MilRadialScaling {
     }
     const auto elapsed=std::chrono::steady_clock::now()-begin;
     const auto milState=mil.dense_from_reduced(); // <=256 validation output
+    const auto rk_begin=std::chrono::steady_clock::now();
     const auto reference=reference_rk4(diagonal,off,initial,tau);
+    const auto rk_elapsed=std::chrono::steady_clock::now()-rk_begin;
 
     Result result;
     result.profile=profile;
@@ -207,6 +211,8 @@ class MilRadialScaling {
     result.peak_components=peak;
     result.tau_inverse_mev=tau;
     result.time_ms=std::chrono::duration<double,std::milli>(elapsed).count();
+    result.decomposition_ms=std::chrono::duration<double,std::milli>(plan_elapsed).count();
+    result.reference_ms=std::chrono::duration<double,std::milli>(rk_elapsed).count();
     result.mil.resize(N);result.reference.resize(N);
     Complex overlap{};
     for(std::size_t i=0;i<N;i++){
