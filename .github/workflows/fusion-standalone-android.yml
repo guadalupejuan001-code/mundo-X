@@ -46,6 +46,13 @@ jobs:
           g++ -std=c++17 -O3 -Wall -Wextra -Wpedantic -I native/include \
             fusion-android/tests/ether_render_smoke.cpp -o fusion-build/ether_render_smoke
           ./fusion-build/ether_render_smoke | tee fusion-evidence/ether-render-oracle.txt
+      - name: Verify MIL Reduced quantum evolution against independent sparse RK4
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -I native/include \
+            native/tests/mil_radial_evolution.cpp -o fusion-build/mil_radial_evolution
+          timeout 180 ./fusion-build/mil_radial_evolution | tee fusion-evidence/mil-radial-evolution.txt
+
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
       - name: Install Android SDK and native toolchain
@@ -76,7 +83,7 @@ jobs:
           details=subprocess.check_output([aapt,'dump','badging',str(apk)],text=True)
           perms=subprocess.check_output([aapt,'dump','permissions',str(apk)],text=True)
           package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",details)
-          assert package and package.groups()==('com.mundox.fusion3d','2','1.1.0'),details.splitlines()[:4]
+          assert package and package.groups()==('com.mundox.fusion3d','3','1.2.0'),details.splitlines()[:4]
           assert 'FusionActivity' in details, 'Launcher not included'
           assert 'uses-permission:' not in perms,perms
           with zipfile.ZipFile(apk) as z:
@@ -91,9 +98,13 @@ jobs:
                 'renderer':'repository EtherRenderer::render() C++ own raytracer',
                 'phenomenological_nuclear_WKB':True,
                 'radial_hamiltonian_tridiagonal':True,
-                'radial_hamiltonian_propagator':False,
+                'radial_hamiltonian_propagator':True,
+                'radial_MIL_reduced_qubits':[2,3],
+                'radial_MIL_reduced_max_sites':8,
+                'radial_full_256_sites_evolved':False,
                 'many_body_nuclear_solver':False,
-                'MIL_Core_nuclear_evolution':False,
+                'MIL_Core_nuclear_evolution':True,
+                'MIL_makes_fusion_predictions':False,
                 'signed_debug':True}
           Path('fusion-dist/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
           Path('fusion-dist/apk-badging.txt').write_text(details)
@@ -123,11 +134,12 @@ jobs:
           adb install -r fusion-dist/MUNDO-X-FUSION-3D.apk
           adb install -r fusion-dist/MUNDO-X-FUSION-3D-tests.apk
           adb logcat -c
-          timeout --kill-after=15 90 adb shell am instrument -w \
+          timeout --kill-after=15 150 adb shell am instrument -w \
             com.mundox.fusion3d.test/com.mundox.fusion3d.FusionInstrumentation | tee fusion-evidence/instrumentation.txt
           grep -q 'FUSION_3D_ANDROID_PASS' fusion-evidence/instrumentation.txt
           grep -q 'NUCLEAR_INTERACTION_ANDROID_PASS' fusion-evidence/instrumentation.txt
           grep -q 'RADIAL_H_ANDROID_PASS' fusion-evidence/instrumentation.txt
+          grep -q 'MIL_RADIAL_ANDROID_PASS' fusion-evidence/instrumentation.txt
           adb shell am start -W -n com.mundox.fusion3d/.FusionActivity > fusion-evidence/app-launch.txt
           # Wait for the real workspace frame rather than capturing Android's splash screen.
           sleep 4
@@ -148,6 +160,7 @@ jobs:
           assert 'FUSION_3D_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           assert 'NUCLEAR_INTERACTION_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           assert 'RADIAL_H_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
+          assert 'MIL_RADIAL_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           print('FUSION_3D_RELEASE_PASS')
           PY
       - name: Preserve signed APK, screenshots and audit evidence

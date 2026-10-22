@@ -37,6 +37,9 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Standalone, offline isotope/fusion research desk for Android.
@@ -59,6 +62,20 @@ public final class FusionActivity extends Activity {
     private static final String DOE="https://www.energy.gov/science/doe-explainsfusion-reactions";
 
     private final Handler ui=new Handler(Looper.getMainLooper());
+    private final ExecutorService milWorker=Executors.newSingleThreadExecutor(r->{
+        Thread t=new Thread(r,"Mundo-X-MIL-Radial");
+        t.setPriority(Thread.NORM_PRIORITY-1);
+        return t;
+    });
+    private volatile boolean closed=false;
+    private boolean milRunning=false;
+    private long milModelRevision=0;
+    private int milQubits=3;
+    private Button milRunButton,milSizeButton;
+    private SeekBar milTimeControl;
+    private TextView milTimeLabel,milSummary;
+    private MilProbabilityView milChart;
+    private MilRadialEvolver.Result lastMilResult;
     private final Runnable frameStepper=new Runnable() {
         @Override public void run(){
             if(!playing)return;
@@ -187,6 +204,10 @@ public final class FusionActivity extends Activity {
             energyBar.setProgress(state.getInt("energy",CollisionModel.energyToSlider(.02)));
             nuclearDepth.setProgress(state.getInt("nuclear_depth",15));
             timeline.setProgress(state.getInt("timeline",0));
+            milQubits=state.getInt("mil_qubits",3)==2?2:3;
+            milTimeControl.setProgress(state.getInt("mil_time",500));
+            if(milSizeButton!=null)milSizeButton.setText(
+                    milQubits==3?"3 qubits / 8 posiciones":"2 qubits / 4 posiciones");
         }
         updateReport();
     }
@@ -199,6 +220,8 @@ public final class FusionActivity extends Activity {
         out.putBoolean("expert",expert);
         out.putInt("energy",energyBar.getProgress());
         out.putInt("nuclear_depth",nuclearDepth.getProgress());
+        out.putInt("mil_time",milTimeControl.getProgress());
+        out.putInt("mil_qubits",milQubits);
         out.putInt("timeline",timeline.getProgress());
     }
 
@@ -230,8 +253,8 @@ public final class FusionActivity extends Activity {
         body.addView(big);
         body.addView(text("Investiga reacciones nucleares, inspecciona sus modelos físicos y explora una escena 3D calculada con Ether Render X.",13,SUB));
         TextView newModelInfo=text(
-                "NUEVO v1.1  ·  Interacción Coulomb + Woods–Saxon, penetración WKB "+
-                "y Hamiltoniano radial exportable. Desplázate hasta el panel 03 para estudiarlos.",
+                "NUEVO v1.2  ·  Potencial nuclear, WKB y evolución MIL Core "+
+                "de 2–3 qubits. Busca el panel 04 para ejecutar el Hamiltoniano reducido.",
                 11,GREEN);
         newModelInfo.setPadding(0,dp(10),0,0);
         body.addView(newModelInfo);
@@ -416,13 +439,70 @@ public final class FusionActivity extends Activity {
         interactions.addView(exportHamiltonianButton,exportH);
         exportHamiltonianButton.setOnClickListener(v->exportHamiltonian());
         interactions.addView(text(
-                "Las líneas son resultados numéricos del modelo. El archivo CSV "+
-                "contiene el operador H radial discretizado, listo para investigaciones "+
-                "posteriores; MIL Core todavía no ejecuta esta matriz. "+
-                "El visor Ether 3D continúa siendo una representación ilustrativa.",11,SUB));
+                "El CSV contiene el operador radial de 256 posiciones, sin evolución. "+
+                "MIL Core ejecuta una discretización reducida del mismo potencial "+
+                "de 4 u 8 posiciones, con referencia matemática independiente.",11,SUB));
+
+        LinearLayout milPanel=panel(body);
+        milPanel.addView(section("04 / EVOLUCIÓN UNITARIA EN MIL CORE"));
+        milPanel.addView(text(
+                "El backend MIL Reduced evoluciona un Hamiltoniano radial de "+
+                "4 u 8 posiciones, codificadas en 2 o 3 qubits. "+
+                "Esto NO equivale a evolucionar la matriz de 256 posiciones. "+
+                "Se comprueba contra RK4 aplicado directamente a la matriz pequeña.",12,SUB));
+        milSizeButton=button("3 qubits / 8 posiciones",false);
+        milSizeButton.setContentDescription("mil-radial-grid-qubits");
+        milPanel.addView(milSizeButton,new LinearLayout.LayoutParams(-1,dp(46)));
+        milSizeButton.setOnClickListener(v->{
+            if(milRunning)return;
+            milQubits=milQubits==3?2:3;
+            milSizeButton.setText(milQubits==3?
+                    "3 qubits / 8 posiciones":"2 qubits / 4 posiciones");
+            clearMilResult();
+        });
+        milTimeLabel=text("Tiempo de evolución: τ=t/ħ",12,GREEN);
+        milTimeLabel.setPadding(0,dp(12),0,dp(4));
+        milPanel.addView(milTimeLabel);
+        milTimeControl=new SeekBar(this);
+        milTimeControl.setMax(1000);
+        milTimeControl.setProgress(500);
+        milTimeControl.setContentDescription("mil-radial-physical-time-control");
+        milPanel.addView(milTimeControl);
+        milTimeControl.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onStartTrackingTouch(SeekBar seekBar){}
+            @Override public void onStopTrackingTouch(SeekBar seekBar){}
+            @Override public void onProgressChanged(SeekBar seekBar,int value,boolean fromUser){
+                double tau=milTimeFromSlider(value);
+                milTimeLabel.setText(String.format(Locale.US,
+                        "τ=t/ħ = %.4f MeV^-1; t ≈ %.3e s",
+                        tau,tau*6.582119569e-22));
+                if(fromUser)clearMilResult();
+            }
+        });
+        milRunButton=button("EJECUTAR EVOLUCIÓN MIL CORE",true);
+        milRunButton.setContentDescription("mil-run-hamiltonian-evolution");
+        LinearLayout.LayoutParams runParams=new LinearLayout.LayoutParams(-1,dp(52));
+        runParams.topMargin=dp(9);
+        milPanel.addView(milRunButton,runParams);
+        milRunButton.setOnClickListener(v->runMilEvolution());
+        milSummary=text(
+                "Selecciona una pareja con canal conocido y pulsa Ejecutar. "+
+                "El tiempo evoluciona el Hamiltoniano reducido, no una trayectoria nuclear observada.",
+                12,SUB);
+        milSummary.setContentDescription("mil-radial-execution-result");
+        milSummary.setTypeface(Typeface.MONOSPACE);
+        milSummary.setTextIsSelectable(true);
+        milSummary.setPadding(0,dp(11),0,dp(8));
+        milPanel.addView(milSummary);
+        milChart=new MilProbabilityView(this);
+        milPanel.addView(milChart,new LinearLayout.LayoutParams(-1,dp(224)));
+        milPanel.addView(text(
+                "Verde: probabilidades del estado cuántico MIL. "+
+                "Naranja: referencia RK4 independiente del mismo Hamiltoniano reducido. "+
+                "Esta concordancia NO predice una tasa de fusión.",11,ORANGE));
 
         LinearLayout output=panel(body);
-        output.addView(section("04 / RESULTADOS Y EVIDENCIA"));
+        output.addView(section("05 / RESULTADOS Y EVIDENCIA"));
         channelButton=button("Canal de reacción",false);
         channelButton.setContentDescription("fusion-reaction-branch");
         output.addView(channelButton,new LinearLayout.LayoutParams(-1,dp(48)));
@@ -610,6 +690,8 @@ public final class FusionActivity extends Activity {
             a1=actualA;a2=actualB;
             analysis=FusionPhysics.analyze(z1,a1,z2,a2);
             model=CollisionModel.calculate(analysis,CollisionModel.sliderToMeV(energyBar.getProgress()));
+            milModelRevision++;
+            clearMilResult();
             if(channel>=analysis.documentedChannels.size())channel=0;
             selectedHint.setText(String.format(Locale.US,
                     "%s: %d p + %d n   /   %s: %d p + %d n",
@@ -705,6 +787,8 @@ public final class FusionActivity extends Activity {
             updateStageText();
         }catch(IllegalArgumentException failure){
             analysis=null;model=null;nuclearModel=null;radialHamiltonian=null;hasResult=false;
+            milModelRevision++;
+            clearMilResult();
             formulaSummary.setText("Revisa isótopos: "+failure.getMessage());
             reactionSummary.setText("Datos de entrada incompletos o inválidos");
             unknownWarning.setText("Introduce un A válido para cada núcleo.");
@@ -792,6 +876,86 @@ public final class FusionActivity extends Activity {
                 "03 / Reacción no determinada · sin productos inventados");
     }
 
+    private static double milTimeFromSlider(int progress){
+        return .005 + Math.max(0,Math.min(1000,progress))*.075/1000.;
+    }
+
+    private void clearMilResult(){
+        lastMilResult=null;
+        if(milChart!=null)milChart.setResult(null);
+        if(milSummary!=null && !milRunning)
+            milSummary.setText("Sin evolución MIL para la configuración actual.");
+    }
+
+    private void runMilEvolution(){
+        if(milRunning||closed)return;
+        if(nuclearModel==null||!nuclearModel.hasNuclearModel){
+            toast("Este par no tiene modelo nuclear de referencia.");
+            return;
+        }
+        final RadialHamiltonian.Grid coarse;
+        try {
+            coarse=RadialHamiltonian.forMil(nuclearModel,milQubits);
+        }catch(RuntimeException failure){
+            toast("No se pudo crear la malla MIL: "+failure.getMessage());
+            return;
+        }
+        final double tau=milTimeFromSlider(milTimeControl.getProgress());
+        final int initialSite=Math.max(0,coarse.sites/2-1);
+        final long version=milModelRevision;
+        milRunning=true;
+        milRunButton.setEnabled(false);
+        milSizeButton.setEnabled(false);
+        milSummary.setText("MIL Core: evolucionando el estado cuántico y calculando "+
+                "una referencia independiente. La interfaz sigue disponible…");
+        try {
+            milWorker.execute(()->{
+                MilRadialEvolver.Result state=null;
+                String error=null;
+                try {state=MilRadialEvolver.execute(coarse,initialSite,tau,12);}
+                catch(Exception|LinkageError failure){error=failure.getMessage();}
+                final MilRadialEvolver.Result finished=state;
+                final String failureText=error;
+                ui.post(()->{
+                    if(closed)return;
+                    milRunning=false;
+                    milRunButton.setEnabled(true);
+                    milSizeButton.setEnabled(true);
+                    if(version!=milModelRevision){
+                        clearMilResult();
+                        milSummary.setText("El Hamiltoniano cambió durante la "+
+                                "operación. Ejecuta de nuevo para estos parámetros.");
+                        return;
+                    }
+                    if(failureText!=null||finished==null){
+                        milSummary.setText("MIL Core no completó la evolución: "+
+                                failureText+"\nNo se sustituyó el resultado por RK4.");
+                        milChart.setResult(null);
+                        return;
+                    }
+                    lastMilResult=finished;
+                    milChart.setResult(finished);
+                    milSummary.setText(String.format(Locale.US,
+                            "MIL ejecutó %d puertas sobre %d qubits (%d sitios).\n"+
+                            "Norma = %.9f; fidelidad vs RK4 = %.8f.\n"+
+                            "Distancia L1 de poblaciones = %.5g.\n"+
+                            "Tiempo físico = %.3e s.\n"+
+                            "Componentes máximos = %d.\n\n"+
+                            "Estos resultados describen la malla radial reducida, "+
+                            "no un evento de fusión nuclear.",
+                            finished.gates,finished.qubits,finished.sites,
+                            finished.norm,finished.fidelity,finished.probabilityL1,
+                            finished.physicalSeconds,finished.peakComponents));
+                });
+            });
+        }catch(RejectedExecutionException error){
+            milRunning=false;
+            milRunButton.setEnabled(true);
+            milSizeButton.setEnabled(true);
+            milSummary.setText("No pudo iniciarse el hilo de cálculo MIL.");
+        }
+    }
+
     private void exportHamiltonian(){
         if(radialHamiltonian==null){
             toast("Selecciona un canal nuclear conocido antes de exportar H.");
@@ -846,6 +1010,9 @@ public final class FusionActivity extends Activity {
                 +"\n\n"+(radialHamiltonian==null?
                         "HAMILTONIANO RADIAL: no disponible":
                         radialHamiltonian.summary())
+                +"\n\n"+(lastMilResult==null?
+                        "MIL CORE: no ejecutado con estos parámetros." :
+                        lastMilResult.summary())
                 +"\n\n"+renderer.provenance()
                 +"\n\nREFERENCIAS\nNIST: "+NIST+"\nNNDC QCalc: "+NNDC+"\nDOE: "+DOE+"\n";
         byte[] bytes=report.getBytes(StandardCharsets.UTF_8);
@@ -867,7 +1034,9 @@ public final class FusionActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        closed=true;
         stopPlay();
+        milWorker.shutdown();
         if(renderer!=null)renderer.shutdown();
         super.onDestroy();
     }

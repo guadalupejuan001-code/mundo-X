@@ -62,6 +62,26 @@ public final class FusionInstrumentation extends Instrumentation {
             String provenance=viewer.provenance();
             if(!provenance.contains("EtherRenderer")||!provenance.contains("escena 344x224"))
                 throw new AssertionError("noncanonical renderer: "+provenance);
+            // Test the new Hamiltonian as actual MIL gates through JNI,
+            // not just the classical reference solver or a fake summary.
+            View milRun=findByDescription(workspace,"mil-run-hamiltonian-evolution");
+            View milStatus=findByDescription(workspace,"mil-radial-execution-result");
+            View milPlot=findByDescription(workspace,"mil-radial-population-chart");
+            if(milRun==null||milStatus==null||milPlot==null)
+                throw new AssertionError("MIL Core execution UI not connected");
+            runOnMainSync(milRun::performClick);
+            final long milDeadline=SystemClock.elapsedRealtime()+40000;
+            String milText="";
+            while(SystemClock.elapsedRealtime()<milDeadline){
+                milText=((android.widget.TextView)milStatus).getText().toString();
+                if(milText.contains("MIL ejecutó "))break;
+                if(milText.contains("no completó"))
+                    throw new AssertionError("MIL Core JNI failure: "+milText);
+                SystemClock.sleep(200);
+            }
+            if(!milText.contains("MIL ejecutó ")||
+                    !milText.contains("fidelidad vs RK4"))
+                throw new AssertionError("MIL backend did not execute: "+milText);
             // Real, non-default orbit should redraw an actual raytraced image.
             runOnMainSync(viewer::resetCamera);
             waitForIdleSync();
@@ -71,7 +91,8 @@ public final class FusionInstrumentation extends Instrumentation {
                     interaction.log10Wkb+" r1="+interaction.innerTurningFm+
                     " r2="+interaction.outerTurningFm+"\n"+
                     "RADIAL_H_ANDROID_PASS sites="+radial.sites+
-                    " tridiagonal=true\n");
+                    " tridiagonal=true\n"+
+                    "MIL_RADIAL_ANDROID_PASS backend=MIL-Reduced 8-sites Strang-2\n");
             runOnMainSync(activity::finish);
         } catch(Throwable fail) {
             result.putString("stream","FUSION_3D_ANDROID_FAIL "+fail+"\n");

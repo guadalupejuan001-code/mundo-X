@@ -1,5 +1,7 @@
 # Mundo X Fusion 3D — Núcleo de interacción nuclear v1.1
 
+> **Actualización v1.2:** la discretización RADIAL DE 4/8 SITIOS del mismo potencial ya se evoluciona con puertas del motor MIL Core Reduced y se contrasta con RK4 independiente. **La malla de 256 sitios descrita abajo sigue SIN evolucionarse.** Véase [MIL_RADIAL_EVOLUTION.md](MIL_RADIAL_EVOLUTION.md). Los párrafos siguientes documentan el alcance original de la versión 1.1.
+
 **Estado:** implementación calculable y reproducible de un *modelo fenomenológico*, no una predicción validada de tasas de fusión. El código ejecuta las integrales de forma clásica en el teléfono. No altera el diseño ni los pesos de MIL Core. Este modelo prepara un operador Hamiltoniano discreto para integrar a futuro, cuando exista una evolución cuántica con pruebas comparativas.
 
 ## 1. Modelo con unidades físicas

@@ -26,7 +26,8 @@ public final class RadialHamiltonian {
         public final double offDiagonalMeV;
 
         private Grid(int n,double domain,double mu,NuclearInteractionModel.Result model) {
-            if(n<64||n>512||!Double.isFinite(domain)||domain<12||domain>256||
+            if(((n<64||n>512) && n!=4 && n!=8)||
+                    !Double.isFinite(domain)||domain<12||domain>256||
                     !Double.isFinite(mu)||mu<=0)
                 throw new IllegalArgumentException("Malla radial fuera de presupuesto");
             sites=n;domainFm=domain;
@@ -120,6 +121,20 @@ public final class RadialHamiltonian {
         if(result==null||!result.hasNuclearModel)
             throw new IllegalArgumentException("No existe modelo nuclear para esta pareja");
         return new Grid(DEFAULT_SITES,DEFAULT_LENGTH_FM,result.reducedMassMeV,result);
+    }
+
+    /**
+     * Low-resolution discretization of THE SAME radial operator for a small
+     * MIL quantum experiment. N=8 => three qubits, L=14 fm.
+     * This does NOT evolve the separate N=256 research grid. Coarse-grid
+     * discretization error is distinct from Trotter and floating-point error.
+     */
+    public static Grid forMil(NuclearInteractionModel.Result result,int qubits){
+        if(result==null||!result.hasNuclearModel)
+            throw new IllegalArgumentException("No validated model for MIL coarse evolution");
+        if(qubits!=2&&qubits!=3)
+            throw new IllegalArgumentException("MIL radial evolution supports 2 or 3 qubits");
+        return new Grid(1<<qubits,14.0,result.reducedMassMeV,result);
     }
 
     /** Pure free-particle reference Hamiltonian, used as an analytic oracle. */
