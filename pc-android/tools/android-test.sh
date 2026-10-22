@@ -143,15 +143,44 @@ grep -q 'Status: ok' "$evidence_dir/desktop-start.txt"
 "$adb_bin" shell screencap -p /sdcard/mundo-x-desktop.png
 "$adb_bin" exec-out cat /sdcard/mundo-x-desktop.png > "$evidence_dir/mundo-x-desktop.png"
 
-"$adb_bin" shell am start -W -n com.cosmicx.pc/.QuantumDesktopActivity > "$evidence_dir/quantum-desktop-start.txt"
+# Access the internal workstation via the exported desktop only. Use the
+# actual accessible view bounds rather than enabling an externally callable
+# quantum Activity or hard-coding emulator pixel coordinates.
+"$adb_bin" shell uiautomator dump /sdcard/mundo-x-ui.xml > "$evidence_dir/window-dump.txt"
+"$adb_bin" exec-out cat /sdcard/mundo-x-ui.xml > "$evidence_dir/window.xml"
+read tap_x tap_y < <(python3 - <<'PY'
+import re, xml.etree.ElementTree as ET
+root=ET.parse('pc-evidence/window.xml').getroot()
+for node in root.iter('node'):
+    if (node.attrib.get('content-desc') or '').startswith('Quantum Workstation.'):
+        x0,y0,x1,y1=map(int,re.findall(r'\d+',node.attrib['bounds']))
+        print((x0+x1)//2,(y0+y1)//2)
+        break
+else:
+    raise SystemExit('Quantum Workstation card not found')
+PY
+)
+"$adb_bin" shell input tap "$tap_x" "$tap_y"
 sleep 4
 "$adb_bin" shell pidof com.cosmicx.pc > /dev/null
-grep -q 'Status: ok' "$evidence_dir/quantum-desktop-start.txt"
 "$adb_bin" shell screencap -p /sdcard/mundo-quantum-desktop.png
 "$adb_bin" exec-out cat /sdcard/mundo-quantum-desktop.png > "$evidence_dir/mundo-quantum-desktop.png"
-
-"$adb_bin" shell am start -W -n com.cosmicx.pc/.MundoXDesktopActivity > "$evidence_dir/desktop-return.txt"
-sleep 4
+# Back must pause the Quantum Activity; that lifecycle queues an AtomicFile
+# checkpoint. Starting the desktop again with am start is not equivalent.
+"$adb_bin" shell input keyevent KEYCODE_BACK
+saved=false
+for i in $(seq 1 25); do
+    if "$adb_bin" shell run-as com.cosmicx.pc ls files/mundo_x_quantum_autosave.mqx >/dev/null 2>&1; then
+        saved=true
+        break
+    fi
+    sleep 1
+done
+[[ "$saved" == true ]] || {
+    "$adb_bin" logcat -d | grep -E 'MundoXQuantum|AndroidRuntime' | tail -60 || true
+    echo 'Quantum automatic checkpoint did not appear' >&2
+    exit 1
+}
 "$adb_bin" logcat -d > "$evidence_dir/desktop-quantum-logcat.txt"
 "$adb_bin" shell run-as com.cosmicx.pc ls -la files > "$evidence_dir/desktop-files.txt" || true
 "$adb_bin" exec-out run-as com.cosmicx.pc cat files/mundo_x_quantum_autosave.mqx > "$evidence_dir/quantum-workstation-autosave.mqx"
