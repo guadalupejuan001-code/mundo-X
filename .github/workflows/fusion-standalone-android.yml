@@ -67,6 +67,18 @@ jobs:
           grep -q 'MIL_RADIAL_SCALED_RUN_PASS qubits=8 sites=256' \
             fusion-evidence/mil-radial-scaling.txt
 
+      - name: Verify 100-qubit GHZ multipass Ether Render with independent ray oracle
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            -I native/include -I fusion-android/native \
+            fusion-android/tests/mil100_ether_render.cpp \
+            -o fusion-build/mil100_ether_render
+          timeout --kill-after=5 150 fusion-build/mil100_ether_render \
+            | tee fusion-evidence/mil100-ether-render.txt
+          grep -q 'MIL_100Q_ETHER_RENDER_PASS qubits=100 visible_objects=100 passes=2' \
+            fusion-evidence/mil100-ether-render.txt
+
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
       - name: Install Android SDK and native toolchain
@@ -97,7 +109,7 @@ jobs:
           details=subprocess.check_output([aapt,'dump','badging',str(apk)],text=True)
           perms=subprocess.check_output([aapt,'dump','permissions',str(apk)],text=True)
           package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",details)
-          assert package and package.groups()==('com.mundox.fusion3d','4','1.3.0'),details.splitlines()[:4]
+          assert package and package.groups()==('com.mundox.fusion3d','5','1.4.0'),details.splitlines()[:4]
           assert 'FusionActivity' in details, 'Launcher not included'
           assert 'uses-permission:' not in perms,perms
           with zipfile.ZipFile(apk) as z:
@@ -121,6 +133,12 @@ jobs:
                 'many_body_nuclear_solver':False,
                 'MIL_Core_nuclear_evolution':True,
                 'MIL_makes_fusion_predictions':False,
+                'quantum_render_register_qubits':100,
+                'quantum_render_3d_objects':100,
+                'quantum_render_ether_passes':2,
+                'quantum_render_global_GHZ_observable':True,
+                'quantum_render_full_statevector':False,
+                'quantum_hardware':False,
                 'signed_debug':True}
           Path('fusion-dist/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
           Path('fusion-dist/apk-badging.txt').write_text(details)
@@ -156,6 +174,7 @@ jobs:
           grep -q 'NUCLEAR_INTERACTION_ANDROID_PASS' fusion-evidence/instrumentation.txt
           grep -q 'RADIAL_H_ANDROID_PASS' fusion-evidence/instrumentation.txt
           grep -q 'MIL_RADIAL_ANDROID_PASS' fusion-evidence/instrumentation.txt
+          grep -q 'MIL100_ETHER_ANDROID_PASS' fusion-evidence/instrumentation.txt
           adb shell am start -W -n com.mundox.fusion3d/.FusionActivity > fusion-evidence/app-launch.txt
           # Wait for the real workspace frame rather than capturing Android's splash screen.
           sleep 4
@@ -177,6 +196,7 @@ jobs:
           assert 'NUCLEAR_INTERACTION_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           assert 'RADIAL_H_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           assert 'MIL_RADIAL_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
+          assert 'MIL100_ETHER_ANDROID_PASS' in Path('fusion-evidence/instrumentation.txt').read_text()
           print('FUSION_3D_RELEASE_PASS')
           PY
       - name: Preserve signed APK, screenshots and audit evidence
