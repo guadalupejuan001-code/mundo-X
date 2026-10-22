@@ -31,6 +31,11 @@ OBSERVER_PIVOT_REFERENCE = "00e2f014186d9db9d2d87b3f7aabee3338d2b2a5"
 MICRO_BOUNDS_REFERENCE = "201388f2c98ed64a5260abcdafa1957a125468e7"
 PHYSICS_SPATIAL_REFERENCE = "59916f0ae34196d43914ce069a042ee80782287d"
 RECOVERED_PHYSICS_REFERENCE = "02e69b81f18329e38d5f0e32a5a082be27bffa3c"
+ETHER_RENDER_REFERENCE = "89c90ab399eb621b8d3c304d921b638a40e770fb"
+XASM_RENDER_REFERENCE = "74742b76a7eaa8174c909e6627924669723be617"
+XASM_RENDER_TEST_REFERENCE = "f8eddc70c3b7ff87dc38c3dee875d4dca6edc304"
+ETHER_RENDER_TEST_REFERENCE = "526cd7db6a05c7cbd3e7f01a860201616ed7736a"
+ETHER_RENDER_CLI_REFERENCE = "93883f03c0bd1e157aa44a14f07f4028ad22d1a0"
 GRAPHICS_MANIFEST_REFERENCE = "4f04322eed3b698e4f20081921c5ed1da2c4b721"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 ETHER_MEMORY_REFERENCE = "729994e1e044ad5a4d4ffd4c43dcea2ad638608f"
@@ -80,10 +85,14 @@ ADDITIONAL_SOURCES = {
     "native/tests/ether_frame.cpp": ETHER_FUSION_REFERENCE,
     "native/tests/ether_fusion.cpp": AUDIT_REFERENCE,
     "native/tests/quantum_algorithms.cpp": QUANTUM_ALGORITHMS_REFERENCE,
+    "native/include/mundo_x/ether_renderer.hpp": ETHER_RENDER_REFERENCE,
+    "native/tests/rule_renderer.cpp": ETHER_RENDER_TEST_REFERENCE,
+    "native/tests/xasm_renderer.cpp": XASM_RENDER_TEST_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_FUSION_REFERENCE,
 }
 REVISED_SOURCES = {
-    "native/src/main.cpp": RECOVERED_PHYSICS_REFERENCE,
+    "native/src/main.cpp": ETHER_RENDER_CLI_REFERENCE,
+    "native/include/mundo_x/xasm.hpp": XASM_RENDER_REFERENCE,
     "graphics-android/app/src/main/cpp/PROVENANCE.json": GRAPHICS_MANIFEST_REFERENCE,
     "native/include/mundo_x/pauli_observer.hpp": OBSERVER_PIVOT_REFERENCE,
     "native/tests/core_1000.cpp": OBSERVER_PIVOT_REFERENCE,

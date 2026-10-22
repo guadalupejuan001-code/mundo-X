@@ -16,6 +16,7 @@
 
 #include "mundo_x/compact_core.hpp"
 #include "mundo_x/exact_t_experiment.hpp"
+#include "mundo_x/ether_renderer.hpp"
 #include "mundo_x/pauli_observer.hpp"
 #include "mundo_x/visual_scene.hpp"
 
@@ -36,6 +37,10 @@ struct XasmRunResult {
   std::size_t logical_payload_bytes = 0;
   std::size_t components = 0;
   std::size_t t_gates = 0;
+  std::size_t render_instructions = 0;
+  std::size_t render_width = 0, render_height = 0, render_bodies = 0;
+  std::uint64_t render_hash = 0;
+  std::uint64_t render_candidate_tests = 0, render_brute_tests = 0;
 };
 
 inline std::string trim(const std::string& s) {
@@ -75,6 +80,19 @@ inline std::int32_t read_scene_seed(std::istringstream& input, std::size_t line)
   throw std::runtime_error("line " + std::to_string(line) + ": expected scene <count> <int32 seed>");
 }
 
+inline double read_finite(std::istringstream& input, std::size_t line,
+                          const std::string& syntax) {
+  std::string token;
+  double value = 0.0;
+  if ((input >> token) && token.find_first_not_of("+-0123456789.eE") == std::string::npos) {
+    std::istringstream number(token);
+    number.imbue(std::locale::classic());
+    number >> std::noskipws >> value;
+    if (number && number.eof() && std::isfinite(value)) return value;
+  }
+  throw std::runtime_error("line " + std::to_string(line) + ": expected " + syntax);
+}
+
 inline double read_expected_value(std::istringstream& input) {
   std::string token;
   double value = 0.0;
@@ -103,6 +121,8 @@ inline XasmRunResult run_xasm(std::istream& input) {
   std::unique_ptr<CompactCore> core;
   std::unique_ptr<VisualScene> scene;
   std::unique_ptr<ReducedExactTRepresentation> reduced;
+  std::unique_ptr<EtherRenderer> renderer;
+  bool rendered = false;
   std::unique_ptr<mundo_x_bridge::PauliObserver> observer;
   bool backend_declared = false;
   std::ostringstream out;
@@ -187,6 +207,84 @@ inline XasmRunResult run_xasm(std::istream& input) {
         else throw std::runtime_error("unsupported stabilizer probability for scene_probz");
         scene->edit(id, state);
         ++result.visual_instructions;
+      }
+      continue;
+    }
+
+    if (op == "render" || op == "render_camera" || op == "render_body" ||
+        op == "render_clear" || op == "render_plan" || op == "render_frame" ||
+        op == "render_info" || op == "render_pixel" || op == "render_assert_exact" || op == "render_train") {
+      if (op == "render") {
+        if (renderer) throw std::runtime_error("line " + std::to_string(line_number) + ": render already declared");
+        const auto width=xasm_detail::read_unsigned<std::size_t>(in,line_number,"render <width> <height> <tile>");
+        const auto height=xasm_detail::read_unsigned<std::size_t>(in,line_number,"render <width> <height> <tile>");
+        const auto tile=xasm_detail::read_unsigned<std::size_t>(in,line_number,"render <width> <height> <tile>");
+        xasm_detail::require_end(in,line_number);
+        renderer=std::make_unique<EtherRenderer>(width,height,tile);
+      } else {
+        if(!renderer)throw std::runtime_error("line " + std::to_string(line_number) + ": declare render first");
+        if(op=="render_camera"){
+          EtherRenderer::Vec3 eye{
+            xasm_detail::read_finite(in,line_number,"render_camera <ex> <ey> <ez> <tx> <ty> <tz> <fov>"),
+            xasm_detail::read_finite(in,line_number,"render_camera <ex> <ey> <ez> <tx> <ty> <tz> <fov>"),
+            xasm_detail::read_finite(in,line_number,"render_camera <ex> <ey> <ez> <tx> <ty> <tz> <fov>")};
+          EtherRenderer::Vec3 target{
+            xasm_detail::read_finite(in,line_number,"render_camera <ex> <ey> <ez> <tx> <ty> <tz> <fov>"),
+            xasm_detail::read_finite(in,line_number,"render_camera <ex> <ey> <ez> <tx> <ty> <tz> <fov>"),
+            xasm_detail::read_finite(in,line_number,"render_camera <ex> <ey> <ez> <tx> <ty> <tz> <fov>")};
+          const double fov=xasm_detail::read_finite(in,line_number,"render_camera <ex> <ey> <ez> <tx> <ty> <tz> <fov>");
+          xasm_detail::require_end(in,line_number);renderer->set_camera(eye,target,fov);rendered=false;++result.render_instructions;
+        }else if(op=="render_body"){
+          EtherRenderer::Body body;
+          body.id=xasm_detail::read_unsigned<std::uint32_t>(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>");
+          body.center={
+            xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>"),
+            xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>"),
+            xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>")};
+          body.radius=xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>");
+          body.color={{
+            xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>"),
+            xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>"),
+            xasm_detail::read_finite(in,line_number,"render_body <id> <x> <y> <z> <radius> <r> <g> <b>")}};
+          xasm_detail::require_end(in,line_number);renderer->add_body(body);rendered=false;++result.render_instructions;
+        }else if(op=="render_clear"){
+          xasm_detail::require_end(in,line_number);renderer->clear_bodies();rendered=false;++result.render_instructions;
+        }else if(op=="render_plan"){
+          xasm_detail::require_end(in,line_number);renderer->plan();rendered=false;++result.render_instructions;
+        }else if(op=="render_frame"){
+          xasm_detail::require_end(in,line_number);renderer->render(false);rendered=true;++result.render_instructions;
+        }else if(op=="render_assert_exact"){
+          xasm_detail::require_end(in,line_number);const auto st=renderer->render(true);rendered=true;++result.render_instructions;
+          const bool ok=st.exact_mismatches==0;result.assertions_passed=result.assertions_passed&&ok;
+          out<<"ASSERT render_exact "<<(ok?"PASS":"FAIL")<<" mismatches="<<st.exact_mismatches<<"\n";
+        }else if(op=="render_train"){
+          xasm_detail::require_end(in,line_number);
+          const auto trained=renderer->train_tiles();rendered=true;++result.render_instructions;
+          out<<"RENDER_TRAIN tile="<<trained.chosen_tile
+             <<" median_ms="<<xasm_detail::precise_value(trained.median_ms)
+             <<" candidate_tests="<<trained.candidate_tests
+             <<" distance_pruned="<<trained.distance_pruned_candidates
+             <<" mismatches="<<trained.exact_mismatches
+             <<" hash="<<trained.frame_hash<<"\n";
+        }else if(op=="render_info"){
+          xasm_detail::require_end(in,line_number);if(!rendered)renderer->render(false);
+          const auto& st=renderer->stats();
+          out<<"RENDER "<<st.width<<"x"<<st.height<<" tile="<<st.tile
+             <<" regions="<<st.tiles_x*st.tiles_y<<" bodies="<<st.bodies
+             <<" candidate_refs="<<st.candidate_references<<" brute_refs="<<st.brute_references
+             <<" candidate_tests="<<st.candidate_tests<<" brute_tests="<<st.brute_tests
+             <<" distance_pruned="<<st.distance_pruned_candidates
+             <<" test_ratio="<<xasm_detail::precise_value(st.test_ratio())
+             <<" hash="<<st.frame_hash<<"\n";
+          rendered=true;
+        }else{
+          const auto x=xasm_detail::read_unsigned<std::size_t>(in,line_number,"render_pixel <x> <y>");
+          const auto y=xasm_detail::read_unsigned<std::size_t>(in,line_number,"render_pixel <x> <y>");
+          xasm_detail::require_end(in,line_number);if(!rendered)throw std::runtime_error("line " + std::to_string(line_number) + ": render_frame first");
+          const auto& p=renderer->pixel(x,y);
+          out<<"PIXEL x="<<x<<" y="<<y<<" body="<<p.body<<" depth="<<xasm_detail::precise_value(p.depth)
+             <<" rgba="<<p.rgba<<"\n";
+        }
       }
       continue;
     }
@@ -370,7 +468,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
 
   if (input.bad() || (input.fail() && !input.eof()))
     throw std::runtime_error("failed to read XASM program");
-  if (!core && !reduced && !scene) throw std::runtime_error("program did not declare qubits or scene");
+  if (!core && !reduced && !scene && !renderer) throw std::runtime_error("program did not declare qubits, scene or render");
 
   if (reduced) {
     result.logical_payload_bytes = reduced->logical_payload_bytes();
@@ -383,6 +481,12 @@ inline XasmRunResult run_xasm(std::istream& input) {
     result.scene_objects = scene->count();
     result.scene_rule_bytes = scene->logical_rule_bytes();
     result.scene_text = scene->export_text();
+  }
+  if (renderer) {
+    const auto& st=renderer->stats();
+    result.render_width=st.width;result.render_height=st.height;
+    result.render_bodies=st.bodies;result.render_hash=st.frame_hash;
+    result.render_candidate_tests=st.candidate_tests;result.render_brute_tests=st.brute_tests;
   }
   result.output = out.str();
   return result;
