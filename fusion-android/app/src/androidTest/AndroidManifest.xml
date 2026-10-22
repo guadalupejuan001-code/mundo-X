@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation android:name="com.mundox.fusion3d.FusionInstrumentation"
+                     android:targetPackage="com.mundox.fusion3d"
+                     android:label="Mundo X Fusion 3D validation" />
+</manifest>

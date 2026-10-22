@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Offline scientific model and locally computed render: zero network/storage permissions. -->
+  <application android:allowBackup="false" android:usesCleartextTraffic="false"
+               android:supportsRtl="true" android:label="Mundo X Fusion 3D"
+               android:theme="@android:style/Theme.Material.NoActionBar"
+               android:hardwareAccelerated="true">
+    <activity android:name=".FusionActivity" android:exported="true"
+              android:screenOrientation="unspecified" android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
