@@ -37,6 +37,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
+import org.json.JSONObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -75,6 +76,9 @@ public final class FusionActivity extends Activity {
     private SeekBar milTimeControl;
     private TextView milTimeLabel,milSummary;
     private MilProbabilityView milChart;
+    private Mil100EtherView mil100View;
+    private SeekBar mil100PhaseSlider;
+    private TextView mil100PhaseText,mil100Status;
     private MilRadialEvolver.Result lastMilResult;
     private final Runnable frameStepper=new Runnable() {
         @Override public void run(){
@@ -207,6 +211,7 @@ public final class FusionActivity extends Activity {
             milQubits=Math.max(2,Math.min(8,state.getInt("mil_qubits",8)));
             milTimeControl.setProgress(state.getInt("mil_time",500));
             if(milSizeButton!=null)milSizeButton.setText(gridLabel(milQubits));
+            mil100PhaseSlider.setProgress(state.getInt("mil100_phase",125));
         }
         updateReport();
     }
@@ -221,6 +226,7 @@ public final class FusionActivity extends Activity {
         out.putInt("nuclear_depth",nuclearDepth.getProgress());
         out.putInt("mil_time",milTimeControl.getProgress());
         out.putInt("mil_qubits",milQubits);
+        out.putInt("mil100_phase",mil100PhaseSlider.getProgress());
         out.putInt("timeline",timeline.getProgress());
     }
 
@@ -252,8 +258,8 @@ public final class FusionActivity extends Activity {
         body.addView(big);
         body.addView(text("Investiga reacciones nucleares, inspecciona sus modelos físicos y explora una escena 3D calculada con Ether Render X.",13,SUB));
         TextView newModelInfo=text(
-                "NUEVO v1.3 · MIL Core evoluciona hasta 256 posiciones con 8 qubits. "+
-                "Usa el panel 04 para ejecutar y comparar con RK4 independiente.",
+                "NUEVO v1.4 · Render 3D de 100 qubits GHZ con MIL Core y Ether Render X. "+
+                "La evolución radial de 256 posiciones (8 qubits) sigue en el panel 04.",
                 11,GREEN);
         newModelInfo.setPadding(0,dp(10),0,0);
         body.addView(newModelInfo);
@@ -295,6 +301,8 @@ public final class FusionActivity extends Activity {
         playButton.setOnClickListener(v->togglePlay());
         rewind.setOnClickListener(v->{stopPlay();timeline.setProgress(0);});
         resetCamera.setOnClickListener(v->renderer.resetCamera());
+
+        buildMil100Panel(body);
 
         LinearLayout choices=panel(body);
         choices.addView(section("01 / SELECCIONA DOS NÚCLEOS"));
@@ -1094,6 +1102,7 @@ public final class FusionActivity extends Activity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        if(mil100View!=null)mil100View.shutdown();
         closed=true;
         stopPlay();
         milWorker.shutdown();
