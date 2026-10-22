@@ -89,7 +89,9 @@ void one_run(std::size_t qubits) {
            <<" steps="<<result.steps
            <<" mil_gates="<<result.gates
            <<" max_components="<<result.peak_components
-           <<" time_ms="<<result.time_ms
+           <<" mil_gate_ms="<<result.time_ms
+           <<" pauli_preparation_ms="<<result.decomposition_ms
+           <<" independent_RK4_ms="<<result.reference_ms
            <<" wall_ms="<<wall
            <<" fidelity="<<result.fidelity
            <<" l1="<<result.probability_l1
