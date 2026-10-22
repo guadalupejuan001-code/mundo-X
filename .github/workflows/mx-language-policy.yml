@@ -1,0 +1,32 @@
+name: MX language ownership gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  no-new-host-language:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject new C/C++ or Python source debt
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files | grep -E '\.(py|c|cc|cpp|cxx|h|hpp)$' | LC_ALL=C sort > /tmp/current-host-languages.txt || true
+          LC_ALL=C sort migration/bootstrap-language-allowlist.txt > /tmp/allowed-host-languages.txt
+          if ! comm -23 /tmp/current-host-languages.txt /tmp/allowed-host-languages.txt | tee /tmp/new-host-language.txt | grep -q .; then
+            echo "MX migration gate: no new C/C++ or Python files."
+          else
+            echo "New C/C++ or Python source is forbidden during MX self-hosting:"
+            cat /tmp/new-host-language.txt
+            exit 1
+          fi
+          current=$(wc -l < /tmp/current-host-languages.txt)
+          allowed=$(wc -l < /tmp/allowed-host-languages.txt)
+          echo "host_language_debt=$current baseline_ceiling=$allowed"
+          test "$current" -le "$allowed"
