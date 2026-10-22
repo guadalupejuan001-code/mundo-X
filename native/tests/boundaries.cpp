@@ -82,25 +82,25 @@ int main() {
   expect_exception<std::invalid_argument>(
       [] { ReducedExactTRepresentation state(0); }, "reduced rejects zero");
   expect_exception<std::invalid_argument>(
-      [] { ReducedExactTRepresentation state(64); }, "reduced rejects 64");
+      [] { ReducedExactTRepresentation state(1001); }, "reduced rejects 1001");
   expect_exception<std::invalid_argument>(
       [&] { ReducedExactTRepresentation state(maximum); },
       "reduced rejects SIZE_MAX before constructing tableau");
 
-  ReducedExactTRepresentation reduced(63);
-  reduced.phase_t(62);
+  ReducedExactTRepresentation reduced(1000);
+  reduced.phase_t(999);
   expect(reduced.component_count() == 1,
-         "T on highest supported computational-basis qubit");
-  reduced.hadamard(62);
-  reduced.phase_t(62);
+         "T on q999 computational-basis qubit");
+  reduced.hadamard(999);
+  reduced.phase_t(999);
   expect(reduced.component_count() == 2,
-         "T branches on highest supported superposition qubit");
-  expect_exception<std::out_of_range>([&] { reduced.phase_t(63); },
-                                     "reduced rejects out-of-range gate");
+         "T branches on q999 superposition qubit");
+  expect_exception<std::out_of_range>([&] { reduced.phase_t(1000); },
+                                     "reduced rejects out-of-range q1000");
   expect(reduced.component_count() == 2,
          "reduced rejected gate leaves components unchanged");
   expect_exception<std::runtime_error>([&] { reduced.dense_from_reduced(); },
-                                       "dense validation guard at 63 qubits");
+                                       "dense validation guard at 1000 qubits");
 
   std::cout << "checks=" << checks << " failures=" << failures << '\n';
   return failures == 0 ? 0 : 1;
