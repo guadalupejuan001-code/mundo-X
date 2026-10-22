@@ -52,10 +52,10 @@ public final class FusionInstrumentation extends Instrumentation {
             runOnMainSync(activity::finish);
         } catch(Throwable fail) {
             result.putString("stream","FUSION_3D_ANDROID_FAIL "+fail+"\n");
-            finish(RESULT_CANCELED,result);
+            finish(Activity.RESULT_CANCELED,result);
             return;
         }
-        finish(RESULT_OK,result);
+        finish(Activity.RESULT_OK,result);
     }
 
     private EtherRenderView findViewer(View root){
