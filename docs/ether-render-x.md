@@ -1,14 +1,12 @@
-# Ether Render X v0.1
+# Ether Render X v0.2
 
-Ether Render X is the first renderer implemented directly as a domain of Mundo X and driven from XASM. It does not replace Solar or the validated GLES renderer yet.
+Ether Render X is the new canonical rendering core of Mundo X, driven directly from XASM. It is still isolated from the production Solar/GLES path until it matches those capabilities and passes the same exactness gates.
 
 ## Principle
 
 > Resolve what can affect a screen region before asking individual pixels.
 
-The brute-force oracle asks every body for every pixel. Ether Render X first projects each body's conservative bounding sphere into screen regions. Each region stores only a 64-bit candidate mask. Pixels trace only those candidates.
-
-No copy of the world is created per region. Bodies exist once; regions contain only references by id.
+Bodies exist once. Screen regions contain only candidate IDs. Pixels trace those candidates, not the whole world.
 
 ## Pipeline
 
@@ -17,18 +15,20 @@ XASM world
   -> camera
   -> conservative region planner
   -> candidate masks
+  -> front-to-back conservative ordering
   -> per-pixel rays
   -> nearest exact sphere hit
   -> simple surface shading
   -> framebuffer hash / pixel observations
 ```
 
-The implementation is in:
+## Implementation
 
 - `native/include/mundo_x/ether_renderer.hpp`
 - `native/tests/rule_renderer.cpp`
 - `native/tests/xasm_renderer.cpp`
 - `examples/ether_render.x`
+- `docs/ether-render-research-training-2026-10-21.md`
 
 ## XASM commands
 
@@ -38,83 +38,36 @@ render_camera <eyeX> <eyeY> <eyeZ> <targetX> <targetY> <targetZ> <fovDeg>
 render_body <id> <x> <y> <z> <radius> <r> <g> <b>
 render_clear
 render_plan
+render_train
 render_frame
 render_pixel <x> <y>
 render_assert_exact
 render_info
 ```
 
-The render domain can exist without allocating qubits or a `VisualScene`.
+`render_train` tests candidate region sizes on the executing machine, preserves only the fastest measured median, and then verifies the selected path against the brute-force oracle. It does not train neural-network weights.
 
-Example:
+## Run
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build --target mundo_x test_rule_renderer test_xasm_renderer -j 2
 ./build/mundo_x run examples/ether_render.x
-ctest --test-dir build -R '^(rule_renderer|xasm_renderer) --output-on-failure
+ctest --test-dir build -R '^(rule_renderer|xasm_renderer)$' --output-on-failure
 ```
 
 ## Exactness contract
 
-`render_assert_exact` renders the frame through both paths:
+`render_assert_exact` renders through both the optimized candidate path and a brute-force all-bodies path. Any different body id, selected depth or RGBA value fails.
 
-1. region candidate path;
-2. brute-force all-bodies path.
-
-It fails if any pixel differs in body id, exact selected depth or RGBA result. This is deliberately stricter than a visual tolerance.
-
-The native randomized oracle also checks 100 generated 20-body scenes.
+The randomized native oracle also checks 100 generated 20-body scenes. Tile training must preserve the same frame hash and finish with zero brute-force mismatches.
 
 ## Current scope
 
-v0.1 implements:
+v0.2 implements a perspective camera, up to 64 spherical bodies, conservative region projection, region candidate masks, exact nearest-sphere intersection, deterministic direct lighting, front-to-back lower-bound pruning, framebuffer/pixel observations, brute-force exactness validation, work counters, and local tile-size training.
 
-- one perspective camera;
-- up to 64 spherical bodies;
-- conservative screen-region projection;
-- region candidate masks;
-- exact nearest sphere intersection;
-- deterministic direct lighting;
-- framebuffer and pixel observations;
-- brute-force exactness oracle;
-- work counters: candidate references/tests versus brute-force references/tests.
-
-It does **not** yet implement the Solar materials, textures, rings, atmospheres, eclipses, mirrors or Android GLES execution. Those are later stages. This keeps the first structural claim measurable before replacing a production renderer.
+It does not yet implement Solar textures/materials, rings, atmospheres, eclipses, mirrors, arbitrary meshes or an Android GPU backend. Existing production renderers remain adapters/references until those functions are migrated.
 
 ## Promotion rule
 
-Ether Render X is allowed to enter Solar only after a Solar-specific adapter proves zero candidate omissions and zero frame differences against Solar's full reference while reducing total work on the target path.
- --output-on-failure
-```
-
-## Exactness contract
-
-`render_assert_exact` renders the frame through both paths:
-
-1. region candidate path;
-2. brute-force all-bodies path.
-
-It fails if any pixel differs in body id, exact selected depth or RGBA result. This is deliberately stricter than a visual tolerance.
-
-The native randomized oracle also checks 100 generated 20-body scenes.
-
-## Current scope
-
-v0.1 implements:
-
-- one perspective camera;
-- up to 64 spherical bodies;
-- conservative screen-region projection;
-- region candidate masks;
-- exact nearest sphere intersection;
-- deterministic direct lighting;
-- framebuffer and pixel observations;
-- brute-force exactness oracle;
-- work counters: candidate references/tests versus brute-force references/tests.
-
-It does **not** yet implement the Solar materials, textures, rings, atmospheres, eclipses, mirrors or Android GLES execution. Those are later stages. This keeps the first structural claim measurable before replacing a production renderer.
-
-## Promotion rule
-
-Ether Render X is allowed to enter Solar only after a Solar-specific adapter proves zero candidate omissions and zero frame differences against Solar's full reference while reducing total work on the target path.
+Ether Render X enters a production path only when it covers that path's required features, returns zero differences where exactness is required, and reduces or preserves total cost on the same target hardware.
