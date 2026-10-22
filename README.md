@@ -134,7 +134,7 @@ El contrato comprueba entrelazamiento GHZ sobre los 1.000 qubits, correlaciones,
 | --- | --- |
 | Sesión gráfica / CompactCore | Perfil portable de 1 a 1.000 qubits; H, S, X, Y, Z, CX y CZ. El perfil finito de 1.000 conserva 3.000 observables iniciales. |
 | CompactCore nativo / XASM | Circuitos estabilizadores, entrelazamiento Clifford y medición Z reproducible; incluye `examples/ghz1000.x`. |
-| Reduced Exact T | Interfaz XASM de 1 a 63 qubits, 128 puertas T y 65.536 componentes como límites. El costo depende del crecimiento real de componentes. |
+| Reduced Exact T | Interfaz XASM de 1 a 1.000 qubits, 128 puertas T y 65.536 componentes como límites. Las máscaras Pauli son multi-palabra; el costo depende del crecimiento real de componentes. |
 | FactorizedCore | Mantiene factores independientes y bloques con presupuesto; el límite de bloque denso sigue siendo 20 qubits. |
 | Solar | Prepara ocho direcciones y observa trece señales de una única sesión Ether; esas direcciones no limitan el dominio total. |
 | Laboratorios | Cada experimento conserva la representación que requiere su modelo; no se sustituyen silenciosamente sus backends. |
@@ -343,7 +343,7 @@ y [Bell](examples/measurement_bell.x) muestran fases y correlaciones.
 Estas instrucciones también están en `practice`; aún no hay controles Android
 para programarlas. Las consultas deterministas generales pueden requerir
 eliminación del tableau: [costos y alcance](docs/origen_y_recorrido_cuantico.md#recorrido-programable-añadido).
-**XASM v0.2** añade el modo experimental `backend reduced`, declarado antes de `qubits`, para programar circuitos Clifford+T con `t <q>`. Conserva Compact Core como modo predeterminado. El modo reducido permite de 1 a 63 qubits, hasta 128 puertas T y 65.536 componentes. `expect` y `assert expectation` consultan operadores Pauli; `assert norm` comprueba los componentes. `assert fidelity` activa la referencia densa y se limita a 12 qubits. `show` informa componentes y puertas T, y `bytes` identifica la carga lógica estimada; esa cifra no mide la RAM total. Consulta [sintaxis, límites y ejemplos de XASM v0.2](docs/xasm_v0_2.md).
+**XASM v0.2** añade el modo experimental `backend reduced`, declarado antes de `qubits`, para programar circuitos Clifford+T con `t <q>`. Conserva Compact Core como modo predeterminado. El modo reducido permite de 1 a 1.000 qubits, hasta 128 puertas T y 65.536 componentes. Sus etiquetas Pauli usan 16 palabras de 64 bits para cubrir q0..q999. `expect` y `assert expectation` consultan operadores Pauli; `assert norm` comprueba los componentes. `assert fidelity` activa la referencia densa y se limita a 12 qubits. `show` informa componentes y puertas T, y `bytes` identifica la carga lógica estimada; esa cifra no mide la RAM total. El ancho de 1.000 no elimina el crecimiento potencial de componentes en circuitos no-Clifford generales. Consulta [sintaxis, límites y ejemplos de XASM v0.2](docs/xasm_v0_2.md).
 
 ~~~text
 qubits 2
