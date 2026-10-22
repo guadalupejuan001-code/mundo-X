@@ -439,13 +439,70 @@ public final class FusionActivity extends Activity {
         interactions.addView(exportHamiltonianButton,exportH);
         exportHamiltonianButton.setOnClickListener(v->exportHamiltonian());
         interactions.addView(text(
-                "Las líneas son resultados numéricos del modelo. El archivo CSV "+
-                "contiene el operador H radial discretizado, listo para investigaciones "+
-                "posteriores; MIL Core todavía no ejecuta esta matriz. "+
-                "El visor Ether 3D continúa siendo una representación ilustrativa.",11,SUB));
+                "El CSV contiene el operador radial de 256 posiciones, sin evolución. "+
+                "MIL Core ejecuta una discretización reducida del mismo potencial "+
+                "de 4 u 8 posiciones, con referencia matemática independiente.",11,SUB));
+
+        LinearLayout milPanel=panel(body);
+        milPanel.addView(section("04 / EVOLUCIÓN UNITARIA EN MIL CORE"));
+        milPanel.addView(text(
+                "El backend MIL Reduced evoluciona un Hamiltoniano radial de "+
+                "4 u 8 posiciones, codificadas en 2 o 3 qubits. "+
+                "Esto NO equivale a evolucionar la matriz de 256 posiciones. "+
+                "Se comprueba contra RK4 aplicado directamente a la matriz pequeña.",12,SUB));
+        milSizeButton=button("3 qubits / 8 posiciones",false);
+        milSizeButton.setContentDescription("mil-radial-grid-qubits");
+        milPanel.addView(milSizeButton,new LinearLayout.LayoutParams(-1,dp(46)));
+        milSizeButton.setOnClickListener(v->{
+            if(milRunning)return;
+            milQubits=milQubits==3?2:3;
+            milSizeButton.setText(milQubits==3?
+                    "3 qubits / 8 posiciones":"2 qubits / 4 posiciones");
+            clearMilResult();
+        });
+        milTimeLabel=text("Tiempo de evolución: τ=t/ħ",12,GREEN);
+        milTimeLabel.setPadding(0,dp(12),0,dp(4));
+        milPanel.addView(milTimeLabel);
+        milTimeControl=new SeekBar(this);
+        milTimeControl.setMax(1000);
+        milTimeControl.setProgress(500);
+        milTimeControl.setContentDescription("mil-radial-physical-time-control");
+        milPanel.addView(milTimeControl);
+        milTimeControl.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onStartTrackingTouch(SeekBar seekBar){}
+            @Override public void onStopTrackingTouch(SeekBar seekBar){}
+            @Override public void onProgressChanged(SeekBar seekBar,int value,boolean fromUser){
+                double tau=milTimeFromSlider(value);
+                milTimeLabel.setText(String.format(Locale.US,
+                        "τ=t/ħ = %.4f MeV^-1; t ≈ %.3e s",
+                        tau,tau*6.582119569e-22));
+                if(fromUser)clearMilResult();
+            }
+        });
+        milRunButton=button("EJECUTAR EVOLUCIÓN MIL CORE",true);
+        milRunButton.setContentDescription("mil-run-hamiltonian-evolution");
+        LinearLayout.LayoutParams runParams=new LinearLayout.LayoutParams(-1,dp(52));
+        runParams.topMargin=dp(9);
+        milPanel.addView(milRunButton,runParams);
+        milRunButton.setOnClickListener(v->runMilEvolution());
+        milSummary=text(
+                "Selecciona una pareja con canal conocido y pulsa Ejecutar. "+
+                "El tiempo evoluciona el Hamiltoniano reducido, no una trayectoria nuclear observada.",
+                12,SUB);
+        milSummary.setContentDescription("mil-radial-execution-result");
+        milSummary.setTypeface(Typeface.MONOSPACE);
+        milSummary.setTextIsSelectable(true);
+        milSummary.setPadding(0,dp(11),0,dp(8));
+        milPanel.addView(milSummary);
+        milChart=new MilProbabilityView(this);
+        milPanel.addView(milChart,new LinearLayout.LayoutParams(-1,dp(224)));
+        milPanel.addView(text(
+                "Verde: probabilidades del estado cuántico MIL. "+
+                "Naranja: referencia RK4 independiente del mismo Hamiltoniano reducido. "+
+                "Esta concordancia NO predice una tasa de fusión.",11,ORANGE));
 
         LinearLayout output=panel(body);
-        output.addView(section("04 / RESULTADOS Y EVIDENCIA"));
+        output.addView(section("05 / RESULTADOS Y EVIDENCIA"));
         channelButton=button("Canal de reacción",false);
         channelButton.setContentDescription("fusion-reaction-branch");
         output.addView(channelButton,new LinearLayout.LayoutParams(-1,dp(48)));
