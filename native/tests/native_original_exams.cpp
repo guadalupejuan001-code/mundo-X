@@ -298,7 +298,7 @@ int sanity() {
     failures += reduced_case("product_t8", n, 20261018, 0, true);
     failures += reduced_case("connected", n, 20261018, 0, true);
   }
-  for (const auto n : {std::size_t{0}, std::size_t{64}, std::numeric_limits<std::size_t>::max()}) {
+  for (const auto n : {std::size_t{0}, std::size_t{1001}, std::numeric_limits<std::size_t>::max()}) {
     bool rejected = false;
     try { mundo_x::ReducedExactTRepresentation invalid(n); }
     catch (const std::invalid_argument&) { rejected = true; }
