@@ -456,10 +456,13 @@ struct ExactTExperimentResult {
 class ReducedExactTRepresentation {
  public:
   using ProductPair = std::array<std::complex<double>, 2>;
+  static constexpr std::size_t kMaxQubits = 1000;
+  static constexpr std::size_t kMaxWords = (kMaxQubits + 63) / 64;
+  using WordArray = std::array<std::uint64_t, kMaxWords>;
 
   struct PauliKey {
-    std::uint64_t x = 0;
-    std::uint64_t z = 0;
+    WordArray x{};
+    WordArray z{};
 
     bool operator==(const PauliKey& other) const {
       return x == other.x && z == other.z;
@@ -468,8 +471,11 @@ class ReducedExactTRepresentation {
 
   struct PauliKeyHash {
     std::size_t operator()(const PauliKey& p) const {
-      std::uint64_t h = p.x * 0x9E3779B185EBCA87ULL;
-      h ^= p.z + 0xC2B2AE3D27D4EB4FULL + (h << 6U) + (h >> 2U);
+      std::uint64_t h = 0x9E3779B185EBCA87ULL;
+      for (std::size_t i = 0; i < kMaxWords; ++i) {
+        h ^= p.x[i] + 0x9E3779B185EBCA87ULL + (h << 6U) + (h >> 2U);
+        h ^= p.z[i] + 0xC2B2AE3D27D4EB4FULL + (h << 6U) + (h >> 2U);
+      }
       return static_cast<std::size_t>(h ^ (h >> 32U));
     }
   };
@@ -527,14 +533,15 @@ class ReducedExactTRepresentation {
       }
       ComponentMap next;
       next.reserve(out.components_.size() * branches);
-      const auto mask = std::uint64_t{1} << q;
+      const std::size_t word = q / 64;
+      const std::uint64_t mask = std::uint64_t{1} << (q % 64);
       for (const auto& entry : out.components_) {
         if (coefficients[0] != std::complex<double>{})
           next.emplace(entry.first, entry.second * coefficients[0]);
         if (coefficients[1] != std::complex<double>{}) {
           auto flipped = entry.first;
-          if (axis == 0) flipped.x |= mask;
-          else flipped.z |= mask;
+          if (axis == 0) flipped.x[word] |= mask;
+          else flipped.z[word] |= mask;
           next.emplace(flipped, entry.second * coefficients[1]);
         }
       }
@@ -615,12 +622,48 @@ class ReducedExactTRepresentation {
     return total;
   }
 
-  // Q = i^phase X^x Z^z, with phase interpreted modulo four. For example,
-  // one-qubit Y has x=1, z=1, phase=1. Non-Hermitian Paulis are supported and
-  // may yield complex results. Bits outside the declared register are errors.
+  // Q = i^phase X^x Z^z. The legacy one-word overload remains for small
+  // callers; the vector overload carries the same observable across up to
+  // 1000 qubits without truncating high words.
   std::complex<double> pauli_expectation(std::uint64_t x, std::uint64_t z,
                                          std::uint8_t phase = 0) const {
-    if (((x | z) >> n_) != 0) throw std::out_of_range("Pauli mask outside qubit register");
+    if (n_ < 64 && ((x | z) >> n_) != 0)
+      throw std::out_of_range("Pauli mask outside qubit register");
+    WordArray wx{}, wz{};
+    wx[0] = x; wz[0] = z;
+    return pauli_expectation_words(wx, wz, phase);
+  }
+
+  std::complex<double> pauli_expectation(
+      const std::vector<std::uint64_t>& x,
+      const std::vector<std::uint64_t>& z,
+      std::uint8_t phase = 0) const {
+    const std::size_t words = word_count();
+    if (x.size() > kMaxWords || z.size() > kMaxWords)
+      throw std::out_of_range("Pauli mask outside qubit register");
+    WordArray wx{}, wz{};
+    for (std::size_t i = 0; i < x.size(); ++i) wx[i] = x[i];
+    for (std::size_t i = 0; i < z.size(); ++i) wz[i] = z[i];
+    for (std::size_t i = words; i < kMaxWords; ++i)
+      if (wx[i] != 0 || wz[i] != 0)
+        throw std::out_of_range("Pauli mask outside qubit register");
+    if ((n_ & 63U) != 0) {
+      const unsigned used = static_cast<unsigned>(n_ & 63U);
+      if (((wx[words - 1] | wz[words - 1]) >> used) != 0)
+        throw std::out_of_range("Pauli mask outside qubit register");
+    }
+    return pauli_expectation_words(wx, wz, phase);
+  }
+
+  double z_expectation(std::size_t q) const {
+    check(q);
+    const auto observable = pauli_z_op(q);
+    return pauli_expectation_words(observable.x, observable.z, 0).real();
+  }
+
+ private:
+  std::complex<double> pauli_expectation_words(
+      const WordArray& x, const WordArray& z, std::uint8_t phase) const {
     check_cancelled();
     const auto basis = stabilizer_basis();
     const Pauli observable{x, z, static_cast<std::uint8_t>(phase & 3U)};
@@ -637,12 +680,6 @@ class ReducedExactTRepresentation {
     return total;
   }
 
-  double z_expectation(std::size_t q) const {
-    check(q);
-    return pauli_expectation(0, std::uint64_t{1} << q).real();
-  }
-
- private:
   void apply_t(std::size_t q, bool dagger) {
     check(q);
     check_cancelled();
@@ -897,25 +934,45 @@ class ReducedExactTRepresentation {
 
  private:
   struct Pauli {
-    std::uint64_t x = 0;
-    std::uint64_t z = 0;
+    WordArray x{};
+    WordArray z{};
     std::uint8_t phase = 0;  // i^phase * X^x Z^z
   };
 
   struct StabilizerBasis {
     std::vector<Pauli> rows;
     std::vector<std::size_t> pivots;
-    std::uint64_t pivot_x = 0;
-    std::uint64_t pivot_z = 0;
+    WordArray pivot_x{};
+    WordArray pivot_z{};
   };
 
   using ComponentMap =
       std::unordered_map<PauliKey, std::complex<double>, PauliKeyHash>;
 
   static std::size_t validated_qubits(std::size_t n) {
-    if (n == 0 || n > 63)
-      throw std::invalid_argument("reduced representation supports 1..63 qubits");
+    if (n == 0 || n > kMaxQubits)
+      throw std::invalid_argument("reduced representation supports 1..1000 qubits");
     return n;
+  }
+
+  std::size_t word_count() const { return (n_ + 63) / 64; }
+
+  static bool word_test(const WordArray& words, std::size_t q) {
+    return ((words[q / 64] >> (q % 64)) & 1ULL) != 0;
+  }
+
+  static void word_set(WordArray& words, std::size_t q) {
+    words[q / 64] |= std::uint64_t{1} << (q % 64);
+  }
+
+  static void word_toggle(WordArray& words, std::size_t q) {
+    words[q / 64] ^= std::uint64_t{1} << (q % 64);
+  }
+
+  static bool intersects(const WordArray& a, const WordArray& b) {
+    for (std::size_t i = 0; i < kMaxWords; ++i)
+      if ((a[i] & b[i]) != 0) return true;
+    return false;
   }
 
   void check_cancelled() const {
@@ -1003,30 +1060,39 @@ class ReducedExactTRepresentation {
     }
   }
 
+  static unsigned parity_and(const WordArray& a, const WordArray& b) {
+    unsigned p = 0;
+    for (std::size_t i = 0; i < kMaxWords; ++i)
+      p ^= parity(a[i] & b[i]);
+    return p & 1U;
+  }
+
   static Pauli multiply(const Pauli& a, const Pauli& b) {
     Pauli out;
-    out.x = a.x ^ b.x;
-    out.z = a.z ^ b.z;
+    for (std::size_t i = 0; i < kMaxWords; ++i) {
+      out.x[i] = a.x[i] ^ b.x[i];
+      out.z[i] = a.z[i] ^ b.z[i];
+    }
     out.phase = static_cast<std::uint8_t>(
-        (a.phase + b.phase + 2U * parity(a.z & b.x)) & 3U);
+        (a.phase + b.phase + 2U * parity_and(a.z, b.x)) & 3U);
     return out;
   }
 
   static bool bit_at(const Pauli& p, std::size_t n, std::size_t col) {
-    if (col < n) return ((p.x >> col) & 1ULL) != 0;
-    return ((p.z >> (col - n)) & 1ULL) != 0;
+    if (col < n) return word_test(p.x, col);
+    return word_test(p.z, col - n);
   }
 
   static Pauli pauli_x_op(std::size_t q) {
-    return {std::uint64_t{1} << q, 0, 0};
+    Pauli p; word_set(p.x, q); return p;
   }
 
   static Pauli pauli_y_op(std::size_t q) {
-    return {std::uint64_t{1} << q, std::uint64_t{1} << q, 1};
+    Pauli p; word_set(p.x, q); word_set(p.z, q); p.phase = 1; return p;
   }
 
   static Pauli pauli_z_op(std::size_t q) {
-    return {0, std::uint64_t{1} << q, 0};
+    Pauli p; word_set(p.z, q); return p;
   }
 
   Pauli parse_generator(const std::string& g) const {
@@ -1042,14 +1108,14 @@ class ReducedExactTRepresentation {
         case 'I':
           break;
         case 'X':
-          p.x |= (std::uint64_t{1} << q);
+          word_set(p.x, q);
           break;
         case 'Z':
-          p.z |= (std::uint64_t{1} << q);
+          word_set(p.z, q);
           break;
         case 'Y':
-          p.x |= (std::uint64_t{1} << q);
-          p.z |= (std::uint64_t{1} << q);
+          word_set(p.x, q);
+          word_set(p.z, q);
           p.phase = static_cast<std::uint8_t>((p.phase + 1U) & 3U);
           break;
         default:
@@ -1086,9 +1152,9 @@ class ReducedExactTRepresentation {
 
       basis.pivots.push_back(col);
       if (col < n_)
-        basis.pivot_x |= std::uint64_t{1} << col;
+        word_set(basis.pivot_x, col);
       else
-        basis.pivot_z |= std::uint64_t{1} << (col - n_);
+        word_set(basis.pivot_z, col - n_);
       ++rank;
     }
 
@@ -1100,7 +1166,8 @@ class ReducedExactTRepresentation {
   }
 
   Pauli canonicalize(Pauli p, const StabilizerBasis& basis) const {
-    if (!(p.x & basis.pivot_x) && !(p.z & basis.pivot_z)) return p;
+    if (!intersects(p.x, basis.pivot_x) && !intersects(p.z, basis.pivot_z))
+      return p;
     for (std::size_t r = 0; r < basis.pivots.size(); ++r) {
       if (bit_at(p, n_, basis.pivots[r]))
         p = multiply(p, basis.rows[r]);  // right multiply by +1 stabilizer
@@ -1132,23 +1199,22 @@ class ReducedExactTRepresentation {
   }
 
   Pauli conjugate(Pauli p, const ExactExperimentGate& gate) const {
-    // Direct symplectic updates for i^phase X^x Z^z. The raw XZ convention
-    // matters: S contributes i for every X, and CX needs no phase update.
-    const auto a = std::uint64_t{1} << gate.a;
-    const bool xa = (p.x & a) != 0;
-    const bool za = (p.z & a) != 0;
+    // Direct symplectic updates for i^phase X^x Z^z over packed multiword
+    // masks. The raw XZ convention matters: S contributes i for every X.
+    const bool xa = word_test(p.x, gate.a);
+    const bool za = word_test(p.z, gate.a);
     switch (gate.op) {
       case ExactExperimentOp::H:
         if (xa && za) p.phase += 2;
         if (xa != za) {
-          p.x ^= a;
-          p.z ^= a;
+          word_toggle(p.x, gate.a);
+          word_toggle(p.z, gate.a);
         }
         break;
       case ExactExperimentOp::S:
         if (xa) {
           ++p.phase;
-          p.z ^= a;
+          word_toggle(p.z, gate.a);
         }
         break;
       case ExactExperimentOp::X:
@@ -1158,17 +1224,16 @@ class ReducedExactTRepresentation {
         if (xa) p.phase += 2;
         break;
       case ExactExperimentOp::CX: {
-        const auto b = std::uint64_t{1} << gate.b;
-        if (xa) p.x ^= b;
-        if (p.z & b) p.z ^= a;
+        const bool zb = word_test(p.z, gate.b);
+        if (xa) word_toggle(p.x, gate.b);
+        if (zb) word_toggle(p.z, gate.a);
         break;
       }
       case ExactExperimentOp::CZ: {
-        const auto b = std::uint64_t{1} << gate.b;
-        const bool xb = (p.x & b) != 0;
+        const bool xb = word_test(p.x, gate.b);
         if (xa && xb) p.phase += 2;
-        if (xa) p.z ^= b;
-        if (xb) p.z ^= a;
+        if (xa) word_toggle(p.z, gate.b);
+        if (xb) word_toggle(p.z, gate.a);
         break;
       }
       case ExactExperimentOp::T:
@@ -1261,10 +1326,12 @@ class ReducedExactTRepresentation {
   static std::vector<std::complex<double>> apply_pauli_state(
       const std::vector<std::complex<double>>& input,
       const PauliKey& p) {
+    // Dense validation is guarded to <=23 qubits, so only word zero can
+    // contribute to an amplitude index here.
     std::vector<std::complex<double>> out(input.size(), {0.0, 0.0});
     for (std::size_t i = 0; i < input.size(); ++i) {
-      const std::size_t j = i ^ static_cast<std::size_t>(p.x);
-      const double sign = parity(p.z & static_cast<std::uint64_t>(i))
+      const std::size_t j = i ^ static_cast<std::size_t>(p.x[0]);
+      const double sign = parity(p.z[0] & static_cast<std::uint64_t>(i))
                               ? -1.0
                               : 1.0;
       out[j] += sign * input[i];
