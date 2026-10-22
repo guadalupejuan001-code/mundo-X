@@ -6,7 +6,7 @@ COSMIC X Engine es el título del conjunto. Dentro se conserva la computación c
 
 **Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 21 de octubre de 2026.
 
-Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: **Ether**, el perfil finito de **1.000 qubits**, Graphics **4K/8K con espejos**, **Solar con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. La [consolidación del repositorio](docs/repository-unification-2026-10-21.md) identifica los aportes recuperados, los borradores superados y la evidencia de cada plataforma.
+Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: **Ether**, el perfil finito de **1.000 qubits**, Graphics **4K/8K con espejos**, **Solar con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits y el micromundo. La línea Python antigua de Quantum Core/Bridge/Transformer fue retirada de la rama activa durante la migración a MX autoalojado. La [consolidación del repositorio](docs/repository-unification-2026-10-21.md) identifica los aportes recuperados, los borradores superados y la evidencia de cada plataforma.
 
 **InfiniteCore integrado.** El [dominio por reglas y componentes finitos](docs/infinite_core.md)
 dispone de una [sesión compartida con el emulador y el motor gráfico](docs/infinite_integration.md).
@@ -118,9 +118,8 @@ como un dibujo instantáneo ni como una cifra de FPS.
 | COSMIC X Solar | Sol, ocho planetas y catorce lunas; navegación, mapa orbital, tiempo variable, ambientes de descenso y captura UHD. Su preparación actúa sobre ocho direcciones del mismo dominio Ether que alimenta sus señales visuales. | [Solar](solar-android/README.md), [modelos orbitales](solar-android/docs/solar-science.md), [ambientes](solar-android/docs/atmosphere-science.md) |
 | COSMIC X PC | Intérprete propio de un subconjunto x86/x64, RAM por demanda, SHLD/SHRD, BIOS de texto/teclado/disco y framebuffer huésped VBE hasta 8K presentado con GLES 3; dispositivo InfiniteCore y viewport sobre la sesión cuántica compartida. Arranques propios hasta modo largo de 64 bits. | [PC propia](pc-android/README.md) |
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
-| Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
+| Mundo X Language | `.mx` pasa a ser la fuente canónica. XASM `.x` y XI `.xi` quedan como IR/dialectos temporales durante la migración autoalojada. | [MX v1](docs/mx-language-v1.md), [migración](docs/mx-self-hosting-migration.md), [XASM histórico](docs/xasm_v0_2.md) |
 | Física nativa 2D y 3D | Modelos clásicos finitos con recuperación de fallos; el CLI `physics3d` ejecuta la base 3D rescatada. Sus cuerpos aún no son estado Ether ni alimentan las órbitas de Solar. | [Auditoría del núcleo](docs/repository-core-review-2026-10-21.md) |
-| Bridge X y Transformer X | Codificación de bytes en modos y modelo PyTorch entrenable. Se conserva como línea independiente; todavía no alimenta CompactCore. | [Bridge X](src/bridge_x.py), [Transformer X](src/transformer_x.py), [entrenamiento](experiments/train_file_v0_1.py) |
 
 La APK principal `com.mundox.cosmic` reúne el motor, el núcleo y los laboratorios. **Solar y PC son aplicaciones separadas dentro del mismo código fuente.** La VM didáctica de 8 bits está incluida en COSMIC; el emulador x86/x64 de PC conserva su propio destino de compilación.
 
@@ -141,9 +140,9 @@ El contrato comprueba entrelazamiento GHZ sobre los 1.000 qubits, correlaciones,
 
 El tableau de 1.000 almacena **257.000 bytes** en sus buffers. Esa cifra no incluye observador, historial, Java, Android ni GPU. El perfil compacto corresponde a estados estabilizadores; los circuitos generales con muchas puertas T no adquieren por este cambio el mismo costo de memoria. [Fórmula, benchmark de 20/60/1.000 y límites](docs/core_1000_qubits.md#memoria-y-observación).
 
-### Compilar el conjunto nativo
+### Bootstrap nativo temporal
 
-Desde Linux, con CMake y un compilador C++17:
+Mientras MX aún no es autoalojado, el conjunto existente se compila con el bootstrap C++17. Estos comandos son de compatibilidad de migración, no la arquitectura final:
 
 ```sh
 git clone https://github.com/guadalupejuan001-code/mundo-X.git
@@ -164,17 +163,9 @@ ctest --test-dir build --output-on-failure
 
 La compilación raíz incluye los contratos del núcleo, la VM y las diez suites de PC, incluidas `pc_video` y `pc_quantum`. `BUILD_TESTING=OFF` permite construir los ejecutables sin los tests. Las instrucciones de PC ejecutan los arranques propios de demostración; no arrancan Windows.
 
-### Crear o ampliar un proyecto de escritorio
+### Adaptador de escritorio en migración
 
-```sh
-python -m pip install -r graphics-desktop/requirements.txt
-python graphics-desktop/demo.py --no-render --export-project mundo-1000.cosmic
-python graphics-desktop/demo.py --project mundo-anterior.cosmic \
-  --expand-qubits 1000 --gate X:999 --no-render \
-  --export-project mundo-ampliado.cosmic
-```
-
-Sustituye `mundo-anterior.cosmic` por tu archivo. La exportación sin render no necesita un contexto gráfico; para producir imágenes, el adaptador de escritorio necesita EGL/OpenGL ES y actualmente construye una biblioteca Linux `.so`. [Uso y ejemplos](graphics-desktop/README.md).
+`graphics-desktop/` todavía usa Python como harness/oracle de compatibilidad. No es fuente canónica nueva y está incluido en la deuda de migración; se retirará cuando el observador MX cubra proyectos `.cosmic`, EGL/GPU y sus pruebas de equivalencia.
 
 ## Aplicaciones Android y resoluciones
 
@@ -261,13 +252,11 @@ La procedencia de PC 0.4.0 registra la identidad real del APK, el commit y los S
 
 Mundo X nació como investigación sobre representación de información y cálculo de su evolución. Un vector de estado denso requiere `2^n` amplitudes; las representaciones del proyecto aprovechan la estructura cuando el circuito la permite. La CPU sigue ejecutando instrucciones convencionales. Cada núcleo conserva su alcance, presupuesto y referencia de corrección. [Origen y recorrido](docs/origen_y_recorrido_cuantico.md), [mapa de motores](results/engine_map_2026-10-18.md).
 
-### 1. Quantum Core y Dense Core — referencia matemática
+### 1. Dense Core — referencia matemática temporal
 
-**Archivos:** [`src/quantum_core.py`](src/quantum_core.py), [`native/include/mundo_x/dense_core.hpp`](native/include/mundo_x/dense_core.hpp).
+**Archivo bootstrap:** [`native/include/mundo_x/dense_core.hpp`](native/include/mundo_x/dense_core.hpp).
 
-Son simuladores de vectores de estado completos, útiles para verificar que las transformaciones del resto del sistema conservan el comportamiento esperado. Contienen primitivas para superposición, fase, interferencia, puertas como H/X/CNOT, entrelazamiento y otras operaciones según la implementación.
-
-Su función principal dentro de Mundo X es ser la **referencia de corrección**, no la representación de escala que se pretende utilizar en producción.
+La referencia Python anterior fue retirada de la rama activa. Dense Core permanece temporalmente como oracle del bootstrap C++ mientras sus contratos se portan a MX. Su función es comprobar corrección de circuitos pequeños, no convertirse en la representación final del proyecto.
 
 ### 2. Compact Core — núcleo de simulación compacta
 
@@ -456,21 +445,13 @@ Para los detalles, resultados y limitaciones de cada medición:
 | `solar-android/` | Explorador solar, catálogo, modelos, texturas y pruebas. |
 | `pc-android/` | Intérprete x86/x64 propio, memoria, medios, CLI y app. |
 | `app/`, `android-experiments/` | XLab, MicroLab, VM, Ecos y experimentos Android originales. |
-| `src/`, `experiments/`, `tests/` | Referencia Python, Bridge/Transformer y experimentos. |
+| `migration/`, `docs/mx-*`, `examples/*.mx` | Migración al lenguaje propio, especificación y programas MX. |
 | `examples/`, `docs/`, `results/` | Programas, contratos, fuentes de datos y evidencia fechada. |
 | `tools/`, `.github/workflows/` | Auditores, benchmarks, compilación y verificación automatizada. |
 
-### Referencia Python y Transformer X
+### Migración de lenguaje propio
 
-```sh
-python -m pip install -r requirements.txt pytest
-python hello_mundo_x.py
-python -m pytest tests/test_quantum_core.py
-python src/transformer_x.py
-python experiments/train_file_v0_1.py ruta/a/un_archivo --epochs 20
-```
-
-El entrenamiento usa ventanas del archivo indicado y guarda `transformer_x_v0_1.pt`. El repositorio conserva el programa de entrenamiento; no incluye un checkpoint general ya entrenado. [Implementación y medición](experiments/train_file_v0_1.py).
+Mundo X Language (`.mx`) es la fuente canónica objetivo. La rama de migración prohíbe añadir nuevos archivos C/C++ o Python y mantiene un inventario decreciente de bootstrap hasta que cada función tenga sustitución MX comprobada. Consulta [MX v1](docs/mx-language-v1.md), [self-hosting](docs/mx-self-hosting-migration.md) y [autoría/dependencias](OWNERSHIP.md).
 
 ### Red experimental
 
@@ -484,7 +465,7 @@ El titular usó «computasis» como analogía de homeostasis. El controlador añ
 
 ## Alcance y autoría
 
-El proyecto conserva simulación compacta Clifford, experimentos no Clifford, lenguajes, aplicaciones y pruebas reproducibles. Quedan abiertos la escala de circuitos generales con T, la evaluación de Transformer X, la compatibilidad completa de PC y mediciones en dispositivos físicos. Los resultados disponibles no establecen una simulación eficiente de todos los estados arbitrarios ni una aceleración de hardware cuántico.
+El proyecto conserva simulación compacta Clifford, experimentos no Clifford, lenguajes, aplicaciones y pruebas reproducibles. Quedan abiertos la escala de circuitos generales con T, la migración autoalojada a MX, la compatibilidad completa de PC y mediciones en dispositivos físicos. Los resultados disponibles no establecen una simulación eficiente de todos los estados arbitrarios ni una aceleración de hardware cuántico.
 
 **Mundo X es un proyecto concebido y dirigido por el titular del repositorio.** El historial conserva implementaciones, revisiones y resultados, incluidos los negativos. [Estado histórico](PROJECT_STATUS_2026-10-14.md), [historial de `main`](https://github.com/guadalupejuan001-code/mundo-X/commits/main), [compilaciones y evidencia](https://github.com/guadalupejuan001-code/mundo-X/actions).
 
