@@ -15,11 +15,11 @@
         </activity>
 
         <!-- Existing own PC and quantum apps remain available inside the desktop.
-             Preserve explicit adb/test access to the legacy PC activity. -->
-        <activity android:name=".MainActivity" android:exported="true"
+             Only the launcher is exported; internal workspaces are not externally startable. -->
+        <activity android:name=".MainActivity" android:exported="false"
                   android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
                   android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".QuantumDesktopActivity" android:exported="true"
+        <activity android:name=".QuantumDesktopActivity" android:exported="false"
                   android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
