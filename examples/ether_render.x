@@ -11,6 +11,8 @@ render_body 1   3.4  0.7 -2    0.90    1.00 0.45 0.10
 render_body 2  -4   -1   -8    1.80    0.55 0.80 0.30
 
 render_plan
+# Benchmark candidate tile sizes on the current machine, then keep the fastest exact one.
+render_train
 render_frame
 
 # Concrete observation of the central pixel.
