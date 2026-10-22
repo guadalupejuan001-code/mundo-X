@@ -6,6 +6,12 @@ La versión **0.4.0** conecta **InfiniteCore como dispositivo del PC y el motor 
 
 La aplicación contiene el intérprete C++ `cosmic_pc`; no contiene QEMU, Limbo, Bochs, Wine ni otro motor de emulación. El código de este módulo se escribió para este proyecto. El presentador utiliza la clase de geometría y validación [RenderResolution](../graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java) compartida con Graphics. El núcleo de 1.000 qubits no ejecuta ni acelera las instrucciones x86/x64: el estado de la CPU y la imagen que escribe el huésped conservan su propio significado.
 
+## Quantum Workstation: plataforma de uso diario
+
+La misma APK incluye ahora una entrada independiente **Mundo X Quantum** en el lanzador Android. Abre un entorno de trabajo con editor de programas `.xi`, terminal, archivos y sesiones `.mqx` persistentes, conectado directamente a **QuantumRuntime (Ether/InfiniteCore + Inverse Ether Memory)**. No requiere arrancar x86 ni inicializar sus 2 GiB de RAM lógica.
+
+La interfaz ofrece **ejecutar, abrir, guardar y restaurar**. El estado y la memoria se actualizan de forma transaccional y pertenecen a esa sesión independiente. El motor XASM universal sigue disponible en la CLI nativa, pero todavía no está conectado al escritorio. [Manual y límites](QUANTUM_WORKSTATION.md).
+
 ## Usar el núcleo y su motor gráfico desde el PC
 
 La tarjeta **Núcleo cuántico · Motor gráfico** permite aplicar programas `.xi`, observar dos direcciones decimales y guardar/abrir el estado del núcleo. Se puede usar antes de seleccionar un medio de arranque. Las operaciones se serializan con los pasos de la CPU en el hilo de trabajo de la app.
