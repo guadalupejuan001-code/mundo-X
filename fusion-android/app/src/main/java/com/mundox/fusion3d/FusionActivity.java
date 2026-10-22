@@ -8,6 +8,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
+import android.view.WindowInsets;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -195,6 +197,16 @@ public final class FusionActivity extends Activity {
         ScrollView scroll=new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(BG);
+        if(Build.VERSION.SDK_INT>=30){
+            scroll.setOnApplyWindowInsetsListener((view,insets)->{
+                android.graphics.Insets bars=insets.getInsets(
+                        WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
+                android.graphics.Insets keyboard=insets.getInsets(WindowInsets.Type.ime());
+                view.setPadding(bars.left,bars.top,bars.right,
+                        Math.max(bars.bottom,keyboard.bottom));
+                return insets;
+            });
+        }else scroll.setFitsSystemWindows(true);
         LinearLayout body=column();
         body.setPadding(dp(16),dp(17),dp(16),dp(32));
         scroll.addView(body);
@@ -274,6 +286,15 @@ public final class FusionActivity extends Activity {
         selectedHint.setPadding(0,dp(10),0,0);
         choices.addView(selectedHint);
         choices.addView(text("Seleccionar un número másico no garantiza que el isótopo exista o sea estable. Solo asignamos valores Q a canales tabulados.",11,ORANGE));
+        Button analyze=button("ANALIZAR LOS NÚCLEOS",true);
+        LinearLayout.LayoutParams analyzeLayout=new LinearLayout.LayoutParams(-1,dp(50));
+        analyzeLayout.topMargin=dp(12);
+        choices.addView(analyze,analyzeLayout);
+        analyze.setOnClickListener(v->{
+            stopPlay();
+            timeline.setProgress(0);
+            updateReport();
+        });
 
         LinearLayout presets=panel(body);
         presets.addView(section("CANALES NUCLEARES CON DATOS"));
