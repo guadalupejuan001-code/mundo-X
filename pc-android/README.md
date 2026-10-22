@@ -26,6 +26,10 @@ La misma APK incluye ahora una entrada independiente **Mundo X Quantum** en el l
 
 La interfaz ofrece **ejecutar, abrir, guardar y restaurar**. En modo XI, estado y memoria se actualizan transaccionalmente. En modo XASM, se ejecutan circuitos Compact/Reduced (incluidas puertas T) con estado nuevo por programa. No se mezclan silenciosamente las dos rutas. [Manual y límites](QUANTUM_WORKSTATION.md).
 
+## Fusion Lab · física nuclear en tu PC
+
+La tarjeta del núcleo ahora abre **Fusion Lab**: tabla de los 118 elementos, elección de isótopos y exploración de reacciones nucleares. Los canales conocidos calculan energía Q con masas tabuladas; las combinaciones arbitrarias permanecen hipótesis sin predicción de fusión. No usa MIL Core como simulador nuclear validado. [Manual de Fusion Lab](FUSION_LAB.md).
+
 ## Usar el núcleo y su motor gráfico desde el PC
 
 La tarjeta **Núcleo cuántico · Motor gráfico** permite aplicar programas `.xi`, observar dos direcciones decimales y guardar/abrir el estado del núcleo. Se puede usar antes de seleccionar un medio de arranque. Las operaciones se serializan con los pasos de la CPU en el hilo de trabajo de la app.
