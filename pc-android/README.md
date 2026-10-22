@@ -1,5 +1,19 @@
 # COSMIC X PC — motor x86/x64 propio para Android
 
+## Mundo X Desktop 0.5.0 — entrada práctica
+
+**La APK abre ahora Mundo X Desktop como una única aplicación con Inicio, Web,
+Notas, Archivos, Quantum Workstation y COSMIC X PC.** El navegador usa WebView y
+servicios de red de Android; las notas se guardan localmente y los documentos
+se abren con el selector de archivos de Android. Quantum Workstation usa
+directamente Ether/InfiniteCore, Inverse Ether Memory y XASM por medio de los
+puentes nativos ya disponibles.
+
+El emulador x86/x64 de este módulo continúa incluido y accesible desde Inicio;
+no se sustituye ni se hace pasar por el sistema Android ni por hardware
+cuántico. Manual y límites: [MUNDO_X_DESKTOP.md](MUNDO_X_DESKTOP.md) y
+[QUANTUM_WORKSTATION.md](QUANTUM_WORKSTATION.md).
+
 Este módulo desarrolla un emulador de PC propio dentro del proyecto COSMIC X. Interpreta instrucciones x86/x64 y conecta su CPU con RAM, vídeo de texto y framebuffer gráfico, teclado BIOS y lectura de disco. La versión 0.3.0 incorporó SHRD/SHLD, un dispositivo VBE lineal hasta 8K y un presentador GLES 3 propio; la versión **0.4.0** conserva la memoria por demanda y el arranque de prueba real → protegido → largo de 64 bits. **Esta versión todavía no ejecuta ni instala Windows completo ni juegos de PC.**
 
 La versión **0.4.0** conecta **InfiniteCore como dispositivo del PC y el motor gráfico GLES canónico**. El huésped x86/x64, los comandos de la app y el observador cuántico acceden a una misma sesión. La pantalla de texto/framebuffer que escribe el huésped y el mundo del observador cuántico tienen sus propias vistas. Se conservan el intérprete, la RAM, los medios de arranque y el presentador VBE/GLES incorporado en 0.3.0.
