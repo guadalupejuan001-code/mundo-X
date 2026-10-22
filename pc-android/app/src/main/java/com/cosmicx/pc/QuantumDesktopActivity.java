@@ -14,6 +14,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.util.AtomicFile;
 import android.provider.OpenableColumns;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
