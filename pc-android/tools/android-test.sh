@@ -140,6 +140,8 @@ PY
 sleep 3
 "$adb_bin" shell pidof com.cosmicx.pc > "$evidence_dir/desktop-pid.txt"
 grep -q 'Status: ok' "$evidence_dir/desktop-start.txt"
+"$adb_bin" shell screencap -p /sdcard/mundo-x-desktop.png
+"$adb_bin" exec-out cat /sdcard/mundo-x-desktop.png > "$evidence_dir/mundo-x-desktop.png"
 
 "$adb_bin" shell am start -W -n com.cosmicx.pc/.QuantumDesktopActivity > "$evidence_dir/quantum-desktop-start.txt"
 sleep 4
