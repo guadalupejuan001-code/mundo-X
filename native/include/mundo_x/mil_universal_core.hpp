@@ -94,15 +94,31 @@ class WideReducedExactTRepresentation {
   }
   void phase(std::size_t q,double theta){ apply_phase(q,theta); }
 
-  // diag(1,1,1,e^{i theta}) using exact phase/CNOT identities.
+  // diag(1,1,1,e^{i theta}) expanded directly in the Pauli basis:
+  // I + (e^{i theta}-1)(I-Zc-Zt+ZcZt)/4.
+  // This avoids the older 3 phase expansions + 2 CNOT intermediates.
   void controlled_phase(std::size_t c,std::size_t t,double theta){
-    check_pair(c,t);
-    finite(theta);
-    apply_phase(c,theta*.5);
-    apply_phase(t,theta*.5);
-    apply_clifford(Op::CX,c,t);
-    apply_phase(t,-theta*.5);
-    apply_clifford(Op::CX,c,t);
+    check_pair(c,t);finite(theta);
+    const std::complex<double> e{std::cos(theta),std::sin(theta)};
+    const auto delta=e-std::complex<double>{1.,0.};
+    const auto a0=std::complex<double>{1.,0.}+delta*.25;
+    const auto a1=-delta*.25;
+    const auto a3=delta*.25;
+    const Pauli zc=pauli_z_op(c),zt=pauli_z_op(t);
+    const Pauli zczt=multiply(zc,zt);
+    ComponentMap next;
+    const std::size_t factor=4;
+    const std::size_t wanted=components_.size()>max_components_/factor?
+        max_components_:std::min(max_components_,components_.size()*factor+1);
+    next.reserve(wanted);
+    for(const auto& entry:components_){
+      Pauli p{entry.first.x,entry.first.z,0};
+      accumulate(next,p,entry.second*a0,basis_);
+      accumulate(next,multiply(zc,p),entry.second*a1,basis_);
+      accumulate(next,multiply(zt,p),entry.second*a1,basis_);
+      accumulate(next,multiply(zczt,p),entry.second*a3,basis_);
+    }
+    components_=std::move(next);
   }
 
   double coefficient_norm_squared() const {
@@ -295,10 +311,15 @@ class WideReducedExactTRepresentation {
     Key key{std::move(p.x),std::move(p.z)};
     auto it=map.find(key);
     if(it==map.end()){
+      if(coefficient==std::complex<double>{0.,0.})return;
       if(map.size()>=max_components_)
         throw std::length_error("wide reduced component budget exceeded");
       map.emplace(std::move(key),coefficient);
-    }else it->second+=coefficient;
+    }else{
+      const auto combined=it->second+coefficient;
+      if(combined==std::complex<double>{0.,0.})map.erase(it);
+      else it->second=combined;
+    }
   }
   void accumulate(ComponentMap& map,Pauli p,std::complex<double> coefficient,
                   const Basis& basis) const {
