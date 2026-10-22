@@ -131,3 +131,32 @@ for name in ['pc-screen.png','pc-video-screen.png']:
     screenshot=Path('pc-evidence',name).read_bytes()
     assert len(screenshot)>1000 and screenshot.startswith(b'\x89PNG\r\n\x1a\n'),name
 PY
+
+# Practical desktop smoke: verify the actual new Android entry point runs.
+# Exercise the native Quantum Workstation lifecycle and inspect its
+# transactionally saved private checkpoint after returning to the desktop.
+"$adb_bin" shell am force-stop com.cosmicx.pc
+"$adb_bin" shell am start -W -n com.cosmicx.pc/.MundoXDesktopActivity > "$evidence_dir/desktop-start.txt"
+sleep 3
+"$adb_bin" shell pidof com.cosmicx.pc > "$evidence_dir/desktop-pid.txt"
+grep -q 'Status: ok' "$evidence_dir/desktop-start.txt"
+
+"$adb_bin" shell am start -W -n com.cosmicx.pc/.QuantumDesktopActivity > "$evidence_dir/quantum-desktop-start.txt"
+sleep 4
+"$adb_bin" shell pidof com.cosmicx.pc > /dev/null
+grep -q 'Status: ok' "$evidence_dir/quantum-desktop-start.txt"
+
+"$adb_bin" shell am start -W -n com.cosmicx.pc/.MundoXDesktopActivity > "$evidence_dir/desktop-return.txt"
+sleep 3
+"$adb_bin" exec-out run-as com.cosmicx.pc cat files/mundo_x_quantum_autosave.mqx > "$evidence_dir/quantum-workstation-autosave.mqx"
+python3 - <<'PY'
+import json
+from pathlib import Path
+p=Path('pc-evidence/quantum-workstation-autosave.mqx')
+s=json.loads(p.read_text())
+assert s['format']=='MUNDOX-QUANTUM-WORKSTATION-1',s.get('format')
+assert s['mode']=='xi',s.get('mode')
+assert 'mem_store' in s['xi_program'] and 'backend reduced' in s['xasm_program']
+assert s['core'] and s['memory'], 'Both native snapshots must be present'
+print('MUNDO_X_DESKTOP_SMOKE_PASS')
+PY
