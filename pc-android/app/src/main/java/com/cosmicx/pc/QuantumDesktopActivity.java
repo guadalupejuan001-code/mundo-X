@@ -404,7 +404,7 @@ public final class QuantumDesktopActivity extends Activity {
                     job.run();
                 } catch (Exception | LinkageError error) {
                     log("Error: " + error.getMessage()
-                            + "\nNo se aplicaron cambios del programa si hubo un fallo de ejecución.");
+                            + "\nSi falló la ejecución XI, los cambios del programa se descartan.");
                 } finally {
                     ui.post(() -> {
                         if (!closed) {
