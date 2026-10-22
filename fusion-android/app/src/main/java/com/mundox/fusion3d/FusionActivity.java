@@ -70,7 +70,7 @@ public final class FusionActivity extends Activity {
     private volatile boolean closed=false;
     private boolean milRunning=false;
     private long milModelRevision=0;
-    private int milQubits=3;
+    private int milQubits=8;
     private Button milRunButton,milSizeButton;
     private SeekBar milTimeControl;
     private TextView milTimeLabel,milSummary;
@@ -204,10 +204,9 @@ public final class FusionActivity extends Activity {
             energyBar.setProgress(state.getInt("energy",CollisionModel.energyToSlider(.02)));
             nuclearDepth.setProgress(state.getInt("nuclear_depth",15));
             timeline.setProgress(state.getInt("timeline",0));
-            milQubits=state.getInt("mil_qubits",3)==2?2:3;
+            milQubits=Math.max(2,Math.min(8,state.getInt("mil_qubits",8)));
             milTimeControl.setProgress(state.getInt("mil_time",500));
-            if(milSizeButton!=null)milSizeButton.setText(
-                    milQubits==3?"3 qubits / 8 posiciones":"2 qubits / 4 posiciones");
+            if(milSizeButton!=null)milSizeButton.setText(gridLabel(milQubits));
         }
         updateReport();
     }
@@ -439,28 +438,39 @@ public final class FusionActivity extends Activity {
         interactions.addView(exportHamiltonianButton,exportH);
         exportHamiltonianButton.setOnClickListener(v->exportHamiltonian());
         interactions.addView(text(
-                "El CSV contiene el operador radial de 256 posiciones, sin evolución. "+
-                "MIL Core ejecuta una discretización reducida del mismo potencial "+
-                "de 4 u 8 posiciones, con referencia matemática independiente.",11,SUB));
+                "El CSV contiene el operador radial de 256 posiciones. "+
+                "MIL Core puede evolucionar esa malla completa usando 8 qubits "+
+                "lógicos, además de modelos menores para comparar rendimiento. "+
+                "Cada escala tiene límites explícitos de pasos y recursos.",11,SUB));
 
         LinearLayout milPanel=panel(body);
         milPanel.addView(section("04 / EVOLUCIÓN UNITARIA EN MIL CORE"));
         milPanel.addView(text(
-                "El backend MIL Reduced evoluciona un Hamiltoniano radial de "+
-                "4 u 8 posiciones, codificadas en 2 o 3 qubits. "+
-                "Esto NO equivale a evolucionar la matriz de 256 posiciones. "+
-                "Se comprueba contra RK4 aplicado directamente a la matriz pequeña.",12,SUB));
-        milSizeButton=button("3 qubits / 8 posiciones",false);
+                "MIL Reduced puede evolucionar de 4 a 256 posiciones radiales "+
+                "mediante 2–8 qubits. 256 posiciones = 8 qubits. "+
+                "Las escalas de 16–256 usan el dominio de 96 fm del "+
+                "Hamiltoniano de investigación; las de 4/8 mantienen "+
+                "el piloto de 14 fm. El resultado se verifica contra RK4.",12,SUB));
+        milSizeButton=button(gridLabel(milQubits),false);
         milSizeButton.setContentDescription("mil-radial-grid-qubits");
         milPanel.addView(milSizeButton,new LinearLayout.LayoutParams(-1,dp(46)));
         milSizeButton.setOnClickListener(v->{
             if(milRunning)return;
-            milQubits=milQubits==3?2:3;
-            milSizeButton.setText(milQubits==3?
-                    "3 qubits / 8 posiciones":"2 qubits / 4 posiciones");
-            clearMilResult();
+            String[] sizes=new String[7];
+            for(int bits=2;bits<=8;bits++)sizes[bits-2]=gridLabel(bits);
+            new AlertDialog.Builder(this)
+                    .setTitle("Tamaño de evolución · MIL Core")
+                    .setSingleChoiceItems(sizes,milQubits-2,(dialog,index)->{
+                        milQubits=index+2;
+                        milSizeButton.setText(gridLabel(milQubits));
+                        milModelRevision++;
+                        clearMilResult();
+                        updateMilTimeLabel();
+                        dialog.dismiss();
+                    })
+                    .setNegativeButton("Cancelar",null).show();
         });
-        milTimeLabel=text("Tiempo de evolución: τ=t/ħ",12,GREEN);
+        milTimeLabel=text("Tiempo de evolución escalado: τ=t/ħ",12,GREEN);
         milTimeLabel.setPadding(0,dp(12),0,dp(4));
         milPanel.addView(milTimeLabel);
         milTimeControl=new SeekBar(this);
@@ -472,11 +482,11 @@ public final class FusionActivity extends Activity {
             @Override public void onStartTrackingTouch(SeekBar seekBar){}
             @Override public void onStopTrackingTouch(SeekBar seekBar){}
             @Override public void onProgressChanged(SeekBar seekBar,int value,boolean fromUser){
-                double tau=milTimeFromSlider(value);
-                milTimeLabel.setText(String.format(Locale.US,
-                        "τ=t/ħ = %.4f MeV^-1; t ≈ %.3e s",
-                        tau,tau*6.582119569e-22));
-                if(fromUser)clearMilResult();
+                updateMilTimeLabel();
+                if(fromUser){
+                    milModelRevision++;
+                    clearMilResult();
+                }
             }
         });
         milRunButton=button("EJECUTAR EVOLUCIÓN MIL CORE",true);
@@ -486,8 +496,9 @@ public final class FusionActivity extends Activity {
         milPanel.addView(milRunButton,runParams);
         milRunButton.setOnClickListener(v->runMilEvolution());
         milSummary=text(
-                "Selecciona una pareja con canal conocido y pulsa Ejecutar. "+
-                "El tiempo evoluciona el Hamiltoniano reducido, no una trayectoria nuclear observada.",
+                "Selecciona un canal nuclear conocido y pulsa Ejecutar. "+
+                "En 8 qubits se evolucionan las 256 posiciones del Hamiltoniano "+
+                "radial. El motor está simulado en CPU; no es una QPU física.",
                 12,SUB);
         milSummary.setContentDescription("mil-radial-execution-result");
         milSummary.setTypeface(Typeface.MONOSPACE);
@@ -497,9 +508,10 @@ public final class FusionActivity extends Activity {
         milChart=new MilProbabilityView(this);
         milPanel.addView(milChart,new LinearLayout.LayoutParams(-1,dp(224)));
         milPanel.addView(text(
-                "Verde: probabilidades del estado cuántico MIL. "+
-                "Naranja: referencia RK4 independiente del mismo Hamiltoniano reducido. "+
-                "Esta concordancia NO predice una tasa de fusión.",11,ORANGE));
+                "Verde: probabilidades del estado MIL. Naranja: RK4 independiente "+
+                "sobre el mismo Hamiltoniano. Con 256 posiciones, el gráfico "+
+                "suma grupos contiguos sin inventar datos. "+
+                "La concordancia matemática NO predice una tasa de fusión.",11,ORANGE));
 
         LinearLayout output=panel(body);
         output.addView(section("05 / RESULTADOS Y EVIDENCIA"));
