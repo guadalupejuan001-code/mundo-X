@@ -62,6 +62,7 @@ public final class EtherRenderView extends View {
     private int za=1,aa=2,zb=1,ab=3;
     private int pza=2,paa=4,pzb=0,pab=1;
     private boolean products=true,closed=false;
+    private String interactionCaption="Física de interacción: seleccionar modelo";
     private float progress=0f;
     private float yaw=.25f,pitch=.17f,distance=5.8f;
     private long revision=0, completedRevision=-1, renderMs=0;
@@ -107,6 +108,21 @@ public final class EtherRenderView extends View {
     public void setProgress(float value){
         progress=Math.max(0f,Math.min(1f,value));
         requestFrame();
+    }
+
+    /**
+     * The overlay reflects a computed WKB number; it does not change
+     * raytraced nucleon trajectories into physical quantum dynamics.
+     */
+    public void setNuclearModel(NuclearInteractionModel.Result value){
+        if(value==null || !value.hasNuclearModel)
+            interactionCaption="Interacción: sin canal nuclear calibrado";
+        else if(value.belowBarrier)
+            interactionCaption=String.format(Locale.US,
+                "WKB: 10^(%.2f) [modelo]",value.log10Wkb);
+        else
+            interactionCaption="WKB sub-barrera: no aplicable";
+        invalidate();
     }
 
     public float progress(){return progress;}
@@ -177,6 +193,11 @@ public final class EtherRenderView extends View {
         canvas.drawText("ETHER RENDER X  /  C++",dp(17),dp(25),font);
         font.setColor(MUTED);
         canvas.drawText("344×224 · raytracing · " + renderMs + " ms",dp(17),dp(41),font);
+        bg.setColor(Color.argb(183,6,14,24));
+        canvas.drawRoundRect(new RectF(dp(8),h-dp(80),w-dp(8),h-dp(56)),
+                dp(7),dp(7),bg);
+        font.setColor(CYAN);
+        canvas.drawText(interactionCaption,dp(15),h-dp(63),font);
         bg.setColor(Color.argb(199,6,14,24));
         canvas.drawRoundRect(new RectF(dp(8),h-dp(53),w-dp(8),h-dp(8)),dp(8),dp(8),bg);
         font.setColor(TEXT);

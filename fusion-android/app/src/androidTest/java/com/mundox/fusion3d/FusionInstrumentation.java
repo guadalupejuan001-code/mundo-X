@@ -25,6 +25,14 @@ public final class FusionInstrumentation extends Instrumentation {
             double q=dt.documentedChannels.get(0).qMeV;
             if(Math.abs(q-17.5893)>.005)throw new AssertionError("D-T Q invalid: "+q);
             CollisionModel.Result model=CollisionModel.calculate(dt,.020);
+            NuclearInteractionModel.Result interaction=
+                    NuclearInteractionModel.solve(dt,.020,35.);
+            if(!interaction.hasNuclearModel || !interaction.belowBarrier ||
+                    !(interaction.log10Wkb<0 && interaction.innerTurningFm>0))
+                throw new AssertionError("Nuclear interaction WKB solver failed");
+            RadialHamiltonian.Grid radial=RadialHamiltonian.from(interaction);
+            if(radial.sites!=256 || !radial.csv().contains("i,r_fm,vc_mev"))
+                throw new AssertionError("Sparse radial Hamiltonian unavailable");
             if(!(model.rContactFm>0&&model.coulombContactMeV>.02&&
                     model.classicalTurningFm>model.rContactFm))
                 throw new AssertionError("Coulomb model invalid");
@@ -33,7 +41,17 @@ public final class FusionInstrumentation extends Instrumentation {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             Activity activity=startActivitySync(intent);
             waitForIdleSync();
-            EtherRenderView viewer=findViewer(activity.getWindow().getDecorView());
+            View workspace=activity.getWindow().getDecorView();
+            View physicsPanel=findByDescription(workspace,"nuclear-wkb-model-result");
+            View graph=findByDescription(workspace,"nuclear-potential-wkb-plot");
+            View operatorView=findByDescription(workspace,"radial-hamiltonian-grid-details");
+            View operatorExport=findByDescription(workspace,"export-sparse-nuclear-hamiltonian");
+            if(physicsPanel==null || graph==null || operatorView==null || operatorExport==null)
+                throw new AssertionError("Nuclear interaction results not connected to UI");
+            if(!(physicsPanel instanceof android.widget.TextView) ||
+                    !((android.widget.TextView)physicsPanel).getText().toString().contains("WKB"))
+                throw new AssertionError("No calculated WKB value in user-facing model panel");
+            EtherRenderView viewer=findViewer(workspace);
             if(viewer==null)throw new AssertionError("3D native Ether view missing");
             long deadline=SystemClock.elapsedRealtime()+15000;
             while(SystemClock.elapsedRealtime()<deadline && !viewer.hasNativeFrame()){
@@ -48,7 +66,12 @@ public final class FusionInstrumentation extends Instrumentation {
             runOnMainSync(viewer::resetCamera);
             waitForIdleSync();
             result.putString("stream","FUSION_3D_ANDROID_PASS Q="+q+
-                    " MeV; native "+provenance+"\n");
+                    " MeV; native "+provenance+"\n"+
+                    "NUCLEAR_INTERACTION_ANDROID_PASS WKB_log10="+
+                    interaction.log10Wkb+" r1="+interaction.innerTurningFm+
+                    " r2="+interaction.outerTurningFm+"\n"+
+                    "RADIAL_H_ANDROID_PASS sites="+radial.sites+
+                    " tridiagonal=true\n");
             runOnMainSync(activity::finish);
         } catch(Throwable fail) {
             result.putString("stream","FUSION_3D_ANDROID_FAIL "+fail+"\n");
@@ -58,6 +81,18 @@ public final class FusionInstrumentation extends Instrumentation {
         finish(Activity.RESULT_OK,result);
     }
 
+    private View findByDescription(View root,String description){
+        CharSequence label=root.getContentDescription();
+        if(label!=null && label.toString().equals(description))return root;
+        if(root instanceof ViewGroup){
+            ViewGroup group=(ViewGroup)root;
+            for(int i=0;i<group.getChildCount();i++){
+                View candidate=findByDescription(group.getChildAt(i),description);
+                if(candidate!=null)return candidate;
+            }
+        }
+        return null;
+    }
     private EtherRenderView findViewer(View root){
         if(root instanceof EtherRenderView)return (EtherRenderView)root;
         if(root instanceof ViewGroup){

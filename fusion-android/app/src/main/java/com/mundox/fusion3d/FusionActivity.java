@@ -45,6 +45,7 @@ import java.util.Locale;
  */
 public final class FusionActivity extends Activity {
     private static final int EXPORT_RESULT=801;
+    private static final int EXPORT_HAMILTONIAN=802;
     private static final int BG=Color.rgb(8,14,23);
     private static final int PANEL=Color.rgb(15,27,41);
     private static final int BORDER=Color.rgb(49,78,94);
@@ -75,6 +76,12 @@ public final class FusionActivity extends Activity {
 
     private int z1=1,z2=1,a1=2,a2=3,channel=0;
     private boolean expert=false,playing=false;
+    private NuclearInteractionModel.Result nuclearModel;
+    private RadialHamiltonian.Grid radialHamiltonian;
+    private NuclearPotentialGraphView nuclearGraph;
+    private TextView nuclearSummary, nuclearDepthCaption, hamiltonianSummary;
+    private SeekBar nuclearDepth;
+    private Button nuclearZoomButton, exportHamiltonianButton;
     private Button firstElement,secondElement,channelButton,playButton,exportButton,expertButton;
     private TextView selectedHint,collisionLabel,stageLabel,formulaSummary,reactionSummary,unknownWarning,stepInfo,detailsView;
     private EditText isotopeA,isotopeB;
@@ -178,6 +185,7 @@ public final class FusionActivity extends Activity {
         setPresets(false,z1,a1,z2,a2);
         if(state!=null){
             energyBar.setProgress(state.getInt("energy",CollisionModel.energyToSlider(.02)));
+            nuclearDepth.setProgress(state.getInt("nuclear_depth",15));
             timeline.setProgress(state.getInt("timeline",0));
         }
         updateReport();
@@ -190,6 +198,7 @@ public final class FusionActivity extends Activity {
         out.putInt("channel",channel);
         out.putBoolean("expert",expert);
         out.putInt("energy",energyBar.getProgress());
+        out.putInt("nuclear_depth",nuclearDepth.getProgress());
         out.putInt("timeline",timeline.getProgress());
     }
 
@@ -220,6 +229,12 @@ public final class FusionActivity extends Activity {
         big.setPadding(0,dp(5),0,dp(5));
         body.addView(big);
         body.addView(text("Investiga reacciones nucleares, inspecciona sus modelos físicos y explora una escena 3D calculada con Ether Render X.",13,SUB));
+        TextView newModelInfo=text(
+                "NUEVO v1.1  ·  Interacción Coulomb + Woods–Saxon, penetración WKB "+
+                "y Hamiltoniano radial exportable. Desplázate hasta el panel 03 para estudiarlos.",
+                11,GREEN);
+        newModelInfo.setPadding(0,dp(10),0,0);
+        body.addView(newModelInfo);
 
         LinearLayout viewport=panel(body);
         viewport.addView(section("VISOR ESPACIAL · ETHER RENDER X"));
@@ -325,14 +340,16 @@ public final class FusionActivity extends Activity {
         collisions.addView(energyBar);
         energyBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             @Override public void onStartTrackingTouch(SeekBar b){}
-            @Override public void onStopTrackingTouch(SeekBar b){}
+            @Override public void onStopTrackingTouch(SeekBar b){updateReport();}
             @Override public void onProgressChanged(SeekBar b,int value,boolean user){
                 double keV=CollisionModel.sliderToMeV(value)*1000;
                 collisionLabel.setText(String.format(Locale.US,
                         "Ecm = %s keV",keV>=1000?String.format(Locale.US,"%.1f",keV):
                                 keV>=10?String.format(Locale.US,"%.2f",keV):
                                         String.format(Locale.US,"%.3f",keV)));
-                if(isotopeA!=null&&formulaSummary!=null)updateReport();
+                // A WKB integration is not a real-time slider effect:
+                // compute on release, or when a saved value is restored.
+                if(!user && isotopeA!=null&&formulaSummary!=null)updateReport();
             }
         });
         potential=new CoulombGraphView(this);
@@ -342,8 +359,70 @@ public final class FusionActivity extends Activity {
         formulaSummary.setPadding(0,dp(11),0,dp(4));
         collisions.addView(formulaSummary);
 
+        LinearLayout interactions=panel(body);
+        interactions.addView(section("03 / INTERACCIÓN NUCLEAR Y TÚNEL"));
+        interactions.addView(text(
+                "Ahora calculamos la atracción nuclear aproximada (Woods-Saxon) "+
+                "además de la repulsión de Coulomb. Para energías bajo la barrera, "+
+                "la integral WKB estima la supresión de penetración cuántica. "+
+                "NO equivale a probabilidad de fusión.",12,SUB));
+        nuclearSummary=title("Preparando modelo nuclear…",13);
+        nuclearSummary.setContentDescription("nuclear-wkb-model-result");
+        nuclearSummary.setPadding(0,dp(12),0,dp(8));
+        interactions.addView(nuclearSummary);
+        nuclearDepthCaption=text("Profundidad de prueba V0 = 35 MeV",12,GREEN);
+        interactions.addView(nuclearDepthCaption);
+        nuclearDepth=new SeekBar(this);
+        nuclearDepth.setMax(40);
+        nuclearDepth.setProgress(15);
+        nuclearDepth.setContentDescription("nuclear-woods-saxon-depth-control");
+        interactions.addView(nuclearDepth);
+        interactions.addView(text(
+                "V0 = 20–60 MeV, parámetro ajustable de un potencial fenomenológico. "+
+                "No se ha calibrado con datos de dispersión D–T.",11,ORANGE));
+        nuclearGraph=new NuclearPotentialGraphView(this);
+        nuclearGraph.setContentDescription("nuclear-potential-wkb-plot");
+        interactions.addView(nuclearGraph,new LinearLayout.LayoutParams(-1,dp(240)));
+        nuclearDepth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onStartTrackingTouch(SeekBar b){}
+            @Override public void onStopTrackingTouch(SeekBar b){updateReport();}
+            @Override public void onProgressChanged(SeekBar b,int value,boolean fromUser){
+                nuclearDepthCaption.setText("Profundidad de prueba V0 = "+(20+value)+" MeV");
+                if(!fromUser && nuclearGraph!=null && energyBar!=null)updateReport();
+            }
+        });
+        LinearLayout options=row();
+        interactions.addView(options);
+        nuclearZoomButton=button("Ver pozo completo",false);
+        Button compareDepth=button("Sensibilidad V0",false);
+        half(options,nuclearZoomButton,compareDepth);
+        nuclearZoomButton.setOnClickListener(v->{
+            boolean zoom=!nuclearGraph.isBarrierZoom();
+            nuclearGraph.setBarrierZoom(zoom);
+            nuclearZoomButton.setText(zoom?"Ver pozo completo":"Zoom de barrera");
+        });
+        compareDepth.setOnClickListener(v->compareNuclearDepths());
+        hamiltonianSummary=text(
+                "H radial: sin cálculo. Se prepara una matriz tridiagonal, no una simulación completa.",
+                12,SUB);
+        hamiltonianSummary.setContentDescription("radial-hamiltonian-grid-details");
+        hamiltonianSummary.setPadding(0,dp(10),0,dp(5));
+        interactions.addView(hamiltonianSummary);
+        exportHamiltonianButton=button("Exportar Hamiltoniano radial .CSV",false);
+        exportHamiltonianButton.setContentDescription("export-sparse-nuclear-hamiltonian");
+        exportHamiltonianButton.setEnabled(false);
+        LinearLayout.LayoutParams exportH=new LinearLayout.LayoutParams(-1,dp(46));
+        exportH.topMargin=dp(8);
+        interactions.addView(exportHamiltonianButton,exportH);
+        exportHamiltonianButton.setOnClickListener(v->exportHamiltonian());
+        interactions.addView(text(
+                "Las líneas son resultados numéricos del modelo. El archivo CSV "+
+                "contiene el operador H radial discretizado, listo para investigaciones "+
+                "posteriores; MIL Core todavía no ejecuta esta matriz. "+
+                "El visor Ether 3D continúa siendo una representación ilustrativa.",11,SUB));
+
         LinearLayout output=panel(body);
-        output.addView(section("03 / RESULTADOS Y EVIDENCIA"));
+        output.addView(section("04 / RESULTADOS Y EVIDENCIA"));
         channelButton=button("Canal de reacción",false);
         channelButton.setContentDescription("fusion-reaction-branch");
         output.addView(channelButton,new LinearLayout.LayoutParams(-1,dp(48)));
@@ -389,7 +468,11 @@ public final class FusionActivity extends Activity {
         nist.setOnClickListener(v->external(NIST));
         nndc.setOnClickListener(v->external(NNDC));
         doe.setOnClickListener(v->external(DOE));
-        TextView contract=text("LIMITACIÓN EXPLÍCITA: Ether Render X dibuja cuerpos 3D; no predice trayectorias reales de nucleones. MIL Core no está conectado a un Hamiltoniano nuclear validado. Esta app no fabrica elementos ni calcula probabilidades de síntesis.",11,ORANGE);
+        TextView contract=text("LIMITACIÓN EXPLÍCITA: WKB es una aproximación semiclasica "+
+                "de la barrera de un potencial fenomenológico sin ajuste experimental. "+
+                "Ether Render X dibuja cuerpos 3D; no predice trayectorias nucleares. "+
+                "MIL Core todavía no ejecuta un Hamiltoniano nuclear validado. "+
+                "Esta app no calcula tasas de fusión ni fabrica elementos.",11,ORANGE);
         contract.setPadding(0,dp(11),0,dp(3));
         sources.addView(contract);
     }
@@ -535,6 +618,57 @@ public final class FusionActivity extends Activity {
                     "Ecm = %.4g MeV  ·  Rcontact ≈ %.3f fm\nVcoulomb(contact) ≈ %.4g MeV\nRetorno clásico rmin ≈ %.4g fm",
                     model.eCmMeV,model.rContactFm,model.coulombContactMeV,model.classicalTurningFm));
             potential.setData(model);
+            nuclearModel=null;
+            try {
+                nuclearModel=NuclearInteractionModel.solve(
+                        analysis,model.eCmMeV,20+nuclearDepth.getProgress());
+                nuclearGraph.setResult(nuclearModel);
+                if(!nuclearModel.hasNuclearModel){
+                    nuclearSummary.setText(
+                            "Sin potencial nuclear parametrizado para esta pareja. "+
+                            "No se inventan valores de túnel ni se extrapola el modelo.");
+                    nuclearSummary.setTextColor(ORANGE);
+                }else if(nuclearModel.belowBarrier){
+                    nuclearSummary.setText(String.format(Locale.US,
+                            "Pico del modelo: %.4f MeV a %.3f fm\n"+
+                            "Puntos de retorno: %.3f – %.3f fm\n"+
+                            "Supresión WKB ≈ 10^(%.3f) (NO probabilidad de fusión)",
+                            nuclearModel.barrierPeakMeV,nuclearModel.barrierPeakRadiusFm,
+                            nuclearModel.innerTurningFm,nuclearModel.outerTurningFm,
+                            nuclearModel.log10Wkb));
+                    nuclearSummary.setTextColor(GREEN);
+                }else{
+                    nuclearSummary.setText(String.format(Locale.US,
+                            "Pico del modelo: %.4f MeV a %.3f fm\n"+
+                            "No se calcula WKB sub-barrera en esta energía.",
+                            nuclearModel.barrierPeakMeV,nuclearModel.barrierPeakRadiusFm));
+                    nuclearSummary.setTextColor(ORANGE);
+                }
+            } catch(RuntimeException numericalFailure) {
+                nuclearGraph.setResult(null);
+                nuclearSummary.setText("La integral nuclear no pudo evaluarse: "+
+                        numericalFailure.getMessage());
+                nuclearSummary.setTextColor(ORANGE);
+            }
+            renderer.setNuclearModel(nuclearModel);
+            radialHamiltonian=null;
+            if(nuclearModel!=null && nuclearModel.hasNuclearModel) {
+                try {
+                    radialHamiltonian=RadialHamiltonian.from(nuclearModel);
+                    hamiltonianSummary.setText(String.format(Locale.US,
+                            "H radial l=0 · %d puntos · Δr=%.4f fm · "+
+                            "matriz tridiagonal real (%d diagonales + %d enlaces).",
+                            radialHamiltonian.sites,radialHamiltonian.stepFm,
+                            radialHamiltonian.sites,radialHamiltonian.sites-1));
+                }catch(RuntimeException operatorFailure){
+                    hamiltonianSummary.setText("No se pudo discretizar H: "+
+                            operatorFailure.getMessage());
+                }
+            }else{
+                hamiltonianSummary.setText(
+                        "Hamiltoniano no parametrizado para esta pareja de núcleos.");
+            }
+            exportHamiltonianButton.setEnabled(radialHamiltonian!=null);
             boolean known=analysis.hasDocumentedChannel();
             channelButton.setEnabled(known&&analysis.documentedChannels.size()>1);
             channelButton.setText(known?(analysis.documentedChannels.size()>1?
@@ -559,20 +693,65 @@ public final class FusionActivity extends Activity {
                 "Modelo electrostático: Ecm está por debajo de la energía clásica de contacto. "+
                 "El túnel cuántico podría permitir una reacción, pero NO se ha calculado su probabilidad.");
             renderer.setScene(analysis,channel);
-            detailsView.setText(model.summary()+"\n\n"+renderer.provenance());
+            detailsView.setText(model.summary()+"\n\n"+
+                    (nuclearModel==null?"Modelo nuclear sin solución en estos parámetros.":
+                            nuclearModel.explain())+"\n"+
+                    (radialHamiltonian==null?"No hay operador radial.":
+                            radialHamiltonian.summary())+
+                    "\n"+renderer.provenance());
             hasResult=true;
             exportButton.setEnabled(true);
             showExpert();
             updateStageText();
         }catch(IllegalArgumentException failure){
-            analysis=null;model=null;hasResult=false;
+            analysis=null;model=null;nuclearModel=null;radialHamiltonian=null;hasResult=false;
             formulaSummary.setText("Revisa isótopos: "+failure.getMessage());
             reactionSummary.setText("Datos de entrada incompletos o inválidos");
             unknownWarning.setText("Introduce un A válido para cada núcleo.");
             detailsView.setText("");
             potential.setData(null);
+            nuclearGraph.setResult(null);
+            nuclearSummary.setText("Datos de interacción nuclear no disponibles.");
+            hamiltonianSummary.setText("No hay operador nuclear para estos datos.");
+            renderer.setNuclearModel(null);
+            exportHamiltonianButton.setEnabled(false);
             exportButton.setEnabled(false);
         }
+    }
+
+    private void compareNuclearDepths(){
+        if(analysis==null || !analysis.hasDocumentedChannel()){
+            new AlertDialog.Builder(this).setTitle("Modelo no disponible")
+                    .setMessage("Solo se usa el modelo de entrada con los "+
+                            "isótopos de canales de referencia conocidos.")
+                    .setPositiveButton("Entendido",null).show();
+            return;
+        }
+        StringBuilder comparison=new StringBuilder(
+                "MISMA PAREJA Y MISMA ENERGÍA\n"+
+                "El parámetro V0 cambia la atracción nuclear aproximada, "+
+                "no las masas ni la energía Q.\n\n");
+        for(double depth:new double[]{25.,35.,45.}){
+            try{
+                NuclearInteractionModel.Result variant=NuclearInteractionModel.solve(
+                        analysis,model.eCmMeV,depth);
+                comparison.append(String.format(Locale.US,
+                        "V0 = %.0f MeV  ·  Barrera = %.4f MeV",
+                        depth,variant.barrierPeakMeV));
+                if(variant.belowBarrier)
+                    comparison.append(String.format(Locale.US,
+                            "\n  log10 supresión WKB = %.4f\n",variant.log10Wkb));
+                else comparison.append("\n  WKB sub-barrera no aplicable\n");
+            }catch(RuntimeException failure){
+                comparison.append("V0=").append(depth).append(": ")
+                        .append(failure.getMessage()).append("\n");
+            }
+        }
+        comparison.append("\nNo son bandas de incertidumbre experimental, "+
+                "son una prueba de sensibilidad del modelo.");
+        new AlertDialog.Builder(this).setTitle("Sensibilidad a la interacción nuclear")
+                .setMessage(comparison.toString())
+                .setPositiveButton("Cerrar",null).show();
     }
 
     private void selectChannel(){
@@ -613,6 +792,20 @@ public final class FusionActivity extends Activity {
                 "03 / Reacción no determinada · sin productos inventados");
     }
 
+    private void exportHamiltonian(){
+        if(radialHamiltonian==null){
+            toast("Selecciona un canal nuclear conocido antes de exportar H.");
+            return;
+        }
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.setType("text/csv");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.putExtra(Intent.EXTRA_TITLE,
+                "Mundo-X-H-radial-"+analysis.first.label()+"-"+analysis.second.label()+".csv");
+        try{startActivityForResult(intent,EXPORT_HAMILTONIAN);}
+        catch(ActivityNotFoundException fail){toast("No hay selector de archivos disponible.");}
+    }
+
     private void saveReport(){
         if(!hasResult||model==null)return;
         Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -624,14 +817,35 @@ public final class FusionActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
-        if(request!=EXPORT_RESULT||result!=RESULT_OK||data==null||data.getData()==null
-                ||model==null||!hasResult)return;
+        if(result!=RESULT_OK||data==null||data.getData()==null)return;
+        if(request==EXPORT_HAMILTONIAN) {
+            if(radialHamiltonian==null)return;
+            String csv=radialHamiltonian.csv();
+            byte[] dataBytes=csv.getBytes(StandardCharsets.UTF_8);
+            if(dataBytes.length>128*1024){
+                toast("Operador fuera de presupuesto CSV (128 KiB)");
+                return;
+            }
+            try(OutputStream stream=getContentResolver().openOutputStream(data.getData(),"wt")){
+                if(stream==null)throw new IllegalStateException("Sin acceso al documento");
+                stream.write(dataBytes);stream.flush();
+                toast("Hamiltoniano radial exportado: "+radialHamiltonian.sites+" puntos");
+            }catch(Exception error){toast("Error exportando H: "+error.getMessage());}
+            return;
+        }
+        if(request!=EXPORT_RESULT||model==null||!hasResult)return;
         String report="MUNDO X / FUSION 3D / REPORTE\n"
                 +"Modelo de masas NIST + Coulomb clásico + render 3D ilustrativo\n"
                 +"Software local · No prueba de síntesis\n\n"
                 +model.summary()
                 +"\nCANAL VISUALIZADO: "+(analysis.hasDocumentedChannel()?
                     analysis.documentedChannels.get(channel).products:"NO DETERMINADO")
+                +"\n\n"+(nuclearModel==null?
+                        "MODELO NUCLEAR: sin resultado numérico":
+                        nuclearModel.explain())
+                +"\n\n"+(radialHamiltonian==null?
+                        "HAMILTONIANO RADIAL: no disponible":
+                        radialHamiltonian.summary())
                 +"\n\n"+renderer.provenance()
                 +"\n\nREFERENCIAS\nNIST: "+NIST+"\nNNDC QCalc: "+NNDC+"\nDOE: "+DOE+"\n";
         byte[] bytes=report.getBytes(StandardCharsets.UTF_8);

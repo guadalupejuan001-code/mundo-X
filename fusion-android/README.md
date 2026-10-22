@@ -2,7 +2,7 @@
 
 **Nombre de Android:** Mundo X Fusion 3D  
 **Paquete:** `com.mundox.fusion3d`  
-**Versión:** 1.0.0  
+**Versión:** 1.1.0  
 **Sin conexión, sin permisos de red, sin acceso general a archivos.**
 
 Este módulo construye una APK **independiente** de `COSMIC X PC`, `MUNDO X Desktop`, `Solar` y de otras apps. Su interfaz está diseñada para el teléfono: pantalla completa, 118 elementos, búsqueda, selección de isótopos, explicación contextual, cálculo físico y una escena 3D orbitable.
@@ -14,13 +14,13 @@ Este módulo construye una APK **independiente** de `COSMIC X PC`, `MUNDO X Desk
 | Tabla periódica | 118 elementos con número atómico y números másicos editables | No afirma estabilidad/realidad de cualquier isótopo elegido |
 | Energía Q | Diferencia de masas isotópicas neutrales tabuladas por NIST y balance Z/A, 5 canales concretos | No calcula probabilidades, captura ni productos de reacciones arbitrarias |
 | Energía Ecm | Control logarítmico de 0.1 a 10,000 keV | No fija una velocidad de cámara ni una duración física |
-| Potencial de Coulomb | `V(r)=1.4399764 Z1 Z2/r` MeV con distancia en fm | Exterior al radio de contacto estimado; sin fuerza nuclear fuerte, interacción de canal ni efecto de túnel |
+| Potencial Coulomb | `V_C(r)=1.4399764 Z1 Z2/r` MeV fuera de contacto (y esfera uniformemente cargada dentro) | Modelo electrostático aproximado |
 | Radio de contacto | `R=1.2(A1^(1/3)+A2^(1/3))` fm | Modelo geométrico simplificado, no radio medido específico |
-| Radio clásico de retorno | `rmin=1.4399764 Z1 Z2/Ecm` fm | Idealización de aproximación frontal clásica sin potencial nuclear |
+| Radio clásico de retorno | `rmin=1.4399764 Z1 Z2/Ecm` fm | Idealización de aproximación frontal clásica sin potencial nuclear |\n| Interacción nuclear fenomenológica | `V_N(r)=-V0/[1+exp((r-R)/a)]`, V0 20–60 MeV | No ajustada a datos D–T/D–D; no implica una fuerza microscópica |\n| Penetración sub-barrera WKB | Integral numérica con dos puntos de retorno y comparación analítica Coulomb | Factor semiclasico de barrera; **no es probabilidad de fusión** |\n| Hamiltoniano radial | Matriz tridiagonal real 256 puntos, exportable como CSV | Operador de estudio, todavía sin evolución en MIL Core |
 | Vista 3D | El **código original de EtherRenderer (Mundo X)** traza rayos contra esferas tridimensionales y sombrea el fotograma | Posiciones de nucleones y trayectorias son diagramas, no resultados de un Hamiltoniano nuclear |
 | Exportación | Informe de texto con Q, isótopos, dimensiones, fuentes, límites y motor gráfico | No asegura que se haya producido una reacción física |
 
-Las simulaciones de dinámica nuclear cuántica completa requerirían un Hamiltoniano nuclear validado, fuerzas y amplitudes de transición, un solver y verificación contra secciones eficaces experimentales. Esos componentes no están implementados aquí ni se atribuyen a MIL Core.
+La versión 1.1 añade un Hamiltoniano **discretizado** y un modelo WKB; no ejecuta ni propaga ese Hamiltoniano. La dinámica nuclear cuántica completa requiere fuerzas y amplitudes de transición verificables, condiciones de contorno para dispersión y comparaciones con secciones eficaces experimentales. No se atribuye ese trabajo a MIL Core. Detalles y derivaciones: [NUCLEAR_INTERACTION.md](NUCLEAR_INTERACTION.md).
 
 ## 2. Reacciones de referencia
 
@@ -63,12 +63,12 @@ El resultado **no** procede de otra librería 3D, motor de juegos o imagen está
 
 Workflow `.github/workflows/fusion-standalone-android.yml`:
 1. Compila los modelos matemáticos con Java sin Android.
-2. Comprueba 118 elementos, canales, Q, invariancia de reactivos, energía y radios.
+2. Comprueba 118 elementos, canales, Q, invariancia de reactivos, energía y radios. La ampliación 1.1 también prueba el modelo Woods–Saxon/WKB frente a Coulomb analítico, su sensibilidad y el Hamiltoniano tridiagonal simétrico.
 3. Compila y ejecuta el renderizador C++ original con un oráculo geométrico exhaustivo y comprueba órbita distinta.
 4. Compila y firma APK Android ARM64 y x86_64, revisa clase de lanzador y biblioteca nativa.
 5. Inicia la APK en un emulador Android 15, captura pantalla y revisa errores de inicio.
 
-## 6. Fuentes científicas
+## 6. Fuentes científicas\n\n- [Modelo nuclear, ecuaciones, pruebas y límites de v1.1](NUCLEAR_INTERACTION.md)
 
 - [NIST Atomic Weights and Isotopic Compositions](https://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl?all=all&ascii=ascii&ele=&isotype=all)
 - [BNL/NNDC QCalc, evaluación AME 2020](https://www.nndc.bnl.gov/qcalc/)
