@@ -33,7 +33,7 @@ class AdaptivePhaseCore {
                              Transition transition = Transition::Transfer)
       : n_(n), tolerance_(product_tolerance), max_components_(max_components),
         transition_(transition) {
-    if (n == 0 || n > 63) throw std::invalid_argument("supports 1..63 qubits");
+    if (n == 0 || n > 1000) throw std::invalid_argument("adaptive product register supports 1..1000 qubits");
     if (!std::isfinite(tolerance_) || tolerance_ < 0. || tolerance_ > 1e-8)
       throw std::invalid_argument("invalid product tolerance");
     if (max_components_ == 0) throw std::invalid_argument("zero component limit");
@@ -139,6 +139,7 @@ class AdaptivePhaseCore {
     }
   }
   void fallback(const Gate& current) {
+    if (n_ > 63) throw std::length_error("entangling non-product state above 63 qubits requires multiword reduced backend; operation rejected");
     std::unique_ptr<ReducedExactTRepresentation> candidate;
     if (transition_ == Transition::Transfer) {
       candidate = std::make_unique<ReducedExactTRepresentation>(
