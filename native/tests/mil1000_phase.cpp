@@ -1,45 +1,84 @@
-#include "mundo_x/adaptive_phase_core.hpp"
+#include "mundo_x/mil_universal_core.hpp"
+#include "mundo_x/exact_t_experiment.hpp"
+
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
-static void require(bool ok, const char* message) {
-  if (!ok) throw std::runtime_error(message);
+static void require(bool ok,const char* message){
+  if(!ok)throw std::runtime_error(message);
 }
 
-int main() {
-  using mundo_x::AdaptivePhaseCore;
-  const double pi = std::acos(-1.0);
-  AdaptivePhaseCore core(1000);
-  require(core.qubits()==1000, "1000 qubits not created");
-  core.hadamard(999);
+static std::string pauli(std::size_t n,char fill,char last){
+  std::string out(n,fill);out.back()=last;return out;
+}
+
+int main(){
+  using mundo_x::MilUniversalCore;
+  using mundo_x::ReducedExactTRepresentation;
+
+  const double pi=std::acos(-1.0);
+  const double s=std::sqrt(.5);
+
+  // Main target: one 1000-qubit register, entangled while still compact,
+  // then promoted to the multiword non-Clifford representation.
+  MilUniversalCore core(1000,4096);
+  core.hadamard(0);
+  for(std::size_t q=1;q<1000;++q)core.cnot(q-1,q);
+  require(!core.promoted(),"Clifford preparation promoted early");
+  require(std::abs(core.expectation(std::string(1000,'X'))-1.)<1e-12,
+          "GHZ1000 X product before T");
+
   core.phase_t(999);
-  require(std::abs(core.pauli_expectation('X',999)-std::sqrt(.5))<1e-12,"T X incorrect");
-  require(std::abs(core.pauli_expectation('Y',999)-std::sqrt(.5))<1e-12,"T Y incorrect");
-  core.phase(999,.37);
-  require(std::abs(core.pauli_expectation('X',999)-std::cos(pi/4+.37))<1e-12,"phase X incorrect");
-  require(std::abs(core.pauli_expectation('Y',999)-std::sin(pi/4+.37))<1e-12,"phase Y incorrect");
-  core.controlled_phase(0,999,.41);
-  require(core.is_product(),"inactive control should not entangle");
-  require(core.component_count()==1,"product expanded");
-  require(core.logical_payload_bytes()<=1000*sizeof(AdaptivePhaseCore::Pair),"product payload unexpectedly expanded");
-  require(std::abs(core.norm_squared()-1.)<1e-12,"norm incorrect");
+  require(core.promoted(),"T did not promote wide backend");
+  require(core.component_count()<=2,"one T used more than two components");
+  require(std::abs(core.expectation(std::string(1000,'X'))-s)<1e-10,
+          "GHZ1000 T all-X mismatch");
+  require(std::abs(core.expectation(pauli(1000,'X','Y'))-s)<1e-10,
+          "GHZ1000 T X...Y mismatch");
 
-  AdaptivePhaseCore entangled(1000);
-  entangled.hadamard(0);
-  bool rejected=false;
-  try { entangled.cnot(0,999); }
-  catch(const std::length_error&) { rejected=true; }
-  require(rejected,"unsupported multiword entanglement was silently accepted");
-  bool blocked=false;
-  try { (void)entangled.norm_squared(); }
-  catch(const std::logic_error&) { blocked=true; }
-  require(blocked,"failed transition left readable state");
+  const double extra=.37;
+  core.phase(999,extra);
+  const double angle=pi/4.+extra;
+  require(std::abs(core.expectation(std::string(1000,'X'))-std::cos(angle))<1e-10,
+          "1000-qubit arbitrary phase all-X mismatch");
+  require(std::abs(core.expectation(pauli(1000,'X','Y'))-std::sin(angle))<1e-10,
+          "1000-qubit arbitrary phase X...Y mismatch");
 
-  AdaptivePhaseCore legacy(63);
-  legacy.hadamard(0);
-  legacy.cnot(0,62);
-  require(!legacy.is_product(),"63-qubit fallback regression");
+  // Clifford evolution after promotion must remain legal. Apply an involution
+  // twice and require the original non-Clifford correlations to return.
+  core.cnot(0,999);
+  core.cnot(0,999);
+  require(std::abs(core.expectation(std::string(1000,'X'))-std::cos(angle))<1e-10,
+          "post-T Clifford evolution changed restored observable");
 
-  std::cout<<"{\"suite\":\"mil1000_phase\",\"qubits\":1000,\"product_t\":true,\"general_phase\":true,\"controlled_phase\":true,\"entangling_1000\":false,\"checks\":12}\n";
+  // Cross-check the wide engine against the already validated 64-bit Reduced
+  // backend on a small circuit, including T and a general phase.
+  mundo_x::WideReducedExactTRepresentation wide(8,4096);
+  ReducedExactTRepresentation reduced(8,4096);
+  auto bothH=[&](std::size_t q){wide.hadamard(q);reduced.hadamard(q);};
+  auto bothCX=[&](std::size_t a,std::size_t b){wide.cnot(a,b);reduced.cnot(a,b);};
+  auto bothT=[&](std::size_t q){wide.phase_t(q);reduced.phase_t(q);};
+  auto bothP=[&](std::size_t q,double t){wide.phase(q,t);reduced.phase(q,t);};
+  bothH(0);bothCX(0,7);bothT(7);bothH(3);bothP(3,.231);bothCX(3,4);bothT(4);
+  for(std::size_t q=0;q<8;++q)for(char axis:{'X','Y','Z'}){
+    const double a=wide.pauli_expectation(axis,q);
+    const double b=reduced.pauli_expectation(axis,q);
+    require(std::abs(a-b)<1e-10,"wide/reduced local observable mismatch");
+  }
+  require(std::abs(wide.coefficient_norm_squared()-reduced.coefficient_norm_squared())<1e-10,
+          "wide/reduced norm mismatch");
+
+  std::cout
+      <<"{\"suite\":\"mil1000_universal\","
+      <<"\"qubits\":1000,"
+      <<"\"ghz1000\":true,"
+      <<"\"t_q999\":true,"
+      <<"\"general_phase_q999\":true,"
+      <<"\"post_t_clifford\":true,"
+      <<"\"wide_small_crosscheck\":true,"
+      <<"\"components\":"<<core.component_count()<<","
+      <<"\"payload_bytes\":"<<core.logical_payload_bytes()
+      <<"}\n";
 }
