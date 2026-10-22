@@ -872,6 +872,86 @@ public final class FusionActivity extends Activity {
                 "03 / Reacción no determinada · sin productos inventados");
     }
 
+    private static double milTimeFromSlider(int progress){
+        return .005 + Math.max(0,Math.min(1000,progress))*.075/1000.;
+    }
+
+    private void clearMilResult(){
+        lastMilResult=null;
+        if(milChart!=null)milChart.setResult(null);
+        if(milSummary!=null && !milRunning)
+            milSummary.setText("Sin evolución MIL para la configuración actual.");
+    }
+
+    private void runMilEvolution(){
+        if(milRunning||closed)return;
+        if(nuclearModel==null||!nuclearModel.hasNuclearModel){
+            toast("Este par no tiene modelo nuclear de referencia.");
+            return;
+        }
+        final RadialHamiltonian.Grid coarse;
+        try {
+            coarse=RadialHamiltonian.forMil(nuclearModel,milQubits);
+        }catch(RuntimeException failure){
+            toast("No se pudo crear la malla MIL: "+failure.getMessage());
+            return;
+        }
+        final double tau=milTimeFromSlider(milTimeControl.getProgress());
+        final int initialSite=Math.max(0,coarse.sites/2-1);
+        final long version=milModelRevision;
+        milRunning=true;
+        milRunButton.setEnabled(false);
+        milSizeButton.setEnabled(false);
+        milSummary.setText("MIL Core: evolucionando el estado cuántico y calculando "+
+                "una referencia independiente. La interfaz sigue disponible…");
+        try {
+            milWorker.execute(()->{
+                MilRadialEvolver.Result state=null;
+                String error=null;
+                try {state=MilRadialEvolver.execute(coarse,initialSite,tau,12);}
+                catch(Exception|LinkageError failure){error=failure.getMessage();}
+                final MilRadialEvolver.Result finished=state;
+                final String failureText=error;
+                ui.post(()->{
+                    if(closed)return;
+                    milRunning=false;
+                    milRunButton.setEnabled(true);
+                    milSizeButton.setEnabled(true);
+                    if(version!=milModelRevision){
+                        clearMilResult();
+                        milSummary.setText("El Hamiltoniano cambió durante la "+
+                                "operación. Ejecuta de nuevo para estos parámetros.");
+                        return;
+                    }
+                    if(failureText!=null||finished==null){
+                        milSummary.setText("MIL Core no completó la evolución: "+
+                                failureText+"\nNo se sustituyó el resultado por RK4.");
+                        milChart.setResult(null);
+                        return;
+                    }
+                    lastMilResult=finished;
+                    milChart.setResult(finished);
+                    milSummary.setText(String.format(Locale.US,
+                            "MIL ejecutó %d puertas sobre %d qubits (%d sitios).\n"+
+                            "Norma = %.9f; fidelidad vs RK4 = %.8f.\n"+
+                            "Distancia L1 de poblaciones = %.5g.\n"+
+                            "Tiempo físico = %.3e s.\n"+
+                            "Componentes máximos = %d.\n\n"+
+                            "Estos resultados describen la malla radial reducida, "+
+                            "no un evento de fusión nuclear.",
+                            finished.gates,finished.qubits,finished.sites,
+                            finished.norm,finished.fidelity,finished.probabilityL1,
+                            finished.physicalSeconds,finished.peakComponents));
+                });
+            });
+        }catch(RejectedExecutionException error){
+            milRunning=false;
+            milRunButton.setEnabled(true);
+            milSizeButton.setEnabled(true);
+            milSummary.setText("No pudo iniciarse el hilo de cálculo MIL.");
+        }
+    }
+
     private void exportHamiltonian(){
         if(radialHamiltonian==null){
             toast("Selecciona un canal nuclear conocido antes de exportar H.");
