@@ -27,7 +27,7 @@ public final class MilRadialEvolver {
         public final int qubits,sites,initialSite,steps,pauliTerms,gates,peakComponents;
         public final double tauInverseMev,physicalSeconds,norm,referenceNorm;
         public final double fidelity,probabilityL1,initialProbability;
-        public final double executionMs;
+        public final double executionMs,pauliPreparationMs,referenceMs;
         public final double[] probabilities,referenceProbabilities;
         public final String backend,method,oracle,pauliDecomposition;
 
@@ -51,6 +51,8 @@ public final class MilRadialEvolver {
             probabilityL1=state.getDouble("probability_l1");
             initialProbability=state.getDouble("initial_probability");
             executionMs=state.optDouble("execution_ms",0.);
+            pauliPreparationMs=state.optDouble("pauli_preparation_ms",0.);
+            referenceMs=state.optDouble("reference_ms",0.);
             probabilities=asArray(state.getJSONArray("probabilities"));
             referenceProbabilities=asArray(state.getJSONArray("reference_probabilities"));
             if(!"MIL ReducedExactTRepresentation".equals(backend) || qubits<2||
@@ -82,7 +84,8 @@ public final class MilRadialEvolver {
                     "Estado inicial localizado: sitio %d (de 0 a %d).\n"+
                     "Tiempo τ=t/ħ = %.6g MeV^-1 (t≈%.3e s).\n"+
                     "Evolución: %d pasos Strang, %d términos Pauli, %d puertas MIL.\n"+
-                    "Descomposición Pauli: %s; tiempo medido: %.3f ms.\n"+
+                    "Descomposición Pauli: %s; MIL puertas: %.3f ms.\n"+
+                    "Preparación Pauli: %.3f ms; RK4 independiente: %.3f ms.\n"+
                     "Componentes del motor (máximo): %d.\n"+
                     "Norma MIL = %.10f · norma referencia = %.10f.\n"+
                     "Fidelidad MIL vs. RK4 independiente = %.9f.\n"+
@@ -97,7 +100,7 @@ public final class MilRadialEvolver {
                     "No se calculan secciones eficaces ni dinámica de muchos cuerpos.",
                     backend,method,sites,qubits,initialSite,sites-1,
                     tauInverseMev,physicalSeconds,steps,pauliTerms,gates,
-                    pauliDecomposition,executionMs,
+                    pauliDecomposition,executionMs,pauliPreparationMs,referenceMs,
                     peakComponents,norm,referenceNorm,fidelity,probabilityL1,
                     initialSite,initialProbability,display(probabilities),
                     display(referenceProbabilities));
