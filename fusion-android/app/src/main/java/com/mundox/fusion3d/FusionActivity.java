@@ -577,6 +577,115 @@ public final class FusionActivity extends Activity {
         sources.addView(contract);
     }
 
+    private void buildMil100Panel(LinearLayout body){
+        LinearLayout scene=panel(body);
+        scene.addView(section("VISOR CUÁNTICO · 100 QUBITS MIL CORE"));
+        scene.addView(text(
+                "Aquí se representan 100 qubits lógicos entrelazados en un estado GHZ, "+
+                "q0…q99. Cada esfera es un marcador tridimensional, no un nucleón. "+
+                "MIL calcula la coherencia global ⟨X⊗100⟩ y Ether Render X cambia "+
+                "el brillo de los 100 objetos según ese valor.",12,SUB));
+
+        mil100View=new Mil100EtherView(this);
+        scene.addView(mil100View,new LinearLayout.LayoutParams(-1,dp(275)));
+        scene.addView(text(
+                "Arrastra para orbitar los 100 objetos; utiliza dos dedos para zoom. "+
+                "El motor original conserva su límite de 64 cuerpos por pasada: "+
+                "esta escena utiliza dos pasadas de 50, combinadas por profundidad.",11,SUB));
+
+        mil100PhaseText=title("Fase en q99 = π/4 · coherencia teórica = 0,7071",12);
+        mil100PhaseText.setPadding(0,dp(13),0,dp(5));
+        scene.addView(mil100PhaseText);
+        mil100PhaseSlider=new SeekBar(this);
+        mil100PhaseSlider.setMax(1000);
+        mil100PhaseSlider.setProgress(125);
+        mil100PhaseSlider.setContentDescription("mil-100q-phase-control");
+        scene.addView(mil100PhaseSlider);
+        mil100PhaseSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onStartTrackingTouch(SeekBar seekBar){}
+            @Override public void onStopTrackingTouch(SeekBar seekBar){}
+            @Override public void onProgressChanged(SeekBar seekBar,int progress,boolean user){
+                float theta=(float)(2.*Math.PI*progress/1000.);
+                mil100PhaseText.setText(String.format(Locale.US,
+                        "Fase en q99 = %.3f rad · coherencia esperada cos(θ) = %.4f",
+                        theta,Math.cos(theta)));
+                if(mil100View!=null)mil100View.setQuantumPhase(theta);
+            }
+        });
+
+        LinearLayout row1=row();
+        scene.addView(row1);
+        Button pure=button("GHZ · θ=0",false);
+        Button magic=button("Fase T · π/4",false);
+        half(row1,pure,magic);
+        pure.setOnClickListener(v->mil100PhaseSlider.setProgress(0));
+        magic.setOnClickListener(v->mil100PhaseSlider.setProgress(125));
+
+        LinearLayout row2=row();
+        scene.addView(row2);
+        Button orthogonal=button("θ=π/2",false);
+        Button orbit=button("Reiniciar cámara",false);
+        half(row2,orthogonal,orbit);
+        orthogonal.setOnClickListener(v->mil100PhaseSlider.setProgress(250));
+        orbit.setOnClickListener(v->mil100View.resetCamera());
+
+        mil100Status=text(
+                "Preparando MIL Reduced 100q y los dos fotogramas Ether Render X...",
+                11,TEXT);
+        mil100Status.setTypeface(Typeface.MONOSPACE);
+        mil100Status.setTextIsSelectable(true);
+        mil100Status.setContentDescription("mil-100q-quantum-status");
+        mil100Status.setPadding(0,dp(13),0,dp(10));
+        scene.addView(mil100Status);
+        mil100View.setFrameListener((json,error)->{
+            if(closed||mil100Status==null)return;
+            if(error!=null){
+                mil100Status.setText("MIL 100Q: no se completó la imagen.\n"+
+                        error+"\nNo se sustituyen resultados por un dibujo falso.");
+                mil100Status.setTextColor(ORANGE);
+                return;
+            }
+            if(json==null||json.isEmpty())return;
+            try{
+                JSONObject report=new JSONObject(json);
+                if(report.getInt("qubits")!=100 ||
+                    report.getInt("visible_objects")!=100 ||
+                    report.getInt("passes")!=2 ||
+                    Math.abs(report.getDouble("norm")-1.)>1e-8)
+                    throw new IllegalStateException("El informe MIL 100Q no pasó los invariantes");
+                mil100Status.setText(String.format(Locale.US,
+                        "MIL: 100 qubits · 100 esferas · 2 pasadas\n"+
+                        "Norma del GHZ = %.9f · ⟨Z0 Z99⟩ = %.5f\n"+
+                        "Coherencia calculada ⟨X⊗100⟩ = %.6f\n"+
+                        "Componentes MIL = %d · memoria lógica = %d bytes\n"+
+                        "Tiempo de observables = %.1f ms · Ether render = %.1f ms\n"+
+                        "Intersecciones candidatas = %d · discrepancias = %d",
+                        report.getDouble("norm"),
+                        report.getDouble("distant_zz"),
+                        report.getDouble("global_x"),
+                        report.getInt("components"),
+                        report.getInt("state_bytes"),
+                        report.getDouble("quantum_refresh_ms"),
+                        report.getDouble("raster_ms"),
+                        report.getLong("candidate_tests"),
+                        report.getInt("exact_mismatches")));
+                mil100Status.setTextColor(GREEN);
+            }catch(Exception failure){
+                mil100Status.setText("No se pudo validar el informe del motor MIL: "+
+                        failure.getMessage());
+                mil100Status.setTextColor(ORANGE);
+            }
+        });
+        scene.addView(text(
+                "FÍSICA DEL VISOR: GHZ de 100 qubits (software), correlación "+
+                "cuántica y fase de q99 calculadas de verdad. "+
+                "GEOMETRÍA: 100 esferas de referencia colocadas "+
+                "artificialmente en el espacio. Esto no usa 100 qubits para "+
+                "evolucionar el Hamiltoniano nuclear: esa evolución sigue "+
+                "usando 8 qubits y 256 posiciones en el panel 04. "+
+                "Tampoco es una GPU cuántica.",11,ORANGE));
+    }
+
     private void setPresets(boolean resetTime,int firstZ,int firstA,int secondZ,int secondA){
         z1=firstZ;z2=secondZ;a1=firstA;a2=secondA;
         if(isotopeA!=null)isotopeA.setText(Integer.toString(a1));
