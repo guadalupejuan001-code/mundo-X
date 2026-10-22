@@ -38,8 +38,8 @@ void nucleus(EtherRenderer& renderer, int& nextId, int maxBodies, int z, int a,
                static_cast<double>(display)*static_cast<double>(z)/a)),0,display);
     // Even for light nuclei, these deterministic pseudo-positions are an
     // illustration only and do not predict actual nucleon locations.
-    const double radius=display==1 ? 0.0 : 0.18 + 0.035*std::cbrt(static_cast<double>(a));
-    const double sphereRadius=a<=6 ? 0.18 : (a<=35 ? 0.135 : 0.105);
+    const double radius=display==1 ? 0.0 : 0.21 + 0.05*std::cbrt(static_cast<double>(a));
+    const double sphereRadius=a<=6 ? 0.29 : (a<=35 ? 0.19 : 0.135);
     for(int i=0;i<display;i++) {
         const double y=1.0 - 2.0*(i+0.5)/display;
         const double band=std::sqrt(std::max(0.0,1.0-y*y));
