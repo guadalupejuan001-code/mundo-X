@@ -284,6 +284,9 @@ public final class MundoXDesktopActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(browser, false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setSupportMultipleWindows(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -294,7 +297,11 @@ public final class MundoXDesktopActivity extends Activity {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme();
                 if (scheme == null) return true;
-                if (scheme.equalsIgnoreCase("https") || scheme.equalsIgnoreCase("http")) return false;
+                if (scheme.equalsIgnoreCase("https")) return false;
+                if (scheme.equalsIgnoreCase("http")) {
+                    confirmUnsafeHttp(uri);
+                    return true;
+                }
                 if (scheme.equalsIgnoreCase("mailto") || scheme.equalsIgnoreCase("tel")) {
                     try {
                         startActivity(new Intent(Intent.ACTION_VIEW, uri));
@@ -344,8 +351,8 @@ public final class MundoXDesktopActivity extends Activity {
             }
         });
         browser.setDownloadListener((url, userAgent, disposition, mime, length) -> {
-            if (!isWebUrl(url)) {
-                message("Solo se permiten descargas HTTP o HTTPS");
+            if (!isHttpsUrl(url)) {
+                message("Descarga HTTP bloqueada. Usa conexiones HTTPS cifradas");
                 return;
             }
             String filename = URLUtil.guessFileName(url, disposition, mime);
@@ -406,7 +413,38 @@ public final class MundoXDesktopActivity extends Activity {
             message("Dirección no permitida");
             return;
         }
+        if (!isHttpsUrl(url)) {
+            confirmUnsafeHttp(Uri.parse(url));
+            return;
+        }
         browser.loadUrl(url);
+    }
+
+    /** Never load plaintext HTTP inside the privileged app's WebView. */
+    private void confirmUnsafeHttp(Uri uri) {
+        new AlertDialog.Builder(this)
+                .setTitle("Conexión sin cifrar")
+                .setMessage("HTTP no protege las páginas ni tus datos. "
+                        + "Mundo X solo abre HTTPS internamente. "
+                        + "¿Abrir este enlace con otra aplicación?")
+                .setPositiveButton("Abrir afuera", (dialog, which) -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    } catch (ActivityNotFoundException error) {
+                        message("No hay una aplicación compatible");
+                    }
+                })
+                .setNegativeButton("Cancelar", null).show();
+    }
+
+    private static boolean isHttpsUrl(String text) {
+        try {
+            Uri uri = Uri.parse(text);
+            return "https".equalsIgnoreCase(uri.getScheme()) &&
+                    uri.getHost() != null && !uri.getHost().isEmpty();
+        } catch (Exception error) {
+            return false;
+        }
     }
 
     private static boolean isWebUrl(String text) {
@@ -703,7 +741,7 @@ public final class MundoXDesktopActivity extends Activity {
                     URL current = new URL(download.url);
                     String originalHost = current.getHost();
                     for (int redirects = 0; redirects <= 5; redirects++) {
-                        if (!isWebUrl(current.toString())) throw new IllegalArgumentException("Destino no HTTP(S)");
+                        if (!isHttpsUrl(current.toString())) throw new IllegalArgumentException("La descarga HTTPS no admite redirección a HTTP");
                         connection = (HttpURLConnection) current.openConnection();
                         connection.setConnectTimeout(15000);
                         connection.setReadTimeout(30000);
