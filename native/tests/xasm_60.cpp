@@ -165,6 +165,20 @@ void reduced_sixty() {
          "incorrect analytical expectation fails instead of merely reporting a value");
 }
 
+void reduced_thousand() {
+  std::string x999(1000, 'I'); x999[999] = 'X';
+  std::string y999(1000, 'I'); y999[999] = 'Y';
+  const auto result = run(
+      "backend reduced\nqubits 1000\nh 999\nt 999\nassert norm\n"
+      "assert expectation " + x999 + " 0.70710678118654752440\n" +
+      "assert expectation " + y999 + " 0.70710678118654752440\n" +
+      "cx 999 0\nassert expectation " + zz(1000, 0, 999) + " 1\n");
+  expect(result.backend == "reduced" && result.qubits == 1000 &&
+         result.components == 2 && result.t_gates == 1 &&
+         result.instructions == 3 && result.assertions_passed,
+         "Reduced 1000 executes high-word T and entanglement without dense state");
+}
+
 void limits_and_parser() {
   const auto small = run("backend reduced\nqubits 12\nassert fidelity\nassert norm\n");
   expect(small.assertions_passed &&
@@ -173,13 +187,13 @@ void limits_and_parser() {
   expect(run("backend reduced\nqubits 13\nassert norm\n").assertions_passed,
          "Reduced XASM permits registers beyond the old 12-qubit validation limit");
   expect(run("backend reduced\nqubits 63\nh 62\nt 62\nassert norm\n").assertions_passed,
-         "Reduced highest supported bit is usable through XASM");
+         "Reduced legacy 63-bit boundary remains usable through XASM");
+  expect(run("backend reduced\nqubits 64\nh 63\nt 63\nassert norm\n").assertions_passed,
+         "Reduced crosses the old single-word boundary");
   rejects("backend reduced\nqubits 60\nassert fidelity\n", "line 3: assert fidelity uses a dense reference limited to 12 qubits",
           "fidelity60 fails before any dense reconstruction");
-  rejects("backend reduced\nqubits 64\n", "line 2: reduced XASM supports 1..63 qubits",
-          "Reduced64 remains unsupported explicitly");
-  rejects("backend reduced\nqubits 1000\n", "line 2: reduced XASM supports 1..63 qubits",
-          "Compact1000 support is never attributed to Reduced");
+  rejects("backend reduced\nqubits 1001\n", "line 2: reduced XASM supports 1..1000 qubits",
+          "Reduced1001 is rejected explicitly");
   rejects("backend reduced\nqubits 60\nt 60\n", "line 3:", "out-of-range Reduced gate");
 
   std::string maximum_t = "backend reduced\nqubits 60\n";
@@ -208,6 +222,7 @@ int main() {
     compact_thousand();
     observer_invalidation();
     reduced_sixty();
+    reduced_thousand();
     limits_and_parser();
   } catch (const std::exception& error) {
     expect(false, std::string("unexpected exception: ") + error.what());

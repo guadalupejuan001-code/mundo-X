@@ -62,7 +62,7 @@ referencia densa y se limita explícitamente a 12 qubits.
 |---|---|
 | Sesión gráfica / `CompactCore` | 1.000 qubits; H, S, X, Y, Z, CX y CZ; observables Pauli. |
 | `CompactCore` nativo y XASM | Registro de 1.000, entrelazamiento Clifford y medición Z reproducible. |
-| `ReducedExactTRepresentation` | Conserva el rango de 1 a 63; XASM admite 128 T y 65.536 componentes. |
+| `ReducedExactTRepresentation` | Admite 1 a 1.000 qubits mediante máscaras Pauli multi-palabra; XASM conserva 128 T y 65.536 componentes como presupuestos. |
 | `FactorizedCore` | Conserva sus límites de bloque y presupuesto; no se convierte un bloque denso de 20 en uno de 1.000. |
 
 La prueba GHZ de 1.000 entrelaza el registro completo. La capacidad exacta del
@@ -129,3 +129,9 @@ guardado/reapertura y ampliación desde proyectos de 2, 8, 20 y 60 qubits.
 Las suites Android ejercitan JNI, los botones de ampliación y la conservación
 de la imagen y el mundo. El workflow conserva resultados y la APK del commit
 que se probó.
+
+## Ruta universal de 1.000 qubits
+
+La ruta reducida ya no usa una sola máscara de 64 bits. X/Z y los pivotes estabilizadores se almacenan en 16 palabras de 64 bits, suficientes para q0..q999. El contrato `reduced_1000` ejecuta T en q999, una fase general en q998, entrelazamiento CNOT entre q999 y q0 y la transferencia de `AdaptivePhaseCore` de 1.000 qubits. La campaña cuántica aislada aprobó este contrato junto con las regresiones existentes.
+
+Esto elimina el antiguo límite estructural de 63 qubits; **no** convierte cualquier circuito universal de 1.000 qubits en una carga barata. La cantidad de componentes no-Clifford sigue limitada por presupuesto y puede crecer exponencialmente con el estado/circuito.

@@ -52,7 +52,9 @@ int main(int argc, char** argv) {
       throw std::invalid_argument("invalid backend or repetitions");
     std::ifstream input(argv[1]);
     std::size_t n;
-    if (!(input >> n) || n == 0 || n > 63) throw std::invalid_argument("invalid qubit count");
+    if (!(input >> n) || n == 0 ||
+        n > mundo_x::ReducedExactTRepresentation::kMaxQubits)
+      throw std::invalid_argument("invalid qubit count");
     std::string line;
     std::getline(input, line);
     std::vector<Gate> gates;

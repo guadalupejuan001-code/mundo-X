@@ -96,7 +96,7 @@ El motor reducido no poda componentes por ser pequeños. La ruta adaptativa
 usa por defecto un presupuesto de 65.536 componentes, comprobado al final
 de cada puerta pública; los mapas temporales dentro de una puerta pueden
 ser mayores. Superarlo provoca un error y bloquea las lecturas del estado.
-La API admite de 1 a 63 qubits; la reconstrucción densa para validar sigue
+La API admite de 1 a 1.000 qubits mediante máscaras Pauli multi-palabra; la reconstrucción densa para validar sigue
 limitada a 23. No se garantiza ejecución eficiente para cualquier circuito.
 
 ## Uso

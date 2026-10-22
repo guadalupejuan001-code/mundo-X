@@ -13,7 +13,7 @@ template<class F> void rejects(F f) {
 int main() {
   using mundo_x::AdaptivePhaseCore;
   rejects([] { AdaptivePhaseCore s(0); });
-  rejects([] { AdaptivePhaseCore s(64); });
+  rejects([] { AdaptivePhaseCore s(1001); });
   rejects([] { AdaptivePhaseCore s(2, -1.); });
   rejects([] { AdaptivePhaseCore s(2, 1e-14, 0); });
   AdaptivePhaseCore s(2);
@@ -40,6 +40,15 @@ int main() {
   AdaptivePhaseCore large(50);
   large.phase(49,.17);
   rejects([&] { large.dense_state(); });
+
+  AdaptivePhaseCore thousand(1000);
+  thousand.hadamard(999); thousand.phase_t(999);
+  require(std::abs(thousand.pauli_expectation('X',999)-std::sqrt(.5)) < 1e-12);
+  require(std::abs(thousand.pauli_expectation('Y',999)-std::sqrt(.5)) < 1e-12);
+  thousand.cnot(999,0);
+  require(!thousand.is_product());
+  require(thousand.transferred_qubit_count()==1000);
+  require(std::abs(thousand.norm_squared()-1.) < 1e-12);
   mundo_x::ReducedExactTRepresentation reduced(3);
   reduced.hadamard(0); reduced.phase(0,.37); reduced.cnot(0,1);
   reduced.hadamard(2); reduced.controlled_phase(1,2,-.191);

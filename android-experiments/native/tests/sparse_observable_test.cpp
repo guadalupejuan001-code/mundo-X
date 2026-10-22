@@ -119,6 +119,21 @@ void analytic_tests() {
   throws_message([&]{ high.dense_reference(); }, "dense validation safety limit is 23 qubits");
   throws_message([&]{ high.pauli_expectation(std::uint64_t{1} << 63,0); }, "Pauli mask outside qubit register");
   throws_message([&]{ high.z_expectation(63); }, "qubit");
+
+  Reduced wide(1000, 32);
+  wide.hadamard(999); wide.phase_t(999);
+  close(wide.sparse_norm(), 1, "1000-qubit sparse norm");
+  close(wide.pauli_expectation('X',999), h, "q999 magic X");
+  close(wide.pauli_expectation('Y',999), h, "q999 magic Y");
+  wide.hadamard(998); wide.phase(998, .37);
+  close(wide.pauli_expectation('X',998), std::cos(.37), "q998 general phase X");
+  close(wide.pauli_expectation('Y',998), std::sin(.37), "q998 general phase Y");
+  wide.cnot(999,0);
+  std::vector<std::uint64_t> wx(16), wz(16);
+  wz[0] |= 1ULL;
+  wz[999 / 64] |= std::uint64_t{1} << (999 % 64);
+  close(wide.pauli_expectation(wx,wz), 1, "q0-q999 ZZ correlation");
+  require(wide.component_count() <= 4, "wide sparse support unexpectedly expanded");
 }
 void random_tests() {
   std::mt19937 rng(0x51a29);
@@ -184,8 +199,9 @@ void integrated_phase_tests() {
 }
 
 void limits_and_cancellation() {
-  throws_message([]{ Reduced invalid(0); }, "reduced representation supports 1..63 qubits");
-  throws_message([]{ Reduced invalid(std::numeric_limits<std::size_t>::max()); }, "reduced representation supports 1..63 qubits");
+  throws_message([]{ Reduced invalid(0); }, "reduced representation supports 1..1000 qubits");
+  throws_message([]{ Reduced invalid(1001); }, "reduced representation supports 1..1000 qubits");
+  throws_message([]{ Reduced invalid(std::numeric_limits<std::size_t>::max()); }, "reduced representation supports 1..1000 qubits");
   throws_message([]{ Reduced invalid(1, 0); }, "max_components must be positive");
   throws_message([]{ Reduced cancelled(1, 2, []{ return true; }); }, "reduced representation cancelled");
   Reduced guarded(2, 1);

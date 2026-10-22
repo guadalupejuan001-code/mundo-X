@@ -36,7 +36,7 @@ Otros experimentos:
 Esta version ejecuta simulacion cuantica en una CPU convencional.
 No genera qubits fisicos ni acredita ventaja cuantica. XASM usa CompactCore
 por defecto, incluido el registro de 1000 qubits. backend reduced permite
-programar Clifford+T (1..63 qubits, 128 puertas T, 65536 componentes).
+programar Clifford+T (1..1000 qubits, 128 puertas T, 65536 componentes).
 assert fidelity conserva una referencia densa limitada a 12 qubits.
 El frontend .mx compila circuitos reutilizables a XASM.
 Las instrucciones scene crean escenas exportables para XLab.

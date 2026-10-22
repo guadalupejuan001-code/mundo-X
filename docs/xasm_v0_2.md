@@ -33,7 +33,7 @@ assert norm
 
 Este circuito prepara el estado `( |0> + exp(iπ/4)|1> ) / √2`. La evolución reducida mantiene una base estabilizadora compartida, etiquetas Pauli y coeficientes; no materializa las ramas ingenuas `2^T`. El número de componentes todavía puede crecer como `2^n`.
 
-El modo reducido del intérprete admite **1..63 qubits, 128 puertas T y hasta 65.536 componentes**. El núcleo compacto admite el registro de 1.000 qubits. La ruta reducida conserva su límite de máscaras de 63 bits; no se presenta como un backend de 1.000 qubits. La directiva `backend` se declara como máximo una vez, antes de `qubits`.
+El modo reducido del intérprete admite **1..1.000 qubits, 128 puertas T y hasta 65.536 componentes**. X/Z se representan con máscaras Pauli multi-palabra, por lo que q999 participa en T, fases, Clifford y observables sin truncarse a una palabra. La directiva `backend` se declara como máximo una vez, antes de `qubits`. El ancho de 1.000 no garantiza costo compacto para cualquier circuito no-Clifford: el presupuesto de componentes sigue siendo la frontera práctica.
 
 ## Instrucciones
 
@@ -41,7 +41,7 @@ Los índices de qubit empiezan en cero. Cada instrucción ocupa una línea; `#` 
 
 | Instrucción | Compact | Reduced | Función |
 |---|---|---|---|
-| `qubits n` | Sí | Sí, 1..63 | Inicializa el estado en cero; una declaración por programa |
+| `qubits n` | Sí | Sí, 1..1.000 | Inicializa el estado en cero; una declaración por programa |
 | `h q`, `x q`, `z q`, `s q` | Sí | Sí | Puertas de un qubit |
 | `cx c t`, `cz a b` | Sí | Sí | Puertas de dos qubits distintos |
 | `t q` | No | Sí | Puerta de fase T; hasta 128 por programa |
