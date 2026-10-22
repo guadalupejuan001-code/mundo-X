@@ -78,7 +78,7 @@ public final class QuantumDesktopActivity extends Activity {
     private TextView console;
     private TextView state;
     private Button runButton, sendButton, inspectButton, resetButton;
-    private Button openProgramButton, saveProgramButton, newProgramButton;
+    private Button openProgramButton, saveProgramButton, newProgramButton, generatorButton;
     private Button openSessionButton, saveSessionButton, modeButton;
     private boolean xasmMode;
     private String xiDraft = "# Programa XI persistente\n# Memoria lógica sin medir qubits\nmem_store 0 88\nmem_read 0\nmem_stats\n";
@@ -182,6 +182,10 @@ public final class QuantumDesktopActivity extends Activity {
         openProgramButton.setOnClickListener(v -> openDocument(OPEN_PROGRAM, "*/*"));
         saveProgramButton.setOnClickListener(v -> createDocument(SAVE_PROGRAM, "text/plain",
                 xasmMode ? "programa.x" : "programa.xi"));
+        generatorButton = control("Generar programa", true);
+        generatorButton.setContentDescription("Generar código XI o XASM desde plantillas verificables");
+        programCard.addView(generatorButton, spaced(46));
+        generatorButton.setOnClickListener(v -> showProgramGenerator());
         newProgramButton = control("Nuevo programa", false);
         programCard.addView(newProgramButton, spaced(44));
         newProgramButton.setOnClickListener(v -> new AlertDialog.Builder(this)
@@ -252,6 +256,98 @@ public final class QuantumDesktopActivity extends Activity {
             finish();
         });
         root.addView(label("Motor cuántico de software local. Esta interfaz no representa una QPU física ni arranca Windows.", 11, MUTED));
+    }
+
+    /**
+     * Local, deterministic code generation: produces executable XI or XASM
+     * text, never compiles arbitrary native code or downloads a model.
+     * Generated source goes to the normal editor for inspection and saving;
+     * nothing runs until the user explicitly presses Ejecutar.
+     */
+    private void showProgramGenerator() {
+        String[] examples = {
+                "XI · Memoria Ether (lectura y escritura)",
+                "XI · Entrelazamiento Bell (2 direcciones)",
+                "XASM · GHZ configurable (2 a 1000 qubits)",
+                "XASM · 1000 qubits y puerta T"
+        };
+        new AlertDialog.Builder(this).setTitle("Generar código en Mundo X")
+                .setItems(examples, (dialog, selected) -> {
+                    switch (selected) {
+                        case 0:
+                            confirmGenerated(false,
+                                    "# Memoria Ether: no necesitas convertir todo a qubits\n"
+                                    + "mem_store 100 42\nmem_read 100\nmem_stats\n",
+                                    "Memoria Ether");
+                            break;
+                        case 1:
+                            confirmGenerated(false,
+                                    "# Par Bell. Usa Reiniciar núcleo antes si ya cambiaste q0/q1\n"
+                                    + "h 0\ncx 0 1\nexpect X:0 X:1\n"
+                                    + "expect Y:0 Y:1\nexpect Z:0 Z:1\nstats\n",
+                                    "Entrelazamiento Bell");
+                            break;
+                        case 2:
+                            askGhzQubits();
+                            break;
+                        case 3:
+                            confirmGenerated(true,
+                                    "# Circuito no-Clifford. Independiente del XI persistente.\n"
+                                    + "backend reduced\nqubits 1000\nseed 42\n"
+                                    + "h 0\nt 0\nshow\nbytes\n",
+                                    "MIL 1000 + puerta T");
+                            break;
+                        default:
+                            break;
+                    }
+                }).setNegativeButton("Cancelar", null).show();
+    }
+
+    private void askGhzQubits() {
+        EditText countInput = new EditText(this);
+        countInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        countInput.setSingleLine(true);
+        countInput.setText("16");
+        countInput.setSelectAllOnFocus(true);
+        countInput.setPadding(dp(20), dp(12), dp(20), dp(12));
+        new AlertDialog.Builder(this)
+                .setTitle("Qubits para GHZ (2 a 1000)")
+                .setView(countInput)
+                .setPositiveButton("Generar código", (dialog, which) -> {
+                    try {
+                        String raw = countInput.getText().toString().trim();
+                        int qubits = Integer.parseInt(raw);
+                        if (qubits < 2 || qubits > 1000)
+                            throw new IllegalArgumentException("Debes elegir entre 2 y 1000 qubits");
+                        StringBuilder program = new StringBuilder();
+                        program.append("# GHZ creado por el generador local de Mundo X\n")
+                               .append("backend compact\nqubits ").append(qubits)
+                               .append("\nseed 42\nh 0\n");
+                        for (int q = 1; q < qubits; ++q) {
+                            program.append("cx ").append(q - 1).append(' ').append(q).append('\n');
+                        }
+                        program.append("show\nbytes\n");
+                        confirmGenerated(true, program.toString(), "GHZ de " + qubits + " qubits");
+                    } catch (NumberFormatException | IllegalArgumentException error) {
+                        new AlertDialog.Builder(this).setTitle("Cantidad no válida")
+                                .setMessage("Escribe un número entero entre 2 y 1000.")
+                                .setPositiveButton("Entendido", null).show();
+                    }
+                }).setNegativeButton("Cancelar", null).show();
+    }
+
+    private void confirmGenerated(boolean targetXasm, String source, String name) {
+        new AlertDialog.Builder(this).setTitle("Crear " + name)
+                .setMessage("El generador sustituirá el editor de este modo. "
+                        + "No ejecutará instrucciones ni cambiará el estado del núcleo "
+                        + "hasta que pulses Ejecutar. Guarda antes un programa que quieras conservar.")
+                .setPositiveButton("Crear", (dialog, which) -> {
+                    if (xasmMode != targetXasm) changeMode();
+                    editor.setText(source);
+                    editor.setSelection(0);
+                    log("Programa generado localmente: " + name + ". Revisa el código y pulsa Ejecutar.");
+                })
+                .setNegativeButton("Cancelar", null).show();
     }
 
     private void changeMode() {
@@ -535,6 +631,7 @@ public final class QuantumDesktopActivity extends Activity {
         openProgramButton.setEnabled(enabled);
         saveProgramButton.setEnabled(enabled);
         newProgramButton.setEnabled(enabled);
+        generatorButton.setEnabled(enabled);
         openSessionButton.setEnabled(enabled);
         saveSessionButton.setEnabled(enabled);
     }
