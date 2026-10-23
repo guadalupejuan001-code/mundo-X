@@ -170,6 +170,9 @@ public final class SolarInstrumentation extends Instrumentation {
         waitUntil(() -> activity.hasWindowFocus(), 15_000,
                 "Solar Activity is obscured by another window at launch");
         metrics.put("initialWindowFocused", true);
+        gl(() -> expect(activity.renderer().isAdaptivePreviewEnabled()
+                    == (BuildConfig.SOLAR_DEFAULT_MODE==0),
+                "Initial Auto fluido state does not match the selected Solar app variant"));
         expect(activity.bridge().stateBytes() > 0 && activity.bridge().etherRules() == 2,
                 "The default finite preparation and Ether frame are absent");
         prepare(3, false, false);
