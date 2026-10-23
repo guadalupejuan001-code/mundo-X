@@ -40,7 +40,7 @@ import org.json.JSONObject;
 /** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
-    private static final int LEGACY_TESTS = 14;
+    private static final int LEGACY_TESTS = 15;
     private static final int TEST_QUALITY = 640;
     private static final long FRAME_TIMEOUT_MS = 30_000;
     private static final long UHD_FRAME_TIMEOUT_MS = 150_000;
@@ -77,7 +77,7 @@ public final class SolarInstrumentation extends Instrumentation {
         ultraSuite = arguments != null && "true".equals(arguments.getString("ultra8k"));
         uhdSuite = ultraSuite || (arguments != null && "true".equals(arguments.getString("uhd4k")));
         if (ultraSuite) expectedTests += 2;
-        else if (uhdSuite) expectedTests += 6;
+        else if (uhdSuite) expectedTests += 7;
         start();
     }
 
@@ -103,6 +103,7 @@ public final class SolarInstrumentation extends Instrumentation {
 
             runCase("native_gles_launch_and_textures", this::launchAndTextures);
             runCase("cinematic_opt_in_shader_and_legacy_restore", this::cinematicShader);
+            runCase("smart_4k_live_preview_is_native_and_bounded", this::smart4kPreview);
             runCase("astronomy_and_magnetic_classification", this::astronomyAndMagnetism);
             runCase("native_ether_fusion_and_readonly_observation", this::nativeEtherFusion);
             runCase("quantum_coupled_and_uncoupled_frames", this::quantumCoupling);
@@ -129,6 +130,8 @@ public final class SolarInstrumentation extends Instrumentation {
                     runCase("entry_atmosphere_and_grazing_frames", this::entryLayers);
                     runCase("entry_uhd_lifecycle_and_orientation", this::entryLifecycle);
                     runCase("map_ui_planet_and_moon_selection", this::mapSelection);
+                    runCase("smart_4k_png_capture_native_then_preview",
+                            this::smart4kCapture);
                 }
                 // Keep demand mode through reporting. Restoring continuous mode
                 // here queued another 8K entry draw after the failed capture,
