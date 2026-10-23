@@ -69,6 +69,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
     private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
     private int mapTexture,colorTexture,depthBuffer,framebuffer;
+    // Reusable screen-preview FBO: avoids full 4K/8K shader cost while dragging.
+    // The 4K/8K framebuffer remains authoritative for all still captures.
+    private int previewColor,previewDepth,previewFramebuffer,previewWidth,previewHeight;
+    private boolean previewUnavailable=false,interactionPreview=false;
+    private volatile boolean interactivePreviewEnabled=true,cinematic=true,previewFrame=false;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -158,6 +163,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
+        previewColor=previewDepth=previewFramebuffer=previewWidth=previewHeight=0;
+        previewUnavailable=false;previewFrame=false;interactionPreview=false;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -177,7 +184,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         }catch(Throwable e){error(e);}
     }
     @Override public void onSurfaceChanged(GL10 unused,int w,int h){
-        viewWidth=Math.max(1,w);viewHeight=Math.max(1,h);framebufferDirty=true;
+        viewWidth=Math.max(1,w);viewHeight=Math.max(1,h);
+        deletePreviewTarget();framebufferDirty=true;
         if(!initializedCamera||isOverview)resetDistance=true;
     }
 
@@ -232,6 +240,78 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(int n=0;n<16&&glGetError()!=GL_NO_ERROR;n++){}
         throw new IllegalStateException(stage+": "+(error==GL_OUT_OF_MEMORY?"memoria gráfica insuficiente":"GLES 0x"+Integer.toHexString(error)));
     }
+    /** Preview attachments are independent from the 4K/8K capture target. */
+    private void deletePreviewTarget() {
+        deleteTarget(previewColor,previewDepth,previewFramebuffer);
+        previewColor=previewDepth=previewFramebuffer=0;
+        previewWidth=previewHeight=0;
+        previewFrame=false;
+        previewUnavailable=false;
+    }
+
+    /**
+     * Allocate once, after an interaction first requests a UHD preview.
+     * Failure is local to the preview feature: the validated full-quality
+     * rendering path remains available and no partially allocated GL name
+     * replaces the real capture framebuffer.
+     */
+    private boolean ensurePreviewTarget(){
+        if(previewFramebuffer!=0)return true;
+        if(previewUnavailable || framebuffer==0)return false;
+        if(!activeUhd&&!activeUltra)return false;
+        int color=0,depth=0,target=0;
+        boolean committed=false;
+        try{
+            RenderResolution.Size full=new RenderResolution.Size(width,height);
+            RenderResolution.Size size=SolarRenderPolicy.preview(full);
+            if(size.pixels()>=full.pixels())return false;
+            RenderResolution.requireAllocation(size,full);
+            resolutionLimits().require(size);
+            color=newTexture();
+            int[] names={0};
+            glGenRenderbuffers(1,names,0);depth=names[0];
+            glGenFramebuffers(1,names,0);target=names[0];
+            allocationCheck("Crear vista previa");
+            if(color==0||depth==0||target==0)
+                throw new IllegalStateException("Faltan nombres del framebuffer de vista previa");
+            glBindTexture(GL_TEXTURE_2D,color);
+            glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,size.width,size.height,
+                    0,GL_RGBA,GL_UNSIGNED_BYTE,null);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+            allocationCheck("Reservar color de vista previa");
+            glBindRenderbuffer(GL_RENDERBUFFER,depth);
+            glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH_COMPONENT24,size.width,size.height);
+            allocationCheck("Reservar profundidad de vista previa");
+            glBindFramebuffer(GL_FRAMEBUFFER,target);
+            glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,
+                    GL_TEXTURE_2D,color,0);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,
+                    GL_RENDERBUFFER,depth);
+            int status=glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            allocationCheck("Validar vista previa");
+            if(status!=GL_FRAMEBUFFER_COMPLETE)
+                throw new IllegalStateException("Framebuffer de vista previa incompleto");
+            previewColor=color;previewDepth=depth;previewFramebuffer=target;
+            previewWidth=size.width;previewHeight=size.height;
+            committed=true;
+            return true;
+        }catch(RuntimeException|OutOfMemoryError fault){
+            // The preview is optional. Reset GL error state and retain the
+            // installed full-resolution framebuffer as the safe fallback.
+            previewUnavailable=true;
+            for(int i=0;i<16&&glGetError()!=GL_NO_ERROR;i++){}
+            return false;
+        }finally{
+            if(!committed)deleteTarget(color,depth,target);
+            glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);
+            glBindRenderbuffer(GL_RENDERBUFFER,depthBuffer);
+            glBindTexture(GL_TEXTURE_2D,0);
+        }
+    }
+
     /** Same exact UHD/FIT geometry as the standalone COSMIC X 4K observer. */
     private RenderResolution.Limits resolutionLimits(){
         int[] caps=new int[4];glGetIntegerv(GL_MAX_TEXTURE_SIZE,caps,0);
@@ -242,6 +322,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private void installTarget(RenderResolution.Size size,int mode,int limit){
         RenderResolution.Fit fit=RenderResolution.fit(viewWidth,viewHeight,size);
         if(framebuffer==0||width!=size.width||height!=size.height){
+            // Reclaim preview color/depth BEFORE the transactional UHD switch.
+            // It is optional and can be recreated lazily on the next gesture.
+            deletePreviewTarget();
             RenderResolution.Size existing=framebuffer==0?null:new RenderResolution.Size(width,height);
             RenderResolution.requireAllocation(size,existing);
             int color=0,depth=0,target=0;boolean accepted=false;
@@ -266,6 +349,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 int oldColor=colorTexture,oldDepth=depthBuffer,oldTarget=framebuffer;
                 colorTexture=color;depthBuffer=depth;framebuffer=target;width=size.width;height=size.height;
                 accepted=true;deleteTarget(oldColor,oldDepth,oldTarget);
+                deletePreviewTarget(); // resolution change invalidates preview aspect
             }finally{
                 if(!accepted)deleteTarget(color,depth,target);
                 glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glBindRenderbuffer(GL_RENDERBUFFER,depthBuffer);
@@ -461,10 +545,10 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(SolarData.Body body:SolarData.BODIES){int p=body.id*4;for(int k=0;k<3;k++)packedBodies[p+k]=(float)((positions[body.id][k]-cameraEye[k])*sceneScale);packedBodies[p+3]=(float)(radii[body.id]*sceneScale);}
         initializedCamera=true;
     }
-    private void drawScene(){
+    private void drawScene(int renderWidth,int renderHeight){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
-        glUniform2f(sceneLoc("uResolution"),width,height);
+        glUniform2f(sceneLoc("uResolution"),renderWidth,renderHeight);
         glUniform3fv(sceneLoc("uForward"),1,forward,0);glUniform3fv(sceneLoc("uRight"),1,right,0);glUniform3fv(sceneLoc("uUp"),1,up,0);
         glUniform1f(sceneLoc("uAspect"),aspect);glUniform1f(sceneLoc("uTanHalfFov"),TAN_HALF_FOV);
         glUniform1f(sceneLoc("uNear"),near);glUniform1f(sceneLoc("uFar"),far);glUniform1f(sceneLoc("uTime"),(float)(clockSeconds%100000));
@@ -481,6 +565,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform4fv(sceneLoc("uQ0"),1,quantum,0);glUniform4fv(sceneLoc("uQ1"),1,quantum,4);
         glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
+        glUniform1i(sceneLoc("uCinematic"),cinematic?1:0);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -696,10 +781,24 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 entryAltitude=flightState.altitudeKm;publishEntry();
             }
             if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
-            glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
-            lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
+            CaptureListener requested=capture;
+            boolean previewRequested=SolarRenderPolicy.shouldPreview(
+                    interactivePreviewEnabled,interactionPreview,
+                    activeUhd||activeUltra,requested!=null);
+            boolean drawPreview=previewRequested&&ensurePreviewTarget();
+            int target=drawPreview?previewFramebuffer:framebuffer;
+            int drawWidth=drawPreview?previewWidth:width;
+            int drawHeight=drawPreview?previewHeight:height;
+            glBindFramebuffer(GL_FRAMEBUFFER,target);
+            glViewport(0,0,drawWidth,drawHeight);
+            drawScene(drawWidth,drawHeight);
+            lines.clear();points.clear();if(!entryMode){
+                orbitLines();fieldLines();tracerParticles();
+                drawOverlay(lines,false);drawOverlay(points,true);
+            }
+            previewFrame=drawPreview;
             check("Observación solar");
-            CaptureListener requested=capture;Capture result=null;
+            Capture result=null;
             if(requested!=null){
                 int rowBytes=width*4,blockRows=Math.min(height,128);byte[] rgba=new byte[rowBytes*height];
                 ByteBuffer pixels=direct(rowBytes*blockRows);
@@ -710,13 +809,21 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 result=new Capture(width,height,rgba);capture=null;
             }
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER,framebuffer);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER,target);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
             int bottom=viewHeight-display.top-display.height;
-            glBlitFramebuffer(0,0,width,height,display.left,bottom,display.left+display.width,bottom+display.height,GL_COLOR_BUFFER_BIT,GL_LINEAR);glBindFramebuffer(GL_FRAMEBUFFER,0);
+            glBlitFramebuffer(0,0,drawWidth,drawHeight,
+                    display.left,bottom,
+                    display.left+display.width,bottom+display.height,
+                    GL_COLOR_BUFFER_BIT,GL_LINEAR);
+            glBindFramebuffer(GL_FRAMEBUFFER,0);
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,
+                    "%.0f FPS · %d × %d%s · núcleo r%d · %s%s%s",
+                    fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",
+                    uploadedRevision,drawPreview?"vista interactiva 960p":"escena completa",
+                    cinematic?" · cine":"",resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
@@ -893,6 +1000,23 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public int surfaceHeight(){return viewHeight;}
     public RenderResolution.Fit displayRect(){return display;}
     public String resolutionNotice(){return resolutionMessage;}
+    /**
+     * Rendering mode, controlled from Solar settings on the GL thread.
+     * Only changes light/material/photographic presentation, not ephemerides.
+     */
+    public void setCinematic(boolean enabled){cinematic=enabled;}
+    public boolean cinematicEnabled(){return cinematic;}
+    public void setInteractivePreviewEnabled(boolean enabled){
+        interactivePreviewEnabled=enabled;
+        if(!enabled)interactionPreview=false;
+    }
+    public boolean interactivePreviewEnabled(){return interactivePreviewEnabled;}
+    /** Touch state should be driven by SolarSurface, on the GL thread. */
+    public void setInteractionPreview(boolean enabled){interactionPreview=enabled;}
+    /** Current presentation, not a claim about output PNG size. */
+    public boolean isPreviewFrame(){return previewFrame;}
+    public int previewRenderedWidth(){return previewWidth;}
+    public int previewRenderedHeight(){return previewHeight;}
     public void setAtmosphereEnabled(boolean enabled){atmosphereEnabled=enabled;}
     public boolean atmosphereEnabled(){return atmosphereEnabled;}
     public void setPaused(boolean paused){this.paused=paused;}
@@ -940,6 +1064,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     }
     /** Delete GPU resources while the GL context is current; the core is borrowed. */
     public void release(){
+        deletePreviewTarget();
         if(sceneProgram!=0)glDeleteProgram(sceneProgram);if(overlayProgram!=0)glDeleteProgram(overlayProgram);
         glDeleteTextures(2,new int[]{mapTexture,colorTexture},0);
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);

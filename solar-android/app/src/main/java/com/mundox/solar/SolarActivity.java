@@ -64,6 +64,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     private Joystick joystick;
     private boolean fields=false,wind=true,orbits=true,realScale=false,paused=false,freeFlight=false,cleanView=false,resumed;
     private boolean uhd4k=false,uhd8k=false,entryActive=false,atmospheres=true,localPhysics=false,pngDestinationOpen;
+    private boolean cinematic=true,interactivePreview=true;
     private volatile boolean destroyed;
     private double desiredEntryAltitude=35;
     private String resolutionMessage,pngToken;
@@ -97,6 +98,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         uhd4k=prefs.getBoolean("uhd4k",defaultMode==1);uhd8k=prefs.getBoolean("uhd8k",defaultMode==2);
         if(uhd8k)uhd4k=false;
         atmospheres=prefs.getBoolean("atmospheres",true);localPhysics=prefs.getBoolean("localPhysics",false);
+        cinematic=prefs.getBoolean("cinematic",true);
+        interactivePreview=prefs.getBoolean("interactivePreview",true);
         entryActive=prefs.getBoolean("entry",false);
         desiredEntryAltitude=Double.longBitsToDouble(prefs.getLong("entryAltitude",Double.doubleToLongBits(35)));
         double[] entryPose=readPose(prefs.getString("entryPose",null));
@@ -115,6 +118,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             quality=clamp(saved.getInt("quality",quality),480,1440);
             uhd4k=saved.getBoolean("uhd4k",uhd4k);uhd8k=saved.getBoolean("uhd8k",uhd8k);if(uhd8k)uhd4k=false;
             atmospheres=saved.getBoolean("atmospheres",atmospheres);localPhysics=saved.getBoolean("localPhysics",localPhysics);
+            cinematic=saved.getBoolean("cinematic",cinematic);
+            interactivePreview=saved.getBoolean("interactivePreview",interactivePreview);
             entryActive=saved.getBoolean("entry",entryActive);
             desiredEntryAltitude=saved.getDouble("entryAltitude",desiredEntryAltitude);
             if(saved.containsKey("entryPose"))entryPose=saved.getDoubleArray("entryPose");
@@ -131,6 +136,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             observer.setRealScale(realScale);observer.setQuality(quality);
             if(uhd8k)observer.setUhd8k(true);else observer.setUhd4k(uhd4k);
             observer.setAtmosphereEnabled(atmospheres);observer.setLocalPhysics(localPhysics);
+            observer.setCinematic(cinematic);
+            observer.setInteractivePreviewEnabled(interactivePreview);
             if(body<0)observer.overview();else observer.focus(body);
             if(entryActive&&body>0){
                 if(entryPose!=null)observer.restoreEntryState(entryPose);
@@ -262,7 +269,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         joystick.setVisibility(freeFlight||entryActive?View.VISIBLE:View.GONE);
         entryButton.setText(entryActive?"↑  Regresar a órbita":"↓  Descender");entryButton.setEnabled(body>0);
         entryButton.setAlpha(body>0?1f:.5f);altitudeRow.setVisibility(entryActive?View.VISIBLE:View.GONE);
-        qualityButton.setText(uhd8k?"8K UHD":uhd4k?"4K UHD":"Calidad");qualityButton.setTextColor(uhd4k||uhd8k?GOLD:TEXT);
+        qualityButton.setText(uhd8k?"8K UHD":uhd4k?"4K UHD":cinematic?"Cine":"Calidad");
+        qualityButton.setTextColor(cinematic?GOLD:TEXT);
         if(root!=null)root.requestApplyInsets();
     }
     private void updateBody(){
@@ -288,7 +296,13 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         double jd=observer.julianDate();
         boolean actualPause=observer.isPaused();if(paused!=actualPause){paused=actualPause;if(surface!=null)surface.setPausedRendering(actualPause);updateButtons();}
         dateLabel.setText(dateFormat.format(new Date((long)((jd-2440587.5)*86400000)))+"    "+(paused?"Pausa":SPEED_NAMES[speedIndex]));
-        engineLabel.setText(String.format(Locale.ROOT,"NÚCLEO X  ·  %d × %d  ·  %.0f fps%s",observer.renderedWidth(),observer.renderedHeight(),observer.fps,entryActive&&localPhysics?String.format(Locale.ROOT," · g %.2f m/s² · vr %.3f km/s",observer.localGravityMs2(),observer.radialVelocityKmS()):""));
+        engineLabel.setText(String.format(Locale.ROOT,
+                "NÚCLEO X · %d × %d · %.0f FPS%s%s",
+                observer.renderedWidth(),observer.renderedHeight(),observer.fps,
+                observer.isPreviewFrame()?" · VISTA RÁPIDA":"",
+                entryActive&&localPhysics?
+                        String.format(Locale.ROOT," · g %.2f m/s² · vr %.3f km/s",
+                                observer.localGravityMs2(),observer.radialVelocityKmS()):""));
         if(entryActive&&observer.isEntryMode()){
             desiredEntryAltitude=observer.altitudeKm();altitudeButton.setText(altitudeText(desiredEntryAltitude));
         }
@@ -389,13 +403,46 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Descenso · "+SolarData.BODIES[body].name).setView(content).setPositiveButton("Continuar",null).setNegativeButton("Volver a órbita",(dialog,which)->exitEntry()).create();showDialog(d);
     }
     private void qualityDialog(){
-        String[] options={"Ahorro · hasta 640 px","Equilibrada · hasta 960 px","Alta · hasta 1440 px",
-                "4K UHD · 8,3 millones de píxeles","8K UHD · 33,2 millones de píxeles"};
-        int checked=uhd8k?4:uhd4k?3:quality<=640?0:quality<=960?1:2;
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Calidad de imagen").setSingleChoiceItems(options,checked,(dialog,index)->{
-            if(index==4)setUltraQuality(true);else if(index==3)setUhdQuality(true);
-            else setAdaptiveQuality(new int[]{640,960,1440}[index]);dialog.dismiss();
-        }).setNegativeButton("Cerrar",null).create();showDialog(d);
+        LinearLayout content=dialogColumn();
+        content.addView(section("RESOLUCIÓN REAL DEL OBSERVADOR"));
+        content.addView(label("Elige el detalle espacial. 4K/8K usan el framebuffer completo "+
+                "para fotogramas quietos y PNG; el movimiento puede usar una vista "+
+                "interactiva más ligera sin cambiar la resolución de exportación.",
+                12,MUTED,false));
+        String[] labels={"Ahorro · 640p","Equilibrada · 960p",
+                "Alta · 1440p","4K UHD · 8,3 MP","8K UHD · 33,2 MP"};
+        int selected=uhd8k?4:uhd4k?3:quality<=640?0:quality<=960?1:2;
+        for(int index=0;index<labels.length;index++){
+            final int mode=index;
+            Button b=button((mode==selected?"✓  ":"")+labels[index],0,()->{
+                if(mode==4)setUltraQuality(true);
+                else if(mode==3)setUhdQuality(true);
+                else setAdaptiveQuality(new int[]{640,960,1440}[mode]);
+                message("Resolución solicitada. El observador verifica los límites GPU.");
+            });
+            content.addView(b);
+        }
+        content.addView(section("ACABADO Y FLUIDEZ"));
+        addToggle(content,"Cine · halo solar, relieve y color",cinematic,b->setCinematicQuality(b));
+        addToggle(content,"Vista rápida mientras mueves 4K/8K",interactivePreview,b->setInteractivePreview(b));
+        content.addView(label("El modo Cine es una presentación visual opcional: "+
+                "no cambia órbitas, gravedad, clima ni valores nucleares. "+
+                "La vista rápida reduce solo los píxeles del movimiento; "+
+                "guardar PNG siempre dibuja un fotograma completo.",12,MUTED,false));
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Solar · imagen y rendimiento")
+                .setView(scroll(content)).setPositiveButton("Cerrar",null).create();
+        showDialog(d);
+    }
+
+    private void setCinematicQuality(boolean value){
+        cinematic=value;
+        runGL(()->observer.setCinematic(value));
+        updateButtons();
+    }
+    private void setInteractivePreview(boolean value){
+        interactivePreview=value;
+        runGL(()->observer.setInteractivePreviewEnabled(value));
+        updateButtons();
     }
     private void setAdaptiveQuality(int pixels){
         quality=pixels;uhd4k=uhd8k=false;resolutionMessage=null;
@@ -538,6 +585,11 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         addToggle(content,"Gravedad local durante descenso",localPhysics,b->{localPhysics=b;runGL(()->observer.setLocalPhysics(b));updateBody();});
         content.addView(label("Exploración amplía los cuerpos y comprime distancias para verlos juntos. Proporciones reales conserva sus tamaños y distancias; usa los destinos para acercarte.",12,MUTED,false));
         content.addView(section("CALIDAD DE IMAGEN"));
+        addToggle(content,"Acabado cinematográfico de Solar",cinematic,b->setCinematicQuality(b));
+        addToggle(content,"Vista UHD optimizada al mover la cámara",interactivePreview,b->setInteractivePreview(b));
+        content.addView(label("El brillo cinematográfico y el relieve aparente "+
+                "son visualizaciones opcionales. La vista de movimiento puede "+
+                "usar 960p sin cambiar la imagen final 4K/8K ni el PNG.",12,MUTED,false));
         LinearLayout qualities=row();int[] sizes={640,960,1440};String[] labels={"Ahorro","Equilibrada","Alta"};
         for(int i=0;i<sizes.length;i++){final int px=sizes[i];Button b=button(labels[i],0,()->setAdaptiveQuality(px));qualities.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));}content.addView(qualities);
         content.addView(button("4K UHD · 3840 × 2160 / vertical",0,()->setUhdQuality(true)));
@@ -665,6 +717,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
                 .putInt("quality",quality).putInt("preset",quantum.preset()).putBoolean("fields",fields)
                 .putBoolean("wind",wind).putBoolean("orbits",orbits).putBoolean("realScale",realScale)
                 .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k).putBoolean("uhd8k",uhd8k).putBoolean("atmospheres",atmospheres).putBoolean("localPhysics",localPhysics)
+                .putBoolean("cinematic",cinematic).putBoolean("interactivePreview",interactivePreview)
                 .putBoolean("entry",entryActive).putLong("entryAltitude",Double.doubleToLongBits(desiredEntryAltitude))
                 .putString("entryPose",poseText(pose)).apply();
     }
@@ -672,6 +725,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         super.onSaveInstanceState(state);state.putInt("body",body);state.putInt("speed",speedIndex);state.putBoolean("fields",fields);state.putBoolean("wind",wind);state.putBoolean("orbits",orbits);state.putBoolean("realScale",realScale);state.putBoolean("paused",paused);
         if(observer!=null)state.putDouble("jd",observer.julianDate());if(quantum!=null)state.putInt("preset",quantum.preset());
         state.putInt("quality",quality);state.putBoolean("uhd4k",uhd4k);state.putBoolean("uhd8k",uhd8k);state.putBoolean("atmospheres",atmospheres);state.putBoolean("localPhysics",localPhysics);
+        state.putBoolean("cinematic",cinematic);state.putBoolean("interactivePreview",interactivePreview);
         state.putBoolean("entry",entryActive);state.putDouble("entryAltitude",desiredEntryAltitude);
         state.putDoubleArray("entryPose",observer==null?null:observer.entryState());
         if(pngDestinationOpen&&pngToken!=null){state.putBoolean("pngDestinationOpen",true);state.putString("pngToken",pngToken);}
@@ -693,4 +747,6 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     public void fieldsForTest(boolean enabled){fields=enabled;runGL(()->observer.setFields(enabled));updateButtons();updateBody();}
     public void pauseForTest(boolean enabled){paused=enabled;runGL(()->observer.setPaused(enabled));if(surface!=null)surface.setPausedRendering(enabled);updateButtons();}
     public void scaleForTest(boolean enabled){realScale=enabled;runGL(()->observer.setRealScale(enabled));updateBody();}
+    public void cinematicForTest(boolean enabled){setCinematicQuality(enabled);}
+    public void interactivePreviewForTest(boolean enabled){setInteractivePreview(enabled);}
 }

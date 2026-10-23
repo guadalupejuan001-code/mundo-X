@@ -32,7 +32,14 @@ def run(fixtures,repeats,select,candidate_shader=None,baseline_shader=None,color
         for k,v in [('before',old),('after',new)]:
             if single_program and k=='after':programs[k,kind]=programs['before',kind];continue
             expr='float value=float(id+1);' if kind=='id' else 'float value=floor(gl_FragDepth*16777215.0);'
-            v=v.replace('    outColor=vec4(color*vignette,1.0);',expr+'outColor=vec4(mod(value,256.0),mod(floor(value/256.0),256.0),floor(value/65536.0),255.0)/255.0;')
+            # Both shader versions must preserve identical ID/depth math:
+            # only the final color output may be replaced by the oracle.
+            endings=('    outColor=vec4(color*vignette,1.0);',
+                     '    outColor=vec4(color,1.0);')
+            matching=[suffix for suffix in endings if v.count(suffix)==1]
+            if len(matching)!=1:
+                raise RuntimeError('Cannot locate exactly one output for ID/depth oracle: '+k)
+            v=v.replace(matching[0],expr+'outColor=vec4(mod(value,256.0),mod(floor(value/256.0),256.0),floor(value/65536.0),255.0)/255.0;')
             programs[k,kind]=g.program(vertex,v)
     vao=g.object('glGenVertexArrays');g.glBindVertexArray(vao)
     maps=g.object('glGenTextures');g.glActiveTexture(0x84C0);g.glBindTexture(0x8C1A,maps)

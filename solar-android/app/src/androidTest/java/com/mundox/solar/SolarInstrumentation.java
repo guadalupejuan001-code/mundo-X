@@ -40,7 +40,7 @@ import org.json.JSONObject;
 /** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
-    private static final int LEGACY_TESTS = 13;
+    private static final int LEGACY_TESTS = 14;
     private static final int TEST_QUALITY = 640;
     private static final long FRAME_TIMEOUT_MS = 30_000;
     private static final long UHD_FRAME_TIMEOUT_MS = 150_000;
@@ -112,6 +112,7 @@ public final class SolarInstrumentation extends Instrumentation {
             runCase("real_scale_earth_focus", this::realScale);
             runCase("camera_rotation_zoom_pan_and_flight", this::cameraControls);
             runCase("resolution_budget", this::resolutionBudget);
+            runCase("cinematic_solar_visual_and_core_integrity", this::cinematicVisual);
             runCase("background_resume_preserves_state", this::backgroundResume);
             runCase("recreation_and_orientation_preserve_state", this::recreationAndOrientation);
             if (uhdSuite) {
@@ -475,6 +476,46 @@ public final class SolarInstrumentation extends Instrumentation {
         gl(() -> activity.renderer().setQuality(TEST_QUALITY));
     }
 
+    // A/B performance runs copy this instrumentation into an older source
+    // snapshot. Reflection allows the new-feature tests to compile there,
+    // while performanceSuite skips these tests on the historical baseline.
+    private static void reflectFlag(SolarRenderer renderer,String name,boolean value){
+        try{SolarRenderer.class.getMethod(name,boolean.class).invoke(renderer,value);}
+        catch(ReflectiveOperationException error){throw new IllegalStateException(name,error);}
+    }
+    private static int reflectInt(SolarRenderer renderer,String name){
+        try{return ((Integer)SolarRenderer.class.getMethod(name).invoke(renderer)).intValue();}
+        catch(ReflectiveOperationException error){throw new IllegalStateException(name,error);}
+    }
+    private static boolean reflectBoolean(SolarRenderer renderer,String name){
+        try{return ((Boolean)SolarRenderer.class.getMethod(name).invoke(renderer)).booleanValue();}
+        catch(ReflectiveOperationException error){throw new IllegalStateException(name,error);}
+    }
+
+    private void cinematicVisual() throws Exception {
+        prepare(3,false,false);
+        long nativeRevision=activity.bridge().nativeRevision();
+        double jd=activity.renderer().julianDate();
+        gl(()->reflectFlag(activity.renderer(),"setCinematic",false));
+        SolarRenderer.Capture reference=frame();
+        gl(()->reflectFlag(activity.renderer(),"setCinematic",true));
+        SolarRenderer.Capture cinematic=frame();
+        SolarRenderer.Capture repeated=frame();
+        int differences=changed(reference,cinematic);
+        expect(differences>100,
+                "Cinematic lighting did not modify the real GLSL framebuffer");
+        expect(changed(cinematic,repeated)==0,
+                "Cinematic shader changed a paused, deterministic scene");
+        expect(activity.bridge().nativeRevision()==nativeRevision
+                &&activity.renderer().julianDate()==jd,
+                "Cinematic shading mutated Ether or orbital data");
+        metrics.put("cinematicChangedPixels",differences)
+                .put("cinematicRepeatedPixelsChanged",0)
+                .put("cinematicCoreRevision",nativeRevision);
+        save("solar-cinematic-earth.png",cinematic);
+        gl(()->reflectFlag(activity.renderer(),"setCinematic",true));
+    }
+
     private void backgroundResume() throws Exception {
         prepare(3, true, false);
         gl(() -> activity.bridge().setPreset(3));
@@ -569,6 +610,29 @@ public final class SolarInstrumentation extends Instrumentation {
         setUhdMode(true);
         saveUhd(ultraSuite?"ultra8k-earth-orbit.png":"uhd-earth-orbit.png", false);
         expect(ultraSuite?activity.renderer().isUhd8k():activity.renderer().isUhd4k(), "The renderer did not accept actual UHD mode");
+        gl(()->{
+            reflectFlag(activity.renderer(),"setInteractivePreviewEnabled",true);
+            reflectFlag(activity.renderer(),"setInteractionPreview",true);
+            activity.renderer().onDrawFrame(null);
+        });
+        expect(reflectBoolean(activity.renderer(),"isPreviewFrame")
+                        && reflectInt(activity.renderer(),"previewRenderedWidth")>0
+                        && reflectInt(activity.renderer(),"previewRenderedHeight")>0,
+                "4K/8K touch preview did not render an actual smaller framebuffer");
+        RenderResolution.Size full=new RenderResolution.Size(
+                activity.renderer().renderedWidth(),activity.renderer().renderedHeight());
+        // Compatibility with the frozen baseline used for A/B performance:
+        // new policy is tested separately on JVM; the instrumentation uses
+        // the exact mathematical 960p geometry and reflective feature hooks.
+        RenderResolution.Size preview=full.width>=full.height
+                ?new RenderResolution.Size(960,540)
+                :new RenderResolution.Size(540,960);
+        expect(reflectInt(activity.renderer(),"previewRenderedWidth")==preview.width
+                        &&reflectInt(activity.renderer(),"previewRenderedHeight")==preview.height,
+                "Preview stretched the Solar aspect ratio or exceeded 960p budget");
+        metrics.put("uhdPreviewPixels",preview.pixels())
+                .put("uhdPreviewPixelReduction",(double)full.pixels()/preview.pixels());
+        gl(()->reflectFlag(activity.renderer(),"setInteractionPreview",false));
         setUhdMode(false);
         SolarRenderer.Capture after = frame();
         save("uhd-adaptive-after.png", after);
