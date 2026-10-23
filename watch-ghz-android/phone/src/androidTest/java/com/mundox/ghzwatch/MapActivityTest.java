@@ -1,7 +1,6 @@
 package com.mundox.ghzwatch;
 import android.app.Instrumentation;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.os.SystemClock;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -13,8 +12,6 @@ import org.junit.runner.RunWith;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.io.File;
-import java.io.FileOutputStream;
 import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
@@ -63,12 +60,6 @@ public final class MapActivityTest {
             assertTrue(send(activity,6,"RESET").getBoolean("ok"));
             assertEquals(1,state(activity).getJSONObject("state").getInt("capture"));
             assertEquals(1.1,state(activity).getJSONObject("state").getDouble("dipole"),.000001);
-            instrumentation().waitForIdleSync();
-            Thread.sleep(500);
-            Bitmap screenshot=instrumentation().getUiAutomation().takeScreenshot();
-            try(FileOutputStream out=new FileOutputStream(new File(activity.getFilesDir(),"map-control.png"))){
-                assertTrue(screenshot.compress(Bitmap.CompressFormat.PNG,100,out));
-            }
         }finally{instrumentation().runOnMainSync(activity::finish);}
     }
     @Test public void malformedRequestsAndWrongAcknowledgementsAreRejected()throws Exception {
