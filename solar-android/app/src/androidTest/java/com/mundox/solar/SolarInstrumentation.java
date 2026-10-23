@@ -40,7 +40,7 @@ import org.json.JSONObject;
 /** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
-    private static final int LEGACY_TESTS = 13;
+    private static final int LEGACY_TESTS = 14;
     private static final int TEST_QUALITY = 640;
     private static final long FRAME_TIMEOUT_MS = 30_000;
     private static final long UHD_FRAME_TIMEOUT_MS = 150_000;
@@ -112,6 +112,7 @@ public final class SolarInstrumentation extends Instrumentation {
             runCase("real_scale_earth_focus", this::realScale);
             runCase("camera_rotation_zoom_pan_and_flight", this::cameraControls);
             runCase("resolution_budget", this::resolutionBudget);
+            runCase("cinematic_solar_visual_and_core_integrity", this::cinematicVisual);
             runCase("background_resume_preserves_state", this::backgroundResume);
             runCase("recreation_and_orientation_preserve_state", this::recreationAndOrientation);
             if (uhdSuite) {
@@ -475,6 +476,30 @@ public final class SolarInstrumentation extends Instrumentation {
         gl(() -> activity.renderer().setQuality(TEST_QUALITY));
     }
 
+    private void cinematicVisual() throws Exception {
+        prepare(3,false,false);
+        long nativeRevision=activity.bridge().nativeRevision();
+        double jd=activity.renderer().julianDate();
+        gl(()->activity.renderer().setCinematic(false));
+        SolarRenderer.Capture reference=frame();
+        gl(()->activity.renderer().setCinematic(true));
+        SolarRenderer.Capture cinematic=frame();
+        SolarRenderer.Capture repeated=frame();
+        int differences=changed(reference,cinematic);
+        expect(differences>100,
+                "Cinematic lighting did not modify the real GLSL framebuffer");
+        expect(changed(cinematic,repeated)==0,
+                "Cinematic shader changed a paused, deterministic scene");
+        expect(activity.bridge().nativeRevision()==nativeRevision
+                &&activity.renderer().julianDate()==jd,
+                "Cinematic shading mutated Ether or orbital data");
+        metrics.put("cinematicChangedPixels",differences)
+                .put("cinematicRepeatedPixelsChanged",0)
+                .put("cinematicCoreRevision",nativeRevision);
+        save("solar-cinematic-earth.png",cinematic);
+        gl(()->activity.renderer().setCinematic(true));
+    }
+
     private void backgroundResume() throws Exception {
         prepare(3, true, false);
         gl(() -> activity.bridge().setPreset(3));
@@ -569,6 +594,24 @@ public final class SolarInstrumentation extends Instrumentation {
         setUhdMode(true);
         saveUhd(ultraSuite?"ultra8k-earth-orbit.png":"uhd-earth-orbit.png", false);
         expect(ultraSuite?activity.renderer().isUhd8k():activity.renderer().isUhd4k(), "The renderer did not accept actual UHD mode");
+        gl(()->{
+            activity.renderer().setInteractivePreviewEnabled(true);
+            activity.renderer().setInteractionPreview(true);
+            activity.renderer().onDrawFrame(null);
+        });
+        expect(activity.renderer().isPreviewFrame()
+                        && activity.renderer().previewRenderedWidth()>0
+                        && activity.renderer().previewRenderedHeight()>0,
+                "4K/8K touch preview did not render an actual smaller framebuffer");
+        RenderResolution.Size full=new RenderResolution.Size(
+                activity.renderer().renderedWidth(),activity.renderer().renderedHeight());
+        RenderResolution.Size preview=SolarRenderPolicy.preview(full);
+        expect(activity.renderer().previewRenderedWidth()==preview.width
+                        &&activity.renderer().previewRenderedHeight()==preview.height,
+                "Preview stretched the Solar aspect ratio or exceeded 960p budget");
+        metrics.put("uhdPreviewPixels",preview.pixels())
+                .put("uhdPreviewPixelReduction",SolarRenderPolicy.approximatePixelReduction(full));
+        gl(()->activity.renderer().setInteractionPreview(false));
         setUhdMode(false);
         SolarRenderer.Capture after = frame();
         save("uhd-adaptive-after.png", after);
