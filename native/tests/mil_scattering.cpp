@@ -171,6 +171,7 @@ int main() {
             "free propagation must preserve preexisting entanglement");
 
     // Prevent accidental quadratic state blow-ups and malformed inputs.
+    input.contact = 5.0;  // Work-budget rejection must test the interacting solver.
     input.sites = 1000;
     rejects([&] { MIL::run(input); }, "non-power-of-two lattice accepted");
     input.sites = 2048;
