@@ -2,6 +2,8 @@ package com.mundox.solar;
 
 import android.content.Context;
 import android.opengl.GLSurfaceView;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -13,6 +15,10 @@ public final class SolarSurface extends GLSurfaceView {
     private final GestureDetector gestures;
     private float previousX,previousY;
     private boolean twoFingers;
+    private final Handler interactionHandler=new Handler(Looper.getMainLooper());
+    private final Runnable restoreFullUhd=()->{
+        if(isAttachedToWindow())mutate(()->observer.setInteractionPreview(false));
+    };
     public SolarSurface(Context context, SolarRenderer renderer) {
         super(context);
         observer=renderer;
@@ -51,8 +57,12 @@ public final class SolarSurface extends GLSurfaceView {
         if(paused)requestRender();
     }
     @Override public boolean onTouchEvent(MotionEvent event){
-        scale.onTouchEvent(event);
         final int action=event.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN){
+            interactionHandler.removeCallbacks(restoreFullUhd);
+            mutate(()->observer.setInteractionPreview(true));
+        }
+        scale.onTouchEvent(event);
         if(event.getPointerCount()==2){
             float x=(event.getX(0)+event.getX(1))*.5f;
             float y=(event.getY(0)+event.getY(1))*.5f;
@@ -63,8 +73,16 @@ public final class SolarSurface extends GLSurfaceView {
             previousX=x;previousY=y;twoFingers=true;
         }
         gestures.onTouchEvent(event);
-        if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)twoFingers=false;
+        if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){
+            twoFingers=false;
+            interactionHandler.removeCallbacks(restoreFullUhd);
+            interactionHandler.postDelayed(restoreFullUhd,140);
+        }
         return true;
+    }
+    @Override protected void onDetachedFromWindow(){
+        interactionHandler.removeCallbacks(restoreFullUhd);
+        super.onDetachedFromWindow();
     }
     @Override public boolean performClick(){super.performClick();return true;}
 }
