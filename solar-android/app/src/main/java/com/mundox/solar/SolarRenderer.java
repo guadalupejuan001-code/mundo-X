@@ -240,6 +240,78 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(int n=0;n<16&&glGetError()!=GL_NO_ERROR;n++){}
         throw new IllegalStateException(stage+": "+(error==GL_OUT_OF_MEMORY?"memoria gráfica insuficiente":"GLES 0x"+Integer.toHexString(error)));
     }
+    /** Preview attachments are independent from the 4K/8K capture target. */
+    private void deletePreviewTarget() {
+        deleteTarget(previewColor,previewDepth,previewFramebuffer);
+        previewColor=previewDepth=previewFramebuffer=0;
+        previewWidth=previewHeight=0;
+        previewFrame=false;
+        previewUnavailable=false;
+    }
+
+    /**
+     * Allocate once, after an interaction first requests a UHD preview.
+     * Failure is local to the preview feature: the validated full-quality
+     * rendering path remains available and no partially allocated GL name
+     * replaces the real capture framebuffer.
+     */
+    private boolean ensurePreviewTarget(){
+        if(previewFramebuffer!=0)return true;
+        if(previewUnavailable || framebuffer==0)return false;
+        if(!activeUhd&&!activeUltra)return false;
+        int color=0,depth=0,target=0;
+        boolean committed=false;
+        try{
+            RenderResolution.Size full=new RenderResolution.Size(width,height);
+            RenderResolution.Size size=SolarRenderPolicy.preview(full);
+            if(size.pixels()>=full.pixels())return false;
+            RenderResolution.requireAllocation(size,full);
+            resolutionLimits().require(size);
+            color=newTexture();
+            int[] names={0};
+            glGenRenderbuffers(1,names,0);depth=names[0];
+            glGenFramebuffers(1,names,0);target=names[0];
+            allocationCheck("Crear vista previa");
+            if(color==0||depth==0||target==0)
+                throw new IllegalStateException("Faltan nombres del framebuffer de vista previa");
+            glBindTexture(GL_TEXTURE_2D,color);
+            glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,size.width,size.height,
+                    0,GL_RGBA,GL_UNSIGNED_BYTE,null);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+            allocationCheck("Reservar color de vista previa");
+            glBindRenderbuffer(GL_RENDERBUFFER,depth);
+            glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH_COMPONENT24,size.width,size.height);
+            allocationCheck("Reservar profundidad de vista previa");
+            glBindFramebuffer(GL_FRAMEBUFFER,target);
+            glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,
+                    GL_TEXTURE_2D,color,0);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,
+                    GL_RENDERBUFFER,depth);
+            int status=glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            allocationCheck("Validar vista previa");
+            if(status!=GL_FRAMEBUFFER_COMPLETE)
+                throw new IllegalStateException("Framebuffer de vista previa incompleto");
+            previewColor=color;previewDepth=depth;previewFramebuffer=target;
+            previewWidth=size.width;previewHeight=size.height;
+            committed=true;
+            return true;
+        }catch(RuntimeException|OutOfMemoryError fault){
+            // The preview is optional. Reset GL error state and retain the
+            // installed full-resolution framebuffer as the safe fallback.
+            previewUnavailable=true;
+            for(int i=0;i<16&&glGetError()!=GL_NO_ERROR;i++){}
+            return false;
+        }finally{
+            if(!committed)deleteTarget(color,depth,target);
+            glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);
+            glBindRenderbuffer(GL_RENDERBUFFER,depthBuffer);
+            glBindTexture(GL_TEXTURE_2D,0);
+        }
+    }
+
     /** Same exact UHD/FIT geometry as the standalone COSMIC X 4K observer. */
     private RenderResolution.Limits resolutionLimits(){
         int[] caps=new int[4];glGetIntegerv(GL_MAX_TEXTURE_SIZE,caps,0);
