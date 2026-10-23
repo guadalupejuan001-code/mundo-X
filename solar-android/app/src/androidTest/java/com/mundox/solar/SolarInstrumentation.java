@@ -462,6 +462,19 @@ public final class SolarInstrumentation extends Instrumentation {
 
     private void resolutionBudget() throws Exception {
         prepare(3, false, false);
+        long coreBefore=activity.bridge().nativeRevision();
+        // Exercise the actual Activity control, not only the renderer setter.
+        main(() -> activity.setFluidQuality());
+        gl(() -> expect(activity.renderer().isAdaptivePreviewEnabled(),
+                "Auto fluido selection did not reach the GL owner"));
+        SolarRenderer.Capture automatic=frame();
+        expect(Math.max(automatic.width,automatic.height)<=1280,
+                "Auto fluido exceeded its preview ceiling");
+        expect(activity.bridge().nativeRevision()==coreBefore,
+                "Changing preview resolution changed Ether state");
+        main(() -> activity.setAdaptiveQuality(TEST_QUALITY));
+        gl(() -> expect(!activity.renderer().isAdaptivePreviewEnabled(),
+                "Selecting manual resolution did not disable Auto fluido"));
         gl(() -> activity.renderer().setQuality(480));
         SolarRenderer.Capture low = frame();
         gl(() -> activity.renderer().setQuality(960));
@@ -510,7 +523,7 @@ public final class SolarInstrumentation extends Instrumentation {
         // Persist the adaptive fixture in the Activity as well as the renderer:
         // standalone APKs otherwise restore their original UHD mode on recreate.
         main(() -> { activity.setUhdQuality(false); activity.setUltraQuality(false);
-            activity.scaleForTest(true); });
+            activity.setAdaptiveQuality(960);activity.scaleForTest(true); });
         gl(() -> { activity.renderer().setQuality(960); activity.renderer().setOrbits(true);
             activity.bridge().setPreset(3); activity.renderer().focus(3); });
         double date = activity.renderer().julianDate();
