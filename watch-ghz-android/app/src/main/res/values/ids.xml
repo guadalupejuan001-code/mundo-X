@@ -1,0 +1,18 @@
+<resources>
+    <item name="prepare" type="id"/>
+    <item name="phase" type="id"/>
+    <item name="measure" type="id"/>
+    <item name="reset" type="id"/>
+    <item name="size" type="id"/>
+    <item name="status" type="id"/>
+    <item name="hardware" type="id"/>
+    <item name="hardware_start" type="id"/>
+    <item name="hardware_stop" type="id"/>
+    <item name="hardware_status" type="id"/>
+    <item name="hardware_inventory" type="id"/>
+    <item name="map_remote" type="id"/>
+    <item name="map_connect" type="id"/>
+    <item name="map_status" type="id"/>
+    <item name="field_sensors" type="id"/>
+    <item name="field_readings" type="id"/>
+</resources>
