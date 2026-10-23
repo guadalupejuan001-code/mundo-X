@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
@@ -69,6 +70,15 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
     private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
     private int mapTexture,colorTexture,depthBuffer,framebuffer;
+    // Ephemeral camera-visible candidate regions: no persistent per-pixel object list.
+    // GL ES 3 integer texture costs 4 bytes per 128x128 tile, not per pixel.
+    private final SolarVisualEther.Workspace candidateWorkspace=new SolarVisualEther.Workspace();
+    private IntBuffer candidateUpload;
+    private int candidateTexture,candidateTilesX,candidateTilesY;
+    private volatile boolean candidateRequested=true,candidateActive;
+    private volatile double candidateRatio=1.0;
+    private volatile String candidateNotice;
+
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -158,6 +168,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
+        candidateTexture=candidateTilesX=candidateTilesY=0;
+        candidateActive=false;candidateRatio=1.0;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -461,6 +473,56 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(SolarData.Body body:SolarData.BODIES){int p=body.id*4;for(int k=0;k<3;k++)packedBodies[p+k]=(float)((positions[body.id][k]-cameraEye[k])*sceneScale);packedBodies[p+3]=(float)(radii[body.id]*sceneScale);}
         initializedCamera=true;
     }
+    /**
+     * Derive only the regions touched by the next frame from the current
+     * camera-relative scene. CPU workspace and integer upload buffer are reused.
+     * Any GPU allocation/transfer failure disables this optional optimization
+     * and preserves the original all-bodies fragment path.
+     */
+    private void prepareCandidates(){
+        candidateActive=false;
+        if(!candidateRequested){candidateRatio=1.0;return;}
+        try{
+            SolarVisualEther.Plan plan=candidateWorkspace.update(
+                    width,height,SolarVisualEther.DEFAULT_TILE,TAN_HALF_FOV,aspect,
+                    forward,right,up,packedBodies,appearance,atmosphere,SolarData.BODIES.length);
+            if(candidateTexture==0){
+                candidateTexture=newTexture();
+                if(candidateTexture==0)throw new IllegalStateException("No se pudo crear textura Ether Visual");
+            }
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D,candidateTexture);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+            if(candidateTilesX!=plan.tilesX||candidateTilesY!=plan.tilesY){
+                glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,plan.tilesX,plan.tilesY,0,
+                        GL_RED_INTEGER,GL_UNSIGNED_INT,null);
+                allocationCheck("Reservar Ether Visual");
+                candidateTilesX=plan.tilesX;candidateTilesY=plan.tilesY;
+            }
+            int count=plan.masks.length;
+            if(candidateUpload==null||candidateUpload.capacity()<count)
+                candidateUpload=direct(Math.multiplyExact(count,4)).asIntBuffer();
+            candidateUpload.clear();candidateUpload.put(plan.masks,0,count);candidateUpload.flip();
+            glTexSubImage2D(GL_TEXTURE_2D,0,0,0,plan.tilesX,plan.tilesY,
+                    GL_RED_INTEGER,GL_UNSIGNED_INT,candidateUpload);
+            allocationCheck("Actualizar candidatos de Ether Visual");
+            candidateRatio=plan.referenceRatio();
+            candidateNotice=null;candidateActive=true;
+        }catch(RuntimeException|OutOfMemoryError rejected){
+            candidateRequested=false;candidateActive=false;candidateRatio=1.0;
+            candidateNotice="Ether Visual desactivado: "+rejected.getClass().getSimpleName();
+            if(candidateTexture!=0)glDeleteTextures(1,new int[]{candidateTexture},0);
+            candidateTexture=candidateTilesX=candidateTilesY=0;
+            // The legacy shader path does not read any candidate texture.
+            for(int n=0;n<16&&glGetError()!=GL_NO_ERROR;n++){}
+        }finally{
+            glActiveTexture(GL_TEXTURE0);
+        }
+    }
+
     private void drawScene(){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
@@ -481,6 +543,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform4fv(sceneLoc("uQ0"),1,quantum,0);glUniform4fv(sceneLoc("uQ1"),1,quantum,4);
         glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
+        glUniform1i(sceneLoc("uUseTileMasks"),candidateActive?1:0);
+        glUniform1i(sceneLoc("uTileMasks"),1);
+        if(candidateActive){glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,candidateTexture);}
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -696,6 +761,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 entryAltitude=flightState.altitudeKm;publishEntry();
             }
             if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
+            prepareCandidates();
             glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
             lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
             check("Observación solar");
@@ -716,7 +782,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,(resolutionMessage==null?"":"\n"+resolutionMessage)
+                    +(candidateActive?String.format(Locale.US," · Ether Visual %.1f%%",candidateRatio*100)
+                    :candidateNotice==null?" · Ether Visual referencia":" · "+candidateNotice)));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
@@ -882,6 +950,15 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
+    /** Exact-reference switch used for visual regression and device comparisons. */
+    public void setCandidateCulling(boolean enabled){
+        candidateRequested=enabled;candidateActive=false;candidateNotice=null;
+        candidateRatio=1.0;
+    }
+    public boolean candidateCullingEnabled(){return candidateRequested;}
+    public boolean candidateCullingActive(){return candidateActive;}
+    public double candidateReferenceRatio(){return candidateRatio;}
+    public String candidateFailureNotice(){return candidateNotice;}
     public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;}
     public void setUhd4k(boolean enabled){requestedUhd=enabled; if(enabled)requestedUltra=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
     public void setUhd8k(boolean enabled){requestedUltra=enabled; if(enabled)requestedUhd=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
@@ -942,10 +1019,13 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public void release(){
         if(sceneProgram!=0)glDeleteProgram(sceneProgram);if(overlayProgram!=0)glDeleteProgram(overlayProgram);
         glDeleteTextures(2,new int[]{mapTexture,colorTexture},0);
+        if(candidateTexture!=0)glDeleteTextures(1,new int[]{candidateTexture},0);
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
         glDeleteBuffers(1,new int[]{overlayVbo},0);glDeleteVertexArrays(2,new int[]{eyeVao,overlayVao},0);
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
+        candidateTexture=candidateTilesX=candidateTilesY=0;candidateActive=false;
+        candidateUpload=null;candidateRatio=1.0;
         hasFrame=false;capture=null;
         activeUhd=activeUltra=false;
     }

@@ -79,6 +79,24 @@ jobs:
             ../solar-before/solar-android/app/src/main/assets/shaders/solar.frag
           cp solar-android/app/src/androidTest/java/com/mundox/solar/{SolarInstrumentation,SolarPerformanceChecks}.java \
             ../solar-before/solar-android/app/src/androidTest/java/com/mundox/solar/
+          # The baseline lacks the new visual-candidate API. Run the identical
+          # performance harness there, but do not transplant its unrelated
+          # candidate-equivalence regression into an old renderer.
+          python3 - <<'PY'
+          from pathlib import Path
+          file = Path('../solar-before/solar-android/app/src/androidTest/java/com/mundox/solar/SolarInstrumentation.java')
+          source = file.read_text()
+          start = source.index('    /**\n     * Draw the same paused scene with exact all-bodies evaluation')
+          end = source.index('    private void astronomyAndMagnetism() throws Exception {', start)
+          source = source[:start] + source[end:]
+          target = '            runCase("ether_visual_exact_candidate_frames", this::etherVisualExact);\n'
+          assert target in source
+          source = source.replace(target, '')
+          target = 'private static final int LEGACY_TESTS = 14;'
+          assert target in source
+          source = source.replace(target, 'private static final int LEGACY_TESTS = 13;')
+          file.write_text(source)
+          PY
           gradle -p ../solar-before/solar-android --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1g :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Build integrated original module
         run: gradle -p solar-android --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx1g :app:assembleDebug :app:assembleDebugAndroidTest
