@@ -288,29 +288,62 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         display=fit;aspect=(float)width/height;quality=acceptedQuality=limit;
         activeUhd=requestedUhd=mode==RenderResolution.UHD_4K;
         activeUltra=requestedUltra=mode==RenderResolution.UHD_8K;
+        if(smart4kRequested) {
+            // Capture-only UHD is transient and must never silently change
+            // the user-selected live preview mode to continuous 4K.
+            requestedUhd=requestedUltra=false;
+            smart4kActive=!smart4kCapturePending;
+        } else {
+            smart4kActive=false;
+        }
         framebufferDirty=false;
     }
     private void sizeFramebuffer(){
         RenderResolution.Limits caps=null;
         RenderResolution.Size uhd=RenderResolution.uhd(viewWidth,viewHeight);
         RenderResolution.Size ultra=RenderResolution.uhd8k(viewWidth,viewHeight);
-        boolean wantedUltra=requestedUltra,wantedUhd=requestedUhd&&!wantedUltra;
+        boolean smart=smart4kRequested;
+        boolean captureFull=smart&&smart4kCapturePending;
+        boolean wantedUltra=!smart&&requestedUltra,wantedUhd=!smart&&requestedUhd&&!wantedUltra;
         int wantedQuality=quality;
-        int wantedMode=wantedUltra?RenderResolution.UHD_8K:wantedUhd?RenderResolution.UHD_4K:RenderResolution.ADAPTIVE;
+        int wantedMode=wantedUltra?RenderResolution.UHD_8K:
+                (wantedUhd||captureFull)?RenderResolution.UHD_4K:RenderResolution.ADAPTIVE;
         RenderResolution.Size requested=wantedUltra?ultra:uhd;
         String request=wantedUltra?"UHD 8K "+ultra.width+"×"+ultra.height
-                :wantedUhd?"UHD 4K "+uhd.width+"×"+uhd.height:wantedQuality+" px";
+                :(wantedUhd||captureFull)?"UHD 4K "+uhd.width+"×"+uhd.height:
+                smart?"4K Fluido · visor "+smart4kGovernor.limit()+" px":wantedQuality+" px";
         try{
             caps=resolutionLimits();
-            RenderResolution.Size size=wantedMode==RenderResolution.ADAPTIVE
-                    ?RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps):requested;
+            RenderResolution.Size size=wantedMode!=RenderResolution.ADAPTIVE ? requested:
+                    smart?SolarSmart4k.preview(viewWidth,viewHeight,smart4kGovernor.limit(),caps):
+                    RenderResolution.adaptive(viewWidth,viewHeight,wantedQuality,caps);
             caps.require(size);installTarget(size,wantedMode,wantedQuality);resolutionMessage=null;
         }catch(RuntimeException|OutOfMemoryError rejected){
             String reason=rejected.getMessage();if(reason==null)reason=rejected.getClass().getSimpleName();
+            if(captureFull&&framebuffer!=0){
+                // Never return the low-res preview mislabeled as a 4K PNG.
+                // Keep the valid preview, report a recoverable per-capture
+                // failure and let the Activity release the PNG ownership token.
+                smart4kCaptureError=reason;
+                smart4kCapturePending=false;
+                requestedUhd=requestedUltra=false;
+                smart4kActive=true;
+                framebufferDirty=false;
+                display=RenderResolution.fit(viewWidth,viewHeight,
+                        new RenderResolution.Size(width,height));
+                resolutionMessage="No se pudo capturar 4K nativo: "+reason+
+                        ". Se conserva el visor fluido.";
+                return;
+            }
             if(framebuffer!=0){
-                requestedUhd=activeUhd;requestedUltra=activeUltra;quality=acceptedQuality;framebufferDirty=false;
-                display=RenderResolution.fit(viewWidth,viewHeight,new RenderResolution.Size(width,height));
-                resolutionMessage="No se pudo activar "+request+": "+reason+". Se conserva "+width+"×"+height+".";return;
+                requestedUhd=activeUhd;requestedUltra=activeUltra;
+                smart4kRequested=smart4kActive;
+                quality=acceptedQuality;framebufferDirty=false;
+                display=RenderResolution.fit(viewWidth,viewHeight,
+                        new RenderResolution.Size(width,height));
+                resolutionMessage="No se pudo activar "+request+": "+reason+
+                        ". Se conserva "+width+"×"+height+".";
+                return;
             }
             if(caps==null)throw rejected;
             int fallback=wantedQuality;
