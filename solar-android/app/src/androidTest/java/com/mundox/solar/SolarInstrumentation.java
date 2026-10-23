@@ -235,21 +235,30 @@ public final class SolarInstrumentation extends Instrumentation {
             prepare(body,false,false);
             gl(()->activity.renderer().setCandidateCulling(false));
             SolarRenderer.Capture reference=frame();
+            SolarRenderer.Capture referenceRepeated=frame();
+            int baselineDrift=changed(reference,referenceRepeated);
             gl(()->activity.renderer().setCandidateCulling(true));
             SolarRenderer.Capture tiled=frame();
+            SolarRenderer.Capture tiledRepeated=frame();
+            int tiledDrift=changed(tiled,tiledRepeated);
             boolean enabled=activity.renderer().candidateCullingActive();
             double ratio=activity.renderer().candidateReferenceRatio();
             if(enabled){active++;bestRatio=Math.min(bestRatio,ratio);}
-            int mismatch=changed(reference,tiled);
+            int mismatch=changed(referenceRepeated,tiledRepeated);
             comparisons.put(new JSONObject().put("body",body).put("active",enabled)
                     .put("ratio",ratio).put("changedPixels",mismatch)
+                    .put("baselineDrift",baselineDrift).put("candidateDrift",tiledDrift)
                     .put("width",tiled.width).put("height",tiled.height));
-            if(mismatch!=0){
-                save("ether-visual-reference-"+body+".png",reference);
-                save("ether-visual-candidates-"+body+".png",tiled);
+            if(mismatch!=0||baselineDrift!=0||tiledDrift!=0){
+                save("ether-visual-reference-"+body+".png",referenceRepeated);
+                save("ether-visual-candidates-"+body+".png",tiledRepeated);
+                save("ether-visual-initial-reference-"+body+".png",reference);
+                save("ether-visual-initial-candidates-"+body+".png",tiled);
             }
+            expect(baselineDrift==0,"Solar reference was not stationary: "+baselineDrift+" pixels for "+body);
+            expect(tiledDrift==0,"Solar region shader was not stationary: "+tiledDrift+" pixels for "+body);
             expect(mismatch==0,"Ether Visual changed reference pixels for body "+body+
-                    ": "+mismatch+"; "+activity.renderer().candidateFailureNotice());
+                    ": "+mismatch+"; ratio="+ratio+"; "+activity.renderer().candidateFailureNotice());
         }
         // Inside an atmosphere, the camera may be enclosed by the candidate
         // bounds. Test that case too; it cannot silently cull local medium.
