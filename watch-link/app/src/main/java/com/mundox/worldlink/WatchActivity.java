@@ -52,7 +52,8 @@ public final class WatchActivity extends Activity
     private TextView status;
     private Button streamButton, heartButton;
     private boolean streaming, heartRequested;
-    private boolean hasA, hasG, hasM, hasH;
+    private boolean hasA, hasG, hasM, hasH, hasL;
+    private float lux;
     private float heartRate;
     private long sequence, beganAt, lastNodesAt;
     private String sessionId;
@@ -124,7 +125,7 @@ public final class WatchActivity extends Activity
         if (streaming) return;
         streaming = true;
         sequence = 0;
-        hasA = false; hasG = false; hasM = false; hasH = false;
+        hasA = false; hasG = false; hasM = false; hasH = false; hasL = false;
         sessionId = UUID.randomUUID().toString();
         beganAt = SystemClock.uptimeMillis();
         lastNodesAt = -100_000L;
@@ -132,6 +133,7 @@ public final class WatchActivity extends Activity
         register(Sensor.TYPE_ACCELEROMETER);
         register(Sensor.TYPE_GYROSCOPE);
         register(Sensor.TYPE_MAGNETIC_FIELD);
+        register(Sensor.TYPE_LIGHT);
         if (heartRequested && checkSelfPermission(Manifest.permission.BODY_SENSORS)
                 == PackageManager.PERMISSION_GRANTED) register(Sensor.TYPE_HEART_RATE);
         message = "Buscando teléfono...";
@@ -202,7 +204,7 @@ public final class WatchActivity extends Activity
     private void publish() {
         if (!hasA || !hasG) return;
         try {
-            int mask = 1 | 2 | (hasM ? 4 : 0) | (hasH ? 8 : 0);
+            int mask = 1 | 2 | (hasM ? 4 : 0) | (hasH ? 8 : 0) | (hasL ? 16 : 0);
             JSONObject data = new JSONObject();
             data.put("v", 1);
             data.put("sid", sessionId);
@@ -213,6 +215,7 @@ public final class WatchActivity extends Activity
             data.put("gx", gyro[0]); data.put("gy", gyro[1]); data.put("gz", gyro[2]);
             data.put("mx", magnet[0]); data.put("my", magnet[1]); data.put("mz", magnet[2]);
             data.put("hr", hasH ? heartRate : 0);
+            data.put("lux", hasL ? lux : 0);
             byte[] payload = data.toString().getBytes(StandardCharsets.UTF_8);
             for (String id : nodes) Wearable.getMessageClient(this).sendMessage(id, SAMPLE_PATH, payload);
         } catch (Exception e) {
@@ -231,6 +234,11 @@ public final class WatchActivity extends Activity
                 break;
             case Sensor.TYPE_MAGNETIC_FIELD:
                 if (values.length >= 3) { System.arraycopy(values,0,magnet,0,3); hasM = true; }
+                break;
+            case Sensor.TYPE_LIGHT:
+                if (values.length > 0 && Float.isFinite(values[0]) && values[0] >= 0) {
+                    lux = values[0]; hasL = true;
+                }
                 break;
             case Sensor.TYPE_HEART_RATE:
                 if (values.length > 0 && values[0] > 0) { heartRate = values[0]; hasH = true; }
@@ -252,9 +260,10 @@ public final class WatchActivity extends Activity
     private void refresh() {
         if (status == null) return;
         String t = streaming ? String.format(Locale.US,
-                "ENLACE ACTIVO\nDestino(s): %d\nEnviadas: %d\nCampo: %s\nPulso: %s",
+                "ENLACE ACTIVO\nDestino(s): %d\nEnviadas: %d\nCampo: %s\nPulso: %s\nLuz: %s",
                 nodes.size(), sequence, hasM ? "detectado" : "sin lectura",
-                hasH ? (int)heartRate + " lpm" : "no disponible") : message;
+                hasH ? (int)heartRate + " lpm" : "no disponible",
+                hasL ? String.format(Locale.US,"%.1f lux",lux) : "sin sensor") : message;
         status.setText(t);
     }
 
