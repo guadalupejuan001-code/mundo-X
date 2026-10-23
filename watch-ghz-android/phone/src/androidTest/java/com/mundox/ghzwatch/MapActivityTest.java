@@ -46,6 +46,13 @@ public final class MapActivityTest {
             JSONObject initial;
             do { initial=state(activity);if(initial.optBoolean("ok"))break;Thread.sleep(100); }while(SystemClock.elapsedRealtime()<until);
             assertTrue("Bundled 3D map failed to load",initial.optBoolean("ok"));
+            JSONObject layout=evaluate(activity,"JSON.stringify({width:innerWidth,edges:[...document.querySelectorAll('.physical-panel,.lab-panel,.lab-panel button')].map(el=>({left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right}))})");
+            for(int index=0;index<layout.getJSONArray("edges").length();index++){
+                JSONObject edge=layout.getJSONArray("edges").getJSONObject(index);
+                assertTrue("Field control clipped on left",edge.getDouble("left")>=0);
+                assertTrue("Field control clipped on right",edge.getDouble("right")<=layout.getDouble("width")+1);
+            }
+
             assertTrue(send(activity,1,"HELLO").getBoolean("ok"));
             assertTrue(send(activity,2,"NEXT").getBoolean("ok"));
             assertEquals(2,state(activity).getJSONObject("state").getInt("capture"));
