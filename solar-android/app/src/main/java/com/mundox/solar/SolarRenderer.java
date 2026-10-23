@@ -542,10 +542,10 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(SolarData.Body body:SolarData.BODIES){int p=body.id*4;for(int k=0;k<3;k++)packedBodies[p+k]=(float)((positions[body.id][k]-cameraEye[k])*sceneScale);packedBodies[p+3]=(float)(radii[body.id]*sceneScale);}
         initializedCamera=true;
     }
-    private void drawScene(){
+    private void drawScene(int renderWidth,int renderHeight){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
-        glUniform2f(sceneLoc("uResolution"),width,height);
+        glUniform2f(sceneLoc("uResolution"),renderWidth,renderHeight);
         glUniform3fv(sceneLoc("uForward"),1,forward,0);glUniform3fv(sceneLoc("uRight"),1,right,0);glUniform3fv(sceneLoc("uUp"),1,up,0);
         glUniform1f(sceneLoc("uAspect"),aspect);glUniform1f(sceneLoc("uTanHalfFov"),TAN_HALF_FOV);
         glUniform1f(sceneLoc("uNear"),near);glUniform1f(sceneLoc("uFar"),far);glUniform1f(sceneLoc("uTime"),(float)(clockSeconds%100000));
@@ -778,10 +778,24 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 entryAltitude=flightState.altitudeKm;publishEntry();
             }
             if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
-            glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
-            lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
+            CaptureListener requested=capture;
+            boolean previewRequested=SolarRenderPolicy.shouldPreview(
+                    interactivePreviewEnabled,interactionPreview,
+                    activeUhd||activeUltra,requested!=null);
+            boolean drawPreview=previewRequested&&ensurePreviewTarget();
+            int target=drawPreview?previewFramebuffer:framebuffer;
+            int drawWidth=drawPreview?previewWidth:width;
+            int drawHeight=drawPreview?previewHeight:height;
+            glBindFramebuffer(GL_FRAMEBUFFER,target);
+            glViewport(0,0,drawWidth,drawHeight);
+            drawScene(drawWidth,drawHeight);
+            lines.clear();points.clear();if(!entryMode){
+                orbitLines();fieldLines();tracerParticles();
+                drawOverlay(lines,false);drawOverlay(points,true);
+            }
+            previewFrame=drawPreview;
             check("Observación solar");
-            CaptureListener requested=capture;Capture result=null;
+            Capture result=null;
             if(requested!=null){
                 int rowBytes=width*4,blockRows=Math.min(height,128);byte[] rgba=new byte[rowBytes*height];
                 ByteBuffer pixels=direct(rowBytes*blockRows);
@@ -792,13 +806,21 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 result=new Capture(width,height,rgba);capture=null;
             }
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER,framebuffer);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER,target);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
             int bottom=viewHeight-display.top-display.height;
-            glBlitFramebuffer(0,0,width,height,display.left,bottom,display.left+display.width,bottom+display.height,GL_COLOR_BUFFER_BIT,GL_LINEAR);glBindFramebuffer(GL_FRAMEBUFFER,0);
+            glBlitFramebuffer(0,0,drawWidth,drawHeight,
+                    display.left,bottom,
+                    display.left+display.width,bottom+display.height,
+                    GL_COLOR_BUFFER_BIT,GL_LINEAR);
+            glBindFramebuffer(GL_FRAMEBUFFER,0);
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,
+                    "%.0f FPS · %d × %d%s · núcleo r%d · %s%s%s",
+                    fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",
+                    uploadedRevision,drawPreview?"vista interactiva 960p":"escena completa",
+                    cinematic?" · cine":"",resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
