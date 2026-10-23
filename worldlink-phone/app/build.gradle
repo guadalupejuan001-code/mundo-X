@@ -5,7 +5,7 @@ android {
     ndkVersion '27.2.12479018'
     defaultConfig {
         // Google Wearable Data Layer: must match watch applicationId and signature.
-        applicationId 'com.mundox.worldlink.active'
+        applicationId 'com.mundox.worldlink.quantum'
         minSdk 29
         targetSdk 35
         versionCode 2
