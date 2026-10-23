@@ -56,10 +56,21 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
       - name: Build phone and watch experiment pair
+        shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          set +e
           gradle -p watch-link -PfieldPrediction=true --no-daemon :app:assembleDebug :app:lintDebug
+          WATCH_RESULT=$?
           gradle -p worldlink-phone -PfieldPrediction=true --no-daemon :app:assembleDebug :app:lintDebug
+          PHONE_RESULT=$?
+          if [ "$WATCH_RESULT" -ne 0 ] || [ "$PHONE_RESULT" -ne 0 ]; then
+            for PROJECT in watch-link worldlink-phone; do
+              REPORT="$PROJECT/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
+              if [ -f "$REPORT" ]; then cat "$REPORT"; fi
+            done
+            exit 1
+          fi
       - name: Verify pair, package and native rule entry points
         shell: bash
         run: |

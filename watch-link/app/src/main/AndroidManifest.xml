@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.BODY_SENSORS"/>
     <application android:allowBackup="false" android:usesCleartextTraffic="false"
         android:label="${appLabel}" android:theme="@android:style/Theme.Material.NoActionBar">
+        <meta-data android:name="com.google.android.wearable.standalone" android:value="false"/>
         <activity android:name=".WatchActivity" android:exported="false"/>
         <activity android:name=".FieldWatchActivity" android:exported="false"/>
         <activity-alias android:name=".Launcher" android:targetActivity="${launcherActivity}" android:exported="true">
