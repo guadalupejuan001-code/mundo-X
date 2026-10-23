@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(ether_world LANGUAGES CXX)
+get_filename_component(MUNDO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
+add_library(ether_world SHARED world_jni.cpp)
+target_include_directories(ether_world PRIVATE "${MUNDO_ROOT}/native/include")
+target_compile_features(ether_world PRIVATE cxx_std_17)
+target_compile_options(ether_world PRIVATE -O2 -Wall -Wextra)
+target_link_options(ether_world PRIVATE "-Wl,-z,max-page-size=16384")
