@@ -120,7 +120,7 @@ class InverseMemory {
       std::vector<InfiniteCore::Gate> flips;
       for (unsigned bit = 0; bit < 8; ++bit)
         if (((current.value ^ value) >> bit) & 1U)
-          flips.push_back({'X', add_small(binding->second, bit, core.limits().max_address_digits), {}});
+          flips.push_back({'X', add_small(*binding, bit, core.limits().max_address_digits), {}});
       if (!flips.empty()) core.apply(flips);
       return;
     }
