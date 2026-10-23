@@ -143,7 +143,7 @@ jobs:
               assert {"lib/arm64-v8a/libmx_graphics.so",
                       "lib/x86_64/libmx_graphics.so"} <= set(z.namelist())
           Path("solar-presentation-dist/SHA256SUMS.txt").write_text(
-              hashlib.sha256(apk.read_bytes()).hexdigest()+"  "+apk.name+"\\n")
+              hashlib.sha256(apk.read_bytes()).hexdigest()+"  "+apk.name+chr(10))
           PY
           git rev-parse HEAD > solar-presentation-dist/source-commit.txt
 
