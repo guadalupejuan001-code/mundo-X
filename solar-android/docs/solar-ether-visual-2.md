@@ -20,8 +20,11 @@ con pruebas exhaustivas, pero no estaba conectado al shader en producción.
 Ahora la cámara y las posiciones actuales producen un **mapa transitorio**
 de máscaras de 32 bits por celdas de 128 × 128 píxeles. El motor crea o
 reutiliza una textura `GL_R32UI` y la actualiza mediante `glTexSubImage2D`.
-El shader consulta esa máscara con `texelFetch` e ignora únicamente los
-cuerpos cuyas esferas envolventes no intersectan la región.
+El shader consulta esa máscara con `texelFetch` y evita los recorridos
+**costosos de atmósferas y anillos** cuando sus envolventes no intersectan
+la región. Conserva la comprobación de intersección de las 23 esferas,
+incluso las lunas de diámetro inferior a un píxel: las capturas Android
+detectaron diferencias de siluetas al filtrarlas solo por máscara.
 
 ## Lo que se conserva
 
