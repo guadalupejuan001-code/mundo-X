@@ -437,7 +437,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         runGL(()->observer.setQuality(pixels));
         updateButtons();
     }
-    private void setSmartQuality(boolean enabled){
+    /** Package-visible for Android lifecycle instrumentation; user access is via Calidad. */
+    void setSmartQuality(boolean enabled){
         smart4k=enabled;
         if(enabled)uhd4k=uhd8k=false;
         resolutionMessage=null;
