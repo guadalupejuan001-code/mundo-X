@@ -555,7 +555,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         addToggle(content,"Ether Visual · regiones visibles",etherVisual,b->{
             etherVisual=b;runGL(()->observer.setCandidateCulling(b));
         });
-        content.addView(label("Ether Visual evita revisar cuerpos fuera de cada región de 128 × 128 píxeles. Usa el mismo núcleo, shader y físicas. La ruta de referencia permite comparar resultados; no equivale a una GPU cuántica.",12,MUTED,false));
+        content.addView(label("Ether Visual descarta atmósferas y anillos que no pueden afectar cada región de 128 × 128 píxeles, pero sigue comprobando todas las esferas para preservar satélites diminutos. Usa el mismo núcleo, shader y físicas. La ruta de referencia permite comparar resultados; no equivale a una GPU cuántica.",12,MUTED,false));
         content.addView(button("Núcleo X · estados y trazas",0,()->coreDialog()));
         content.addView(button("Modelo físico y fuentes",0,()->modelDialog()));
         content.addView(button("Cómo navegar",0,()->helpDialog()));
