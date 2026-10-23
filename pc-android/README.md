@@ -1,10 +1,34 @@
 # COSMIC X PC — motor x86/x64 propio para Android
 
+## Mundo X Desktop 0.5.0 — entrada práctica
+
+**La APK abre ahora Mundo X Desktop como una única aplicación con Inicio, Web,
+Notas, Archivos, Quantum Workstation y COSMIC X PC.** El navegador usa WebView y
+servicios de red de Android; las notas se guardan localmente y los documentos
+se abren con el selector de archivos de Android. Quantum Workstation usa
+directamente Ether/InfiniteCore, Inverse Ether Memory y XASM por medio de los
+puentes nativos ya disponibles.
+
+El emulador x86/x64 de este módulo continúa incluido y accesible desde Inicio;
+no se sustituye ni se hace pasar por el sistema Android ni por hardware
+cuántico. Manual y límites: [MUNDO_X_DESKTOP.md](MUNDO_X_DESKTOP.md) y
+[QUANTUM_WORKSTATION.md](QUANTUM_WORKSTATION.md).
+
 Este módulo desarrolla un emulador de PC propio dentro del proyecto COSMIC X. Interpreta instrucciones x86/x64 y conecta su CPU con RAM, vídeo de texto y framebuffer gráfico, teclado BIOS y lectura de disco. La versión 0.3.0 incorporó SHRD/SHLD, un dispositivo VBE lineal hasta 8K y un presentador GLES 3 propio; la versión **0.4.0** conserva la memoria por demanda y el arranque de prueba real → protegido → largo de 64 bits. **Esta versión todavía no ejecuta ni instala Windows completo ni juegos de PC.**
 
 La versión **0.4.0** conecta **InfiniteCore como dispositivo del PC y el motor gráfico GLES canónico**. El huésped x86/x64, los comandos de la app y el observador cuántico acceden a una misma sesión. La pantalla de texto/framebuffer que escribe el huésped y el mundo del observador cuántico tienen sus propias vistas. Se conservan el intérprete, la RAM, los medios de arranque y el presentador VBE/GLES incorporado en 0.3.0.
 
 La aplicación contiene el intérprete C++ `cosmic_pc`; no contiene QEMU, Limbo, Bochs, Wine ni otro motor de emulación. El código de este módulo se escribió para este proyecto. El presentador utiliza la clase de geometría y validación [RenderResolution](../graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java) compartida con Graphics. El núcleo de 1.000 qubits no ejecuta ni acelera las instrucciones x86/x64: el estado de la CPU y la imagen que escribe el huésped conservan su propio significado.
+
+## Quantum Workstation: plataforma de uso diario
+
+La misma APK incluye ahora una entrada independiente **Mundo X Quantum** en el lanzador Android. Abre un entorno de trabajo con editor de programas `.xi`, terminal, archivos y sesiones `.mqx` persistentes, conectado directamente a **QuantumRuntime (Ether/InfiniteCore + Inverse Ether Memory)**. No requiere arrancar x86 ni inicializar sus 2 GiB de RAM lógica.
+
+La interfaz ofrece **ejecutar, abrir, guardar y restaurar**. En modo XI, estado y memoria se actualizan transaccionalmente. En modo XASM, se ejecutan circuitos Compact/Reduced (incluidas puertas T) con estado nuevo por programa. No se mezclan silenciosamente las dos rutas. [Manual y límites](QUANTUM_WORKSTATION.md).
+
+## Fusion Lab · física nuclear en tu PC
+
+La tarjeta del núcleo ahora abre **Fusion Lab**: tabla de los 118 elementos, elección de isótopos y exploración de reacciones nucleares. Los canales conocidos calculan energía Q con masas tabuladas; las combinaciones arbitrarias permanecen hipótesis sin predicción de fusión. No usa MIL Core como simulador nuclear validado. [Manual de Fusion Lab](FUSION_LAB.md).
 
 ## Usar el núcleo y su motor gráfico desde el PC
 
