@@ -51,6 +51,7 @@ Java_com_mundox_worldlink_phone_QuantumBridge_nativeEvolve(
       << ",\"light_available\":" << (r.light_available?"true":"false")
       << ",\"xx\":" << r.xx
       << ",\"zz\":" << r.zz
+      << ",\"chsh_simulated\":" << r.chsh_simulated
       << ",\"norm\":" << r.norm
       << ",\"phase\":" << r.phase_radians
       << ",\"frequency_hz\":" << r.frequency_hz
