@@ -35,7 +35,15 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         public final int width,height;
         /** RGBA8, OpenGL bottom row first. */
         public final byte[] rgba;
-        public Capture(int width,int height,byte[] rgba){this.width=width;this.height=height;this.rgba=rgba;}
+        /** Optional recoverable 4K allocation failure, never a partial PNG. */
+        public final String error;
+        public Capture(int width,int height,byte[] rgba){
+            this(width,height,rgba,null);
+        }
+        private Capture(int width,int height,byte[] rgba,String error){
+            this.width=width;this.height=height;this.rgba=rgba;this.error=error;
+        }
+        static Capture failed(String reason){return new Capture(0,0,null,reason);}
     }
 
     private static final int MAX_BODIES=24,MAX_OVERLAY_VERTICES=42000;
@@ -73,6 +81,10 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
     private volatile boolean activeUhd,activeUltra;
+    private volatile boolean smart4kRequested,smart4kActive;
+    private boolean smart4kCapturePending;
+    private String smart4kCaptureError;
+    private final SolarSmart4k.Governor smart4kGovernor=new SolarSmart4k.Governor();
     private volatile String resolutionMessage;
     private volatile RenderResolution.Fit display=RenderResolution.fit(1,1,new RenderResolution.Size(1,1));
     private volatile boolean entryMode,atmosphereEnabled=true;
