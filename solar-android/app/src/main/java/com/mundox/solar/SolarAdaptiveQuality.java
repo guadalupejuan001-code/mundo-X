@@ -14,7 +14,7 @@ public final class SolarAdaptiveQuality {
     public static final int MAX_DIMENSION = 1280;
     private static final long SLOW_NS = 29_000_000L;
     private static final long VERY_SLOW_NS = 100_000_000L;
-    private static final long FAST_NS = 14_000_000L;
+    private static final long FAST_NS = 18_000_000L;
     private static final long SUSPENDED_NS = 1_000_000_000L;
     private int dimension,slow,verySlow,fast;
 
