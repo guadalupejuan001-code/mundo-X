@@ -19,6 +19,49 @@ void rejects(Fn fn, const char* label) {
   try { fn(); } catch (const std::exception&) { rejected = true; }
   require(rejected, label);
 }
+
+using C = MIL::Complex;
+// Independent RK4 integration of the ORIGINAL two-particle sparse Hamiltonian.
+// No FFT, no Suzuki splitting and no call to the MIL propagator in this oracle.
+std::vector<C> sparse_derivative(const std::vector<C>& psi, std::size_t n,
+                                  double hopping, double contact) {
+  std::vector<C> output(n * n);
+  for (std::size_t x = 0; x < n; ++x)
+    for (std::size_t y = 0; y < n; ++y) {
+      const auto at = [&](std::size_t a, std::size_t b) { return psi[a * n + b]; };
+      const C kinetic = -hopping *
+          (at((x + 1) % n, y) + at((x + n - 1) % n, y) +
+           at(x, (y + 1) % n) + at(x, (y + n - 1) % n));
+      const C interaction = x == y ? contact * at(x, y) : C(0.0, 0.0);
+      output[x * n + y] = C(0.0, -1.0) * (kinetic + interaction);
+    }
+  return output;
+}
+std::vector<C> add_scaled(const std::vector<C>& psi,
+                          const std::vector<C>& k, double multiplier) {
+  auto result = psi;
+  for (std::size_t i = 0; i < result.size(); ++i) result[i] += multiplier * k[i];
+  return result;
+}
+std::vector<C> independent_rk4(std::vector<C> state, std::size_t n,
+                                double hopping, double contact,
+                                double dt, std::size_t steps) {
+  for (std::size_t t = 0; t < steps; ++t) {
+    const auto k1 = sparse_derivative(state, n, hopping, contact);
+    const auto k2 = sparse_derivative(add_scaled(state, k1, dt / 2.0), n, hopping, contact);
+    const auto k3 = sparse_derivative(add_scaled(state, k2, dt / 2.0), n, hopping, contact);
+    const auto k4 = sparse_derivative(add_scaled(state, k3, dt), n, hopping, contact);
+    for (std::size_t i = 0; i < state.size(); ++i)
+      state[i] += dt * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]) / 6.0;
+  }
+  return state;
+}
+double amplitude_l2(const std::vector<C>& a, const std::vector<C>& b) {
+  require(a.size() == b.size(), "oracle dimensions");
+  double squared = 0.0;
+  for (std::size_t i = 0; i < a.size(); ++i) squared += std::norm(a[i] - b[i]);
+  return std::sqrt(squared);
+}
 }  // namespace
 
 int main() {
@@ -61,6 +104,27 @@ int main() {
     const auto repeat = MIL::run(input);
     require(MIL::probability_l1(free, repeat) == 0.0, "deterministic re-execution");
 
+    // Test physical evolution, not just self-consistency of the FFT.
+    // Solve the original H independently with 4000 RK4 substeps to time 0.4.
+    const auto reference = independent_rk4(MIL::initial_state(8),
+                                            8, 1.0, 4.0, 0.0001, 4000);
+    MIL::Input oracle_cfg;
+    oracle_cfg.sites = 8;
+    oracle_cfg.contact = 4.0;
+    oracle_cfg.hopping = 1.0;
+    oracle_cfg.steps = 4;
+    oracle_cfg.dt = 0.1;
+    auto coarse = MIL::initial_state(8);
+    MIL::propagate(coarse, oracle_cfg, oracle_cfg.dt);
+    oracle_cfg.steps = 40;
+    oracle_cfg.dt = 0.01;
+    auto refined = MIL::initial_state(8);
+    MIL::propagate(refined, oracle_cfg, oracle_cfg.dt);
+    const double coarse_l2 = amplitude_l2(coarse, reference);
+    const double refined_l2 = amplitude_l2(refined, reference);
+    require(refined_l2 < 0.0002, "split-operator disagrees with independent RK4");
+    require(refined_l2 < coarse_l2 / 20.0, "time-step refinement did not converge");
+
     input.sites = 128;
     input.steps = 50;
     input.contact = 8.0;
@@ -94,6 +158,8 @@ int main() {
               << " initial_contact=" << interacting.initial_contact
               << " peak_contact=" << interacting.peak_contact
               << " interacting_vs_free_l1=" << difference
+              << " rk4_l2_coarse=" << coarse_l2
+              << " rk4_l2_refined=" << refined_l2
               << " interacting_purity=" << interacting_purity
               << " free_purity=" << free_purity
               << " reverse_error=" << max_reverse_error
