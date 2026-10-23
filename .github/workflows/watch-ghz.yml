@@ -50,6 +50,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          set +e
           gradle -p watch-ghz-android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :phone:assembleDebug :phone:assembleDebugAndroidTest :phone:lintDebug
           RESULT=$?
           if [ "$RESULT" -ne 0 ]; then
