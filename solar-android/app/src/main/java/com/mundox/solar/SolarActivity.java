@@ -64,6 +64,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     private Joystick joystick;
     private boolean fields=false,wind=true,orbits=true,realScale=false,paused=false,freeFlight=false,cleanView=false,resumed;
     private boolean uhd4k=false,uhd8k=false,entryActive=false,atmospheres=true,localPhysics=false,pngDestinationOpen;
+    private boolean cinematic=true,interactivePreview=true;
     private volatile boolean destroyed;
     private double desiredEntryAltitude=35;
     private String resolutionMessage,pngToken;
@@ -97,6 +98,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         uhd4k=prefs.getBoolean("uhd4k",defaultMode==1);uhd8k=prefs.getBoolean("uhd8k",defaultMode==2);
         if(uhd8k)uhd4k=false;
         atmospheres=prefs.getBoolean("atmospheres",true);localPhysics=prefs.getBoolean("localPhysics",false);
+        cinematic=prefs.getBoolean("cinematic",true);
+        interactivePreview=prefs.getBoolean("interactivePreview",true);
         entryActive=prefs.getBoolean("entry",false);
         desiredEntryAltitude=Double.longBitsToDouble(prefs.getLong("entryAltitude",Double.doubleToLongBits(35)));
         double[] entryPose=readPose(prefs.getString("entryPose",null));
@@ -115,6 +118,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             quality=clamp(saved.getInt("quality",quality),480,1440);
             uhd4k=saved.getBoolean("uhd4k",uhd4k);uhd8k=saved.getBoolean("uhd8k",uhd8k);if(uhd8k)uhd4k=false;
             atmospheres=saved.getBoolean("atmospheres",atmospheres);localPhysics=saved.getBoolean("localPhysics",localPhysics);
+            cinematic=saved.getBoolean("cinematic",cinematic);
+            interactivePreview=saved.getBoolean("interactivePreview",interactivePreview);
             entryActive=saved.getBoolean("entry",entryActive);
             desiredEntryAltitude=saved.getDouble("entryAltitude",desiredEntryAltitude);
             if(saved.containsKey("entryPose"))entryPose=saved.getDoubleArray("entryPose");
@@ -131,6 +136,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             observer.setRealScale(realScale);observer.setQuality(quality);
             if(uhd8k)observer.setUhd8k(true);else observer.setUhd4k(uhd4k);
             observer.setAtmosphereEnabled(atmospheres);observer.setLocalPhysics(localPhysics);
+            observer.setCinematic(cinematic);
+            observer.setInteractivePreviewEnabled(interactivePreview);
             if(body<0)observer.overview();else observer.focus(body);
             if(entryActive&&body>0){
                 if(entryPose!=null)observer.restoreEntryState(entryPose);
@@ -262,7 +269,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         joystick.setVisibility(freeFlight||entryActive?View.VISIBLE:View.GONE);
         entryButton.setText(entryActive?"↑  Regresar a órbita":"↓  Descender");entryButton.setEnabled(body>0);
         entryButton.setAlpha(body>0?1f:.5f);altitudeRow.setVisibility(entryActive?View.VISIBLE:View.GONE);
-        qualityButton.setText(uhd8k?"8K UHD":uhd4k?"4K UHD":"Calidad");qualityButton.setTextColor(uhd4k||uhd8k?GOLD:TEXT);
+        qualityButton.setText(uhd8k?"8K UHD":uhd4k?"4K UHD":cinematic?"Cine":"Calidad");
+        qualityButton.setTextColor(cinematic?GOLD:TEXT);
         if(root!=null)root.requestApplyInsets();
     }
     private void updateBody(){
@@ -288,7 +296,13 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         double jd=observer.julianDate();
         boolean actualPause=observer.isPaused();if(paused!=actualPause){paused=actualPause;if(surface!=null)surface.setPausedRendering(actualPause);updateButtons();}
         dateLabel.setText(dateFormat.format(new Date((long)((jd-2440587.5)*86400000)))+"    "+(paused?"Pausa":SPEED_NAMES[speedIndex]));
-        engineLabel.setText(String.format(Locale.ROOT,"NÚCLEO X  ·  %d × %d  ·  %.0f fps%s",observer.renderedWidth(),observer.renderedHeight(),observer.fps,entryActive&&localPhysics?String.format(Locale.ROOT," · g %.2f m/s² · vr %.3f km/s",observer.localGravityMs2(),observer.radialVelocityKmS()):""));
+        engineLabel.setText(String.format(Locale.ROOT,
+                "NÚCLEO X · %d × %d · %.0f FPS%s%s",
+                observer.renderedWidth(),observer.renderedHeight(),observer.fps,
+                observer.isPreviewFrame()?" · VISTA RÁPIDA":"",
+                entryActive&&localPhysics?
+                        String.format(Locale.ROOT," · g %.2f m/s² · vr %.3f km/s",
+                                observer.localGravityMs2(),observer.radialVelocityKmS()):""));
         if(entryActive&&observer.isEntryMode()){
             desiredEntryAltitude=observer.altitudeKm();altitudeButton.setText(altitudeText(desiredEntryAltitude));
         }
