@@ -27,7 +27,7 @@ static void write_ppm(const std::string& file,
     throw std::runtime_error("PPM dimensions incorrect");
   std::ofstream out(file,std::ios::binary);
   if(!out)throw std::runtime_error("preview image could not be created");
-  out<<"P6\\n"<<width<<' '<<height<<"\\n255\\n";
+  out<<"P6\n"<<width<<' '<<height<<"\n255\n";
   for(const auto pixel:image) {
     const char rgb[]={static_cast<char>((pixel>>16)&0xff),
                       static_cast<char>((pixel>>8)&0xff),
