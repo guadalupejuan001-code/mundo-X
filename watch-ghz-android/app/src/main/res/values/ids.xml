@@ -1,0 +1,8 @@
+<resources>
+    <item name="prepare" type="id"/>
+    <item name="phase" type="id"/>
+    <item name="measure" type="id"/>
+    <item name="reset" type="id"/>
+    <item name="size" type="id"/>
+    <item name="status" type="id"/>
+</resources>

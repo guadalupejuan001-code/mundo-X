@@ -1,0 +1,100 @@
+name: Mundo X GHZ watch core
+
+on:
+  push:
+    branches: ['codex/watch-ghz-core-20261023']
+    paths: ['watch-ghz-android/**', 'native/include/mundo_x/**', '.github/workflows/watch-ghz.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch-ghz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Independent quantum-state oracle and host JNI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ghz-dist /tmp/ghz-native /tmp/ghz-java
+          g++ -std=c++17 -O2 -Wall -Wextra -I native/include \
+            watch-ghz-android/tests/watch_ghz_core_test.cpp -o /tmp/ghz-native/check
+          /tmp/ghz-native/check | tee ghz-dist/core-checks.txt
+          g++ -std=c++17 -O2 -shared -fPIC -pthread -I native/include \
+            -I "$JAVA_HOME/include" -I "$JAVA_HOME/include/linux" \
+            watch-ghz-android/app/src/main/cpp/ghz_jni.cpp -o /tmp/ghz-native/libmundox_ghz.so
+          javac -d /tmp/ghz-java watch-ghz-android/app/src/main/java/com/mundox/ghzwatch/NativeGhz.java \
+            watch-ghz-android/tests/NativeGhzCheck.java
+          java -Djava.library.path=/tmp/ghz-native -cp /tmp/ghz-java com.mundox.ghzwatch.NativeGhzCheck \
+            | tee ghz-dist/jni-checks.txt
+      - name: Android SDK
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Build and lint standalone watch app
+        shell: bash
+        run: |
+          set -uo pipefail
+          gradle -p watch-ghz-android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
+          RESULT=$?
+          if [ "$RESULT" -ne 0 ]; then
+            REPORT=watch-ghz-android/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+            if [ -f "$REPORT" ]; then cat "$REPORT"; fi
+            exit "$RESULT"
+          fi
+      - name: Verify APK identity and ARM64 native core
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp watch-ghz-android/app/build/outputs/apk/debug/app-debug.apk ghz-dist/Mundo-X-GHZ-Reloj.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs ghz-dist/Mundo-X-GHZ-Reloj.apk > ghz-dist/signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging ghz-dist/Mundo-X-GHZ-Reloj.apk > ghz-dist/manifest.txt
+          grep -q "package: name='com.mundox.ghzwatch'" ghz-dist/manifest.txt
+          unzip -p ghz-dist/Mundo-X-GHZ-Reloj.apk lib/arm64-v8a/libmundox_ghz.so > /tmp/ghz-native/android.so
+          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D /tmp/ghz-native/android.so > ghz-dist/native-symbols.txt
+          grep -q Java_com_mundox_ghzwatch_NativeGhz_command ghz-dist/native-symbols.txt
+          git rev-parse HEAD > ghz-dist/commit.txt
+          sha256sum ghz-dist/*.apk > ghz-dist/SHA256SUMS.txt
+          cp docs/watch-ghz-core.md ghz-dist/LEEME.md
+      - name: Enable emulator acceleration
+        run: |
+          sudo chmod 666 /dev/kvm
+      - name: Native UI smoke test at watch-sized resolution
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb shell wm size 450x450
+            adb shell wm density 240
+            gradle -p watch-ghz-android --no-daemon :app:connectedDebugAndroidTest
+            adb shell am start -n com.mundox.ghzwatch/.MainActivity
+            adb shell input tap 220 280
+            adb shell uiautomator dump /sdcard/ghz-window.xml
+            adb pull /sdcard/ghz-window.xml ghz-dist/ui.xml
+            adb shell screencap -p /sdcard/ghz.png
+            adb pull /sdcard/ghz.png ghz-dist/ui.png
+      - name: Preserve app and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-GHZ-Watch
+          path: |
+            ghz-dist/**
+            watch-ghz-android/app/build/outputs/androidTest-results/**
+            watch-ghz-android/app/build/reports/lint-results-debug.html
+          if-no-files-found: error
+          retention-days: 30
