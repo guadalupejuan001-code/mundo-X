@@ -112,6 +112,49 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Build independent Cine X presentation package
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p solar-android --no-daemon --stacktrace \
+            -PsolarPresentationStandalone=true :app:assembleDebug \
+            2>&1 | tee solar-presentation-build.log
+          mkdir -p solar-presentation-dist
+          cp solar-android/app/build/outputs/apk/debug/app-debug.apk \
+            solar-presentation-dist/COSMIC-X-Solar-Cine-X.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            solar-presentation-dist/COSMIC-X-Solar-Cine-X.apk \
+            > solar-presentation-dist/signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+            solar-presentation-dist/COSMIC-X-Solar-Cine-X.apk \
+            > solar-presentation-dist/manifest.txt
+          grep -F "name='com.cosmicx.solar.presentation' versionCode='7' versionName='1.6.0'" \
+            solar-presentation-dist/manifest.txt
+          grep -F "application-label:'COSMIC X Solar Cine X'" \
+            solar-presentation-dist/manifest.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import hashlib
+          apk=Path("solar-presentation-dist/COSMIC-X-Solar-Cine-X.apk")
+          with ZipFile(apk) as z:
+              assert z.testzip() is None
+              assert "uniform int uCinematic" in z.read("assets/shaders/solar.frag").decode()
+              assert {"lib/arm64-v8a/libmx_graphics.so",
+                      "lib/x86_64/libmx_graphics.so"} <= set(z.namelist())
+          Path("solar-presentation-dist/SHA256SUMS.txt").write_text(
+              hashlib.sha256(apk.read_bytes()).hexdigest()+"  "+apk.name+"\\n")
+          PY
+          git rev-parse HEAD > solar-presentation-dist/source-commit.txt
+
+      - name: Upload installable coexisting Cine X presentation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Solar-Cine-X-Presentation-APK
+          path: solar-presentation-dist/**
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -120,6 +163,8 @@ jobs:
           path: |
             solar-build.log
             solar-science.log
+            solar-presentation-build.log
+            solar-presentation-dist/*.txt
             solar-dist/*.txt
             solar-dist/*.json
             solar-android/app/build/reports/**
