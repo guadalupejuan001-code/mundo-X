@@ -258,10 +258,10 @@ public final class MainActivity extends Activity {
 
     private String validateHost(String raw) {
         String host = raw.trim();
-        if (!host.matches("[0-9]{1,3}(\\\\.[0-9]{1,3}){3}")) {
+        if (!host.matches("[0-9]{1,3}(\\.[0-9]{1,3}){3}")) {
             throw new IllegalArgumentException("Escribe la dirección IPv4 que muestra el reloj");
         }
-        String[] fields = host.split("\\\\.");
+        String[] fields = host.split("\\.");
         for (String field : fields) {
             if (Integer.parseInt(field)>255) throw new IllegalArgumentException("Dirección IP incorrecta");
         }
