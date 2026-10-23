@@ -60,7 +60,7 @@ jobs:
             if [ -f "$PHONE_REPORT" ]; then cat "$PHONE_REPORT"; fi
             exit "$RESULT"
           fi
-      - name: Verify APK identity and ARM64 native core
+      - name: Verify APK identity and ARM32, ARM64 and emulator native cores
         shell: bash
         run: |
           set -euo pipefail
@@ -68,9 +68,12 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs ghz-dist/Mundo-X-GHZ-Reloj.apk > ghz-dist/signature.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging ghz-dist/Mundo-X-GHZ-Reloj.apk > ghz-dist/manifest.txt
           grep -q "package: name='com.mundox.ghzwatch'" ghz-dist/manifest.txt
-          unzip -p ghz-dist/Mundo-X-GHZ-Reloj.apk lib/arm64-v8a/libmundox_ghz.so > /tmp/ghz-native/android.so
-          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D /tmp/ghz-native/android.so > ghz-dist/native-symbols.txt
-          grep -q Java_com_mundox_ghzwatch_NativeGhz_command ghz-dist/native-symbols.txt
+          python3 watch-ghz-android/tests/verify_apk_abis.py ghz-dist/Mundo-X-GHZ-Reloj.apk | tee ghz-dist/native-abis.txt
+          for ABI in armeabi-v7a arm64-v8a x86_64; do
+            unzip -p ghz-dist/Mundo-X-GHZ-Reloj.apk "lib/$ABI/libmundox_ghz.so" > "/tmp/ghz-native/$ABI.so"
+            "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D "/tmp/ghz-native/$ABI.so" > "ghz-dist/native-symbols-$ABI.txt"
+            grep -q Java_com_mundox_ghzwatch_NativeGhz_command "ghz-dist/native-symbols-$ABI.txt"
+          done
           cp watch-ghz-android/phone/build/outputs/apk/debug/phone-debug.apk ghz-dist/Mundo-X-Mapa-Telefono.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs ghz-dist/Mundo-X-Mapa-Telefono.apk > ghz-dist/phone-signature.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging ghz-dist/Mundo-X-Mapa-Telefono.apk > ghz-dist/phone-manifest.txt

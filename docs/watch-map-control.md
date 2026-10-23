@@ -1,4 +1,4 @@
-# Mundo X 1.2 · reloj como mando del mapa
+# Mundo X 1.2.1 · reloj como mando del mapa
 Esta versión incluye **dos APK distintos**, compilados juntos y firmados con la misma clave de depuración:
 
 - **Mundo-X-GHZ-Reloj.apk**: instalar en Galaxy Watch4 Classic. Conserva GHZ simulado y la prueba de sensores; añade «MAPA 4D · MANDO».
@@ -29,6 +29,17 @@ El enlace usa Wear OS Data Layer MessageClient. Sólo se intercambian órdenes y
 La escucha sólo se activa mientras las apps están abiertas. El reloj confirma una orden únicamente cuando recibe la respuesta del código del mapa, no por el mero éxito de sendMessage. Hay un tiempo de espera de 4 segundos y no hay reenvío automático de órdenes. El teléfono detecta números de secuencia repetidos y no vuelve a aplicar la misma orden.
 
 ## Instalación de pruebas
+La versión 1.2.1 corrige `INSTALL_FAILED_NO_MATCHING_ABIS` (`res=-113`):
+el APK del reloj incluye ahora el núcleo compilado para **armeabi-v7a (ARM de 32 bits)**,
+además de ARM64 y el emulador. La versión 1.2.0 omitía ARM32. CI abre el APK final,
+comprueba los encabezados ELF de las tres arquitecturas y verifica sus símbolos JNI.
+Las pruebas de ejecución siguen realizándose en el emulador x86_64; la instalación
+y ejecución en el Watch4 físico se comprueban con el dispositivo del usuario.
+
+Este error indica incompatibilidad de arquitectura del APK; no se corrige cambiando
+Wi-Fi, puertos o el instalador ADB. Puedes seguir usando tu app de depuración.
+Instala los dos APK de esta entrega como pareja para conservar la firma coincidente.
+
 Estos APK no se instalan automáticamente al abrir un enlace. El APK del teléfono no sustituye la instalación del APK del reloj.
 Si existe una versión de depuración anterior con otro certificado, Android puede rechazar la actualización. Desinstalarla borra sus datos privados, incluido hardware-latest.json. Conserva cualquier registro que necesites antes de hacerlo. Ambos APK de esta entrega deben instalarse como pareja; sus certificados se comprueban en CI.
 

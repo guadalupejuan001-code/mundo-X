@@ -67,12 +67,14 @@ Android pulsa los controles y comprueba el resultado del núcleo nativo.
 
 El workflow `.github/workflows/watch-ghz.yml` compila Java 17 / Gradle 8.9 /
 AGP 8.7.3 / SDK 35 / NDK 27.2.12479018, ejecuta lint, verifica firma e identidad
-del APK, e incluye bibliotecas arm64-v8a y x86_64. La prueba UI se ejecuta en
+del APK, e incluye bibliotecas armeabi-v7a, arm64-v8a y x86_64. Se verifica que
+cada biblioteca del APK sea un ELF de la arquitectura declarada y exporte JNI.
+La prueba UI se ejecuta en
 Android API 30 con una pantalla de 450 × 450; no sustituye una prueba física
 en Galaxy Watch4. Los resultados de cada ejecución están en el artefacto CI.
 
 Para compilar: `gradle -p watch-ghz-android :app:assembleDebug :app:lintDebug`.
-Paquete independiente: `com.mundox.ghzwatch`, versión 1.1.0. Puede coexistir
+Paquete independiente: `com.mundox.ghzwatch`, versión 1.2.1. Puede coexistir
 con WorldLink y BBY-Q. El APK debug permite instalación mediante ADB inalámbrico
 en Wear OS; abrirlo en el teléfono no lo instala automáticamente en el reloj.
 
