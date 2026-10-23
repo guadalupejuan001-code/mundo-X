@@ -717,6 +717,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
                 .putInt("quality",quality).putInt("preset",quantum.preset()).putBoolean("fields",fields)
                 .putBoolean("wind",wind).putBoolean("orbits",orbits).putBoolean("realScale",realScale)
                 .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k).putBoolean("uhd8k",uhd8k).putBoolean("atmospheres",atmospheres).putBoolean("localPhysics",localPhysics)
+                .putBoolean("cinematic",cinematic).putBoolean("interactivePreview",interactivePreview)
                 .putBoolean("entry",entryActive).putLong("entryAltitude",Double.doubleToLongBits(desiredEntryAltitude))
                 .putString("entryPose",poseText(pose)).apply();
     }
@@ -724,6 +725,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         super.onSaveInstanceState(state);state.putInt("body",body);state.putInt("speed",speedIndex);state.putBoolean("fields",fields);state.putBoolean("wind",wind);state.putBoolean("orbits",orbits);state.putBoolean("realScale",realScale);state.putBoolean("paused",paused);
         if(observer!=null)state.putDouble("jd",observer.julianDate());if(quantum!=null)state.putInt("preset",quantum.preset());
         state.putInt("quality",quality);state.putBoolean("uhd4k",uhd4k);state.putBoolean("uhd8k",uhd8k);state.putBoolean("atmospheres",atmospheres);state.putBoolean("localPhysics",localPhysics);
+        state.putBoolean("cinematic",cinematic);state.putBoolean("interactivePreview",interactivePreview);
         state.putBoolean("entry",entryActive);state.putDouble("entryAltitude",desiredEntryAltitude);
         state.putDoubleArray("entryPose",observer==null?null:observer.entryState());
         if(pngDestinationOpen&&pngToken!=null){state.putBoolean("pngDestinationOpen",true);state.putString("pngToken",pngToken);}
@@ -745,4 +747,6 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     public void fieldsForTest(boolean enabled){fields=enabled;runGL(()->observer.setFields(enabled));updateButtons();updateBody();}
     public void pauseForTest(boolean enabled){paused=enabled;runGL(()->observer.setPaused(enabled));if(surface!=null)surface.setPausedRendering(enabled);updateButtons();}
     public void scaleForTest(boolean enabled){realScale=enabled;runGL(()->observer.setRealScale(enabled));updateBody();}
+    public void cinematicForTest(boolean enabled){setCinematicQuality(enabled);}
+    public void interactivePreviewForTest(boolean enabled){setInteractivePreview(enabled);}
 }
