@@ -24,6 +24,7 @@ uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
+uniform int uCinematic; // 0: original physical-reference render; 1: optional filmic material details
 out vec4 outColor;
 
 float hash(float n){return fract(sin(n)*43758.5453123);}
@@ -148,18 +149,26 @@ float ringShadowFootprint(vec3 light,float lightDistance,vec3 dx,vec3 dy,
     return abs(radialGradient(p,rx,radius))+abs(radialGradient(p,ry,radius));
 }
 vec3 terrainNormal(vec3 n,int id,float ocean,float normalFootprint){
-    if(!entering(id)||id==0||uAtmosphere[id].w==5.0)return n;
-    float radiusKm=max(uEntry.z,.01),frequency=radiusKm/1.8;
+    if(id==0||uAtmosphere[id].w==5.0)return n;
+    // Optional close-orbit apparent relief. It is explicitly procedural,
+    // never a measured topographic height map.
+    bool closeOrbit=uCinematic==1&&!entering(id)&&
+            (id==1||id==4||id==9||id>=10)&&normalFootprint<.0012;
+    if(!entering(id)&&!closeOrbit)return n;
+    float radiusKm=entering(id)?max(uEntry.z,.01):max(1.0,uBodies[id].w);
+    float frequency=entering(id)?radiusKm/1.8:180.0;
     vec3 p=localNormal(n,id);
     float footprint=normalFootprint*frequency;
-    float visible=(1.0-smoothstep(.25,1.2,footprint))*(1.0-smoothstep(90.0,180.0,uEntry.y));
+    float visible=entering(id)
+            ?(1.0-smoothstep(.25,1.2,footprint))*(1.0-smoothstep(90.0,180.0,uEntry.y))
+            :(1.0-smoothstep(.20,1.0,footprint))*.55;
     if(visible<.002)return n;
     vec3 tangent=normalize(cross(n,abs(n.y)>.9?vec3(0,0,1):vec3(0,1,0))),bitangent=cross(n,tangent);
     vec3 tx=localNormal(tangent,id),ty=localNormal(bitangent,id);
     float e=.07/max(1.0,frequency);
     float h=detailFbm(p*frequency);
     vec2 slope=vec2(detailFbm((p+tx*e)*frequency)-h,detailFbm((p+ty*e)*frequency)-h)/e;
-    float amplitude=.30/radiusKm;
+    float amplitude=entering(id)?(.30/radiusKm):.020;
     if(id==3)amplitude*=1.0-ocean*.97;
     return normalize(n-(tangent*slope.x+bitangent*slope.y)*amplitude*visible);
 }
@@ -177,6 +186,13 @@ vec3 sky(vec3 rd,vec3 drx,vec3 dry){
     vec3 col=vec3(0.0010,0.0018,0.0045);
     float milky=pow(max(0.0,1.0-abs(dot(rd,normalize(vec3(.23,.89,.39))))),20.0);
     col+=milky*vec3(.006,.009,.017)*(0.35+fbm(rd*14.0));
+    if(uCinematic==1){
+        // Procedural photographic star haze; not a measured Milky Way map.
+        // Uses the same analytic sky ray and no extra texture allocations.
+        float lane=pow(max(0.0,1.0-abs(dot(rd,normalize(vec3(.23,.89,.39))))),13.0);
+        float dust=.78+.22*sin(dot(rd,vec3(51.0,24.0,78.0)));
+        col+=lane*dust*vec3(.010,.014,.023);
+    }
     vec2 uv=vec2(longitude(rd)/(2.0*PI)+.5,asin(clamp(rd.y,-1.0,1.0))/PI+.5);
     vec2 uvWidth=abs(angularGradient(rd,drx))+abs(angularGradient(rd,dry));
     for(int level=0;level<2;level++){
@@ -418,6 +434,19 @@ void main(){
             // Rounded unit vectors may have a dot product just above one.
             float rim=pow(1.0-clamp(dot(normal,-rd),0.0,1.0),3.5);
             if(!entering(id))color+=atmosphereColor(id)*rim*(.10+.35*smoothstep(-.22,.55,nl))*visibility;
+            if(uCinematic==1 && !entering(id)){
+                // A soft, sunward atmospheric limb: a low-cost artistic
+                // approximation of forward scattering, not meteorology.
+                float sunward=smoothstep(-.24,.40,nl);
+                float twilight=1.0-smoothstep(.10,.46,abs(nl));
+                color+=atmosphereColor(id)*rim*(.20*sunward+.095*twilight)*visibility;
+                if(id==3){
+                    // Warm ocean glint is conditioned on the actual Earth
+                    // albedo-derived water mask, not a fictitious night map.
+                    float glint=pow(max(dot(reflect(-light,normal),viewDir),0.0),64.0);
+                    color+=vec3(.10,.12,.17)*glint*ocean*(1.0-clouds)*visibility;
+                }
+            }
             // A planet casts its shadow onto its own rings, and rings dim its day side.
             if(uAppearance[id].w>0.0){
                 vec3 axis=uAxes[id];
@@ -455,6 +484,12 @@ void main(){
         float tint=.55+.2*sin(rr*31.0)+.15*sin(rr*113.0);
         vec3 ring=mix(vec3(.18,.13,.078),vec3(.72,.62,.41),tint);
         ring*=.32+.83*abs(dot(axis,light));ring*=.12+.88*shadow;
+        if(uCinematic==1){
+            // Optional back/forward particulate glint based only on the
+            // illumination angle. No unmodelled particle dynamics.
+            float glint=pow(max(dot(rd,light),0.0),12.0);
+            ring*=1.0+.26*glint;
+        }
         if(j==7||j==8)ring*=vec3(.44,.62,.80);
         color=mix(color,ring,opacity*.91);
         if(opacity>.35){
@@ -473,6 +508,15 @@ void main(){
             float rays=.6+.22*sin(angle*15.0+qPhase*3.0)+.16*sin(angle*39.0-uTime*.03+uQ1.x*uCoupling*2.0);
             float halo=exp(-(radius-1.0)*3.5)*.20+exp(-(radius-1.0)*.8)*.006*rays;
             color+=vec3(1.0,.36,.055)*halo;
+            if(uCinematic==1){
+                // Lens-like photographic stellar bloom within the existing
+                // visible Sun cone. The occlusion condition above prevents
+                // the glow leaking through other planetary bodies.
+                float soft=exp(-(radius-1.0)*1.30)*.018;
+                float spikes=pow(max(0.0,1.0-abs(sin(angle*4.0))),18.0);
+                float diffraction=spikes*exp(-(radius-1.0)*.52)*.025;
+                color+=vec3(1.0,.51,.19)*(soft+diffraction);
+            }
         }
     }
     if(uAtmosphereEnabled==1){
@@ -500,6 +544,14 @@ void main(){
     // more naturally than the previous exponential clamp.
     color=acesFilm(max(color,vec3(0.0))*1.08);
     color=pow(color,vec3(1.0/2.2));
-    float vignette=1.0-.14*pow(length(ndc*.59),2.0);
-    outColor=vec4(color*vignette,1.0);
+    float vignette=1.0-(uCinematic==1?.10:.14)*pow(length(ndc*.59),2.0);
+    color*=vignette;
+    if(uCinematic==1){
+        // Fixed sub-8-bit quantization dither reduces color banding without
+        // time jitter, per-frame randomness, temporal ghosting or AA blur.
+        vec2 p=fract(gl_FragCoord.xy*vec2(.06711056,.00583715));
+        float d=fract(52.9829189*fract(p.x+p.y));
+        color=clamp(color+(d-.5)/255.0,0.0,1.0);
+    }
+    outColor=vec4(color,1.0);
 }
