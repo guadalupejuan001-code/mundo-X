@@ -16,6 +16,7 @@ iFixit encontró un chip Texas Instruments AFE4500S de biosensado óptico en el 
 
 - Botón **Ver sensores**: enumeración mediante Android SensorManager. Muestra si existen acelerómetro, giroscopio, sensor de luz ambiental frontal y sensor de pulso procesado.
 - Botón **Registrar 60 s**: registra acelerómetro, giroscopio y luz ambiental si el firmware permite esos sensores; deja CSV local app-private.
+- Botón **Pulso óptico (BPM)**: solicita BODY_SENSORS y registra el sensor estándar TYPE_HEART_RATE cuando esté expuesto por el firmware. Es un **resultado óptico procesado** por el reloj y permite validar una recepción básica sin SDK cerrado; NO entrega luz incidente ni muestras PPG crudas.
 - Botón **PPG óptico bruto**: solicita permiso Body Sensors. **Solo funciona si el desarrollador aporta el archivo oficial AAR de Samsung** y el reloj permite PPG_CONTINUOUS.
 - El archivo CSV contiene wall_ms, source, device_time, tres campos numéricos de señal y tres campos de status. Los timestamps de SensorManager son ns desde arranque; los de PPG de Samsung son ms según su documentación. No mezclar sin conversión.
 - No tiene permiso INTERNET, grabación de audio ni acceso a datos de otras apps.
@@ -35,7 +36,7 @@ No se distribuye el AAR de Samsung, y el CI sin AAR no valida integración espec
 Hacer sesiones cortas y etiquetarlas manualmente:
 1. Reloj bien ajustado sobre la muñeca, quieto (referencia).
 2. Reloj bien ajustado, movimiento suave (artefacto mecánico).
-3. Reloj fuera de la muñeca, sin contacto con piel (control).
+3. Reloj fuera de la muñeca, sin contacto con piel (control; algunos sensores dejan de producir datos o reportan inválido).
 4. Cambios normales de iluminación alrededor del reloj (artefacto ambiental).
 
 No usar láseres, abrir la carcasa, pegar componentes al sensor ni introducir señales eléctricas en la electrónica. No enviar datos personales a internet. Medir si las lecturas cambian en función de los controles y si el firmware informa error/ausencia de contacto. No inferir coherencia cuántica de las fluctuaciones del ADC.
