@@ -1,20 +1,67 @@
-# Solar: Ether demand-driven v0.1
+# Solar: Auto fluido conectado a Ether — etapa de renderizado
 
-Base: main después de PR #54 (Ether Memory con 256 páginas COW).
+Referencia: PR #60, basado en `main` tras la fusión del PR #54
+(Ether Memory con 256 páginas de copy-on-write).
 
-Esta etapa cambia la política de **observación y renderizado**, no las leyes físicas ni la semántica cuántica. Solar conserva `QuantumSolarBridge`, su estado Ether por sesión, la efeméride `SolarData` y el shader GLES propio.
+## Qué se ha corregido
 
-## Implementación
+El primer borrador del modo adaptativo nunca se activaba en la aplicación real:
+`SolarActivity.onCreate` invocaba `setQuality`, que desactivaba
+`adaptivePreview`, y la UI no ofrecía una opción para reactivarlo. Además,
+medía solamente el tiempo CPU transcurrido dentro de `onDrawFrame`, que no
+incluye necesariamente las esperas de GPU/sincronización.
 
-`SolarRenderer` añade un modo de vista previa adaptativa: mide el coste de cada cuadro, baja el máximo de resolución tras 12 cuadros de más de 29 ms y lo recupera gradualmente tras 90 cuadros por debajo de 14 ms. Usa histéresis para evitar cambios continuos. La vista previa va de 480 a 1280 píxeles de dimensión máxima. El estado de simulación, la fecha, los cuerpos y la observación de Ether no se modifican por cambiar el framebuffer.
+La implementación corregida incorpora un controlador **separado y verificable
+sin Android**, `SolarAdaptiveQuality`, que observa intervalos entre comienzos
+de fotogramas. Esto aproxima el ritmo efectivo de cuadros, aunque no es un
+contador de tiempo GPU ni acredita una velocidad concreta en Samsung.
 
-La captura explícita 4K/8K no se rebaja automáticamente. La opción `setQuality` desactiva la adaptación para respetar la resolución manual; `setAdaptivePreview(true)` permite reactivarla. El modo de entrada atmosférica se excluye de esta primera etapa para evitar afectar su experiencia.
+- **Auto fluido** aparece en `Calidad de imagen` y `Observatorio`. Está
+  activado por defecto en la app normal nueva, salvo preferencia previa;
+  las APK UHD 4K/8K mantienen su modo explícito por defecto.
+- Previsualización máxima entre **480 y 1280 px**. Tras seis intervalos lentos
+  (≥29 ms) reduce 160 px. Dos intervalos muy lentos (≥100 ms) reducen 240 px.
+  Noventa intervalos rápidos (≤14 ms) elevan 80 px. La histéresis evita un
+  rebote continuo.
+- Un primer fotograma, reanudación tras suspensión prolongada, pausa,
+  captura PNG, entrada a atmósfera, cambio de orientación o modo UHD no
+  alimentan las muestras. **Auto no modifica las fechas, fuerzas, órbitas,
+  estado Ether, RNG ni las fuentes científicas**.
+- Los ajustes `Ahorro`, `Equilibrada`, `Alta`, `4K`, `8K`
+  siguen siendo modos manuales. Una selección UHD no se degrada de forma
+  silenciosa. El botón superior identifica Auto fluido y la preferencia
+  `fluidPreview` se conserva tras recreación.
+- Las pruebas de la lógica autónoma (`SolarAdaptiveQualityChecks`) se
+  ejecutan en las tres variantes de CI junto a las pruebas astronómicas.
+  `SolarInstrumentation.resolutionBudget` activa el modo desde la Activity
+  real, comprueba la resolución permitida, su desactivación al seleccionar
+  modo manual y la conservación de la revisión del núcleo.
 
-## Límites y aceptación
+## Separación real de responsabilidades
 
-- Esta primera modificación es **una política de resolución**, no una reimplementación del renderizador ni una prueba de que Ether acelere GLES.
-- Requiere compilar Solar Android, ejecutar la suite de integración y medir FPS, PSS/RSS, GPU y calidad en un dispositivo real.
-- El PR #54 optimiza las transacciones de Inverse Ether Memory, pero Solar todavía consulta el puente `NativeCore` existente; no se le atribuyen ganancias de RAM sin un perfil que demuestre su participación.
-- Futuro: reducir cálculos y transferencias de observables sin cambios, priorizar objetos visibles y eliminar buffers temporales grandes, siempre con comparación de imagen y conservación de estado.
+`QuantumSolarBridge` conserva la autoridad de las observaciones cuánticas;
+`SolarData` calcula posiciones, tiempo y datos físicos. El motor GLES procesa
+la imagen y es el único que decide qué resolución asignar a los framebuffers.
+Una decisión de calidad es únicamente una **vista derivada**.
 
-No fusionar hasta validar los workflows de Solar.
+La optimización de Inverse Ether Memory del PR #54 afecta al runtime cuántico.
+No significa que Solar GPU use qubits como hardware ni que la memoria lógica
+evite texturas, framebuffer o muestras de sombreado. El puente de Solar sigue
+consultando `NativeCore`, por lo que solo una traza de rendimiento de ese
+recorrido permitiría atribuirle nuevas mejoras.
+
+## Cómo verificar
+
+1. `javac -d /tmp/solar-tests solar-android/app/src/main/java/com/mundox/solar/SolarAdaptiveQuality.java solar-android/tests/SolarAdaptiveQualityChecks.java`
+2. `java -cp /tmp/solar-tests com.mundox.solar.SolarAdaptiveQualityChecks`
+3. Compilar la app Android y su paquete de instrumentación con el workflow
+   `solar-android.yml`; repetir las variantes 4K/8K.
+4. Ejecutar Android 15 instrumentado y comparar estado, imágenes, memoria
+   PSS y consumo CPU/GPU en el dispositivo objetivo. No atribuir a la
+   política mejoras de FPS antes de medirlas.
+
+**Alcance honesto:** Solar conserva el renderizador, shaders y modelos
+originales. Es una primera optimización efectiva del coste de visualización
+y de su elección de calidad; **no es una reescritura completa de la escena,
+de la física o del hardware gráfico**. Las siguientes mejoras deben medirse
+en cuellos de botella por frame, buffers y transferencia CPU→GPU.
