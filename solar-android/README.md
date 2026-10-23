@@ -1,5 +1,54 @@
 # COSMIC X Solar
 
+## Versión 1.5 — 4K Fluido y fotografía 4K real
+
+**Problema observado:** un framebuffer 3840 × 2160 requiere 8.294.400
+fragmentos (más luz, nubes y atmósferas) por fotograma. A 2 FPS, cada
+fotograma tarda aproximadamente 500 ms. MIL Core no acelera automáticamente
+las operaciones GLES de la GPU del teléfono.
+
+**Nuevo selector Calidad → 4K Fluido:** para navegar se dibuja el
+mismo shader propio de Solar en un framebuffer 16:9, empezando en
+**540 × 960 (518.400 píxeles)**. Eso reduce 16× el número de píxeles
+de sombreado frente a 4K nativo. Un controlador con histéresis ajusta la
+vista entre 360 × 640, 540 × 960 y 810 × 1440, según los FPS medidos.
+Esta reducción del número de fragmentos **no garantiza multiplicar FPS por 16**:
+CPU, memoria, carga de texturas y controlador GPU también influyen.
+
+Al pulsar **Guardar PNG** en 4K Fluido, Solar crea temporalmente un
+framebuffer **2160 × 3840** (o **3840 × 2160** en horizontal), renderiza
+la escena **a resolución nativa** y lee todos los píxeles. Una vez
+capturado, vuelve al visor adaptable y libera el framebuffer UHD.
+El PNG NO se crea reescalando una imagen 960p.
+Si la GPU no soporta esa reserva, se notifica un error y se conserva
+la vista anterior; nunca se exporta silenciosamente una falsa captura 4K.
+
+**4K UHD nativo y 8K UHD nativo siguen disponibles sin cambios:** estos
+modos renderizan TODOS los píxeles en cada fotograma y, por tanto,
+pueden funcionar lentamente en móviles modestos. El indicador
+de pantalla muestra el tamaño real del visor junto a la etiqueta
+**PNG 4K** cuando está activo 4K Fluido.
+
+La actualización no modifica los datos planetarios, la física,
+los estados de MIL Core, las capas atmosféricas científicas ni
+los resultados de Cine X. No es reconstrucción de imagen mediante IA
+ni computación cuántica gráfica.
+
+### Verificación
+
+- `SolarSmart4kChecks.java`: prueba de tamaños y orientación,
+  518.400 vs. 8.294.400 píxeles, límites GPU, histéresis y cambios
+  entre 640/960/1440.
+- `SolarInstrumentation`: dibuja realmente el visor con GLES,
+  verifica que el framebuffer no se etiqueta 4K nativo y comprueba la
+  restauración del modo clásico.
+- La batería de pruebas UHD 4K solicita una captura real de 8,3 MP,
+  guarda su PNG y verifica que el framebuffer adaptable se recupera.
+
+Los FPS y la temperatura **del Samsung del usuario** no se infieren
+de un emulador Android y deben medirse en ese teléfono.
+
+
 ## Actualización visual 1.4 · Cine X
 
 El modo **Cine X** es una mejora gráfica opcional sobre el shader original
