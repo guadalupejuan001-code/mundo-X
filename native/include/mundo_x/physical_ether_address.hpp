@@ -61,7 +61,7 @@ class PhysicalEtherDecoder {
 
   struct Model {
     bool ready = false;
-    PhysicalVector background_uT, effective_moment_uT_m3;
+    PhysicalVector background_uT, effective_moment_uT_m3, uniform_mean_uT;
     double fit_rmse_uT = 0., uniform_baseline_rmse_uT = 0.;
     std::array<double, 3> min_xyz{}, max_xyz{};
     double min_time_s = 0., max_time_s = 0.;
@@ -231,6 +231,7 @@ class PhysicalEtherDecoder {
     candidate.background_uT={parameter[0],parameter[1],parameter[2]};
     candidate.effective_moment_uT_m3={parameter[3],parameter[4],parameter[5]};
     mean={mean.x/readings.size(),mean.y/readings.size(),mean.z/readings.size()};
+    candidate.uniform_mean_uT=mean;
     double residual=0.,null_residual=0.;
     for(const auto& observation:readings) {
       const PhysicalVector r{observation.address.x_m,observation.address.y_m,
@@ -281,13 +282,14 @@ class PhysicalEtherDecoder {
       validate_observation(sample);
       const auto guessed=predict(sample.address);
       model_error+=squared_difference(guessed.magnetic_uT,sample.magnetic_uT);
-      baseline_error+=squared_difference(model_.background_uT,sample.magnetic_uT);
+      baseline_error+=squared_difference(model_.uniform_mean_uT,sample.magnetic_uT);
     }
     HoldoutScore score;
     score.count=static_cast<unsigned>(holdouts.size());
     score.model_rmse_uT=std::sqrt(model_error/(3.*holdouts.size()));
     score.uniform_rmse_uT=std::sqrt(baseline_error/(3.*holdouts.size()));
-    score.improves_over_uniform=score.model_rmse_uT < .8*score.uniform_rmse_uT;
+    score.improves_over_uniform=score.model_rmse_uT < .8*score.uniform_rmse_uT &&
+        (score.uniform_rmse_uT-score.model_rmse_uT) > .15;
     return score;
   }
 
