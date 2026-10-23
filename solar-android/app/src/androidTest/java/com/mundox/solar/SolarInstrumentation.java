@@ -490,6 +490,16 @@ public final class SolarInstrumentation extends Instrumentation {
             throw new AssertionError("Auto fluido Activity control failed",error);
         }
     }
+    private void chooseManualQuality(int size) {
+        try {
+            java.lang.reflect.Method method=SolarActivity.class.getDeclaredMethod(
+                    "setAdaptiveQuality",int.class);
+            method.setAccessible(true);
+            method.invoke(activity,size);
+        } catch(ReflectiveOperationException error) {
+            throw new AssertionError("Solar manual quality Activity control failed",error);
+        }
+    }
     private void resolutionBudget() throws Exception {
         prepare(3, false, false);
         if(supportsAutoFluid()){
@@ -556,7 +566,10 @@ public final class SolarInstrumentation extends Instrumentation {
         // Persist the adaptive fixture in the Activity as well as the renderer:
         // standalone APKs otherwise restore their original UHD mode on recreate.
         main(() -> { activity.setUhdQuality(false); activity.setUltraQuality(false);
-            activity.scaleForTest(true); });
+            // Recreate from the same UI quality that the GL fixture renders.
+            // The previous Auto fluido test may have left the Activity at 640,
+            // while the renderer was temporarily configured directly to 960.
+            chooseManualQuality(960);activity.scaleForTest(true); });
         gl(() -> { activity.renderer().setQuality(960); activity.renderer().setOrbits(true);
             activity.bridge().setPreset(3); activity.renderer().focus(3); });
         double date = activity.renderer().julianDate();
@@ -598,7 +611,7 @@ public final class SolarInstrumentation extends Instrumentation {
                 && activity.renderer().windEnabled() && activity.renderer().orbitsEnabled()
                 && activity.renderer().realScaleEnabled() && activity.renderer().qualityLimit() == 960
                 && !activity.renderer().isUhd4k() && !activity.renderer().isUhd8k(),
-                "Activity recreation lost its live time, scale, layer or adaptive quality settings"));
+                "Activity recreation lost its live time, scale, layer or adaptive quality settings: quality="+activity.renderer().qualityLimit()));
         expectHeading("CAMPO INTRÍNSECO");
         frame(); frame();
         expect(activity.renderer().julianDate() == date, "Recreated paused scene advanced in time");
