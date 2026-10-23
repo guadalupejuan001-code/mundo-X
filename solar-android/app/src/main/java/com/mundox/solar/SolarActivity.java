@@ -407,14 +407,14 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             dialog.dismiss();
         }).setNegativeButton("Cerrar",null).create();showDialog(d);
     }
-    private void setFluidQuality(){
+    void setFluidQuality(){
         final int start=Math.max(480,Math.min(1280,quality));
         quality=start;fluidPreview=true;uhd4k=uhd8k=false;resolutionMessage=null;
         runGL(()->{observer.setUhd8k(false);observer.setUhd4k(false);
             observer.setQuality(start);observer.setAdaptivePreview(true);});
         updateButtons();
     }
-    private void setAdaptiveQuality(int pixels){
+    void setAdaptiveQuality(int pixels){
         quality=pixels;fluidPreview=false;uhd4k=uhd8k=false;resolutionMessage=null;
         runGL(()->{observer.setUhd8k(false);observer.setUhd4k(false);observer.setQuality(pixels);});updateButtons();
     }
