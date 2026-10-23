@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <fstream>
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -19,7 +20,24 @@ static void rejects(Action action,const char* explanation){
   try{action();}catch(const std::exception&){return;}
   throw std::runtime_error(explanation);
 }
-int main() {
+static void write_ppm(const std::string& file,
+                      const std::vector<std::uint32_t>& image,int width,int height) {
+  if(file.empty())return;
+  if(image.size()!=static_cast<std::size_t>(width*height))
+    throw std::runtime_error("PPM dimensions incorrect");
+  std::ofstream out(file,std::ios::binary);
+  if(!out)throw std::runtime_error("preview image could not be created");
+  out<<"P6\\n"<<width<<' '<<height<<"\\n255\\n";
+  for(const auto pixel:image) {
+    const char rgb[]={static_cast<char>((pixel>>16)&0xff),
+                      static_cast<char>((pixel>>8)&0xff),
+                      static_cast<char>(pixel&0xff)};
+    out.write(rgb,sizeof(rgb));
+  }
+  if(!out)throw std::runtime_error("PPM write failed");
+}
+
+int main(int argc,char** argv) {
   try {
     using World=mundo_x::EtherWorld;
     using Render=mundo_x::EtherWorldRenderer;
@@ -122,6 +140,11 @@ int main() {
     world.emit_pulse();
     need(world.simulated_quantum_field()==0.,"second Ether X did not restore Z0");
     need(world.rules().logical_rule_bytes()==32,"base generated rule became a million-cell array");
+    if(argc>=3) {
+      const auto preview=display.render(world,false);
+      write_ppm(argv[1],preview.view,Render::kWidth,Render::kHeight);
+      write_ppm(argv[2],preview.map,Render::kMapWidth,Render::kMapWidth);
+    }
     std::cout<<"ETHER_WORLD_NATIVE_PASS checks="<<checks
              <<" logical_cells="<<world.rules().count()
              <<" ether_overrides="<<world.stats().edits
