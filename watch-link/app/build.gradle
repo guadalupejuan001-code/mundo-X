@@ -6,7 +6,7 @@ android {
     compileSdk 35
     defaultConfig {
         // This ID MUST match the installed phone app for Wear Data Layer pairing.
-        applicationId standaloneWorldLink ? 'com.mundox.worldlink.active' : 'com.mundox.graphics'
+        applicationId standaloneWorldLink ? 'com.mundox.worldlink.quantum' : 'com.mundox.graphics'
         minSdk 30
         targetSdk 35
         versionCode 3
