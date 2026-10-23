@@ -8,6 +8,8 @@ on:
       - 'native/tests/physical_ether_address.cpp'
       - 'native/src/physical_ether_lab.cpp'
       - 'examples/physical_ether_dipole_synthetic.csv'
+      - 'tools/test_physical_ether_cli.py'
+      - 'tools/cosmic_source_provenance.py'
       - 'quantum-runtime/CMakeLists.txt'
       - '.github/workflows/physical-ether-decoder.yml'
   pull_request:
@@ -16,6 +18,8 @@ on:
       - 'native/tests/physical_ether_address.cpp'
       - 'native/src/physical_ether_lab.cpp'
       - 'examples/physical_ether_dipole_synthetic.csv'
+      - 'tools/test_physical_ether_cli.py'
+      - 'tools/cosmic_source_provenance.py'
       - 'quantum-runtime/CMakeLists.txt'
       - '.github/workflows/physical-ether-decoder.yml'
   workflow_dispatch:
@@ -29,6 +33,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact source inventory
+        run: python3 tools/cosmic_source_provenance.py > /tmp/physical-source-provenance.json
       - name: Configure quantum-only runtime
         run: cmake -S quantum-runtime -B /tmp/ether-physical-build -DCMAKE_BUILD_TYPE=Release
       - name: Compile decoder and measurement CLI
@@ -38,6 +46,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p physical-ether-results
+          cp /tmp/physical-source-provenance.json physical-ether-results/source-provenance.json
+          python3 tools/test_physical_ether_cli.py /tmp/ether-physical-build/mundo_x_physical_ether_lab \
+            2>&1 | tee physical-ether-results/cli-regressions.log
           ctest --test-dir /tmp/ether-physical-build \
             -R '^physical_ether_(address|cli)$' --output-on-failure \
             | tee physical-ether-results/ctest.log

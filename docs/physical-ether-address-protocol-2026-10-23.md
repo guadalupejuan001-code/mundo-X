@@ -79,10 +79,27 @@ El CSV distingue TRAIN y HOLDOUT. El programa ajusta únicamente TRAIN,
 reserva HOLDOUT para evaluación y muestra el error del modelo comparado
 con un campo uniforme aprendido del mismo TRAIN.
 
+Cada fila representa una posición distinta: promedia por separado las lecturas
+repetidas de un sitio antes de importarlas. Se requieren al menos 8 sitios TRAIN
+y 4 HOLDOUT (se recomiendan 8 HOLDOUT). Dos posiciones deben estar separadas por
+al menos `resolution_m` metros, tanto dentro de cada grupo como entre grupos.
+Cambiar el tiempo o desplazar coordenadas menos que esa resolución no convierte
+un sitio de entrenamiento en una validación espacial independiente. Estos
+controles no certifican el origen físico de un archivo ni la independencia
+estadística de las lecturas.
+
+La regresión de la interfaz CSV se ejecuta con:
+
+    python3 tools/test_physical_ether_cli.py ./quantum-build/mundo_x_physical_ether_lab
+
+Incluye datos repetidos, solapamiento TRAIN/HOLDOUT, ruido de posición inferior
+a la resolución, controles uniformes y de fuente cambiada, y entradas inválidas.
+Una consulta inválida termina con error y sin publicar un JSON parcial.
+
 Los resultados sintéticos aprobados en el workflow de GitHub incluyen:
 
 - 16 posiciones de entrenamiento y 8 independientes.
-- 2.038 comprobaciones en la prueba C++.
+- Más de 2.000 comprobaciones en la prueba C++, incluidos los rechazos anteriores.
 - RMSE de las ocho posiciones: ~0,0187 µT (prueba C++);
   importador CSV independiente: ~0,0226 µT por diferencias de orden
   de ruido generado en el ejemplo.
@@ -103,6 +120,10 @@ El Watch4 incluye un magnetómetro; su telemetría WorldLink previa
 ya enviaba mx,my,mz, pero la pantalla presentaba la magnitud y
 todavía NO exporta a este importador posiciones calibradas ni el
 vector convertido a un sistema de referencia fijo.
+La captura `mundox.hardware-probe.v1` de MundoX GHZ 1.1 registra vectores y
+tiempos del sensor, pero tampoco incluye posiciones medidas ni una orientación
+de referencia calibrada. Su JSON no puede convertirse automáticamente en este
+ensayo espacial; hacen falta esas mediciones adicionales.
 
 Para obtener evidencia físicamente interpretable:
 

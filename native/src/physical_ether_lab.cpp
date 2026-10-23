@@ -93,10 +93,15 @@ CSV load_csv(const std::string& path) {
 }
 std::string quote(const std::string& s) {
   std::string out="\"";
-  for(const auto c:s) {
-    if(c=='"'||c=='\\')out+='\\';
-    if(c=='\n'||c=='\r')out+=' ';
-    else out+=c;
+  constexpr char hex[]="0123456789abcdef";
+  for(const unsigned char c:s) {
+    if(c<0x20) {
+      out+="\\u00";
+      out+=hex[c>>4];out+=hex[c&15];
+    } else {
+      if(c=='"'||c=='\\')out+='\\';
+      out+=static_cast<char>(c);
+    }
   }
   return out+"\"";
 }
@@ -114,8 +119,10 @@ int main(int argc,char** argv) {
     for(const auto& sample:csv.train)ether.observe(sample);
     const auto model=ether.infer();
     const auto score=ether.evaluate(csv.holdout);
-    std::cout<<std::fixed<<std::setprecision(8);
-    std::cout<<"{\"model\":\"uniform-plus-single-magnetic-dipole\""
+    // Publish one complete result only after every requested query succeeds.
+    std::ostringstream report;
+    report<<std::fixed<<std::setprecision(8);
+    report<<"{\"model\":\"uniform-plus-single-magnetic-dipole\""
              <<",\"claimed_universal_lattice\":false"
              <<",\"dataset\":"
              <<quote(argv[1])
@@ -140,11 +147,12 @@ int main(int argc,char** argv) {
       const Address query{csv.frame,number(argv[2]),number(argv[3]),number(argv[4]),
                           number(argv[5]),csv.resolution,Address::Observable::MagneticVector};
       const auto p=ether.predict(query);
-      std::cout<<",\"query_prediction_uT\":["<<p.magnetic_uT.x<<","
+      report<<",\"query_prediction_uT\":["<<p.magnetic_uT.x<<","
                <<p.magnetic_uT.y<<","<<p.magnetic_uT.z<<"]"
                <<",\"query_magnitude_uT\":"<<p.magnitude_uT;
     }
-    std::cout<<"}\n";
+    report<<"}\n";
+    std::cout<<report.str();
     return 0;
   } catch(const std::exception& error) {
     std::cerr<<"Ether Physical Address error: "<<error.what()<<'\n';

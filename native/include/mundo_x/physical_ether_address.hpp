@@ -146,12 +146,14 @@ class PhysicalEtherDecoder {
   }
 
   // A numerical inverse problem, not a magical lookup into unknown reality.
-  // At least eight distinct positions are needed; rank-deficient geometry
-  // fails closed instead of inventing unique hidden physical sources.
+  // Each row represents one site (average repeated readings beforehand).
+  // At least eight positions separated by the declared resolution are
+  // required; rank-deficient geometry still fails closed.
   const Model& infer() {
     const auto readings=observed_samples();
     if(readings.size()<8)
       throw std::logic_error("need at least eight independent measurement positions");
+    require_distinct_sites(readings);
     std::array<std::array<double,6>,6> gram{};
     std::array<double,6> rhs{};
     PhysicalVector mean{};
@@ -275,11 +277,18 @@ class PhysicalEtherDecoder {
   // The returned result is a falsifiable comparison, not a declaration that
   // a magnetic dipole actually generated the observed physical field.
   HoldoutScore evaluate(const std::vector<PhysicalObservation>& holdouts) const {
-    if(holdouts.empty())throw std::invalid_argument("empty holdout set");
+    if(holdouts.size()<4 || holdouts.size()>kMaxSamples)
+      throw std::invalid_argument("need 4..128 distinct holdout positions");
     double model_error=0.,baseline_error=0.;
     if(!model_.ready)throw std::logic_error("infer before holdout evaluation");
+    for(const auto& sample:holdouts)validate_observation(sample);
+    require_distinct_sites(holdouts);
+    const auto training=observed_samples();
+    for(const auto& sample:holdouts)
+      for(const auto& seen:training)
+        if(same_site(sample.address,seen.address))
+          throw std::invalid_argument("holdout position overlaps TRAIN at declared resolution");
     for(const auto& sample:holdouts) {
-      validate_observation(sample);
       const auto guessed=predict(sample.address);
       model_error+=squared_difference(guessed.magnetic_uT,sample.magnetic_uT);
       baseline_error+=squared_difference(model_.uniform_mean_uT,sample.magnetic_uT);
@@ -319,6 +328,20 @@ class PhysicalEtherDecoder {
   }
   static double squared_difference(PhysicalVector a,PhysicalVector b) {
     return norm2({a.x-b.x,a.y-b.y,a.z-b.z});
+  }
+  // Spatial separation is necessary for this held-out-site protocol, but
+  // does not establish statistical independence or sensor provenance.
+  bool same_site(const PhysicalAddress& a,const PhysicalAddress& b) const {
+    const auto distance2=norm2({a.x_m-b.x_m,a.y_m-b.y_m,a.z_m-b.z_m});
+    // Allow roundoff at exactly one nominal resolution, never timestamp
+    // changes or sub-resolution jitter to turn a repeated site into a new one.
+    return distance2 < resolution_m_*resolution_m_*(1.-1e-12);
+  }
+  void require_distinct_sites(const std::vector<PhysicalObservation>& samples) const {
+    for(std::size_t i=0;i<samples.size();++i)
+      for(std::size_t j=0;j<i;++j)
+        if(same_site(samples[i].address,samples[j].address))
+          throw std::invalid_argument("repeated measurement position at declared resolution; average readings per site");
   }
   static std::uint64_t sample_base(unsigned index) {
     return kBaseAddress+kHeaderBytes+kRecordBytes*index;

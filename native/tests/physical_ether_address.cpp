@@ -76,8 +76,9 @@ void run() {
   for(double z:{.17,.32}) {
     for(double x:{-.26,-.12,.12,.26}) {
       for(double y:{-.23,.23}) {
-        ether.observe(sample("bench_magnet",{x,y,z},1.+seed*.16,
-                             background,moment,seed++,true));
+        const unsigned id=seed++;
+        ether.observe(sample("bench_magnet",{x,y,z},1.+id*.16,
+                             background,moment,id,true));
       }
     }
   }
@@ -129,6 +130,29 @@ void run() {
   const auto core_before=ether.core_snapshot();
   const auto memory_before=ether.memory_snapshot();
   const auto override_before=ether.ether_overrides();
+  // Copying training sites, even with new timestamps or sub-resolution
+  // position jitter, must never masquerade as independent spatial evidence.
+  auto leaked=holdouts;
+  leaked.front()=exact_data.front();
+  leaked.front().address.time_s+=1.;
+  rejected([&]{ether.evaluate(leaked);},"TRAIN site accepted as a holdout");
+  leaked.front().address.x_m+=.002;
+  rejected([&]{ether.evaluate(leaked);},"sub-resolution TRAIN overlap accepted");
+  auto repeated=holdouts;
+  repeated.back()=repeated.front();
+  rejected([&]{ether.evaluate(repeated);},"duplicate holdout site accepted");
+  repeated.back().address.y_m+=.002;
+  rejected([&]{ether.evaluate(repeated);},"sub-resolution holdout repeat accepted");
+  rejected([&]{ether.evaluate({holdouts.front()});},"one holdout treated as validation");
+  rejected([&]{ether.evaluate(std::vector<Observation>(129,holdouts.front()));},
+           "unbounded holdout set accepted");
+  auto separated=holdouts;
+  separated.front()=exact_data.front();
+  separated.front().address.x_m+=.01;
+  check(ether.evaluate(separated).count==8,
+        "exactly one declared resolution was rejected");
+  check(ether.core_snapshot()==core_before && ether.memory_snapshot()==memory_before,
+        "holdout validation mutated authoritative samples");
   // One thousand distinct requests, without allocating a 3D lattice.
   for(unsigned i=0;i<1000;++i) {
     const double x=-.20+.40*(i%100)/99.;
@@ -191,12 +215,27 @@ void run() {
   check(wrong_frame.memory_snapshot()==wrong_before,
         "failed restore corrupted receiving Ether runtime");
 
-  // Identifiability guard: eight copies at one location cannot distinguish
-  // a uniform field from all three dipole components.
-  Decoder degenerate("degenerate");
+  // Two radii provide six independent equations, so the numeric rank guard
+  // alone used to accept eight rows copied from just two physical positions.
+  Decoder two_sites("two_sites");
   for(unsigned i=0;i<8;++i)
-    degenerate.observe(sample("degenerate",{.2,.2,.2},1.+.1*i,
-                              background,moment,i,false));
+    two_sites.observe(sample("two_sites",{i%2?.4:.2,0.,0.},1.+.1*i,
+                             background,moment,i,false));
+  rejected([&]{two_sites.infer();},"two sites passed the eight-position protocol");
+  check(!two_sites.model().ready,"rejected fit published a usable model");
+
+  Decoder jittered("jittered");
+  for(unsigned i=0;i<8;++i)
+    jittered.observe(sample("jittered",{i%2?.4:.2,.0001*i,0.},1.,
+                            background,moment,i,false));
+  rejected([&]{jittered.infer();},"position jitter bypassed the distinct-site guard");
+
+  // Distinct positions can still be rank deficient: a fixed-radius circle
+  // in z=0 cannot separate the background Bz from the dipole's mz.
+  Decoder degenerate("degenerate");
+  for(Vec3 p:std::vector<Vec3>{{.25,0.,0.},{.15,.2,0.},{0.,.25,0.},
+      {-.15,.2,0.},{-.25,0.,0.},{-.15,-.2,0.},{0.,-.25,0.},{.15,-.2,0.}})
+    degenerate.observe(sample("degenerate",p,1.,background,moment,0,false));
   rejected([&]{degenerate.infer();},
            "rank-deficient geometry was treated as a discovered field");
 
