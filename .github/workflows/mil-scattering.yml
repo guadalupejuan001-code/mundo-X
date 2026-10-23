@@ -1,0 +1,40 @@
+name: MIL coherent scattering / MX language
+on:
+  push:
+    branches:
+      - codex/mil-scattering-*
+    paths:
+      - native/include/mundo_x/mil_scattering.hpp
+      - native/include/mundo_x/mxlang.hpp
+      - native/include/mundo_x/xasm.hpp
+      - native/tests/mil_scattering.cpp
+      - examples/mil_scatter.*
+      - CMakeLists.txt
+      - .github/workflows/mil-scattering.yml
+  pull_request:
+    paths:
+      - native/include/mundo_x/mil_scattering.hpp
+      - native/include/mundo_x/mxlang.hpp
+      - native/include/mundo_x/xasm.hpp
+      - native/tests/mil_scattering.cpp
+      - examples/mil_scatter.*
+      - CMakeLists.txt
+      - .github/workflows/mil-scattering.yml
+  workflow_dispatch:
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Compile existing CLI, MX compiler and scattering regressions
+        run: cmake --build build --target mundo_x test_mil_scattering mundo_x_mxlang_tests --parallel 2
+      - name: Verify numerical model and language round trip
+        run: ctest --test-dir build --output-on-failure -R 'mil_scattering|xasm_mil_scattering|mx_mil_scattering|mxlang_compiler'
+      - name: Compile MX sample to XASM
+        run: ./build/mundo_x compile examples/mil_scatter.mx > build/mil-scatter-generated.x
+      - name: Execute compiled XASM
+        run: ./build/mundo_x run build/mil-scatter-generated.x
