@@ -98,7 +98,7 @@ jobs:
               "same_host_and_compiler": True,
               "scope": "single bounded host workload, not Android",
           }
-          Path("quantum-build/ether-memory-comparison.json").write_text(json.dumps(summary, indent=2)+"\\n")
+          Path("quantum-build/ether-memory-comparison.json").write_text(json.dumps(summary, indent=2))
           print(json.dumps(summary, indent=2))
           PY
 
