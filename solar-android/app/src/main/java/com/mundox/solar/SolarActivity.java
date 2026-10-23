@@ -403,13 +403,46 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Descenso · "+SolarData.BODIES[body].name).setView(content).setPositiveButton("Continuar",null).setNegativeButton("Volver a órbita",(dialog,which)->exitEntry()).create();showDialog(d);
     }
     private void qualityDialog(){
-        String[] options={"Ahorro · hasta 640 px","Equilibrada · hasta 960 px","Alta · hasta 1440 px",
-                "4K UHD · 8,3 millones de píxeles","8K UHD · 33,2 millones de píxeles"};
-        int checked=uhd8k?4:uhd4k?3:quality<=640?0:quality<=960?1:2;
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Calidad de imagen").setSingleChoiceItems(options,checked,(dialog,index)->{
-            if(index==4)setUltraQuality(true);else if(index==3)setUhdQuality(true);
-            else setAdaptiveQuality(new int[]{640,960,1440}[index]);dialog.dismiss();
-        }).setNegativeButton("Cerrar",null).create();showDialog(d);
+        LinearLayout content=dialogColumn();
+        content.addView(section("RESOLUCIÓN REAL DEL OBSERVADOR"));
+        content.addView(label("Elige el detalle espacial. 4K/8K usan el framebuffer completo "+
+                "para fotogramas quietos y PNG; el movimiento puede usar una vista "+
+                "interactiva más ligera sin cambiar la resolución de exportación.",
+                12,MUTED,false));
+        String[] labels={"Ahorro · 640p","Equilibrada · 960p",
+                "Alta · 1440p","4K UHD · 8,3 MP","8K UHD · 33,2 MP"};
+        int selected=uhd8k?4:uhd4k?3:quality<=640?0:quality<=960?1:2;
+        for(int index=0;index<labels.length;index++){
+            final int mode=index;
+            Button b=button((mode==selected?"✓  ":"")+labels[index],0,()->{
+                if(mode==4)setUltraQuality(true);
+                else if(mode==3)setUhdQuality(true);
+                else setAdaptiveQuality(new int[]{640,960,1440}[mode]);
+                message("Resolución solicitada. El observador verifica los límites GPU.");
+            });
+            content.addView(b);
+        }
+        content.addView(section("ACABADO Y FLUIDEZ"));
+        addToggle(content,"Cine · halo solar, relieve y color",cinematic,b->setCinematicQuality(b));
+        addToggle(content,"Vista rápida mientras mueves 4K/8K",interactivePreview,b->setInteractivePreview(b));
+        content.addView(label("El modo Cine es una presentación visual opcional: "+
+                "no cambia órbitas, gravedad, clima ni valores nucleares. "+
+                "La vista rápida reduce solo los píxeles del movimiento; "+
+                "guardar PNG siempre dibuja un fotograma completo.",12,MUTED,false));
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Solar · imagen y rendimiento")
+                .setView(scroll(content)).setPositiveButton("Cerrar",null).create();
+        showDialog(d);
+    }
+
+    private void setCinematicQuality(boolean value){
+        cinematic=value;
+        runGL(()->observer.setCinematic(value));
+        updateButtons();
+    }
+    private void setInteractivePreview(boolean value){
+        interactivePreview=value;
+        runGL(()->observer.setInteractivePreviewEnabled(value));
+        updateButtons();
     }
     private void setAdaptiveQuality(int pixels){
         quality=pixels;uhd4k=uhd8k=false;resolutionMessage=null;
@@ -552,6 +585,11 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         addToggle(content,"Gravedad local durante descenso",localPhysics,b->{localPhysics=b;runGL(()->observer.setLocalPhysics(b));updateBody();});
         content.addView(label("Exploración amplía los cuerpos y comprime distancias para verlos juntos. Proporciones reales conserva sus tamaños y distancias; usa los destinos para acercarte.",12,MUTED,false));
         content.addView(section("CALIDAD DE IMAGEN"));
+        addToggle(content,"Acabado cinematográfico de Solar",cinematic,b->setCinematicQuality(b));
+        addToggle(content,"Vista UHD optimizada al mover la cámara",interactivePreview,b->setInteractivePreview(b));
+        content.addView(label("El brillo cinematográfico y el relieve aparente "+
+                "son visualizaciones opcionales. La vista de movimiento puede "+
+                "usar 960p sin cambiar la imagen final 4K/8K ni el PNG.",12,MUTED,false));
         LinearLayout qualities=row();int[] sizes={640,960,1440};String[] labels={"Ahorro","Equilibrada","Alta"};
         for(int i=0;i<sizes.length;i++){final int px=sizes[i];Button b=button(labels[i],0,()->setAdaptiveQuality(px));qualities.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));}content.addView(qualities);
         content.addView(button("4K UHD · 3840 × 2160 / vertical",0,()->setUhdQuality(true)));
