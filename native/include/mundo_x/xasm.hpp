@@ -437,6 +437,8 @@ inline XasmRunResult run_xasm(std::istream& input) {
             << " peak_contact=" << xasm_detail::precise_value(collision.peak_contact)
             << " final_contact=" << xasm_detail::precise_value(collision.final_contact)
             << " exchanged_order=" << xasm_detail::precise_value(collision.exchanged_order)
+            << " purity=" << (sites <= 128 ? xasm_detail::precise_value(
+                  MilScattering::reduced_purity(collision.amplitudes, sites)) : "unavailable")
             << " state_bytes=" << collision.state_bytes
             << " scratch_bytes=" << collision.scratch_bytes
             << " estimated_work=" << collision.estimated_work << "\n";
