@@ -220,6 +220,8 @@ if (BUILD_TESTING)
   # MIL circuit suite so existing backends are not modified.
   add_executable(test_mil_scattering native/tests/mil_scattering.cpp)
   target_include_directories(test_mil_scattering PRIVATE native/include)
+  add_executable(mil_scattering_benchmark native/tests/mil_scattering_benchmark.cpp)
+  target_include_directories(mil_scattering_benchmark PRIVATE native/include)
   if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(test_mil_scattering PRIVATE -O3 -Wall -Wextra -Wpedantic)
   endif()
