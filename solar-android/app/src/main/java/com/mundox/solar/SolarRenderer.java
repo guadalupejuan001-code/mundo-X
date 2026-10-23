@@ -49,8 +49,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final Context context;
     private final QuantumSolarBridge bridge;
     private final Listener listener;
-    private final String sceneVertex,sceneFragment,overlayVertex,overlayFragment;
+    private final String sceneVertex,sceneFragment,cinematicFragment,overlayVertex,overlayFragment;
     private final HashMap<String,Integer> sceneLocations=new HashMap<>();
+    private final HashMap<String,Integer> cinematicLocations=new HashMap<>();
     private final HashMap<String,Integer> overlayLocations=new HashMap<>();
     private final double[][] positions=new double[MAX_BODIES][3];
     private final double[][] physical=new double[MAX_BODIES][3];
@@ -72,7 +73,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final float[] view=new float[16],projection=new float[16],vp=new float[16];
     private final FloatBuffer lines=direct(MAX_OVERLAY_VERTICES*7*4).asFloatBuffer();
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
-    private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
+    private int sceneProgram,cinematicProgram,activeSceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
     private int mapTexture,colorTexture,depthBuffer,framebuffer;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
@@ -113,7 +114,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         if(context==null||bridge==null||listener==null)throw new IllegalArgumentException("Falta el contexto, núcleo o receptor visual");
         if(SolarData.BODIES.length>MAX_BODIES)throw new IllegalArgumentException("La escena admite hasta 24 cuerpos");
         this.context=context.getApplicationContext();this.bridge=bridge;this.listener=listener;
-        sceneVertex=asset(context,"shaders/solar.vert");sceneFragment=asset(context,"shaders/solar.frag");
+        sceneVertex=asset(context,"shaders/solar.vert");
+        sceneFragment=asset(context,"shaders/solar.frag");
+        cinematicFragment=asset(context,"shaders/solar-cine.frag");
         overlayVertex=asset(context,"shaders/overlay.vert");overlayFragment=asset(context,"shaders/overlay.frag");
         jd=Math.max(SolarData.MIN_JD,Math.min(SolarData.MAX_JD,System.currentTimeMillis()/86400000.0+2440587.5));
         for(int i=0;i<MAX_BODIES;i++)layers[i]=-1;
@@ -161,20 +164,30 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         finally{if(v!=0)glDeleteShader(v);if(f!=0)glDeleteShader(f);}
     }
     private static int newTexture(){int[] n={0};glGenTextures(1,n,0);return n[0];}
-    private int sceneLoc(String name){Integer l=sceneLocations.get(name);if(l==null){l=glGetUniformLocation(sceneProgram,name);sceneLocations.put(name,l);}return l;}
+    private int sceneLoc(String name){
+        HashMap<String,Integer> locations=activeSceneProgram==cinematicProgram?
+                cinematicLocations:sceneLocations;
+        Integer l=locations.get(name);
+        if(l==null){l=glGetUniformLocation(activeSceneProgram,name);locations.put(name,l);}
+        return l;
+    }
     private int overlayLoc(String name){Integer l=overlayLocations.get(name);if(l==null){l=glGetUniformLocation(overlayProgram,name);overlayLocations.put(name,l);}return l;}
     private static void check(String where){int error=glGetError();if(error!=GL_NO_ERROR)throw new IllegalStateException(where+" GLES 0x"+Integer.toHexString(error));}
 
     @Override public void onSurfaceCreated(GL10 unused,EGLConfig config){
         // EGL recreation invalidates GL names, never the logical solar world/core.
-        sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
+        sceneProgram=cinematicProgram=activeSceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
         activeUhd=false;activeUltra=false;
-        sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
+        sceneLocations.clear();cinematicLocations.clear();overlayLocations.clear();
+        hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
         adaptiveQuality.clearSamples();
         try{
-            sceneProgram=program(sceneVertex,sceneFragment);overlayProgram=program(overlayVertex,overlayFragment);
+            sceneProgram=program(sceneVertex,sceneFragment);
+            cinematicProgram=program(sceneVertex,cinematicFragment);
+            activeSceneProgram=sceneProgram;
+            overlayProgram=program(overlayVertex,overlayFragment);
             int[] names={0};glGenVertexArrays(1,names,0);eyeVao=names[0];
             glGenVertexArrays(1,names,0);overlayVao=names[0];
             glGenBuffers(1,names,0);overlayVbo=names[0];glBindVertexArray(overlayVao);
@@ -476,7 +489,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         initializedCamera=true;
     }
     private void drawScene(){
-        glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
+        activeSceneProgram=cinematic?cinematicProgram:sceneProgram;
+        glUseProgram(activeSceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
         glUniform2f(sceneLoc("uResolution"),width,height);
         glUniform3fv(sceneLoc("uForward"),1,forward,0);glUniform3fv(sceneLoc("uRight"),1,right,0);glUniform3fv(sceneLoc("uUp"),1,up,0);
@@ -998,11 +1012,14 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     }
     /** Delete GPU resources while the GL context is current; the core is borrowed. */
     public void release(){
-        if(sceneProgram!=0)glDeleteProgram(sceneProgram);if(overlayProgram!=0)glDeleteProgram(overlayProgram);
+        if(sceneProgram!=0)glDeleteProgram(sceneProgram);
+        if(cinematicProgram!=0)glDeleteProgram(cinematicProgram);
+        if(overlayProgram!=0)glDeleteProgram(overlayProgram);
         glDeleteTextures(2,new int[]{mapTexture,colorTexture},0);
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
         glDeleteBuffers(1,new int[]{overlayVbo},0);glDeleteVertexArrays(2,new int[]{eyeVao,overlayVao},0);
-        sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
+        sceneProgram=cinematicProgram=activeSceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
+        sceneLocations.clear();cinematicLocations.clear();
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
         hasFrame=false;capture=null;
         activeUhd=activeUltra=false;
