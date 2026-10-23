@@ -1,0 +1,87 @@
+name: Ether Physical Address - inverse field validation
+
+on:
+  push:
+    branches: ['codex/ether-physical-address-inverse-field-20261023', main]
+    paths:
+      - 'native/include/mundo_x/physical_ether_address.hpp'
+      - 'native/tests/physical_ether_address.cpp'
+      - 'native/src/physical_ether_lab.cpp'
+      - 'examples/physical_ether_dipole_synthetic.csv'
+      - 'tools/test_physical_ether_cli.py'
+      - 'tools/cosmic_source_provenance.py'
+      - 'quantum-runtime/CMakeLists.txt'
+      - '.github/workflows/physical-ether-decoder.yml'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/physical_ether_address.hpp'
+      - 'native/tests/physical_ether_address.cpp'
+      - 'native/src/physical_ether_lab.cpp'
+      - 'examples/physical_ether_dipole_synthetic.csv'
+      - 'tools/test_physical_ether_cli.py'
+      - 'tools/cosmic_source_provenance.py'
+      - 'quantum-runtime/CMakeLists.txt'
+      - '.github/workflows/physical-ether-decoder.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  physical-address-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact source inventory
+        run: python3 tools/cosmic_source_provenance.py > /tmp/physical-source-provenance.json
+      - name: Configure quantum-only runtime
+        run: cmake -S quantum-runtime -B /tmp/ether-physical-build -DCMAKE_BUILD_TYPE=Release
+      - name: Compile decoder and measurement CLI
+        run: cmake --build /tmp/ether-physical-build --target test_physical_ether_address mundo_x_physical_ether_lab -j 2
+      - name: Execute held-out inverse-field and CSV validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p physical-ether-results
+          cp /tmp/physical-source-provenance.json physical-ether-results/source-provenance.json
+          python3 tools/test_physical_ether_cli.py /tmp/ether-physical-build/mundo_x_physical_ether_lab \
+            2>&1 | tee physical-ether-results/cli-regressions.log
+          ctest --test-dir /tmp/ether-physical-build \
+            -R '^physical_ether_(address|cli)$' --output-on-failure \
+            | tee physical-ether-results/ctest.log
+          /tmp/ether-physical-build/mundo_x_physical_ether_lab \
+            examples/physical_ether_dipole_synthetic.csv 0 0 .24 2 \
+            | tee physical-ether-results/cli-synthetic.json
+          /tmp/ether-physical-build/test_physical_ether_address \
+            | tee physical-ether-results/metrics.jsonl
+          git rev-parse HEAD > physical-ether-results/commit.txt
+      - name: Verify no false physical discovery
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path("physical-ether-results/metrics.jsonl").read_text().strip())
+          assert result["ok"] and result["synthetic_validation"]
+          assert not result["lattice_physical_evidence"]
+          assert result["spatial_queries_without_allocation"] == 1000
+          assert result["quantum_active_sites"] == 0
+          assert result["holdout_rmse_uT"] < 0.1
+          assert result["holdout_rmse_uT"] < 0.8*result["uniform_holdout_rmse_uT"]
+          assert result["changed_source_rmse_uT"] > 5*result["holdout_rmse_uT"]
+          cli=json.loads(Path("physical-ether-results/cli-synthetic.json").read_text().strip())
+          assert cli["train"] == 16 and cli["holdout"] == 8
+          assert cli["holdout_rmse_uT"] < 0.1
+          assert cli["holdout_rmse_uT"] < 0.8*cli["uniform_null_rmse_uT"]
+          assert cli["claimed_universal_lattice"] is False
+          assert len(cli["query_prediction_uT"]) == 3
+          print("Ether physical address inverse-field validation: PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ether-Physical-Address-Evidence
+          path: physical-ether-results/**
+          retention-days: 14
+          if-no-files-found: error

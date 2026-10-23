@@ -1,0 +1,6 @@
+# BLANK TEMPLATE for REAL calibrated measurements.
+# Every magnetic vector must be expressed in the SAME fixed laboratory frame.
+# Place source magnet at origin; record known distances/positions in meters.
+# Calibration TRAIN and withheld HOLDOUT data must be kept separate.
+# Never claim real measurement or quantum lattice evidence from template data.
+role,frame,x_m,y_m,z_m,time_s,resolution_m,bx_uT,by_uT,bz_uT
