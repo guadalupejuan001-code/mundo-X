@@ -458,14 +458,49 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         if(observer==null||observer.failure!=null){message("Espera a que la escena esté disponible.");return;}
         String token=UUID.randomUUID().toString();
         if(!PNG_OWNER.compareAndSet(null,token)){message("Hay una imagen pendiente de guardar.");return;}
-        pngToken=token;pngDestinationOpen=false;final SolarRenderer source=observer;
-        message("Preparando la imagen a resolución completa…");
+        pngToken=token;pngDestinationOpen=false;
+        final SolarRenderer source=observer;
+        // In Cine X, take a real 4K frame rather than enlarging the adaptive
+        // viewport. The user's live render mode is restored on the GL thread.
+        final boolean photo4k=cinematic&&!uhd4k&&!uhd8k;
+        message(photo4k?"Preparando foto Cine X en 4K real…":
+                "Preparando la imagen a la resolución seleccionada…");
         runGL(()->{
-            try{source.requestCapture(image->{
-                if(destroyed){PNG_OWNER.compareAndSet(token,null);return;}
-                try{images.execute(()->stagePng(image,token));}
-                catch(Exception error){PNG_OWNER.compareAndSet(token,null);message("No se pudo preparar PNG: "+error.getMessage());}
-            });}catch(Exception error){PNG_OWNER.compareAndSet(token,null);message("No se pudo capturar: "+error.getMessage());}
+            final int previousQuality=source.qualityLimit();
+            final boolean previousAuto=source.isAdaptivePreviewEnabled();
+            try{
+                if(photo4k)source.setUhd4k(true);
+                source.requestCapture(image->{
+                    if(photo4k){
+                        source.setUhd4k(false);
+                        source.setQuality(previousQuality);
+                        if(previousAuto)source.setAdaptivePreview(true);
+                        if(surface!=null&&!destroyed)surface.requestRender();
+                    }
+                    if(destroyed){PNG_OWNER.compareAndSet(token,null);return;}
+                    if(image==null||image.rgba==null){
+                        PNG_OWNER.compareAndSet(token,null);
+                        message("No se pudo generar el fotograma. Se conservó el visor.");return;
+                    }
+                    if(photo4k&&!((image.width==2160&&image.height==3840)||
+                                  (image.width==3840&&image.height==2160))){
+                        PNG_OWNER.compareAndSet(token,null);
+                        message("La GPU no pudo crear la foto 4K. No se exportó una imagen ampliada.");
+                        return;
+                    }
+                    try{images.execute(()->stagePng(image,token));}
+                    catch(Exception error){PNG_OWNER.compareAndSet(token,null);
+                        message("No se pudo preparar PNG: "+error.getMessage());}
+                });
+            }catch(Exception|OutOfMemoryError error){
+                if(photo4k){
+                    source.setUhd4k(false);source.setQuality(previousQuality);
+                    if(previousAuto)source.setAdaptivePreview(true);
+                    if(surface!=null&&!destroyed)surface.requestRender();
+                }
+                PNG_OWNER.compareAndSet(token,null);
+                message("No se pudo capturar: "+error.getMessage());
+            }
         });
     }
     private void stagePng(SolarRenderer.Capture image,String token){
