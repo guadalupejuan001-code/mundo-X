@@ -29,6 +29,11 @@ int main() {
       memory.bind_quantum_byte(std::to_string(40000 + i),
                                std::to_string(10000 + i * 8), quantum);
     const auto reference = memory.snapshot();
+    std::uint64_t snapshot_hash = UINT64_C(14695981039346656037);
+    for (const unsigned char byte : reference) {
+      snapshot_hash ^= byte;
+      snapshot_hash *= UINT64_C(1099511628211);
+    }
     const auto start = Clock::now();
 
     std::vector<InverseMemory> readers;
@@ -64,6 +69,7 @@ int main() {
               << "\"copy_and_read_ms\":" << read_copy_ms << ","
               << "\"first_write_detach_ms\":" << write_detach_ms << ","
               << "\"checksum\":" << checksum << ","
+              << "\"snapshot_fnv64\":" << snapshot_hash << ","
               << "\"failures\":0}\n";
     return 0;
   } catch (const std::exception& error) {
