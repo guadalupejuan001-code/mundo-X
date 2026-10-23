@@ -69,6 +69,14 @@ jobs:
             solar-android/tests/SolarVisualEtherChecks.java
           java -cp solar-science-classes com.mundox.solar.SolarDataChecks | tee solar-science.log
           java -cp solar-science-classes com.mundox.solar.SolarVisualEtherChecks | tee solar-visual-ether.log
+          # Exercise exactly the pixel geometry that controls Android 4K Fluido.
+          mkdir -p solar-smart-classes
+          javac -encoding UTF-8 -d solar-smart-classes \
+            graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java \
+            solar-android/app/src/main/java/com/mundox/solar/SolarSmart4k.java \
+            solar-android/tests/SolarSmart4kChecks.java
+          java -cp solar-smart-classes com.mundox.solar.SolarSmart4kChecks \
+            | tee solar-smart4k.log
 
       - name: Install pinned Android build tools
         shell: bash
@@ -117,6 +125,7 @@ jobs:
           path: |
             solar-build.log
             solar-science.log
+            solar-smart4k.log
             solar-dist/*.txt
             solar-dist/*.json
             solar-android/app/build/reports/**
