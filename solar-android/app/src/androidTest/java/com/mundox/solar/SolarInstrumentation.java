@@ -603,6 +603,7 @@ public final class SolarInstrumentation extends Instrumentation {
         // Persist the adaptive fixture in the Activity as well as the renderer:
         // standalone APKs otherwise restore their original UHD mode on recreate.
         main(() -> { activity.setUhdQuality(false); activity.setUltraQuality(false);
+            activity.setSmartQuality(false);
             activity.scaleForTest(true); });
         gl(() -> { activity.renderer().setQuality(960); activity.renderer().setOrbits(true);
             activity.bridge().setPreset(3); activity.renderer().focus(3); });
