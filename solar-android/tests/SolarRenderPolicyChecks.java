@@ -30,7 +30,8 @@ public final class SolarRenderPolicyChecks {
             RenderResolution.Size smaller=SolarRenderPolicy.preview(full);
             yes(smaller.width==spec[2]&&smaller.height==spec[3],
                 "Preview dimensions "+spec[0]+"x"+spec[1]);
-            yes(Math.abs(SolarRenderPolicy.approximatePixelReduction(full)-spec[4])<1e-10,
+            double expected=(double)spec[0]*spec[1]/(spec[2]*spec[3]);
+            yes(Math.abs(SolarRenderPolicy.approximatePixelReduction(full)-expected)<1e-10,
                 "Preview pixel cost "+spec[0]);
             yes(smaller.attachmentBytes()<=8*960L*960,
                 "Preview remains below 8 MiB of two logical surfaces");
