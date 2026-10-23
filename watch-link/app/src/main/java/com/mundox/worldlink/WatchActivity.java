@@ -53,7 +53,9 @@ public final class WatchActivity extends Activity
     private final List<String> nodes=new ArrayList<>();
     private SensorManager sensors;
     private TextView status, link, magneticValue, lightValue, movementValue, heartValue;
-    private Button startButton, pulseButton;
+    private Button startButton, pulseButton, gestureButton;
+    private boolean gestureEnabled,gestureLatched;
+    private long lastGestureAt;
     private String sessionId, info="Toca INICIAR";
     private boolean running,heartEnabled,hasA,hasG,hasM,hasL,hasH;
     private float lux, bpm;
@@ -98,6 +100,10 @@ public final class WatchActivity extends Activity
         control(interaction,"BARRER FRECUENCIAS",()->sendSound("sweep"),false);
         control(interaction,"PARAR EMISIÓN",()->sendSound("stop"),false);
         pulseButton=control(interaction,"ENVIAR PULSO LUMINOSO",this::requestLight,false);
+        gestureButton=control(interaction,"ACTIVAR GIRO DE MUÑECA",this::toggleGesture,false);
+        interaction.addView(label("Gira la muñeca con decisión: el reloj ordenará una onda sonora. "
+                +"El gesto funciona mientras esta pantalla permanezca abierta.",
+                10,MUTED,false));
 
         LinearLayout signals=panel(root);
         signals.addView(label("SENSORES · OPCIONALES",10,LIME,true));
@@ -144,6 +150,8 @@ public final class WatchActivity extends Activity
         queryNodes();
     }
     @Override protected void onPause() {
+        gestureEnabled=false;
+        if(gestureButton!=null)gestureButton.setText("ACTIVAR GIRO DE MUÑECA");
         stop();
         if(listenerAdded) {
             Wearable.getMessageClient(this).removeListener(this);
@@ -188,6 +196,7 @@ public final class WatchActivity extends Activity
         running=false;
         handler.removeCallbacks(sendLoop);
         if(sensors!=null)sensors.unregisterListener(this);
+        if(gestureEnabled)attach(Sensor.TYPE_GYROSCOPE);
         if(startButton!=null)startButton.setText("INICIAR LECTURA");
         // Keep remote controls usable when sensor acquisition stops.
         if(status!=null)status.setText(wasRunning?"DETENIDO":"EN ESPERA");
@@ -260,6 +269,21 @@ public final class WatchActivity extends Activity
             link.setText("Error de lectura: "+e.getClass().getSimpleName());
         }
     }
+    private void toggleGesture() {
+        gestureEnabled=!gestureEnabled;
+        gestureLatched=false;
+        lastGestureAt=0;
+        if(gestureEnabled) {
+            if(!running)attach(Sensor.TYPE_GYROSCOPE);
+            link.setText("Gesto listo: giro de muñeca → onda física en el Samsung");
+            gestureButton.setText("DETENER CONTROL POR GESTO");
+        } else {
+            if(!running && sensors!=null)sensors.unregisterListener(this);
+            link.setText("Control por gesto desactivado");
+            gestureButton.setText("ACTIVAR GIRO DE MUÑECA");
+        }
+    }
+
     private void requestLight() {
         sendRemote(LIGHT_REQUEST,new byte[]{1},"Pulso luminoso solicitado");
     }
@@ -296,7 +320,20 @@ public final class WatchActivity extends Activity
             case Sensor.TYPE_GYROSCOPE:
                 if(v.length>=3 && valid(v[0],v[1],v[2])) {
                     System.arraycopy(v,0,gyro,0,3);hasG=true;
-                    movementValue.setText(String.format(Locale.US,"%.2f rad/s",Math.sqrt(gyro[0]*gyro[0]+gyro[1]*gyro[1]+gyro[2]*gyro[2])));
+                    float magnitude=(float)Math.sqrt(gyro[0]*gyro[0]+gyro[1]*gyro[1]+gyro[2]*gyro[2]);
+                    movementValue.setText(String.format(Locale.US,"%.2f rad/s",magnitude));
+                    // Opt-in physical control, not a screen decoration.
+                    if(gestureEnabled) {
+                        if(magnitude<1.25f)gestureLatched=false;
+                        long now=SystemClock.elapsedRealtime();
+                        if(!gestureLatched && magnitude>=4.0f && now-lastGestureAt>=2600L) {
+                            gestureLatched=true;lastGestureAt=now;
+                            float strongest=gyro[0];
+                            if(Math.abs(gyro[1])>Math.abs(strongest))strongest=gyro[1];
+                            if(Math.abs(gyro[2])>Math.abs(strongest))strongest=gyro[2];
+                            sendSound(strongest>=0?"tone:440":"tone:220");
+                        }
+                    }
                 }
                 break;
             case Sensor.TYPE_MAGNETIC_FIELD:
