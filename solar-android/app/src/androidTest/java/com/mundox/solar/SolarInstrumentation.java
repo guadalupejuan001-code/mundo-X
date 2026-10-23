@@ -168,6 +168,73 @@ public final class SolarInstrumentation extends Instrumentation {
         finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, output);
     }
 
+    private void smart4kPreview() throws Exception {
+        // The old native-UHD path stays untouched. Smart preview draws
+        // on the ORIGINAL shader, but invokes it for far fewer pixels.
+        prepare(3,false,false);
+        gl(()->{
+            SolarRenderer r=activity.renderer();
+            r.setSmart4k(true);
+            r.onDrawFrame(null);
+        });
+        SolarRenderer r=activity.renderer();
+        expect(r.failure==null,"4K Fluido shader startup failed: "+r.failure);
+        expect(r.isSmart4k(),"4K Fluido is not selected");
+        final int w=r.renderedWidth(),h=r.renderedHeight();
+        expect(Math.max(w,h)==960 && (long)w*h==518400L,
+                "Preview must be exact 16:9 540x960 or 960x540, got "+w+"x"+h);
+        expect(!r.isUhd4k(),"Preview falsely reports a native UHD framebuffer");
+        expect(r.displayRect().framebufferWidth==w &&
+               r.displayRect().framebufferHeight==h,
+                "Touch/FIT does not match 4K Fluido preview resolution");
+        JSONObject result=new JSONObject().put("previewWidth",w).put("previewHeight",h)
+                .put("previewPixels",(long)w*h)
+                .put("native4kPixels",8294400)
+                .put("fragmentReduction",8294400./(w*h))
+                .put("physicalSpeedupClaimed",false);
+        metrics.put("smart4kPreview",result);
+        gl(()->{
+            r.setSmart4k(false);
+            r.setQuality(TEST_QUALITY);
+            r.onDrawFrame(null);
+        });
+        expect(!r.isSmart4k(),"Smart preview did not restore normal rendering");
+    }
+
+    private void smart4kCapture() throws Exception {
+        // This explicitly UHD-only optional suite exercises FULL 4K output,
+        // not just an on-screen scale-up. Software emulator may take many
+        // seconds; that cost must not be charged to the regular tests.
+        prepare(3,false,false);
+        gl(()->{
+            SolarRenderer r=activity.renderer();
+            r.setSmart4k(true);
+            r.onDrawFrame(null);
+        });
+        SolarRenderer r=activity.renderer();
+        int lowW=r.renderedWidth(),lowH=r.renderedHeight();
+        expect((long)lowW*lowH==518400L,"Smart preview not enabled before photo");
+        SolarRenderer.Capture photo=frame(UHD_FRAME_TIMEOUT_MS);
+        expect(photo.error==null,"Smart 4K could not allocate full UHD: "+photo.error);
+        expect((photo.width==2160&&photo.height==3840)||
+               (photo.width==3840&&photo.height==2160),
+                "4K photo cannot be a scaled-up preview");
+        expect((long)photo.width*photo.height==8294400L,
+                "PNG must have 8294400 actual rendered pixels");
+        save("smart4k-native-photo.png",photo);
+        gl(()->r.onDrawFrame(null));
+        expect(r.isSmart4k(),"Smart mode was lost after native UHD capture");
+        expect((long)r.renderedWidth()*r.renderedHeight()<=
+               1440L*810 && Math.max(r.renderedWidth(),r.renderedHeight())>=640,
+                "Full UHD framebuffer was not released after the photo");
+        metrics.put("smart4kNativeCapture",
+                new JSONObject().put("width",photo.width).put("height",photo.height)
+                        .put("previewRestoredWidth",r.renderedWidth())
+                        .put("previewRestoredHeight",r.renderedHeight())
+                        .put("photoPixels",(long)photo.width*photo.height));
+        gl(()->{r.setSmart4k(false);r.setQuality(TEST_QUALITY);r.onDrawFrame(null);});
+    }
+
     private void cinematicShader() throws Exception {
         // The visual upgrade must compile and render on the shipping GLES
         // pipeline, while its OFF path preserves the original appearance.
