@@ -1,0 +1,19 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.mundox.worldlink.phone'
+    compileSdk 35
+    defaultConfig {
+        // Google Wearable Data Layer: must match watch applicationId and signature.
+        applicationId 'com.mundox.worldlink'
+        minSdk 29
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+    buildTypes { debug { minifyEnabled false } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+dependencies { implementation 'com.google.android.gms:play-services-wearable:20.0.1' }
