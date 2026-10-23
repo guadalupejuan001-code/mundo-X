@@ -170,9 +170,9 @@ public final class SolarInstrumentation extends Instrumentation {
         waitUntil(() -> activity.hasWindowFocus(), 15_000,
                 "Solar Activity is obscured by another window at launch");
         metrics.put("initialWindowFocused", true);
-        gl(() -> expect(activity.renderer().isAdaptivePreviewEnabled()
-                    == (BuildConfig.SOLAR_DEFAULT_MODE==0),
-                "Initial Auto fluido state does not match the selected Solar app variant"));
+        if(supportsAutoFluid())
+            gl(() -> expect(autoFluidEnabled() == (BuildConfig.SOLAR_DEFAULT_MODE==0),
+                    "Initial Auto fluido state does not match the selected Solar app variant"));
         expect(activity.bridge().stateBytes() > 0 && activity.bridge().etherRules() == 2,
                 "The default finite preparation and Ether frame are absent");
         prepare(3, false, false);
@@ -463,21 +463,51 @@ public final class SolarInstrumentation extends Instrumentation {
                 .put("pan", panDelta).put("flight", flightDelta));
     }
 
+    // These methods allow the paired CI to compile the same instrumented test
+    // on an older reference APK that does not implement Auto fluido.
+    // New-only checks run whenever the target actually exposes the feature.
+    private static boolean supportsAutoFluid() {
+        try { SolarRenderer.class.getMethod("isAdaptivePreviewEnabled"); return true; }
+        catch(NoSuchMethodException absent) { return false; }
+    }
+    private boolean autoFluidEnabled() {
+        try {
+            return (Boolean) SolarRenderer.class.getMethod("isAdaptivePreviewEnabled")
+                    .invoke(activity.renderer());
+        } catch(ReflectiveOperationException error) {
+            throw new AssertionError("Auto fluido state lookup failed",error);
+        }
+    }
+    private void chooseAutoFluid(boolean enable) {
+        try {
+            java.lang.reflect.Method method=enable
+                    ?SolarActivity.class.getDeclaredMethod("setFluidQuality")
+                    :SolarActivity.class.getDeclaredMethod("setAdaptiveQuality",int.class);
+            method.setAccessible(true);
+            if(enable)method.invoke(activity);
+            else method.invoke(activity,TEST_QUALITY);
+        } catch(ReflectiveOperationException error) {
+            throw new AssertionError("Auto fluido Activity control failed",error);
+        }
+    }
     private void resolutionBudget() throws Exception {
         prepare(3, false, false);
-        long coreBefore=activity.bridge().nativeRevision();
-        // Exercise the actual Activity control, not only the renderer setter.
-        main(() -> activity.setFluidQuality());
-        gl(() -> expect(activity.renderer().isAdaptivePreviewEnabled(),
-                "Auto fluido selection did not reach the GL owner"));
-        SolarRenderer.Capture automatic=frame();
-        expect(Math.max(automatic.width,automatic.height)<=1280,
-                "Auto fluido exceeded its preview ceiling");
-        expect(activity.bridge().nativeRevision()==coreBefore,
-                "Changing preview resolution changed Ether state");
-        main(() -> activity.setAdaptiveQuality(TEST_QUALITY));
-        gl(() -> expect(!activity.renderer().isAdaptivePreviewEnabled(),
-                "Selecting manual resolution did not disable Auto fluido"));
+        if(supportsAutoFluid()){
+            long coreBefore=activity.bridge().nativeRevision();
+            // Use the real Activity control; capture while paused must not
+            // degrade the framebuffer nor modify the simulation state.
+            main(() -> chooseAutoFluid(true));
+            gl(() -> expect(autoFluidEnabled(),
+                    "Auto fluido selection did not reach the GL owner"));
+            SolarRenderer.Capture automatic=frame();
+            expect(Math.max(automatic.width,automatic.height)<=1280,
+                    "Auto fluido exceeded its preview ceiling");
+            expect(activity.bridge().nativeRevision()==coreBefore,
+                    "Changing preview resolution changed Ether state");
+            main(() -> chooseAutoFluid(false));
+            gl(() -> expect(!autoFluidEnabled(),
+                    "Selecting manual resolution did not disable Auto fluido"));
+        }
         gl(() -> activity.renderer().setQuality(480));
         SolarRenderer.Capture low = frame();
         gl(() -> activity.renderer().setQuality(960));
@@ -526,7 +556,7 @@ public final class SolarInstrumentation extends Instrumentation {
         // Persist the adaptive fixture in the Activity as well as the renderer:
         // standalone APKs otherwise restore their original UHD mode on recreate.
         main(() -> { activity.setUhdQuality(false); activity.setUltraQuality(false);
-            activity.setAdaptiveQuality(960);activity.scaleForTest(true); });
+            activity.scaleForTest(true); });
         gl(() -> { activity.renderer().setQuality(960); activity.renderer().setOrbits(true);
             activity.bridge().setPreset(3); activity.renderer().focus(3); });
         double date = activity.renderer().julianDate();
