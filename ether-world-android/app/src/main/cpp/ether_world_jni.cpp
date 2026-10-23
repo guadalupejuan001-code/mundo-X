@@ -53,7 +53,29 @@ std::string report(const World& world,const Render::Output* frame=nullptr) {
   std::ostringstream out;
   out.imbue(std::locale::classic());
   out<<std::fixed<<std::setprecision(3);
+  const auto selected=world.cell(st.selected_x,st.selected_z);
+  const char* kind="desconocido";
+  if(selected.revealed) {
+    switch(selected.edit) {
+      case 1:kind="faro";break;
+      case 2:kind="cristal_construido";break;
+      case 3:kind="vacio";break;
+      case 4:kind="barrera";break;
+      default:
+        if(selected.tone<.16f)kind="agua";
+        else if(selected.tone<.36f)kind="vegetacion";
+        else if(selected.tone<.56f)kind="pradera";
+        else if(selected.tone<.76f)kind="piedra";
+        else if(selected.tone<.92f)kind="mineral";
+        else kind="cristal_natural";
+    }
+  }
   out<<"{\"ok\":true"
+     <<",\"selected_material\":\""<<kind<<"\""
+     <<",\"selected_observed\":"<<(selected.revealed?"true":"false")
+     <<",\"selected_height\":"<<selected.height
+     <<",\"selected_tone\":"<<selected.tone
+     <<",\"selected_field\":"<<world.wave(st.selected_x,st.selected_z)
      <<",\"seed\":"<<st.seed
      <<",\"center_x\":"<<st.center_x<<",\"center_z\":"<<st.center_z
      <<",\"selected_x\":"<<st.selected_x<<",\"selected_z\":"<<st.selected_z
