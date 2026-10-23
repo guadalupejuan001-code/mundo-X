@@ -215,4 +215,22 @@ if (BUILD_TESTING)
     "-DINVALID_SOURCE=${CMAKE_CURRENT_BINARY_DIR}/mx_invalid_program.mx"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_mx_cli.cmake")
   set_tests_properties(mxlang_compiler mxlang_cli_contract PROPERTIES TIMEOUT 20)
+
+  # Independent two-body coherent scattering solver, kept outside the legacy
+  # MIL circuit suite so existing backends are not modified.
+  add_executable(test_mil_scattering native/tests/mil_scattering.cpp)
+  target_include_directories(test_mil_scattering PRIVATE native/include)
+  add_executable(mil_scattering_benchmark native/tests/mil_scattering_benchmark.cpp)
+  target_include_directories(mil_scattering_benchmark PRIVATE native/include)
+  if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_mil_scattering PRIVATE -O3 -Wall -Wextra -Wpedantic)
+  endif()
+  add_test(NAME mil_scattering COMMAND test_mil_scattering)
+  set_tests_properties(mil_scattering PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION "MIL_SCATTER_PASS")
+  add_test(NAME xasm_mil_scattering
+    COMMAND mundo_x run "${CMAKE_CURRENT_SOURCE_DIR}/examples/mil_scatter.x")
+  add_test(NAME mx_mil_scattering
+    COMMAND mundo_x run-mx "${CMAKE_CURRENT_SOURCE_DIR}/examples/mil_scatter.mx")
+  set_tests_properties(xasm_mil_scattering mx_mil_scattering
+    PROPERTIES TIMEOUT 60 PASS_REGULAR_EXPRESSION "SCATTER model=two_distinguishable_particles_1d")
 endif()

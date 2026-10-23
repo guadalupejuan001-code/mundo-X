@@ -313,14 +313,17 @@ static void print_program_result(const mundo_x::XasmRunResult& result,
                                 const std::string& kind,
                                 const std::string& path, double ms) {
   std::cout << kind << " program=" << path << "\n";
-  std::cout << "qubits=" << result.qubits
-            << " instructions=" << result.instructions;
-  if (result.backend == "reduced") {
+  std::cout << "instructions=" << result.instructions;
+  if (result.qubits) std::cout << " qubits=" << result.qubits;
+  if (result.scattering_runs)
+    std::cout << " scattering_runs=" << result.scattering_runs
+              << " scattering_backend=two_particle_fft";
+  if (result.backend == "reduced" && result.qubits) {
     std::cout << " backend=reduced"
               << " components=" << result.components
               << " t_gates=" << result.t_gates
               << " logical_payload_bytes=" << result.logical_payload_bytes;
-  } else {
+  } else if (result.qubits) {
     std::cout << " state_bytes=" << result.state_bytes;
   }
   std::cout << " ms=" << std::fixed << std::setprecision(3) << ms << "\n";

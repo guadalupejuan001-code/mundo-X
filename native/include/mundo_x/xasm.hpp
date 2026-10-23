@@ -19,6 +19,7 @@
 #include "mundo_x/ether_renderer.hpp"
 #include "mundo_x/ether_mil_bridge.hpp"
 #include "mundo_x/pauli_observer.hpp"
+#include "mundo_x/mil_scattering.hpp"
 #include "mundo_x/visual_scene.hpp"
 
 namespace mundo_x {
@@ -38,6 +39,7 @@ struct XasmRunResult {
   std::size_t logical_payload_bytes = 0;
   std::size_t components = 0;
   std::size_t t_gates = 0;
+  std::size_t scattering_runs = 0;
   std::size_t render_instructions = 0;
   std::size_t render_width = 0, render_height = 0, render_bodies = 0;
   std::uint64_t render_hash = 0;
@@ -127,6 +129,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
   bool rendered = false;
   std::unique_ptr<mundo_x_bridge::PauliObserver> observer;
   bool backend_declared = false;
+  std::uint64_t scattering_work = 0;
   std::ostringstream out;
   // Reproducible pseudorandom sampling, not a source of physical randomness.
   std::mt19937_64 random(0);
@@ -398,6 +401,52 @@ inline XasmRunResult run_xasm(std::istream& input) {
         continue;
       }
 
+
+      // Specialized coherent two-particle lattice scattering. This physics
+      // backend is independent of a qubit register, so MX/XASM need not invent
+      // placeholder qubits. The run stays bounded across all calls in a file.
+      if (op == "scatter") {
+        const auto sites = read_size("scatter <sites> <steps> <J_milli> <U_milli>");
+        const auto steps = read_size("scatter <sites> <steps> <J_milli> <U_milli>");
+        const auto j_milli = read_size("scatter <sites> <steps> <J_milli> <U_milli>");
+        const auto u_milli = read_size("scatter <sites> <steps> <J_milli> <U_milli>");
+        require_end();
+        if (j_milli == 0 || j_milli > 100000 || u_milli > 100000)
+          throw std::invalid_argument("scatter requires J_milli 1..100000 and U_milli 0..100000");
+        const auto work = MilScattering::estimate_work(sites, steps, u_milli == 0);
+        if (scattering_work > MilScattering::default_work_budget ||
+            work > MilScattering::default_work_budget - scattering_work)
+          throw std::length_error("scatter cumulative work budget exceeded");
+        MilScattering::Input cfg;
+        cfg.sites = sites;
+        cfg.steps = steps;
+        cfg.hopping = static_cast<double>(j_milli) / 1000.0;
+        cfg.contact = static_cast<double>(u_milli) / 1000.0;
+        const auto collision = MilScattering::run(cfg);
+        scattering_work += work;
+        ++result.scattering_runs;
+        ++result.instructions;
+        out << "SCATTER model=two_distinguishable_particles_1d"
+            << " solver=" << (collision.factorized_free ? "free_product_fft_1d" : "interacting_fft_2d")
+            << " sites=" << sites
+            << " steps=" << steps
+            << " J=" << xasm_detail::precise_value(cfg.hopping)
+            << " U=" << xasm_detail::precise_value(cfg.contact)
+            << " dt=" << xasm_detail::precise_value(cfg.dt)
+            << " norm=" << xasm_detail::precise_value(collision.norm)
+            << " max_norm_error=" << xasm_detail::precise_value(collision.max_norm_error)
+            << " initial_contact=" << xasm_detail::precise_value(collision.initial_contact)
+            << " peak_contact=" << xasm_detail::precise_value(collision.peak_contact)
+            << " final_contact=" << xasm_detail::precise_value(collision.final_contact)
+            << " exchanged_order=" << xasm_detail::precise_value(collision.exchanged_order)
+            << " purity=" << (sites <= 128 ? xasm_detail::precise_value(
+                  MilScattering::reduced_purity(collision.amplitudes, sites)) : "unavailable")
+            << " state_bytes=" << collision.state_bytes
+            << " scratch_bytes=" << collision.scratch_bytes
+            << " estimated_work=" << collision.estimated_work << "\n";
+        continue;
+      }
+
       if (!core && !reduced) throw std::runtime_error("declare qubits first");
 
       if (op == "h" || op == "x" || op == "z" || op == "s") {
@@ -548,7 +597,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
 
   if (input.bad() || (input.fail() && !input.eof()))
     throw std::runtime_error("failed to read XASM program");
-  if (!core && !reduced && !scene && !renderer) throw std::runtime_error("program did not declare qubits, scene or render");
+  if (!core && !reduced && !scene && !renderer && !result.scattering_runs) throw std::runtime_error("program did not declare qubits, scene, render or scatter");
 
   if (reduced) {
     result.logical_payload_bytes = reduced->logical_payload_bytes();
