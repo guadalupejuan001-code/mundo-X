@@ -2,6 +2,13 @@
 
 ## Solar 1.6 · Cine X / modo presentación
 
+Se entregan **dos instaladores**: Solar normal (`com.cosmicx.solar`) y
+Solar Cine X (`com.cosmicx.solar.presentation`). El segundo se instala
+junto a la aplicación existente, inicia con Cine X y visor Auto fluido
+en 1280 px, y permite hacer la demostración sin desinstalar Solar normal.
+
+
+
 El botón **Presentar** activa iluminación fotográfica opcional, inicia el
 visor **Auto fluido** desde 1280 px y oculta paneles para mostrar planetas,
 anillos y atmósferas sin obstáculos. El botón **☰** recupera la interfaz.
