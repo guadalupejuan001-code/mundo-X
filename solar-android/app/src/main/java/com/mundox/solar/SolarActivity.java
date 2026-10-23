@@ -94,12 +94,12 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         SharedPreferences prefs=getSharedPreferences("solar",MODE_PRIVATE);
         body=clamp(prefs.getInt("body",3),-1,SolarData.BODIES.length-1);
         speedIndex=clamp(prefs.getInt("speed",6),0,SPEEDS.length-1);
-        quality=clamp(prefs.getInt("quality",960),480,1440);
+        quality=clamp(prefs.getInt("quality",BuildConfig.SOLAR_SHOWCASE_DEFAULT?1280:960),480,1440);
         int defaultMode=BuildConfig.SOLAR_DEFAULT_MODE;
         uhd4k=prefs.getBoolean("uhd4k",defaultMode==1);uhd8k=prefs.getBoolean("uhd8k",defaultMode==2);
         if(uhd8k)uhd4k=false;
         fluidPreview=prefs.getBoolean("fluidPreview",defaultMode==0)&&!uhd4k&&!uhd8k;
-        cinematic=prefs.getBoolean("cinematic",false);
+        cinematic=prefs.getBoolean("cinematic",BuildConfig.SOLAR_SHOWCASE_DEFAULT);
         atmospheres=prefs.getBoolean("atmospheres",true);localPhysics=prefs.getBoolean("localPhysics",false);
         entryActive=prefs.getBoolean("entry",false);
         desiredEntryAltitude=Double.longBitsToDouble(prefs.getLong("entryAltitude",Double.doubleToLongBits(35)));
