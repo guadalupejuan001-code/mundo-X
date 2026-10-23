@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <stdexcept>
 #include <vector>
 
@@ -35,46 +36,32 @@ class MilScattering {
     std::size_t sites = 0, steps = 0;
     std::uint64_t estimated_work = 0;
     std::size_t state_bytes = 0, scratch_bytes = 0;
+    bool factorized_free = false;
     double norm = 0, max_norm_error = 0;
     double initial_contact = 0, peak_contact = 0, final_contact = 0;
     double exchanged_order = 0;
     std::vector<Complex> amplitudes;
   };
 
-  static std::uint64_t estimate_work(std::size_t n, std::size_t steps) {
+  static std::uint64_t estimate_work(std::size_t n, std::size_t steps,
+                                     bool factorized_free = false) {
     if (n < 8 || n > max_sites || (n & (n - 1)) != 0 ||
         steps == 0 || steps > max_steps)
       throw std::invalid_argument("scatter requires power-of-two sites 8..1024 and steps 1..2048");
     std::size_t bits = 0;
     for (std::size_t k = n; k > 1; k >>= 1) ++bits;
+    if (factorized_free) // Two independent 1D evolutions + final N*N state output.
+      return static_cast<std::uint64_t>(n) * n +
+             2ULL * n * (2 * bits + 3) * steps;
     return static_cast<std::uint64_t>(n) * n * (2 * bits + 3) * steps;
   }
 
   static std::vector<Complex> initial_state(std::size_t n) {
-    estimate_work(n, 1);
+    auto factors = initial_factors(n);
     std::vector<Complex> psi(n * n);
-    const double displacement = std::min(n / 4.0, 10.0);
-    const double left = n / 2.0 - displacement;
-    const double right = n / 2.0 + displacement;
-    const double sigma = std::max(1.4, std::min(4.0, n / 32.0));
-    const double inv = 1.0 / (4 * sigma * sigma);
-    const double momentum = pi / 3.0;
-    // The initial product wavefunction factorizes exactly: O(N)
-    // expensive Gaussian/phase evaluations rather than O(N^2).
-    std::vector<Complex> first(n), second(n);
-    double first_norm = 0.0, second_norm = 0.0;
-    for (std::size_t x = 0; x < n; ++x) {
-      const double dx = periodic_offset(static_cast<double>(x) - left, n);
-      const double dy = periodic_offset(static_cast<double>(x) - right, n);
-      first[x] = std::polar(std::exp(-dx * dx * inv), momentum * dx);
-      second[x] = std::polar(std::exp(-dy * dy * inv), -momentum * dy);
-      first_norm += std::norm(first[x]);
-      second_norm += std::norm(second[x]);
-    }
-    const double scale = 1.0 / std::sqrt(first_norm * second_norm);
     for (std::size_t x = 0; x < n; ++x)
       for (std::size_t y = 0; y < n; ++y)
-        psi[x * n + y] = first[x] * second[y] * scale;
+        psi[x * n + y] = factors.first[x] * factors.second[y];
     return psi;
   }
 
@@ -89,7 +76,8 @@ class MilScattering {
   }
 
   static Result run(const Input& cfg) {
-    const auto budget = validate(cfg);
+    const auto budget = validate(cfg, cfg.contact == 0.0);
+    if (cfg.contact == 0.0) return run_free(cfg, budget);
     Result result;
     result.sites = cfg.sites;
     result.steps = cfg.steps;
@@ -158,12 +146,92 @@ class MilScattering {
   }
 
  private:
+  static std::pair<std::vector<Complex>, std::vector<Complex>> initial_factors(std::size_t n) {
+    estimate_work(n, 1);
+    const double displacement = std::min(n / 4.0, 10.0);
+    const double left = n / 2.0 - displacement;
+    const double right = n / 2.0 + displacement;
+    const double sigma = std::max(1.4, std::min(4.0, n / 32.0));
+    const double inv = 1.0 / (4 * sigma * sigma);
+    const double momentum = pi / 3.0;
+    std::vector<Complex> first(n), second(n);
+    double first_norm = 0.0, second_norm = 0.0;
+    for (std::size_t x = 0; x < n; ++x) {
+      const double dx = periodic_offset(static_cast<double>(x) - left, n);
+      const double dy = periodic_offset(static_cast<double>(x) - right, n);
+      first[x] = std::polar(std::exp(-dx * dx * inv), momentum * dx);
+      second[x] = std::polar(std::exp(-dy * dy * inv), -momentum * dy);
+      first_norm += std::norm(first[x]);
+      second_norm += std::norm(second[x]);
+    }
+    for (auto& c : first) c /= std::sqrt(first_norm);
+    for (auto& c : second) c /= std::sqrt(second_norm);
+    return {std::move(first), std::move(second)};
+  }
+
+  // U=0 with a known product initial state: two independent 1D FFTs.
+  // Still materializes the full N*N final state for caller compatibility.
+  // DO NOT use for arbitrary pre-entangled inputs to propagate().
+  static Result run_free(const Input& cfg, std::uint64_t budget) {
+    Result result;
+    result.sites = cfg.sites;
+    result.steps = cfg.steps;
+    result.estimated_work = budget;
+    result.factorized_free = true;
+    auto factors = initial_factors(cfg.sites);
+    auto& first = factors.first;
+    auto& second = factors.second;
+    Workspace work(cfg.sites, cfg.hopping, 0.0, cfg.dt);
+    result.state_bytes = cfg.sites * cfg.sites * sizeof(Complex);
+    result.scratch_bytes = cfg.sites * (4 * sizeof(Complex) + sizeof(std::size_t)) +
+                           (cfg.sites / 2) * sizeof(Complex);
+    auto contact = [&]() {
+      double p = 0.0;
+      for (std::size_t x = 0; x < cfg.sites; ++x)
+        p += std::norm(first[x]) * std::norm(second[x]);
+      return p;
+    };
+    result.initial_contact = contact();
+    result.peak_contact = result.initial_contact;
+    const double normalization = 1.0 / static_cast<double>(cfg.sites);
+    for (std::size_t step = 0; step < cfg.steps; ++step) {
+      work.fft(first.data(), false);
+      work.fft(second.data(), false);
+      for (std::size_t k = 0; k < cfg.sites; ++k) {
+        first[k] *= work.kinetic[k];
+        second[k] *= work.kinetic[k];
+      }
+      work.fft(first.data(), true);
+      work.fft(second.data(), true);
+      double first_norm = 0.0, second_norm = 0.0;
+      for (std::size_t x = 0; x < cfg.sites; ++x) {
+        first[x] *= normalization;
+        second[x] *= normalization;
+        first_norm += std::norm(first[x]);
+        second_norm += std::norm(second[x]);
+      }
+      result.max_norm_error = std::max(result.max_norm_error,
+                                       std::abs(first_norm * second_norm - 1.0));
+      result.peak_contact = std::max(result.peak_contact, contact());
+    }
+    result.amplitudes.resize(cfg.sites * cfg.sites);
+    for (std::size_t x = 0; x < cfg.sites; ++x)
+      for (std::size_t y = 0; y < cfg.sites; ++y)
+        result.amplitudes[x * cfg.sites + y] = first[x] * second[y];
+    result.norm = norm(result.amplitudes);
+    result.final_contact = contact();
+    for (std::size_t x = 0; x < cfg.sites; ++x)
+      for (std::size_t y = 0; y < x; ++y)
+        result.exchanged_order += std::norm(result.amplitudes[x * cfg.sites + y]);
+    return result;
+  }
+
   static double periodic_offset(double delta, std::size_t n) {
     const double period = static_cast<double>(n);
     return delta - period * std::floor(delta / period + 0.5);
   }
-  static std::uint64_t validate(const Input& cfg) {
-    const auto estimated = estimate_work(cfg.sites, cfg.steps);
+  static std::uint64_t validate(const Input& cfg, bool known_product = false) {
+    const auto estimated = estimate_work(cfg.sites, cfg.steps, known_product);
     if (cfg.work_budget == 0 || estimated > cfg.work_budget)
       throw std::length_error("scatter work budget exceeded; reduce sites or steps");
     if (!std::isfinite(cfg.hopping) || !(cfg.hopping > 0.0) || cfg.hopping > 100.0 ||
