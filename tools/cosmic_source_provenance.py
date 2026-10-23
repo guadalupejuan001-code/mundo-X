@@ -34,6 +34,8 @@ RECOVERED_PHYSICS_REFERENCE = "02e69b81f18329e38d5f0e32a5a082be27bffa3c"
 GRAPHICS_MANIFEST_REFERENCE = "4f04322eed3b698e4f20081921c5ed1da2c4b721"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 ETHER_MEMORY_REFERENCE = "729994e1e044ad5a4d4ffd4c43dcea2ad638608f"
+# Reviewable commit containing the new COW sources and reproducible benchmark.
+ETHER_MEMORY_COW_REFERENCE = "b8d01ae5d335e54ecfd37cb18e498c2b387a5b7d"
 ETHER_MEMORY_FABRIC_REFERENCE = "8b9d5d40319ff093ea019156b8b476754ed6d504"
 UNIVERSAL_1000_REFERENCE = "018176d45cf1743256b56761c43b4e8656d3848f"
 UNIVERSAL_1000_EXAMS_REFERENCE = "dc38a5a76ed8a39a415d587b1ee86934063c2240"
@@ -57,11 +59,12 @@ ADDITIONAL_SOURCES = {
     "native/tests/infinite_extreme.cpp": RECOVERED_PHYSICS_REFERENCE,
     "native/tests/ether_rules.cpp": INTERVAL_EVALUATION_REFERENCE,
     "native/tests/ether_memory.cpp": ETHER_MEMORY_REFERENCE,
-    "native/include/mundo_x/inverse_memory.hpp": "0553c9beb40cef933606fe3f6acc4a3b426cc4fa",
-    "native/include/mundo_x/quantum_runtime.hpp": "ddf2cd8d9bd856deb76f234eb427c4a3407827d1",
+    "native/include/mundo_x/inverse_memory.hpp": ETHER_MEMORY_COW_REFERENCE,
+    "native/include/mundo_x/quantum_runtime.hpp": ETHER_MEMORY_COW_REFERENCE,
     "native/src/quantum_runner.cpp": "832f219112000e0a8d33c0482b1b341a0c5d9502",
-    "native/tests/inverse_memory.cpp": "2287f2d5ad5964dbb34922845e726d62d6ca5583",
-    "native/tests/quantum_runtime.cpp": "8ebffec07e1685d2eca827b68ffc0b221789801f",
+    "native/tests/inverse_memory.cpp": ETHER_MEMORY_COW_REFERENCE,
+    "native/tests/quantum_runtime.cpp": ETHER_MEMORY_COW_REFERENCE,
+    "native/tests/ether_memory_copy_benchmark.cpp": ETHER_MEMORY_COW_REFERENCE,
     "native/tests/reduced_1000.cpp": MAGIC_GROWTH_REFERENCE,
     "native/tests/ether_batch.cpp": AUDIT_REFERENCE,
     "native/tests/ether_stress.cpp": AUDIT_REFERENCE,
