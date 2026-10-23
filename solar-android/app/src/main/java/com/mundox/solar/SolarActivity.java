@@ -314,7 +314,13 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         if(activeMap!=null)activeMap.setJulianDate(jd);
         String notice=observer.resolutionNotice();
         if(notice!=null&&!notice.equals(resolutionMessage)){
-            resolutionMessage=notice;uhd4k=observer.isUhd4k();uhd8k=observer.isUhd8k();updateButtons();message(notice);
+            resolutionMessage=notice;
+            uhd4k=observer.isUhd4k();
+            uhd8k=observer.isUhd8k();
+            smart4k=observer.isSmart4k();
+            if(smart4k){uhd4k=false;uhd8k=false;}
+            updateButtons();
+            message(notice);
         }
     }
     @Override public void status(String status){latestStatus=status;}
