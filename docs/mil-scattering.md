@@ -59,7 +59,7 @@ The model is **never** a constant-memory or arbitrary-multiparticle simulator. F
 | 512 | 262,144 | 4 MiB |
 | 1024 | 1,048,576 | 16 MiB |
 
-For example, interacting N=256 over 128 steps requires approximately 176 million *estimated* work units and a 1 MiB state payload (work units are a budget proxy, not exact floating-point operation counts). The old estimate for this example was inadvertently low. For a separable **U=0** run, the budget follows the faster O(N log N) path plus one O(N^2) output expansion, making N=1024 and 100 steps feasible with a 16 MiB final state payload. Interacting N=1024 at large step counts still exceeds the default work budget. No FPS or Android battery/RAM guarantee is made.
+For example, interacting N=256 over 128 steps requires approximately 159 million *estimated* work units and a 1 MiB state payload (work units are a budget proxy, not exact floating-point operation counts). For a separable **U=0** run, the budget follows the faster O(N log N) path plus one O(N^2) output expansion, making N=1024 and 100 steps feasible with a 16 MiB final state payload. Interacting N=1024 at large step counts still exceeds the default work budget. No FPS or Android battery/RAM guarantee is made.
 
 ## Boundaries of existing Mil Core
 
