@@ -59,17 +59,22 @@ class MilScattering {
     const double sigma = std::max(1.4, std::min(4.0, n / 32.0));
     const double inv = 1.0 / (4 * sigma * sigma);
     const double momentum = pi / 3.0;
-    double square_norm = 0.0;
+    // The initial product wavefunction factorizes exactly: O(N)
+    // expensive Gaussian/phase evaluations rather than O(N^2).
+    std::vector<Complex> first(n), second(n);
+    double first_norm = 0.0, second_norm = 0.0;
     for (std::size_t x = 0; x < n; ++x) {
       const double dx = periodic_offset(static_cast<double>(x) - left, n);
-      for (std::size_t y = 0; y < n; ++y) {
-        const double dy = periodic_offset(static_cast<double>(y) - right, n);
-        psi[x * n + y] = std::polar(std::exp(-(dx * dx + dy * dy) * inv),
-                                    momentum * (dx - dy));
-        square_norm += std::norm(psi[x * n + y]);
-      }
+      const double dy = periodic_offset(static_cast<double>(x) - right, n);
+      first[x] = std::polar(std::exp(-dx * dx * inv), momentum * dx);
+      second[x] = std::polar(std::exp(-dy * dy * inv), -momentum * dy);
+      first_norm += std::norm(first[x]);
+      second_norm += std::norm(second[x]);
     }
-    for (auto& amplitude : psi) amplitude /= std::sqrt(square_norm);
+    const double scale = 1.0 / std::sqrt(first_norm * second_norm);
+    for (std::size_t x = 0; x < n; ++x)
+      for (std::size_t y = 0; y < n; ++y)
+        psi[x * n + y] = first[x] * second[y] * scale;
     return psi;
   }
 
@@ -91,7 +96,10 @@ class MilScattering {
     result.estimated_work = budget;
     result.amplitudes = initial_state(cfg.sites);
     result.state_bytes = result.amplitudes.size() * sizeof(Complex);
-    result.scratch_bytes = cfg.sites * sizeof(Complex) * 2;
+    // O(N) FFT workspace; the product-state setup temporaries are
+    // not concurrent with Workspace.
+    result.scratch_bytes = cfg.sites * (2 * sizeof(Complex) + sizeof(std::size_t)) +
+                           (cfg.sites / 2) * sizeof(Complex);
     result.initial_contact = contact_probability(result.amplitudes, cfg.sites);
     result.peak_contact = result.initial_contact;
     Workspace work(cfg.sites, cfg.hopping, cfg.contact, cfg.dt);
@@ -165,50 +173,64 @@ class MilScattering {
     return estimated;
   }
 
-  static void fft(Complex* values, std::size_t n, bool inverse) {
-    for (std::size_t i = 1, j = 0; i < n; ++i) {
-      std::size_t bit = n >> 1;
-      for (; j & bit; bit >>= 1) j ^= bit;
-      j ^= bit;
-      if (i < j) std::swap(values[i], values[j]);
-    }
-    for (std::size_t len = 2; len <= n; len <<= 1) {
-      const Complex root = std::polar(1.0, (inverse ? 2.0 : -2.0) * pi / len);
-      for (std::size_t begin = 0; begin < n; begin += len) {
-        Complex factor(1.0, 0.0);
-        for (std::size_t j = 0; j < len / 2; ++j) {
-          const Complex u = values[begin + j];
-          const Complex v = values[begin + j + len / 2] * factor;
-          values[begin + j] = u + v;
-          values[begin + j + len / 2] = u - v;
-          factor *= root;
-        }
-      }
-    }
-    if (inverse)
-      for (std::size_t i = 0; i < n; ++i) values[i] /= static_cast<double>(n);
-  }
-
   struct Workspace {
     std::size_t n;
-    std::vector<Complex> column, kinetic;
+    std::vector<Complex> column, kinetic, twiddles;
+    std::vector<std::size_t> bit_reversal;
     Complex half_contact;
+
     Workspace(std::size_t sites, double hopping, double contact, double dt)
-      : n(sites), column(sites), kinetic(sites),
-        half_contact(std::polar(1.0, -0.5 * dt * contact)) {
-      for (std::size_t k = 0; k < n; ++k)
-        kinetic[k] = std::polar(1.0, 2.0 * dt * hopping *
-                                    std::cos(2 * pi * k / n));
+      : n(sites), column(sites), kinetic(sites), twiddles(sites / 2),
+        bit_reversal(sites), half_contact(std::polar(1.0, -0.5 * dt * contact)) {
+      std::size_t levels = 0;
+      for (std::size_t k = n; k > 1; k >>= 1) ++levels;
+      for (std::size_t i = 0; i < n; ++i) {
+        std::size_t src = i, reversed = 0;
+        for (std::size_t b = 0; b < levels; ++b) {
+          reversed = (reversed << 1) | (src & 1U);
+          src >>= 1;
+        }
+        bit_reversal[i] = reversed;
+        kinetic[i] = std::polar(1.0, 2.0 * dt * hopping *
+                                    std::cos(2.0 * pi * i / n));
+        if (i < n / 2)
+          twiddles[i] = std::polar(1.0, -2.0 * pi * i / n);
+      }
     }
+
+    void fft(Complex* values, bool inverse) const {
+      for (std::size_t i = 0; i < n; ++i)
+        if (i < bit_reversal[i]) std::swap(values[i], values[bit_reversal[i]]);
+      for (std::size_t len = 2; len <= n; len <<= 1) {
+        const std::size_t stride = n / len;
+        for (std::size_t begin = 0; begin < n; begin += len)
+          for (std::size_t j = 0; j < len / 2; ++j) {
+            const Complex factor = inverse ? std::conj(twiddles[j * stride])
+                                           : twiddles[j * stride];
+            const Complex u = values[begin + j];
+            const Complex v = values[begin + j + len / 2] * factor;
+            values[begin + j] = u + v;
+            values[begin + j + len / 2] = u - v;
+          }
+      }
+    }
+
     void transform(std::vector<Complex>& amplitudes, bool inverse) {
       for (std::size_t row = 0; row < n; ++row)
-        fft(amplitudes.data() + row * n, n, inverse);
+        fft(amplitudes.data() + row * n, inverse);
+      const double normalization = 1.0 / (static_cast<double>(n) * n);
       for (std::size_t col = 0; col < n; ++col) {
         for (std::size_t row = 0; row < n; ++row)
           column[row] = amplitudes[row * n + col];
-        fft(column.data(), n, inverse);
-        for (std::size_t row = 0; row < n; ++row)
-          amplitudes[row * n + col] = column[row];
+        fft(column.data(), inverse);
+        if (inverse) {
+          // Fused final inverse normalization for both spatial axes.
+          for (std::size_t row = 0; row < n; ++row)
+            amplitudes[row * n + col] = column[row] * normalization;
+        } else {
+          for (std::size_t row = 0; row < n; ++row)
+            amplitudes[row * n + col] = column[row];
+        }
       }
     }
     void step(std::vector<Complex>& amplitudes) {
