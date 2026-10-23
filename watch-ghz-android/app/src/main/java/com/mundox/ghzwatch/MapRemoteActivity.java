@@ -21,6 +21,7 @@ import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.Wearable;
 import com.mundox.maplink.MapProtocol;
+import com.mundox.maplink.FieldTelemetry;
 import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,14 +34,20 @@ public final class MapRemoteActivity extends Activity implements MessageClient.O
     private long sequence,pending;
     private boolean active,ready,listenerAttached,discovering;
     private int page;
-    private TextView status;
+    private TextView status,sensorStatus;
+    private Button sensorToggle;
+    private WatchFieldSensors fieldSensors;
     private Button connect,mode;
     private final List<Button> controls=new ArrayList<>();
     private final String[][] commands={{"LEFT","RIGHT","UP","DOWN","ZOOM_OUT","ZOOM_IN"},
-        {"PREVIOUS","NEXT","PLAY","RESET"},{"Z_DOWN","Z_UP","FIELD_DOWN","FIELD_UP","RESET"}};
+        {"PREVIOUS","NEXT","PLAY","RESET"},{"Z_DOWN","Z_UP","FIELD_DOWN","FIELD_UP","RESET"},
+        {"LAB_MAGNETIC","LAB_GRAVITY","LAB_BOTH","LAB_PLAY","LAB_RESET"},
+        {"MAGNETIC_DOWN","MAGNETIC_UP","GRAVITY_DOWN","GRAVITY_UP"}};
     private final String[][] labels={{"GIRO ←","GIRO →","INCLINAR ↑","INCLINAR ↓","ZOOM −","ZOOM +"},
         {"TIEMPO −","TIEMPO +","REPRODUCIR / PAUSAR","REINICIAR VISTA"},
-        {"ALTURA Z −","ALTURA Z +","DIPOLO −","DIPOLO +","REINICIAR VISTA"}};
+        {"ALTURA Z −","ALTURA Z +","DIPOLO −","DIPOLO +","REINICIAR VISTA"},
+        {"CAMPO MAGNÉTICO","GRAVEDAD","AMBOS CAMPOS","MOVER / PAUSAR OBJETOS","REINICIAR OBJETOS"},
+        {"B VIRTUAL −","B VIRTUAL +","GRAVEDAD −","GRAVEDAD +"}};
     private LinearLayout buttons;
     private final Runnable heartbeat=new Runnable(){@Override public void run(){
         if(!active)return;
@@ -67,10 +74,20 @@ public final class MapRemoteActivity extends Activity implements MessageClient.O
         status.setId(R.id.map_status);
         connect=button(root,"CONECTAR TELÉFONO",true);connect.setId(R.id.map_connect);connect.setOnClickListener(v->discover());
         mode=button(root,"VISTA · CAMBIAR",false);
-        mode.setOnClickListener(v->{page=(page+1)%3;renderControls();});
+        mode.setOnClickListener(v->{page=(page+1)%commands.length;renderControls();});
         buttons=new LinearLayout(this);buttons.setOrientation(LinearLayout.VERTICAL);root.addView(buttons);
         renderControls();
         text(root,"Modifica el mapa virtual.\\nDipolo ± sólo edita la demo.\\nMantén ambas apps abiertas.",11,Color.rgb(156,156,172),false);
+        sensorToggle=button(root,"MEDIR SENSORES",false);sensorToggle.setId(R.id.field_sensors);
+        sensorStatus=text(root,"B y gravedad del sensor. No emite un campo externo.",11,Color.rgb(205,205,216),false);sensorStatus.setId(R.id.field_readings);
+        fieldSensors=new WatchFieldSensors(this,handler,session,(bytes,summary)->{
+            sensorStatus.setText(summary);
+            if(bytes!=null&&active&&ready&&node!=null)Wearable.getMessageClient(this).sendMessage(node,FieldTelemetry.PATH,bytes);
+        });
+        sensorToggle.setOnClickListener(v->{if(!active)return;if(fieldSensors.isRunning())fieldSensors.stop();else fieldSensors.start();
+            sensorToggle.setText(fieldSensors.isRunning()?"DETENER SENSORES":"MEDIR SENSORES");});
+        Button probe=button(root,"VIBRACIÓN + SENSORES",false);
+        probe.setOnClickListener(v->startActivity(new android.content.Intent(this,HardwareActivity.class)));
         setContentView(scroll);
     }
     @Override protected void onStart(){
@@ -84,6 +101,7 @@ public final class MapRemoteActivity extends Activity implements MessageClient.O
         handler.postDelayed(heartbeat,5000);
     }
     @Override protected void onStop(){
+        fieldSensors.stop();sensorToggle.setText("MEDIR SENSORES");
         active=false;ready=false;pending=0;discovering=false;handler.removeCallbacksAndMessages(null);
         if(listenerAttached)Wearable.getMessageClient(this).removeListener(this);
         listenerAttached=false;super.onStop();
@@ -136,7 +154,7 @@ public final class MapRemoteActivity extends Activity implements MessageClient.O
     private void renderControls(){
         if(buttons==null)return;
         buttons.removeAllViews();controls.clear();
-        mode.setText(new String[]{"VISTA · CAMBIAR","TIEMPO · CAMBIAR","CAMPO · CAMBIAR"}[page]);
+        mode.setText(new String[]{"VISTA · CAMBIAR","TIEMPO · CAMBIAR","CAMPO · CAMBIAR","OBJETOS · CAMBIAR","FUERZAS · CAMBIAR"}[page]);
         for(int i=0;i<commands[page].length;i++){
             final String cmd=commands[page][i];
             Button b=button(buttons,labels[page][i],false);b.setOnClickListener(v->send(cmd));controls.add(b);
@@ -159,6 +177,7 @@ public final class MapRemoteActivity extends Activity implements MessageClient.O
         GradientDrawable background=new GradientDrawable();background.setColor(primary?Color.rgb(149,30,45):Color.rgb(31,31,39));background.setCornerRadius(dp(22));b.setBackground(background);
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(44));p.topMargin=dp(6);parent.addView(b,p);return b;
     }
+    boolean sensorsRunningForTest(){return fieldSensors.isRunning();}
     private int dp(float value){return Math.round(value*getResources().getDisplayMetrics().density);}
 }
 

@@ -41,3 +41,28 @@ for attempt in range(10):
 else:
     (destination / "map-control-error.xml").write_bytes(raw)
     raise AssertionError("The phone UI did not expose the loaded map: " + text)
+
+
+# Inspect the actual controls below the 3D canvas and the sensor status panel.
+width, height = list(re.findall(r"(\d+)x(\d+)", adb("shell", "wm", "size").decode()))[-1]
+width, height = int(width), int(height)
+for target, basename in [("Campos + objetos", "field-controls"), ("Espacio físico", "field-sensors")]:
+    for attempt in range(14):
+        adb("shell", "uiautomator", "dump", "/sdcard/fields-window.xml")
+        raw = adb("shell", "cat", "/sdcard/fields-window.xml")
+        root = ET.fromstring(raw)
+        candidates = [node for node in root.iter("node") if target in node.get("text", "")]
+        visible = False
+        for node in candidates:
+            coords = list(map(int, re.findall(r"\d+", node.get("bounds", ""))))
+            if len(coords) == 4 and coords[2] > coords[0] and 0 < coords[3] <= height * .55:
+                visible = True
+        if visible:
+            (destination / (basename + ".xml")).write_bytes(raw)
+            (destination / (basename + ".png")).write_bytes(adb("exec-out", "screencap", "-p"))
+            print("Verified visible phone panel:", target)
+            break
+        # The canvas consumes drags. Scroll in the page margin beside it.
+        adb("shell", "input", "swipe", str(width - 10), str(int(height * .82)), str(width - 10), str(int(height * .42)), "400")
+    else:
+        raise AssertionError("Phone panel not reachable by scrolling: " + target)

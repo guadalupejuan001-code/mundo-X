@@ -13,4 +13,6 @@
     <item name="map_remote" type="id"/>
     <item name="map_connect" type="id"/>
     <item name="map_status" type="id"/>
+    <item name="field_sensors" type="id"/>
+    <item name="field_readings" type="id"/>
 </resources>

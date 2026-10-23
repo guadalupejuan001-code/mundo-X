@@ -24,6 +24,8 @@ import com.google.android.gms.wearable.MessageClient;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Wearable;
 import com.mundox.maplink.MapProtocol;
+import com.mundox.maplink.FieldTelemetry;
+import android.os.SystemClock;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 import java.io.ByteArrayInputStream;
@@ -40,6 +42,8 @@ public final class MapActivity extends Activity implements MessageClient.OnMessa
     private boolean active,listenerAttached;
     private ValueCallback<Uri[]> chooser;
     private String pendingCsv;
+    private String watchNode,watchSession;
+    private long watchSeen,telemetrySequence;
     private final LinkedHashMap<String,Entry> ledger=new LinkedHashMap<>();
     private static final class Entry { long sequence; byte[] reply; Entry(long n){sequence=n;} }
     interface Reply { void send(byte[] bytes); }
@@ -118,15 +122,19 @@ public final class MapActivity extends Activity implements MessageClient.OnMessa
         }else connection.setText("Mapa local · el enlace necesita Google Play services actualizado.");
     }
     @Override protected void onPause() {
-        active=false;
+        active=false;watchNode=null;watchSession=null;telemetrySequence=0;
         if(listenerAttached)Wearable.getMessageClient(this).removeListener(this);
         listenerAttached=false;
         connection.setText("Abre «Mapa 4D · Mando» en el reloj y pulsa CONECTAR.");
-        web.evaluateJavascript("document.getElementById('play')?.getAttribute('aria-label')==='Pausar capturas' && document.getElementById('play').click()",null);
+        web.evaluateJavascript("window.MundoXPause && window.MundoXPause()",null);
         web.onPause();
         super.onPause();
     }
     @Override public void onMessageReceived(MessageEvent event) {
+        if(FieldTelemetry.PATH.equals(event.getPath())){
+            final String source=event.getSourceNodeId();final byte[] payload=event.getData();
+            runOnUiThread(()->acceptTelemetry(source,payload));return;
+        }
         if(!MapProtocol.REQUEST.equals(event.getPath()))return;
         final String node=event.getSourceNodeId();
         final byte[] bytes=event.getData();
@@ -156,11 +164,28 @@ public final class MapActivity extends Activity implements MessageClient.OnMessa
                     JSONObject result=new JSONObject((String)decoded);
                     ok=result.getBoolean("ok");message=result.optString("message",message);
                 }
+                if(ok&&active){
+                    if(!node.equals(watchNode)||!request.session.equals(watchSession)){
+                        telemetrySequence=0;web.evaluateJavascript("window.MundoXPhysical && window.MundoXPhysical.clear()",null);
+                    }
+                    watchNode=node;watchSession=request.session;watchSeen=SystemClock.elapsedRealtime();
+                }
                 current.reply=MapProtocol.ack(request,ok,message);
                 callback.send(current.reply);
                 if(active)connection.setText(ok?"Reloj conectado · "+message:"Reloj: "+message);
             }catch(Exception ignored){respond(request,false,message,callback);}
         });
+    }
+    boolean acceptTelemetry(String node,byte[] bytes){
+        if(!active||watchNode==null||!watchNode.equals(node)||SystemClock.elapsedRealtime()-watchSeen>12000)return false;
+        try{
+            JSONObject packet=FieldTelemetry.parse(bytes);
+            long sequence=packet.getLong("seq");
+            if(!packet.getString("session").equals(watchSession)||sequence<=telemetrySequence)return false;
+            telemetrySequence=sequence;
+            web.evaluateJavascript("window.MundoXPhysical && window.MundoXPhysical.receive("+packet.toString()+")",null);
+            return true;
+        }catch(Exception error){return false;}
     }
     private void respond(MapProtocol.Request request,boolean ok,String message,Reply callback) {
         try{callback.send(MapProtocol.ack(request,ok,message));}catch(Exception ignored){}

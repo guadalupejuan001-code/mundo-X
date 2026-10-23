@@ -5,6 +5,9 @@ import android.os.SystemClock;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.mundox.maplink.MapProtocol;
+import com.mundox.maplink.FieldTelemetry;
+import org.json.JSONArray;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 import org.junit.Test;
@@ -60,6 +63,26 @@ public final class MapActivityTest {
             assertTrue(send(activity,6,"RESET").getBoolean("ok"));
             assertEquals(1,state(activity).getJSONObject("state").getInt("capture"));
             assertEquals(1.1,state(activity).getJSONObject("state").getDouble("dipole"),.000001);
+            assertTrue(send(activity,7,"LAB_GRAVITY").getBoolean("ok"));
+            assertEquals("gravity",state(activity).getJSONObject("state").getJSONObject("lab").getString("mode"));
+            assertTrue(send(activity,8,"GRAVITY_UP").getBoolean("ok"));
+            assertEquals(1.1,state(activity).getJSONObject("state").getJSONObject("lab").getDouble("gravity"),.000001);
+            JSONObject before=state(activity).getJSONObject("state").getJSONObject("lab");
+            assertTrue(send(activity,9,"LAB_PLAY").getBoolean("ok"));
+            Thread.sleep(700);
+            assertTrue(send(activity,10,"LAB_PLAY").getBoolean("ok"));
+            JSONObject after=state(activity).getJSONObject("state").getJSONObject("lab");
+            assertTrue("Virtual bodies did not move",after.getDouble("time")>0);
+            assertNotEquals(before.getJSONArray("particles").toString(),after.getJSONArray("particles").toString());
+            assertFalse(after.getBoolean("running"));
+            assertTrue(send(activity,11,"LAB_MAGNETIC").getBoolean("ok"));
+            assertTrue(send(activity,12,"MAGNETIC_DOWN").getBoolean("ok"));
+            assertEquals(.9,state(activity).getJSONObject("state").getJSONObject("lab").getDouble("magnetic"),.000001);
+            assertTrue(send(activity,13,"LAB_BOTH").getBoolean("ok"));
+            assertTrue(send(activity,14,"LAB_RESET").getBoolean("ok"));
+            assertEquals(0,state(activity).getJSONObject("state").getJSONObject("lab").getDouble("time"),.000001);
+            assertEquals(1.1,state(activity).getJSONObject("state").getDouble("dipole"),.000001);
+
         }finally{instrumentation().runOnMainSync(activity::finish);}
     }
     @Test public void malformedRequestsAndWrongAcknowledgementsAreRejected()throws Exception {
@@ -72,5 +95,52 @@ public final class MapActivityTest {
         try{MapProtocol.parseAck(MapProtocol.ack(request,true,"ok"),session,2);fail("Wrong sequence accepted");}
         catch(org.json.JSONException expected){}
     }
+    private byte[] telemetry(long sequence,String mode)throws Exception {
+        JSONObject packet=new JSONObject().put("v",1).put("session",session).put("seq",sequence).put("mode",mode)
+            .put("model","instrumented sensor fixture").put("emulator",true)
+            .put("magnetic",mode.equals("measuring")?new JSONArray(new double[]{30,40,0}):JSONObject.NULL)
+            .put("gravity",mode.equals("measuring")?new JSONArray(new double[]{0,0,9.81}):JSONObject.NULL)
+            .put("magneticAgeMs",0).put("gravityAgeMs",0).put("magneticAccuracy",3).put("gravityAccuracy",3);
+        return packet.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+    private boolean ingest(MapActivity activity,String node,byte[] packet){
+        AtomicBoolean result=new AtomicBoolean();
+        instrumentation().runOnMainSync(()->result.set(activity.acceptTelemetry(node,packet)));return result.get();
+    }
+    @Test public void sensorPacketsRequireLivePeerAndExpireInsteadOfInventingMeasurements()throws Exception {
+        MapActivity activity=(MapActivity)instrumentation().startActivitySync(new Intent(instrumentation().getTargetContext(),MapActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try{
+            long until=SystemClock.elapsedRealtime()+25000;
+            while(!state(activity).optBoolean("ok")&&SystemClock.elapsedRealtime()<until)Thread.sleep(100);
+            assertFalse(ingest(activity,"instrumented-watch",telemetry(1,"measuring")));
+            assertTrue(send(activity,1,"HELLO").getBoolean("ok"));
+            assertFalse(ingest(activity,"other-watch",telemetry(1,"measuring")));
+            assertTrue(ingest(activity,"instrumented-watch",telemetry(1,"measuring")));
+            JSONObject reading=evaluate(activity,"JSON.stringify({b:document.getElementById('magnetic-live').textContent,status:document.getElementById('physical-status').textContent})");
+            assertTrue(reading.getString("b").startsWith("50"));assertEquals("SENSORES DE EMULADOR",reading.getString("status"));
+            assertFalse(ingest(activity,"instrumented-watch",telemetry(1,"measuring")));
+            Thread.sleep(4100);
+            reading=evaluate(activity,"JSON.stringify({b:document.getElementById('magnetic-live').textContent,status:document.getElementById('physical-status').textContent})");
+            assertEquals("—",reading.getString("b"));assertEquals("Sin lecturas recientes",reading.getString("status"));
+            assertTrue(ingest(activity,"instrumented-watch",telemetry(2,"measuring")));
+            assertTrue(ingest(activity,"instrumented-watch",telemetry(3,"stopped")));
+            assertEquals("Medición detenida",evaluate(activity,"JSON.stringify({status:document.getElementById('physical-status').textContent})").getString("status"));
+        }finally{instrumentation().runOnMainSync(activity::finish);}
+    }
+    @Test public void malformedTelemetryCannotMasqueradeAsASensorReading()throws Exception {
+        JSONObject valid=FieldTelemetry.parse(telemetry(1,"measuring"));
+        assertTrue(valid.getBoolean("emulator"));
+        for(int index=0;index<5;index++){
+            JSONObject bad=new JSONObject(valid.toString());
+            if(index==0)bad.put("magnetic",new JSONArray(new double[]{1,2}));
+            if(index==1)bad.put("gravity",new JSONArray(new String[]{"1","2","3"}));
+            if(index==2)bad.put("gravityAgeMs",3001);
+            if(index==3)bad.put("mode","generated");
+            if(index==4){bad.remove("magnetic");bad.put("unexpected",true);}
+            try{FieldTelemetry.parse(bad.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));fail("Malformed telemetry accepted");}
+            catch(org.json.JSONException expected){}
+        }
+    }
+
 }
 

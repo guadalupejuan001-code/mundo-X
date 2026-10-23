@@ -41,7 +41,7 @@ jobs:
             watch-ghz-android/tests/ProbeAnalysisCheck.java
           java -cp /tmp/ghz-java com.mundox.ghzwatch.ProbeAnalysisCheck | tee ghz-dist/hardware-analysis-checks.txt
       - name: Browser map numerical checks
-        run: node --test watch-ghz-android/tests/map-field.test.mjs
+        run: node --test watch-ghz-android/tests/*.test.mjs
       - name: Android SDK
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \

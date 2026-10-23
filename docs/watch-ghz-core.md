@@ -74,7 +74,7 @@ Android API 30 con una pantalla de 450 × 450; no sustituye una prueba física
 en Galaxy Watch4. Los resultados de cada ejecución están en el artefacto CI.
 
 Para compilar: `gradle -p watch-ghz-android :app:assembleDebug :app:lintDebug`.
-Paquete independiente: `com.mundox.ghzwatch`, versión 1.2.1. Puede coexistir
+Paquete independiente: `com.mundox.ghzwatch`, versión 1.3.0. Puede coexistir
 con WorldLink y BBY-Q. El APK debug permite instalación mediante ADB inalámbrico
 en Wear OS; abrirlo en el teléfono no lo instala automáticamente en el reloj.
 

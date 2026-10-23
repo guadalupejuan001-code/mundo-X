@@ -13,7 +13,9 @@ public final class MapProtocol {
     public static final String CAPABILITY = "mundox_map_phone_v1";
     public static final Set<String> COMMANDS = java.util.Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
         "HELLO","LEFT","RIGHT","UP","DOWN","ZOOM_IN","ZOOM_OUT","Z_UP","Z_DOWN",
-        "NEXT","PREVIOUS","PLAY","FIELD_UP","FIELD_DOWN","RESET")));
+        "NEXT","PREVIOUS","PLAY","FIELD_UP","FIELD_DOWN","RESET",
+        "LAB_MAGNETIC","LAB_GRAVITY","LAB_BOTH","LAB_PLAY","LAB_RESET",
+        "MAGNETIC_UP","MAGNETIC_DOWN","GRAVITY_UP","GRAVITY_DOWN")));
     private MapProtocol() {}
     public static final class Request {
         public final String session, command;
