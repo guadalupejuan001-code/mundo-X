@@ -46,7 +46,7 @@ public final class FieldExperimentActivity extends Activity implements MessageCl
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);lastFile=new File(getFilesDir(),"worldlink-field-last.csv");
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
-        LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(dp(20),dp(24),dp(20),dp(28));root.setBackgroundColor(BG);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(20),dp(24),dp(20),dp(28));root.setBackgroundColor(BG);
         root.setOnApplyWindowInsetsListener((v,insets)->{
             if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets b=insets.getInsets(WindowInsets.Type.systemBars());v.setPadding(dp(20)+b.left,dp(24)+b.top,dp(20)+b.right,dp(28)+b.bottom);}return insets;
         });
@@ -98,7 +98,7 @@ public final class FieldExperimentActivity extends Activity implements MessageCl
         progress.setText("Preparando primera muestra…");result.setText("El modelo se fijará al terminar los primeros 20 segundos.");
     }
     private void abort(String reason){
-        if(experiment!=null&&experiment.active()){experiment.abort(reason);progress.setText(experiment.status());finish();}
+        if(experiment!=null&&experiment.active()){experiment.abort(reason);progress.setText(experiment.status());saveSession();}
     }
     @Override public void onMessageReceived(MessageEvent event){
         if(!ROUTE.equals(event.getPath()))return;
@@ -128,14 +128,14 @@ public final class FieldExperimentActivity extends Activity implements MessageCl
                     double[] y=experiment.model().predict(s);
                     result.setText(String.format(Locale.US,"Predicción XYZ: %.1f / %.1f / %.1f µT\nModelo fijo · %s",y[0],y[1],y[2],experiment.stage()));
                 }
-                if(!experiment.active())finish();
+                if(!experiment.active())saveSession();
             } else begin.setEnabled(!saving);
         }catch(Exception e){
             if(experiment!=null&&experiment.active())experiment.reject();
             connection.setText("Lectura descartada: "+e.getMessage());
         }
     }
-    private void finish(){
+    private void saveSession(){
         if(experiment==null||saveQueued)return;saveQueued=true;
         if(experiment.stage()==FieldExperiment.Stage.DONE){progress.setText("PRUEBA FINALIZADA");result.setText(experiment.report());}
         saving=true;begin.setEnabled(false);export.setEnabled(false);storageStatus.setText("Guardando mediciones…");
@@ -174,7 +174,7 @@ public final class FieldExperimentActivity extends Activity implements MessageCl
             }catch(Exception e){runOnUiThread(()->storageStatus.setText("Exportación falló: "+e.getMessage()));}
         });
     }
-    private LinearLayout card(LinearLayout parent){LinearLayout box=new LinearLayout(this);box.setOrientation(1);box.setPadding(dp(16),dp(14),dp(16),dp(16));
+    private LinearLayout card(LinearLayout parent){LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(14),dp(16),dp(16));
         GradientDrawable bg=new GradientDrawable();bg.setColor(0xff1b2d24);bg.setCornerRadius(dp(18));box.setBackground(bg);
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=dp(18);parent.addView(box,p);return box;}
     private TextView label(LinearLayout parent,String text,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(text);t.setTextSize(size);t.setTextColor(color);

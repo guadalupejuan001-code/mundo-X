@@ -45,7 +45,7 @@ public final class FieldWatchActivity extends Activity implements SensorEventLis
         if(manager!=null){magnetic=manager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED);
             rotation=manager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);}
         ScrollView scroll=new ScrollView(this);
-        LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);
         root.setPadding(26,28,26,32);root.setBackgroundColor(0xff101a17);
         add(root,"WORLDLINK · CAMPO",14,0xffcbf47e);
         add(root,"PREDICCIÓN FÍSICA",19,0xfff2f6ee);
