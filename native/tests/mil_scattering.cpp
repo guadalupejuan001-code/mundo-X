@@ -92,6 +92,16 @@ int main() {
     input.contact = 0.0;
     const auto free = MIL::run(input);
     require(std::abs(free.norm - 1.0) < 2e-11, "free propagator norm");
+    require(free.factorized_free && !interacting.factorized_free,
+            "use factorization only for known free product");
+    auto general_free = MIL::initial_state(input.sites);
+    MIL::propagate(general_free, input, input.dt);
+    double free_equivalence = 0.0;
+    for (std::size_t i = 0; i < general_free.size(); ++i)
+      free_equivalence = std::max(free_equivalence,
+          std::abs(general_free[i] - free.amplitudes[i]));
+    require(free_equivalence < 1e-10,
+            "factorized free state disagrees with full two-body FFT");
     const double difference = MIL::probability_l1(interacting, free);
     require(difference > 0.005, "contact coupling must affect collision statistics");
     const double interacting_purity = MIL::reduced_purity(interacting.amplitudes, 32);
@@ -133,6 +143,33 @@ int main() {
     require(large.state_bytes == 128 * 128 * sizeof(MIL::Complex),
             "128-site state memory");
 
+    // O(S*N*log N) free evolution: 1024 sites is practical under the same
+    // budget even though 100 steps of interacting N*N FFT are not.
+    input.sites = 1024;
+    input.steps = 100;
+    input.contact = 0.0;
+    const auto large_free = MIL::run(input);
+    require(large_free.factorized_free && large_free.state_bytes == 16 * 1024 * 1024,
+            "1024-site free run and full final state");
+    require(std::abs(large_free.norm - 1.0) < 2e-10,
+            "large free state norm");
+    require(large_free.estimated_work ==
+                MIL::estimate_work(1024, 100, true) &&
+            large_free.estimated_work < MIL::default_work_budget,
+            "factorized work budget must match actual path");
+
+    // Arbitrary pre-entangled input must remain in the full 2D propagation
+    // path even when the interaction U=0.
+    input.sites = 8;
+    input.steps = 16;
+    std::vector<MIL::Complex> entangled(8 * 8);
+    const double bell = 1.0 / std::sqrt(2.0);
+    entangled[0] = {bell, 0.0};
+    entangled[9] = {bell, 0.0};
+    MIL::propagate(entangled, input, input.dt);
+    require(std::abs(MIL::reduced_purity(entangled, 8) - 0.5) < 1e-10,
+            "free propagation must preserve preexisting entanglement");
+
     // Prevent accidental quadratic state blow-ups and malformed inputs.
     input.sites = 1000;
     rejects([&] { MIL::run(input); }, "non-power-of-two lattice accepted");
@@ -161,6 +198,7 @@ int main() {
               << " rk4_l2_coarse=" << coarse_l2
               << " rk4_l2_refined=" << refined_l2
               << " interacting_purity=" << interacting_purity
+              << " free_equivalence=" << free_equivalence
               << " free_purity=" << free_purity
               << " reverse_error=" << max_reverse_error
               << " state_bytes_128=" << large.state_bytes << "\n";
