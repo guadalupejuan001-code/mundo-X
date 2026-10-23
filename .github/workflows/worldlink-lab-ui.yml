@@ -1,0 +1,94 @@
+name: WorldLink Physical Lab - phone and watch
+
+on:
+  push:
+    branches: [main, 'codex/worldlink-physical-lab-ui-20261023', 'codex/worldlink-active-interaction-20261023']
+    paths:
+      - 'worldlink-phone/**'
+      - 'watch-link/**'
+      - '.github/workflows/worldlink-lab-ui.yml'
+  pull_request:
+    paths:
+      - 'worldlink-phone/**'
+      - 'watch-link/**'
+      - '.github/workflows/worldlink-lab-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0'
+      - name: Validate acoustic wave math without Android device
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/worldlink-acoustic-test
+          javac -d /tmp/worldlink-acoustic-test \
+            worldlink-phone/app/src/main/java/com/mundox/worldlink/phone/AcousticWave.java \
+            worldlink-phone/tests/AcousticWaveCheck.java
+          java -cp /tmp/worldlink-acoustic-test AcousticWaveCheck
+      - name: Build standalone Watch4 UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p watch-link -PstandaloneWorldLink=true --no-daemon :app:assembleDebug
+      - name: Build standalone Samsung UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p worldlink-phone --no-daemon :app:assembleDebug
+      - name: Verify both packages and signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p worldlink-lab-dist
+          cp worldlink-phone/app/build/outputs/apk/debug/app-debug.apk \
+            worldlink-lab-dist/WorldLink-Interaccion-Telefono.apk
+          cp watch-link/app/build/outputs/apk/debug/app-debug.apk \
+            worldlink-lab-dist/WorldLink-Interaccion-Reloj.apk
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          "$APKSIGNER" verify --print-certs worldlink-lab-dist/WorldLink-Interaccion-Telefono.apk \
+            > worldlink-lab-dist/phone-signature.txt
+          "$APKSIGNER" verify --print-certs worldlink-lab-dist/WorldLink-Interaccion-Reloj.apk \
+            > worldlink-lab-dist/watch-signature.txt
+          "$AAPT" dump badging worldlink-lab-dist/WorldLink-Interaccion-Telefono.apk \
+            > worldlink-lab-dist/phone-manifest.txt
+          "$AAPT" dump badging worldlink-lab-dist/WorldLink-Interaccion-Reloj.apk \
+            > worldlink-lab-dist/watch-manifest.txt
+          grep -q "package: name='com.mundox.worldlink.active'" worldlink-lab-dist/phone-manifest.txt
+          grep -q "package: name='com.mundox.worldlink.active'" worldlink-lab-dist/watch-manifest.txt
+          PHONE_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' worldlink-lab-dist/phone-signature.txt)
+          WATCH_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' worldlink-lab-dist/watch-signature.txt)
+          test -n "$PHONE_CERT"
+          test "$PHONE_CERT" = "$WATCH_CERT"
+          echo "Matching package IDs and signing certificates verified"
+          sha256sum worldlink-lab-dist/*.apk > worldlink-lab-dist/SHA256SUMS.txt
+          git rev-parse HEAD > worldlink-lab-dist/commit.txt
+      - name: Upload paired APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorldLink-Interaccion-APKs
+          path: worldlink-lab-dist/**
+          retention-days: 14
+          if-no-files-found: error
