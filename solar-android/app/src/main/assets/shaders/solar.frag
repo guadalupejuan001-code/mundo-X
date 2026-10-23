@@ -395,7 +395,9 @@ void main(){
     float closest=uFar;int id=-1;
     for(int j=0;j<MAX_BODIES;j++){
         if(j>=uCount)break;
-        if((candidates&(1u<<uint(j)))==0u)continue;
+        // Preserve full nearest-body identity, including subpixel satellite
+        // silhouettes. Their inexpensive intersection test is always exact;
+        // Ether region masks prune costly media and ring work separately.
         // A gas giant's reference radius is not a solid surface. During entry,
         // only its participating cloud/haze volume may occlude the view.
         if(entering(j)&&uAtmosphere[j].w==5.0)continue;
