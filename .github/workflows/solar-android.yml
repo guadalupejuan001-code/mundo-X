@@ -139,7 +139,8 @@ jobs:
           apk=Path("solar-presentation-dist/COSMIC-X-Solar-Cine-X.apk")
           with ZipFile(apk) as z:
               assert z.testzip() is None
-              assert "uniform int uCinematic" in z.read("assets/shaders/solar.frag").decode()
+              assert "uniform int uCinematic" in z.read("assets/shaders/solar-cine.frag").decode()
+              assert "uniform int uCinematic" not in z.read("assets/shaders/solar.frag").decode()
               assert {"lib/arm64-v8a/libmx_graphics.so",
                       "lib/x86_64/libmx_graphics.so"} <= set(z.namelist())
           Path("solar-presentation-dist/SHA256SUMS.txt").write_text(
