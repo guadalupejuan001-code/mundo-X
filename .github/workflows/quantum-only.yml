@@ -70,6 +70,12 @@ jobs:
           set -euo pipefail
           ctest --test-dir quantum-build --output-on-failure -j 2 | tee quantum-build/ctest.log
 
+      - name: Measure memory copy and first-write costs
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./quantum-build/ether_memory_copy_benchmark | tee quantum-build/ether-memory-cow-benchmark.jsonl
+
       - name: Run XI inverse-memory smoke program
         shell: bash
         run: |
@@ -101,5 +107,6 @@ jobs:
             quantum-build/compile-scope.json
             quantum-build/ctest.log
             quantum-build/quantum-demo.jsonl
+            quantum-build/ether-memory-cow-benchmark.jsonl
           if-no-files-found: error
           retention-days: 14
