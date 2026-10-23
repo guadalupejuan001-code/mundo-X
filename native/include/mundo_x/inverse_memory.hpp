@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mundo_x/infinite_core.hpp"
+#include "mundo_x/cow_sharded_map.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -74,11 +75,11 @@ class InverseMemory {
   // The memory snapshot may come from a runtime with a different core budget.
   void validate_quantum_bindings(const InfiniteCore& core) const {
     const auto digits = std::min(limits_.max_address_digits, core.limits().max_address_digits);
-    for (const auto& binding : *bindings_) {
+    bindings_->for_each_sorted([&](const auto& binding) {
       if (binding.second.size() > digits)
         throw std::length_error("Inverse Memory quantum binding exceeds core address budget");
       (void)add_small(binding.second, 7, digits);
-    }
+    });
   }
 
   // Replace the global rule and discard every finite difference/binding.
@@ -97,12 +98,12 @@ class InverseMemory {
 
   ReadResult read(const std::string& logical_address, const InfiniteCore& core) const {
     const auto address = canonical(logical_address);
-    const auto binding = bindings_->find(address);
-    if (binding == bindings_->end()) {
-      const auto changed = overrides_->find(address);
-      return {true, changed == overrides_->end() ? background_ : changed->second, {}};
+    const auto* binding = bindings_->get(address);
+    if (!binding) {
+      const auto* changed = overrides_->get(address);
+      return {true, changed ? *changed : background_, {}};
     }
-    return read_quantum(address, binding->second, core);
+    return read_quantum(address, *binding, core);
   }
 
   // Classical stores preserve the rule-first representation. An unbound byte
@@ -111,9 +112,9 @@ class InverseMemory {
   // deterministic; a superposed/entangled byte is never collapsed implicitly.
   void store(const std::string& logical_address, std::uint8_t value, InfiniteCore& core) {
     const auto address = canonical(logical_address);
-    const auto binding = bindings_->find(address);
-    if (binding != bindings_->end()) {
-      const auto current = read_quantum(address, binding->second, core);
+    const auto* binding = bindings_->get(address);
+    if (binding) {
+      const auto current = read_quantum(address, *binding, core);
       if (!current.deterministic)
         throw std::runtime_error("Inverse Memory store requires an explicit quantum decision");
       std::vector<InfiniteCore::Gate> flips;
@@ -124,25 +125,25 @@ class InverseMemory {
       return;
     }
 
-    const auto old = overrides_->find(address);
+    const auto* old = overrides_->get(address);
     if (value == background_) {
-      if (old == overrides_->end()) return;
+      if (!old) return;
       require_revision();
       writable_overrides().erase(address);
       ++revision_;
       return;
     }
-    if (old != overrides_->end()) {
-      if (old->second == value) return;
+    if (old) {
+      if (*old == value) return;
       require_revision();
-      writable_overrides().at(address) = value;
+      writable_overrides().assign_existing(address, value);
       ++revision_;
       return;
     }
     if (overrides_->size() == limits_.max_overrides)
       throw std::length_error("Inverse Memory classical override budget exceeded");
     require_revision();
-    writable_overrides().emplace(address, value);
+    writable_overrides().insert(address, value);
     ++revision_;
   }
 
@@ -157,25 +158,24 @@ class InverseMemory {
     const auto base = infinite_detail::canonical_address(
         qbase, std::min(limits_.max_address_digits, core.limits().max_address_digits));
     (void)add_small(base, 7, core.limits().max_address_digits);
-    const auto found = bindings_->find(address);
-    if (found != bindings_->end()) {
-      if (found->second == base) return;
+    const auto* found = bindings_->get(address);
+    if (found) {
+      if (*found == base) return;
       require_revision();
-      writable_bindings().at(address) = base;
+      writable_bindings().assign_existing(address, base);
       ++revision_;
       return;
     }
     if (bindings_->size() == limits_.max_quantum_bindings)
       throw std::length_error("Inverse Memory quantum binding budget exceeded");
     require_revision();
-    writable_bindings().emplace(address, base);
+    writable_bindings().insert(address, base);
     ++revision_;
   }
 
   void unbind_quantum_byte(const std::string& logical_address) {
     const auto address = canonical(logical_address);
-    const auto found = bindings_->find(address);
-    if (found == bindings_->end()) return;
+    if (!bindings_->get(address)) return;
     require_revision();
     writable_bindings().erase(address);
     ++revision_;
@@ -209,10 +209,12 @@ class InverseMemory {
     std::ostringstream out;
     out.imbue(std::locale::classic());
     out << "MXIM1 " << unsigned(background_) << '\n';
-    for (const auto& item : *overrides_)
+    overrides_->for_each_sorted([&](const auto& item) {
       out << "O " << item.first << ' ' << unsigned(item.second) << '\n';
-    for (const auto& item : *bindings_)
+    });
+    bindings_->for_each_sorted([&](const auto& item) {
       out << "Q " << item.first << ' ' << item.second << '\n';
+    });
     return out.str();
   }
 
@@ -230,7 +232,7 @@ class InverseMemory {
       if (kind == "O") {
         if (result.overrides_->size() == limits.max_overrides)
           throw std::length_error("Inverse Memory snapshot override budget exceeded");
-        if (!result.overrides_->emplace(address, byte_value(payload, "Inverse Memory byte")).second)
+        if (!result.overrides_->insert(address, byte_value(payload, "Inverse Memory byte")))
           throw std::invalid_argument("Duplicate Inverse Memory override");
       } else if (kind == "Q") {
         const auto base = infinite_detail::canonical_address(payload, limits.max_address_digits);
@@ -238,7 +240,7 @@ class InverseMemory {
         (void)add_small(base, 7, limits.max_address_digits);
         if (result.bindings_->size() == limits.max_quantum_bindings)
           throw std::length_error("Inverse Memory snapshot binding budget exceeded");
-        if (!result.bindings_->emplace(address, base).second)
+        if (!result.bindings_->insert(address, base))
           throw std::invalid_argument("Duplicate Inverse Memory binding");
       } else {
         throw std::invalid_argument("Unknown Inverse Memory snapshot record");
@@ -253,8 +255,8 @@ class InverseMemory {
   }
 
  private:
-  using AddressMap = std::map<std::string, std::uint8_t, infinite_detail::AddressLess>;
-  using BindingMap = std::map<std::string, std::string, infinite_detail::AddressLess>;
+  using AddressMap = memory_detail::CowShardedMap<std::uint8_t>;
+  using BindingMap = memory_detail::CowShardedMap<std::string>;
 
   std::uint8_t background_ = 0;
   Limits limits_;
