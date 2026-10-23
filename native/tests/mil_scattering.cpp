@@ -51,6 +51,13 @@ int main() {
     require(std::abs(free.norm - 1.0) < 2e-11, "free propagator norm");
     const double difference = MIL::probability_l1(interacting, free);
     require(difference > 0.005, "contact coupling must affect collision statistics");
+    const double interacting_purity = MIL::reduced_purity(interacting.amplitudes, 32);
+    const double free_purity = MIL::reduced_purity(free.amplitudes, 32);
+    require(interacting_purity < 0.95,
+            "contact collision should entangle initially independent particles");
+    require(std::abs(free_purity - 1.0) < 1e-10,
+            "noninteracting product should remain separable");
+
     const auto repeat = MIL::run(input);
     require(MIL::probability_l1(free, repeat) == 0.0, "deterministic re-execution");
 
@@ -87,6 +94,8 @@ int main() {
               << " initial_contact=" << interacting.initial_contact
               << " peak_contact=" << interacting.peak_contact
               << " interacting_vs_free_l1=" << difference
+              << " interacting_purity=" << interacting_purity
+              << " free_purity=" << free_purity
               << " reverse_error=" << max_reverse_error
               << " state_bytes_128=" << large.state_bytes << "\n";
     return 0;
