@@ -748,13 +748,32 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Observación solar");
             CaptureListener requested=capture;Capture result=null;
             if(requested!=null){
-                int rowBytes=width*4,blockRows=Math.min(height,128);byte[] rgba=new byte[rowBytes*height];
-                ByteBuffer pixels=direct(rowBytes*blockRows);
-                for(int row=0;row<height;row+=blockRows){
-                    int rows=Math.min(blockRows,height-row);pixels.clear();glReadPixels(0,row,width,rows,GL_RGBA,GL_UNSIGNED_BYTE,pixels);check("Lectura solar");
-                    pixels.rewind();pixels.get(rgba,row*rowBytes,rows*rowBytes);
+                if(smart4kCaptureError!=null){
+                    // Never silently export the 960px preview as a 4K image.
+                    result=Capture.failed(smart4kCaptureError);
+                    smart4kCaptureError=null;
+                    capture=null;
+                }else{
+                    int rowBytes=width*4,blockRows=Math.min(height,128);
+                    byte[] rgba=new byte[rowBytes*height];
+                    ByteBuffer pixels=direct(rowBytes*blockRows);
+                    for(int row=0;row<height;row+=blockRows){
+                        int rows=Math.min(blockRows,height-row);
+                        pixels.clear();glReadPixels(0,row,width,rows,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+                        check("Lectura solar");pixels.rewind();
+                        pixels.get(rgba,row*rowBytes,rows*rowBytes);
+                    }
+                    result=new Capture(width,height,rgba);
+                    capture=null;
                 }
-                result=new Capture(width,height,rgba);capture=null;
+                if(smart4kRequested&&smart4kCapturePending){
+                    // A full UHD image has been READ from the native UHD FBO.
+                    // Restore the lightweight live preview on the NEXT frame;
+                    // no 4K buffer is misrepresented as a continuous preview.
+                    smart4kCapturePending=false;
+                    framebufferDirty=true;
+                    smart4kGovernor.reset();
+                }
             }
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
             glBindFramebuffer(GL_READ_FRAMEBUFFER,framebuffer);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
@@ -763,7 +782,20 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Pantalla solar");hasFrame=true;frameCount++;
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){
+                statusNanos=now;
+                final String viewMode=smart4kRequested?
+                        (smart4kCapturePending?" · PNG 4K":" · 4K Fluido: visor adaptable / PNG 4K"):
+                        isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"";
+                listener.status(String.format(Locale.US,
+                        "%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",
+                        fps,width,height,viewMode,uploadedRevision,
+                        resolutionMessage==null?"":"\n"+resolutionMessage));
+            }
+            if(smart4kRequested&&!smart4kCapturePending&&requested==null&&!paused){
+                int before=smart4kGovernor.limit();
+                if(smart4kGovernor.observe(fps,now)!=before)framebufferDirty=true;
+            }
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
@@ -932,9 +964,35 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
-    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;}
-    public void setUhd4k(boolean enabled){requestedUhd=enabled; if(enabled)requestedUltra=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
-    public void setUhd8k(boolean enabled){requestedUltra=enabled; if(enabled)requestedUhd=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
+    public void setQuality(int maxDimension){
+        quality=Math.max(360,Math.min(1920,maxDimension));
+        requestedUhd=requestedUltra=false;smart4kRequested=false;
+        resolutionMessage=null;framebufferDirty=true;
+    }
+    public void setUhd4k(boolean enabled){
+        requestedUhd=enabled;if(enabled)requestedUltra=false;
+        smart4kRequested=false;resolutionMessage=null;framebufferDirty=true;
+        if(isOverview)resetDistance=true;
+    }
+    public void setUhd8k(boolean enabled){
+        requestedUltra=enabled;if(enabled)requestedUhd=false;
+        smart4kRequested=false;resolutionMessage=null;framebufferDirty=true;
+        if(isOverview)resetDistance=true;
+    }
+    /** Live 16:9 640/960/1440 preview; complete native 4K only when taking a PNG. */
+    public void setSmart4k(boolean enabled){
+        if(smart4kRequested==enabled)return;
+        smart4kRequested=enabled;
+        smart4kCapturePending=false;
+        smart4kCaptureError=null;
+        if(enabled){
+            requestedUhd=requestedUltra=false;
+            smart4kGovernor.reset();
+        }
+        resolutionMessage=null;framebufferDirty=true;
+    }
+    public boolean isSmart4k(){return smart4kRequested;}
+    public int smart4kPreviewLimit(){return smart4kGovernor.limit();}
     public boolean isUhd4k(){return activeUhd&&framebuffer!=0&&((width==3840&&height==2160)||(width==2160&&height==3840));}
     public boolean isUhd8k(){return activeUltra&&framebuffer!=0&&((width==7680&&height==4320)||(width==4320&&height==7680));}
     public int renderedWidth(){return width;}
@@ -986,7 +1044,13 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     /** Request on the GL thread. The callback receives the next complete frame. */
     public void requestCapture(CaptureListener listener){
         if(listener==null)throw new IllegalArgumentException("Falta el receptor de la captura");
-        if(capture!=null)throw new IllegalStateException("Ya existe una captura pendiente");capture=listener;
+        if(capture!=null)throw new IllegalStateException("Ya existe una captura pendiente");
+        capture=listener;
+        smart4kCaptureError=null;
+        if(smart4kRequested){
+            smart4kCapturePending=true;
+            framebufferDirty=true;
+        }
     }
     /** Delete GPU resources while the GL context is current; the core is borrowed. */
     public void release(){
