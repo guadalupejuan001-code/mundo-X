@@ -65,10 +65,14 @@ jobs:
             solar-android/app/src/main/java/com/mundox/solar/SolarEnvironment.java \
             solar-android/app/src/main/java/com/mundox/solar/SolarFlightPhysics.java \
             solar-android/app/src/main/java/com/mundox/solar/SolarVisualEther.java \
+            solar-android/app/src/main/java/com/mundox/solar/SolarRenderPolicy.java \
+            graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java \
+            solar-android/tests/SolarRenderPolicyChecks.java \
             solar-android/tests/SolarDataChecks.java \
             solar-android/tests/SolarVisualEtherChecks.java
           java -cp solar-science-classes com.mundox.solar.SolarDataChecks | tee solar-science.log
           java -cp solar-science-classes com.mundox.solar.SolarVisualEtherChecks | tee solar-visual-ether.log
+          java -cp solar-science-classes com.mundox.solar.SolarRenderPolicyChecks | tee solar-render-policy.log
 
       - name: Install pinned Android build tools
         shell: bash
