@@ -25,6 +25,8 @@ import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Standalone real-physics laboratory for Galaxy Watch4 Classic.
@@ -40,6 +42,10 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
     private final Handler handler=new Handler(Looper.getMainLooper());
     private PhotonEmitter photons;
     private SoundFieldEmitter sound;
+    private final ExecutorService quantumWorker=Executors.newSingleThreadExecutor();
+    private TextView quantumReport;
+    private boolean quantumBusy;
+    private int quantumGeneration;
     private TelemetryChart chart;
     private TextView linkStatus, watchName, lightValue, fieldValue, motionValue, pulseValue;
     private TextView caption, experiment, measurement, lastSignal, soundStatus;
@@ -75,6 +81,7 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
         activityVisible=false;
         armed=false;
         measuring=false;
+        ++quantumGeneration;
         photons.off();
         sound.stop();
         handler.removeCallbacks(heartbeat);
@@ -84,6 +91,8 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
     }
     @Override protected void onDestroy() {
         photons.off();
+        ++quantumGeneration;
+        quantumWorker.shutdown();
         sound.close();
         super.onDestroy();
     }
@@ -302,6 +311,21 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
             showFeedback("Solicitud del reloj bloqueada: activa CONTROL REMOTO en el móvil.");
             return;
         }
+        if("quantum".equals(cmd)) {
+            runQuantum(true, -1f);
+            return;
+        }
+        if(cmd.startsWith("quantum:") && cmd.length()<=22) {
+            try {
+                int angularHundredths=Integer.parseInt(cmd.substring(8));
+                if(angularHundredths>=0 && angularHundredths<=1800) {
+                    runQuantum(true,angularHundredths/100f);
+                    return;
+                }
+            } catch(NumberFormatException ignored){}
+            showFeedback("Dato del gesto inválido; no se emitió nada.");
+            return;
+        }
         switch(cmd) {
             case "tone:220": playTone(220);break;
             case "tone:440": playTone(440);break;
@@ -320,9 +344,95 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
         showFeedback(result);
     }
     private void stopSound(){
+        ++quantumGeneration;
         sound.stop();
         if(soundStatus!=null)soundStatus.setText("Salida sonora detenida");
         showFeedback("Emisión acústica detenida");
+    }
+
+    private void runQuantum(boolean emitPhysical,float angularOverride) {
+        if(quantumBusy) {
+            showFeedback("MIL/Ether calculando un estado: espera a que termine antes de repetir.");
+            return;
+        }
+        if(!QuantumBridge.available()) {
+            showFeedback("Falta biblioteca nativa del núcleo: "+QuantumBridge.problem());
+            return;
+        }
+        final boolean fresh=SystemClock.elapsedRealtime()-lastReceipt<6500L;
+        final float m=fresh && (lastMask&4)!=0 && Float.isFinite(mag)?mag:-1f;
+        final float rotation=Float.isFinite(angularOverride) && angularOverride>=0
+                ? angularOverride
+                : fresh && (lastMask&3)==3 && Float.isFinite(motion)?motion:-1f;
+        final float light=fresh && (lastMask&16)!=0 && Float.isFinite(lux)?lux:-1f;
+        final String source=m>=0 || rotation>=0 || light>=0
+                ? "Reloj físico · parámetros medidos"
+                : "Sin señal Watch4 · parámetros neutros explícitos";
+        final int ticket=++quantumGeneration;
+        quantumBusy=true;
+        if(quantumReport!=null)quantumReport.setText("MIL 1.000 + Ether COW256 calculando...\n"+source);
+        quantumWorker.execute(()->{
+            try {
+                JSONObject state=QuantumBridge.evolve(m,rotation,light);
+                final int hz=state.getInt("frequency_hz");
+                runOnUiThread(()->{
+                    quantumBusy=false;
+                    if(!activityVisible || ticket!=quantumGeneration)return;
+                    String output="ESTADO BELL SIMULADO · q0 ↔ q999\n"+
+                            String.format(Locale.US,"ZZ = %+.4f   XX = %+.4f\n",
+                                state.optDouble("zz"),state.optDouble("xx"))+
+                            String.format(Locale.US,"MIL: %d componentes · %d bytes lógicos\n",
+                                state.optInt("components"),state.optInt("mil_logical_bytes"))+
+                            String.format(Locale.US,"Ether: %d qubits activos · %d entradas memoria\n",
+                                state.optInt("ether_active_qubits"),
+                                state.optInt("ether_memory_overrides"))+
+                            String.format(Locale.US,"Fase: %.3f rad · onda calculada: %d Hz\n",
+                                state.optDouble("phase"),hz)+
+                            String.format(Locale.US,"Cálculo: %.2f ms · evento %d\n",
+                                state.optDouble("calculation_ms"),state.optInt("event"))+
+                            source+"\n";
+                    if(emitPhysical) {
+                        String emission=sound.emitTone(hz);
+                        output+="SALIDA REAL: "+emission;
+                        showFeedback(emission+" · elegida por MIL, no por un tono fijo.");
+                    } else output+="SIN EMISIÓN EXTERNA · Pulsa ENLAZAR ESTADO → SONIDO para actuar.";
+                    if(quantumReport!=null)quantumReport.setText(output);
+                });
+            } catch(Exception error) {
+                runOnUiThread(()->{
+                    quantumBusy=false;
+                    if(ticket==quantumGeneration && activityVisible) {
+                        String message="No se obtuvo un estado MIL válido: "+error.getMessage();
+                        if(quantumReport!=null)quantumReport.setText(message);
+                        showFeedback(message);
+                    }
+                });
+            }
+        });
+    }
+
+    private void resetQuantum() {
+        if(quantumBusy) {showFeedback("El cálculo actual debe finalizar primero.");return;}
+        if(!QuantumBridge.available()){showFeedback(QuantumBridge.problem());return;}
+        final int ticket=++quantumGeneration;
+        quantumBusy=true;
+        quantumWorker.execute(()->{
+            try {
+                JSONObject result=new JSONObject(QuantumBridge.nativeReset());
+                if(!result.optBoolean("ok"))throw new IllegalStateException(result.optString("error"));
+                runOnUiThread(()->{
+                    quantumBusy=false;
+                    if(!activityVisible||ticket!=quantumGeneration)return;
+                    if(quantumReport!=null)quantumReport.setText("Estado reiniciado: Ether y MIL preparados de cero.\nNo se ha realizado ningún cambio físico.");
+                    showFeedback("MIL y Ether reiniciados");
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    quantumBusy=false;
+                    if(activityVisible&&ticket==quantumGeneration)showFeedback("Error al reiniciar MIL/Ether: "+e.getMessage());
+                });
+            }
+        });
     }
 
     private void showFeedback(String message){
@@ -360,6 +470,28 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
         root.addView(label("Reloj  →  Orden  →  Campo físico  →  Materia",12,MUTED,false));
 
         // PRIMARY TASK: actuate, not watch a passive sensor dashboard.
+        LinearLayout quantumCard=card(root);
+        quantumCard.addView(label("00  /  MIL CORE 1000 + ETHER OPTIMIZADO",12,GREEN,true));
+        quantumCard.addView(label("PUENTE CUÁNTICO → FÍSICO",20,WHITE,true));
+        quantumCard.addView(label("El Watch4 transmite datos clásicos. MIL prepara un estado Bell "
+                +"simulado entre q0 y q999; su correlación XX determina una frecuencia que "
+                +"el altavoz emite físicamente. Ether conserva eventos usando memoria COW de 256 páginas.",
+                12,MUTED,false));
+        actionButton(quantumCard,"PREPARAR BELL q0 ↔ q999 (SIMULADO)",
+                ()->runQuantum(false,-1f),false);
+        actionButton(quantumCard,"MIL + ETHER → EMITIR ONDA REAL",
+                ()->runQuantum(true,-1f),true);
+        actionButton(quantumCard,"REINICIAR MIL / ETHER",this::resetQuantum,false);
+        quantumReport=label(QuantumBridge.available()
+                ? "Núcleo original conectado · pulsa PREPARAR BELL"
+                : "Error al cargar el motor MIL/Ether: "+QuantumBridge.problem(),
+                12,WHITE,false);
+        quantumReport.setPadding(0,dp(10),0,dp(4));
+        quantumCard.addView(quantumReport);
+        quantumCard.addView(label("La correlación Bell aquí es virtual. La emisión de sonido "
+                +"es física. Para entrelazar fotones reales se necesita una fuente cuántica "
+                +"y detectores, que el reloj no incorpora.",11,MUTED,false));
+
         LinearLayout interactionCard=card(root);
         interactionCard.addView(label("01  /  ACTUAR SOBRE EL ENTORNO",12,GREEN,true));
         interactionCard.addView(label("CONTROL DE ONDAS",22,WHITE,true));
