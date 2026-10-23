@@ -40,7 +40,7 @@ import org.json.JSONObject;
 /** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
-    private static final int LEGACY_TESTS = 13;
+    private static final int LEGACY_TESTS = 14;
     private static final int TEST_QUALITY = 640;
     private static final long FRAME_TIMEOUT_MS = 30_000;
     private static final long UHD_FRAME_TIMEOUT_MS = 150_000;
@@ -102,6 +102,7 @@ public final class SolarInstrumentation extends Instrumentation {
             ready(60_000);
 
             runCase("native_gles_launch_and_textures", this::launchAndTextures);
+            runCase("ether_visual_exact_candidate_frames", this::etherVisualExact);
             runCase("astronomy_and_magnetic_classification", this::astronomyAndMagnetism);
             runCase("native_ether_fusion_and_readonly_observation", this::nativeEtherFusion);
             runCase("quantum_coupled_and_uncoupled_frames", this::quantumCoupling);
@@ -219,6 +220,59 @@ public final class SolarInstrumentation extends Instrumentation {
         metrics.put("packagedNasaTextures", textures);
         metrics.put("uploadedNasaTextures", 3);
         metrics.put("initialBrightPixels", bright(earth));
+    }
+
+    /**
+     * Draw the same paused scene with exact all-bodies evaluation and with the
+     * new tile mask. Compare real framebuffer pixels rather than just a
+     * CPU-side candidate count. No independent quantum world is constructed.
+     */
+    private void etherVisualExact() throws Exception {
+        int active=0;
+        double bestRatio=1.0;
+        JSONArray comparisons=new JSONArray();
+        for(int body:new int[]{-1,3,6,9}){
+            prepare(body,false,false);
+            gl(()->activity.renderer().setCandidateCulling(false));
+            SolarRenderer.Capture reference=frame();
+            gl(()->activity.renderer().setCandidateCulling(true));
+            SolarRenderer.Capture tiled=frame();
+            boolean enabled=activity.renderer().candidateCullingActive();
+            double ratio=activity.renderer().candidateReferenceRatio();
+            if(enabled){active++;bestRatio=Math.min(bestRatio,ratio);}
+            int mismatch=changed(reference,tiled);
+            comparisons.put(new JSONObject().put("body",body).put("active",enabled)
+                    .put("ratio",ratio).put("changedPixels",mismatch)
+                    .put("width",tiled.width).put("height",tiled.height));
+            if(mismatch!=0){
+                save("ether-visual-reference-"+body+".png",reference);
+                save("ether-visual-candidates-"+body+".png",tiled);
+            }
+            expect(mismatch==0,"Ether Visual changed reference pixels for body "+body+
+                    ": "+mismatch+"; "+activity.renderer().candidateFailureNotice());
+        }
+        // Inside an atmosphere, the camera may be enclosed by the candidate
+        // bounds. Test that case too; it cannot silently cull local medium.
+        prepare(3,false,false);
+        gl(()->activity.renderer().enterAtmosphere(3));
+        gl(()->activity.renderer().setCandidateCulling(false));
+        SolarRenderer.Capture skyReference=frame();
+        gl(()->activity.renderer().setCandidateCulling(true));
+        SolarRenderer.Capture skyCandidates=frame();
+        if(activity.renderer().candidateCullingActive())active++;
+        int skyMismatch=changed(skyReference,skyCandidates);
+        if(skyMismatch!=0){
+            save("ether-visual-entry-reference.png",skyReference);
+            save("ether-visual-entry-candidates.png",skyCandidates);
+        }
+        expect(skyMismatch==0,"Atmospheric entry differed with candidate masks");
+        expect(active>0,"No GPU candidate plan was enabled; "+activity.renderer().candidateFailureNotice());
+        expect(bestRatio<1.0,"No selective candidate reduction in outside-camera cases");
+        metrics.put("etherVisual",new JSONObject().put("masksActiveInScenes",active)
+                .put("bestCandidateRatio",bestRatio).put("entryChangedPixels",skyMismatch)
+                .put("frameComparisons",comparisons));
+        prepare(3,false,false);
+        gl(()->activity.renderer().setCandidateCulling(true));
     }
 
     private void astronomyAndMagnetism() throws Exception {
