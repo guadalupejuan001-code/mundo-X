@@ -1,0 +1,86 @@
+name: Ether World - native spatial simulation Android APK
+
+on:
+  push:
+    branches: [main, 'codex/ether-world-spatial-simulation-20261023']
+    paths:
+      - 'ether-world-android/**'
+      - 'native/include/mundo_x/ether_world.hpp'
+      - 'native/include/mundo_x/ether_world_renderer.hpp'
+      - '.github/workflows/ether-world-android.yml'
+  pull_request:
+    paths:
+      - 'ether-world-android/**'
+      - 'native/include/mundo_x/ether_world.hpp'
+      - 'native/include/mundo_x/ether_world_renderer.hpp'
+      - '.github/workflows/ether-world-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout original Mundo X
+        uses: actions/checkout@v4
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configure Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Native canonical engine regression and world exact oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ether-world-test
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
+            -I native/include \
+            ether-world-android/tests/ether_world_smoke.cpp \
+            -o /tmp/ether-world-test/ether_world_smoke
+          /tmp/ether-world-test/ether_world_smoke | tee /tmp/ether-world-test/world-regression.log
+      - name: Build standalone Android app with original Ether Render X
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p ether-world-android --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify APK, library, 16KB page support and artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ether-world-dist
+          cp ether-world-android/app/build/outputs/apk/debug/app-debug.apk \
+            ether-world-dist/Mundo-X-Ether-World.apk
+          cp /tmp/ether-world-test/world-regression.log ether-world-dist/native-regression.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            ether-world-dist/Mundo-X-Ether-World.apk > ether-world-dist/signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+            ether-world-dist/Mundo-X-Ether-World.apk > ether-world-dist/package.txt
+          grep -q "package: name='com.mundox.etherworld'" ether-world-dist/package.txt
+          unzip -Z1 ether-world-dist/Mundo-X-Ether-World.apk \
+            | grep -q '^lib/arm64-v8a/libether_world.so$'
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 \
+            ether-world-dist/Mundo-X-Ether-World.apk > ether-world-dist/alignment.txt
+          sha256sum ether-world-dist/Mundo-X-Ether-World.apk \
+            > ether-world-dist/SHA256SUMS.txt
+          git rev-parse HEAD > ether-world-dist/commit.txt
+      - name: Upload tested APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-Ether-World-APK
+          path: ether-world-dist/**
+          retention-days: 14
+          if-no-files-found: error
