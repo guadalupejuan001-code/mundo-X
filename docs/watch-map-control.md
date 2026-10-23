@@ -9,13 +9,15 @@ Esta versión incluye **dos APK distintos**, compilados juntos y firmados con la
 2. Mantén reloj y teléfono emparejados en Galaxy Wearable. Ambos requieren Google Play services compatible.
 3. Abre **Mundo X · Mapa** en el teléfono y espera a ver el mapa.
 4. En el reloj abre **Mundo X · GHZ → MAPA 4D · MANDO → CONECTAR TELÉFONO**.
-5. Cuando aparezca **APLICADO**, usa «VISTA · CAMBIAR» para alternar entre vista, tiempo y campo. Mantén ambas apps abiertas.
+5. Cuando aparezca **APLICADO**, usa «VISTA · CAMBIAR» para alternar entre vista, tiempo, campo, objetos y fuerzas. Mantén ambas apps abiertas.
 
 | Modo | Controles |
 | --- | --- |
 | Vista | Giro horizontal, inclinación y zoom |
 | Tiempo | Captura anterior/siguiente, reproducir/pausar y reiniciar vista |
 | Campo | Corte de altura Z y factor del dipolo de la demo, entre ×0,1 y ×3,0 |
+| Objetos | Magnético, gravedad o ambos; mover/pausar y reiniciar partículas |
+| Fuerzas | B virtual de −3 a +3 y gravedad virtual de 0 a 3 |
 
 **Dipolo ± modifica el modelo sintético**, no el campo magnético físico. Conserva la captura seleccionada y la cámara. No modifica los valores de un CSV importado. «Reiniciar vista» restablece cámara, altura y tiempo, y conserva el factor del dipolo.
 
@@ -24,12 +26,12 @@ Puedes editar la demo también desde los botones del teléfono. Exportar datos a
 ## Qué se conecta
 El mando controla el mapa **dentro del APK del teléfono**. La pestaña del sitio web publicado no recibe estas órdenes y no se sincroniza automáticamente. El mapa del APK parte del mismo código (Site commit 2a5ab59abfa13ee2cccd7f056777850304be3568), con controles y exportación Android añadidos.
 
-El enlace usa Wear OS Data Layer MessageClient. Sólo se intercambian órdenes y confirmaciones pequeñas; no se envían muestras de sensores, GPS o datos de salud. Google Play services exige el mismo identificador de paquete y certificado en ambos dispositivos. Prefiere Bluetooth y puede usar infraestructura de Google cuando esa conexión no está disponible. No se implementa un servidor propio ni sockets entre dispositivos.
+El enlace usa Wear OS Data Layer MessageClient. Intercambia órdenes y confirmaciones pequeñas. Si el usuario activa MEDIR SENSORES, también envía vectores del magnetómetro y del sensor de gravedad, su edad, precisión y modelo del reloj. No solicita GPS ni datos de salud. Google Play services exige el mismo identificador de paquete y certificado en ambos dispositivos. Prefiere Bluetooth y puede usar infraestructura de Google cuando esa conexión no está disponible. No se implementa un servidor propio ni sockets entre dispositivos.
 
 La escucha sólo se activa mientras las apps están abiertas. El reloj confirma una orden únicamente cuando recibe la respuesta del código del mapa, no por el mero éxito de sendMessage. Hay un tiempo de espera de 4 segundos y no hay reenvío automático de órdenes. El teléfono detecta números de secuencia repetidos y no vuelve a aplicar la misma orden.
 
 ## Instalación de pruebas
-La versión 1.3.0 corrige `INSTALL_FAILED_NO_MATCHING_ABIS` (`res=-113`):
+La versión 1.3.0 conserva la corrección introducida en 1.2.1 para `INSTALL_FAILED_NO_MATCHING_ABIS` (`res=-113`):
 el APK del reloj incluye ahora el núcleo compilado para **armeabi-v7a (ARM de 32 bits)**,
 además de ARM64 y el emulador. La versión 1.2.0 omitía ARM32. CI abre el APK final,
 comprueba los encabezados ELF de las tres arquitecturas y verifica sus símbolos JNI.
