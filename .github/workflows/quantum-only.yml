@@ -70,11 +70,37 @@ jobs:
           set -euo pipefail
           ctest --test-dir quantum-build --output-on-failure -j 2 | tee quantum-build/ctest.log
 
-      - name: Measure memory copy and first-write costs
+      - name: Compare bounded memory workloads with pinned main
         shell: bash
         run: |
           set -euo pipefail
+          git worktree add --detach quantum-build/ether-memory-base d4a63cafdb47dc237b07c0d48fe2cf3e254e54b7
+          g++ -std=c++17 -O3 -Wall -Wextra -Wpedantic \
+            -I quantum-build/ether-memory-base/native/include \
+            native/tests/ether_memory_copy_benchmark.cpp \
+            -o quantum-build/ether_memory_before
+          ./quantum-build/ether_memory_before | tee quantum-build/ether-memory-before.jsonl
           ./quantum-build/ether_memory_copy_benchmark | tee quantum-build/ether-memory-cow-benchmark.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          before=json.loads(Path("quantum-build/ether-memory-before.jsonl").read_text())
+          after=json.loads(Path("quantum-build/ether-memory-cow-benchmark.jsonl").read_text())
+          for key in ("overrides", "quantum_bindings", "read_only_transaction_copies",
+                      "write_detaches", "checksum", "failures"):
+              assert before[key] == after[key], (key, before[key], after[key])
+          summary = {
+              "baseline_commit": "d4a63cafdb47dc237b07c0d48fe2cf3e254e54b7",
+              "baseline_copy_and_read_ms": before["copy_and_read_ms"],
+              "candidate_copy_and_read_ms": after["copy_and_read_ms"],
+              "baseline_first_write_ms": before["first_write_detach_ms"],
+              "candidate_first_write_ms": after["first_write_detach_ms"],
+              "same_host_and_compiler": True,
+              "scope": "single bounded host workload, not Android",
+          }
+          Path("quantum-build/ether-memory-comparison.json").write_text(json.dumps(summary, indent=2)+"\\n")
+          print(json.dumps(summary, indent=2))
+          PY
 
       - name: Run XI inverse-memory smoke program
         shell: bash
@@ -107,6 +133,8 @@ jobs:
             quantum-build/compile-scope.json
             quantum-build/ctest.log
             quantum-build/quantum-demo.jsonl
+            quantum-build/ether-memory-before.jsonl
             quantum-build/ether-memory-cow-benchmark.jsonl
+            quantum-build/ether-memory-comparison.json
           if-no-files-found: error
           retention-days: 14
