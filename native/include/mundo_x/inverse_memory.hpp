@@ -74,7 +74,7 @@ class InverseMemory {
   // The memory snapshot may come from a runtime with a different core budget.
   void validate_quantum_bindings(const InfiniteCore& core) const {
     const auto digits = std::min(limits_.max_address_digits, core.limits().max_address_digits);
-    for (const auto& binding : bindings_) {
+    for (const auto& binding : *bindings_) {
       if (binding.second.size() > digits)
         throw std::length_error("Inverse Memory quantum binding exceeds core address budget");
       (void)add_small(binding.second, 7, digits);
