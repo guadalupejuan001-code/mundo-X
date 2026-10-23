@@ -24,8 +24,6 @@ uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
-// Opt-in photographic interpretation for presentations, not extra physics.
-uniform int uCinematic;
 out vec4 outColor;
 
 float hash(float n){return fract(sin(n)*43758.5453123);}
@@ -178,13 +176,7 @@ float sphere(vec3 rd,vec3 centre,float radius){
 vec3 sky(vec3 rd,vec3 drx,vec3 dry){
     vec3 col=vec3(0.0010,0.0018,0.0045);
     float milky=pow(max(0.0,1.0-abs(dot(rd,normalize(vec3(.23,.89,.39))))),20.0);
-    // Evaluate this procedural sky field only once for both photo looks.
-    float galacticBand=0.35+fbm(rd*14.0);
-    col+=milky*vec3(.006,.009,.017)*galacticBand;
-    if(uCinematic==1){
-        // Slight photographic sky exposure, not an observed Milky Way map.
-        col+=milky*vec3(.008,.011,.020)*galacticBand;
-    }
+    col+=milky*vec3(.006,.009,.017)*(0.35+fbm(rd*14.0));
     vec2 uv=vec2(longitude(rd)/(2.0*PI)+.5,asin(clamp(rd.y,-1.0,1.0))/PI+.5);
     vec2 uvWidth=abs(angularGradient(rd,drx))+abs(angularGradient(rd,dry));
     for(int level=0;level<2;level++){
@@ -199,16 +191,6 @@ vec3 sky(vec3 rd,vec3 drx,vec3 dry){
         star*=step(level==0?.9975:.996,h)*(level==0?.85:1.8);
         vec3 tint=mix(vec3(.62,.77,1.0),vec3(1.0,.81,.58),hash(h*419.1));
         col+=star*tint;
-        if(uCinematic==1 && h>.9988){
-            // Filtered lens diffraction: camera illustration, not a new star.
-            float d=length(delta)/max(pixel,.06);
-            float halo=exp(-d*1.7)*.22;
-            float horizontal=exp(-abs(delta.y)/max(pixel*.16,.012))
-                    *exp(-abs(delta.x)/max(pixel*3.5,.04));
-            float vertical=exp(-abs(delta.x)/max(pixel*.16,.012))
-                    *exp(-abs(delta.y)/max(pixel*3.5,.04));
-            col+=(halo+.045*(horizontal+vertical))*tint;
-        }
     }
     return col;
 }
@@ -245,9 +227,6 @@ vec3 surface(vec3 n,int id,vec3 localDx,vec3 localDy,out float ocean,out float c
             vec3 cp=rotY(p,uTime*.00035);
             float cloudNoise=fbm(cp*8.4+vec3(0,noise(cp*4.0)*2.0,0));
             clouds=smoothstep(.51,.69,cloudNoise)*.73;
-            // Presentation emphasis: retain visible oceans/continents under
-            // the illustrative procedural cloud layer.
-            if(uCinematic==1)clouds*=.72;
         }
         c=mix(c,vec3(.95,.98,1.0),clouds);
     }else if(id==2){
@@ -434,29 +413,11 @@ void main(){
             float roughness=clamp(materialRoughness(id,ocean,clouds),.045,.98);
             // Bodies in this catalogue are treated as dielectrics; exposed
             // metal fractions are not invented from unavailable material maps.
-            // The legacy exposure clips Saturn's light bands close to white.
-            // Cine X preserves hue and surface contrast by reducing scene gain.
-            float solarExposure=uCinematic==1?2.15:3.35;
-            color=pbrDirect(albedo,normal,viewDir,light,roughness,0.0)
-                    *solarExposure*visibility;
-            if(uCinematic==1 && (id==5||id==6)){
-                // Gentle warm balance for gaseous bands; illustrative material.
-                color*=id==6?vec3(1.06,.94,.79):vec3(1.06,.98,.90);
-            }
+            color=pbrDirect(albedo,normal,viewDir,light,roughness,0.0)*3.35*visibility;
             color+=albedo*.008;
             // Rounded unit vectors may have a dot product just above one.
             float rim=pow(1.0-clamp(dot(normal,-rd),0.0,1.0),3.5);
             if(!entering(id))color+=atmosphereColor(id)*rim*(.10+.35*smoothstep(-.22,.55,nl))*visibility;
-            if(uCinematic==1 && uAtmosphereEnabled==1 && !entering(id) &&
-                    uAtmosphere[id].z>0.0){
-                // Approximate backlit upper-atmosphere limb and terminator.
-                // Bounded local shading: no new ray marches or material edits.
-                float limb=pow(1.0-clamp(dot(normal,viewDir),0.0,1.0),5.0);
-                float twilight=1.0-smoothstep(-.10,.30,nl);
-                float illuminated=smoothstep(-.35,.65,nl);
-                float rimBoost=(.035+.10*twilight+.12*illuminated)*uAtmosphere[id].z;
-                color+=uAtmosphereColors[id]*limb*rimBoost*visibility;
-            }
             // A planet casts its shadow onto its own rings, and rings dim its day side.
             if(uAppearance[id].w>0.0){
                 vec3 axis=uAxes[id];
@@ -493,12 +454,6 @@ void main(){
         if(b>0.0){float q=length(p+light*b)/uBodies[j].w;shadow=smoothstep(.96,1.04,q);}
         float tint=.55+.2*sin(rr*31.0)+.15*sin(rr*113.0);
         vec3 ring=mix(vec3(.18,.13,.078),vec3(.72,.62,.41),tint);
-        if(uCinematic==1){
-            // Narrow antialiased ringlets, never finer than local pixel support.
-            float ringlet=sin(rr*390.0)*.095
-                    *(1.0-smoothstep(.002,.025,radialWidth));
-            ring*=1.0+ringlet;
-        }
         ring*=.32+.83*abs(dot(axis,light));ring*=.12+.88*shadow;
         if(j==7||j==8)ring*=vec3(.44,.62,.80);
         color=mix(color,ring,opacity*.91);
@@ -517,12 +472,6 @@ void main(){
                     +dot(uEther,vec4(.17,.29,.43,.67)))*uCoupling;
             float rays=.6+.22*sin(angle*15.0+qPhase*3.0)+.16*sin(angle*39.0-uTime*.03+uQ1.x*uCoupling*2.0);
             float halo=exp(-(radius-1.0)*3.5)*.20+exp(-(radius-1.0)*.8)*.006*rays;
-            if(uCinematic==1){
-                // Camera glare around the solar disc, bounded by occlusion above.
-                float streak=pow(abs(cos(angle*2.0)),24.0);
-                halo+=exp(-(radius-1.0)*1.1)*.026
-                        +streak*exp(-(radius-1.0)*.65)*.012;
-            }
             color+=vec3(1.0,.36,.055)*halo;
         }
     }
@@ -551,13 +500,6 @@ void main(){
     // more naturally than the previous exponential clamp.
     color=acesFilm(max(color,vec3(0.0))*1.08);
     color=pow(color,vec3(1.0/2.2));
-    if(uCinematic==1){
-        // Very gentle photographic contrast and chroma for the presentation.
-        // Legacy path remains exactly unchanged when the flag is zero.
-        float luma=dot(color,vec3(.2126,.7152,.0722));
-        color=clamp(mix(vec3(luma),color,1.045),0.0,1.0);
-        color=smoothstep(vec3(0.0),vec3(1.0),color)*.035+color*.965;
-    }
     float vignette=1.0-.14*pow(length(ndc*.59),2.0);
     outColor=vec4(color*vignette,1.0);
 }
