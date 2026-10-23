@@ -122,6 +122,24 @@ class MilScattering {
     for (std::size_t i = 0; i < sites; ++i) total += std::norm(psi[i * sites + i]);
     return total;
   }
+  // Reduced one-particle purity Tr(rho_1^2), with rho_1=Tr_2|psi><psi|.
+  // Equals 1 for a pure product state, below 1 for an entangled two-body pure
+  // state. Explicit O(N^3) observer is deliberately limited to <=128 sites,
+  // and is NEVER invoked inside a propagator step.
+  static double reduced_purity(const std::vector<Complex>& psi, std::size_t sites) {
+    if (sites == 0 || sites > 128 || psi.size() != sites * sites)
+      throw std::invalid_argument("reduced purity needs 1..128 sites and N*N amplitudes");
+    double purity = 0.0;
+    for (std::size_t x = 0; x < sites; ++x)
+      for (std::size_t y = 0; y < sites; ++y) {
+        Complex rho{};
+        for (std::size_t k = 0; k < sites; ++k)
+          rho += psi[x * sites + k] * std::conj(psi[y * sites + k]);
+        purity += std::norm(rho);
+      }
+    return purity;
+  }
+
   static double probability_l1(const Result& a, const Result& b) {
     if (a.sites != b.sites || a.amplitudes.size() != b.amplitudes.size())
       throw std::invalid_argument("incompatible scatter results");
