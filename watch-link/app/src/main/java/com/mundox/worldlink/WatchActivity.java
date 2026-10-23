@@ -43,6 +43,7 @@ public final class WatchActivity extends Activity
     private static final String SAMPLE="/mundox/worldlink/v1/telemetry";
     private static final String HAPTIC="/mundox/worldlink/v1/haptic";
     private static final String LIGHT_REQUEST="/mundox/worldlink/v1/light-request";
+    private static final String SOUND_REQUEST="/mundox/worldlink/v1/sound-command";
     private static final int BODY_REQUEST=702;
     private static final long SAMPLE_INTERVAL_MS=300L, MAX_DURATION_MS=180000L;
     private static final int BG=0xff0c1511, PANEL=0xff223328, WHITE=0xfff1f6ed;
@@ -76,18 +77,30 @@ public final class WatchActivity extends Activity
         TextView brand=label("MUNDO X   ·   WORLDLINK",10,LIME,true);
         brand.setGravity(Gravity.CENTER);
         brand.setLetterSpacing(.05f);root.addView(brand);
-        TextView title=label("CANALIZADOR",17,WHITE,true);
+        TextView title=label("CONTROL FÍSICO",17,WHITE,true);
         title.setGravity(Gravity.CENTER);
         title.setPadding(0,dp(5),0,dp(8));root.addView(title);
 
         LinearLayout heading=panel(root);
-        status=label("EN ESPERA",15,LIME,true);
+        status=label("LISTO PARA INTERACTUAR",14,LIME,true);
         status.setGravity(Gravity.CENTER);heading.addView(status);
-        link=label("Sin datos enviados",11,MUTED,false);
+        link=label("Activa CONTROL REMOTO en el Samsung",11,MUTED,false);
         link.setGravity(Gravity.CENTER);link.setPadding(0,dp(4),0,0);heading.addView(link);
 
+        LinearLayout interaction=panel(root);
+        interaction.addView(label("ACTUAR SOBRE EL ENTORNO",11,LIME,true));
+        interaction.addView(label("El Samsung emitirá ondas de presión física. "
+            +"Activa CONTROL REMOTO en la app del móvil. "
+            +"No necesitas iniciar los sensores para usar estos controles.",
+            10,MUTED,false));
+        control(interaction,"ONDA · 220 Hz",()->sendSound("tone:220"),true);
+        control(interaction,"ONDA · 440 Hz",()->sendSound("tone:440"),false);
+        control(interaction,"BARRER FRECUENCIAS",()->sendSound("sweep"),false);
+        control(interaction,"PARAR EMISIÓN",()->sendSound("stop"),false);
+        pulseButton=control(interaction,"ENVIAR PULSO LUMINOSO",this::requestLight,false);
+
         LinearLayout signals=panel(root);
-        signals.addView(label("SENSORES FÍSICOS",10,LIME,true));
+        signals.addView(label("SENSORES · OPCIONALES",10,LIME,true));
         magneticValue=datum(signals,"CAMPO","— µT");
         lightValue=datum(signals,"LUZ","— lux");
         movementValue=datum(signals,"GIRO","— rad/s");
@@ -97,12 +110,10 @@ public final class WatchActivity extends Activity
             if(running)stop();
             else start();
         },true);
-        pulseButton=control(root,"PEDIR PULSO DE LUZ",this::requestLight,false);
-        pulseButton.setEnabled(false);
-        control(root,"ACTIVAR PULSO (OPCIONAL)",this::allowHeart,false);
-        TextView note=label("Tu cuerpo → señal → móvil → materia.\n"
-                +"La luz y los campos son físicos.\n"
-                +"No es entrelazamiento cuántico.",10,MUTED,false);
+         control(root,"ACTIVAR PULSO (OPCIONAL)",this::allowHeart,false);
+        TextView note=label("ONDA SONORA = PRESIÓN REAL EN EL AIRE.\n"
+                +"No significa cambiar átomos arbitrariamente.\n"
+                +"Frecuencias limitadas · duración breve.",10,MUTED,false);
         note.setGravity(Gravity.CENTER);
         note.setPadding(0,dp(10),0,0);
         root.addView(note);
@@ -130,6 +141,7 @@ public final class WatchActivity extends Activity
             listenerAdded=true;
             Wearable.getMessageClient(this).addListener(this);
         }
+        queryNodes();
     }
     @Override protected void onPause() {
         stop();
@@ -160,7 +172,7 @@ public final class WatchActivity extends Activity
         if(heartEnabled && checkSelfPermission(Manifest.permission.BODY_SENSORS)
                 == PackageManager.PERMISSION_GRANTED)attach(Sensor.TYPE_HEART_RATE);
         startButton.setText("DETENER LECTURA");
-        pulseButton.setEnabled(true);
+        // Actuators do not depend on sensor acquisition.
         status.setText("LEYENDO...");
         status.setTextColor(LIME);
         info="Buscando el Samsung";
@@ -177,7 +189,7 @@ public final class WatchActivity extends Activity
         handler.removeCallbacks(sendLoop);
         if(sensors!=null)sensors.unregisterListener(this);
         if(startButton!=null)startButton.setText("INICIAR LECTURA");
-        if(pulseButton!=null)pulseButton.setEnabled(false);
+        // Keep remote controls usable when sensor acquisition stops.
         if(status!=null)status.setText(wasRunning?"DETENIDO":"EN ESPERA");
         if(link!=null && wasRunning)link.setText("Lecturas detenidas");
     }
@@ -249,13 +261,28 @@ public final class WatchActivity extends Activity
         }
     }
     private void requestLight() {
-        if(!running) {link.setText("Inicia la lectura primero");return;}
-        if(nodes.isEmpty()){link.setText("Necesitas conectar el teléfono");return;}
-        for(String id:nodes) {
-            Wearable.getMessageClient(this).sendMessage(id,LIGHT_REQUEST,new byte[]{1})
-                .addOnFailureListener(e->link.setText("Solicitud fallida: "+e.getClass().getSimpleName()));
-        }
-        link.setText("Solicitud de luz enviada · requiere habilitarla en el móvil");
+        sendRemote(LIGHT_REQUEST,new byte[]{1},"Pulso luminoso solicitado");
+    }
+
+    private void sendSound(String command) {
+        sendRemote(SOUND_REQUEST,command.getBytes(StandardCharsets.UTF_8),
+            "Orden física: "+command+" · activa CONTROL REMOTO en móvil");
+    }
+
+    private void sendRemote(String route,byte[] payload,String message) {
+        Wearable.getNodeClient(this).getConnectedNodes()
+            .addOnSuccessListener(found->{
+                if(found.isEmpty()){
+                    link.setText("No se detectó la app Samsung: revisa Wear OS");
+                    return;
+                }
+                for(Node node:found) {
+                    Wearable.getMessageClient(this).sendMessage(node.getId(),route,payload)
+                        .addOnFailureListener(e->link.setText("Enlace falló: "+e.getClass().getSimpleName()));
+                }
+                link.setText(message);
+            })
+            .addOnFailureListener(e->link.setText("No se pudo conectar con el móvil"));
     }
 
     @Override public void onSensorChanged(SensorEvent event) {
