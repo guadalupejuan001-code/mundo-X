@@ -164,7 +164,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
         previewColor=previewDepth=previewFramebuffer=previewWidth=previewHeight=0;
-        previewUnavailable=false;previewFrame=false;
+        previewUnavailable=false;previewFrame=false;interactionPreview=false;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -997,6 +997,23 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public int surfaceHeight(){return viewHeight;}
     public RenderResolution.Fit displayRect(){return display;}
     public String resolutionNotice(){return resolutionMessage;}
+    /**
+     * Rendering mode, controlled from Solar settings on the GL thread.
+     * Only changes light/material/photographic presentation, not ephemerides.
+     */
+    public void setCinematic(boolean enabled){cinematic=enabled;}
+    public boolean cinematicEnabled(){return cinematic;}
+    public void setInteractivePreviewEnabled(boolean enabled){
+        interactivePreviewEnabled=enabled;
+        if(!enabled)interactionPreview=false;
+    }
+    public boolean interactivePreviewEnabled(){return interactivePreviewEnabled;}
+    /** Touch state should be driven by SolarSurface, on the GL thread. */
+    public void setInteractionPreview(boolean enabled){interactionPreview=enabled;}
+    /** Current presentation, not a claim about output PNG size. */
+    public boolean isPreviewFrame(){return previewFrame;}
+    public int previewRenderedWidth(){return previewWidth;}
+    public int previewRenderedHeight(){return previewHeight;}
     public void setAtmosphereEnabled(boolean enabled){atmosphereEnabled=enabled;}
     public boolean atmosphereEnabled(){return atmosphereEnabled;}
     public void setPaused(boolean paused){this.paused=paused;}
@@ -1044,6 +1061,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     }
     /** Delete GPU resources while the GL context is current; the core is borrowed. */
     public void release(){
+        deletePreviewTarget();
         if(sceneProgram!=0)glDeleteProgram(sceneProgram);if(overlayProgram!=0)glDeleteProgram(overlayProgram);
         glDeleteTextures(2,new int[]{mapTexture,colorTexture},0);
         glDeleteRenderbuffers(1,new int[]{depthBuffer},0);glDeleteFramebuffers(1,new int[]{framebuffer},0);
