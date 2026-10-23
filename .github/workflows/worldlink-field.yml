@@ -1,0 +1,91 @@
+name: WorldLink field prediction experiment
+
+on:
+  push:
+    branches: ['codex/worldlink-field-prediction-20261023']
+    paths:
+      - 'worldlink-phone/**'
+      - 'watch-link/**'
+      - 'native/include/mundo_x/worldlink_field_memory.hpp'
+      - '.github/workflows/worldlink-field.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  field:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Sensor prediction and chronological holdout tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/field-java
+          javac -d /tmp/field-java \
+            worldlink-phone/app/src/main/java/com/mundox/worldlink/phone/FieldExperiment.java \
+            worldlink-phone/app/src/main/java/com/mundox/worldlink/phone/NativeFieldRule.java \
+            worldlink-phone/tests/FieldExperimentCheck.java \
+            worldlink-phone/tests/FieldNativeCheck.java
+          java -cp /tmp/field-java FieldExperimentCheck
+      - name: Canonical Ether storage, rollback and real JNI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/field-native
+          g++ -std=c++17 -O2 -Wall -Wextra -I native/include \
+            worldlink-phone/tests/worldlink_field_memory_test.cpp -o /tmp/field-native/memory-test
+          /tmp/field-native/memory-test
+          g++ -std=c++17 -O2 -shared -fPIC -I native/include \
+            -I "$JAVA_HOME/include" -I "$JAVA_HOME/include/linux" \
+            worldlink-phone/app/src/main/cpp/worldlink_quantum_jni.cpp \
+            -o /tmp/field-native/libworldlink_quantum.so
+          java -Djava.library.path=/tmp/field-native -cp /tmp/field-java \
+            com.mundox.worldlink.phone.FieldNativeCheck
+      - name: Android SDK
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Build phone and watch experiment pair
+        run: |
+          set -euo pipefail
+          gradle -p watch-link -PfieldPrediction=true --no-daemon :app:assembleDebug :app:lintDebug
+          gradle -p worldlink-phone -PfieldPrediction=true --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Verify pair, package and native rule entry points
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p field-dist
+          cp watch-link/app/build/outputs/apk/debug/app-debug.apk field-dist/WorldLink-Campo-Reloj.apk
+          cp worldlink-phone/app/build/outputs/apk/debug/app-debug.apk field-dist/WorldLink-Campo-Telefono.apk
+          for DEVICE in Reloj Telefono; do
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "field-dist/WorldLink-Campo-$DEVICE.apk" > "field-dist/$DEVICE-signature.txt"
+            "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "field-dist/WorldLink-Campo-$DEVICE.apk" > "field-dist/$DEVICE-manifest.txt"
+            grep -q "package: name='com.mundox.worldlink.field'" "field-dist/$DEVICE-manifest.txt"
+          done
+          CERT_PHONE=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' field-dist/Telefono-signature.txt)
+          CERT_WATCH=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' field-dist/Reloj-signature.txt)
+          test -n "$CERT_PHONE"
+          test "$CERT_PHONE" = "$CERT_WATCH"
+          unzip -p field-dist/WorldLink-Campo-Telefono.apk lib/arm64-v8a/libworldlink_quantum.so > /tmp/field-native/android.so
+          "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D /tmp/field-native/android.so > field-dist/native-symbols.txt
+          grep -q Java_com_mundox_worldlink_phone_NativeFieldRule_nativeStore field-dist/native-symbols.txt
+          grep -q Java_com_mundox_worldlink_phone_NativeFieldRule_nativeLoad field-dist/native-symbols.txt
+          cp docs/worldlink-field-experiment.md field-dist/LEEME.md
+          git rev-parse HEAD > field-dist/commit.txt
+          sha256sum field-dist/*.apk > field-dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WorldLink-Campo-APKs
+          path: field-dist/**
+          if-no-files-found: error
+          retention-days: 30

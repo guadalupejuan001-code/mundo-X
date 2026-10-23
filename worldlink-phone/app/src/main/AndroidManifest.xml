@@ -2,15 +2,17 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.flash" android:required="false"/>
-    <application android:label="WorldLink · MIL Ether"
+    <application android:label="${appLabel}"
         android:allowBackup="false" android:supportsRtl="true"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="false"/>
+        <activity android:name=".FieldExperimentActivity" android:exported="false" android:configChanges="orientation|screenSize"/>
+        <activity-alias android:name=".Launcher" android:targetActivity="${launcherActivity}" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity>
+        </activity-alias>
     </application>
 </manifest>
