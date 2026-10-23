@@ -98,10 +98,11 @@ public final class WatchActivity extends Activity
         control(interaction,"ONDA · 220 Hz",()->sendSound("tone:220"),true);
         control(interaction,"ONDA · 440 Hz",()->sendSound("tone:440"),false);
         control(interaction,"BARRER FRECUENCIAS",()->sendSound("sweep"),false);
+        control(interaction,"MIL CORE 1000 → ONDA",()->sendSound("quantum"),true);
         control(interaction,"PARAR EMISIÓN",()->sendSound("stop"),false);
         pulseButton=control(interaction,"ENVIAR PULSO LUMINOSO",this::requestLight,false);
         gestureButton=control(interaction,"ACTIVAR GIRO DE MUÑECA",this::toggleGesture,false);
-        interaction.addView(label("Gira la muñeca con decisión: el reloj ordenará una onda sonora. "
+        interaction.addView(label("Gira la muñeca con decisión: el reloj envía el giro al núcleo MIL 1000. "
                 +"El gesto funciona mientras esta pantalla permanezca abierta.",
                 10,MUTED,false));
 
@@ -331,7 +332,10 @@ public final class WatchActivity extends Activity
                             float strongest=gyro[0];
                             if(Math.abs(gyro[1])>Math.abs(strongest))strongest=gyro[1];
                             if(Math.abs(gyro[2])>Math.abs(strongest))strongest=gyro[2];
-                            sendSound(strongest>=0?"tone:440":"tone:220");
+                            // Send the measured wrist angular rate through the actual
+                            // quantum-core route; do not fabricate a fixed 220/440-Hz tone.
+                            int hundredths=Math.min(1800,Math.max(0,Math.round(magnitude*100f)));
+                            sendSound("quantum:"+hundredths);
                         }
                     }
                 }
