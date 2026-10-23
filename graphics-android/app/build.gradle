@@ -21,3 +21,6 @@ android {
     externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
+
+// Wear OS Data Layer uses matching application IDs and signing certificates.
+dependencies { implementation 'com.google.android.gms:play-services-wearable:20.0.1' }

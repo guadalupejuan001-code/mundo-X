@@ -1,0 +1,25 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.mundox.wireless'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.mundox.wireless'
+        minSdk 29
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+    buildTypes { debug { minifyEnabled false }; release { minifyEnabled false } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    packaging { resources { excludes += ['META-INF/versions/**','META-INF/DEPENDENCIES','META-INF/NOTICE.md'] } }
+}
+dependencies {
+    // ADB host, SPAKE2 pairing and encrypted TLS connection. Apache-2.0 option.
+    implementation 'com.github.MuntashirAkon:libadb-android:3.1.1'
+    implementation 'org.conscrypt:conscrypt-android:2.5.3'
+    // Persistent per-install RSA identity and X.509 certificate.
+    implementation 'org.bouncycastle:bcpkix-jdk15to18:1.81'
+}

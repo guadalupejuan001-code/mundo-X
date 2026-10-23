@@ -1,0 +1,74 @@
+name: Mundo X Wireless Debug APK
+
+on:
+  push:
+    branches: [main, 'codex/worldlink-watch-body-20261023']
+    paths:
+      - 'wireless-debug-android/**'
+      - 'watch-link/**'
+      - '.github/workflows/mundo-x-wireless-debug.yml'
+  pull_request:
+    paths:
+      - 'wireless-debug-android/**'
+      - 'watch-link/**'
+      - '.github/workflows/mundo-x-wireless-debug.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android SDK build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build bundled Galaxy Watch4 app
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p watch-link --no-daemon :app:assembleDebug
+          mkdir -p wireless-debug-android/app/src/main/assets
+          cp watch-link/app/build/outputs/apk/debug/app-debug.apk \
+            wireless-debug-android/app/src/main/assets/worldlink-watch.apk
+      - name: Build wireless debugging installer APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p wireless-debug-android --no-daemon --stacktrace :app:assembleDebug
+      - name: Sign check and stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wireless-debug-dist
+          cp wireless-debug-android/app/build/outputs/apk/debug/app-debug.apk \
+            wireless-debug-dist/Mundo-X-Depuracion-Inalambrica.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            wireless-debug-dist/Mundo-X-Depuracion-Inalambrica.apk > wireless-debug-dist/apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+            wireless-debug-dist/Mundo-X-Depuracion-Inalambrica.apk > wireless-debug-dist/package-info.txt
+          sha256sum wireless-debug-dist/*.apk > wireless-debug-dist/SHA256SUMS.txt
+          git rev-parse HEAD > wireless-debug-dist/commit.txt
+      - name: Publish APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-Depuracion-Inalambrica
+          path: wireless-debug-dist/**
+          if-no-files-found: error
+          retention-days: 14
