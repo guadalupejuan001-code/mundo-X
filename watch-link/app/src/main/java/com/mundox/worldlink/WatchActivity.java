@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -16,6 +18,7 @@ import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -32,242 +35,314 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Wrist interface for Mundo X. Only actual accessible sensors are used;
- * streams run while the activity is visible and the user has pressed Start.
+ * Real sensor channel on Galaxy Watch4 Classic. UI and sensors operate while visible.
+ * The watch can request a flashlight pulse only if explicitly armed on the phone.
  */
 public final class WatchActivity extends Activity
         implements SensorEventListener, MessageClient.OnMessageReceivedListener {
-    private static final String SAMPLE_PATH = "/mundox/worldlink/v1/telemetry";
-    private static final String HAPTIC_PATH = "/mundox/worldlink/v1/haptic";
-    private static final int HEART_PERMISSION_REQUEST = 13;
-    private static final long SAMPLE_PERIOD_MS = 300L;
-    private static final long MAX_SESSION_MS = 180_000L;
-
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final float[] acceleration = new float[3];
-    private final float[] gyro = new float[3];
-    private final float[] magnet = new float[3];
-    private final List<String> nodes = new ArrayList<>();
+    private static final String SAMPLE="/mundox/worldlink/v1/telemetry";
+    private static final String HAPTIC="/mundox/worldlink/v1/haptic";
+    private static final String LIGHT_REQUEST="/mundox/worldlink/v1/light-request";
+    private static final int BODY_REQUEST=702;
+    private static final long SAMPLE_INTERVAL_MS=300L, MAX_DURATION_MS=180000L;
+    private static final int BG=0xff0c1511, PANEL=0xff223328, WHITE=0xfff1f6ed;
+    private static final int LIME=0xffcff77c, MUTED=0xffb2bfb0;
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private final float[] accel=new float[3],gyro=new float[3],mag=new float[3];
+    private final List<String> nodes=new ArrayList<>();
     private SensorManager sensors;
-    private TextView status;
-    private Button streamButton, heartButton;
-    private boolean streaming, heartRequested;
-    private boolean hasA, hasG, hasM, hasH, hasL;
-    private float lux;
-    private float heartRate;
-    private long sequence, beganAt, lastNodesAt;
-    private String sessionId;
-    private String message = "Listo";
+    private TextView status, link, magneticValue, lightValue, movementValue, heartValue;
+    private Button startButton, pulseButton;
+    private String sessionId, info="Toca INICIAR";
+    private boolean running,heartEnabled,hasA,hasG,hasM,hasL,hasH;
+    private float lux, bpm;
+    private long sequence, began, lastQuery;
+    private boolean listenerAdded;
 
-    @Override public void onCreate(Bundle bundle) {
-        super.onCreate(bundle);
-        sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        ScrollView scroll = new ScrollView(this);
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        sensors=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
+        createUI();
+    }
+
+    private void createUI() {
+        ScrollView scroll=new ScrollView(this);
         scroll.setFillViewport(true);
-        LinearLayout root = new LinearLayout(this);
-        root.setPadding(dp(20),dp(12),dp(20),dp(14));
+        LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER);
-        TextView title = new TextView(this);
-        title.setText("MUNDO X\nENLACE");
-        title.setTextColor(0xffd5ee76);
-        title.setTextSize(21);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(23),dp(8),dp(23),dp(14));
+        root.setBackgroundColor(BG);
+        TextView brand=label("MUNDO X   ·   WORLDLINK",10,LIME,true);
+        brand.setGravity(Gravity.CENTER);
+        brand.setLetterSpacing(.05f);root.addView(brand);
+        TextView title=label("CANALIZADOR",17,WHITE,true);
         title.setGravity(Gravity.CENTER);
-        root.addView(title);
-        status = new TextView(this);
-        status.setTextSize(12);
-        status.setTextColor(Color.WHITE);
-        status.setGravity(Gravity.CENTER);
-        status.setPadding(0,dp(8),0,dp(8));
-        root.addView(status);
-        streamButton = new Button(this);
-        streamButton.setAllCaps(false);
-        streamButton.setText("INICIAR");
-        streamButton.setOnClickListener(v -> {
-            if (streaming) stopStreaming();
-            else startStreaming();
-        });
-        root.addView(streamButton);
-        heartButton = new Button(this);
-        heartButton.setAllCaps(false);
-        heartButton.setText("Activar pulso (opcional)");
-        heartButton.setOnClickListener(v -> enableHeartSensor());
-        root.addView(heartButton);
-        TextView privacy = new TextView(this);
-        privacy.setText("Señales reales. Control digital de un núcleo simulado.\n"
-                + "Detener para apagar la lectura.");
-        privacy.setTextSize(10);
-        privacy.setTextColor(0xffb8b8b8);
-        privacy.setGravity(Gravity.CENTER);
-        root.addView(privacy);
+        title.setPadding(0,dp(5),0,dp(8));root.addView(title);
+
+        LinearLayout heading=panel(root);
+        status=label("EN ESPERA",15,LIME,true);
+        status.setGravity(Gravity.CENTER);heading.addView(status);
+        link=label("Sin datos enviados",11,MUTED,false);
+        link.setGravity(Gravity.CENTER);link.setPadding(0,dp(4),0,0);heading.addView(link);
+
+        LinearLayout signals=panel(root);
+        signals.addView(label("SENSORES FÍSICOS",10,LIME,true));
+        magneticValue=datum(signals,"CAMPO","— µT");
+        lightValue=datum(signals,"LUZ","— lux");
+        movementValue=datum(signals,"GIRO","— rad/s");
+        heartValue=datum(signals,"PULSO","— lpm");
+
+        startButton=control(root,"INICIAR LECTURA",()->{
+            if(running)stop();
+            else start();
+        },true);
+        pulseButton=control(root,"PEDIR PULSO DE LUZ",this::requestLight,false);
+        pulseButton.setEnabled(false);
+        control(root,"ACTIVAR PULSO (OPCIONAL)",this::allowHeart,false);
+        TextView note=label("Tu cuerpo → señal → móvil → materia.\n"
+                +"La luz y los campos son físicos.\n"
+                +"No es entrelazamiento cuántico.",10,MUTED,false);
+        note.setGravity(Gravity.CENTER);
+        note.setPadding(0,dp(10),0,0);
+        root.addView(note);
         scroll.addView(root);
         setContentView(scroll);
-        refresh();
+    }
+
+    private TextView datum(LinearLayout parent,String title,String value) {
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0,dp(3),0,dp(3));
+        TextView label=label(title,10,MUTED,true);
+        row.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+        TextView result=label(value,12,WHITE,true);
+        result.setGravity(Gravity.END);
+        row.addView(result,new LinearLayout.LayoutParams(0,-2,2));
+        parent.addView(row);
+        return result;
     }
 
     @Override protected void onResume() {
         super.onResume();
-        Wearable.getMessageClient(this).addListener(this);
+        if(!listenerAdded) {
+            listenerAdded=true;
+            Wearable.getMessageClient(this).addListener(this);
+        }
     }
-
     @Override protected void onPause() {
-        stopStreaming();
-        Wearable.getMessageClient(this).removeListener(this);
+        stop();
+        if(listenerAdded) {
+            Wearable.getMessageClient(this).removeListener(this);
+            listenerAdded=false;
+        }
         super.onPause();
     }
-
     @Override protected void onDestroy() {
-        stopStreaming();
+        stop();
         super.onDestroy();
     }
 
-    private void startStreaming() {
-        if (streaming) return;
-        streaming = true;
-        sequence = 0;
-        hasA = false; hasG = false; hasM = false; hasH = false; hasL = false;
-        sessionId = UUID.randomUUID().toString();
-        beganAt = SystemClock.uptimeMillis();
-        lastNodesAt = -100_000L;
-        streamButton.setText("DETENER");
-        register(Sensor.TYPE_ACCELEROMETER);
-        register(Sensor.TYPE_GYROSCOPE);
-        register(Sensor.TYPE_MAGNETIC_FIELD);
-        register(Sensor.TYPE_LIGHT);
-        if (heartRequested && checkSelfPermission(Manifest.permission.BODY_SENSORS)
-                == PackageManager.PERMISSION_GRANTED) register(Sensor.TYPE_HEART_RATE);
-        message = "Buscando teléfono...";
-        refresh();
-        tick.run();
+    private void start() {
+        if(running)return;
+        running=true;
+        hasA=false;hasG=false;hasM=false;hasL=false;hasH=false;
+        sessionId=UUID.randomUUID().toString();
+        sequence=0;
+        began=SystemClock.elapsedRealtime();
+        lastQuery=0;
+        nodes.clear();
+        attach(Sensor.TYPE_ACCELEROMETER);
+        attach(Sensor.TYPE_GYROSCOPE);
+        attach(Sensor.TYPE_MAGNETIC_FIELD);
+        attach(Sensor.TYPE_LIGHT);
+        if(heartEnabled && checkSelfPermission(Manifest.permission.BODY_SENSORS)
+                == PackageManager.PERMISSION_GRANTED)attach(Sensor.TYPE_HEART_RATE);
+        startButton.setText("DETENER LECTURA");
+        pulseButton.setEnabled(true);
+        status.setText("LEYENDO...");
+        status.setTextColor(LIME);
+        info="Buscando el Samsung";
+        sendLoop.run();
     }
-
-    private void register(int type) {
-        Sensor sensor = sensors.getDefaultSensor(type);
-        if (sensor != null) sensors.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI);
+    private void attach(int type) {
+        if(sensors==null)return;
+        Sensor sensor=sensors.getDefaultSensor(type);
+        if(sensor!=null)sensors.registerListener(this,sensor,100000);
     }
-
-    private void stopStreaming() {
-        streaming = false;
-        handler.removeCallbacks(tick);
-        if (sensors != null) sensors.unregisterListener(this);
-        if (streamButton != null) streamButton.setText("INICIAR");
-        message = "Detenido";
-        refresh();
+    private void stop() {
+        boolean wasRunning=running;
+        running=false;
+        handler.removeCallbacks(sendLoop);
+        if(sensors!=null)sensors.unregisterListener(this);
+        if(startButton!=null)startButton.setText("INICIAR LECTURA");
+        if(pulseButton!=null)pulseButton.setEnabled(false);
+        if(status!=null)status.setText(wasRunning?"DETENIDO":"EN ESPERA");
+        if(link!=null && wasRunning)link.setText("Lecturas detenidas");
     }
-
-    private void enableHeartSensor() {
-        if (checkSelfPermission(Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.BODY_SENSORS}, HEART_PERMISSION_REQUEST);
+    private void allowHeart() {
+        if(checkSelfPermission(Manifest.permission.BODY_SENSORS)!=PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.BODY_SENSORS},BODY_REQUEST);
             return;
         }
-        heartRequested = true;
-        heartButton.setText("Pulso autorizado");
-        if (streaming) register(Sensor.TYPE_HEART_RATE);
-        refresh();
+        heartEnabled=true;
+        if(running)attach(Sensor.TYPE_HEART_RATE);
+        info="Pulso autorizado";
+        if(link!=null)link.setText(info);
     }
 
-    @Override public void onRequestPermissionsResult(int req, String[] permissions, int[] grants) {
-        super.onRequestPermissionsResult(req,permissions,grants);
-        if (req != HEART_PERMISSION_REQUEST) return;
-        if (grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) enableHeartSensor();
-        else {
-            message = "Sin permiso de pulso; movimiento y magnetismo siguen disponibles.";
-            refresh();
-        }
+    @Override public void onRequestPermissionsResult(int request,String[] names,int[] granted) {
+        super.onRequestPermissionsResult(request,names,granted);
+        if(request==BODY_REQUEST && granted.length>0 &&
+                granted[0]==PackageManager.PERMISSION_GRANTED)allowHeart();
+        else if(request==BODY_REQUEST && link!=null)link.setText("Pulso no autorizado; otros sensores disponibles");
     }
 
-    private final Runnable tick = new Runnable() {
+    private final Runnable sendLoop=new Runnable() {
         @Override public void run() {
-            if (!streaming) return;
-            long now = SystemClock.uptimeMillis();
-            if (now - beganAt >= MAX_SESSION_MS) {
-                stopStreaming();
-                message = "Sesión de 3 minutos terminada; inicia de nuevo.";
-                refresh();
+            if(!running)return;
+            long now=SystemClock.elapsedRealtime();
+            if(now-began>=MAX_DURATION_MS) {
+                stop();
+                link.setText("3 minutos finalizados · puedes reiniciar");
                 return;
             }
-            if (now - lastNodesAt >= 5_000L) findNodes();
-            publish();
-            refresh();
-            handler.postDelayed(this, SAMPLE_PERIOD_MS);
+            if(now-lastQuery>5000) queryNodes();
+            sendSample();
+            status.setText(nodes.isEmpty()?"BUSCANDO TELÉFONO":"ENLACE ACTIVO");
+            link.setText("Destinos: "+nodes.size()+"   ·   Muestras: "+sequence);
+            handler.postDelayed(this,SAMPLE_INTERVAL_MS);
         }
     };
 
-    private void findNodes() {
-        lastNodesAt = SystemClock.uptimeMillis();
-        Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(connected -> {
-            nodes.clear();
-            for (Node n : connected) nodes.add(n.getId());
-        }).addOnFailureListener(e -> message = "No hay conexión Wear OS: " + e.getMessage());
+    private void queryNodes() {
+        lastQuery=SystemClock.elapsedRealtime();
+        Wearable.getNodeClient(this).getConnectedNodes()
+            .addOnSuccessListener(available->{
+                nodes.clear();
+                for(Node node:available)nodes.add(node.getId());
+            })
+            .addOnFailureListener(e->{if(link!=null)link.setText("Sin enlace: "+e.getClass().getSimpleName());});
     }
 
-    private void publish() {
-        if (!hasA || !hasG) return;
+    private void sendSample() {
+        if(!hasA || !hasG || nodes.isEmpty())return;
         try {
-            int mask = 1 | 2 | (hasM ? 4 : 0) | (hasH ? 8 : 0) | (hasL ? 16 : 0);
-            JSONObject data = new JSONObject();
-            data.put("v", 1);
-            data.put("sid", sessionId);
-            data.put("seq", ++sequence);
-            data.put("t", System.currentTimeMillis());
-            data.put("mask", mask);
-            data.put("ax", acceleration[0]); data.put("ay", acceleration[1]); data.put("az", acceleration[2]);
-            data.put("gx", gyro[0]); data.put("gy", gyro[1]); data.put("gz", gyro[2]);
-            data.put("mx", magnet[0]); data.put("my", magnet[1]); data.put("mz", magnet[2]);
-            data.put("hr", hasH ? heartRate : 0);
-            data.put("lux", hasL ? lux : 0);
-            byte[] payload = data.toString().getBytes(StandardCharsets.UTF_8);
-            for (String id : nodes) Wearable.getMessageClient(this).sendMessage(id, SAMPLE_PATH, payload);
-        } catch (Exception e) {
-            message = "Lectura inválida: " + e.getMessage();
+            JSONObject j=new JSONObject();
+            int mask=1|2|(hasM?4:0)|(hasH?8:0)|(hasL?16:0);
+            j.put("v",1);
+            j.put("sid",sessionId);
+            j.put("seq",++sequence);
+            j.put("mask",mask);
+            j.put("t",System.currentTimeMillis());
+            j.put("ax",accel[0]);j.put("ay",accel[1]);j.put("az",accel[2]);
+            j.put("gx",gyro[0]);j.put("gy",gyro[1]);j.put("gz",gyro[2]);
+            j.put("mx",mag[0]);j.put("my",mag[1]);j.put("mz",mag[2]);
+            j.put("lux",hasL?lux:0);
+            j.put("hr",hasH?bpm:0);
+            byte[] raw=j.toString().getBytes(StandardCharsets.UTF_8);
+            for(String id:nodes)
+                Wearable.getMessageClient(this).sendMessage(id,SAMPLE,raw);
+        } catch(Exception e) {
+            link.setText("Error de lectura: "+e.getClass().getSimpleName());
         }
+    }
+    private void requestLight() {
+        if(!running) {link.setText("Inicia la lectura primero");return;}
+        if(nodes.isEmpty()){link.setText("Necesitas conectar el teléfono");return;}
+        for(String id:nodes) {
+            Wearable.getMessageClient(this).sendMessage(id,LIGHT_REQUEST,new byte[]{1})
+                .addOnFailureListener(e->link.setText("Solicitud fallida: "+e.getClass().getSimpleName()));
+        }
+        link.setText("Solicitud de luz enviada · requiere habilitarla en el móvil");
     }
 
     @Override public void onSensorChanged(SensorEvent event) {
-        float[] values = event.values;
-        switch (event.sensor.getType()) {
+        float[] v=event.values;
+        switch(event.sensor.getType()) {
             case Sensor.TYPE_ACCELEROMETER:
-                if (values.length >= 3) { System.arraycopy(values,0,acceleration,0,3); hasA = true; }
+                if(v.length>=3 && valid(v[0],v[1],v[2])) {
+                    System.arraycopy(v,0,accel,0,3);hasA=true;
+                }
                 break;
             case Sensor.TYPE_GYROSCOPE:
-                if (values.length >= 3) { System.arraycopy(values,0,gyro,0,3); hasG = true; }
+                if(v.length>=3 && valid(v[0],v[1],v[2])) {
+                    System.arraycopy(v,0,gyro,0,3);hasG=true;
+                    movementValue.setText(String.format(Locale.US,"%.2f rad/s",Math.sqrt(gyro[0]*gyro[0]+gyro[1]*gyro[1]+gyro[2]*gyro[2])));
+                }
                 break;
             case Sensor.TYPE_MAGNETIC_FIELD:
-                if (values.length >= 3) { System.arraycopy(values,0,magnet,0,3); hasM = true; }
+                if(v.length>=3 && valid(v[0],v[1],v[2])) {
+                    System.arraycopy(v,0,mag,0,3);hasM=true;
+                    magneticValue.setText(String.format(Locale.US,"%.1f µT",Math.sqrt(mag[0]*mag[0]+mag[1]*mag[1]+mag[2]*mag[2])));
+                }
                 break;
             case Sensor.TYPE_LIGHT:
-                if (values.length > 0 && Float.isFinite(values[0]) && values[0] >= 0) {
-                    lux = values[0]; hasL = true;
+                if(v.length>0 && Float.isFinite(v[0]) && v[0]>=0) {
+                    lux=v[0];hasL=true;
+                    lightValue.setText(String.format(Locale.US,"%.1f lux",lux));
                 }
                 break;
             case Sensor.TYPE_HEART_RATE:
-                if (values.length > 0 && values[0] > 0) { heartRate = values[0]; hasH = true; }
+                if(v.length>0 && Float.isFinite(v[0]) && v[0]>0) {
+                    bpm=v[0];hasH=true;
+                    heartValue.setText(String.format(Locale.US,"%.0f lpm",bpm));
+                }
                 break;
-            default: break;
+            default:break;
         }
     }
-
-    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    private static boolean valid(float a,float b,float c){
+        return Float.isFinite(a)&&Float.isFinite(b)&&Float.isFinite(c);
+    }
+    @Override public void onAccuracyChanged(Sensor sensor,int accuracy) {}
 
     @Override public void onMessageReceived(MessageEvent event) {
-        if (!HAPTIC_PATH.equals(event.getPath())) return;
-        Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-        if (vibrator != null && vibrator.hasVibrator()) {
-            vibrator.vibrate(VibrationEffect.createOneShot(90, VibrationEffect.DEFAULT_AMPLITUDE));
-        }
+        if(!HAPTIC.equals(event.getPath()))return;
+        if(!running)return;
+        Vibrator vibration=(Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
+        if(vibration!=null && vibration.hasVibrator())
+            vibration.vibrate(VibrationEffect.createOneShot(100,VibrationEffect.DEFAULT_AMPLITUDE));
     }
 
-    private void refresh() {
-        if (status == null) return;
-        String t = streaming ? String.format(Locale.US,
-                "ENLACE ACTIVO\nDestino(s): %d\nEnviadas: %d\nCampo: %s\nPulso: %s\nLuz: %s",
-                nodes.size(), sequence, hasM ? "detectado" : "sin lectura",
-                hasH ? (int)heartRate + " lpm" : "no disponible",
-                hasL ? String.format(Locale.US,"%.1f lux",lux) : "sin sensor") : message;
-        status.setText(t);
+    private LinearLayout panel(LinearLayout root) {
+        LinearLayout p=new LinearLayout(this);
+        p.setOrientation(LinearLayout.VERTICAL);
+        p.setPadding(dp(12),dp(10),dp(12),dp(10));
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(PANEL);bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(1),0xff38533e);
+        p.setBackground(bg);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+        lp.bottomMargin=dp(8);
+        root.addView(p,lp);
+        return p;
     }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    private Button control(LinearLayout root,String label,Runnable onClick,boolean prominent) {
+        Button b=new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextSize(11);
+        b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        b.setTextColor(prominent?BG:WHITE);
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(prominent?LIME:0xff2c4433);
+        bg.setCornerRadius(dp(30));
+        b.setBackground(bg);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(47));
+        p.bottomMargin=dp(7);
+        root.addView(b,p);
+        b.setOnClickListener(v->onClick.run());
+        return b;
+    }
+    private TextView label(String str,int size,int color,boolean strong){
+        TextView t=new TextView(this);
+        t.setText(str);t.setTextSize(size);t.setTextColor(color);
+        if(strong)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        return t;
+    }
+    private int dp(float v){
+        return Math.round(v*getResources().getDisplayMetrics().density);
     }
 }
