@@ -381,7 +381,7 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
                     String output="ESTADO BELL SIMULADO · q0 ↔ q999\n"+
                             String.format(Locale.US,"ZZ = %+.4f   XX = %+.4f\n",
                                 state.optDouble("zz"),state.optDouble("xx"))+
-                            String.format(Locale.US,"CHSH = %.3f (simulado; límite clásico 2)\\n",
+                            String.format(Locale.US,"CHSH = %.3f (simulado; límite clásico 2)\n",
                                 state.optDouble("chsh_simulated"))+
                             String.format(Locale.US,"MIL: %d componentes · %d bytes lógicos\n",
                                 state.optInt("components"),state.optInt("mil_logical_bytes"))+
