@@ -46,12 +46,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/ether-world-test
+          mkdir -p /tmp/ether-world-test ether-world-dist
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \
             -I native/include \
             ether-world-android/tests/ether_world_smoke.cpp \
             -o /tmp/ether-world-test/ether_world_smoke
-          /tmp/ether-world-test/ether_world_smoke | tee /tmp/ether-world-test/world-regression.log
+          /tmp/ether-world-test/ether_world_smoke \
+            ether-world-dist/ether-3d-preview.ppm \
+            ether-world-dist/ether-spatial-map.ppm \
+            | tee /tmp/ether-world-test/world-regression.log
       - name: Build standalone Android app with original Ether Render X
         shell: bash
         run: |
