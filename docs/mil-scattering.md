@@ -31,7 +31,7 @@ Run:
 
 The MX command scatter(sites, steps, J_milli, U_milli) compiles into the XASM line scatter sites steps J_milli U_milli. J_milli=1000 means hopping J=1.0; U_milli=5000 means contact repulsion U=5.0; dt defaults to 0.1 in dimensionless units. The standalone instruction requires no fictitious qubits declaration. Negative U is supported by the native solver, but **not yet exposed by the integer-only MX/XASM v0.1 command**.
 
-Deterministic results provide: norm, max_norm_error, initial_contact, peak_contact, final_contact, exchanged_order, state_bytes, scratch_bytes and estimated_work. Exchanged_order is a ring-coordinate position-order probability P(x1>x2), **not** an experimentally measured scattering cross section.
+Deterministic results provide: norm, max_norm_error, initial_contact, peak_contact, final_contact, exchanged_order, purity, state_bytes, scratch_bytes and estimated_work. Purity is the reduced one-particle Tr(rho^2) and is evaluated only for N <= 128, otherwise reported as unavailable to avoid cubic measurement cost. Exchanged_order is a ring-coordinate position-order probability P(x1>x2), **not** an experimentally measured scattering cross section.
 
 ## Scaling and explicit budgets
 
@@ -67,6 +67,6 @@ cmake --build build --target mundo_x test_mil_scattering mundo_x_mxlang_tests --
 ctest --test-dir build --output-on-failure -R 'mil_scattering|xasm_mil_scattering|mx_mil_scattering|mxlang_compiler'
 ~~~
 
-The native regression checks norm preservation, forward/backward reversibility, wavepacket contact, nonzero coupling changing probabilities, deterministic replay, payload accounting and resource rejection. Norm conservation alone does not establish predictive validity for physical hadrons.
+The native regression checks norm preservation, forward/backward reversibility, wavepacket contact, nonzero coupling changing probabilities, deterministic replay, payload accounting and resource rejection. It also checks generated entanglement (reduced-state purity < 1 for U>0, purity = 1 for U=0) and compares split-operator amplitudes against an **independent RK4 integrator of the original sparse Hamiltonian** at small N, including convergence when the time step is refined. Norm conservation alone does not establish predictive validity for physical hadrons.
 
-Scientific next steps: an **independent** exact reference for small lattices, time-step convergence, quantitative entanglement observables, open-boundary wavepacket scattering, and a real MIL Reduced encoding. Particle-production dynamics would additionally require a variable-particle-number quantum field model.
+Scientific next steps: independent exact diagonalization for small lattices, open-boundary wavepacket scattering, a real MIL Reduced encoding, and an independently validated field-theory Hamiltonian with particle-number-changing channels. The existing sparse RK4 check is a numerical cross-check, not experimental validation. Particle-production dynamics would additionally require a variable-particle-number quantum field model.
