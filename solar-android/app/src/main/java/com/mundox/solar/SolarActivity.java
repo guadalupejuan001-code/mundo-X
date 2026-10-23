@@ -408,24 +408,44 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Descenso · "+SolarData.BODIES[body].name).setView(content).setPositiveButton("Continuar",null).setNegativeButton("Volver a órbita",(dialog,which)->exitEntry()).create();showDialog(d);
     }
     private void qualityDialog(){
-        String[] options={"Ahorro · hasta 640 px","Equilibrada · hasta 960 px","Alta · hasta 1440 px",
-                "4K UHD · 8,3 millones de píxeles","8K UHD · 33,2 millones de píxeles"};
-        int checked=uhd8k?4:uhd4k?3:quality<=640?0:quality<=960?1:2;
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Calidad de imagen").setSingleChoiceItems(options,checked,(dialog,index)->{
-            if(index==4)setUltraQuality(true);else if(index==3)setUhdQuality(true);
-            else setAdaptiveQuality(new int[]{640,960,1440}[index]);dialog.dismiss();
-        }).setNegativeButton("Cerrar",null).create();showDialog(d);
+        String[] options={
+                "Ahorro · vista hasta 640 px",
+                "Equilibrada · vista hasta 960 px",
+                "Alta · vista hasta 1440 px",
+                "4K Fluido · vista 640–1440 px / guardar PNG 4K",
+                "4K UHD nativo · 8,3 millones de píxeles por fotograma",
+                "8K UHD nativo · 33,2 millones de píxeles"};
+        int checked=smart4k?3:uhd8k?5:uhd4k?4:quality<=640?0:quality<=960?1:2;
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Calidad de imagen")
+                .setSingleChoiceItems(options,checked,(dialog,index)->{
+                    if(index==5)setUltraQuality(true);
+                    else if(index==4)setUhdQuality(true);
+                    else if(index==3)setSmartQuality(true);
+                    else setAdaptiveQuality(new int[]{640,960,1440}[index]);
+                    dialog.dismiss();
+                }).setNegativeButton("Cerrar",null).create();
+        showDialog(d);
     }
     private void setAdaptiveQuality(int pixels){
-        quality=pixels;uhd4k=uhd8k=false;resolutionMessage=null;
-        runGL(()->{observer.setUhd8k(false);observer.setUhd4k(false);observer.setQuality(pixels);});updateButtons();
+        quality=pixels;uhd4k=uhd8k=smart4k=false;resolutionMessage=null;
+        runGL(()->observer.setQuality(pixels));
+        updateButtons();
+    }
+    private void setSmartQuality(boolean enabled){
+        smart4k=enabled;
+        if(enabled)uhd4k=uhd8k=false;
+        resolutionMessage=null;
+        runGL(()->observer.setSmart4k(enabled));
+        updateButtons();
     }
     void setUhdQuality(boolean enabled){
-        uhd4k=enabled; if(enabled)uhd8k=false; resolutionMessage=null;
+        uhd4k=enabled;if(enabled)uhd8k=false;
+        smart4k=false;resolutionMessage=null;
         runGL(()->observer.setUhd4k(enabled));updateButtons();
     }
     void setUltraQuality(boolean enabled){
-        uhd8k=enabled; if(enabled)uhd4k=false; resolutionMessage=null;
+        uhd8k=enabled;if(enabled)uhd4k=false;
+        smart4k=false;resolutionMessage=null;
         runGL(()->observer.setUhd8k(enabled));updateButtons();
     }
     private void message(String text){handler.post(()->{if(!destroyed&&!isFinishing())Toast.makeText(this,text,Toast.LENGTH_LONG).show();});}
@@ -563,9 +583,18 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         content.addView(label("Cine X añade iluminación artística opcional al shader propio. Puede reducir FPS en móviles modestos; no modifica las órbitas ni acelera el render con qubits.",12,MUTED,false));
         LinearLayout qualities=row();int[] sizes={640,960,1440};String[] labels={"Ahorro","Equilibrada","Alta"};
         for(int i=0;i<sizes.length;i++){final int px=sizes[i];Button b=button(labels[i],0,()->setAdaptiveQuality(px));qualities.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));}content.addView(qualities);
-        content.addView(button("4K UHD · 3840 × 2160 / vertical",0,()->setUhdQuality(true)));
-        content.addView(button("8K UHD · 7680 × 4320 / vertical",0,()->setUltraQuality(true)));
-        content.addView(label("4K/8K usan framebuffers reales cuando el dispositivo los admite. Si faltan límites o memoria, el renderer conserva la última resolución válida.",12,MUTED,false));
+        content.addView(button("4K Fluido · visor adaptable + foto real a 4K",
+                0,()->setSmartQuality(true)));
+        content.addView(button("4K UHD nativo · 3840 × 2160 / vertical",
+                0,()->setUhdQuality(true)));
+        content.addView(button("8K UHD nativo · 7680 × 4320 / vertical",
+                0,()->setUltraQuality(true)));
+        content.addView(label(
+                "4K Fluido usa 640/960/1440 px para navegar y genera un framebuffer "+
+                "4K real solo al guardar PNG. El modo 4K nativo conserva los 8,3 millones "+
+                "de píxeles en cada cuadro y puede dar 2 FPS en GPU modestas. "+
+                "No se han acelerado los qubits ni la física orbital.",
+                12,MUTED,false));
         content.addView(section("TU MOTOR"));content.addView(button("Núcleo X · estados y trazas",0,()->coreDialog()));
         content.addView(button("Modelo físico y fuentes",0,()->modelDialog()));
         content.addView(button("Cómo navegar",0,()->helpDialog()));
@@ -687,14 +716,23 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         getSharedPreferences("solar",MODE_PRIVATE).edit().putInt("body",body).putInt("speed",speedIndex)
                 .putInt("quality",quality).putInt("preset",quantum.preset()).putBoolean("fields",fields)
                 .putBoolean("wind",wind).putBoolean("orbits",orbits).putBoolean("realScale",realScale)
-                .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k).putBoolean("uhd8k",uhd8k).putBoolean("atmospheres",atmospheres).putBoolean("localPhysics",localPhysics).putBoolean("cinematic",cinematic)
+                .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k)
+                .putBoolean("uhd8k",uhd8k).putBoolean("smart4k",smart4k)
+                .putBoolean("atmospheres",atmospheres)
+                .putBoolean("localPhysics",localPhysics).putBoolean("cinematic",cinematic)
                 .putBoolean("entry",entryActive).putLong("entryAltitude",Double.doubleToLongBits(desiredEntryAltitude))
                 .putString("entryPose",poseText(pose)).apply();
     }
     @Override protected void onSaveInstanceState(Bundle state){
         super.onSaveInstanceState(state);state.putInt("body",body);state.putInt("speed",speedIndex);state.putBoolean("fields",fields);state.putBoolean("wind",wind);state.putBoolean("orbits",orbits);state.putBoolean("realScale",realScale);state.putBoolean("paused",paused);
         if(observer!=null)state.putDouble("jd",observer.julianDate());if(quantum!=null)state.putInt("preset",quantum.preset());
-        state.putInt("quality",quality);state.putBoolean("uhd4k",uhd4k);state.putBoolean("uhd8k",uhd8k);state.putBoolean("atmospheres",atmospheres);state.putBoolean("localPhysics",localPhysics);state.putBoolean("cinematic",cinematic);
+        state.putInt("quality",quality);
+        state.putBoolean("uhd4k",uhd4k);
+        state.putBoolean("uhd8k",uhd8k);
+        state.putBoolean("smart4k",smart4k);
+        state.putBoolean("atmospheres",atmospheres);
+        state.putBoolean("localPhysics",localPhysics);
+        state.putBoolean("cinematic",cinematic);
         state.putBoolean("entry",entryActive);state.putDouble("entryAltitude",desiredEntryAltitude);
         state.putDoubleArray("entryPose",observer==null?null:observer.entryState());
         if(pngDestinationOpen&&pngToken!=null){state.putBoolean("pngDestinationOpen",true);state.putString("pngToken",pngToken);}
