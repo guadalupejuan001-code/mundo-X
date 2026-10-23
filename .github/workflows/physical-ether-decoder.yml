@@ -1,0 +1,63 @@
+name: Ether Physical Address - inverse field validation
+
+on:
+  push:
+    branches: ['codex/ether-physical-address-inverse-field-20261023', main]
+    paths:
+      - 'native/include/mundo_x/physical_ether_address.hpp'
+      - 'native/tests/physical_ether_address.cpp'
+      - 'quantum-runtime/CMakeLists.txt'
+      - '.github/workflows/physical-ether-decoder.yml'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/physical_ether_address.hpp'
+      - 'native/tests/physical_ether_address.cpp'
+      - 'quantum-runtime/CMakeLists.txt'
+      - '.github/workflows/physical-ether-decoder.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  physical-address-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure quantum-only runtime
+        run: cmake -S quantum-runtime -B /tmp/ether-physical-build -DCMAKE_BUILD_TYPE=Release
+      - name: Compile physical Ether address test
+        run: cmake --build /tmp/ether-physical-build --target test_physical_ether_address -j 2
+      - name: Execute held-out inverse-field validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p physical-ether-results
+          ctest --test-dir /tmp/ether-physical-build \
+            -R '^physical_ether_address$' --output-on-failure \
+            | tee physical-ether-results/ctest.log
+          /tmp/ether-physical-build/test_physical_ether_address \
+            | tee physical-ether-results/metrics.jsonl
+          git rev-parse HEAD > physical-ether-results/commit.txt
+      - name: Verify independent null and displacement controls ran
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          values=json.loads(Path("physical-ether-results/metrics.jsonl").read_text().strip())
+          assert values["ok"] and values["synthetic_validation"]
+          assert not values["lattice_physical_evidence"]
+          assert values["spatial_queries_without_allocation"] == 1000
+          assert values["quantum_active_sites"] == 0
+          assert values["holdout_rmse_uT"] < 0.1
+          assert values["holdout_rmse_uT"] < 0.8*values["uniform_holdout_rmse_uT"]
+          assert values["changed_source_rmse_uT"] > 5*values["holdout_rmse_uT"]
+          print("Physical Ether inference validation: PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ether-Physical-Address-Evidence
+          path: physical-ether-results/**
+          retention-days: 14
+          if-no-files-found: error
