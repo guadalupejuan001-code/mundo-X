@@ -27,10 +27,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ghz-dist /tmp/ghz-native /tmp/ghz-java
-          g++ -std=c++17 -O2 -Wall -Wextra -I native/include \
+          g++ -std=c++17 -O2 -Wall -Wextra -I native/include -I watch-ghz-android/native \
             watch-ghz-android/tests/watch_ghz_core_test.cpp -o /tmp/ghz-native/check
           /tmp/ghz-native/check | tee ghz-dist/core-checks.txt
-          g++ -std=c++17 -O2 -shared -fPIC -pthread -I native/include \
+          g++ -std=c++17 -O2 -shared -fPIC -pthread -I native/include -I watch-ghz-android/native \
             -I "$JAVA_HOME/include" -I "$JAVA_HOME/include/linux" \
             watch-ghz-android/app/src/main/cpp/ghz_jni.cpp -o /tmp/ghz-native/libmundox_ghz.so
           javac -d /tmp/ghz-java watch-ghz-android/app/src/main/java/com/mundox/ghzwatch/NativeGhz.java \
@@ -81,12 +81,8 @@ jobs:
             adb shell wm size 450x450
             adb shell wm density 240
             gradle -p watch-ghz-android --no-daemon :app:connectedDebugAndroidTest
-            adb shell am start -n com.mundox.ghzwatch/.MainActivity
-            adb shell input tap 220 280
-            adb shell uiautomator dump /sdcard/ghz-window.xml
-            adb pull /sdcard/ghz-window.xml ghz-dist/ui.xml
-            adb shell screencap -p /sdcard/ghz.png
-            adb pull /sdcard/ghz.png ghz-dist/ui.png
+            adb install -r watch-ghz-android/app/build/outputs/apk/debug/app-debug.apk
+            python3 watch-ghz-android/tests/capture_ui.py ghz-dist
       - name: Preserve app and evidence
         if: always()
         uses: actions/upload-artifact@v4

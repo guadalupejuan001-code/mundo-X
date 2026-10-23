@@ -1,4 +1,4 @@
-#include "mundo_x/watch_ghz_core.hpp"
+#include "watch_ghz_core.hpp"
 #include <jni.h>
 #include <mutex>
 
