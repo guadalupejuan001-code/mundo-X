@@ -178,10 +178,12 @@ float sphere(vec3 rd,vec3 centre,float radius){
 vec3 sky(vec3 rd,vec3 drx,vec3 dry){
     vec3 col=vec3(0.0010,0.0018,0.0045);
     float milky=pow(max(0.0,1.0-abs(dot(rd,normalize(vec3(.23,.89,.39))))),20.0);
-    col+=milky*vec3(.006,.009,.017)*(0.35+fbm(rd*14.0));
+    // Evaluate this procedural sky field only once for both photo looks.
+    float galacticBand=0.35+fbm(rd*14.0);
+    col+=milky*vec3(.006,.009,.017)*galacticBand;
     if(uCinematic==1){
         // Slight photographic sky exposure, not an observed Milky Way map.
-        col+=milky*vec3(.008,.011,.020)*(0.35+fbm(rd*14.0));
+        col+=milky*vec3(.008,.011,.020)*galacticBand;
     }
     vec2 uv=vec2(longitude(rd)/(2.0*PI)+.5,asin(clamp(rd.y,-1.0,1.0))/PI+.5);
     vec2 uvWidth=abs(angularGradient(rd,drx))+abs(angularGradient(rd,dry));
