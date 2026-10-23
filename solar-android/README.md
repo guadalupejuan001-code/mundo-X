@@ -7,6 +7,13 @@ Esta versión comparte la infraestructura de resolución del motor **4K/8K** y
 ofrece un modo **Solar 4K UHD**, un mapa orbital interactivo y una cámara de
 descenso para los ocho planetas y las catorce lunas del catálogo.
 
+La actualización **1.4.0** añade el modo **Cine** con halos de atmósfera y Sol,
+reflejos de anillos, relieve visual cerca de superficies y tramado determinista.
+Para navegar a 4K/8K, un segundo framebuffer opcional reduce el coste de
+píxeles durante los gestos y restaura la escena a resolución UHD al terminar.
+El PNG permanece a resolución completa. Consulta
+[mejoras gráficas y rendimiento 1.4](docs/cinematic-1.4.md).
+
 La integración **1.3.0** publica observaciones atómicas de Ether, comparte las
 efemérides y evita evaluar material procedural cuyo resultado no se usa. El
 shader evalúa los 23 cuerpos con gradientes de filtrado definidos; el descarte
@@ -34,6 +41,9 @@ Miranda. La aplicación funciona sin conexión y no solicita permiso de Internet
 | Altitud / Subir / Bajar | Cambiar la altura de la cámara de descenso |
 | Regresar a órbita | Recuperar la cámara exterior y sus capas |
 | Calidad → 4K UHD | Renderizar a 3840 × 2160 o 2160 × 3840 según orientación |
+| Calidad → 8K UHD | Renderizar a 7680 × 4320 o 4320 × 7680 según orientación, si la GPU lo permite |
+| Calidad → Cine | Acabado visual opcional con detalles en atmósfera, anillos, Sol y cuerpos cercanos |
+| Calidad → Vista rápida | Dibujar 960p durante gestos UHD; recuperar 4K/8K al soltar sin degradar el PNG |
 | Guardar PNG | Exportar el framebuffer a una imagen sin los controles |
 | Volar | Activar un control táctil para avanzar, retroceder y desplazarse |
 | Campos | Mostrar el entorno magnético del destino |
@@ -53,7 +63,10 @@ a 640, 960 o 1440 píxeles. **4K UHD** solicita una imagen de 8.294.400 píxeles
 ajustada a la pantalla sin deformarla. Si la GPU rechaza la asignación, el motor
 conserva una resolución válida y avisa. Estos modos definen la resolución de la
 imagen; el rendimiento depende del dispositivo. El inicio utiliza Equilibrada
-para que el usuario pueda activar UHD desde el mismo explorador.
+para que el usuario pueda activar UHD desde el mismo explorador. Cine y vista
+rápida están activados de fábrica pero pueden desactivarse por separado sin
+cambiar el estado del núcleo ni las órbitas. Vista rápida sólo reduce el trabajo
+de fragmentos durante la interacción; no garantiza una mejora concreta de FPS.
 
 Durante el descenso, arrastrar mira alrededor y el control circular desplaza
 la cámara sobre el destino. Pellizcar cambia la altura. La altitud se mide
@@ -174,8 +187,8 @@ gradle -p solar-android --no-daemon \
   :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-La variante normal tiene paquete `com.cosmicx.solar`, versión **1.3.0**, código
-de versión 4. `-Psolar4kStandalone=true` y `-Psolar8kStandalone=true` conservan
+La variante normal tiene paquete `com.cosmicx.solar`, versión **1.4.0**, código
+de versión 5. `-Psolar4kStandalone=true` y `-Psolar8kStandalone=true` conservan
 las identidades `.uhd` y `.ultra`. `-PsolarReview=true` añade `.review` al
 paquete elegido y «Pruebas» al nombre; permite instalar esta revisión junto a
 la original. Las compilaciones de desarrollo usan firma debug; actualizar un
