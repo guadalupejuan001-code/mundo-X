@@ -69,6 +69,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
     private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
     private int mapTexture,colorTexture,depthBuffer,framebuffer;
+    // Reusable screen-preview FBO: avoids full 4K/8K shader cost while dragging.
+    // The 4K/8K framebuffer remains authoritative for all still captures.
+    private int previewColor,previewDepth,previewFramebuffer,previewWidth,previewHeight;
+    private boolean previewUnavailable=false,interactionPreview=false;
+    private volatile boolean interactivePreviewEnabled=true,cinematic=true,previewFrame=false;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -158,6 +163,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
+        previewColor=previewDepth=previewFramebuffer=previewWidth=previewHeight=0;
+        previewUnavailable=false;previewFrame=false;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -177,7 +184,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         }catch(Throwable e){error(e);}
     }
     @Override public void onSurfaceChanged(GL10 unused,int w,int h){
-        viewWidth=Math.max(1,w);viewHeight=Math.max(1,h);framebufferDirty=true;
+        viewWidth=Math.max(1,w);viewHeight=Math.max(1,h);
+        deletePreviewTarget();framebufferDirty=true;
         if(!initializedCamera||isOverview)resetDistance=true;
     }
 
@@ -266,6 +274,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 int oldColor=colorTexture,oldDepth=depthBuffer,oldTarget=framebuffer;
                 colorTexture=color;depthBuffer=depth;framebuffer=target;width=size.width;height=size.height;
                 accepted=true;deleteTarget(oldColor,oldDepth,oldTarget);
+                deletePreviewTarget(); // resolution change invalidates preview aspect
             }finally{
                 if(!accepted)deleteTarget(color,depth,target);
                 glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glBindRenderbuffer(GL_RENDERBUFFER,depthBuffer);
@@ -481,6 +490,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform4fv(sceneLoc("uQ0"),1,quantum,0);glUniform4fv(sceneLoc("uQ1"),1,quantum,4);
         glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
+        glUniform1i(sceneLoc("uCinematic"),cinematic?1:0);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
