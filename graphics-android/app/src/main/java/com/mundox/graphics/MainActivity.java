@@ -47,6 +47,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /** Android host of the existing Graphics observer and its authoritative CompactCore. */
 public final class MainActivity extends Activity {
     NativeCore core;
+    private WearLinkBridge wearLink;
     QuantumRenderer renderer;
     GLSurfaceView surface;
     volatile boolean resumed;
@@ -132,6 +133,7 @@ public final class MainActivity extends Activity {
                 text.setPadding(dp(24),dp(64),dp(24),dp(24));text.setBackgroundColor(INK);setContentView(text);return;
             }
         }
+        wearLink=new WearLinkBridge(this);
         applyPresentation();buildScreen();
     }
 
@@ -215,6 +217,7 @@ public final class MainActivity extends Activity {
             .setItems(new String[]{"1.024","16.384","65.536","262.144","1.000.000","1.048.576"},(d,index)->{
                 int count=new int[]{1024,16384,65536,262144,1000000,1048576}[index];action(()->renderer.objectCount(count));
             }).show()));
+        navigation.addView(button("Cuerpo ↔ Mundo",()->wearLink.showPanel()));
         controls.addView(scroll(navigation));
 
         TextView coreLabel=label("NÚCLEO CUÁNTICO",10,LIME);coreLabel.setLetterSpacing(.10f);coreLabel.setPadding(dp(6),dp(4),0,dp(2));controls.addView(coreLabel);
@@ -600,6 +603,16 @@ public final class MainActivity extends Activity {
     private void infiniteActions(){InfiniteControls.actions(this,core,addressA,script->action(()->{
         String output=core.executeInfinite(script);main.post(()->{if(!destroyed)InfiniteControls.result(this,output);});
     }));}
+    /** A physical wrist gesture selects one gate in the already existing simulator. */
+    void applyWearGesture(){applyGate(NativeCore.H);}
+
+    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants) {
+        super.onRequestPermissionsResult(code,permissions,grants);
+        if(code==PhoneLightEmitter.REQUEST_CAMERA && wearLink!=null)
+            wearLink.permissionResult(grants.length>0
+                && grants[0]==android.content.pm.PackageManager.PERMISSION_GRANTED);
+    }
+
     private void applyGate(int operation){
         if(core.isInfinite()){final String a=addressA,b=addressB;action(()->renderer.gate(operation,a,b));}
         else {final int q=qubit;action(()->renderer.gate(operation,q,0));}
@@ -677,9 +690,10 @@ public final class MainActivity extends Activity {
         });
     }
 
-    @Override protected void onResume(){super.onResume();resumed=true;if(surface!=null){surface.onResume();surface.requestRender();if(animate){lastTick=0;main.post(tick);}}}
+    @Override protected void onResume(){super.onResume();resumed=true;if(surface!=null){surface.onResume();surface.requestRender();if(animate){lastTick=0;main.post(tick);}}if(wearLink!=null)wearLink.resumeIfVisible();}
     @Override protected void onPause(){
         resumed=false;main.removeCallbacks(tick);
+        if(wearLink!=null)wearLink.stop();
         cancelImagePreparation();
         if(surface!=null){
             surface.queueEvent(()->{try{captureSession();}catch(Throwable error){showStatus("No se pudo guardar el estado: "+error.getMessage());}});surface.onPause();
@@ -696,6 +710,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onDestroy(){
         destroyed=true;
+        if(wearLink!=null)wearLink.close();
         cancelImagePreparation();
         if((isFinishing()||!imageDestinationOpen)&&imageExportToken!=null)
             IMAGE_EXPORT_OWNER.compareAndSet(imageExportToken,null);
