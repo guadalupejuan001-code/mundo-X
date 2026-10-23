@@ -130,6 +130,16 @@ int main() {
     readers[0].store("42", 200, core);
     need(readers[0].stats().revision == no_op_revision, "no-op store changed revision");
 
+    // Shards must not change the byte-for-byte sorted MXIM1 wire format.
+    InverseMemory ordered;
+    for (const unsigned id : {200U, 10U, 1U, 100U, 2U})
+      ordered.store(std::to_string(id), static_cast<std::uint8_t>(id), core);
+    need(ordered.snapshot() ==
+         "MXIM1 0\nO 1 1\nO 2 2\nO 10 10\nO 100 100\nO 200 200\n",
+         "sharded snapshot lost numeric address ordering");
+    need(InverseMemory::from_snapshot(ordered.snapshot()).snapshot() == ordered.snapshot(),
+         "sharded snapshot failed exact restoration");
+
     InverseMemory::Limits short_address;
     short_address.max_address_digits = 3;
     rejects([&] {
