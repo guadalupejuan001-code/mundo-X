@@ -84,6 +84,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private double sceneScale=1;
     private boolean framebufferDirty=true,failed=false,initializedCamera=false;
     private boolean freeFlight=false,fields=false,wind=true,orbits=true,realScale=false;
+    private volatile boolean cinematic=false;
     private boolean isOverview=false,resetDistance=true;
     private volatile boolean paused=false;
     private volatile int selected=3;
@@ -481,6 +482,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform4fv(sceneLoc("uQ0"),1,quantum,0);glUniform4fv(sceneLoc("uQ1"),1,quantum,4);
         glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
+        glUniform1i(sceneLoc("uCinematic"),cinematic?1:0);
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -876,6 +878,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         fields=enabled;if(enabled&&!entryMode&&!isOverview&&!freeFlight&&distance<radii[selected]*10)desiredDistance=radii[selected]*10;
     }
     public void setWind(boolean enabled){wind=enabled;}
+    /** Optional GPU visual effects; no changes to physics or MIL state. */
+    public void setCinematic(boolean enabled){cinematic=enabled;}
+    public boolean cinematicEnabled(){return cinematic;}
     public void setOrbits(boolean enabled){orbits=enabled;}
     public void setRealScale(boolean enabled){
         if(realScale==enabled)return;
