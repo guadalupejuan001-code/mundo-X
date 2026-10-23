@@ -16,12 +16,13 @@ public final class SolarSurface extends GLSurfaceView {
     private float previousX,previousY;
     private boolean twoFingers;
     private final Handler interactionHandler=new Handler(Looper.getMainLooper());
-    private final Runnable restoreFullUhd=()->{
-        if(isAttachedToWindow())mutate(()->observer.setInteractionPreview(false));
-    };
+    private final Runnable restoreFullUhd;
     public SolarSurface(Context context, SolarRenderer renderer) {
         super(context);
         observer=renderer;
+        restoreFullUhd=()->{
+            if(isAttachedToWindow())mutate(()->observer.setInteractionPreview(false));
+        };
         setEGLContextClientVersion(3);
         setEGLConfigChooser(8,8,8,8,24,0);
         setPreserveEGLContextOnPause(true);
