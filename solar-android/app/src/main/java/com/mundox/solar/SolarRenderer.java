@@ -74,6 +74,10 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private boolean requestedUhd,requestedUltra;
     private volatile boolean activeUhd,activeUltra;
     private volatile String resolutionMessage;
+    // The simulation state and its Ether observation remain authoritative.
+    // Dynamic display resolution is a derived view, never a state mutation.
+    private volatile boolean adaptivePreview;
+    private final SolarAdaptiveQuality adaptiveQuality=new SolarAdaptiveQuality(960);
     private volatile RenderResolution.Fit display=RenderResolution.fit(1,1,new RenderResolution.Size(1,1));
     private volatile boolean entryMode,atmosphereEnabled=true;
     private double entryLatitude,entryLongitude,entryHeading,entryLookPitch;
@@ -161,6 +165,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
+        adaptiveQuality.clearSamples();
         try{
             sceneProgram=program(sceneVertex,sceneFragment);overlayProgram=program(overlayVertex,overlayFragment);
             int[] names={0};glGenVertexArrays(1,names,0);eyeVao=names[0];
@@ -178,6 +183,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     }
     @Override public void onSurfaceChanged(GL10 unused,int w,int h){
         viewWidth=Math.max(1,w);viewHeight=Math.max(1,h);framebufferDirty=true;
+        adaptiveQuality.clearSamples();
         if(!initializedCamera||isOverview)resetDistance=true;
     }
 
@@ -296,6 +302,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             String reason=rejected.getMessage();if(reason==null)reason=rejected.getClass().getSimpleName();
             if(framebuffer!=0){
                 requestedUhd=activeUhd;requestedUltra=activeUltra;quality=acceptedQuality;framebufferDirty=false;
+                adaptiveQuality.reset(quality);
                 display=RenderResolution.fit(viewWidth,viewHeight,new RenderResolution.Size(width,height));
                 resolutionMessage="No se pudo activar "+request+": "+reason+". Se conserva "+width+"×"+height+".";return;
             }
@@ -688,7 +695,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     @Override public void onDrawFrame(GL10 unused){
         if(failed||sceneProgram==0)return;
         try{
-            long now=System.nanoTime();double dt=previousNanos==0?0:Math.min(.1,Math.max(0,(now-previousNanos)*1e-9));previousNanos=now;
+            long now=System.nanoTime();
+            long frameIntervalNanos=previousNanos==0?0:Math.max(0,now-previousNanos);
+            double dt=Math.min(.1,frameIntervalNanos*1e-9);previousNanos=now;
             if(!paused)clockSeconds+=dt;
             if(!paused){double next=jd+dt*speed;if(next<SolarData.MIN_JD||next>SolarData.MAX_JD){jd=Math.max(SolarData.MIN_JD,Math.min(SolarData.MAX_JD,next));paused=true;}else jd=next;}
             if(entryMode&&localPhysics&&!paused&&dt>0){
@@ -714,9 +723,15 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             int bottom=viewHeight-display.top-display.height;
             glBlitFramebuffer(0,0,width,height,display.left,bottom,display.left+display.width,bottom+display.height,GL_COLOR_BUFFER_BIT,GL_LINEAR);glBindFramebuffer(GL_FRAMEBUFFER,0);
             check("Pantalla solar");hasFrame=true;frameCount++;
+            // Effective cadence includes GPU/display throttling that CPU-only
+            // draw timing misses. Do not feed capture, paused, entry or UHD frames.
+            if(adaptivePreview&&!paused&&!entryMode&&!requestedUhd&&!requestedUltra&&requested==null){
+                int next=adaptiveQuality.sample(frameIntervalNanos);
+                if(next>0&&next!=quality){quality=next;framebufferDirty=true;}
+            }else adaptiveQuality.clearSamples();
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
-            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
+            if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":adaptivePreview?" · Auto fluido":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
             if(requested!=null)requested.captured(result);
         }catch(Throwable e){error(e);}
     }
@@ -882,9 +897,29 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
-    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;}
-    public void setUhd4k(boolean enabled){requestedUhd=enabled; if(enabled)requestedUltra=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
-    public void setUhd8k(boolean enabled){requestedUltra=enabled; if(enabled)requestedUhd=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
+    public void setQuality(int maxDimension){
+        quality=Math.max(360,Math.min(1920,maxDimension));
+        adaptivePreview=false;adaptiveQuality.reset(quality);
+        requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;
+    }
+    /** Demand-driven preview never changes the physical model or exported UHD target. */
+    public void setAdaptivePreview(boolean enabled){
+        adaptivePreview=enabled;adaptiveQuality.reset(quality);
+        if(enabled&&!requestedUhd&&!requestedUltra){
+            quality=adaptiveQuality.dimension();framebufferDirty=true;resolutionMessage=null;
+        }
+    }
+    public boolean isAdaptivePreviewEnabled(){return adaptivePreview;}
+    public void setUhd4k(boolean enabled){
+        requestedUhd=enabled;if(enabled){requestedUltra=false;adaptivePreview=false;}
+        adaptiveQuality.clearSamples();resolutionMessage=null;framebufferDirty=true;
+        if(isOverview)resetDistance=true;
+    }
+    public void setUhd8k(boolean enabled){
+        requestedUltra=enabled;if(enabled){requestedUhd=false;adaptivePreview=false;}
+        adaptiveQuality.clearSamples();resolutionMessage=null;framebufferDirty=true;
+        if(isOverview)resetDistance=true;
+    }
     public boolean isUhd4k(){return activeUhd&&framebuffer!=0&&((width==3840&&height==2160)||(width==2160&&height==3840));}
     public boolean isUhd8k(){return activeUltra&&framebuffer!=0&&((width==7680&&height==4320)||(width==4320&&height==7680));}
     public int renderedWidth(){return width;}
@@ -895,7 +930,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public String resolutionNotice(){return resolutionMessage;}
     public void setAtmosphereEnabled(boolean enabled){atmosphereEnabled=enabled;}
     public boolean atmosphereEnabled(){return atmosphereEnabled;}
-    public void setPaused(boolean paused){this.paused=paused;}
+    public void setPaused(boolean paused){this.paused=paused;adaptiveQuality.clearSamples();}
     public void setSpeed(double daysPerSecond){if(finite(daysPerSecond))speed=Math.max(-36525,Math.min(36525,daysPerSecond));}
     public void setJulianDate(double date){if(finite(date)){jd=Math.max(SolarData.MIN_JD,Math.min(SolarData.MAX_JD,date));orbitCacheDate=Double.NaN;syncWorld();}}
     public int selectedBody(){return selected;}
@@ -911,7 +946,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public int textureLayerForBody(int body){return body>=0&&body<MAX_BODIES?layers[body]:-1;}
     public int loadedMapCount(){int count=0;for(int layer:layers)if(layer>=0)count++;return count;}
     /** Lifecycle hook: a resumed frame must not integrate suspended wall time. */
-    public void resetFrameClock(){previousNanos=0;}
+    public void resetFrameClock(){previousNanos=0;adaptiveQuality.clearSamples();}
     /** Deterministic fixture hook: call while paused, on the GL thread. */
     public void setAnimationTimeForTest(float seconds){if(finite(seconds))clockSeconds=Math.max(0,seconds);}
     public void pick(float screenX,float screenY){
