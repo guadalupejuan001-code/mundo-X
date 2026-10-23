@@ -30,9 +30,14 @@ mx_quantum_target(test_quantum_algorithms native/tests/quantum_algorithms.cpp)
 mx_quantum_target(test_reduced_1000 native/tests/reduced_1000.cpp)
 mx_quantum_target(test_native_original_exams native/tests/native_original_exams.cpp)
 mx_quantum_target(test_ether_rules native/tests/ether_rules.cpp)
+# Physical observations remain in the SAME Ether COW memory, without
+# adding graphics, Android, field voxels, or any extra quantum backend.
+mx_quantum_target(test_physical_ether_address native/tests/physical_ether_address.cpp)
+
 mx_quantum_target(test_infinite_session native/tests/infinite_session.cpp)
 target_link_libraries(test_infinite_session PRIVATE Threads::Threads)
 
+add_test(NAME physical_ether_address COMMAND test_physical_ether_address)
 add_test(NAME inverse_memory COMMAND test_inverse_memory)
 add_test(NAME quantum_runtime COMMAND test_quantum_runtime)
 add_test(NAME ether_memory_copy_benchmark COMMAND ether_memory_copy_benchmark)
