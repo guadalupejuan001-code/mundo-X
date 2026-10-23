@@ -5,6 +5,18 @@ Reutiliza el renderizador `SolarRenderer`, el shader `solar.frag` de COSMIC,
 el puente `QuantumSolarBridge` con su sesión Ether compartida y los
 datos astronómicos originales. No sustituye ni duplica estos motores.
 
+## Dos APK para la demostración
+
+- **COSMIC X Solar 1.6** actualiza la app habitual
+  (`com.cosmicx.solar`) y conserva Cine X desactivado por defecto.
+- **COSMIC X Solar Cine X** es un instalador independiente
+  (`com.cosmicx.solar.presentation`) que **coexiste** con Solar normal:
+  inicia con Cine X habilitado y visor Auto fluido desde 1280 px.
+  No requiere borrar los proyectos ni los ajustes de la app habitual.
+
+Ambas variantes contienen el mismo código de simulación, shader propio y
+soporte 4K/8K cuando el hardware lo permite.
+
 ## Experiencia para una demostración
 
 1. Abrir **Tierra** o **Saturno** y tocar **Presentar** junto a **Guardar PNG**.
