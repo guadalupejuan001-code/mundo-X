@@ -23,6 +23,10 @@ int main() {
     constexpr double pi=3.14159265358979323846;
     near(baseline.xx,std::cos(pi/4.+.19),1e-8,
          "MIL T+general-phase correlations");
+    near(baseline.chsh_simulated,std::sqrt(2.)*(1.+baseline.xx),1e-9,
+         "Simulated CHSH must derive from the actual MIL expectations");
+    check(baseline.chsh_simulated>2. && baseline.chsh_simulated<=2.*std::sqrt(2.),
+          "Simulated Bell witness outside expected range");
     check(baseline.frequency_hz >= 180 && baseline.frequency_hz <=1200,
           "Physical frequency outside bounded range");
     check(baseline.event==1 && baseline.ether_memory_overrides==1,
