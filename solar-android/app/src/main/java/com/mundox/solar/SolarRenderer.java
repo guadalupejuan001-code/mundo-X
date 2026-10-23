@@ -74,6 +74,12 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private boolean requestedUhd,requestedUltra;
     private volatile boolean activeUhd,activeUltra;
     private volatile String resolutionMessage;
+    // The simulation state and its Ether observation remain authoritative.
+    // Dynamic display resolution is a derived view, never a state mutation.
+    private boolean adaptivePreview=true;
+    private int adaptiveDimension=960,slowFrames,fastFrames;
+    private long frameWorkStartNanos;
+    private static final int PREVIEW_MIN=480,PREVIEW_MAX=1280;
     private volatile RenderResolution.Fit display=RenderResolution.fit(1,1,new RenderResolution.Size(1,1));
     private volatile boolean entryMode,atmosphereEnabled=true;
     private double entryLatitude,entryLongitude,entryHeading,entryLookPitch;
@@ -687,6 +693,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
 
     @Override public void onDrawFrame(GL10 unused){
         if(failed||sceneProgram==0)return;
+        frameWorkStartNanos=System.nanoTime();
         try{
             long now=System.nanoTime();double dt=previousNanos==0?0:Math.min(.1,Math.max(0,(now-previousNanos)*1e-9));previousNanos=now;
             if(!paused)clockSeconds+=dt;
@@ -714,6 +721,21 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             int bottom=viewHeight-display.top-display.height;
             glBlitFramebuffer(0,0,width,height,display.left,bottom,display.left+display.width,bottom+display.height,GL_COLOR_BUFFER_BIT,GL_LINEAR);glBindFramebuffer(GL_FRAMEBUFFER,0);
             check("Pantalla solar");hasFrame=true;frameCount++;
+            // Hysteresis prevents oscillation; only the preview is resized.
+            // Never lower explicit 4K/8K capture or modify physical state.
+            if(adaptivePreview&&!requestedUhd&&!requestedUltra&&!entryMode&&capture==null){
+                double workMs=(System.nanoTime()-frameWorkStartNanos)*1e-6;
+                if(workMs>29){slowFrames++;fastFrames=0;}
+                else if(workMs<14){fastFrames++;slowFrames=0;}
+                else {slowFrames=0;fastFrames=0;}
+                if(slowFrames>=12&&adaptiveDimension>PREVIEW_MIN){
+                    adaptiveDimension=Math.max(PREVIEW_MIN,adaptiveDimension-160);
+                    quality=adaptiveDimension;framebufferDirty=true;slowFrames=fastFrames=0;
+                }else if(fastFrames>=90&&adaptiveDimension<PREVIEW_MAX){
+                    adaptiveDimension=Math.min(PREVIEW_MAX,adaptiveDimension+80);
+                    quality=adaptiveDimension;framebufferDirty=true;slowFrames=fastFrames=0;
+                }
+            }
             if(fpsNanos==0){fpsNanos=now;framesAtFps=frameCount;}
             else if(now-fpsNanos>750000000L){fps=(float)((frameCount-framesAtFps)*1e9/(now-fpsNanos));fpsNanos=now;framesAtFps=frameCount;}
             if(now-statusNanos>1000000000L){statusNanos=now;listener.status(String.format(Locale.US,"%.0f FPS · %d × %d%s · núcleo r%d · escena completa%s",fps,width,height,isUhd8k()?" UHD 8K":isUhd4k()?" UHD 4K":"",uploadedRevision,resolutionMessage==null?"":"\n"+resolutionMessage));}
@@ -882,7 +904,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
-    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;}
+    public void setQuality(int maxDimension){quality=Math.max(360,Math.min(1920,maxDimension));adaptiveDimension=quality;adaptivePreview=false;requestedUhd=requestedUltra=false;resolutionMessage=null;framebufferDirty=true;}
+    /** Re-enable demand-driven preview; full-resolution export remains explicit. */
+    public void setAdaptivePreview(boolean enabled){adaptivePreview=enabled;slowFrames=fastFrames=0;if(enabled&&!requestedUhd&&!requestedUltra){adaptiveDimension=Math.min(PREVIEW_MAX,Math.max(PREVIEW_MIN,quality));quality=adaptiveDimension;framebufferDirty=true;}}
     public void setUhd4k(boolean enabled){requestedUhd=enabled; if(enabled)requestedUltra=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
     public void setUhd8k(boolean enabled){requestedUltra=enabled; if(enabled)requestedUhd=false; resolutionMessage=null;framebufferDirty=true;if(isOverview)resetDistance=true;}
     public boolean isUhd4k(){return activeUhd&&framebuffer!=0&&((width==3840&&height==2160)||(width==2160&&height==3840));}
