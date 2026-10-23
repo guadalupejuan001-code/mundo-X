@@ -135,6 +135,22 @@ jobs:
           done
           [[ "$ready" == true ]] || { tail -80 solar-fluido-dist/emulator.log; exit 1; }
           adb shell input keyevent 82
+          # Reuse the checked original Solar Android test fixture. A clean
+          # Google APIs Android 15 user may present an unrelated immersive
+          # tutorial / Digital Wellbeing ANR that steals focus and invalidates
+          # lifecycle/visual comparisons despite the renderer working.
+          adb shell wm size 960x1707
+          adb shell wm density 320
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell settings put secure immersive_mode_confirmations confirmed
+          test "$(adb shell settings get secure immersive_mode_confirmations | tr -d '\r')" = confirmed
+          wellbeing=com.google.android.apps.wellbeing
+          if [ "$(adb shell pm list packages --user 0 "$wellbeing" | tr -d '\r')" = "package:$wellbeing" ]; then
+            adb shell pm disable-user --user 0 "$wellbeing"
+            test "$(adb shell pm list packages -d --user 0 "$wellbeing" | tr -d '\r')" = "package:$wellbeing"
+          fi
           adb install -r solar-fluido-dist/COSMIC-X-Solar-Fluido.apk
           adb install -r solar-fluido-dist/COSMIC-X-Solar-Fluido-tests.apk
           timeout --kill-after=15 600 adb shell am instrument -w \
