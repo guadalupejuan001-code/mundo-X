@@ -25,6 +25,9 @@ Los cambios son **opcionales** y solo se aplican cuando
 
 - Destellos de estrellas con anchura filtrada por la huella angular del píxel.
 - Realce tenue de dispersión en el limbo y el terminador de atmósferas.
+- Exposición propia para superficies: conserva tonos de Saturno que antes
+  tendían a perderse en blancos y deja ver mejor océanos bajo nubes
+  procedurales en la Tierra.
 - Bandas secundarias en anillos con amortiguación de subpíxel.
 - Corona solar con halo y destellos geométricos limitados por oclusión.
 - Grado fotográfico de color moderado, tras el tone mapping original.
