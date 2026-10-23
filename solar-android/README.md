@@ -1,5 +1,27 @@
 # COSMIC X Solar
 
+## Solar 1.6 · Cine X / modo presentación
+
+El botón **Presentar** activa iluminación fotográfica opcional, inicia el
+visor **Auto fluido** desde 1280 px y oculta paneles para mostrar planetas,
+anillos y atmósferas sin obstáculos. El botón **☰** recupera la interfaz.
+
+- **Cine X** incorpora destellos filtrados, limbos atmosféricos, bandas
+  finas en anillos y corona solar ilustrativa, conservando el renderizador
+  propio y el estado de Ether. Se puede desactivar en **Observatorio** y
+  recuperar el resultado anterior.
+- **Foto 4K** realiza un render de 8,3 megapíxeles **solo al capturar**
+  mientras Cine X está activo; regresa al visor adaptativo después. Si
+  la GPU no admite la reserva de 4K, informa del error sin exportar un
+  PNG falsamente ampliado.
+- La calidad de vista previa se ajusta a la GPU. El render continuo a
+  4K/8K continúa siendo opcional y puede funcionar despacio en móviles
+  modestos.
+- El modo Cine X es apariencia óptica, no un modelo de radiación
+  validado. Órbitas, gravedad, efemérides y el núcleo cuántico no cambian.
+
+[Detalles técnicos y pasos de presentación](../docs/solar-cine-x-presentation-2026-10-23.md).
+
 Explorador del sistema solar para Android, construido como una nueva aplicación
 de **COSMIC X Engine**. Integra el núcleo original de Mundo X y amplía su
 observador gráfico con planetas esféricos, anillos, órbitas y capas magnéticas.
