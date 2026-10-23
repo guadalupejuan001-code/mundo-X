@@ -45,6 +45,7 @@ class WorldLinkQuantumBridge {
     double phase_radians = 0.0;
     double xx = 0.0;
     double zz = 0.0;
+    double chsh_simulated = 0.0;
     double norm = 0.0;
     int frequency_hz = 440;
     std::uint64_t event = 0;
@@ -132,6 +133,10 @@ class WorldLinkQuantumBridge {
     out.zz = std::clamp(zz_complex.real() / norm, -1.0, 1.0);
     if (std::abs(out.zz - 1.0) > 1e-8)
       throw std::runtime_error("MIL Bell ZZ parity failed");
+    // Standard Bell-CHSH settings A={Z,X}, B={(Z+X)/sqrt2,(Z-X)/sqrt2}.
+    // E00+E01+E10-E11 = sqrt(2)*(ZZ+XX), with cross terms cancelling.
+    // This is a SIMULATED witness, not a violation observed in hardware.
+    out.chsh_simulated = std::sqrt(2.0) * (out.zz + out.xx);
 
     out.components = candidate->component_count();
     out.mil_logical_bytes = candidate->logical_payload_bytes();
