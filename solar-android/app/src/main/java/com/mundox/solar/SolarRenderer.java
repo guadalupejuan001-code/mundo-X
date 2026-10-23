@@ -322,6 +322,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private void installTarget(RenderResolution.Size size,int mode,int limit){
         RenderResolution.Fit fit=RenderResolution.fit(viewWidth,viewHeight,size);
         if(framebuffer==0||width!=size.width||height!=size.height){
+            // Reclaim preview color/depth BEFORE the transactional UHD switch.
+            // It is optional and can be recreated lazily on the next gesture.
+            deletePreviewTarget();
             RenderResolution.Size existing=framebuffer==0?null:new RenderResolution.Size(width,height);
             RenderResolution.requireAllocation(size,existing);
             int color=0,depth=0,target=0;boolean accepted=false;
