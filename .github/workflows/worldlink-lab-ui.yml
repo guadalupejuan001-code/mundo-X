@@ -68,16 +68,16 @@ jobs:
             worldlink-lab-dist/WorldLink-Interaccion-Reloj.apk
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt2"
-          "$APKSIGNER" verify --print-certs worldlink-lab-dist/WorldLink-Mundo-X-Telefono.apk \
+          "$APKSIGNER" verify --print-certs worldlink-lab-dist/WorldLink-Interaccion-Telefono.apk \
             > worldlink-lab-dist/phone-signature.txt
-          "$APKSIGNER" verify --print-certs worldlink-lab-dist/WorldLink-Mundo-X-Reloj.apk \
+          "$APKSIGNER" verify --print-certs worldlink-lab-dist/WorldLink-Interaccion-Reloj.apk \
             > worldlink-lab-dist/watch-signature.txt
-          "$AAPT" dump badging worldlink-lab-dist/WorldLink-Mundo-X-Telefono.apk \
+          "$AAPT" dump badging worldlink-lab-dist/WorldLink-Interaccion-Telefono.apk \
             > worldlink-lab-dist/phone-manifest.txt
-          "$AAPT" dump badging worldlink-lab-dist/WorldLink-Mundo-X-Reloj.apk \
+          "$AAPT" dump badging worldlink-lab-dist/WorldLink-Interaccion-Reloj.apk \
             > worldlink-lab-dist/watch-manifest.txt
           grep -q "package: name='com.mundox.worldlink.active'" worldlink-lab-dist/phone-manifest.txt
-          grep -q "package: name='com.mundox.worldlink'" worldlink-lab-dist/watch-manifest.txt
+          grep -q "package: name='com.mundox.worldlink.active'" worldlink-lab-dist/watch-manifest.txt
           PHONE_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' worldlink-lab-dist/phone-signature.txt)
           WATCH_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' worldlink-lab-dist/watch-signature.txt)
           test -n "$PHONE_CERT"
