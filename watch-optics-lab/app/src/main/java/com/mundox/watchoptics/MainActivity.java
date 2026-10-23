@@ -32,6 +32,7 @@ import java.util.Locale;
  */
 public final class MainActivity extends Activity implements SensorEventListener {
     private static final int REQUEST_OPTICAL = 700;
+    private static final int REQUEST_HEART = 701;
     private static final long MAX_SESSION_MS = 60000L;
     private static final int MAX_ROWS = 12000;
     private SensorManager sensors;
@@ -74,6 +75,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         samples = label("PPG bruto exige biblioteca Samsung oficial", 11);
         button(layout, "Ver sensores", v -> showInventory());
         button(layout, "Registrar 60 s", v -> beginSession());
+        button(layout, "Pulso óptico (BPM)", v -> startHeartRate());
         button(layout, "PPG óptico bruto", v -> startOptical());
         button(layout, "Detener y guardar", v -> finishSession());
         layout.addView(status);
@@ -116,6 +118,28 @@ public final class MainActivity extends Activity implements SensorEventListener 
             }
         }
         status.setText("Registro iniciado • máximo 60 s\nSin red y con datos locales");
+    }
+
+    private void startHeartRate() {
+        if (!capturing) beginSession();
+        if (!capturing) return;
+        if (checkSelfPermission(Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.BODY_SENSORS}, REQUEST_HEART);
+            return;
+        }
+        Sensor heart = sensors.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+        if (heart == null) {
+            status.setText("El firmware no expone pulso a SensorManager");
+            return;
+        }
+        if (!activeSensors.contains(heart)) {
+            if (sensors.registerListener(this, heart, SensorManager.SENSOR_DELAY_NORMAL)) {
+                activeSensors.add(heart);
+                status.setText("Pulso óptico activado (BPM calculado por firmware; NO PPG crudo)");
+            } else {
+                status.setText("El sistema no permite iniciar lectura de pulso");
+            }
+        }
     }
 
     private void startOptical() {
@@ -178,7 +202,8 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if (!capturing) return;
         String kind = event.sensor.getType() == Sensor.TYPE_ACCELEROMETER ? "accelerometer" :
                       event.sensor.getType() == Sensor.TYPE_GYROSCOPE ? "gyroscope" :
-                      event.sensor.getType() == Sensor.TYPE_LIGHT ? "ambient_light" : "other";
+                      event.sensor.getType() == Sensor.TYPE_LIGHT ? "ambient_light" :
+                      event.sensor.getType() == Sensor.TYPE_HEART_RATE ? "heart_rate_bpm" : "other";
         float[] value = event.values;
         String a = value.length > 0 ? Float.toString(value[0]) : "";
         String b = value.length > 1 ? Float.toString(value[1]) : "";
@@ -227,6 +252,11 @@ public final class MainActivity extends Activity implements SensorEventListener 
             startOptical();
         } else if (code == REQUEST_OPTICAL) {
             status.setText("Sin permiso: PPG desactivado. Otras lecturas siguen disponibles.");
+        } else if (code == REQUEST_HEART && results.length > 0 &&
+                   results[0] == PackageManager.PERMISSION_GRANTED) {
+            startHeartRate();
+        } else if (code == REQUEST_HEART) {
+            status.setText("Sin permiso: pulso óptico no leído.");
         }
     }
 
