@@ -179,6 +179,10 @@ vec3 sky(vec3 rd,vec3 drx,vec3 dry){
     vec3 col=vec3(0.0010,0.0018,0.0045);
     float milky=pow(max(0.0,1.0-abs(dot(rd,normalize(vec3(.23,.89,.39))))),20.0);
     col+=milky*vec3(.006,.009,.017)*(0.35+fbm(rd*14.0));
+    if(uCinematic==1){
+        // Slight photographic sky exposure, not an observed Milky Way map.
+        col+=milky*vec3(.008,.011,.020)*(0.35+fbm(rd*14.0));
+    }
     vec2 uv=vec2(longitude(rd)/(2.0*PI)+.5,asin(clamp(rd.y,-1.0,1.0))/PI+.5);
     vec2 uvWidth=abs(angularGradient(rd,drx))+abs(angularGradient(rd,dry));
     for(int level=0;level<2;level++){
@@ -239,6 +243,9 @@ vec3 surface(vec3 n,int id,vec3 localDx,vec3 localDy,out float ocean,out float c
             vec3 cp=rotY(p,uTime*.00035);
             float cloudNoise=fbm(cp*8.4+vec3(0,noise(cp*4.0)*2.0,0));
             clouds=smoothstep(.51,.69,cloudNoise)*.73;
+            // Presentation emphasis: retain visible oceans/continents under
+            // the illustrative procedural cloud layer.
+            if(uCinematic==1)clouds*=.72;
         }
         c=mix(c,vec3(.95,.98,1.0),clouds);
     }else if(id==2){
@@ -425,7 +432,15 @@ void main(){
             float roughness=clamp(materialRoughness(id,ocean,clouds),.045,.98);
             // Bodies in this catalogue are treated as dielectrics; exposed
             // metal fractions are not invented from unavailable material maps.
-            color=pbrDirect(albedo,normal,viewDir,light,roughness,0.0)*3.35*visibility;
+            // The legacy exposure clips Saturn's light bands close to white.
+            // Cine X preserves hue and surface contrast by reducing scene gain.
+            float solarExposure=uCinematic==1?2.15:3.35;
+            color=pbrDirect(albedo,normal,viewDir,light,roughness,0.0)
+                    *solarExposure*visibility;
+            if(uCinematic==1 && (id==5||id==6)){
+                // Gentle warm balance for gaseous bands; illustrative material.
+                color*=id==6?vec3(1.06,.94,.79):vec3(1.06,.98,.90);
+            }
             color+=albedo*.008;
             // Rounded unit vectors may have a dot product just above one.
             float rim=pow(1.0-clamp(dot(normal,-rd),0.0,1.0),3.5);
