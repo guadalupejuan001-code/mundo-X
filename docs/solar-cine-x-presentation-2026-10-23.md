@@ -32,8 +32,11 @@ soporte 4K/8K cuando el hardware lo permite.
 
 ## Calidad óptica
 
-Los cambios son **opcionales** y solo se aplican cuando
-`uCinematic=1` en el shader GLES de Solar:
+Los cambios son **opcionales** y se calculan en el shader independiente
+`solar-cine.frag` cuando `uCinematic=1`. El shader científico original
+`solar.frag` permanece **idéntico byte por byte** al de la base. Se compilan
+dos programas GLES y cada uno conserva sus ubicaciones de uniformes, evitando
+que la versión óptica cambie un píxel del programa clásico:
 
 - Destellos de estrellas con anchura filtrada por la huella angular del píxel.
 - Realce tenue de dispersión en el limbo y el terminador de atmósferas.
