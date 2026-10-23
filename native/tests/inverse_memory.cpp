@@ -100,6 +100,52 @@ int main() {
 
     need(core_before_superposition != core_quantum, "H did not change the tested quantum state");
 
+    // Copy-on-write: even a large store must be cheap to copy for a read-only
+    // transaction, and writes to any copy must not affect the other owners.
+    InverseMemory populated;
+    for (unsigned i = 0; i < 1024; ++i)
+      populated.store(std::to_string(i), static_cast<std::uint8_t>(1 + i % 254), core);
+    populated.bind_quantum_byte("5000", "6000", core);
+    const auto original = populated.snapshot();
+    std::vector<InverseMemory> readers(64, populated);
+    for (auto& reader : readers) {
+      need(reader.read("42", core).deterministic && reader.read("42", core).value == 43,
+           "read-only copy lost a classical override");
+      need(reader.read("5000", core).deterministic, "read-only copy lost quantum binding");
+    }
+    readers[0].store("42", 200, core);
+    readers[1].bind_quantum_byte("5000", "7000", core);
+    readers[2].unbind_quantum_byte("5000");
+    readers[3].reset(9);
+    need(populated.snapshot() == original, "one writer changed the shared parent");
+    need(readers[4].snapshot() == original, "one writer changed another shared reader");
+    need(readers[0].read("42", core).value == 200 &&
+         populated.read("42", core).value == 43, "classical map did not detach");
+    need(readers[1].stats().quantum_bindings == 1 &&
+         readers[1].snapshot() != original, "rebind did not detach quantum map");
+    need(readers[2].stats().quantum_bindings == 0, "unbind did not detach quantum map");
+    need(readers[3].read("42", core).value == 9 &&
+         readers[3].stats().overrides == 0, "reset did not abandon shared maps");
+    const auto no_op_revision = readers[0].stats().revision;
+    readers[0].store("42", 200, core);
+    need(readers[0].stats().revision == no_op_revision, "no-op store changed revision");
+
+    // Shards must not change the byte-for-byte sorted MXIM1 wire format.
+    InverseMemory ordered;
+    for (const unsigned id : {200U, 10U, 1U, 100U, 2U})
+      ordered.store(std::to_string(id), static_cast<std::uint8_t>(id), core);
+    need(ordered.snapshot() ==
+         "MXIM1 0\nO 1 1\nO 2 2\nO 10 10\nO 100 100\nO 200 200\n",
+         "sharded snapshot lost numeric address ordering");
+    need(InverseMemory::from_snapshot(ordered.snapshot()).snapshot() == ordered.snapshot(),
+         "sharded snapshot failed exact restoration");
+
+    InverseMemory::Limits short_address;
+    short_address.max_address_digits = 3;
+    rejects([&] {
+      (void)InverseMemory::from_snapshot("MXIM1 0\nQ 7 999\n", short_address);
+    }, "snapshot accepted a quantum byte crossing the address limit");
+
     std::cout << "{\"suite\":\"inverse_memory\",\"checks\":" << checks
               << ",\"rule_domain\":\"decimal-unbounded\","
               << "\"implicit_byte_array\":false,"

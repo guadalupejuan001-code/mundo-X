@@ -83,6 +83,21 @@ int main() {
     need(material.find("\"hex\":\"2c2d\"") != std::string::npos,
          "XI bounded projection changed bytes");
 
+    // Snapshot from a memory owner with a wider address allowance must not
+    // install an eight-qubit binding invalid for this core's tighter limit.
+    mundo_x::InfiniteCore::Limits core_limits;
+    core_limits.max_address_digits = 3;
+    mundo_x::QuantumRuntime limited(mundo_x::InfiniteCore::Background::Zero,
+                                    core_limits, mundo_x::InverseMemory::Limits{});
+    const auto small_core = limited.core_snapshot();
+    const auto small_memory = limited.memory_snapshot();
+    rejects([&] {
+      limited.restore(small_core, "MXIM1 0\nQ 77 999\n");
+    }, "restore accepted a binding crossing the core address limit");
+    need(limited.core_snapshot() == small_core &&
+         limited.memory_snapshot() == small_memory,
+         "rejected binding restore committed partial quantum or memory state");
+
     std::cout << "{\"suite\":\"quantum_runtime\",\"checks\":" << checks
               << ",\"xi_memory_commands\":true,"
               << "\"transactional\":true,"

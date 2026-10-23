@@ -49,6 +49,7 @@ class QuantumRuntime {
   void restore(const std::string& core_saved, const std::string& memory_saved) {
     auto candidate_core = InfiniteCore::from_snapshot(core_saved, core_.limits());
     auto candidate_memory = InverseMemory::from_snapshot(memory_saved, memory_.limits());
+    candidate_memory.validate_quantum_bindings(candidate_core);
     core_ = std::move(candidate_core);
     memory_ = std::move(candidate_memory);
   }
