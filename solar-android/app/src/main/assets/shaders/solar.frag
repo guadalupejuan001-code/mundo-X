@@ -24,6 +24,7 @@ uniform int uLayers[MAX_BODIES];
 uniform sampler2DArray uMaps;
 uniform vec4 uQ0,uQ1,uEther;
 uniform float uCoupling;
+uniform int uCinematic; // opt-in visual upgrade, never changes orbital physics
 out vec4 outColor;
 
 float hash(float n){return fract(sin(n)*43758.5453123);}
@@ -191,6 +192,17 @@ vec3 sky(vec3 rd,vec3 drx,vec3 dry){
         star*=step(level==0?.9975:.996,h)*(level==0?.85:1.8);
         vec3 tint=mix(vec3(.62,.77,1.0),vec3(1.0,.81,.58),hash(h*419.1));
         col+=star*tint;
+        if(uCinematic==1 && h>.9988){
+            // Analytic optical glint, filtered by angular pixel footprint.
+            // Visual camera effect; not an astronomical measurement.
+            float d=length(delta)/max(pixel,.06);
+            float halo=exp(-d*1.7)*.22;
+            float cross=exp(-abs(delta.x)/max(pixel*.16,.012))*
+                        exp(-abs(delta.y)/max(pixel*3.5,.04));
+            cross+=exp(-abs(delta.y)/max(pixel*.16,.012))*
+                   exp(-abs(delta.x)/max(pixel*3.5,.04));
+            col+=(halo+cross*.045)*tint;
+        }
     }
     return col;
 }
@@ -418,6 +430,16 @@ void main(){
             // Rounded unit vectors may have a dot product just above one.
             float rim=pow(1.0-clamp(dot(normal,-rd),0.0,1.0),3.5);
             if(!entering(id))color+=atmosphereColor(id)*rim*(.10+.35*smoothstep(-.22,.55,nl))*visibility;
+            if(uCinematic==1 && !entering(id) && uAtmosphere[id].z>0.0){
+                // Bounded approximate atmospheric limb-scattering highlight.
+                // Concentrated on the terminator, no extra ray-march passes.
+                float limb=pow(1.0-clamp(dot(normal,viewDir),0.0,1.0),5.0);
+                float twilight=1.0-smoothstep(-.10,.30,nl);
+                float illuminated=smoothstep(-.35,.65,nl);
+                vec3 tint=uAtmosphereColors[id];
+                color+=tint*limb*(.035+.10*twilight+.12*illuminated)*
+                        uAtmosphere[id].z*visibility;
+            }
             // A planet casts its shadow onto its own rings, and rings dim its day side.
             if(uAppearance[id].w>0.0){
                 vec3 axis=uAxes[id];
@@ -454,6 +476,13 @@ void main(){
         if(b>0.0){float q=length(p+light*b)/uBodies[j].w;shadow=smoothstep(.96,1.04,q);}
         float tint=.55+.2*sin(rr*31.0)+.15*sin(rr*113.0);
         vec3 ring=mix(vec3(.18,.13,.078),vec3(.72,.62,.41),tint);
+        if(uCinematic==1){
+            // Narrow ringlets with antialiasing tied to pixel footprint.
+            float wave=sin(rr*390.0)*.5+.5;
+            float ringlet=(wave-.5)*.18*
+                    (1.0-smoothstep(.002,.025,radialWidth));
+            ring*=1.0+ringlet;
+        }
         ring*=.32+.83*abs(dot(axis,light));ring*=.12+.88*shadow;
         if(j==7||j==8)ring*=vec3(.44,.62,.80);
         color=mix(color,ring,opacity*.91);

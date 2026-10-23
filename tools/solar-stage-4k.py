@@ -57,7 +57,7 @@ def main():
         manifests[name] = badging
     require(signatures[APP] == signatures[TESTS], "App and test signing certificates differ")
     app = manifests[APP]
-    require("package: name='com.cosmicx.solar.uhd' versionCode='4' versionName='1.3.0'" in app,
+    require("package: name='com.cosmicx.solar.uhd' versionCode='6' versionName='1.5.0'" in app,
             "Unexpected standalone package identity or version")
     require("package: name='com.cosmicx.solar'" in manifests[COMPANION], "Legacy companion package changed")
     require("package: name='com.cosmicx.solar.uhd.test'" in manifests[TESTS], "Generated test package does not target UHD")

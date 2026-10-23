@@ -40,11 +40,14 @@ def main():
         "forward_reverse_and_paused_time", "real_scale_earth_focus",
         "camera_rotation_zoom_pan_and_flight", "resolution_budget",
         "background_resume_preserves_state", "recreation_and_orientation_preserve_state",
+        "cinematic_opt_in_shader_and_legacy_restore",
+        "smart_4k_live_preview_is_native_and_bounded",
     }
     if uhd:
         expected_tests.update({"uhd_framebuffer_return_preserves_scene", "uhd_fit_picking_preserves_scene",
                                "entry_all_planets_and_moons", "entry_atmosphere_and_grazing_frames",
-                               "entry_uhd_lifecycle_and_orientation", "map_ui_planet_and_moon_selection"})
+                               "entry_uhd_lifecycle_and_orientation", "map_ui_planet_and_moon_selection",
+                               "smart_4k_png_capture_native_then_preview"})
     elif ultra:
         expected_tests.update({"ultra8k_framebuffer_return_preserves_scene",
                                "ultra8k_earth_entry_atmosphere"})
@@ -63,6 +66,12 @@ def main():
     require(metrics["androidSdk"] == 35 and "x86_64" in metrics["abis"],
             "The device does not match the Android 15 x86_64 validation target")
     require("swiftshader" in metrics["glRenderer"].lower(), "Unexpected GLES validation driver")
+    preview = metrics["smart4kPreview"]
+    require(preview["previewPixels"] == 518_400
+            and preview["native4kPixels"] == 8_294_400
+            and preview["fragmentReduction"] == 16
+            and preview["physicalSpeedupClaimed"] is False,
+            "4K Fluido must report real 960p shading, not fake continuous 4K")
     require(metrics["nativeDomain"] == "q0,q1,..." and metrics["nativePreparationSites"] == 8
             and 0 <= metrics["nativeActiveSites"] <= 8 and metrics["nativeStateBytes"] >= 0,
             "The Ether domain and finite Solar preparation were not distinguished")
@@ -172,7 +181,8 @@ def main():
         expected_images.update(f"entry-body-{body:02d}.png" for body in range(1, 23))
         expected_images.update(f"entry-{body}-{kind}.png" for body in ("earth", "venus", "jupiter", "titan", "moon")
                                for kind in ("atmosphere", "grazing"))
-        expected_images.update({"entry-earth-vacuum.png", "entry-moon-vacuum.png"})
+        expected_images.update({"entry-earth-vacuum.png", "entry-moon-vacuum.png",
+                                "smart4k-native-photo.png"})
     elif ultra:
         expected_images.update({"uhd-adaptive-before.png", "uhd-adaptive-after.png",
                                 "ultra8k-earth-orbit.png", "ultra8k-earth-entry.png"})
@@ -193,6 +203,13 @@ def main():
     require(portrait["height"] > portrait["width"] and landscape["width"] > landscape["height"],
             "Actual Activity screenshots do not verify both display orientations")
     if uhd:
+        smart_capture=metrics["smart4kNativeCapture"]
+        require(smart_capture["photoPixels"] == 8_294_400
+                and smart_capture["previewRestoredWidth"]*
+                    smart_capture["previewRestoredHeight"]<=1_166_400
+                and image_manifest["smart4k-native-photo.png"]["width"]*
+                    image_manifest["smart4k-native-photo.png"]["height"]==8_294_400,
+                "4K Fluido photo did not draw native 4K and restore the preview")
         require(metrics["applicationId"] == "com.cosmicx.solar.uhd" and metrics["uhdPixels"] == 8_294_400,
                 "The standalone package or UHD pixel count is wrong")
         require(metrics["uhdReturnChangedPixels"] == 0 and metrics["uhdNativeOwnerPreserved"] is True
@@ -272,7 +289,7 @@ def main():
                 and 0 <= entry["altitudeKm"] <= 1000 and entry["brightPixels"] > 80,
                 "Solar 8K atmospheric entry evidence is incomplete")
         require(provenance["applicationId"] == "com.cosmicx.solar.ultra"
-                and provenance["version"] == "1.3.0" and provenance["versionCode"] == 4
+                and provenance["version"] == "1.5.0" and provenance["versionCode"] == 6
                 and provenance["scientificChecks"] >= 511,
                 "Solar 8K APK provenance is incomplete")
         expected_provenance = verify_integrated_core(Path(__file__).resolve().parents[1])
