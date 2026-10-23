@@ -1,0 +1,44 @@
+name: X Recorder Android APK (isolated)
+on:
+  push:
+    branches:
+      - xrecorder/screen-recorder-app-20261022
+    paths:
+      - ci-input/xrecorder-source.tar.xz.b64
+      - .github/workflows/xrecorder-build.yml
+  workflow_dispatch:
+
+jobs:
+  build-xrecorder:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android API 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Install Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Unpack and verify isolated XRecorder source
+        run: |
+          base64 -d ci-input/xrecorder-source.tar.xz.b64 > /tmp/xrecorder-source.tar.xz
+          echo '333277e2ccdade4594248a2c6c2bb88a97d04261c22bf40d102f3afca196b64e  /tmp/xrecorder-source.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/xrecorder-source.tar.xz
+      - name: Build standalone XRecorder debug APK
+        working-directory: XRecorder-Android
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Attach XRecorder APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: XRecorder-Android-debug
+          path: XRecorder-Android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
