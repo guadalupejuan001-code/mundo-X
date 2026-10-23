@@ -228,6 +228,12 @@ public final class SolarInstrumentation extends Instrumentation {
      * CPU-side candidate count. No independent quantum world is constructed.
      */
     private void etherVisualExact() throws Exception {
+        // Demand-mode captures stop continuous frames from interleaving with
+        // the paused, controlled A/B experiment. Every frame() still submits
+        // an actual new GLES draw and glReadPixels.
+        main(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY));
+        onDemandFrames=true;
+        try {
         int active=0;
         double bestRatio=1.0;
         JSONArray comparisons=new JSONArray();
@@ -282,6 +288,10 @@ public final class SolarInstrumentation extends Instrumentation {
                 .put("frameComparisons",comparisons));
         prepare(3,false,false);
         gl(()->activity.renderer().setCandidateCulling(true));
+        } finally {
+            main(() -> activity.surface().setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY));
+            onDemandFrames=false;
+        }
     }
 
     private void astronomyAndMagnetism() throws Exception {
