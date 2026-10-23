@@ -413,7 +413,7 @@ inline XasmRunResult run_xasm(std::istream& input) {
         require_end();
         if (j_milli == 0 || j_milli > 100000 || u_milli > 100000)
           throw std::invalid_argument("scatter requires J_milli 1..100000 and U_milli 0..100000");
-        const auto work = MilScattering::estimate_work(sites, steps);
+        const auto work = MilScattering::estimate_work(sites, steps, u_milli == 0);
         if (scattering_work > MilScattering::default_work_budget ||
             work > MilScattering::default_work_budget - scattering_work)
           throw std::length_error("scatter cumulative work budget exceeded");
@@ -426,7 +426,9 @@ inline XasmRunResult run_xasm(std::istream& input) {
         scattering_work += work;
         ++result.scattering_runs;
         ++result.instructions;
-        out << "SCATTER model=two_distinguishable_particles_1d sites=" << sites
+        out << "SCATTER model=two_distinguishable_particles_1d"
+            << " solver=" << (collision.factorized_free ? "free_product_fft_1d" : "interacting_fft_2d")
+            << " sites=" << sites
             << " steps=" << steps
             << " J=" << xasm_detail::precise_value(cfg.hopping)
             << " U=" << xasm_detail::precise_value(cfg.contact)
