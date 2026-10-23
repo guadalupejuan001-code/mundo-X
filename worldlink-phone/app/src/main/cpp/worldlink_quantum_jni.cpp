@@ -7,14 +7,17 @@
 #include <string>
 
 #include "mundo_x/worldlink_quantum_bridge.hpp"
+#include "mundo_x/worldlink_field_memory.hpp"
 
 namespace {
 std::mutex mutex;
 std::unique_ptr<mundo_x::WorldLinkQuantumBridge> engine;
+std::unique_ptr<mundo_x::WorldLinkFieldMemory> field_memory;
 
 jstring result_string(JNIEnv* env, const std::string& value) {
   return env->NewStringUTF(value.c_str());
 }
+
 std::string escape_json(const std::string& value) {
   std::string out;
   for (const unsigned char c : value) {
@@ -101,4 +104,26 @@ Java_com_mundox_worldlink_phone_QuantumBridge_nativeReset(
   } catch(const std::exception& e) {
     return result_string(env,error_json(e.what()));
   }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mundox_worldlink_phone_NativeFieldRule_nativeStore(JNIEnv* env,jclass,jdoubleArray values) {
+  try {
+    std::lock_guard<std::mutex> lock(mutex);
+    if(!values || env->GetArrayLength(values)!=6)throw std::invalid_argument("Six field coefficients required");
+    std::array<double,6> p{};env->GetDoubleArrayRegion(values,0,6,p.data());if(env->ExceptionCheck())return;
+    if(!field_memory)field_memory=std::make_unique<mundo_x::WorldLinkFieldMemory>();
+    field_memory->store(p);
+  }catch(const std::exception& e){env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),e.what());}
+  catch(...){env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),"Field rule storage failed");}
+}
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_com_mundox_worldlink_phone_NativeFieldRule_nativeLoad(JNIEnv* env,jclass) {
+  try {
+    std::lock_guard<std::mutex> lock(mutex);
+    if(!field_memory)throw std::logic_error("No fitted field rule");
+    const auto p=field_memory->load();jdoubleArray out=env->NewDoubleArray(6);if(!out)return nullptr;
+    env->SetDoubleArrayRegion(out,0,6,p.data());return out;
+  }catch(const std::exception& e){env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),e.what());return nullptr;}
+  catch(...){env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),"Field rule read failed");return nullptr;}
 }

@@ -4,12 +4,15 @@
     <!-- Optional heart rate sensor; requested on screen, never in background. -->
     <uses-permission android:name="android.permission.BODY_SENSORS"/>
     <application android:allowBackup="false" android:usesCleartextTraffic="false"
-        android:label="WorldLink · MIL Ether" android:theme="@android:style/Theme.Material.NoActionBar">
-        <activity android:name=".WatchActivity" android:exported="true">
+        android:label="${appLabel}" android:theme="@android:style/Theme.Material.NoActionBar">
+        <meta-data android:name="com.google.android.wearable.standalone" android:value="false"/>
+        <activity android:name=".WatchActivity" android:exported="false"/>
+        <activity android:name=".FieldWatchActivity" android:exported="false"/>
+        <activity-alias android:name=".Launcher" android:targetActivity="${launcherActivity}" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity>
+        </activity-alias>
     </application>
 </manifest>
