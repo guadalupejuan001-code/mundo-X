@@ -529,6 +529,57 @@ public final class SolarInstrumentation extends Instrumentation {
         metrics.put("lowResolution", new JSONArray().put(low.width).put(low.height));
         metrics.put("highResolution", new JSONArray().put(high.width).put(high.height));
         gl(() -> activity.renderer().setQuality(TEST_QUALITY));
+        verifyCinematicPresentation();
+    }
+
+    /**
+     * The paired benchmark intentionally compiles this test against the old
+     * reference application. Reflection keeps the old baseline compilable;
+     * the new renderer must visibly change and then restore the exact image.
+     */
+    private static boolean supportsCinematic() {
+        try {SolarRenderer.class.getMethod("setCinematic",boolean.class);return true;}
+        catch(NoSuchMethodException legacy) {return false;}
+    }
+    private void cinematic(boolean enabled) {
+        try {
+            SolarRenderer.class.getMethod("setCinematic",boolean.class)
+                    .invoke(activity.renderer(),enabled);
+        } catch(ReflectiveOperationException error) {
+            throw new AssertionError("Cine X toggle failed",error);
+        }
+    }
+    private void verifyCinematicPresentation() throws Exception {
+        if(!supportsCinematic()){
+            metrics.put("cinematicPresentationAvailable",false);
+            return;
+        }
+        metrics.put("cinematicPresentationAvailable",true);
+        int[] destinations={3,6};String[] names={"earth","saturn"};
+        for(int index=0;index<destinations.length;index++){
+            prepare(destinations[index],false,false);
+            gl(()->cinematic(false));
+            frame(); // Complete any camera/quality transition before comparing.
+            SolarRenderer.Capture reference=frame();
+            long revision=activity.bridge().nativeRevision();
+            double date=activity.renderer().julianDate();
+            gl(()->cinematic(true));
+            SolarRenderer.Capture enhanced=frame();
+            expect(reference.width==enhanced.width&&reference.height==enhanced.height,
+                    "Cine X unexpectedly resized the reference framebuffer");
+            int difference=changed(reference,enhanced);
+            expect(difference>0,"Cine X did not change the rendered "+names[index]+" image");
+            save("cine-x-"+names[index]+".png",enhanced);
+            gl(()->cinematic(false));
+            SolarRenderer.Capture restored=frame();
+            expect(changed(reference,restored)==0,
+                    "Cine X OFF failed to restore exact legacy pixels for "+names[index]);
+            expect(activity.bridge().nativeRevision()==revision &&
+                    activity.renderer().julianDate()==date,
+                    "Cine X changed the quantum or orbital source state");
+            metrics.put("cineX"+names[index]+"ChangedPixels",difference);
+        }
+        metrics.put("cineXLegacyRestored",true);
     }
 
     private void backgroundResume() throws Exception {
