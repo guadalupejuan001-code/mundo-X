@@ -21,7 +21,7 @@ contador de tiempo GPU ni acredita una velocidad concreta en Samsung.
   las APK UHD 4K/8K mantienen su modo explícito por defecto.
 - Previsualización máxima entre **480 y 1280 px**. Tras seis intervalos lentos
   (≥29 ms) reduce 160 px. Dos intervalos muy lentos (≥100 ms) reducen 240 px.
-  Noventa intervalos rápidos (≤14 ms) elevan 80 px. La histéresis evita un
+  Noventa intervalos rápidos (≤18 ms) elevan 80 px, incluso a 60 Hz. La histéresis evita un
   rebote continuo.
 - Un primer fotograma, reanudación tras suspensión prolongada, pausa,
   captura PNG, entrada a atmósfera, cambio de orientación o modo UHD no
