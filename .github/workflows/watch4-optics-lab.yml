@@ -1,0 +1,42 @@
+name: Watch4 Optical Receiver standalone APK
+on:
+  push:
+    branches: ['codex/watch4-optical-receiver-*']
+    paths: ['watch-optics-lab/**', '.github/workflows/watch4-optics-lab.yml']
+  pull_request:
+    paths: ['watch-optics-lab/**', '.github/workflows/watch4-optics-lab.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile-base:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Install Android API
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Confirm proprietary SDK is NOT bundled in CI
+        run: |
+          test ! -e watch-optics-lab/app/libs/samsung-health-sensor-api.aar
+      - name: Build standalone Wear OS debug APK
+        run: gradle -p watch-optics-lab --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify signature and permissions
+        run: |
+          set -euo pipefail
+          APK=watch-optics-lab/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.mundox.watchoptics'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/optical-permissions.txt
+          ! grep -Eq 'android.permission.INTERNET|android.permission.RECORD_AUDIO|android.permission.ACCESS_FINE_LOCATION' /tmp/optical-permissions.txt
+          test "$(wc -c < "$APK")" -gt 1000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-Watch4-Optical-Lab-BASE-debug
+          path: watch-optics-lab/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
