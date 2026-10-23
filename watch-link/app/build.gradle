@@ -1,14 +1,16 @@
 plugins { id 'com.android.application' }
+// Preserve the original COSMIC companion; build an independent WorldLink pair on demand.
+def standaloneWorldLink = providers.gradleProperty('standaloneWorldLink').map { it.toBoolean() }.getOrElse(false)
 android {
     namespace 'com.mundox.worldlink'
     compileSdk 35
     defaultConfig {
         // This ID MUST match the installed phone app for Wear Data Layer pairing.
-        applicationId 'com.mundox.graphics'
+        applicationId standaloneWorldLink ? 'com.mundox.worldlink' : 'com.mundox.graphics'
         minSdk 30
         targetSdk 35
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '1.0.0'
     }
     buildTypes { debug { minifyEnabled false } }
     compileOptions {
