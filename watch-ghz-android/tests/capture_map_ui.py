@@ -1,5 +1,6 @@
 """Capture the installed phone app after instrumentation has removed its copy."""
 import pathlib
+import re
 import struct
 import subprocess
 import sys
@@ -26,11 +27,14 @@ for attempt in range(10):
                     for node in root.iter("node"))
     if "24 muestras" in text or "Mapa 3D, datos sintéticos, captura 1" in text:
         image = adb("exec-out", "screencap", "-p")
-        assert image[:8] == b"\x89PNG\r\n\x1a\n", "Screenshot output is not PNG"
-        width, height = struct.unpack(">II", image[16:24])
-        assert width >= 1000 and height >= 2000, "Unexpected phone screenshot dimensions"
         (destination / "map-control.png").write_bytes(image)
         (destination / "map-control.xml").write_bytes(raw)
+        assert image[:8] == b"\x89PNG\r\n\x1a\n", "Screenshot output is not PNG"
+        width, height = struct.unpack(">II", image[16:24])
+        display = adb("shell", "wm", "size").decode()
+        sizes = {tuple(map(int, pair)) for pair in re.findall(r"(\d+)x(\d+)", display)}
+        assert (width, height) in sizes, f"PNG {width}x{height} does not match Android display: {display}"
+        assert height > width > 0, "Expected a portrait phone display"
         print(f"Verified loaded phone map screenshot: {width}x{height}")
         break
     time.sleep(1)
