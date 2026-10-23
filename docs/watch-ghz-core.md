@@ -2,7 +2,9 @@
 
 Aplicación Wear OS independiente. Ejecuta **qubits simulados** directamente en
 la CPU del reloj usando el código canónico `QuantumRuntime → InfiniteCore →
-CompactCore`. No necesita una app de teléfono, red ni permisos de sensores.
+CompactCore`. No necesita una app de teléfono ni red. Desde la versión 1.1.0
+incluye una prueba de hardware independiente del estado simulado, con el
+permiso Android `VIBRATE`. No solicita permisos biométricos.
 
 ## Uso
 
@@ -20,7 +22,8 @@ CompactCore`. No necesita una app de teléfono, red ni permisos de sensores.
 Desliza o gira el bisel para acceder a todos los controles y métricas. La
 selección de tamaño se conserva. El estado se mantiene mientras viva el
 proceso; después de que Android lo cierre se inicia en reposo. No se ejecuta
-un servicio de fondo, bucle de animación ni registro de sensores.
+un servicio de fondo ni un bucle de animación. Los sensores se registran solo
+durante la prueba explícita de hardware descrita abajo.
 
 ## Memoria y límites
 
@@ -69,6 +72,77 @@ Android API 30 con una pantalla de 450 × 450; no sustituye una prueba física
 en Galaxy Watch4. Los resultados de cada ejecución están en el artefacto CI.
 
 Para compilar: `gradle -p watch-ghz-android :app:assembleDebug :app:lintDebug`.
-Paquete independiente: `com.mundox.ghzwatch`, versión 1.0.0. Puede coexistir
+Paquete independiente: `com.mundox.ghzwatch`, versión 1.1.0. Puede coexistir
 con WorldLink y BBY-Q. El APK debug permite instalación mediante ADB inalámbrico
 en Wear OS; abrirlo en el teléfono no lo instala automáticamente en el reloj.
+
+## Hardware: primer experimento compartido
+
+Abre **HARDWARE · PRUEBA REAL** desde la pantalla GHZ. El inventario consulta
+el modelo, Android, el vibrador y los sensores que expone ese dispositivo;
+no presupone que todos los Galaxy Watch tengan los mismos sensores o APIs.
+La prueba se habilita si hay acelerómetro, magnetómetro y vibrador.
+
+1. Deja el reloj apoyado e inmóvil sobre una superficie, fuera del cargador.
+2. Pulsa **INICIAR · 13 SEGUNDOS** y no toques el reloj durante el registro.
+3. En cuatro intervalos separados se solicitan dos pulsos de 200 ms y se
+   ejecutan dos controles sin vibración, en orden aleatorio balanceado.
+4. Anota los cuatro valores de ΔB y de variación del acelerómetro. Repite en
+   la misma posición para comparar la variabilidad entre sesiones.
+
+La captura solicita 50 Hz sin batching; la frecuencia efectiva depende del
+dispositivo y se comprueba con los timestamps. El magnetómetro sin calibración
+de hierro duro tiene preferencia; si no existe, se usa el calibrado y queda
+identificado. Se guardan todos los valores de cada evento, incluido el bias
+estimado si Android lo entrega, su precisión declarada y su tiempo de llegada.
+
+Cada orden usa `elapsedRealtimeNanos()`, la misma base temporal de SensorEvent.
+Se comparan ventanas de 700 ms: de −750 a −50 ms y de 0 a +700 ms respecto
+al instante de solicitar el pulso o ejecutar el control. Se exige al menos
+cuatro timestamps distintos por ventana, cobertura de sus extremos dentro de
+200 ms y ningún hueco mayor de 250 ms. Si falla, se muestra **muestras
+insuficientes**, sin reemplazarlas por ceros. Un retraso de planificación mayor
+de 250 ms interrumpe el experimento y conserva el estado parcial.
+
+ΔB es la norma de la diferencia entre los vectores medios magnéticos (µT).
+El RMS de aceleración es la desviación vectorial respecto al promedio de la
+propia ventana (m/s²). No es una medición de la frecuencia mecánica del motor;
+una señal rápida puede sufrir aliasing a esta tasa. Los tiempos de orden no
+equivalen a medir el comienzo físico de la vibración. Android puede suprimir
+un pulso por sus políticas aunque la llamada no lance una excepción.
+
+El objetivo es comprobar si una orden del actuador se acompaña de una respuesta
+repetible de los sensores. Un cambio magnético no separa por sí mismo el
+movimiento del reloj, interferencias del motor y variaciones del entorno.
+Cuatro intervalos son una exploración, no una estimación de significación ni
+una demostración de causalidad, superposición física o entrelazamiento. No se
+usan los números GHZ para producir o interpretar estas lecturas.
+
+**DETENER**, salir de la pantalla o perder el primer plano cancela los pulsos
+pendientes y desregistra ambos sensores. No hay servicio en segundo plano.
+Se conserva como máximo una sesión en `files/hardware-latest.json`, escrita
+de forma atómica. Repetir reemplaza el registro anterior. Su contenido incluye
+el inventario completo, órdenes, lecturas originales y comparaciones. No se
+sube a ninguna red. Puedes extraer cada sesión antes de repetirla mediante
+la misma conexión ADB que utilizaste para instalar:
+
+```sh
+adb exec-out run-as com.mundox.ghzwatch cat files/hardware-latest.json > hardware-latest.json
+```
+
+La estadística tiene comprobaciones con fixtures sintéticos independientes.
+La prueba Android verifica inventario, captura completa y archivo, cancelación
+manual y cancelación al salir. Las lecturas de emulador prueban software y no
+constituyen evidencia del Watch4 físico. Ese paso lo realiza el usuario con
+su reloj, y sus datos determinan el siguiente cambio del proyecto.
+
+El APK usa firma de desarrollo. Si una versión anterior fue generada con otra
+clave y Android muestra `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, retira la app
+anterior antes de instalar esta; eso elimina su estado y archivos locales.
+
+Fuentes oficiales de las interfaces utilizadas:
+
+- [Android: sensores y capacidades](https://developer.android.com/develop/sensors-and-location/sensors/sensors_overview)
+- [Android: magnetómetro calibrado y sin calibración](https://developer.android.com/develop/sensors-and-location/sensors/sensors_position)
+- [Android: pulsos VibrationEffect](https://developer.android.com/reference/android/os/VibrationEffect)
+- [Android: tiempos de SensorEvent](https://developer.android.com/reference/android/hardware/SensorEvent#timestamp)

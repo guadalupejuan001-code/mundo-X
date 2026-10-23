@@ -37,6 +37,9 @@ jobs:
             watch-ghz-android/tests/NativeGhzCheck.java
           java -Djava.library.path=/tmp/ghz-native -cp /tmp/ghz-java com.mundox.ghzwatch.NativeGhzCheck \
             | tee ghz-dist/jni-checks.txt
+          javac -d /tmp/ghz-java watch-ghz-android/app/src/main/java/com/mundox/ghzwatch/ProbeAnalysis.java \
+            watch-ghz-android/tests/ProbeAnalysisCheck.java
+          java -cp /tmp/ghz-java com.mundox.ghzwatch.ProbeAnalysisCheck | tee ghz-dist/hardware-analysis-checks.txt
       - name: Android SDK
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \

@@ -46,3 +46,27 @@ for attempt in range(8):
         break
 else:
     raise AssertionError("The captured app did not reach a prepared GHZ state: " + status)
+
+# Enter the hardware screen through its public UI; it is not an exported activity.
+for attempt in range(8):
+    raw, root = ui()
+    target = next((node for node in root.iter("node")
+                   if node.get("resource-id") == "com.mundox.ghzwatch:id/hardware"), None)
+    if target is not None:
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", target.get("bounds")))
+        if y2-y1 >= 30:
+            adb("shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2))
+            break
+    adb("shell", "input", "swipe", "225", "370", "225", "140", "300")
+else:
+    raise AssertionError("Hardware entry was not reachable")
+
+for attempt in range(8):
+    raw, root = ui()
+    if any(node.get("resource-id") == "com.mundox.ghzwatch:id/hardware_start" for node in root.iter("node")):
+        (destination / "hardware-ui.xml").write_bytes(raw)
+        (destination / "hardware-ui.png").write_bytes(adb("exec-out", "screencap", "-p"))
+        print("Verified hardware screen screenshot (emulator only)")
+        break
+else:
+    raise AssertionError("Hardware screen did not open")

@@ -5,4 +5,9 @@
     <item name="reset" type="id"/>
     <item name="size" type="id"/>
     <item name="status" type="id"/>
+    <item name="hardware" type="id"/>
+    <item name="hardware_start" type="id"/>
+    <item name="hardware_stop" type="id"/>
+    <item name="hardware_status" type="id"/>
+    <item name="hardware_inventory" type="id"/>
 </resources>

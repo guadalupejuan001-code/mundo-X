@@ -2,6 +2,7 @@ package com.mundox.ghzwatch;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -81,6 +82,8 @@ public final class MainActivity extends Activity {
         phase = addButton(column, PHASE_ID, "FASE +90°", false);
         measure = addButton(column, MEASURE_ID, "MEDIR EN Z", true);
         reset = addButton(column, RESET_ID, "REPOSO · LIBERAR ESTADO", false);
+        Button hardware = addButton(column, R.id.hardware, "HARDWARE · PRUEBA REAL", false);
+        hardware.setOnClickListener(view -> startActivity(new Intent(this, HardwareActivity.class)));
         metrics = addText(column, "", 12, MUTED, false);
         metrics.setPadding(0, dp(10), 0, dp(6));
         addText(column, "Coherencia calculada\nX…X y YX…X conservan la información de fase.\n\nTras medir, todos los bits coinciden y esa coherencia desaparece.", 12, MUTED, false);
