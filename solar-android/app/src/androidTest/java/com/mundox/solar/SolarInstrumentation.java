@@ -476,13 +476,29 @@ public final class SolarInstrumentation extends Instrumentation {
         gl(() -> activity.renderer().setQuality(TEST_QUALITY));
     }
 
+    // A/B performance runs copy this instrumentation into an older source
+    // snapshot. Reflection allows the new-feature tests to compile there,
+    // while performanceSuite skips these tests on the historical baseline.
+    private static void reflectFlag(SolarRenderer renderer,String name,boolean value){
+        try{SolarRenderer.class.getMethod(name,boolean.class).invoke(renderer,value);}
+        catch(ReflectiveOperationException error){throw new IllegalStateException(name,error);}
+    }
+    private static int reflectInt(SolarRenderer renderer,String name){
+        try{return ((Integer)SolarRenderer.class.getMethod(name).invoke(renderer)).intValue();}
+        catch(ReflectiveOperationException error){throw new IllegalStateException(name,error);}
+    }
+    private static boolean reflectBoolean(SolarRenderer renderer,String name){
+        try{return ((Boolean)SolarRenderer.class.getMethod(name).invoke(renderer)).booleanValue();}
+        catch(ReflectiveOperationException error){throw new IllegalStateException(name,error);}
+    }
+
     private void cinematicVisual() throws Exception {
         prepare(3,false,false);
         long nativeRevision=activity.bridge().nativeRevision();
         double jd=activity.renderer().julianDate();
-        gl(()->activity.renderer().setCinematic(false));
+        gl(()->reflectFlag(activity.renderer(),"setCinematic",false));
         SolarRenderer.Capture reference=frame();
-        gl(()->activity.renderer().setCinematic(true));
+        gl(()->reflectFlag(activity.renderer(),"setCinematic",true));
         SolarRenderer.Capture cinematic=frame();
         SolarRenderer.Capture repeated=frame();
         int differences=changed(reference,cinematic);
@@ -497,7 +513,7 @@ public final class SolarInstrumentation extends Instrumentation {
                 .put("cinematicRepeatedPixelsChanged",0)
                 .put("cinematicCoreRevision",nativeRevision);
         save("solar-cinematic-earth.png",cinematic);
-        gl(()->activity.renderer().setCinematic(true));
+        gl(()->reflectFlag(activity.renderer(),"setCinematic",true));
     }
 
     private void backgroundResume() throws Exception {
@@ -595,23 +611,28 @@ public final class SolarInstrumentation extends Instrumentation {
         saveUhd(ultraSuite?"ultra8k-earth-orbit.png":"uhd-earth-orbit.png", false);
         expect(ultraSuite?activity.renderer().isUhd8k():activity.renderer().isUhd4k(), "The renderer did not accept actual UHD mode");
         gl(()->{
-            activity.renderer().setInteractivePreviewEnabled(true);
-            activity.renderer().setInteractionPreview(true);
+            reflectFlag(activity.renderer(),"setInteractivePreviewEnabled",true);
+            reflectFlag(activity.renderer(),"setInteractionPreview",true);
             activity.renderer().onDrawFrame(null);
         });
-        expect(activity.renderer().isPreviewFrame()
-                        && activity.renderer().previewRenderedWidth()>0
-                        && activity.renderer().previewRenderedHeight()>0,
+        expect(reflectBoolean(activity.renderer(),"isPreviewFrame")
+                        && reflectInt(activity.renderer(),"previewRenderedWidth")>0
+                        && reflectInt(activity.renderer(),"previewRenderedHeight")>0,
                 "4K/8K touch preview did not render an actual smaller framebuffer");
         RenderResolution.Size full=new RenderResolution.Size(
                 activity.renderer().renderedWidth(),activity.renderer().renderedHeight());
-        RenderResolution.Size preview=SolarRenderPolicy.preview(full);
-        expect(activity.renderer().previewRenderedWidth()==preview.width
-                        &&activity.renderer().previewRenderedHeight()==preview.height,
+        // Compatibility with the frozen baseline used for A/B performance:
+        // new policy is tested separately on JVM; the instrumentation uses
+        // the exact mathematical 960p geometry and reflective feature hooks.
+        RenderResolution.Size preview=full.width>=full.height
+                ?new RenderResolution.Size(960,540)
+                :new RenderResolution.Size(540,960);
+        expect(reflectInt(activity.renderer(),"previewRenderedWidth")==preview.width
+                        &&reflectInt(activity.renderer(),"previewRenderedHeight")==preview.height,
                 "Preview stretched the Solar aspect ratio or exceeded 960p budget");
         metrics.put("uhdPreviewPixels",preview.pixels())
-                .put("uhdPreviewPixelReduction",SolarRenderPolicy.approximatePixelReduction(full));
-        gl(()->activity.renderer().setInteractionPreview(false));
+                .put("uhdPreviewPixelReduction",(double)full.pixels()/preview.pixels());
+        gl(()->reflectFlag(activity.renderer(),"setInteractionPreview",false));
         setUhdMode(false);
         SolarRenderer.Capture after = frame();
         save("uhd-adaptive-after.png", after);
