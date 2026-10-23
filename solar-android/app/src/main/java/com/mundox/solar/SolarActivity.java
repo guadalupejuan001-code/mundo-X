@@ -455,14 +455,46 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         if(observer==null||observer.failure!=null){message("Espera a que la escena esté disponible.");return;}
         String token=UUID.randomUUID().toString();
         if(!PNG_OWNER.compareAndSet(null,token)){message("Hay una imagen pendiente de guardar.");return;}
-        pngToken=token;pngDestinationOpen=false;final SolarRenderer source=observer;
-        message("Preparando la imagen a resolución completa…");
+        pngToken=token;pngDestinationOpen=false;
+        final SolarRenderer source=observer;
+        final boolean native4kPhoto=smart4k;
+        message(native4kPhoto?"Generando un PNG 4K real (2160 × 3840 o horizontal)…":
+                "Preparando la imagen a resolución completa…");
         runGL(()->{
-            try{source.requestCapture(image->{
-                if(destroyed){PNG_OWNER.compareAndSet(token,null);return;}
-                try{images.execute(()->stagePng(image,token));}
-                catch(Exception error){PNG_OWNER.compareAndSet(token,null);message("No se pudo preparar PNG: "+error.getMessage());}
-            });}catch(Exception error){PNG_OWNER.compareAndSet(token,null);message("No se pudo capturar: "+error.getMessage());}
+            try{
+                if(native4kPhoto&&!source.isSmart4k()){
+                    PNG_OWNER.compareAndSet(token,null);
+                    message("Cambió la calidad antes de generar el PNG 4K.");
+                    return;
+                }
+                source.requestCapture(image->{
+                    // When time is paused, an explicit next draw is needed to
+                    // release the large snapshot framebuffer back to preview.
+                    if(surface!=null&&!destroyed)surface.requestRender();
+                    if(destroyed){PNG_OWNER.compareAndSet(token,null);return;}
+                    if(image==null||image.error!=null||image.rgba==null){
+                        PNG_OWNER.compareAndSet(token,null);
+                        message("No se pudo generar el PNG 4K: "+
+                                (image==null?"Sin imagen":image.error));
+                        return;
+                    }
+                    if(native4kPhoto &&
+                            !((image.width==2160&&image.height==3840)||
+                              (image.width==3840&&image.height==2160))){
+                        PNG_OWNER.compareAndSet(token,null);
+                        message("Se rechazó una captura que no tenía píxeles 4K reales.");
+                        return;
+                    }
+                    try{images.execute(()->stagePng(image,token));}
+                    catch(Exception error){
+                        PNG_OWNER.compareAndSet(token,null);
+                        message("No se pudo preparar PNG: "+error.getMessage());
+                    }
+                });
+            }catch(Exception error){
+                PNG_OWNER.compareAndSet(token,null);
+                message("No se pudo capturar: "+error.getMessage());
+            }
         });
     }
     private void stagePng(SolarRenderer.Capture image,String token){
