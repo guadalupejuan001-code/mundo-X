@@ -34,13 +34,15 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
     static final String SAMPLE = "/mundox/worldlink/v1/telemetry";
     static final String HAPTIC = "/mundox/worldlink/v1/haptic";
     static final String LIGHT_REQUEST = "/mundox/worldlink/v1/light-request";
+    static final String SOUND_REQUEST = "/mundox/worldlink/v1/sound-command";
     private static final int BG=0xff0c1412, SURFACE=0xff192721, GREEN=0xffcbf47e;
     private static final int WHITE=0xffe8f0e9, MUTED=0xffa6b7aa, CYAN=0xff80dce0;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private PhotonEmitter photons;
+    private SoundFieldEmitter sound;
     private TelemetryChart chart;
     private TextView linkStatus, watchName, lightValue, fieldValue, motionValue, pulseValue;
-    private TextView caption, experiment, measurement, lastSignal;
+    private TextView caption, experiment, measurement, lastSignal, soundStatus;
     private Button signalButton, lightButton, armButton;
     private boolean watching, lightGraph=true, armed, measuring;
     private String sid="";
@@ -57,6 +59,7 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         photons=new PhotonEmitter(this);
+        sound=new SoundFieldEmitter(this::showFeedback);
         drawInterface();
     }
 
@@ -73,6 +76,7 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
         armed=false;
         measuring=false;
         photons.off();
+        sound.stop();
         handler.removeCallbacks(heartbeat);
         Wearable.getMessageClient(this).removeListener(this);
         updateArm();
@@ -80,6 +84,7 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
     }
     @Override protected void onDestroy() {
         photons.off();
+        sound.close();
         super.onDestroy();
     }
     private final Runnable heartbeat=new Runnable() {
@@ -100,7 +105,9 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
             if(!activityVisible)return;
             watchName.setText(nodes.isEmpty()
                     ? "Reloj no detectado · abre WorldLink en el Watch4"
-                    : "Nodo(s) enlazados: "+nodes.size()+" · inicia lectura en el reloj");
+                    : SystemClock.elapsedRealtime()-lastReceipt < 5000
+                        ? "Reloj enlazado · transmitiendo en vivo"
+                        : "Reloj enlazado · los controles remotos están disponibles");
             if (nodes.isEmpty()) {
                 linkStatus.setText("RELOJ SIN ENLACE");
                 linkStatus.setTextColor(MUTED);
@@ -115,6 +122,13 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
                 if (activityVisible && armed) startLightExperiment();
                 else showFeedback("Solicitud del reloj ignorada: activa SALIDA FÍSICA en el móvil.");
             });
+            return;
+        }
+        if (SOUND_REQUEST.equals(path)) {
+            final byte[] payload=event.getData();
+            if(payload==null || payload.length>32)return;
+            final String cmd=new String(payload,StandardCharsets.UTF_8);
+            runOnUiThread(()->handleSoundCommand(cmd));
             return;
         }
         if (!SAMPLE.equals(path)) return;
@@ -273,10 +287,44 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
     }
     private void updateArm() {
         if (armButton==null)return;
-        armButton.setText(armed?"SALIDA FÍSICA: ACTIVADA":"SALIDA FÍSICA: DESACTIVADA");
+        armButton.setText(armed?"CONTROL REMOTO: ACTIVADO":"CONTROL REMOTO: DESACTIVADO");
         armButton.setTextColor(armed?0xff121b14:WHITE);
         armButton.setBackground(buttonBackground(armed?GREEN:0xff293c32));
     }
+    private void handleSoundCommand(String cmd) {
+        if(!activityVisible)return;
+        // STOP is deliberately honored even when the remote control is disarmed.
+        if("stop".equals(cmd)) {
+            stopSound();
+            return;
+        }
+        if(!armed) {
+            showFeedback("Solicitud del reloj bloqueada: activa CONTROL REMOTO en el móvil.");
+            return;
+        }
+        switch(cmd) {
+            case "tone:220": playTone(220);break;
+            case "tone:440": playTone(440);break;
+            case "sweep": playSweep();break;
+            default: showFeedback("Se rechazó un comando remoto desconocido.");
+        }
+    }
+    private void playTone(int hz) {
+        String result=sound.emitTone(hz);
+        if(soundStatus!=null)soundStatus.setText(result);
+        showFeedback(result);
+    }
+    private void playSweep(){
+        String result=sound.emitSweep();
+        if(soundStatus!=null)soundStatus.setText(result);
+        showFeedback(result);
+    }
+    private void stopSound(){
+        sound.stop();
+        if(soundStatus!=null)soundStatus.setText("Salida sonora detenida");
+        showFeedback("Emisión acústica detenida");
+    }
+
     private void showFeedback(String message){
         feedback=message;
         if(measurement!=null)measurement.setText(message);
@@ -307,9 +355,36 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
 
         TextView top=label("MUNDO X  /  WORLDLINK",12,GREEN,true);
         top.setLetterSpacing(.18f);root.addView(top);
-        TextView title=label("LABORATORIO\nFÍSICO",32,WHITE,true);
+        TextView title=label("INTERACCIÓN\nFÍSICA",32,WHITE,true);
         title.setPadding(0,dp(8),0,dp(4));root.addView(title);
-        root.addView(label("Cuerpo  →  Reloj  →  Señal  →  Respuesta real",12,MUTED,false));
+        root.addView(label("Reloj  →  Orden  →  Campo físico  →  Materia",12,MUTED,false));
+
+        // PRIMARY TASK: actuate, not watch a passive sensor dashboard.
+        LinearLayout interactionCard=card(root);
+        interactionCard.addView(label("01  /  ACTUAR SOBRE EL ENTORNO",12,GREEN,true));
+        interactionCard.addView(label("CONTROL DE ONDAS",22,WHITE,true));
+        interactionCard.addView(label("El altavoz del Samsung produce ondas mecánicas reales en el aire. "
+                +"Podemos modificar frecuencia y explorar resonancias en objetos ligeros. "
+                +"Mantén el volumen moderado; no acerques el altavoz a tus oídos.",
+                12,MUTED,false));
+        actionButton(interactionCard,"GENERAR ONDA 220 Hz",()->playTone(220),true);
+        actionButton(interactionCard,"GENERAR ONDA 440 Hz",()->playTone(440),false);
+        actionButton(interactionCard,"BARRIDO DE FRECUENCIAS · 180–1200 Hz",this::playSweep,false);
+        actionButton(interactionCard,"DETENER TODAS LAS ONDAS SONORAS",this::stopSound,false);
+        soundStatus=label("Emisor en espera · altavoz desactivado",12,WHITE,false);
+        soundStatus.setPadding(0,dp(8),0,0);
+        interactionCard.addView(soundStatus);
+        interactionCard.addView(label("Prueba física: acerca el teléfono a una membrana ligera tensada "
+                +"sobre un recipiente y observa si aparecen vibraciones al cambiar la frecuencia. "
+                +"El efecto puede ser débil con un altavoz móvil.",11,MUTED,false));
+        armButton=actionButton(interactionCard,"CONTROL REMOTO: DESACTIVADO",()->{
+            armed=!armed;
+            updateArm();
+            showFeedback(armed
+                ? "El reloj puede controlar la luz y el sonido mientras esta pantalla esté abierta."
+                : "Se bloquearon nuevas órdenes del reloj.");
+        },false);
+        lightButton=actionButton(interactionCard,"EMITIR LUZ REAL · 0,95 s",this::startLightExperiment,false);
 
         LinearLayout statusCard=card(root);
         linkStatus=label("ESPERANDO EL RELOJ",13,MUTED,true);
@@ -321,7 +396,7 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
         statusCard.addView(lastSignal);
 
         LinearLayout metricsCard=card(root);
-        metricsCard.addView(label("01  /  SENSORES REALES",12,GREEN,true));
+        metricsCard.addView(label("03  /  OBSERVACIÓN OPCIONAL",12,GREEN,true));
         LinearLayout r1=row(metricsCard);
         lightValue=metric(r1,"LUZ","— lux");
         fieldValue=metric(r1,"CAMPO","— µT");
@@ -338,30 +413,23 @@ public final class MainActivity extends Activity implements MessageClient.OnMess
         signalButton=actionButton(metricsCard,"Ver gráfico: magnetismo",()->setGraph(!lightGraph),false);
 
         LinearLayout experimentCard=card(root);
-        experimentCard.addView(label("02  /  EXPERIMENTAR",12,GREEN,true));
+        experimentCard.addView(label("04  /  MEDIR EL EFECTO",12,GREEN,true));
         experimentCard.addView(label("LUZ Y MAGNETISMO",21,WHITE,true));
         TextView desc=label("Captura el estado inicial. Acerca la cara del reloj al LED, "
                 +"o acerca un imán pequeño al reloj para observar el campo. "
                 +"No coloques imanes cerca de dispositivos médicos implantados.",12,MUTED,false);
         desc.setPadding(0,dp(4),0,dp(8));experimentCard.addView(desc);
         actionButton(experimentCard,"CAPTURAR REFERENCIA",this::captureBaseline,false);
-        lightButton=actionButton(experimentCard,"EMITIR LUZ REAL  ·  0,95 s",this::startLightExperiment,true);
-        experiment=label(experimentFeedback,13,WHITE,false);
+         experiment=label(experimentFeedback,13,WHITE,false);
         experiment.setPadding(0,dp(10),0,dp(8));experimentCard.addView(experiment);
 
         LinearLayout actuatorCard=card(root);
-        actuatorCard.addView(label("03  /  CANALIZADOR",12,GREEN,true));
+        actuatorCard.addView(label("05  /  RELOJ",12,GREEN,true));
         actuatorCard.addView(label("RETORNO AL RELOJ",18,WHITE,true));
-        armButton=actionButton(actuatorCard,"SALIDA FÍSICA: DESACTIVADA",()->{
-            armed=!armed;
-            updateArm();
-            showFeedback(armed
-                    ? "El reloj ya puede solicitar un pulso de luz mientras esta pantalla esté abierta."
-                    : "Las solicitudes físicas del reloj están bloqueadas.");
-        },false);
-        actionButton(actuatorCard,"VIBRAR RELOJ",this::vibrateWatch,false);
-        actuatorCard.addView(label("La orden remota de luz requiere activar el control anterior. "
-                +"Los pulsos se apagan solos.",11,MUTED,false));
+         actionButton(actuatorCard,"VIBRAR RELOJ",this::vibrateWatch,false);
+        actuatorCard.addView(label("El reloj también controla las ondas de presión y la luz. "
+                +"Activa CONTROL REMOTO en la sección superior. "
+                +"Cada emisión tiene un límite temporal.",11,MUTED,false));
         updateArm();
 
         LinearLayout feedbackCard=card(root);

@@ -4,7 +4,7 @@
     <!-- Optional heart rate sensor; requested on screen, never in background. -->
     <uses-permission android:name="android.permission.BODY_SENSORS"/>
     <application android:allowBackup="false" android:usesCleartextTraffic="false"
-        android:label="Mundo X · Enlace" android:theme="@android:style/Theme.Material.NoActionBar">
+        android:label="WorldLink · Interacción" android:theme="@android:style/Theme.Material.NoActionBar">
         <activity android:name=".WatchActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
