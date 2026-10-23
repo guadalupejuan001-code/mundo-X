@@ -97,7 +97,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         int defaultMode=BuildConfig.SOLAR_DEFAULT_MODE;
         uhd4k=prefs.getBoolean("uhd4k",defaultMode==1);uhd8k=prefs.getBoolean("uhd8k",defaultMode==2);
         if(uhd8k)uhd4k=false;
-        smart4k=prefs.getBoolean("smart4k",false);
+        smart4k=prefs.getBoolean("smart4k",defaultMode==3);
         if(smart4k){uhd4k=false;uhd8k=false;}
         atmospheres=prefs.getBoolean("atmospheres",true);localPhysics=prefs.getBoolean("localPhysics",false);
         cinematic=prefs.getBoolean("cinematic",false);
