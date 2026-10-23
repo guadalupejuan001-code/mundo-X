@@ -38,7 +38,7 @@ public final class MainActivity extends Activity {
     private final List<Button> controls=new ArrayList<>();
     private AtomicFile saved;
     private EtherWorldView scene;
-    private TextView status,summary,details,console,coordinate;
+    private TextView status,summary,details,inspection,console,coordinate;
     private long handle;
     private int cx,cz,sx,sz;
     private boolean busy,destroyed;
@@ -132,6 +132,9 @@ public final class MainActivity extends Activity {
         summary.setPadding(0,dp(5),0,0);stateCard.addView(summary);
         details=text("La optimización se verificará en el motor nativo.",11,MUTED,false);
         details.setPadding(0,dp(6),0,0);stateCard.addView(details);
+        inspection=text("Inspección de celda: esperando Ether...",12,ORANGE,true);
+        inspection.setPadding(0,dp(10),0,dp(2));
+        stateCard.addView(inspection);
 
         LinearLayout explore=card(root);
         explore.addView(text("01   /   EXPLORAR LA ESTRUCTURA",13,ACCENT,true));
@@ -148,6 +151,8 @@ public final class MainActivity extends Activity {
         LinearLayout navigation=row(explore);
         action(navigation,"IR A SELECCIÓN",()->action("focus",sx,sz,0,"Visor movido a selección"),false);
         action(navigation,"SEGUIR SONDA",()->action("follow",0,0,0,"Siguiendo la primera sonda"),false);
+        action(explore,"ESCANEAR CELDA SELECCIONADA",()->action(
+                "scan_selected",sx,sz,0,"Zona seleccionada cartografiada"),true);
         action(explore,"REGRESAR AL ORIGEN",()->action("origin",0,0,0,"Regresaste al origen"),false);
 
         LinearLayout matter=card(root);
@@ -321,6 +326,16 @@ public final class MainActivity extends Activity {
     private void fillStats(JSONObject j,boolean oracle) {
         coordinate.setText(String.format(Locale.US,
             "Observador (%d,%d)   ·   Selección (%d,%d)",cx,cz,sx,sz));
+        if(inspection!=null) {
+            String material=j.optString("selected_material","desconocido")
+                    .replace('_',' ');
+            boolean observed=j.optBoolean("selected_observed",false);
+            inspection.setText(observed
+                    ? String.format(Locale.US,"MATERIA: %s · altura %.2f · campo %.2f",
+                        material.toUpperCase(Locale.US),
+                        j.optDouble("selected_height"),j.optDouble("selected_field"))
+                    : "MATERIA: SIN OBSERVAR · la regla existe, falta escanear");
+        }
         summary.setText(String.format(Locale.US,
             "1.048.576 posiciones lógicas  ·  %d reveladas  ·  %d cambios Ether\n"
             +"%d sondas  ·  %d perturbaciones  ·  %.2f s simulados",
