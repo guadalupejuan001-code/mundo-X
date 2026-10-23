@@ -35,7 +35,7 @@ GRAPHICS_MANIFEST_REFERENCE = "4f04322eed3b698e4f20081921c5ed1da2c4b721"
 QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 ETHER_MEMORY_REFERENCE = "729994e1e044ad5a4d4ffd4c43dcea2ad638608f"
 # Reviewable commit containing the new COW sources and reproducible benchmark.
-ETHER_MEMORY_COW_REFERENCE = "b8d01ae5d335e54ecfd37cb18e498c2b387a5b7d"
+ETHER_MEMORY_COW_REFERENCE = "90ec8893eddd36278cb86af734f10c6790ca9566"
 # Existing radial sources landed on main without inventory references.
 MIL_RADIAL_MAIN_REFERENCE = "d4a63cafdb47dc237b07c0d48fe2cf3e254e54b7"
 ETHER_MEMORY_FABRIC_REFERENCE = "8b9d5d40319ff093ea019156b8b476754ed6d504"
@@ -61,6 +61,7 @@ ADDITIONAL_SOURCES = {
     "native/tests/infinite_extreme.cpp": RECOVERED_PHYSICS_REFERENCE,
     "native/tests/ether_rules.cpp": INTERVAL_EVALUATION_REFERENCE,
     "native/tests/ether_memory.cpp": ETHER_MEMORY_REFERENCE,
+    "native/include/mundo_x/cow_sharded_map.hpp": ETHER_MEMORY_COW_REFERENCE,
     "native/include/mundo_x/inverse_memory.hpp": ETHER_MEMORY_COW_REFERENCE,
     "native/include/mundo_x/quantum_runtime.hpp": ETHER_MEMORY_COW_REFERENCE,
     "native/src/quantum_runner.cpp": "832f219112000e0a8d33c0482b1b341a0c5d9502",
