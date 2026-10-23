@@ -87,7 +87,7 @@ jobs:
           before=json.loads(Path("quantum-build/ether-memory-before.jsonl").read_text())
           after=json.loads(Path("quantum-build/ether-memory-cow-benchmark.jsonl").read_text())
           for key in ("overrides", "quantum_bindings", "read_only_transaction_copies",
-                      "write_detaches", "checksum", "failures"):
+                      "write_detaches", "checksum", "snapshot_fnv64", "failures"):
               assert before[key] == after[key], (key, before[key], after[key])
           summary = {
               "baseline_commit": "d4a63cafdb47dc237b07c0d48fe2cf3e254e54b7",
