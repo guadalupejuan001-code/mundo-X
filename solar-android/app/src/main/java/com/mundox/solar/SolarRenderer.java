@@ -33,9 +33,14 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     public interface CaptureListener { void captured(Capture image); }
     public static final class Capture {
         public final int width,height;
-        /** RGBA8, OpenGL bottom row first. */
+        /** RGBA8, OpenGL bottom row first; null on recoverable readback errors. */
         public final byte[] rgba;
-        public Capture(int width,int height,byte[] rgba){this.width=width;this.height=height;this.rgba=rgba;}
+        public final String error;
+        public Capture(int width,int height,byte[] rgba){this(width,height,rgba,null);}
+        private Capture(int width,int height,byte[] rgba,String error){
+            this.width=width;this.height=height;this.rgba=rgba;this.error=error;
+        }
+        static Capture failed(String reason){return new Capture(0,0,null,reason);}
     }
 
     private static final int MAX_BODIES=24,MAX_OVERLAY_VERTICES=42000;
@@ -713,13 +718,26 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             check("Observación solar");
             CaptureListener requested=capture;Capture result=null;
             if(requested!=null){
-                int rowBytes=width*4,blockRows=Math.min(height,128);byte[] rgba=new byte[rowBytes*height];
-                ByteBuffer pixels=direct(rowBytes*blockRows);
-                for(int row=0;row<height;row+=blockRows){
-                    int rows=Math.min(blockRows,height-row);pixels.clear();glReadPixels(0,row,width,rows,GL_RGBA,GL_UNSIGNED_BYTE,pixels);check("Lectura solar");
-                    pixels.rewind();pixels.get(rgba,row*rowBytes,rows*rowBytes);
+                try{
+                    // Read back in bounded row batches; never fabricate 4K
+                    // output from an undersized or failed GL target.
+                    int rowBytes=width*4,blockRows=Math.min(height,128);
+                    byte[] rgba=new byte[rowBytes*height];
+                    ByteBuffer pixels=direct(rowBytes*blockRows);
+                    for(int row=0;row<height;row+=blockRows){
+                        int rows=Math.min(blockRows,height-row);
+                        pixels.clear();glReadPixels(0,row,width,rows,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+                        check("Lectura solar");pixels.rewind();
+                        pixels.get(rgba,row*rowBytes,rows*rowBytes);
+                    }
+                    result=new Capture(width,height,rgba);
+                }catch(RuntimeException|OutOfMemoryError readbackError){
+                    // Recoverable PNG failure must not permanently disable
+                    // live navigation or destroy the user's Ether session.
+                    String reason=readbackError.getMessage();
+                    result=Capture.failed(reason==null?"Memoria o lectura GLES insuficiente":reason);
                 }
-                result=new Capture(width,height,rgba);capture=null;
+                capture=null;
             }
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
             glBindFramebuffer(GL_READ_FRAMEBUFFER,framebuffer);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,0);
