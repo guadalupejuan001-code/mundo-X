@@ -1,0 +1,163 @@
+name: COSMIC X Solar Fluido coinstallable Android
+on:
+  pull_request:
+    branches: ['main']
+    paths:
+      - 'solar-android/**'
+      - '.github/workflows/solar-fluido-android.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: solar-fluido-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-fluido:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install pinned Android platform and native SDK
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Build independent Solar Fluido APK and Android instrumentation
+        run: |
+          set -euo pipefail
+          mkdir -p solar-fluido-dist
+          gradle -p solar-android --no-daemon \
+            -PsolarFluidStandalone=true \
+            :app:assembleDebug :app:assembleDebugAndroidTest \
+            > solar-fluido-dist/gradle-build.log 2>&1
+          tail -50 solar-fluido-dist/gradle-build.log
+          cp solar-android/app/build/outputs/apk/debug/app-debug.apk \
+            solar-fluido-dist/COSMIC-X-Solar-Fluido.apk
+          cp solar-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            solar-fluido-dist/COSMIC-X-Solar-Fluido-tests.apk
+      - name: Verify coinstall identity, debug signing, security and resources
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
+            --verbose --print-certs solar-fluido-dist/COSMIC-X-Solar-Fluido.apk \
+            > solar-fluido-dist/signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
+            solar-fluido-dist/COSMIC-X-Solar-Fluido.apk \
+            > solar-fluido-dist/manifest.txt
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess,zipfile
+          from pathlib import Path
+          folder=Path('solar-fluido-dist')
+          apk=folder/'COSMIC-X-Solar-Fluido.apk'
+          contents=folder.joinpath('manifest.txt').read_text()
+          assert "package: name='com.cosmicx.solar.fluid' versionCode='6' versionName='1.5.0'" in contents, contents.splitlines()[:4]
+          assert "application-label:'COSMIC X Solar Fluido'" in contents, contents.splitlines()[:6]
+          assert "android.permission.INTERNET" not in contents
+          signature=folder.joinpath('signature.txt').read_text()
+          assert "Verified using v2 scheme (APK Signature Scheme v2): true" in signature
+          with zipfile.ZipFile(apk) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert {'assets/shaders/solar.frag','assets/shaders/solar.vert',
+                      'lib/arm64-v8a/libmx_graphics.so',
+                      'lib/x86_64/libmx_graphics.so'}<=names
+          data={'package':'com.cosmicx.solar.fluid',
+                'version':'1.5.0','preview_default':'4K Fluido, 960px long axis',
+                'native_photo':'3840x2160 / 2160x3840, as device orientation permits',
+                'coinstall_with':'com.cosmicx.solar',
+                'debug_signed':True,'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+                'bytes':apk.stat().st_size,
+                'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()}
+          folder.joinpath('provenance.json').write_text(json.dumps(data,indent=2)+'\n')
+          print(json.dumps(data))
+          PY
+      - name: Upload installable coexisting Solar Fluido APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Solar-Fluido-Android-APK
+          path: solar-fluido-dist/**
+          if-no-files-found: error
+          retention-days: 14
+
+  validate-fluido:
+    needs: build-fluido
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: COSMIC-X-Solar-Fluido-Android-APK
+          path: solar-fluido-dist
+      - name: Install Android 15 emulator
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          export ANDROID_AVD_HOME="$(mktemp -d)"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" \
+            create avd -n solar-fluido -p "$ANDROID_AVD_HOME/solar-fluido.avd" \
+            -k 'system-images;android-35;google_apis;x86_64' --force
+      - name: Verify Solar Fluido launcher, shader and original native core
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          "$ANDROID_HOME/emulator/emulator" -avd solar-fluido -no-window \
+            -no-audio -no-boot-anim -no-snapshot \
+            -gpu swiftshader_indirect -memory 2048 \
+            > solar-fluido-dist/emulator.log 2>&1 &
+          echo $! > solar-fluido-dist/emulator.pid
+          adb start-server
+          ready=false
+          for i in $(seq 1 150); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
+              ready=true;break
+            fi
+            sleep 2
+          done
+          [[ "$ready" == true ]] || { tail -80 solar-fluido-dist/emulator.log; exit 1; }
+          adb shell input keyevent 82
+          adb install -r solar-fluido-dist/COSMIC-X-Solar-Fluido.apk
+          adb install -r solar-fluido-dist/COSMIC-X-Solar-Fluido-tests.apk
+          timeout --kill-after=15 600 adb shell am instrument -w \
+            com.cosmicx.solar.fluid.test/com.mundox.solar.SolarInstrumentation \
+            | tee solar-fluido-dist/instrumentation.txt
+          grep -q 'COSMIC_SOLAR_TESTS_PASSED' solar-fluido-dist/instrumentation.txt
+          adb shell am start -W \
+            -n com.cosmicx.solar.fluid/com.mundox.solar.SolarActivity \
+            | tee solar-fluido-dist/launch.txt
+          adb shell screencap -p /sdcard/solar-fluido.png
+          adb exec-out cat /sdcard/solar-fluido.png \
+            > solar-fluido-dist/screenshot.png
+          adb logcat -d > solar-fluido-dist/logcat.txt
+          test -s solar-fluido-dist/screenshot.png
+      - name: Preserve Android integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: COSMIC-X-Solar-Fluido-Android-Evidence
+          path: |
+            solar-fluido-dist/instrumentation.txt
+            solar-fluido-dist/launch.txt
+            solar-fluido-dist/screenshot.png
+            solar-fluido-dist/emulator.log
+          if-no-files-found: warn
+          retention-days: 14
