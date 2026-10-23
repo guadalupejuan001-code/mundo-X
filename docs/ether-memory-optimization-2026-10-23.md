@@ -21,11 +21,16 @@ separación por escritura; la memoria lógica no.
 1. **Copy-on-write independiente** para excepciones y enlaces. Crear
    una copia transaccional comparte ambos mapas; las consultas siguen
    leyendo el mismo contenido inmutable desde los propietarios existentes.
-2. **Separación únicamente al modificar el mapa correspondiente.**
-   Un `mem_store` clásico no copia enlaces; `mem_bind` no copia excepciones.
+2. **Separación por páginas.** Cada mapa se divide en 256 páginas
+   deterministas de direcciones. El candidato comparte el directorio; al
+   escribir separa el directorio y **solo la página afectada**. Un
+   `mem_store` no clona enlaces y un `mem_bind` no clona excepciones.
    Las operaciones sin cambios no separan los datos. `mem_reset` publica
-   mapas vacíos nuevos sin recorrer los compartidos.
-3. **Persistencia y validación.** El texto de snapshots MXIM1 no cambia.
+   mapas vacíos nuevos; liberar el último propietario de los mapas viejos
+   todavía puede costar tiempo de destrucción.
+3. **Persistencia y validación.** Una fusión ordenada de las páginas
+   conserva el texto de snapshots MXIM1. El benchmark compara también un
+   hash determinista del snapshot completo antes y después.
    Su lector rechaza enlaces cuyo byte de ocho qubits excedería el
    presupuesto de dígitos de la memoria. La restauración conjunta del
    `QuantumRuntime` también valida contra el presupuesto **del núcleo
@@ -39,10 +44,14 @@ separación por escritura; la memoria lógica no.
 
 ## Costes que continúan
 
-- La **primera escritura** sobre un mapa compartido aún lo copia completo:
-  O(N) para excepciones, O(Q) para enlaces; escrituras posteriores en la
-  misma transacción reutilizan el mapa separado. Por eso esta etapa **no**
-  resuelve aún la latencia de muchas transacciones pequeñas con escrituras.
+- La primera escritura copia un directorio fijo de 256 punteros y
+  únicamente la página que contiene la dirección afectada. Con distribución
+  equilibrada, el coste de copia local corresponde aproximadamente a N/256;
+  en el **peor caso**, todas las direcciones podrían caer en una misma página
+  y conservar un coste O(N). No se promete rendimiento constante universal.
+- El directorio añade memoria fija por mapa, incluso vacío. Los snapshots
+  fusionan los cursores ordenados de las páginas: conservan MXIM1 byte a byte,
+  pero el coste de exportación debe compararse con el mapa monolítico.
 - Los dos mapas aún almacenan nodos y cadenas de texto por excepción y enlace.
   No son memoria física infinita ni qRAM.
 - `mem_materialize`, las exportaciones de snapshots y las consultas a
