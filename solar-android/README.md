@@ -48,6 +48,25 @@ ni computación cuántica gráfica.
 Los FPS y la temperatura **del Samsung del usuario** no se infieren
 de un emulador Android y deben medirse en ese teléfono.
 
+### Instalación en paralelo sin perder Solar 1.4
+
+Las APK firmadas con claves de desarrollo **diferentes** no pueden
+actualizarse entre sí si conservan el mismo identificador. Por eso también
+se distribuye **COSMIC X Solar Fluido** como una aplicación independiente
+con identificador `com.cosmicx.solar.fluid`, distinto al
+`com.cosmicx.solar` anterior. Se puede instalar **junto a Solar 1.4**,
+sin desinstalarla ni borrar sus preferencias. La edición Fluido
+activa **4K Fluido por defecto**, conservando también los modos nativos
+4K/8K en el selector de calidad.
+
+```sh
+gradle -p solar-android -PsolarFluidStandalone=true :app:assembleDebug
+```
+
+El workflow `.github/workflows/solar-fluido-android.yml` compila el
+paquete y prueba su firma, nombre, ABI y apertura Android de forma
+independiente. Las firmas de desarrollo no son credenciales de publicación.
+
 
 ## Actualización visual 1.4 · Cine X
 
