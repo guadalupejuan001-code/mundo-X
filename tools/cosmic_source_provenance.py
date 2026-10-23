@@ -36,6 +36,8 @@ QUANTUM_ALGORITHMS_REFERENCE = "9ce470f30383d3fd673a45bf09c5e4265fb1ad26"
 ETHER_MEMORY_REFERENCE = "729994e1e044ad5a4d4ffd4c43dcea2ad638608f"
 # Reviewable commit containing the new COW sources and reproducible benchmark.
 ETHER_MEMORY_COW_REFERENCE = "b8d01ae5d335e54ecfd37cb18e498c2b387a5b7d"
+# Existing radial sources landed on main without inventory references.
+MIL_RADIAL_MAIN_REFERENCE = "d4a63cafdb47dc237b07c0d48fe2cf3e254e54b7"
 ETHER_MEMORY_FABRIC_REFERENCE = "8b9d5d40319ff093ea019156b8b476754ed6d504"
 UNIVERSAL_1000_REFERENCE = "018176d45cf1743256b56761c43b4e8656d3848f"
 UNIVERSAL_1000_EXAMS_REFERENCE = "dc38a5a76ed8a39a415d587b1ee86934063c2240"
@@ -65,6 +67,8 @@ ADDITIONAL_SOURCES = {
     "native/tests/inverse_memory.cpp": ETHER_MEMORY_COW_REFERENCE,
     "native/tests/quantum_runtime.cpp": ETHER_MEMORY_COW_REFERENCE,
     "native/tests/ether_memory_copy_benchmark.cpp": ETHER_MEMORY_COW_REFERENCE,
+    "native/include/mundo_x/mil_radial_evolution.hpp": MIL_RADIAL_MAIN_REFERENCE,
+    "native/tests/mil_radial_evolution.cpp": MIL_RADIAL_MAIN_REFERENCE,
     "native/tests/reduced_1000.cpp": MAGIC_GROWTH_REFERENCE,
     "native/tests/ether_batch.cpp": AUDIT_REFERENCE,
     "native/tests/ether_stress.cpp": AUDIT_REFERENCE,
