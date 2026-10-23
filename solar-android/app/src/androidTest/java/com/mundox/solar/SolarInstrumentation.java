@@ -40,7 +40,7 @@ import org.json.JSONObject;
 /** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
-    private static final int LEGACY_TESTS = 13;
+    private static final int LEGACY_TESTS = 14;
     private static final int TEST_QUALITY = 640;
     private static final long FRAME_TIMEOUT_MS = 30_000;
     private static final long UHD_FRAME_TIMEOUT_MS = 150_000;
@@ -102,6 +102,7 @@ public final class SolarInstrumentation extends Instrumentation {
             ready(60_000);
 
             runCase("native_gles_launch_and_textures", this::launchAndTextures);
+            runCase("cinematic_opt_in_shader_and_legacy_restore", this::cinematicShader);
             runCase("astronomy_and_magnetic_classification", this::astronomyAndMagnetism);
             runCase("native_ether_fusion_and_readonly_observation", this::nativeEtherFusion);
             runCase("quantum_coupled_and_uncoupled_frames", this::quantumCoupling);
@@ -162,6 +163,28 @@ public final class SolarInstrumentation extends Instrumentation {
         output.putString("stream", "\nCOSMIC_SOLAR_TESTS_" + (passed ? "PASSED" : "FAILED")
                 + " tests=" + results.size() + " failures=" + failures + "\n");
         finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, output);
+    }
+
+    private void cinematicShader() throws Exception {
+        // The visual upgrade must compile and render on the shipping GLES
+        // pipeline, while its OFF path preserves the original appearance.
+        prepare(3,false,false);
+        gl(()->activity.renderer().setCinematic(false));
+        SolarRenderer.Capture legacy=frame();
+        gl(()->activity.renderer().setCinematic(true));
+        SolarRenderer.Capture cinematic=frame();
+        expect(activity.renderer().cinematicEnabled(),"Cine X setting was not applied");
+        expect(legacy.width==cinematic.width && legacy.height==cinematic.height,
+                "Cine X must not change framebuffer dimensions");
+        int changedPixels=changed(legacy,cinematic);
+        expect(changedPixels>0,"Cine X produced no visible pixels");
+        gl(()->activity.renderer().setCinematic(false));
+        SolarRenderer.Capture restored=frame();
+        expect(!activity.renderer().cinematicEnabled(),"Cine X did not turn off");
+        expect(changed(legacy,restored)==0,
+                "Legacy rendering was not restored with Cine X disabled");
+        metrics.put("cinematicChangedPixels",changedPixels);
+        metrics.put("cinematicLegacyRestored",true);
     }
 
     private void launchAndTextures() throws Exception {

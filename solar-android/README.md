@@ -1,5 +1,32 @@
 # COSMIC X Solar
 
+## Actualización visual 1.4 · Cine X
+
+El modo **Cine X** es una mejora gráfica opcional sobre el shader original
+de Solar y Ether/COSMIC X. Se activa en **Observatorio → Calidad de imagen →
+Cine X**. Añade tres efectos de coste acotado:
+
+- Brillos ópticos de estrellas especialmente intensas, filtrados según la
+  huella angular de píxel; es un efecto de cámara ilustrativo.
+- Dispersión atmosférica de borde aproximada, modulada por la orientación al Sol
+  y la visibilidad durante eclipses; no es un cálculo radiativo medido.
+- Anillos estrechos antialias en gigantes gaseosos, atenuados al quedar por
+  debajo de la resolución de píxel.
+
+La opción comienza desactivada para preservar las imágenes de referencia,
+las pruebas de determinismo y el rendimiento de dispositivos modestos.
+No cambia las órbitas, las masas, la gravedad, las efemérides, las capas
+cuánticas ni los materiales científicos. El motor sigue siendo el shader
+GLES original; **100 qubits GHZ del laboratorio Fusion 3D no son un
+acelerador GPU de Solar**.
+
+Los controles de calidad Ahorro/Equilibrada/Alta/4K/8K continúan disponibles.
+La resolución UHD no implica 4K/8K a FPS altos: el rendimiento se medirá en
+cada dispositivo. La prueba Android de Cine X exige que el shader compile,
+produzca píxeles diferentes al activarlo y restaure exactamente el framebuffer
+de referencia al desactivarlo.
+
+
 Explorador del sistema solar para Android, construido como una nueva aplicación
 de **COSMIC X Engine**. Integra el núcleo original de Mundo X y amplía su
 observador gráfico con planetas esféricos, anillos, órbitas y capas magnéticas.
