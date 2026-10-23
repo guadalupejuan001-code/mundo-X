@@ -82,6 +82,8 @@ public final class MainActivity extends Activity {
         phase = addButton(column, PHASE_ID, "FASE +90°", false);
         measure = addButton(column, MEASURE_ID, "MEDIR EN Z", true);
         reset = addButton(column, RESET_ID, "REPOSO · LIBERAR ESTADO", false);
+        Button map = addButton(column, R.id.map_remote, "MAPA 4D · MANDO", true);
+        map.setOnClickListener(view -> startActivity(new Intent(this, MapRemoteActivity.class)));
         Button hardware = addButton(column, R.id.hardware, "HARDWARE · PRUEBA REAL", false);
         hardware.setOnClickListener(view -> startActivity(new Intent(this, HardwareActivity.class)));
         metrics = addText(column, "", 12, MUTED, false);

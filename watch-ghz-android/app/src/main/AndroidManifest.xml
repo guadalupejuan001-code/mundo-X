@@ -5,6 +5,7 @@
         android:label="Mundo X · GHZ" android:icon="@drawable/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <meta-data android:name="com.google.android.wearable.standalone" android:value="true"/>
+        <activity android:name=".MapRemoteActivity" android:exported="false"/>
         <activity android:name=".HardwareActivity" android:exported="false"/>
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

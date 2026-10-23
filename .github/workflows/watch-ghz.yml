@@ -40,19 +40,23 @@ jobs:
           javac -d /tmp/ghz-java watch-ghz-android/app/src/main/java/com/mundox/ghzwatch/ProbeAnalysis.java \
             watch-ghz-android/tests/ProbeAnalysisCheck.java
           java -cp /tmp/ghz-java com.mundox.ghzwatch.ProbeAnalysisCheck | tee ghz-dist/hardware-analysis-checks.txt
+      - name: Browser map numerical checks
+        run: node --test watch-ghz-android/tests/map-field.test.mjs
       - name: Android SDK
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
-      - name: Build and lint standalone watch app
+      - name: Build and lint matching watch and phone apps
         shell: bash
         run: |
           set -uo pipefail
-          gradle -p watch-ghz-android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
+          gradle -p watch-ghz-android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :phone:assembleDebug :phone:assembleDebugAndroidTest :phone:lintDebug
           RESULT=$?
           if [ "$RESULT" -ne 0 ]; then
             REPORT=watch-ghz-android/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
             if [ -f "$REPORT" ]; then cat "$REPORT"; fi
+            PHONE_REPORT=watch-ghz-android/phone/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+            if [ -f "$PHONE_REPORT" ]; then cat "$PHONE_REPORT"; fi
             exit "$RESULT"
           fi
       - name: Verify APK identity and ARM64 native core
@@ -66,9 +70,15 @@ jobs:
           unzip -p ghz-dist/Mundo-X-GHZ-Reloj.apk lib/arm64-v8a/libmundox_ghz.so > /tmp/ghz-native/android.so
           "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D /tmp/ghz-native/android.so > ghz-dist/native-symbols.txt
           grep -q Java_com_mundox_ghzwatch_NativeGhz_command ghz-dist/native-symbols.txt
+          cp watch-ghz-android/phone/build/outputs/apk/debug/phone-debug.apk ghz-dist/Mundo-X-Mapa-Telefono.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs ghz-dist/Mundo-X-Mapa-Telefono.apk > ghz-dist/phone-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging ghz-dist/Mundo-X-Mapa-Telefono.apk > ghz-dist/phone-manifest.txt
+          grep -q "package: name='com.mundox.ghzwatch'" ghz-dist/phone-manifest.txt
+          diff <(grep 'certificate SHA-256 digest:' ghz-dist/signature.txt) <(grep 'certificate SHA-256 digest:' ghz-dist/phone-signature.txt)
           git rev-parse HEAD > ghz-dist/commit.txt
           sha256sum ghz-dist/*.apk > ghz-dist/SHA256SUMS.txt
           cp docs/watch-ghz-core.md ghz-dist/LEEME.md
+          cp docs/watch-map-control.md ghz-dist/MAPA-4D.md
       - name: Enable emulator acceleration
         run: |
           sudo chmod 666 /dev/kvm
@@ -86,6 +96,13 @@ jobs:
             gradle -p watch-ghz-android --no-daemon :app:connectedDebugAndroidTest
             adb install -r watch-ghz-android/app/build/outputs/apk/debug/app-debug.apk
             python3 watch-ghz-android/tests/capture_ui.py ghz-dist
+            adb uninstall com.mundox.ghzwatch || true
+            adb uninstall com.mundox.ghzwatch.test || true
+            adb shell wm size 1080x2340
+            adb shell wm density 420
+            gradle -p watch-ghz-android --no-daemon :phone:connectedDebugAndroidTest
+            adb exec-out run-as com.mundox.ghzwatch cat files/map-control.png > ghz-dist/map-control.png
+            test -s ghz-dist/map-control.png
       - name: Preserve app and evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -95,5 +112,7 @@ jobs:
             ghz-dist/**
             watch-ghz-android/app/build/outputs/androidTest-results/**
             watch-ghz-android/app/build/reports/lint-results-debug.html
+            watch-ghz-android/phone/build/outputs/androidTest-results/**
+            watch-ghz-android/phone/build/reports/lint-results-debug.html
           if-no-files-found: error
           retention-days: 30

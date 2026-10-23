@@ -146,3 +146,7 @@ Fuentes oficiales de las interfaces utilizadas:
 - [Android: magnetómetro calibrado y sin calibración](https://developer.android.com/develop/sensors-and-location/sensors/sensors_position)
 - [Android: pulsos VibrationEffect](https://developer.android.com/reference/android/os/VibrationEffect)
 - [Android: tiempos de SensorEvent](https://developer.android.com/reference/android/hardware/SensorEvent#timestamp)
+
+## Versión 1.2: mando para Campo 4D
+
+Incluye un APK compañero para el teléfono y un mando en el reloj. Consulta [instalación, controles y límites](watch-map-control.md). GHZ sigue siendo una simulación; los nuevos controles editan el mapa virtual.

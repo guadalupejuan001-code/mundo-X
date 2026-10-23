@@ -4,4 +4,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = 'MundoXGhzWatch'
-include ':app'
+include ':app', ':phone'
