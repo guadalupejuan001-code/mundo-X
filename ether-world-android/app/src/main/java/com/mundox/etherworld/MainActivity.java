@@ -397,8 +397,11 @@ public final class MainActivity extends Activity {
         g.setColor(accent?ACCENT:0xff284550);
         g.setCornerRadius(dp(10));
         b.setBackground(g);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(48),1f);
+        LinearLayout.LayoutParams p=parent.getOrientation()==LinearLayout.HORIZONTAL
+                ? new LinearLayout.LayoutParams(0,dp(48),1f)
+                : new LinearLayout.LayoutParams(-1,dp(48));
         p.rightMargin=dp(5);
+        p.topMargin=dp(4);
         parent.addView(b,p);
         b.setOnClickListener(v->work.run());
         controls.add(b);
