@@ -47,7 +47,8 @@ jobs:
           assert 'uniform highp usampler2D uEtherMasks;' in shader
           assert 'uEtherMaskEnabled' in shader
           assert 'texelFetch(uEtherMasks' in shader
-          assert 'if((candidates&(1u<<uint(j)))==0u)continue;' in shader
+          assert '// Keep the exact ring path' in shader
+          assert 'if((candidates&(1u<<uint(0)))!=0u)atmosphereVolume' in shader
           assert shader.count('atmosphereVolume(')>=12
           assert 'float t=sphere(rd,uBodies[j].xyz,uBodies[j].w);' in shader
           assert 'float eclipse(' in shader or 'eclipse(' in shader
