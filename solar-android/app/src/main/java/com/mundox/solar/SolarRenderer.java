@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
@@ -69,6 +70,16 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private final FloatBuffer points=direct(4096*7*4).asFloatBuffer();
     private int sceneProgram,overlayProgram,eyeVao,overlayVao,overlayVbo;
     private int mapTexture,colorTexture,depthBuffer,framebuffer;
+    // Sole active visibility planner: canonical native EtherRenderSpatial.
+    // GPU still executes the complete Solar appearance/optics shader; there
+    // is no CPU image upload and only one RGBA framebuffer for presentation.
+    private static final int ETHER_TILE=128;
+    private int etherTexture,etherTilesX,etherTilesY;
+    private int[] etherMasks=new int[0];
+    private IntBuffer etherUpload;
+    private volatile boolean etherRequested=true,etherActive=false;
+    private volatile double etherRatio=1.,etherPlanMs;
+    private volatile String etherFailure;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
     private boolean requestedUhd,requestedUltra;
@@ -162,6 +173,8 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         // EGL recreation invalidates GL names, never the logical solar world/core.
         sceneProgram=overlayProgram=eyeVao=overlayVao=overlayVbo=0;
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
+        etherTexture=etherTilesX=etherTilesY=0;
+        etherActive=false;etherRatio=1.;etherPlanMs=0.;etherFailure=null;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -468,6 +481,69 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         for(SolarData.Body body:SolarData.BODIES){int p=body.id*4;for(int k=0;k<3;k++)packedBodies[p+k]=(float)((positions[body.id][k]-cameraEye[k])*sceneScale);packedBodies[p+3]=(float)(radii[body.id]*sceneScale);}
         initializedCamera=true;
     }
+    /**
+     * Ether GPU index. One 32-bit candidate mask per 128x128 output region;
+     * 8K uses 60x34x4 = 8160 bytes. The same native geometry representation
+     * drives EtherSurfaceBuffer's lazy/exact CPU observations. GPU keeps the
+     * full surface/material pipeline and NEVER uploads a CPU 8K image.
+     *
+     * The source masks are dilated by one tile. The fragment shader retains
+     * exact full-catalogue nearest-body/eclipses and uses this map only to
+     * skip media/ring work that cannot intersect the camera's tile.
+     */
+    private void prepareEtherVisibility(){
+        etherActive=false;
+        if(!etherRequested){etherRatio=1.;return;}
+        final long started=System.nanoTime();
+        try {
+            final int tx=1+(width-1)/ETHER_TILE,ty=1+(height-1)/ETHER_TILE;
+            final int n=Math.multiplyExact(tx,ty);
+            if(etherMasks.length!=n)etherMasks=new int[n];
+            EtherVisibilityNative.plan(width,height,ETHER_TILE,TAN_HALF_FOV,
+                    forward,right,up,packedBodies,appearance,atmosphere,
+                    SolarData.BODIES.length,etherMasks);
+            long references=0;
+            for(int mask:etherMasks)references+=Integer.bitCount(mask);
+            etherRatio=SolarData.BODIES.length==0?0.:
+                    references/(double)((long)n*SolarData.BODIES.length);
+            // When almost every body is relevant, avoid the GPU upload path.
+            if(etherRatio>.92){etherFailure=null;return;}
+            if(etherTexture==0){
+                etherTexture=newTexture();
+                if(etherTexture==0)throw new IllegalStateException("No Ether visibility texture");
+            }
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D,etherTexture);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+            if(tx!=etherTilesX||ty!=etherTilesY){
+                glTexImage2D(GL_TEXTURE_2D,0,GL_R32UI,tx,ty,0,
+                        GL_RED_INTEGER,GL_UNSIGNED_INT,null);
+                allocationCheck("Ether visibility index allocation");
+                etherTilesX=tx;etherTilesY=ty;
+            }
+            if(etherUpload==null||etherUpload.capacity()<n)
+                etherUpload=direct(Math.multiplyExact(n,4)).asIntBuffer();
+            etherUpload.clear();etherUpload.put(etherMasks,0,n);etherUpload.flip();
+            glTexSubImage2D(GL_TEXTURE_2D,0,0,0,tx,ty,
+                    GL_RED_INTEGER,GL_UNSIGNED_INT,etherUpload);
+            allocationCheck("Ether visibility index upload");
+            etherActive=true;etherFailure=null;
+        }catch(RuntimeException|LinkageError|OutOfMemoryError invalid){
+            etherRequested=false;etherActive=false;etherRatio=1.;
+            etherFailure="Ether visibility fallback: "+invalid.getClass().getSimpleName();
+            if(etherTexture!=0)glDeleteTextures(1,new int[]{etherTexture},0);
+            etherTexture=etherTilesX=etherTilesY=0;
+            // Recover reference rendering after an optional indexed-path error.
+            for(int i=0;i<16&&glGetError()!=GL_NO_ERROR;i++){}
+        }finally{
+            glActiveTexture(GL_TEXTURE0);
+            etherPlanMs=(System.nanoTime()-started)*1e-6;
+        }
+    }
+
     private void drawScene(){
         glUseProgram(sceneProgram);glBindVertexArray(eyeVao);glDisable(GL_BLEND);
         glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(true);
@@ -488,6 +564,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         glUniform4fv(sceneLoc("uQ0"),1,quantum,0);glUniform4fv(sceneLoc("uQ1"),1,quantum,4);
         glUniform4fv(sceneLoc("uEther"),1,ether,0);
         glUniform1f(sceneLoc("uCoupling"),(fields||wind)?1f:0f);
+        glUniform1i(sceneLoc("uEtherMaskEnabled"),etherActive?1:0);
+        glUniform1i(sceneLoc("uEtherMasks"),1);
+        if(etherActive){glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,etherTexture);}
         glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D_ARRAY,mapTexture);glUniform1i(sceneLoc("uMaps"),0);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -704,7 +783,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                 SolarFlightPhysics.step(selected,SolarEnvironment.environment(selected),flightState,0,dt);
                 entryAltitude=flightState.altitudeKm;publishEntry();
             }
-            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);
+            if(framebufferDirty)sizeFramebuffer();syncWorld();syncQuantum();camera(dt);prepareEtherVisibility();
             glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);drawScene();
             lines.clear();points.clear();if(!entryMode){orbitLines();fieldLines();tracerParticles();drawOverlay(lines,false);drawOverlay(points,true);}
             check("Observación solar");
@@ -897,6 +976,16 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
+    /** Switch between native Ether GPU visibility and the exhaustive oracle. */
+    public void setEtherVisibility(boolean enabled){
+        etherRequested=enabled;etherActive=false;etherFailure=null;etherRatio=1.;
+    }
+    public boolean etherVisibilityEnabled(){return etherRequested;}
+    public boolean etherVisibilityActive(){return etherActive;}
+    public double etherVisibilityRatio(){return etherRatio;}
+    public double etherVisibilityPlanMs(){return etherPlanMs;}
+    public String etherVisibilityFailure(){return etherFailure;}
+
     public void setQuality(int maxDimension){
         quality=Math.max(360,Math.min(1920,maxDimension));
         adaptivePreview=false;adaptiveQuality.reset(quality);
