@@ -77,6 +77,7 @@ jobs:
             mundo_x_infinite test_infinite_address test_infinite_core \
             test_infinite_tensor test_infinite_session test_infinite_bridge test_infinite_extreme infinite_scale \
             test_ether_core test_ether_frame test_ether_fusion test_ether_rules test_ether_memory test_ether_batch test_ether_mil_renderer \
+            test_ether_render_spatial test_ether_surface_buffer \
             test_compact_measurement mundo_x_native_tests \
             test_core_1000 test_engine_session \
             2>&1 | tee infinite-evidence/build.log
