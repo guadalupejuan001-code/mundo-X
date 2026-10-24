@@ -67,7 +67,7 @@ class EtherRenderSpatial {
     up_=normalize(cross(right_,forward_));
     tan_half_=std::tan(fov*std::acos(-1.)/360.);
     aspect_=static_cast<double>(width_)/static_cast<double>(height_);
-    dirty_=true;
+    dirty_=true;++revision_;
   }
 
   void add_body(const Body& b) {
@@ -78,18 +78,18 @@ class EtherRenderSpatial {
       throw std::invalid_argument("invalid spatial color");
     for(const auto& old:bodies_)if(old.id==b.id)
       throw std::invalid_argument("duplicate spatial body ID");
-    bodies_.push_back(b);dirty_=true;
+    bodies_.push_back(b);dirty_=true;++revision_;
   }
 
-  void clear_bodies(){bodies_.clear();gains_.fill(1.);dirty_=true;}
+  void clear_bodies(){bodies_.clear();gains_.fill(1.);dirty_=true;++revision_;}
   void set_material_gain(std::uint32_t id,double gain) {
     if(id>=4096||!std::isfinite(gain)||gain<0.||gain>2.)
       throw std::invalid_argument("invalid spatial material gain");
-    gains_[id]=gain;
+    if(gains_[id]!=gain){gains_[id]=gain;++revision_;}
   }
   void set_tile(std::size_t tile) {
     if(tile<8||tile>1024)throw std::invalid_argument("spatial tile must be 8..1024");
-    tile_=tile;resize_tiles();dirty_=true;
+    tile_=tile;resize_tiles();dirty_=true;++revision_;
   }
 
   // Planning is fully conservative: the frustum bound is enlarged by one
@@ -212,6 +212,25 @@ class EtherRenderSpatial {
     for(const auto& run:row_runs_[y])if(x>=run.x0&&x<=run.x1)return true;
     return false;
   }
+  std::size_t width()const noexcept{return width_;}
+  std::size_t height()const noexcept{return height_;}
+  std::uint64_t revision()const noexcept{return revision_;}
+  // Recover exact depth of a known surface ID without probing other bodies.
+  // Used by the packed surface buffer: depth is not stored per pixel.
+  double depth_for_body(std::uint32_t id,std::size_t x,std::size_t y){
+    bounds(x,y);if(dirty_)plan();
+    const auto it=std::lower_bound(bodies_.begin(),bodies_.end(),id,
+                [](const Body& b,std::uint32_t key){return b.id<key;});
+    if(it==bodies_.end()||it->id!=id)throw std::out_of_range("surface body ID does not exist");
+    const auto i=static_cast<std::size_t>(it-bodies_.begin());
+    const auto ray=ray_for(x,y);
+    const double along=dot(offsets_[i],ray);
+    const double h2=radius2_[i]-(squared_[i]-along*along);
+    if(h2<0.)return std::numeric_limits<double>::infinity();
+    const double root=std::sqrt(h2);
+    double depth=along-root;if(depth<=1e-6)depth=along+root;
+    return depth>1e-6?depth:std::numeric_limits<double>::infinity();
+  }
   const Stats& stats()const noexcept{return stats_;}
   const std::vector<Body>& bodies()const noexcept{return bodies_;}
 
@@ -250,6 +269,49 @@ class EtherRenderSpatial {
     for(int y=y0;y<=y1;++y)
       row_runs_[y].push_back({static_cast<std::size_t>(x0),static_cast<std::size_t>(x1)});
   }
+  // The sphere's silhouette is a quadratic cone on the image plane.
+  // Each horizontal row is intersected with that cone analytically, so
+  // background pixels outside the silhouette are never individually traced.
+  // Numerical edge cases fall back to the original conservative rectangle.
+  void register_conic_rows(std::uint32_t index,int x0,int x1,int y0,int y1){
+    x0=std::max(x0,0);y0=std::max(y0,0);
+    x1=std::min(x1,static_cast<int>(width_)-1);
+    y1=std::min(y1,static_cast<int>(height_)-1);
+    if(x0>x1||y0>y1)return;
+    const Vec3 c=offsets_[index];
+    const double cx=dot(c,right_),cy=dot(c,up_),cz=dot(c,forward_);
+    const double q=squared_[index]-radius2_[index];
+    const double a=cx*cx-q;
+    if(!std::isfinite(a)||a>=-1e-12||q<=0.){
+      register_rectangle(x0,x1,y0,y1);return;
+    }
+    const double scale_x=tan_half_*aspect_;
+    for(int row=y0;row<=y1;++row){
+      const double sy=(2.*(static_cast<double>(row)+.5)/height_-1.)*tan_half_;
+      const double v=cy*sy+cz;
+      const double b=2.*cx*v;
+      const double d=v*v-q*(sy*sy+1.);
+      const double disc=b*b-4.*a*d;
+      if(!std::isfinite(disc)){
+        row_runs_[row].push_back({static_cast<std::size_t>(x0),static_cast<std::size_t>(x1)});
+        continue;
+      }
+      if(disc<0.){
+        const double error_margin=1e-12*(std::abs(b*b)+std::abs(4.*a*d)+1.);
+        if(disc < -error_margin)continue;
+        row_runs_[row].push_back({static_cast<std::size_t>(x0),static_cast<std::size_t>(x1)});
+        continue;
+      }
+      const double root=std::sqrt(disc);
+      const double s0=(-b-root)/(2.*a),s1=(-b+root)/(2.*a);
+      const double lo=std::min(s0,s1),hi=std::max(s0,s1);
+      // Two-pixel safety margin for floating-point/tangent boundaries.
+      const auto lx=static_cast<int>(std::floor((lo/scale_x+1.)*.5*width_-.5))-2;
+      const auto rx=static_cast<int>(std::ceil((hi/scale_x+1.)*.5*width_-.5))+2;
+      const int l=std::max(x0,lx),r=std::min(x1,rx);
+      if(l<=r)row_runs_[row].push_back({static_cast<std::size_t>(l),static_cast<std::size_t>(r)});
+    }
+  }
   void project(std::uint32_t index){
     const auto& b=bodies_[index];const auto c=offsets_[index];
     const double x=dot(c,right_),y=dot(c,up_),z=dot(c,forward_),r=b.radius;
@@ -278,10 +340,10 @@ class EtherRenderSpatial {
     const auto px1=(right*.5+.5)*static_cast<double>(width_);
     const auto py0=(bottom*.5+.5)*static_cast<double>(height_);
     const auto py1=(top*.5+.5)*static_cast<double>(height_);
-    register_rectangle(static_cast<int>(std::floor(px0))-1,
-                       static_cast<int>(std::ceil(px1))+1,
-                       static_cast<int>(std::floor(py0))-1,
-                       static_cast<int>(std::ceil(py1))+1);
+    register_conic_rows(index,static_cast<int>(std::floor(px0))-1,
+                        static_cast<int>(std::ceil(px1))+1,
+                        static_cast<int>(std::floor(py0))-1,
+                        static_cast<int>(std::ceil(py1))+1);
     fill(index,static_cast<int>(std::floor(px0/tile_)),
                static_cast<int>(std::floor(px1/tile_)),
                static_cast<int>(std::floor(py0/tile_)),
@@ -347,6 +409,7 @@ class EtherRenderSpatial {
   std::array<double,4096> gains_= []{std::array<double,4096> x{};x.fill(1.);return x;}();
   Stats stats_{};
   bool dirty_=true;
+  std::uint64_t revision_=0;
 };
 
 } // namespace mundo_x
