@@ -451,7 +451,8 @@ void main(){
     // Avoid scanning the other nineteen bodies for every fragment.
     for(int j=5;j<=8;j++){
         if(j>=uCount)break;
-        if((candidates&(1u<<uint(j)))==0u)continue;
+        // Keep the exact ring path until the GL differential oracle proves
+        // that ring silhouettes tolerate spatial mask filtering.
         vec3 axis=uAxes[j];
         float den=dot(rd,axis);if(abs(den)<.00001)continue;
         float t=dot(uBodies[j].xyz,axis)/den;
