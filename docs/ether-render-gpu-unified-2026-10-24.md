@@ -19,7 +19,8 @@ de los 33.177.600 píxeles desde un trazador CPU.
 - **Etapa visual:** se mantiene el shader GLSL de Solar con texturas NASA,
   PBR, anillos, atmósferas, corona, órbitas, eclipses, profundidad y entrada
   atmosférica. **No se omiten esferas ni pruebas de eclipse.** Solo se evita
-  trabajo de atmósferas y anillos para tiles fuera de su envolvente.
+  trabajo de atmósferas para tiles fuera de su envolvente. Los anillos se
+  conservan exhaustivos tras la primera regresión de paridad Android.
 - **Garantía conservadora:** las regiones se dilatan un tile para proteger
   errores de redondeo y objetos subpíxel. El oráculo C++ prueba cada rayo de
   escenarios aleatorios y verifica que ninguna envolvente intersectada esté
@@ -67,3 +68,18 @@ declara aprobada hasta obtener los resultados de Android.
 En 8K, el shader sigue generando 33,18 millones de fragmentos al pedir
 una imagen completa. Ningún índice puede eliminar ese trabajo de salida
 si el objetivo es presentar un RGBA completo.
+
+## Resultados Android de diagnóstico (aún no aprobado)
+
+El primer test A/B con índice activo en vista general detectó 4 píxeles
+alterados. La siguiente prueba mostró referencia contra referencia con 7
+píxeles de diferencia en vista general, 45 en Tierra y 9 en Luna, lo que
+impide atribuir automáticamente toda diferencia a Ether. Con índice forzado,
+Saturno presentó 7 diferencias adicionales y Luna 36 en comparación inmediata.
+Por ello esta rama mantiene el cómputo óptico completo de los anillos y ejecuta
+comparaciones A/B/A del mismo frame y cámara: antes, Ether y después. Solo
+se aprobará el índice cuando la variación propia de la referencia se separe
+de cualquier alteración causal del filtro.
+
+El éxito de la compilación y del oráculo geométrico no implica aprobación
+fotográfica ni una ganancia de FPS en Samsung A16.
