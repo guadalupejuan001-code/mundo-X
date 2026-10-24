@@ -79,6 +79,9 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private IntBuffer etherUpload;
     private volatile boolean etherRequested=true,etherActive=false;
     private volatile double etherRatio=1.,etherPlanMs;
+    private long etherPlanSignature;
+    private boolean etherIndexUpToDate;
+    private volatile long etherIndexReuses;
     private volatile String etherFailure;
     private volatile int viewWidth=1,viewHeight=1,width=1,height=1;
     private int quality=960,acceptedQuality=960,mapWidth=2048,mapHeight=1024;
@@ -175,6 +178,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         mapTexture=colorTexture=depthBuffer=framebuffer=0;
         etherTexture=etherTilesX=etherTilesY=0;
         etherActive=false;etherRatio=1.;etherPlanMs=0.;etherFailure=null;
+        etherIndexUpToDate=false;etherIndexReuses=0;
         activeUhd=false;activeUltra=false;
         sceneLocations.clear();overlayLocations.clear();hasFrame=false;failed=false;failure=null;
         previousNanos=fpsNanos=statusNanos=0;uploadedRevision=Long.MIN_VALUE;
@@ -491,11 +495,33 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
      * exact full-catalogue nearest-body/eclipses and uses this map only to
      * skip media/ring work that cannot intersect the camera's tile.
      */
+    private static long etherMix(long signature,int value){
+        return (signature ^ (value & 0xffffffffL))*1099511628211L;
+    }
+    private static long etherMix(long signature,float[] values){
+        for(float v:values)signature=etherMix(signature,Float.floatToRawIntBits(v));
+        return signature;
+    }
+    private long etherVisibilitySignature(){
+        long h=1469598103934665603L;
+        h=etherMix(h,width);h=etherMix(h,height);
+        h=etherMix(h,Float.floatToRawIntBits(TAN_HALF_FOV));
+        h=etherMix(h,forward);h=etherMix(h,right);h=etherMix(h,up);
+        h=etherMix(h,packedBodies);h=etherMix(h,appearance);
+        return etherMix(h,atmosphere);
+    }
     private void prepareEtherVisibility(){
         etherActive=false;
         if(!etherRequested){etherRatio=1.;return;}
         final long started=System.nanoTime();
         try {
+            final long currentSignature=etherVisibilitySignature();
+            if(etherIndexUpToDate&&currentSignature==etherPlanSignature){
+                etherActive=etherTexture!=0&&etherRatio<=.92;
+                etherPlanMs=0.;
+                ++etherIndexReuses;
+                return;
+            }
             final int tx=1+(width-1)/ETHER_TILE,ty=1+(height-1)/ETHER_TILE;
             final int n=Math.multiplyExact(tx,ty);
             if(etherMasks.length!=n)etherMasks=new int[n];
@@ -507,7 +533,11 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             etherRatio=SolarData.BODIES.length==0?0.:
                     references/(double)((long)n*SolarData.BODIES.length);
             // When almost every body is relevant, avoid the GPU upload path.
-            if(etherRatio>.92){etherFailure=null;return;}
+            if(etherRatio>.92){
+                etherFailure=null;
+                etherPlanSignature=currentSignature;etherIndexUpToDate=true;
+                return;
+            }
             if(etherTexture==0){
                 etherTexture=newTexture();
                 if(etherTexture==0)throw new IllegalStateException("No Ether visibility texture");
@@ -531,8 +561,10 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
                     GL_RED_INTEGER,GL_UNSIGNED_INT,etherUpload);
             allocationCheck("Ether visibility index upload");
             etherActive=true;etherFailure=null;
+            etherPlanSignature=currentSignature;etherIndexUpToDate=true;
         }catch(RuntimeException|LinkageError|OutOfMemoryError invalid){
             etherRequested=false;etherActive=false;etherRatio=1.;
+            etherIndexUpToDate=false;
             etherFailure="Ether visibility fallback: "+invalid.getClass().getSimpleName();
             if(etherTexture!=0)glDeleteTextures(1,new int[]{etherTexture},0);
             etherTexture=etherTilesX=etherTilesY=0;
@@ -979,11 +1011,13 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     /** Switch between native Ether GPU visibility and the exhaustive oracle. */
     public void setEtherVisibility(boolean enabled){
         etherRequested=enabled;etherActive=false;etherFailure=null;etherRatio=1.;
+        etherIndexUpToDate=false;
     }
     public boolean etherVisibilityEnabled(){return etherRequested;}
     public boolean etherVisibilityActive(){return etherActive;}
     public double etherVisibilityRatio(){return etherRatio;}
     public double etherVisibilityPlanMs(){return etherPlanMs;}
+    public long etherVisibilityIndexReuses(){return etherIndexReuses;}
     public String etherVisibilityFailure(){return etherFailure;}
 
     public void setQuality(int maxDimension){
