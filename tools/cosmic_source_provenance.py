@@ -47,6 +47,7 @@ ETHER_RENDER_INTEGRATION_REFERENCE = "2de68561ef0f2c9208e6f151dd163db996e2133c"
 MIL_RENDER_INTEGRATION_REFERENCE = "0817158c866e5708991355b0464b961e09304307"
 SPATIAL_RENDER_REFERENCE = "db79b0a1e805ccadcf3172abbf8966501ebea872"
 SURFACE_BUFFER_REFERENCE = "e295da32e682db8bf681598dda86a2a4a8142db6"
+ETHER_GPU_VISIBILITY_REFERENCE = "8d94e3087ed68465bbdb87321fdd9610b42122bf"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -100,7 +101,8 @@ ADDITIONAL_SOURCES = {
     "native/include/mundo_x/ether_renderer.hpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "native/include/mundo_x/ether_mil_bridge.hpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "native/tests/ether_mil_renderer.cpp": MIL_RENDER_INTEGRATION_REFERENCE,
-    "native/include/mundo_x/ether_render_spatial.hpp": SURFACE_BUFFER_REFERENCE,
+    "native/include/mundo_x/ether_render_spatial.hpp": ETHER_GPU_VISIBILITY_REFERENCE,
+    "native/include/mundo_x/ether_render_gpu_extensions.hpp": ETHER_GPU_VISIBILITY_REFERENCE,
     "native/include/mundo_x/ether_surface_buffer.hpp": SURFACE_BUFFER_REFERENCE,
     "native/tests/ether_render_spatial.cpp": SPATIAL_RENDER_REFERENCE,
     "native/tests/ether_surface_buffer.cpp": SURFACE_BUFFER_REFERENCE,
