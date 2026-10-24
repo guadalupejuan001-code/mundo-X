@@ -5,6 +5,8 @@
                android:supportsRtl="true" android:label="Mundo X Fusion 3D"
                android:theme="@android:style/Theme.Material.NoActionBar"
                android:hardwareAccelerated="true">
+    <activity android:name=".EtherBenchmarkActivity" android:exported="false"
+              android:screenOrientation="unspecified"/>
     <activity android:name=".FusionActivity" android:exported="true"
               android:screenOrientation="unspecified" android:windowSoftInputMode="adjustResize">
       <intent-filter>
