@@ -34,7 +34,8 @@ def main():
     tests = report["tests"]
     names = [test["name"] for test in tests]
     expected_tests = {
-        "native_gles_launch_and_textures", "astronomy_and_magnetic_classification",
+        "native_gles_launch_and_textures", "ether_gpu_spatial_visibility_exact_rgba",
+        "astronomy_and_magnetic_classification",
         "native_ether_fusion_and_readonly_observation", "quantum_coupled_and_uncoupled_frames",
         "intrinsic_and_induced_field_frames", "solar_wind_layer", "saturn_rings_and_moon_navigation",
         "forward_reverse_and_paused_time", "real_scale_earth_focus",
@@ -67,6 +68,15 @@ def main():
             and 0 <= metrics["nativeActiveSites"] <= 8 and metrics["nativeStateBytes"] >= 0,
             "The Ether domain and finite Solar preparation were not distinguished")
     require(metrics["framesRendered"] > 0, "No actual GLES frames were rendered")
+    parity = metrics.get("etherGpuExactRgba")
+    require(isinstance(parity, list) and len(parity) == 4,
+            "Native Ether GPU must compare four real matched GLES scenes")
+    require({p.get("destination") for p in parity} == {-1, 3, 6, 9},
+            "Missing system/Earth/Saturn/Moon Ether GPU parity scene")
+    require(all(p.get("candidateActive") is True and p.get("pixelDifferences") == 0
+                and p.get("fallback") is None for p in parity),
+            "Native Ether GPU changed image or silently fell back")
+
     require(metrics["initialWindowFocused"] is True, "The launched Activity did not receive input focus")
     require(metrics["bodyCount"] == 23 and metrics["planetCount"] == 8 and metrics["moonCount"] == 14,
             "Astronomical body inventory is incomplete")
