@@ -51,3 +51,6 @@ c++ -O3 -std=c++17 -I native/include tools/benchmark_ether_surface_buffer.cpp -o
 - Comparar con el prototipo previo de ~40 ms, cuyo código no está publicado, en un protocolo A/B idéntico.
 - Adaptar buffers a GLES/Vulkan y composición de fondo, presentaciones, profundidad y oclusión en Android; medir memoria y FPS del Galaxy/Samsung real.
 - No fusionar a `main` mientras falte la verificación de Android/producción.
+## Verificación completa de la imagen 8K
+
+El benchmark recorre **solo durante la validación** los 33.177.600 píxeles y reconstruye el hash de ID, RGBA y bits de profundidad desde el buffer compacto. En la prueba Linux local: hash compacto `8289019075456906279` = hash del renderizador completo; comprobación de exportación 8K ~1.237 ms (1,237 segundos). Este coste O(W×H) se paga únicamente al pedir el fotograma completo o al validarlo y **no** durante la preparación simbólica ni al consultar píxeles individuales.

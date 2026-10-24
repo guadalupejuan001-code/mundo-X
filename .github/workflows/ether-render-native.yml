@@ -81,6 +81,7 @@ jobs:
           assert d["packed_visible_pixels"]>0 and d["packed_spans"]>0
           assert d["packed_logical_bytes"]==d["packed_allocated_bytes"]
           assert d["packed_allocated_bytes"]<d["full_rgba_bytes"]
+          assert d["packed_full_frame_hash"]==d["full_frame_hash"]
           assert d["full_frame_hash"]==8289019075456906279
           assert d["full_intersection_tests"]==9349565
           print("BUFFER_8K_VALIDATION_PASS")

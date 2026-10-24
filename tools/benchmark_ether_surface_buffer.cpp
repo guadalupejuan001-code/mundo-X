@@ -1,5 +1,6 @@
 #include "mundo_x/ether_surface_buffer.hpp"
 #include <cstdint>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -51,6 +52,22 @@ int main(int argc,char** argv){
     }
     const auto packed_query_ms=ms(query_start2);
     const auto frame=renderer.render();
+    // Validation ONLY: visit all output coordinates and verify the packed
+    // buffer reconstructs the complete 8K image bit-for-bit, including depth.
+    // This O(W*H) export check is NOT part of lazy buffer preparation.
+    std::uint64_t packed_hash=1469598103934665603ULL;
+    const auto full_check_start=Clock::now();
+    for(std::size_t y=0;y<height;++y)for(std::size_t x=0;x<width;++x){
+      const auto p=buffer.at(x,y);
+      auto mix=[&](std::uint64_t v){for(unsigned b=0;b<8;++b){
+        packed_hash^=(v>>(b*8))&0xffu;packed_hash*=1099511628211ULL;
+      }};
+      mix(static_cast<std::uint64_t>(static_cast<std::int64_t>(p.body)));
+      mix(p.rgba);
+      std::uint64_t bits=0;std::memcpy(&bits,&p.depth,sizeof(bits));mix(bits);
+    }
+    const auto full_check_ms=ms(full_check_start);
+    if(packed_hash!=frame.hash)throw std::runtime_error("full 8K packed surface hash differs from renderer");
     std::cout<<std::fixed<<std::setprecision(3)
              <<"{\"width\":"<<width<<",\"height\":"<<height
              <<",\"bodies\":"<<n<<",\"tile\":"<<tile
@@ -58,6 +75,8 @@ int main(int argc,char** argv){
              <<",\"tile_references\":"<<frame.tile_references
              <<",\"nonempty_tiles\":"<<frame.nonempty_tiles
              <<",\"full_frame_hash\":"<<frame.hash
+             <<",\"packed_full_frame_hash\":"<<packed_hash
+             <<",\"packed_full_image_check_ms\":"<<full_check_ms
              <<",\"full_pixel_queries\":"<<frame.ray_queries
              <<",\"full_intersection_tests\":"<<frame.intersection_tests
              <<",\"full_frame_ms\":"<<frame.render_ms
