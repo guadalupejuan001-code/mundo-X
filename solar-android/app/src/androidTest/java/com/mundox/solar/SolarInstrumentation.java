@@ -40,7 +40,7 @@ import org.json.JSONObject;
 /** Tests the shipping Activity, shared Ether session, GL thread and real framebuffers. */
 public final class SolarInstrumentation extends Instrumentation {
     private static final String TAG = "CosmicSolarTests";
-    private static final int LEGACY_TESTS = 13;
+    private static final int LEGACY_TESTS = 14;
     private static final int TEST_QUALITY = 640;
     private static final long FRAME_TIMEOUT_MS = 30_000;
     private static final long UHD_FRAME_TIMEOUT_MS = 150_000;
@@ -102,6 +102,7 @@ public final class SolarInstrumentation extends Instrumentation {
             ready(60_000);
 
             runCase("native_gles_launch_and_textures", this::launchAndTextures);
+            runCase("ether_gpu_spatial_visibility_exact_rgba", this::etherGpuParity);
             runCase("astronomy_and_magnetic_classification", this::astronomyAndMagnetism);
             runCase("native_ether_fusion_and_readonly_observation", this::nativeEtherFusion);
             runCase("quantum_coupled_and_uncoupled_frames", this::quantumCoupling);
@@ -375,6 +376,36 @@ public final class SolarInstrumentation extends Instrumentation {
         expect(delta > 20, "Solar wind toggle did not change actual GLES output");
         save("sun-solar-wind.png", wind);
         metrics.put("windToggleChangedPixels", delta);
+    }
+
+    /** Paired same-camera, same-time real GPU frames; zero different RGB pixels. */
+    private void etherGpuParity() throws Exception {
+        JSONArray cases=new JSONArray();
+        try {
+            for(int destination:new int[]{-1,3,6,9}) {
+                prepare(destination,false,false);
+                gl(() -> activity.renderer().setEtherVisibility(false));
+                SolarRenderer.Capture reference=frame();
+                gl(() -> activity.renderer().setEtherVisibility(true));
+                SolarRenderer.Capture candidate=frame();
+                int differences=changed(reference,candidate);
+                boolean active=activity.renderer().etherVisibilityActive();
+                JSONObject test=new JSONObject()
+                        .put("destination",destination)
+                        .put("width",reference.width).put("height",reference.height)
+                        .put("candidateActive",active)
+                        .put("ratio",activity.renderer().etherVisibilityRatio())
+                        .put("plannerMs",activity.renderer().etherVisibilityPlanMs())
+                        .put("pixelDifferences",differences)
+                        .put("fallback",activity.renderer().etherVisibilityFailure());
+                cases.put(test);
+                expect(active,"Ether native GPU index inactive: "+test);
+                expect(differences==0,"Ether GPU image differs from reference: "+test);
+            }
+        }finally{
+            gl(() -> activity.renderer().setEtherVisibility(true));
+        }
+        metrics.put("etherGpuExactRgba",cases);
     }
 
     private void destinations() throws Exception {
