@@ -385,30 +385,36 @@ public final class SolarInstrumentation extends Instrumentation {
         try {
             for(int destination:new int[]{-1,3,6,9}) {
                 prepare(destination,false,false);
-                gl(() -> activity.renderer().setEtherVisibility(false));
+                gl(() -> {activity.renderer().forceEtherIndexForTest(true);
+                          activity.renderer().setEtherVisibility(false);});
                 SolarRenderer.Capture reference=frame();
+                SolarRenderer.Capture repeated=frame();
+                int referenceJitter=changed(reference,repeated);
                 gl(() -> activity.renderer().setEtherVisibility(true));
                 SolarRenderer.Capture candidate=frame();
-                int differences=changed(reference,candidate);
+                int differences=changed(repeated,candidate);
                 boolean active=activity.renderer().etherVisibilityActive();
                 JSONObject test=new JSONObject()
                         .put("destination",destination)
                         .put("width",reference.width).put("height",reference.height)
                         .put("candidateActive",active)
+                        .put("referenceJitter",referenceJitter)
                         .put("ratio",activity.renderer().etherVisibilityRatio())
                         .put("plannerMs",activity.renderer().etherVisibilityPlanMs())
                         .put("pixelDifferences",differences)
                         .put("fallback",activity.renderer().etherVisibilityFailure());
                 cases.put(test);
-                if(differences>0){
+                if(differences>0||referenceJitter>0){
                     ++differencesFound;
                     save("ether-gpu-reference-"+destination+".png",reference);
+                    save("ether-gpu-reference-repeat-"+destination+".png",repeated);
                     save("ether-gpu-indexed-"+destination+".png",candidate);
                 }
                 expect(active,"Ether native GPU index inactive: "+test);
             }
         }finally{
-            gl(() -> activity.renderer().setEtherVisibility(true));
+            gl(() -> { activity.renderer().forceEtherIndexForTest(false);
+                       activity.renderer().setEtherVisibility(true); });
         }
         metrics.put("etherGpuExactRgba",cases);
         expect(differencesFound==0,"Ether GPU differs from the full renderer: "+cases);
