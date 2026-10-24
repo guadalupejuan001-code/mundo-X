@@ -70,6 +70,55 @@ class EtherRenderSpatial {
     dirty_=true;++revision_;
   }
 
+  // External-camera basis for GLES clients that already own their camera.
+  // This avoids changing Solar's roll/orientation to fit an independent camera.
+  void set_camera_basis(Vec3 eye,Vec3 forward,Vec3 right,Vec3 up,double fov) {
+    if(!finite(eye)||!finite(forward)||!finite(right)||!finite(up)||
+       !std::isfinite(fov)||fov<=1.||fov>=170.)
+      throw std::invalid_argument("invalid Ether visual camera basis");
+    const double norms[]={length(forward),length(right),length(up)};
+    for(double n:norms)if(std::abs(n-1.)>1e-3)
+      throw std::invalid_argument("Ether visual camera basis not normalized");
+    if(std::abs(dot(forward,right))>1e-3||
+       std::abs(dot(forward,up))>1e-3||
+       std::abs(dot(right,up))>1e-3)
+      throw std::invalid_argument("Ether visual camera basis not orthogonal");
+    eye_=eye;forward_=normalize(forward);
+    right_=normalize(right);up_=normalize(up);
+    tan_half_=std::tan(fov*std::acos(-1.)/360.);
+    aspect_=static_cast<double>(width_)/static_cast<double>(height_);
+    dirty_=true;++revision_;
+  }
+
+  // GPU visibility index: one UINT32 bitfield per screen region.
+  // A one-tile halo is intentionally retained for subpixel/raster edges.
+  // Only safe for scenes whose body IDs are in [0,31] (Solar has <=24).
+  // This is derived from the SAME native spatial bins as the exact CPU observer.
+  std::vector<std::uint32_t> tile_masks32(unsigned halo=1) {
+    if(halo>2)throw std::invalid_argument("Ether visibility halo must be 0..2");
+    if(dirty_)plan();
+    std::vector<std::uint32_t> masks(bins_.size(),0u);
+    for(std::size_t ty=0;ty<tiles_y_;++ty)for(std::size_t tx=0;tx<tiles_x_;++tx){
+      std::uint32_t bits=0;
+      for(const auto index:bins_[ty*tiles_x_+tx]){
+        const auto id=bodies_[index].id;
+        if(id>=32)throw std::invalid_argument("Ether GPU mask has at most 32 body IDs");
+        bits|=std::uint32_t{1}<<id;
+      }
+      if(!bits)continue;
+      const std::size_t x0=tx>halo?tx-halo:0;
+      const std::size_t y0=ty>halo?ty-halo:0;
+      const std::size_t x1=std::min(tiles_x_-1,tx+halo);
+      const std::size_t y1=std::min(tiles_y_-1,ty+halo);
+      for(std::size_t y=y0;y<=y1;++y)
+        for(std::size_t x=x0;x<=x1;++x)masks[y*tiles_x_+x]|=bits;
+    }
+    return masks;
+  }
+  std::size_t tiles_x()const noexcept{return tiles_x_;}
+  std::size_t tiles_y()const noexcept{return tiles_y_;}
+  std::size_t tile_size()const noexcept{return tile_;}
+
   void add_body(const Body& b) {
     if(bodies_.size()>=4096||b.id>=4096)throw std::length_error("spatial render supports 4096 bodies/IDs");
     if(!finite(b.center)||!std::isfinite(b.radius)||!(b.radius>0.))

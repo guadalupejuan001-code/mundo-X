@@ -1,0 +1,55 @@
+name: Ether Render X GPU visibility contracts
+
+on:
+  push:
+    branches: [codex/ether-render-unified-gpu-20261024]
+    paths:
+      - 'native/include/mundo_x/ether_render_spatial.hpp'
+      - 'native/include/mundo_x/ether_render_gpu_extensions.hpp'
+      - 'solar-android/**'
+      - 'tools/test_ether_gpu_visibility.cpp'
+      - 'tools/cosmic_source_provenance.py'
+      - '.github/workflows/ether-render-gpu.yml'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/ether_render_spatial.hpp'
+      - 'native/include/mundo_x/ether_render_gpu_extensions.hpp'
+      - 'solar-android/**'
+      - 'tools/test_ether_gpu_visibility.cpp'
+      - 'tools/cosmic_source_provenance.py'
+      - '.github/workflows/ether-render-gpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gpu-native-oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify canonical Ether source provenance
+        run: python3 tools/cosmic_source_provenance.py --verify . > /tmp/ether-source-provenance.json
+      - name: Native independent visibility oracle
+        run: |
+          set -euo pipefail
+          c++ -O3 -std=c++17 -Wall -Wextra -I native/include tools/test_ether_gpu_visibility.cpp -o /tmp/ether-gpu-visibility
+          /tmp/ether-gpu-visibility
+      - name: Verify graphics shader keeps exact bodies/eclipse and conditionally prunes media
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          shader=Path('solar-android/app/src/main/assets/shaders/solar.frag').read_text()
+          assert 'uniform highp usampler2D uEtherMasks;' in shader
+          assert 'uEtherMaskEnabled' in shader
+          assert 'texelFetch(uEtherMasks' in shader
+          assert 'if((candidates&(1u<<uint(j)))==0u)continue;' in shader
+          assert shader.count('atmosphereVolume(')>=12
+          assert 'float t=sphere(rd,uBodies[j].xyz,uBodies[j].w);' in shader
+          assert 'float eclipse(' in shader or 'eclipse(' in shader
+          print('ETHER_GPU_SHADER_CONTRACT_PASS')
+          PY

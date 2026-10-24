@@ -2,6 +2,7 @@
 precision highp float;
 precision highp int;
 precision highp sampler2DArray;
+precision highp usampler2D;
 
 // Analytic spherical observer derived from COSMIC X's eye.frag camera-ray path.
 // Positions arrive relative to a double precision CPU camera. No state vector,
@@ -12,6 +13,10 @@ uniform vec2 uResolution;
 uniform vec3 uForward,uRight,uUp;
 uniform float uAspect,uTanHalfFov,uNear,uFar,uTime;
 uniform int uCount;
+// GPU material/optics pass consumes native EtherRenderSpatial's conservative
+// 32-bit region index. The exhaustive sphere/eclipse paths remain unchanged.
+uniform highp usampler2D uEtherMasks;
+uniform int uEtherMaskEnabled;
 uniform vec4 uBodies[MAX_BODIES]; // camera-relative centre, display radius
 uniform vec4 uAppearance[MAX_BODIES]; // spin, obliquity, inner ring, outer ring
 uniform vec4 uColors[MAX_BODIES];
@@ -374,7 +379,12 @@ void atmosphereVolume(vec3 rd,int id,float maximum,bool background,inout vec3 co
     if(background&&entering(id)&&!star)color*=1.0-daylight*smoothstep(.005,.12,1.0-transmission)*.998;
     color=color*transmission+accumulated;
 }
-uint visualCandidates(){ return (1u<<uint(uCount))-1u; }
+uint visualCandidates(){
+    if(uEtherMaskEnabled==0)return (1u<<uint(uCount))-1u;
+    // 128px aligned tiles, also at 8K framebuffer resolution. GLSL texture
+    // coordinate origin is bottom-left, matching native pixel coordinates.
+    return texelFetch(uEtherMasks,ivec2(gl_FragCoord.xy)/128,0).r;
+}
 
 void main(){
     vec2 ndc=2.0*gl_FragCoord.xy/uResolution-1.0;
@@ -441,6 +451,7 @@ void main(){
     // Avoid scanning the other nineteen bodies for every fragment.
     for(int j=5;j<=8;j++){
         if(j>=uCount)break;
+        if((candidates&(1u<<uint(j)))==0u)continue;
         vec3 axis=uAxes[j];
         float den=dot(rd,axis);if(abs(den)<.00001)continue;
         float t=dot(uBodies[j].xyz,axis)/den;
@@ -481,19 +492,20 @@ void main(){
         // volume. Explicit calls avoid driver-dependent local array lowering.
         if(uEntry.w>.5){
             int j=clamp(int(uEntry.x+.5),0,uCount-1);
-            atmosphereVolume(rd,j,closest,id<0,color);
+            if((candidates&(1u<<uint(j)))!=0u)
+                atmosphereVolume(rd,j,closest,id<0,color);
         }else{
-            atmosphereVolume(rd,0,closest,id<0,color);
-            atmosphereVolume(rd,2,closest,id<0,color);
-            atmosphereVolume(rd,3,closest,id<0,color);
-            atmosphereVolume(rd,4,closest,id<0,color);
-            atmosphereVolume(rd,5,closest,id<0,color);
-            atmosphereVolume(rd,6,closest,id<0,color);
-            atmosphereVolume(rd,7,closest,id<0,color);
-            atmosphereVolume(rd,8,closest,id<0,color);
-            atmosphereVolume(rd,10,closest,id<0,color);
-            atmosphereVolume(rd,14,closest,id<0,color);
-            atmosphereVolume(rd,16,closest,id<0,color);
+            if((candidates&(1u<<uint(0)))!=0u)atmosphereVolume(rd,0,closest,id<0,color);
+            if((candidates&(1u<<uint(2)))!=0u)atmosphereVolume(rd,2,closest,id<0,color);
+            if((candidates&(1u<<uint(3)))!=0u)atmosphereVolume(rd,3,closest,id<0,color);
+            if((candidates&(1u<<uint(4)))!=0u)atmosphereVolume(rd,4,closest,id<0,color);
+            if((candidates&(1u<<uint(5)))!=0u)atmosphereVolume(rd,5,closest,id<0,color);
+            if((candidates&(1u<<uint(6)))!=0u)atmosphereVolume(rd,6,closest,id<0,color);
+            if((candidates&(1u<<uint(7)))!=0u)atmosphereVolume(rd,7,closest,id<0,color);
+            if((candidates&(1u<<uint(8)))!=0u)atmosphereVolume(rd,8,closest,id<0,color);
+            if((candidates&(1u<<uint(10)))!=0u)atmosphereVolume(rd,10,closest,id<0,color);
+            if((candidates&(1u<<uint(14)))!=0u)atmosphereVolume(rd,14,closest,id<0,color);
+            if((candidates&(1u<<uint(16)))!=0u)atmosphereVolume(rd,16,closest,id<0,color);
         }
     }
     // Filmic highlight compression preserves solar/atmospheric dynamic range
