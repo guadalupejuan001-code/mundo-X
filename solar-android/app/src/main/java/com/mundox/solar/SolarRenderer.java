@@ -78,6 +78,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
     private int[] etherMasks=new int[0];
     private IntBuffer etherUpload;
     private volatile boolean etherRequested=true,etherActive=false;
+    private boolean etherForceForParity;
     private volatile double etherRatio=1.,etherPlanMs;
     private long etherPlanSignature;
     private boolean etherIndexUpToDate;
@@ -517,7 +518,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         try {
             final long currentSignature=etherVisibilitySignature();
             if(etherIndexUpToDate&&currentSignature==etherPlanSignature){
-                etherActive=etherTexture!=0&&etherRatio<=.92;
+                etherActive=etherTexture!=0&&(etherRatio<=.92||etherForceForParity);
                 etherPlanMs=0.;
                 ++etherIndexReuses;
                 return;
@@ -533,7 +534,7 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
             etherRatio=SolarData.BODIES.length==0?0.:
                     references/(double)((long)n*SolarData.BODIES.length);
             // When almost every body is relevant, avoid the GPU upload path.
-            if(etherRatio>.92){
+            if(etherRatio>.92&&!etherForceForParity){
                 etherFailure=null;
                 etherPlanSignature=currentSignature;etherIndexUpToDate=true;
                 return;
@@ -1008,6 +1009,12 @@ public final class SolarRenderer implements GLSurfaceView.Renderer {
         realScale=enabled;freeFlight=false;for(int k=0;k<3;k++)panOffset[k]=0;
         syncWorld();orbitCacheDate=Double.NaN;resetDistance=true;
     }
+    /** Force the experimental index for A/B tests even when all tiles are dense.
+     * The production optimizer still avoids uploading dense indices. GL-thread only. */
+    public void forceEtherIndexForTest(boolean enabled){
+        etherForceForParity=enabled;etherIndexUpToDate=false;
+    }
+
     /** Switch between native Ether GPU visibility and the exhaustive oracle. */
     public void setEtherVisibility(boolean enabled){
         etherRequested=enabled;etherActive=false;etherFailure=null;etherRatio=1.;
