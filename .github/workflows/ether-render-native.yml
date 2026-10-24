@@ -5,15 +5,18 @@ on:
     paths:
       - 'native/include/mundo_x/ether_renderer.hpp'
       - 'native/include/mundo_x/ether_render_spatial.hpp'
+      - 'native/include/mundo_x/ether_surface_buffer.hpp'
       - 'native/include/mundo_x/ether_mil_bridge.hpp'
       - 'native/include/mundo_x/exact_t_experiment.hpp'
       - 'native/include/mundo_x/xasm.hpp'
       - 'native/tests/rule_renderer.cpp'
       - 'native/tests/ether_render_spatial.cpp'
+      - 'native/tests/ether_surface_buffer.cpp'
       - 'native/tests/xasm_renderer.cpp'
       - 'native/tests/ether_mil_renderer.cpp'
       - 'CMakeLists.txt'
       - 'tools/benchmark_ether_render_spatial.cpp'
+      - 'tools/benchmark_ether_surface_buffer.cpp'
       - 'examples/ether_render.x'
       - 'examples/ether_mil_render.x'
       - 'tools/cosmic_source_provenance.py'
@@ -22,15 +25,18 @@ on:
     paths:
       - 'native/include/mundo_x/ether_renderer.hpp'
       - 'native/include/mundo_x/ether_render_spatial.hpp'
+      - 'native/include/mundo_x/ether_surface_buffer.hpp'
       - 'native/include/mundo_x/ether_mil_bridge.hpp'
       - 'native/include/mundo_x/exact_t_experiment.hpp'
       - 'native/include/mundo_x/xasm.hpp'
       - 'native/tests/rule_renderer.cpp'
       - 'native/tests/ether_render_spatial.cpp'
+      - 'native/tests/ether_surface_buffer.cpp'
       - 'native/tests/xasm_renderer.cpp'
       - 'native/tests/ether_mil_renderer.cpp'
       - 'CMakeLists.txt'
       - 'tools/benchmark_ether_render_spatial.cpp'
+      - 'tools/benchmark_ether_surface_buffer.cpp'
       - 'examples/ether_render.x'
       - 'examples/ether_mil_render.x'
       - 'tools/cosmic_source_provenance.py'
@@ -52,15 +58,33 @@ jobs:
       - name: Configure native targets
         run: cmake -S . -B render-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Compile renderer, XASM, and 1000-qubit contracts
-        run: cmake --build render-build --target mundo_x test_rule_renderer test_xasm_renderer test_ether_mil_renderer test_ether_render_spatial test_reduced_1000 --parallel 2
+        run: cmake --build render-build --target mundo_x test_rule_renderer test_xasm_renderer test_ether_mil_renderer test_ether_render_spatial test_ether_surface_buffer test_reduced_1000 --parallel 2
       - name: Verify source provenance
         run: python3 tools/cosmic_source_provenance.py --verify .
       - name: Test renderer and universal Reduced regression
-        run: ctest --test-dir render-build -R '^(rule_renderer|xasm_renderer|ether_mil_renderer|ether_render_spatial|reduced_1000)$' --output-on-failure
+        run: ctest --test-dir render-build -R '^(rule_renderer|xasm_renderer|ether_mil_renderer|ether_render_spatial|ether_surface_buffer|reduced_1000)$' --output-on-failure
       - name: Benchmark 8K spatial observer (full image and sparse surface path)
         run: |
           c++ -O3 -std=c++17 -I native/include tools/benchmark_ether_render_spatial.cpp -o render-build/ether_spatial_benchmark
           render-build/ether_spatial_benchmark 7680 4320 4096 16
+      - name: Validate custom 8K surface buffer and exactness
+        shell: bash
+        run: |
+          set -euo pipefail
+          c++ -O3 -std=c++17 -I native/include tools/benchmark_ether_surface_buffer.cpp -o render-build/ether_surface_benchmark
+          render-build/ether_surface_benchmark 7680 4320 4096 16 | tee ether-surface-result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("ether-surface-result.json").read_text())
+          assert d["width"]==7680 and d["height"]==4320 and d["bodies"]==4096
+          assert d["packed_visible_pixels"]>0 and d["packed_spans"]>0
+          assert d["packed_logical_bytes"]==d["packed_allocated_bytes"]
+          assert d["packed_allocated_bytes"]<d["full_rgba_bytes"]
+          assert d["full_frame_hash"]==8289019075456906279
+          assert d["full_intersection_tests"]==9349565
+          print("BUFFER_8K_VALIDATION_PASS")
+          PY
       - name: Run real XASM render
         shell: bash
         run: |
