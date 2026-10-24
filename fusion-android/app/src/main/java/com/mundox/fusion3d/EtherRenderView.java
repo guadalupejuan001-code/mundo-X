@@ -22,7 +22,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Scene viewer using Mundo X's ORIGINAL native EtherRenderer::render().
+ * Scene viewer using only Mundo X's EtherRenderEngine + EtherSurfaceBuffer.
  *
  * Actual 3D spheres and orbit camera are ray-traced by the repository's own
  * C++ engine. Nucleon positions / movement are diagrams, NOT measurements of
@@ -190,7 +190,7 @@ public final class EtherRenderView extends View {
         bg.setColor(Color.argb(188,6,14,24));
         canvas.drawRoundRect(new RectF(dp(8),dp(8),w-dp(8),dp(48)),dp(8),dp(8),bg);
         font.setColor(CYAN);
-        canvas.drawText("ETHER RENDER X  /  C++",dp(17),dp(25),font);
+        canvas.drawText("ETHER SURFACE X  /  C++",dp(17),dp(25),font);
         font.setColor(MUTED);
         canvas.drawText("344×224 · raytracing · " + renderMs + " ms",dp(17),dp(41),font);
         bg.setColor(Color.argb(183,6,14,24));
@@ -265,7 +265,7 @@ public final class EtherRenderView extends View {
 
     public String provenance(){
         return String.format(Locale.US,
-                "Motor: Mundo X EtherRenderer nativo; escena %dx%d, último cuadro %d ms, %d cuadros; "+
+                "Motor: Mundo X EtherRenderEngine + EtherSurfaceBuffer nativo; escena %dx%d, último cuadro %d ms, %d cuadros; "+
                         "máximo 60 esferas. Geometría, colores y movimiento ilustrativos; no solver nuclear.",
                 W,H,renderMs,frames);
     }

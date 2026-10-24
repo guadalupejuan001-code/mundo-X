@@ -46,6 +46,7 @@ ETHER_RENDER_SOURCE_REFERENCE = "f2dee1f4f074a12b30ba8a31357790d90f934669"
 ETHER_RENDER_INTEGRATION_REFERENCE = "2de68561ef0f2c9208e6f151dd163db996e2133c"
 MIL_RENDER_INTEGRATION_REFERENCE = "0817158c866e5708991355b0464b961e09304307"
 SPATIAL_RENDER_REFERENCE = "db79b0a1e805ccadcf3172abbf8966501ebea872"
+ETHER_ENGINE_FACADE_REFERENCE = "ce6f48a1a0cad4d00bc83e79b25d7c4f2e1b0e39"
 SURFACE_BUFFER_REFERENCE = "e295da32e682db8bf681598dda86a2a4a8142db6"
 SOURCE_SCOPES = (
     "native",
@@ -102,6 +103,7 @@ ADDITIONAL_SOURCES = {
     "native/tests/ether_mil_renderer.cpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "native/include/mundo_x/ether_render_spatial.hpp": SURFACE_BUFFER_REFERENCE,
     "native/include/mundo_x/ether_surface_buffer.hpp": SURFACE_BUFFER_REFERENCE,
+    "native/include/mundo_x/ether_render_engine.hpp": ETHER_ENGINE_FACADE_REFERENCE,
     "native/tests/ether_render_spatial.cpp": SPATIAL_RENDER_REFERENCE,
     "native/tests/ether_surface_buffer.cpp": SURFACE_BUFFER_REFERENCE,
     "native/tests/rule_renderer.cpp": ETHER_RENDER_SOURCE_REFERENCE,
