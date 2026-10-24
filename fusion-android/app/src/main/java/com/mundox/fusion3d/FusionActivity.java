@@ -269,6 +269,11 @@ public final class FusionActivity extends Activity {
         renderer=new EtherRenderView(this);
         renderer.setContentDescription("fusion-3d-native-ether-renderer");
         viewport.addView(renderer,new LinearLayout.LayoutParams(-1,dp(263)));
+        Button etherBenchmarkButton=button("Medir Ether Surface X en este dispositivo",true);
+        etherBenchmarkButton.setContentDescription("ether-surface-device-benchmark");
+        viewport.addView(etherBenchmarkButton,new LinearLayout.LayoutParams(-1,dp(52)));
+        etherBenchmarkButton.setOnClickListener(v->
+                startActivity(new Intent(this,EtherBenchmarkActivity.class)));
         viewport.addView(text("Renderizado nativo 3D propio: arrastra para orbitar y pellizca para zoom. Las partículas y trayectorias son representaciones, no posiciones nucleares observadas.",11,SUB));
         stageLabel=title("01 · Aproximación conceptual",12);
         stageLabel.setPadding(0,dp(10),0,dp(2));

@@ -60,8 +60,19 @@ public final class FusionInstrumentation extends Instrumentation {
             if(!viewer.hasNativeFrame())
                 throw new AssertionError("native EtherRenderer failed to generate a frame");
             String provenance=viewer.provenance();
-            if(!provenance.contains("EtherRenderer")||!provenance.contains("escena 344x224"))
+            if(!provenance.contains("EtherRenderEngine")||!provenance.contains("EtherSurfaceBuffer")||!provenance.contains("escena 344x224"))
                 throw new AssertionError("noncanonical renderer: "+provenance);
+            // Measure real CPU A/B on Android; never infer speed from server benchmarks.
+            View benchmarkEntry=findByDescription(workspace,"ether-surface-device-benchmark");
+            if(benchmarkEntry==null)
+                throw new AssertionError("Ether Surface X device benchmark entry missing");
+            org.json.JSONObject cpuAB=new org.json.JSONObject(
+                    EtherBenchmarkActivity.benchmarkNative(0));
+            if(cpuAB.getInt("pixel_mismatches")!=0 ||
+               cpuAB.getInt("bodies")!=32 ||
+               !(cpuAB.getDouble("old_native_ms")>0) ||
+               !(cpuAB.getDouble("new_native_ms")>0))
+                throw new AssertionError("Android CPU A/B comparison failed: "+cpuAB);
             // Verify the 100 logical qubit register is actually constructed by
             // MIL, and that two native Ether frame passes produce 100 objects.
             View quantum100=findByDescription(workspace,"mil-100q-ether-3d-viewport");
@@ -132,7 +143,11 @@ public final class FusionInstrumentation extends Instrumentation {
             // Real, non-default orbit should redraw an actual raytraced image.
             runOnMainSync(viewer::resetCamera);
             waitForIdleSync();
-            result.putString("stream","FUSION_3D_ANDROID_PASS Q="+q+
+            result.putString("stream","ETHER_BUFFER_AB_ANDROID_PASS old_ms="+
+                    cpuAB.getDouble("old_native_ms")+
+                    " new_ms="+cpuAB.getDouble("new_native_ms")+
+                    " mismatches="+cpuAB.getInt("pixel_mismatches")+"\n"+
+                    "FUSION_3D_ANDROID_PASS Q="+q+
                     " MeV; native "+provenance+"\n"+
                     "NUCLEAR_INTERACTION_ANDROID_PASS WKB_log10="+
                     interaction.log10Wkb+" r1="+interaction.innerTurningFm+

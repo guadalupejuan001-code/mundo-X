@@ -1,6 +1,6 @@
 #include <jni.h>
 
-#include "mundo_x/ether_renderer.hpp"
+#include "mundo_x/ether_render_engine.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace {
-using mundo_x::EtherRenderer;
+using EtherRenderer=mundo_x::EtherRenderEngine;
 constexpr double kPi=3.141592653589793238462643383279502884;
 
 // This is the actual repository-owned Ether Render X native ray/sphere kernel.
@@ -56,7 +56,7 @@ void nucleus(EtherRenderer& renderer, int& nextId, int maxBodies, int z, int a,
         body.radius=sphereRadius;
         body.color=(i<protons) ? std::array<double,3>{{1.0,0.43,0.32}} :
                                   std::array<double,3>{{0.27,0.79,0.95}};
-        renderer.add_body(body);
+        renderer.add(body);
     }
 }
 void build(EtherRenderer& renderer,int za,int aa,int zb,int ab,
@@ -117,17 +117,20 @@ Java_com_mundox_fusion3d_EtherRenderView_renderNative(
             distance*std::sin(safePitch),
             distance*std::cos(safePitch)*std::cos(yaw)
         };
-        renderer.set_camera(eye,{0.,0.,0.},44.);
+        renderer.camera(eye,{0.,0.,0.},44.);
         build(renderer,za,aa,zb,ab,pza,paa,pzb,pab,progress,showProducts==JNI_TRUE);
-        const auto stats=renderer.render(false);
-        if(stats.bodies>60)
+        // The scene is observed exclusively through the custom X surface buffer.
+        // No EtherRenderer instance or dense Pixel/depth framebuffer is built.
+        renderer.prepare();
+        if(renderer.info().objects>60)
             throw std::logic_error("nucleon render budget exceeded");
+        std::vector<jint> argb(static_cast<std::size_t>(width)*height);
+        renderer.export_image([&](std::size_t x,std::size_t y,
+                                  const EtherRenderer::Pixel& pixel){
+            argb[y*static_cast<std::size_t>(width)+x]=static_cast<jint>(pixel.rgba);
+        });
         jintArray pixels=env->NewIntArray(width*height);
-        if(!pixels) return nullptr;
-        std::vector<jint> argb;
-        argb.reserve(static_cast<std::size_t>(width)*height);
-        for(const auto& pixel : renderer.frame())
-            argb.push_back(static_cast<jint>(pixel.rgba));
+        if(!pixels)return nullptr;
         env->SetIntArrayRegion(pixels,0,width*height,argb.data());
         return pixels;
     } catch(const std::exception& error) {

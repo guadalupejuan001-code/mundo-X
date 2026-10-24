@@ -2,10 +2,10 @@ name: Mundo X Fusion 3D standalone Android
 on:
   pull_request:
     branches: ['main']
-    paths: ['fusion-android/**', 'native/include/mundo_x/ether_renderer.hpp', '.github/workflows/fusion-standalone-android.yml']
+    paths: ['fusion-android/**', 'native/include/mundo_x/ether_renderer.hpp', 'native/include/mundo_x/ether_render_engine.hpp', 'native/include/mundo_x/ether_surface_buffer.hpp', 'native/include/mundo_x/ether_render_spatial.hpp', '.github/workflows/fusion-standalone-android.yml']
   push:
     branches: ['main']
-    paths: ['fusion-android/**', 'native/include/mundo_x/ether_renderer.hpp', '.github/workflows/fusion-standalone-android.yml']
+    paths: ['fusion-android/**', 'native/include/mundo_x/ether_renderer.hpp', 'native/include/mundo_x/ether_render_engine.hpp', 'native/include/mundo_x/ether_surface_buffer.hpp', 'native/include/mundo_x/ether_render_spatial.hpp', '.github/workflows/fusion-standalone-android.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -46,6 +46,13 @@ jobs:
           g++ -std=c++17 -O3 -Wall -Wextra -Wpedantic -I native/include \
             fusion-android/tests/ether_render_smoke.cpp -o fusion-build/ether_render_smoke
           ./fusion-build/ether_render_smoke | tee fusion-evidence/ether-render-oracle.txt
+      - name: Verify exclusive Ether Surface X viewer against historical renderer
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O3 -Wall -Wextra -Wpedantic -I native/include \
+            fusion-android/tests/ether_surface_fusion.cpp -o fusion-build/ether_surface_fusion
+          timeout 120 ./fusion-build/ether_surface_fusion | tee fusion-evidence/ether-surface-parity.txt
+          grep -q ETHER_FUSION_NEW_ENGINE_PASS fusion-evidence/ether-surface-parity.txt
       - name: Verify MIL Reduced quantum evolution against independent sparse RK4
         run: |
           set -euo pipefail
@@ -109,7 +116,7 @@ jobs:
           details=subprocess.check_output([aapt,'dump','badging',str(apk)],text=True)
           perms=subprocess.check_output([aapt,'dump','permissions',str(apk)],text=True)
           package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",details)
-          assert package and package.groups()==('com.mundox.fusion3d','5','1.4.0'),details.splitlines()[:4]
+          assert package and package.groups()==('com.mundox.fusion3d','6','1.5.0'),details.splitlines()[:4]
           assert 'FusionActivity' in details, 'Launcher not included'
           assert 'uses-permission:' not in perms,perms
           with zipfile.ZipFile(apk) as z:
@@ -121,7 +128,7 @@ jobs:
                 'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
                 'bytes':apk.stat().st_size,'package':package[1], 'version':package[3],
                 'abis':['arm64-v8a','x86_64'],'permissions':[],
-                'renderer':'repository EtherRenderer::render() C++ own raytracer',
+                'renderer':'EtherRenderEngine + EtherSurfaceBuffer CPU raytracer for Fusion viewer; MIL100 separate',
                 'phenomenological_nuclear_WKB':True,
                 'radial_hamiltonian_tridiagonal':True,
                 'radial_hamiltonian_propagator':True,
@@ -170,6 +177,7 @@ jobs:
           adb logcat -c
           timeout --kill-after=15 150 adb shell am instrument -w \
             com.mundox.fusion3d.test/com.mundox.fusion3d.FusionInstrumentation | tee fusion-evidence/instrumentation.txt
+          grep -q 'ETHER_BUFFER_AB_ANDROID_PASS' fusion-evidence/instrumentation.txt
           grep -q 'FUSION_3D_ANDROID_PASS' fusion-evidence/instrumentation.txt
           grep -q 'NUCLEAR_INTERACTION_ANDROID_PASS' fusion-evidence/instrumentation.txt
           grep -q 'RADIAL_H_ANDROID_PASS' fusion-evidence/instrumentation.txt
