@@ -86,8 +86,8 @@ Java_com_mundox_solar_EtherVisibilityNative_plan(
         {{1.,1.,1.}}});
     }
     renderer.plan();
-    // Dilated 1 tile: preserves subpixel/float edge guard-band.
-    const auto masks=renderer.tile_masks32(1);
+    // Dilated 2 tiles: conservative GPU safety margin for subpixel, atmosphere and ring optical edges.
+    const auto masks=renderer.tile_masks32(2);
     // Only storage type differs: jint and uint32_t are both 32-bit on Android.
     std::vector<jint> out(masks.begin(),masks.end());
     env->SetIntArrayRegion(jmasks,0,static_cast<jsize>(out.size()),out.data());
