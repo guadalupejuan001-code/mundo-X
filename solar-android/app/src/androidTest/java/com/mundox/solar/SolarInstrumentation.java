@@ -394,6 +394,10 @@ public final class SolarInstrumentation extends Instrumentation {
                 SolarRenderer.Capture candidate=frame();
                 int differences=changed(repeated,candidate);
                 boolean active=activity.renderer().etherVisibilityActive();
+                gl(() -> activity.renderer().setEtherVisibility(false));
+                SolarRenderer.Capture trailing=frame();
+                int roundTripDelta=changed(candidate,trailing);
+                int drift=changed(repeated,trailing);
                 JSONObject test=new JSONObject()
                         .put("destination",destination)
                         .put("width",reference.width).put("height",reference.height)
@@ -402,6 +406,8 @@ public final class SolarInstrumentation extends Instrumentation {
                         .put("ratio",activity.renderer().etherVisibilityRatio())
                         .put("plannerMs",activity.renderer().etherVisibilityPlanMs())
                         .put("pixelDifferences",differences)
+                        .put("reverseReferenceDifferences",roundTripDelta)
+                        .put("referenceDrift",drift)
                         .put("fallback",activity.renderer().etherVisibilityFailure());
                 cases.put(test);
                 if(differences>0||referenceJitter>0){
@@ -409,6 +415,7 @@ public final class SolarInstrumentation extends Instrumentation {
                     save("ether-gpu-reference-"+destination+".png",reference);
                     save("ether-gpu-reference-repeat-"+destination+".png",repeated);
                     save("ether-gpu-indexed-"+destination+".png",candidate);
+                    save("ether-gpu-reference-after-"+destination+".png",trailing);
                 }
                 expect(active,"Ether native GPU index inactive: "+test);
             }
