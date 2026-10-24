@@ -381,6 +381,7 @@ public final class SolarInstrumentation extends Instrumentation {
     /** Paired same-camera, same-time real GPU frames; zero different RGB pixels. */
     private void etherGpuParity() throws Exception {
         JSONArray cases=new JSONArray();
+        int differencesFound=0;
         try {
             for(int destination:new int[]{-1,3,6,9}) {
                 prepare(destination,false,false);
@@ -399,13 +400,18 @@ public final class SolarInstrumentation extends Instrumentation {
                         .put("pixelDifferences",differences)
                         .put("fallback",activity.renderer().etherVisibilityFailure());
                 cases.put(test);
+                if(differences>0){
+                    ++differencesFound;
+                    save("ether-gpu-reference-"+destination+".png",reference);
+                    save("ether-gpu-indexed-"+destination+".png",candidate);
+                }
                 expect(active,"Ether native GPU index inactive: "+test);
-                expect(differences==0,"Ether GPU image differs from reference: "+test);
             }
         }finally{
             gl(() -> activity.renderer().setEtherVisibility(true));
         }
         metrics.put("etherGpuExactRgba",cases);
+        expect(differencesFound==0,"Ether GPU differs from the full renderer: "+cases);
     }
 
     private void destinations() throws Exception {
