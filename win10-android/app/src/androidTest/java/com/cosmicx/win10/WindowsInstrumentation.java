@@ -64,18 +64,22 @@ public final class WindowsInstrumentation extends Instrumentation {
         put16(b,cat+32+6,8);
         final int at=24*SECTOR;
         Arrays.fill(b,at,at+4096,(byte)0);
-        // Guest 2000:0000 --> 2000:0ACE (screenshot fault address).
+        // Guest starts 2000:0000, reproduces BOTH real ISO fault sites: 0ACE and 0ADC.
         b[at]=(byte)0xb0;b[at+1]=(byte)0xd1;        // MOV AL,D1
         b[at+2]=(byte)0xe9;b[at+3]=(byte)0xc9;
         b[at+4]=(byte)0x0a;                        // JMP 0ACE
         final byte[] code={
-            (byte)0xe6,0x64,                         // OUT 64,AL
-            (byte)0xb0,(byte)0xdf,                    // MOV AL,DF
-            (byte)0xe6,0x60,                         // OUT 60,AL
-            (byte)0xe4,0x64,                         // IN AL,64
-            (byte)0xa8,0x02,                         // TEST AL,02
-            0x75,0x01,                               // JNZ UD2 (bad busy state)
-            (byte)0xf4,0x0f,0x0b                     // HLT, UD2
+            (byte)0xe6,0x64,                         // 0ACE OUT 64,D1
+            (byte)0xb0,(byte)0xdf,                    // 0AD0 MOV AL,DF
+            (byte)0xe6,0x60,                         // 0AD2 OUT 60,DF, A20 on
+            (byte)0xe4,0x64,                         // 0AD4 IN AL,64 (8042 status)
+            (byte)0xa8,0x02,                         // 0AD6 TEST AL,02
+            0x75,0x08,                               // 0AD8 JNZ 0AE2 -> UD2
+            (byte)0xb0,(byte)0xff,                    // 0ADA MOV AL,FF
+            (byte)0xe6,0x64,                         // 0ADC OUT 64,FF, no-line pulse
+            (byte)0xf4,                              // 0ADE HLT
+            (byte)0x90,(byte)0x90,(byte)0x90,         // 0ADF..0AE1
+            0x0f,0x0b                                // 0AE2 UD2 if busy flag
         };
         System.arraycopy(code,0,b,at+0x0ace,code.length);
         return b;
@@ -159,6 +163,28 @@ public final class WindowsInstrumentation extends Instrumentation {
                         kbc.getInt("pending_payload")==2 &&
                         kbc.getInt("command_writes")==1,
                         "i8042 must consume actual guest command D1");
+                JSONObject beforeFf=new JSONObject(NativeMachine.run(handle,6));
+                JSONObject afterD1=beforeFf.getJSONObject("i8042");
+                require(!"fault".equals(beforeFf.optString("status")) &&
+                        beforeFf.optInt("cs")==0x2000 &&
+                        beforeFf.optInt("ip")==0x0adc &&
+                        (beforeFf.getJSONArray("regs").getLong(0)&255L)==0xffL,
+                        "guest must reach actual second ISO fault 2000:0ADC with AL=FF");
+                require(afterD1.getInt("command_writes")==1 &&
+                        afterD1.getInt("last_command")==0xd1 &&
+                        afterD1.getBoolean("a20_enabled"),
+                        "8042 A20 remains on before valid FF command");
+                JSONObject afterFf=new JSONObject(NativeMachine.run(handle,1));
+                JSONObject afterFf8042=afterFf.getJSONObject("i8042");
+                require(!"fault".equals(afterFf.optString("status")) &&
+                        afterFf.optInt("ip")==0x0ade &&
+                        afterFf.getLong("instructions")==beforeFf.getLong("instructions")+1,
+                        "FF at 2000:0ADC must execute and advance to 0ADE");
+                require(afterFf8042.getInt("last_command")==0xff &&
+                        afterFf8042.getInt("command_writes")==2 &&
+                        afterFf8042.getInt("data_writes")==1 &&
+                        afterFf8042.getBoolean("a20_enabled"),
+                        "FF records real command without altering A20 or keyboard data");
                 JSONObject finished=new JSONObject(NativeMachine.run(handle,100));
                 JSONObject completed=finished.getJSONObject("i8042");
                 require("halted".equals(finished.optString("status")) &&
@@ -185,7 +211,8 @@ public final class WindowsInstrumentation extends Instrumentation {
             response.putString("stream",
                     "WIN10_ISO_ANDROID_PASS bios=1 uefi=1 real_guest_boot=W "+
                     "long_mode=true ether_bytes=256 i8042=true "+
-                    "exact_guest=2000:0ACE windows_ready=false");
+                    "exact_guest=2000:0ACE ff_guest=2000:0ADC "+
+                    "pulse_ff_nop=true windows_ready=false");
             final Activity activity=launched;
             runOnMainSync(activity::finish);
             NativeMachine.destroy(handle);handle=0;
