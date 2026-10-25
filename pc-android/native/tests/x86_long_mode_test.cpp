@@ -427,12 +427,25 @@ void paging_and_fault_tests() {
   cpu.interrupt_hook = [&](Cpu&,std::uint8_t) { called = true; return true; };
   expect_fault(cpu, FaultCode::UnsupportedState, "long-mode INT stops before BIOS hook");
   check(!called, "BIOS is never substituted for a long-mode IDT");
-  program(cpu, {0x0f,0xa2}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "CPUID not fabricated");
+  // CPUID is now implemented, but must declare only the emulated features.
+  program(cpu, {0x0f,0xa2});
+  cpu.regs[Cpu::EAX]=0;cpu.regs[Cpu::ECX]=0;
+  const auto before_cpuid=cpu.instructions;
+  check(cpu.step()==StepResult::Executed && cpu.regs[Cpu::EAX]==7 &&
+        cpu.instructions==before_cpuid+1 && !cpu.fault,
+        "modeled CPUID executes correctly in long mode");
+  program(cpu, {0x0f,0xa2});
+  cpu.regs[Cpu::EAX]=1;
+  check(cpu.step()==StepResult::Executed && !(cpu.regs[Cpu::EDX]&(1ULL<<26)),
+        "CPUID must not advertise unsupported SSE2 in long mode");
   program(cpu, {0x48,0xf7,0xe3}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "unimplemented MUL64 stops explicitly");
   program(cpu, {0x0f,0x22,0xe0}); cpu.regs[Cpu::EAX] = 0;
   expect_fault(cpu, FaultCode::ProtectionFault, "PAE cannot be cleared while LMA");
   check(cpu.cr4 == 0x20, "failed control-register write preserves CR4");
-  program(cpu, {0x0f,0x30}); cpu.regs[Cpu::ECX] = 0xc0000080U; cpu.regs[Cpu::EAX] = 0xc00;
+  // CPUID now modifies EDX. Clear its high WRMSR half so this test
+  // isolates the intended EFER.LME transition rather than CPUID side effects.
+  program(cpu, {0x0f,0x30}); cpu.regs[Cpu::ECX] = 0xc0000080U;
+  cpu.regs[Cpu::EAX] = 0xc00; cpu.regs[Cpu::EDX] = 0;
   expect_fault(cpu, FaultCode::ProtectionFault, "LME cannot change while paging");
   check(cpu.efer == 0xd00, "failed WRMSR preserves EFER");
 }

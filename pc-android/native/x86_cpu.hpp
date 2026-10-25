@@ -1093,6 +1093,46 @@ inline void Cpu::extended() {
       const auto value = read_msr(std::uint32_t(regs[ECX]));
       put_reg(EAX, 4, value); put_reg(EDX, 4, value >> 32); return;
     }
+    case 0x31: {  // RDTSC: deterministic synthetic guest cycle counter.
+      // This counter reflects decoded work, not host CPU cycles or a clock.
+      const auto cycles = std::uint64_t(instructions) * 64u;
+      put_reg(EAX, 4, std::uint32_t(cycles));
+      put_reg(EDX, 4, std::uint32_t(cycles >> 32));
+      return;
+    }
+    case 0xa2: {  // CPUID: a truthful, deliberately conservative emulated CPU.
+      const auto leaf = std::uint32_t(regs[EAX]);
+      const auto subleaf = std::uint32_t(regs[ECX]);
+      std::uint32_t eax=0,ebx=0,ecx=0,edx=0;
+      if(leaf==0) {
+        eax=7;
+        // "MUNDOX PC   " is a 12-character emulated CPU vendor identifier.
+        const char vendor[13]="MUNDOX PC   ";
+        auto word=[&](unsigned start){
+          return std::uint32_t(std::uint8_t(vendor[start]))
+              |(std::uint32_t(std::uint8_t(vendor[start+1]))<<8)
+              |(std::uint32_t(std::uint8_t(vendor[start+2]))<<16)
+              |(std::uint32_t(std::uint8_t(vendor[start+3]))<<24);
+        };
+        ebx=word(0);edx=word(4);ecx=word(8);
+      }else if(leaf==1){
+        eax=0x00000663U; // modeled family/model/stepping
+        // TSC, MSR, PAE(long-mode). Do NOT advertise SSE/SSE2, x87,
+        // APIC, AVX, 3D, or interrupt/device capabilities not implemented.
+        edx=(1U<<4)|(1U<<5)|(1U<<6);
+      }else if(leaf==7 && subleaf==0){
+        // Extended feature bits remain zero: no SMEP/AVX2/etc.
+      }else if(leaf==0x80000000U){
+        eax=0x80000008U;
+      }else if(leaf==0x80000001U){
+        edx=(1U<<20)|(1U<<29); // NX and modeled IA-32e long mode
+      }else if(leaf==0x80000008U){
+        eax=32U|(48U<<8); // physical-address and virtual-address bit sizes
+      }
+      put_reg(EAX, 4, eax);put_reg(EBX, 4, ebx);
+      put_reg(ECX, 4, ecx);put_reg(EDX, 4, edx);
+      return;
+    }
     case 0xa0: push(segments[FS], stack_operand_width()); return;
     case 0xa1: load_segment(FS, std::uint16_t(pop(stack_operand_width()))); return;
     case 0xa4: case 0xa5: case 0xac: case 0xad: {

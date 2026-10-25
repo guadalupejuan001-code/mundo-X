@@ -1,0 +1,154 @@
+name: Mundo X Win10 ISO Lab native Android
+on:
+  pull_request:
+    branches: [main]
+    paths: ['win10-android/**','pc-android/**','.github/workflows/win10-native-android.yml']
+  push:
+    branches: [main]
+    paths: ['win10-android/**','pc-android/**','.github/workflows/win10-native-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Test ISO BIOS and EFI parsing and real CPU CPUID
+        run: |
+          set -euo pipefail
+          mkdir -p win10-evidence win10-dist
+          for name in windows_iso_probe x86_cpu_profile; do
+            g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -I native/include \
+              "pc-android/native/tests/$name"_test.cpp -o "win10-evidence/$name"_test
+            "win10-evidence/$name"_test | tee -a win10-evidence/native-results.txt
+          done
+          grep -q WINDOWS_ISO_PROBE_PASS win10-evidence/native-results.txt
+          grep -q WIN10_CPU_PROFILE_PASS win10-evidence/native-results.txt
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Prepare Android SDK
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' \
+            'cmake;3.22.1' 'platform-tools' 'emulator' \
+            'system-images;android-35;default;x86_64'
+      - name: Build own emulator APK and Android instrumentation
+        run: |
+          set -euo pipefail
+          gradle -p win10-android --no-daemon --stacktrace \
+            :app:assembleDebug :app:assembleDebugAndroidTest > win10-evidence/gradle.log 2>&1 || {
+              tail -140 win10-evidence/gradle.log; exit 1
+            }
+          tail -40 win10-evidence/gradle.log
+          cp win10-android/app/build/outputs/apk/debug/app-debug.apk \
+             win10-dist/MUNDO-X-WIN10-ISO-LAB.apk
+          cp win10-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+             win10-dist/MUNDO-X-WIN10-ISO-LAB-tests.apk
+      - name: Audit real APK provenance and signature
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            win10-dist/MUNDO-X-WIN10-ISO-LAB.apk > win10-evidence/signature.txt
+          python3 - <<'PY'
+          import hashlib,json,os,re,subprocess,zipfile
+          from pathlib import Path
+          p=Path('win10-dist/MUNDO-X-WIN10-ISO-LAB.apk')
+          aapt=os.environ['ANDROID_HOME']+'/build-tools/35.0.0/aapt'
+          badging=subprocess.check_output([aapt,'dump','badging',str(p)],text=True)
+          permissions=subprocess.check_output([aapt,'dump','permissions',str(p)],text=True)
+          m=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
+          assert m and m.groups()==('com.cosmicx.win10','1','0.1.0'),badging
+          assert 'uses-permission:' not in permissions,permissions
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              libs={x for x in names if x.startswith('lib/')}
+              expected={'lib/'+abi+'/'+lib for abi in ('arm64-v8a','x86_64')
+                 for lib in ('libcosmic_pc.so','libmx_graphics.so','libc++_shared.so')}
+              assert libs==expected,(libs,expected)
+              dex=b''.join(z.read(x) for x in names if re.fullmatch(r'classes\d*\.dex',x))
+              assert b'Lcom/cosmicx/win10/WindowsActivity;' in dex
+              assert b'Lcom/cosmicx/pc/NativeMachine;' in dex
+              assert not any(x.lower().endswith(('.iso','.wim')) for x in names)
+          original=Path('pc-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java').read_bytes()
+          copied=Path('win10-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java').read_bytes()
+          assert original==copied,'JNI interface diverged from canonical Mundo X'
+          data={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),
+                'bytes':p.stat().st_size,'package':m.group(1),
+                'version':m.group(3),'abis':['arm64-v8a','x86_64'],
+                'engine':'Mundo X own C++ x86/x64 + Ether MemoryFabric',
+                'external_emulators':[],'guest_ram_logical_mib':2048,
+                'guest_resident_cap_mib':256,'user_iso_copied':False,
+                'windows_10_booted':False,'iso_included':False,'permissions':[]}
+          Path('win10-evidence/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
+          print(json.dumps(data))
+          PY
+      - name: Verify on Android 15 — real ISO guest and ISO selector
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          sudo chmod a+rw /dev/kvm
+          export ANDROID_AVD_HOME="$(mktemp -d /tmp/mxwin10.XXXXXX)"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --force -n win10-lab -p "$ANDROID_AVD_HOME/win10-lab.avd" \
+            -k 'system-images;android-35;default;x86_64'
+          "$ANDROID_HOME/emulator/emulator" -avd win10-lab -no-window -no-audio \
+            -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048 \
+            > win10-evidence/emulator.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          adb start-server
+          ready=false
+          for i in $(seq 1 120); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then
+              ready=true;break
+            fi
+            sleep 2
+          done
+          [[ "$ready" == true ]] || { tail -80 win10-evidence/emulator.log;exit 1; }
+          adb shell input keyevent 82
+          adb install -r win10-dist/MUNDO-X-WIN10-ISO-LAB.apk
+          adb install -r win10-dist/MUNDO-X-WIN10-ISO-LAB-tests.apk
+          adb logcat -c
+          timeout --kill-after=15 160 adb shell am instrument -w \
+            com.cosmicx.win10.test/com.cosmicx.win10.WindowsInstrumentation \
+            | tee win10-evidence/instrumentation.txt
+          grep -q WIN10_ISO_ANDROID_PASS win10-evidence/instrumentation.txt
+          grep -q windows_ready=false win10-evidence/instrumentation.txt
+          adb shell am start -W -n com.cosmicx.win10/.WindowsActivity \
+            | tee win10-evidence/launch.txt
+          sleep 3
+          adb shell uiautomator dump /sdcard/mxwin10.xml >/dev/null
+          adb exec-out cat /sdcard/mxwin10.xml > win10-evidence/ui.xml
+          adb shell screencap -p /sdcard/mxwin10.png
+          adb exec-out cat /sdcard/mxwin10.png > win10-evidence/screen.png
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=ET.parse('win10-evidence/ui.xml').getroot()
+          descriptions={node.attrib.get('content-desc') for node in root.iter('node')}
+          assert 'mundo-x-win10-pick-iso' in descriptions
+          png=Path('win10-evidence/screen.png').read_bytes()
+          assert png.startswith(b'\x89PNG\r\n\x1a\n') and len(png)>1000
+          print('WIN10_ANDROID_APP_PASS iso_picker=1 windows_booted=false')
+          PY
+          adb logcat -d > win10-evidence/logcat.txt
+          if grep -F 'FATAL EXCEPTION' win10-evidence/logcat.txt | grep -F 'com.cosmicx.win10'; then exit 1; fi
+      - name: Archive installable APK and validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MUNDO-X-WIN10-LAB-APK
+          path: |
+            win10-dist/**
+            win10-evidence/**
+          if-no-files-found: warn
+          retention-days: 21

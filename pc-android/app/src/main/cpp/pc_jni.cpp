@@ -9,6 +9,8 @@
 #include <vector>
 #include <limits>
 #include "pc_machine.hpp"
+#include "windows_iso_probe.hpp"
+#include <sstream>
 #include "mundo_x/infinite_bridge.hpp"
 
 namespace {
@@ -181,6 +183,55 @@ JNIEXPORT void JNICALL Java_com_cosmicx_pc_NativeMachine_releaseVideoFrame(JNIEn
     const auto found=frame_leases.find(revision);
     if(found!=frame_leases.end()&&found->second.borrowers>0&&--found->second.borrowers==0)
         frame_leases.erase(found);
+}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_probeIso(JNIEnv* e,jclass,jint fd,jlong size){
+    try {
+        if(fd<0 || size<19*2048)
+            throw std::invalid_argument("Selecciona una ISO local válida de al menos 19 sectores");
+        auto file=std::make_shared<File>(dup(fd));
+        if(file->fd<0)throw std::runtime_error("No se pudo duplicar el descriptor de ISO");
+        struct stat info{};
+        if(fstat(file->fd,&info)!=0 || !S_ISREG(info.st_mode) || info.st_size<size)
+            throw std::runtime_error("La ISO necesita archivo local con acceso aleatorio");
+        auto reader=[file](std::uint64_t offset,std::uint8_t* target,std::size_t bytes){
+            if(offset>std::uint64_t(INT64_MAX) ||
+               bytes>std::uint64_t(INT64_MAX)-offset)return false;
+            std::size_t done=0;
+            while(done<bytes){
+                const auto n=pread(file->fd,target+done,bytes-done,off_t(offset+done));
+                if(n<0&&errno==EINTR)continue;
+                if(n<=0)return false;
+                done+=std::size_t(n);
+            }
+            return true;
+        };
+        cosmic_pc::WindowsIsoProbe inspector(std::uint64_t(size),std::move(reader));
+        const auto report=inspector.inspect();
+        std::ostringstream out;
+        out<<"{\"format\":\"iso9660-eltorito\""
+           <<",\"file_bytes\":"<<report.image_bytes
+           <<",\"bytes_examined\":"<<report.bytes_read
+           <<",\"volume_id\":"<<cosmic_pc::PcMachine::quote(report.volume_id)
+           <<",\"catalog_lba\":"<<report.catalog_lba
+           <<",\"entries_examined\":"<<report.catalog_entries
+           <<",\"checksum_valid\":"<<(report.valid_catalog?"true":"false")
+           <<",\"bios_entry\":"<<(report.bios_entry?"true":"false")
+           <<",\"bios_image_lba\":"<<report.bios_lba
+           <<",\"bios_initial_sectors\":"<<report.bios_sectors
+           <<",\"uefi_entry\":"<<(report.uefi_entry?"true":"false")
+           <<",\"uefi_image_lba\":"<<report.uefi_lba
+           <<",\"uefi_initial_sectors\":"<<report.uefi_sectors
+           <<",\"can_attempt_bios_boot\":"
+              <<(report.bios_supported_by_emulator?"true":"false")
+           <<",\"uefi_implemented\":false"
+           <<",\"windows_installer_implemented\":false"
+           <<",\"user_iso_copied\":false"
+           <<",\"engine\":\"MundoX-own-x86+Ether\""
+           <<"}";
+        return java(e,out.str());
+    }catch(const std::exception& ex){
+        exception(e,ex);return nullptr;
+    }
 }
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_mount(JNIEnv* e,jclass,jlong h,jint fd,jlong size,jstring mode){
     if(!mode){e->ThrowNew(e->FindClass("java/lang/IllegalArgumentException"),"Falta modo de medio");return nullptr;}

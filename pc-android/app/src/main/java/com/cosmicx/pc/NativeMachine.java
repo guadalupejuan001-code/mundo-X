@@ -31,6 +31,8 @@ public final class NativeMachine {
     public static native long quantumGraphicsHandle(long machine);
     /** Boots original x86 guest code that selects VBE and writes actual framebuffer pixels. */
     public static native String bootGraphicsDemo(long machine, int width, int height);
+    /** Inspect BIOS/UEFI El Torito entries without loading the ISO into memory. */
+    public static native String probeIso(int fd, long size);
     /** The native implementation duplicates fd before returning. */
     public static native String mount(long machine, int fd, long size, String mode);
     public static native String run(long machine, int budget);

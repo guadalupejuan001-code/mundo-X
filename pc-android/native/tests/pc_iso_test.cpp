@@ -357,12 +357,14 @@ int main() {
          }},
         {"unsupported opcode is an explicit CPU fault", [] {
              PcMachine pc(2 * 1024 * 1024);
-             const auto fixture = mount(pc, isoFixture(Bytes{0x0f, 0x31, 0xf4})); // RDTSC.
+             // 0F 38 is still unsupported. RDTSC (0F 31) is now a defined
+             // synthetic guest counter, so it cannot be used as a fault oracle.
+             const auto fixture = mount(pc, isoFixture(Bytes{0x0f, 0x38, 0xf4}));
              run(pc);
-             need(pc.cpu.fault.has_value(), "Unsupported RDTSC was silently accepted");
+             need(pc.cpu.fault.has_value(), "Unsupported 0F 38 was silently accepted");
              need(pc.cpu.fault->code == cosmic_pc::FaultCode::UnsupportedOpcode,
                   "Unsupported instruction needs an explicit UnsupportedOpcode fault");
-             need(pc.cpu.fault->opcode == 0x0f31 && pc.cpu.fault->cs == 0 &&
+             need(pc.cpu.fault->opcode == 0x0f38 && pc.cpu.fault->cs == 0 &&
                       pc.cpu.fault->eip == 0x7c00 && pc.cpu.eip == 0x7c00,
                   "Fault must preserve the guest opcode and instruction address");
              need(pc.status() == "fault" && !pc.pending.empty() && !pc.cpu.fault->reason.empty(),
