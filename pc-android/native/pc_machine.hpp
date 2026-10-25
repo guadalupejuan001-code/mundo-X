@@ -245,6 +245,16 @@ class PcMachine {
      <<",\"video_format\":"<<quote(video.graphics?"BGRX8888":"VGA-char-attribute")
      <<",\"video_aperture_bytes\":"<<(PcVideo::available(cpu.memory)?PcVideo::kApertureBytes:0)
      <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\",\"engine\":\"cosmic-pc-own-x86\""
+     <<",\"system_registers\":{\"ldtr_selector\":"<<cpu.ldtr.selector
+     <<",\"ldtr_valid\":"<<(cpu.ldtr.valid?"true":"false")
+     <<",\"ldtr_base\":"<<cpu.ldtr.base
+     <<",\"ldtr_limit\":"<<cpu.ldtr.limit
+     <<",\"tr_selector\":"<<cpu.tr.selector
+     <<",\"tr_valid\":"<<(cpu.tr.valid?"true":"false")
+     <<",\"tr_base\":"<<cpu.tr.base
+     <<",\"tr_limit\":"<<cpu.tr.limit
+     <<",\"task_switching_implemented\":false}"
+
      <<",\"i8042\":{\"command_writes\":"<<kbc_metrics.command_writes
      <<",\"data_writes\":"<<kbc_metrics.data_writes
      <<",\"status_reads\":"<<kbc_metrics.status_reads
