@@ -131,6 +131,8 @@ jobs:
           grep -q exact_guest=2000:0ACE win10-evidence/instrumentation.txt
           grep -q ff_guest=2000:0ADC win10-evidence/instrumentation.txt
           grep -q pulse_ff_nop=true win10-evidence/instrumentation.txt
+          grep -q group6_protected16=true win10-evidence/instrumentation.txt
+          grep -q exact_group6_guest=0050:0854 win10-evidence/instrumentation.txt
           adb shell am start -W -n com.cosmicx.win10/.WindowsActivity \
             | tee win10-evidence/launch.txt
           sleep 3
