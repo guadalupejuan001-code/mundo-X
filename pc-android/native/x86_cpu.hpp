@@ -62,6 +62,14 @@ class Cpu {
       ZF = 0x0040, SF = 0x0080, TF = 0x0100, IF = 0x0200, DF = 0x0400,
       OF = 0x0800;
   struct DescriptorTable { std::uint16_t limit; std::uint64_t base; };
+  // LDTR/TR have visible selectors AND hidden descriptor caches. The
+  // emulator does not claim hardware task switching or a full TSS engine.
+  struct SystemRegister {
+    std::uint16_t selector = 0;
+    std::uint64_t base = 0;
+    std::uint32_t limit = 0;
+    bool valid = false;
+  };
   struct SegmentCache {
     std::uint64_t base = 0;
     std::uint32_t limit = 0xffff;
@@ -74,6 +82,7 @@ class Cpu {
   std::uint64_t eip = 0x7c00, cr2 = 0, cr3 = 0, efer = 0, fs_base = 0, gs_base = 0;
   std::uint32_t eflags = 2, cr0 = 0x10, cr4 = 0;
   DescriptorTable gdtr{0, 0}, idtr{0x3ff, 0};
+  SystemRegister ldtr{}, tr{};
   MemoryFabric memory;
   bool a20_enabled = false;
   bool halted = false;
@@ -105,6 +114,7 @@ class Cpu {
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
+    ldtr = {}; tr = {};
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
     transaction_ = false; journal_.clear(); decoded_.clear();
   }
@@ -166,7 +176,7 @@ class Cpu {
     if (fault) return StepResult::Faulted;
     if (halted) return StepResult::Halted;
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
-                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, a20_enabled, halted};
+                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted};
     start_ip_ = eip; start_cs_ = segments[CS]; cursor_ = eip;
     decoded_.clear(); journal_.clear(); opcode_ = 0;
     operand_override_ = address_override_ = false; rex_ = 0;
@@ -237,6 +247,7 @@ class Cpu {
     std::uint32_t eflags, cr0, cr4;
     std::uint64_t cr2, cr3, efer, fs_base, gs_base;
     DescriptorTable gdtr, idtr;
+    SystemRegister ldtr, tr;
     bool a20, halted;
   };
   struct Operand {
@@ -268,7 +279,9 @@ class Cpu {
     regs = s.regs; segments = s.segments; eip = s.eip; eflags = s.eflags;
     cache_ = s.cache; cr0 = s.cr0; cr4 = s.cr4; cr2 = s.cr2; cr3 = s.cr3;
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
-    gdtr = s.gdtr; idtr = s.idtr; a20_enabled = s.a20; halted = s.halted;
+    gdtr = s.gdtr; idtr = s.idtr;
+    ldtr = s.ldtr; tr = s.tr;
+    a20_enabled = s.a20; halted = s.halted;
   }
   static void check_register(unsigned r) {
     if (r >= 16) throw std::out_of_range("register index");
@@ -1043,6 +1056,123 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0x00: { // Group 6: SLDT, STR, LLDT, LTR, VERR, VERW
+      const auto m = modrm(); // Always decode ModRM before any unsupported fault.
+      if (is_real_mode())
+        fail("0F 00 group-6 requires protected mode", FaultCode::InvalidInstruction);
+      if (m.group >= 6)
+        fail("0F 00 group-6 reserved /6 or /7", FaultCode::InvalidInstruction);
+      if (m.group <= 1) {
+        // SLDT/STR write a 16-bit selector to memory; for register forms,
+        // the operand-size attribute controls 16/32/64-bit zero-extension.
+        const auto selector = m.group == 0 ? ldtr.selector : tr.selector;
+        put(m.rm, m.rm.is_register ? bytes : 2, selector);
+        return;
+      }
+
+      const auto selector = std::uint16_t(get(m.rm, 2));
+      if (m.group >= 4) {
+        // VERR/VERW never fault merely because a selector is invalid; only
+        // invalid memory addressing of the *operand* may fault.
+        bool permitted = false;
+        if ((selector & 0xfffcu) != 0) {
+          const bool local = (selector & 4u) != 0;
+          const auto table_base = local ? ldtr.base : gdtr.base;
+          const auto table_limit = local ? ldtr.limit : std::uint32_t(gdtr.limit);
+          const auto offset = std::uint32_t(selector & 0xfff8u);
+          if ((!local || ldtr.valid) &&
+              offset <= table_limit && table_limit - offset >= 7u &&
+              table_base <= UINT64_MAX - offset - 7u) {
+            const auto descriptor_value = read_linear(table_base + offset, 8);
+            const unsigned access = unsigned(descriptor_value >> 40) & 0xffu;
+            const bool segment = (access & 0x10u) != 0;
+            const bool present = (access & 0x80u) != 0;
+            const bool code = (access & 8u) != 0;
+            const bool conforming = code && (access & 4u);
+            const bool accessible = ((access >> 5) & 3u) >= (selector & 3u);
+            const bool privilege_ok = conforming || accessible;
+            const bool read_ok = !code || (access & 2u);
+            const bool write_ok = !code && (access & 2u);
+            permitted = segment && present && privilege_ok &&
+                        (m.group == 4 ? read_ok : write_ok);
+          }
+        }
+        set_flag(ZF, permitted);
+        return;
+      }
+
+      // LLDT/LTR require CPL0. The current CPU has no ring3 execution,
+      // so the guard remains explicit rather than promising task switching.
+      if (segments[CS] & 3u)
+        fail("LLDT/LTR privileged instruction requires CPL0", FaultCode::ProtectionFault);
+      if (m.group == 2 && (selector & 0xfffcu) == 0) {
+        ldtr = {};  // Architectural null LLDT invalidates the descriptor cache.
+        return;
+      }
+      if ((selector & 0xfffcu) == 0)
+        fail("LTR null task selector", FaultCode::ProtectionFault);
+      if (selector & 4u)
+        fail("LLDT/LTR selector must reference global descriptor table",
+             FaultCode::ProtectionFault);
+      if (selector & 3u)
+        fail("LLDT/LTR nonzero selector RPL not modeled in ring0",
+             FaultCode::UnsupportedState);
+
+      const auto offset = std::uint32_t(selector & 0xfff8u);
+      if (offset > gdtr.limit || unsigned(gdtr.limit) - offset < 7u ||
+          gdtr.base > UINT64_MAX - offset - 7u)
+        fail("LLDT/LTR selector exceeds GDT limit", FaultCode::ProtectionFault);
+      const auto descriptor_address = gdtr.base + offset;
+      const auto raw = read_linear(descriptor_address, 8);
+      const auto access = unsigned(raw >> 40) & 0xffu;
+      const auto type = access & 0xfu;
+      if (access & 0x10u)
+        fail("LLDT/LTR requires a system descriptor, not code/data",
+             FaultCode::ProtectionFault);
+      if (!(access & 0x80u))
+        fail("LLDT/LTR descriptor is not present", FaultCode::ProtectionFault);
+      if (m.group == 2 && type != 2u)
+        fail("LLDT requires an LDT descriptor (type 2)",
+             FaultCode::ProtectionFault);
+      if (m.group == 3 && type != 1u && type != 9u)
+        fail("LTR requires an available TSS descriptor (type 1 or 9)",
+             FaultCode::ProtectionFault);
+
+      std::uint64_t base = ((raw >> 16) & 0xffffffu) |
+                           ((raw >> 32) & 0xff000000u);
+      std::uint64_t limit = (raw & 0xffffu) | ((raw >> 32) & 0xf0000u);
+      if (raw & (std::uint64_t{1} << 55)) limit = (limit << 12) | 0xfffu;
+      if (m.group == 3 && limit < (type == 1u ? 0x2bu : 0x67u))
+        fail("TSS limit below architectural minimum", FaultCode::ProtectionFault);
+      if (efer & 0x400u) {
+        // In IA-32e, TSS and LDT descriptors occupy two GDT slots.
+        if (offset > gdtr.limit || unsigned(gdtr.limit) - offset < 15u ||
+            gdtr.base > UINT64_MAX - offset - 15u)
+          fail("IA-32e system descriptor requires 16 GDT bytes",
+               FaultCode::ProtectionFault);
+        const auto upper = read_linear(descriptor_address + 8, 8);
+        if (upper >> 32)
+          fail("reserved upper half of 64-bit system descriptor set",
+               FaultCode::ProtectionFault);
+        base |= (upper & 0xffffffffu) << 32;
+        if (!canonical(base))
+          fail("noncanonical 64-bit system descriptor base",
+               FaultCode::ProtectionFault);
+      }
+      if (limit > UINT32_MAX)
+        fail("system descriptor limit outside representable size",
+             FaultCode::ProtectionFault);
+      const SystemRegister next{selector, base, std::uint32_t(limit), true};
+      if (m.group == 2) {
+        ldtr = next;
+      } else {
+        // LTR marks an AVAILABLE TSS busy without actually switching tasks.
+        // GDT writes follow normal guest paging and transactional rollback.
+        write_linear(descriptor_address + 5, 1, access | 2u);
+        tr = next;
+      }
+      return;
+    }
     case 0x01: {
       const auto m = modrm();
       if (m.group == 4) { put(m.rm, m.rm.is_register ? bytes : 2, cr0); return; }
