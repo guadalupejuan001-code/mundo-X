@@ -64,7 +64,7 @@ public final class WindowsActivity extends Activity {
     private volatile boolean runRequested=false;
     private volatile boolean bootReady=false;
     private volatile boolean hasIso=false;
-    private boolean selectedBios=false;
+    private volatile boolean selectedBios=false;
 
     private String isoDescription="ISO no seleccionada";
     private String isoMetadata="";
@@ -122,7 +122,7 @@ public final class WindowsActivity extends Activity {
         boolean usable=machine!=0&&!working&&!closed;
         pick.setEnabled(usable);
         again.setEnabled(usable&&getPreferences(0).contains("iso_uri"));
-        run.setEnabled(usable&&bootReady);
+        run.setEnabled(usable&&bootReady&&selectedBios);
         step.setEnabled(usable&&bootReady);
         reset.setEnabled(usable&&bootReady);
         pause.setEnabled(runRequested || working);
@@ -253,6 +253,7 @@ public final class WindowsActivity extends Activity {
         if(working||machine==0)return;
         bootReady=false;
         selectedBios=false;
+        isoMetadata="Prueba interna de CPU/Ether, no es la ISO seleccionada.";
         working=true;refreshButtons();
         worker.execute(()->{
             try{
@@ -366,7 +367,7 @@ public final class WindowsActivity extends Activity {
     }
 
     private void runGuest(){
-        if(working||!bootReady||machine==0||closed)return;
+        if(working||!bootReady||!selectedBios||machine==0||closed)return;
         runRequested=true;
         working=true;
         refreshButtons();
@@ -412,6 +413,14 @@ public final class WindowsActivity extends Activity {
         long ram=state.optLong("ram_allocated_bytes",0);
         long cap=state.optLong("ram_budget_bytes",0);
         long pss=Debug.getPss()/1024;  // KiB -> MiB, Android process total.
+        String ramUsed=ram<1048576L ? ((ram+1023L)/1024L)+" KiB" :
+                String.format(Locale.US,"%.2f MiB",ram/1048576.0);
+        JSONObject kbc=state.optJSONObject("i8042");
+        String kbcStatus=kbc==null ? "\n8042: anterior al parche" :
+            "\n8042 comandos: "+kbc.optLong("command_writes")+
+            " · datos: "+kbc.optLong("data_writes")+
+            " · último: 0x"+String.format(Locale.US,"%02X",kbc.optInt("last_command"))+
+            "\nA20: "+(kbc.optBoolean("a20_enabled")?"habilitada":"deshabilitada");
         boolean windows=state.optBoolean("windows_ready",false);
         final String summary="Motor: "+state.optString("engine","Mundo X x86/x64")+
             "\nEstado CPU: "+state.optString("status","...")+
@@ -419,9 +428,9 @@ public final class WindowsActivity extends Activity {
             "\nPasos CPU: "+state.optLong("instructions")+
             " · BIOS disco: "+state.optLong("disk_reads")+
             "\nRIP: "+state.optString("rip_hex","")+
-            "\nRAM huésped usada: "+(ram/1048576)+" MiB / "+(cap/1048576)+" MiB"+
+            "\nRAM huésped usada: "+ramUsed+" / "+(cap/1048576)+" MiB"+
             "\nRAM del proceso (PSS): "+pss+" MiB"+
-            "\nVentana Ether: "+state.optInt("ether_memory_bytes")+" bytes"+
+            "\nVentana Ether: "+state.optInt("ether_memory_bytes")+" bytes"+kbcStatus+
             "\nWindows listo: "+(windows?"sí":"NO (faltan dispositivos e instrucciones)")+
             "\nDetalle: "+state.optString("message","")+
             "\n"+state.optString("pending","");

@@ -22,13 +22,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p win10-evidence win10-dist
-          for name in windows_iso_probe x86_cpu_profile; do
+          for name in windows_iso_probe x86_cpu_profile pc_8042; do
             g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -I native/include \
               "pc-android/native/tests/$name"_test.cpp -o "win10-evidence/$name"_test
             "win10-evidence/$name"_test | tee -a win10-evidence/native-results.txt
           done
           grep -q WINDOWS_ISO_PROBE_PASS win10-evidence/native-results.txt
           grep -q WIN10_CPU_PROFILE_PASS win10-evidence/native-results.txt
+          grep -q PC_8042_ISO_PASS win10-evidence/native-results.txt
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
       - uses: gradle/actions/setup-gradle@v4
