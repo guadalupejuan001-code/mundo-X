@@ -1,0 +1,35 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.cosmicx.win10'
+    compileSdk 35
+    ndkVersion '27.2.12479018'
+    defaultConfig {
+        applicationId 'com.cosmicx.win10'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+        testInstrumentationRunner 'com.cosmicx.win10.WindowsInstrumentation'
+        ndk { abiFilters 'arm64-v8a','x86_64' }
+        externalNativeBuild { cmake {
+            cppFlags '-std=c++17 -O2 -Wall -Wextra'
+            arguments '-DANDROID_STL=c++_shared'
+        } }
+    }
+    // Compile ORIGINAL Mundo X PC core, no vendored emulator binaries.
+    externalNativeBuild {
+        cmake { path '../../pc-android/app/src/main/cpp/CMakeLists.txt'; version '3.22.1' }
+    }
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java','../../pc-android/app/src/main/java']
+            java.include 'com/cosmicx/win10/**','com/cosmicx/pc/NativeMachine.java'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildTypes { debug { debuggable true }; release { minifyEnabled false } }
+}

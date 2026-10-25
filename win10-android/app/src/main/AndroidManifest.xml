@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Zero network/storage permissions: SAF grants access to the user's ISO. -->
+  <application android:label="Mundo X Windows 10 Lab"
+               android:allowBackup="false" android:supportsRtl="true"
+               android:usesCleartextTraffic="false"
+               android:theme="@android:style/Theme.Material.NoActionBar">
+    <activity android:name=".WindowsActivity"
+              android:exported="true"
+              android:screenOrientation="unspecified">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
