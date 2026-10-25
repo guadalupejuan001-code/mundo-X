@@ -442,7 +442,10 @@ void paging_and_fault_tests() {
   program(cpu, {0x0f,0x22,0xe0}); cpu.regs[Cpu::EAX] = 0;
   expect_fault(cpu, FaultCode::ProtectionFault, "PAE cannot be cleared while LMA");
   check(cpu.cr4 == 0x20, "failed control-register write preserves CR4");
-  program(cpu, {0x0f,0x30}); cpu.regs[Cpu::ECX] = 0xc0000080U; cpu.regs[Cpu::EAX] = 0xc00;
+  // CPUID now modifies EDX. Clear its high WRMSR half so this test
+  // isolates the intended EFER.LME transition rather than CPUID side effects.
+  program(cpu, {0x0f,0x30}); cpu.regs[Cpu::ECX] = 0xc0000080U;
+  cpu.regs[Cpu::EAX] = 0xc00; cpu.regs[Cpu::EDX] = 0;
   expect_fault(cpu, FaultCode::ProtectionFault, "LME cannot change while paging");
   check(cpu.efer == 0xd00, "failed WRMSR preserves EFER");
 }
