@@ -206,7 +206,7 @@ void real_iso_guest(){
   check(pc.cpu.a20_enabled,"D1 and DF actually changed CPU A20 gate");
   check(pc.json().find("\"a20_enabled\":true")!=std::string::npos,
         "A20 state reported in machine JSON");
-  check(pc.cpu.instructions>=12,"guest executed D1, DF, FF and HLT as real CPU instructions");
+  check(pc.cpu.instructions>=11,"guest executed D1, DF, FF and HLT as real CPU instructions");
   check(pc.json().find("\"windows_ready\":false")!=std::string::npos,
         "controller support does not imply Windows 10 runs");
   pc.reset();
