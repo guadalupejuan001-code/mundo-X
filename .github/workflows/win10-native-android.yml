@@ -66,7 +66,7 @@ jobs:
           badging=subprocess.check_output([aapt,'dump','badging',str(p)],text=True)
           permissions=subprocess.check_output([aapt,'dump','permissions',str(p)],text=True)
           m=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
-          assert m and m.groups()==('com.cosmicx.win10','1','0.1.0'),badging
+          assert m and m.groups()==('com.cosmicx.win10','2','0.1.1'),badging
           assert 'uses-permission:' not in permissions,permissions
           with zipfile.ZipFile(p) as z:
               assert z.testzip() is None
@@ -124,6 +124,8 @@ jobs:
             | tee win10-evidence/instrumentation.txt
           grep -q WIN10_ISO_ANDROID_PASS win10-evidence/instrumentation.txt
           grep -q windows_ready=false win10-evidence/instrumentation.txt
+          grep -q i8042=true win10-evidence/instrumentation.txt
+          grep -q exact_guest=2000:0ACE win10-evidence/instrumentation.txt
           adb shell am start -W -n com.cosmicx.win10/.WindowsActivity \
             | tee win10-evidence/launch.txt
           sleep 3
