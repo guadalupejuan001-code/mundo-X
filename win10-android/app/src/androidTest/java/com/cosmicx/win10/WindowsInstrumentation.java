@@ -85,6 +85,58 @@ public final class WindowsInstrumentation extends Instrumentation {
         return b;
     }
 
+    private static void put64(byte[] b,int at,long value){
+        for(int j=0;j<8;j++) b[at+j]=(byte)(value >>> (j*8));
+    }
+    private static long desc(long base,long limit,int access){
+        return (limit&0xffffL)|((base&0xffffffL)<<16)|
+            (((long)access)<<40)|(((limit>>>16)&15L)<<48)|
+            (((base>>>24)&255L)<<56);
+    }
+
+    /** Boot real16 ISO code, enter protected16, run actual group-6 x86
+     * instruction at CS:IP 0050:0854 via the original PcMachine JNI. */
+    private static byte[] protected16Fixture(){
+        byte[] b=fixture();
+        final int catalog=20*SECTOR;
+        put16(b,catalog+34,0x2000);
+        put16(b,catalog+38,16);
+        final int at=24*SECTOR;
+        Arrays.fill(b,at,at+8192,(byte)0);
+        final byte[] stub={
+            (byte)0xfa,0x0e,0x1f,
+            0x0f,0x01,0x16,0x00,0x02, // LGDT DS:[0200]
+            0x0f,0x20,(byte)0xc0,     // MOV EAX,CR0
+            0x0d,0x01,0x00,           // OR AX,1
+            0x0f,0x22,(byte)0xc0,     // MOV CR0,EAX, protected mode
+            (byte)0xb8,0x60,0x00,     // MOV AX, 0x60 TSS selector
+            (byte)0xea,0x54,0x08,0x50,0x00 // FAR JMP 0050:0854
+        };
+        System.arraycopy(stub,0,b,at,stub.length);
+        put16(b,at+0x200,0x006f);
+        put32(b,at+0x202,0x20280);
+        put64(b,at+0x280+0x50,desc(0x20000,0x1fff,0x9a)); // 16-bit code
+        put64(b,at+0x280+0x58,desc(0x20000,0x1fff,0x92)); // data
+        put64(b,at+0x280+0x60,desc(0x25000,0x67,0x89)); // TSS available
+        put64(b,at+0x280+0x68,desc(0x21800,0x1f,0x82)); // LDTR descriptor
+        put64(b,at+0x1808,desc(0x20000,0x1fff,0x92)); // LDT entry
+        final byte[] group6={
+            0x0f,0x00,(byte)0xd8, // LTR AX at 0050:0854
+            0x0f,0x00,(byte)0xc8, // STR AX
+            (byte)0xb8,0x58,0x00,
+            0x0f,0x00,(byte)0xe0, // VERR
+            0x0f,0x00,(byte)0xe8, // VERW
+            (byte)0xb8,0x68,0x00,
+            0x0f,0x00,(byte)0xd0, // LLDT
+            0x0f,0x00,(byte)0xc0, // SLDT
+            (byte)0xb8,0x0c,0x00,
+            0x0f,0x00,(byte)0xe0, // VERR LDT
+            (byte)0xf4
+        };
+        System.arraycopy(group6,0,b,at+0x0854,group6.length);
+        return b;
+    }
+
     private static View find(View view,String description){
         if(view.getContentDescription()!=null && description.contentEquals(view.getContentDescription()))return view;
         if(view instanceof ViewGroup){
@@ -198,6 +250,53 @@ public final class WindowsInstrumentation extends Instrumentation {
                         "i8042 support does not establish Windows 10 boot");
             }
             ps2Path.delete();
+            // Real guest instruction in protected16, using actual GDT/LDT/TSS
+            // bytes from a self-contained synthetic El Torito ISO.
+            File group6Path=new File(getTargetContext().getCacheDir(),
+                "windows-protected16-group6-0050-0854.iso");
+            try(FileOutputStream out=new FileOutputStream(group6Path)){
+                out.write(protected16Fixture());
+            }
+            try(ParcelFileDescriptor fd=ParcelFileDescriptor.open(
+                    group6Path,ParcelFileDescriptor.MODE_READ_ONLY)){
+                JSONObject loaded=new JSONObject(NativeMachine.mount(handle,
+                    fd.getFd(),group6Path.length(),"iso"));
+                require("ready".equals(loaded.optString("status")) &&
+                    loaded.getInt("cs")==0x2000 && loaded.getInt("ip")==0,
+                    "group6 fixture did not mount to genuine BIOS CS:IP");
+                JSONObject beforeGroup6=loaded;
+                for(int i=0;i<60;i++){
+                    if(beforeGroup6.optInt("cs")==0x50 &&
+                        beforeGroup6.optInt("ip")==0x0854)break;
+                    require(!"fault".equals(beforeGroup6.optString("status")),
+                        "mode switch fault before group6: "+
+                        beforeGroup6.optString("message"));
+                    beforeGroup6=new JSONObject(NativeMachine.run(handle,1));
+                }
+                require(beforeGroup6.getInt("cs")==0x50 &&
+                    beforeGroup6.getInt("ip")==0x0854 &&
+                    "protected16".equals(beforeGroup6.getString("cpu_mode")),
+                    "ISO guest failed to enter protected16 at screenshot 0050:0854");
+                JSONObject afterGroup6=new JSONObject(NativeMachine.run(handle,1));
+                JSONObject task=afterGroup6.getJSONObject("system_registers");
+                require(!"fault".equals(afterGroup6.optString("status")) &&
+                    afterGroup6.getInt("ip")==0x0857 &&
+                    task.optBoolean("tr_valid") &&
+                    task.getInt("tr_selector")==0x60 &&
+                    !task.optBoolean("task_switching_implemented"),
+                    "0F 00 D8 LTR must load task register and advance three bytes");
+                JSONObject full=new JSONObject(NativeMachine.run(handle,100));
+                JSONObject sr=full.getJSONObject("system_registers");
+                require("halted".equals(full.getString("status")) &&
+                    "protected16".equals(full.getString("cpu_mode")) &&
+                    sr.optBoolean("ldtr_valid") &&
+                    sr.getInt("ldtr_selector")==0x68 &&
+                    sr.getInt("tr_selector")==0x60,
+                    "group6 complete ISA operations failed on Android JNI");
+                require(!full.optBoolean("windows_ready"),
+                    "protected16 group6 success is not Windows 10 support");
+            }
+            group6Path.delete();
             // Validate that the user-visible app is a real ISO frontend, not
             // a pre-rendered Windows desktop.
             Intent intent=new Intent();
@@ -212,7 +311,8 @@ public final class WindowsInstrumentation extends Instrumentation {
                     "WIN10_ISO_ANDROID_PASS bios=1 uefi=1 real_guest_boot=W "+
                     "long_mode=true ether_bytes=256 i8042=true "+
                     "exact_guest=2000:0ACE ff_guest=2000:0ADC "+
-                    "pulse_ff_nop=true windows_ready=false");
+                    "pulse_ff_nop=true group6_protected16=true "+
+                    "exact_group6_guest=0050:0854 windows_ready=false");
             final Activity activity=launched;
             runOnMainSync(activity::finish);
             NativeMachine.destroy(handle);handle=0;
