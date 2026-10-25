@@ -57,6 +57,30 @@ public final class WindowsInstrumentation extends Instrumentation {
         System.arraycopy(boot,0,b,24*SECTOR,boot.length);
         return b;
     }
+    private static byte[] i8042Fixture(){
+        byte[] b=fixture();
+        final int cat=20*SECTOR;
+        put16(b,cat+32+2,0x2000);
+        put16(b,cat+32+6,8);
+        final int at=24*SECTOR;
+        Arrays.fill(b,at,at+4096,(byte)0);
+        // Guest 2000:0000 --> 2000:0ACE (screenshot fault address).
+        b[at]=(byte)0xb0;b[at+1]=(byte)0xd1;        // MOV AL,D1
+        b[at+2]=(byte)0xe9;b[at+3]=(byte)0xc9;
+        b[at+4]=(byte)0x0a;                        // JMP 0ACE
+        final byte[] code={
+            (byte)0xe6,0x64,                         // OUT 64,AL
+            (byte)0xb0,(byte)0xdf,                    // MOV AL,DF
+            (byte)0xe6,0x60,                         // OUT 60,AL
+            (byte)0xe4,0x64,                         // IN AL,64
+            (byte)0xa8,0x02,                         // TEST AL,02
+            0x75,0x01,                               // JNZ UD2 (bad busy state)
+            (byte)0xf4,0x0f,0x0b                     // HLT, UD2
+        };
+        System.arraycopy(code,0,b,at+0x0ace,code.length);
+        return b;
+    }
+
     private static View find(View view,String description){
         if(view.getContentDescription()!=null && description.contentEquals(view.getContentDescription()))return view;
         if(view instanceof ViewGroup){
@@ -112,6 +136,42 @@ public final class WindowsInstrumentation extends Instrumentation {
                 require("long64".equals(long64.optString("cpu_mode")),
                         "real->protected->long 64-bit transition missing");
             }
+            File ps2Path=new File(getTargetContext().getCacheDir(),"ps2-controller-2000-0ACE.iso");
+            try(FileOutputStream out=new FileOutputStream(ps2Path)){out.write(i8042Fixture());}
+            try(ParcelFileDescriptor fd=ParcelFileDescriptor.open(
+                ps2Path,ParcelFileDescriptor.MODE_READ_ONLY)){
+                JSONObject m=new JSONObject(NativeMachine.mount(handle,fd.getFd(),
+                                ps2Path.length(),"iso"));
+                require("ready".equals(m.optString("status")) &&
+                        m.optInt("cs")==0x2000&&m.optInt("ip")==0,
+                        "El Torito fixture must boot at CS:IP 2000:0000");
+                // Capture the execution of the *actual* E6 64 command.
+                JSONObject before=new JSONObject(NativeMachine.run(handle,2));
+                require(before.optInt("ip")==0x0ace &&
+                        before.optLong("instructions")==2,
+                        "synthetic guest must reach 2000:0ACE exactly");
+                JSONObject after=new JSONObject(NativeMachine.run(handle,1));
+                JSONObject kbc=after.getJSONObject("i8042");
+                require(!"fault".equals(after.optString("status")) &&
+                        after.optInt("ip")==0x0ad0,
+                        "OUT 0x64 must execute successfully and advance to 0AD0");
+                require(kbc.getInt("last_command")==0xd1 &&
+                        kbc.getInt("pending_payload")==2 &&
+                        kbc.getInt("command_writes")==1,
+                        "i8042 must consume actual guest command D1");
+                JSONObject finished=new JSONObject(NativeMachine.run(handle,100));
+                JSONObject completed=finished.getJSONObject("i8042");
+                require("halted".equals(finished.optString("status")) &&
+                        "real16".equals(finished.optString("cpu_mode")),
+                        "guest must finish after i8042 and stay in BIOS real16");
+                require(completed.getInt("data_writes")==1 &&
+                        completed.getInt("status_reads")>=1 &&
+                        completed.getBoolean("a20_enabled"),
+                        "i8042 data port/status/A20 must be active on Android");
+                require(!finished.optBoolean("windows_ready"),
+                        "i8042 support does not establish Windows 10 boot");
+            }
+            ps2Path.delete();
             // Validate that the user-visible app is a real ISO frontend, not
             // a pre-rendered Windows desktop.
             Intent intent=new Intent();
@@ -124,7 +184,8 @@ public final class WindowsInstrumentation extends Instrumentation {
                     "user cannot select an ISO with the UI");
             response.putString("stream",
                     "WIN10_ISO_ANDROID_PASS bios=1 uefi=1 real_guest_boot=W "+
-                    "long_mode=true ether_bytes=256 windows_ready=false");
+                    "long_mode=true ether_bytes=256 i8042=true "+
+                    "exact_guest=2000:0ACE windows_ready=false");
             final Activity activity=launched;
             runOnMainSync(activity::finish);
             NativeMachine.destroy(handle);handle=0;
