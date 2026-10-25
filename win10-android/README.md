@@ -63,3 +63,29 @@ Probar contra la ISO concreta del usuario (no disponible en CI), registrar
 la primera instrucción/dispositivo no implementado y avanzar por esa ruta
 sin adulterar el modelo CPUID. Incorporar firmware UEFI y controladores de
 almacenamiento con test de sistema invitado antes de afirmar que Windows arranca.
+
+
+## ISO oficial: diagnóstico del controlador 8042
+
+El 24 de octubre se observó en el teléfono un fallo real de arranque:
+\`2000:0ACE  E6 64\` — \`OUT 0x64, AL\`, después de 2.791 pasos CPU y
+21 operaciones de lectura BIOS. El puerto **0x64** es el registro de comandos
+del controlador PC/AT **8042**.
+
+El emulador ahora conecta el puerto 0x64 y el puerto de datos 0x60 a la
+misma máquina nativa y a **la misma señal A20 del procesador**. Soporta un
+subconjunto explícito: D1 y D0 (escribir/leer puerto de salida/A20), 20 y 60
+(configuración), AD/AE (reloj teclado), A7, AA/AB (autopruebas). Los
+comandos desconocidos, solicitudes de reset del sistema, entrada de teclado
+no implementada e IRQs siguen bloqueados con diagnóstico, sin inventar
+respuestas exitosas.
+
+**Prueba de regresión:** una ISO sintética El Torito carga código que llega
+exactamente a \`2000:0ACE\` y ejecuta la secuencia de A20 por el 8042.
+Eso demuestra que hemos resuelto **esa clase de parada**, pero **no
+demuestra que tu ISO oficial avance**; aún debemos observar la siguiente
+instrucción cuando instales esta actualización y repitas la prueba.
+
+El panel ahora presenta comandos 8042, estado A20 y RAM ocupada con
+precisión de KiB; \`Arrancar BIOS\` deja de aparecer habilitado durante
+las demostraciones internas x64/Ether.
