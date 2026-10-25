@@ -56,7 +56,7 @@ class WindowsIsoProbe {
         if(descriptor[0]==1 && descriptor[6]==1) {
             for(unsigned i=40;i<72;++i) {
                 const unsigned c=descriptor[i];
-                result.volume_id.push_back((c>=32&&c<=126)?char(c):'?');
+                result.volume_id.push_back(c==0?' ':((c>=32&&c<=126)?char(c):'?'));
             }
             while(!result.volume_id.empty()&&result.volume_id.back()==' ')
                 result.volume_id.pop_back();
