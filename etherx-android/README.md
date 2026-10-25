@@ -1,71 +1,59 @@
-# ETHER X File Laboratory — Android nativo 0.2.0
+# ETHER X Reverse Lab · Android nativo v0.3.0
 
-Prototipo Android completamente independiente de Python, Termux y servidores. Su interfaz nativa permite **analizar**, **compactar** y **reconstruir** archivos/ISO elegidos por el usuario desde el selector seguro de Android. Los datos no abandonan el dispositivo.
+Laboratorio local de ingeniería inversa y compactación para Android 8+. Interfaz oscura con identidad visual propia (cian, violeta, azul, coral), icono vectorial, tarjetas interactivas, mapa de entropía y microscopio hexadecimal. No requiere Python, Termux, navegador, cuenta ni Internet.
 
-## Características implementadas
+## Qué es una «cirugía binaria» en esta versión
 
-- **Inspector de firmas:** ISO9660, ISO9660/Joliet, firma UDF, EXF, ZIP/APK, PNG, JPEG, PDF, EXE/MZ, WIM, 7z, GZIP, XZ, Zstandard y MP4.
-- **ISO:** lee metadatos ISO9660/Joliet de los descriptores y enumera entradas de directorio raíz cuando caen en los primeros 512 KiB; no extrae el árbol UDF, no monta ni arranca imágenes.
-- **Compactación reversible:** archivo `.exf` versión 1 en bloques de 1 MiB, codificador **regla uniforme / regla de fondo con excepciones / referencia a bloque anterior / zlib / literal**, elige la menor carga; SHA-256 global y CRC32 por bloque.
-- **Descompresión:** decodifica `.exf` con clases `RAW`, `ZLIB`, `FILL`, `SPARSE` y `REFERENCE`, incluyendo archivos escritos por el prototipo Python v0.1 (rápido/equilibrado). Para restaurar primero crea un temporal privado, verifica SHA-256 y solo entonces copia al destino seleccionado.
-- **Q-Lab:** experimento educativo de clasificación con dos qubits simulados mediante amplitudes complejas/rotaciones y una búsqueda de parámetros; compara contra clasificador clásico. Trabaja sobre ejemplos sintéticos, no entrena con el archivo del usuario ni decide la compresión real.
+1. **Elegir archivo/ISO:** Android entrega una URI de solo lectura. ETHER X nunca ejecuta el archivo.
+2. **Diseccionar:** clasifica por firmas y decodifica los campos conocidos por sus offsets. Las estructuras aparecen como regiones con título, longitud, explicación y estado verificado/indicio.
+3. **Microscopio HEX:** muestra cada byte + su dirección real + interpretación ASCII. Permite saltar a offsets arbitrarios. Fuera de los primeros 3 MiB intenta solicitar solo un rango de 384 bytes al proveedor SAF, sin copiar la imagen entera.
+4. **Mapa:** entropía de 64 intervalos, cobertura, porcentaje de ceros y byte dominante. Las estadísticas se calculan sobre una muestra, **no** sobre todo el archivo salvo que quepa íntegramente.
+5. **Evidencia:** notas técnicas, límites, indicadores internos y cadenas ASCII con offsets.
+6. **Informar:** comparte un informe textual con las regiones interpretadas y sus límites.
+7. **Compactar / reconstruir:** conserva los algoritmos EXF v1 de la versión anterior, CRC32 por bloque y SHA-256 global. Bloques de 1 MiB (regla uniforme, excepciones dispersas, referencias, zlib, literal). El EXF es un formato de almacenamiento, no una ISO arrancable: hay que restaurar la ISO antes de usarla como imagen.
 
-**Compatibilidad incompleta:** el decodificador actual no admite bloques LZMA (tipo 2) de los `.exf` creados por la versión Python en modo `maximo`. El modo “Máximo” nuevo usa zlib 9 en su lugar. Los metadatos y bloques se validan; un método no soportado produce un error claro y no toca el origen.
+## Formatos con disección específica
 
-## Ejecutar las pruebas sin instalar Android
+- **ISO9660 y Joliet:** sector 16, descriptores CD001, volumen, LBAs, registros de directorio, archivos y carpetas anidadas dentro de límites. Puede solicitar por offset directorios lejos del inicio; no es un lector completo de UDF.
+- **ZIP y APK:** cabeceras locales, nombres, método, banderas, tamaños. Busca el directorio central en los últimos 128 KiB del archivo, incluso en ZIP grandes (ZIP64 y algunas variantes requieren ampliación).
+- **PE / EXE Windows:** firma MZ, e_lfanew, cabecera COFF, RVA de entrada, secciones y direcciones de archivo.
+- **ELF:** bits, endianness, arquitectura, punto de entrada y tabla de segmentos.
+- **PNG:** secuencia de chunks, dimensiones, tipo de color y CRC32 de los chunks completos disponibles.
+- **JPEG:** marcadores, tablas, metadatos y dimensiones si aparecen.
+- **PDF:** encabezado, indicadores de objetos, búsqueda de EOF y startxref en la cola.
+- **MP4 / ISO BMFF:** cajas ftyp, moov, mdat y contenedores anidados presentes en la muestra.
+- **SQLite:** cabecera, tamaño de páginas, codificación y cabecera inicial B-tree.
+- **RIFF / WAV / WebP:** estructura de chunks, parámetros básicos de audio WAV.
+- **WIM / GZIP / 7z / XZ / Zstandard / EXF:** detección y campos iniciales seleccionados. No se promete descompresión o descifrado de estos formatos externos.
+- **Formatos desconocidos:** inspección de bytes, búsqueda de firmas embebidas, cadenas y patrones de distribución sin inventar semántica.
 
-Requiere JDK 17+:
+## Alcance real y límites
+
+- La lectura principal está limitada a **3 MiB iniciales**; una lectura aleatoria adicional puede obtener directorios ISO, índice ZIP y cola PDF, más ventanas HEX en otras direcciones. Si el proveedor no soporta seek, la alternativa secuencial está limitada a 128 MiB para evitar lecturas prohibitivas. No se usa RAM proporcional al tamaño de la ISO.
+- Sin decodificador específico no es posible prometer explicación exacta de cualquier formato desconocido, cifrado o propietario. Tampoco hay decompilación x86, extracción de WIM/UDF ni descompresión integral de ZIP en esta versión.
+- En análisis de ZIP, registros fuera de las muestras se señalan como no verificados; el tamaño de campos y firmas proviene de bytes reales. No se ejecuta contenido.
+- La restitución EXF requiere almacenamiento para un temporal íntegro del archivo de salida; se valida SHA-256 antes de escribir el destino. El código no soporta bloques LZMA del EXF Python `maximo` heredado.
+- **Q-Lab** conserva el experimento clásico de circuitos de **2 qubits simulados**, semilla fija y comparación con clasificador clásico. No se entrena con archivos del usuario, no acelera el compresor ni utiliza hardware cuántico.
+- La representación por regla + excepciones adopta el principio de Inverse Ether Memory de Mundo X, pero no enlaza directamente el núcleo cuántico C++ `InfiniteCore`.
+
+## Pruebas
+
+En JDK 17 o superior:
 
 ```sh
 bash tests/test-host.sh
 ```
 
-Para comprobar interoperabilidad con el programa anterior, genera un EXF con el Python original y ejecuta:
+Pruebas EXF preexistentes: ida/vuelta, corrupción, truncamiento, referencias de bloques y experimento Q-Lab. Pruebas nuevas: **1444 verificaciones** incluyendo formatos sintéticos PE, ELF, ISO, ZIP, PDF, PNG con CRC válido/corrupto, MP4, SQLite, RIFF, lectura ISO lejana, índice ZIP en cola, cola PDF y 700 entradas aleatorias con límites de memoria y regiones. Son pruebas de host; la usabilidad en un dispositivo Android debe probarse aparte.
+
+## Compilar y descargar APK
 
 ```sh
-bash tests/test-host.sh tests/demo.iso ruta/archivo_python.exf
+gradle -p etherx-android --no-daemon :app:assembleDebug
 ```
 
-La suite comprueba archivos vacíos, uniformes, dispersos, aleatorios, referencias, CRC/SHA, truncamientos y resultados Q-Lab con semilla fija.
+Desde Mundo X en GitHub, el workflow `.github/workflows/etherx-android.yml` instala SDK 35, ejecuta las pruebas y compila el APK, verifica su firma y publica un artefacto descargable. No es necesario que el teléfono tenga Java SDK o Termux instalado. El APK `debug` es para pruebas, no para distribución pública.
 
-## Compilar APK
+## Privacidad
 
-Para producir un APK instalable con **Gradle 8.9, Java 17 y Android SDK 35**:
-
-```sh
-gradle --no-daemon :app:assembleDebug
-```
-
-APK resultante: `app/build/outputs/apk/debug/app-debug.apk`.
-
-Sin ordenador: crea un repositorio GitHub nuevo, sube **el contenido** de esta carpeta, abre la pestaña **Actions** y ejecuta **ETHER X Native Android**. Descarga el artefacto `ETHER-X-debug-apk` cuando la compilación termine. No hace falta Python ni Termux en Android. Este código no incluye un APK precompilado; el archivo APK solo estará disponible después de un build verificado.
-
-La firma `debug` es únicamente para probar. Para distribución pública, crear configuración de firma release y verificar las huellas de certificado.
-
-## Relación con Mundo X
-
-El motor Java aplica al almacenamiento clásico el **principio arquitectónico** de Inverse Ether Memory: una regla global describe valores repetidos, las diferencias se registran como excepciones y los datos se materializan solo al reconstruir. El compresor no incorpora directamente `InfiniteCore`/`InverseMemory` C++ ni afirma que la compresión esté usando qubits físicos.
-
-**Diseño separado:** no se altera Mundo X ni se afirma mejora cuántica sin benchmark. Se puede añadir como un subproyecto `etherx-android` en Mundo X sin modificar su ruta cuántica principal.
-
-## Limitaciones operativas
-
-- Para cualquier ISO grande, la salida requiere espacio libre suficiente. **Reconstruir exige adicionalmente un temporal de tamaño igual al archivo original**, para preservar integridad antes de publicar el resultado. No constituye compresión en sitio.
-- La app mantiene unos pocos bloques en memoria (1 MiB), pero la restauración utiliza almacenamiento privado.
-- El análisis lee solo la cabecera y hasta 512 KiB, no interpreta la totalidad del sistema de archivos de Windows ni extrae WIM/UDF.
-- La reducción depende de la información; archivos cifrados, con mucha entropía o precomprimidos pueden crecer.
-- El uso de `.exf` no sustituye el formato ISO; hay que reconstruir `.iso` antes de arrancar Windows desde esa imagen.
-- El experimento Q-Lab es una **simulación clásica** de circuito de dos qubits, no entrenamiento de un modelo de IA a gran escala.
-- Construido para Android API 26+ con Storage Access Framework, sin permiso de acceso total a archivos ni permiso de Internet.
-
-## Seguridad y privacidad
-
-1. `ACTION_OPEN_DOCUMENT` proporciona acceso de solo lectura al origen.
-2. `ACTION_CREATE_DOCUMENT` pide al usuario un archivo de salida diferente.
-3. Todos los bloques pasan por verificaciones de tamaño y CRC32, el contenedor exige SHA-256 global.
-4. La extracción de archivos EXF no ejecuta su contenido y nunca interpreta comandos internos.
-5. Si falla una salida parcial, Android intenta eliminar el documento de destino recién creado.
-
-### Licencias / datos
-
-Código prototipo original basado en ideas de Mundo X; utiliza solo las APIs estándar Java/Android. El archivo ISO de pruebas es sintético y pequeño, no contiene Windows ni material propietario.
+No se solicita permiso de Internet ni acceso general a archivos. Los documentos de entrada permanecen sin cambios. La app utiliza `ACTION_OPEN_DOCUMENT` y `ACTION_CREATE_DOCUMENT` (Storage Access Framework), no sube datos y comparte un informe solo cuando se toca «Exportar informe».
