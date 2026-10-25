@@ -421,6 +421,13 @@ public final class WindowsActivity extends Activity {
             " · datos: "+kbc.optLong("data_writes")+
             " · último: 0x"+String.format(Locale.US,"%02X",kbc.optInt("last_command"))+
             "\nA20: "+(kbc.optBoolean("a20_enabled")?"habilitada":"deshabilitada");
+        JSONObject system=state.optJSONObject("system_registers");
+        String systemStatus=system==null ? "" :
+            "\nLDTR: "+(system.optBoolean("ldtr_valid") ?
+                String.format(Locale.US,"0x%04X",system.optInt("ldtr_selector")) : "vacío")+
+            " · TR: "+(system.optBoolean("tr_valid") ?
+                String.format(Locale.US,"0x%04X",system.optInt("tr_selector")) : "vacío")+
+            "\nCambios de tarea x86: no implementados";
         boolean windows=state.optBoolean("windows_ready",false);
         final String summary="Motor: "+state.optString("engine","Mundo X x86/x64")+
             "\nEstado CPU: "+state.optString("status","...")+
@@ -430,7 +437,7 @@ public final class WindowsActivity extends Activity {
             "\nRIP: "+state.optString("rip_hex","")+
             "\nRAM huésped usada: "+ramUsed+" / "+(cap/1048576)+" MiB"+
             "\nRAM del proceso (PSS): "+pss+" MiB"+
-            "\nVentana Ether: "+state.optInt("ether_memory_bytes")+" bytes"+kbcStatus+
+            "\nVentana Ether: "+state.optInt("ether_memory_bytes")+" bytes"+kbcStatus+systemStatus+
             "\nWindows listo: "+(windows?"sí":"NO (faltan dispositivos e instrucciones)")+
             "\nDetalle: "+state.optString("message","")+
             "\n"+state.optString("pending","");
