@@ -7,6 +7,7 @@
 #include "quantum_guest.hpp"
 #include "pc_video.hpp"
 #include "graphics_demo.hpp"
+#include "pc_8042.hpp"
 #include <algorithm>
 #include <chrono>
 #include <deque>
@@ -108,6 +109,7 @@ class PcMachine {
     quantum_cache_valid_=false;
     host_error.clear();pending.clear();waiting_key=false;keys_.clear();disk_reads=0;last_disk_status_=0;
     video_mode_=3;video_.text_mode(3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
+    kbc_.reset();  // Controller, command/data latches and A20 protocol reset together.
     if(!reader_)return;
     cpu.memory.reset_zero();
     video_.reset(cpu.memory);
@@ -223,6 +225,7 @@ class PcMachine {
   std::string json() const {
     std::ostringstream o;
     const auto video=video_info();
+    const auto kbc_metrics=kbc_.metrics();
     const std::string message=!host_error.empty()?host_error:(cpu.fault?cpu.fault->describe():(!reader_?"Selecciona una ISO, disco o arranque de prueba":waiting_key?"Esperando entrada de teclado BIOS":cpu.halted?"El invitado ejecutó HLT":std::string("CPU propia: ")+cpu.mode_name()));
     o<<"{\"status\":"<<quote(status())<<",\"instructions\":"<<cpu.instructions<<",\"cs\":"<<cpu.segments[1]<<",\"ip\":"<<cpu.eip<<",\"flags\":"<<cpu.eflags<<",\"regs\":[";
     for(unsigned i=0;i<cpu.regs.size();++i){if(i)o<<',';o<<cpu.regs[i];}
@@ -241,7 +244,18 @@ class PcMachine {
      <<",\"video_bytes\":"<<video.byte_size<<",\"video_address\":"<<video.physical_address
      <<",\"video_format\":"<<quote(video.graphics?"BGRX8888":"VGA-char-attribute")
      <<",\"video_aperture_bytes\":"<<(PcVideo::available(cpu.memory)?PcVideo::kApertureBytes:0)
-     <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\",\"engine\":\"cosmic-pc-own-x86\",\"windows_ready\":false,\"graphics_3d_ready\":false,\"quantum\":"<<quantum_json()<<"}";
+     <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\",\"engine\":\"cosmic-pc-own-x86\""
+     <<",\"i8042\":{\"command_writes\":"<<kbc_metrics.command_writes
+     <<",\"data_writes\":"<<kbc_metrics.data_writes
+     <<",\"status_reads\":"<<kbc_metrics.status_reads
+     <<",\"data_reads\":"<<kbc_metrics.data_reads
+     <<",\"last_command\":"<<unsigned(kbc_metrics.last_command)
+     <<",\"command_byte\":"<<unsigned(kbc_.config_byte())
+     <<",\"pending_payload\":"<<unsigned(kbc_.pending())
+     <<",\"reply_ready\":"<<(kbc_.has_reply()?"true":"false")
+     <<",\"a20_enabled\":"<<(cpu.a20_enabled?"true":"false")
+     <<"}"
+     <<",\"windows_ready\":false,\"graphics_3d_ready\":false,\"quantum\":"<<quantum_json()<<"}";
     return o.str();
   }
   static std::string hex64(std::uint64_t value){std::ostringstream o;o<<std::hex<<std::uppercase<<std::setfill('0')<<std::setw(16)<<value;return o.str();}
@@ -256,6 +270,7 @@ class PcMachine {
     return {{1,{{a,'X'},{b,'X'}}},{1,{{a,'Y'},{b,'Y'}}},{1,{{a,'Z'},{b,'Z'}}},{1,{{a,'Z'}}},{1,{{b,'Z'}}}};
   }
   PcVideo video_;
+  Pc8042 kbc_;  // Owned subset of physical PC/AT 8042; no simulated IRQs.
   Reader reader_;
   std::uint64_t media_bytes_=0;
   BootPlan plan_{};
@@ -408,7 +423,7 @@ class PcMachine {
     if(p==0x92)return cpu.a20_enabled?2u:0u;
     if(p==0x21)return pic1_;
     if(p==0xa1)return pic2_;
-    if(p==0x64)return 0u;
+    if(p==0x64 || p==0x60)return kbc_.input(p,width,cpu.a20_enabled);
     if(p==0x71){if(cmos_index_==0x0a)return 0x26u;if(cmos_index_==0x0b)return 2u;if(cmos_index_==0x0d)return 0x80u;return std::nullopt;}
     if(p==0x3fd)return 0x60u;
     return std::nullopt;
@@ -416,7 +431,15 @@ class PcMachine {
   bool output(std::uint16_t p,unsigned width,std::uint32_t v){
     if(p==PcQuantumDevice::data_port||p==PcQuantumDevice::control_port)return quantum_device.output(p,width,v);
     if(width!=1)return false;
-    if(p==0x92){if(v&1)missing("Reinicio por puerto A20 pendiente");cpu.a20_enabled=v&2;return true;}
+    if(p==0x64 || p==0x60) {
+      if(kbc_.output(p,width,v,cpu.a20_enabled))return true;
+      std::ostringstream s;
+      s<<"Controlador 8042: OUT 0x"<<std::hex<<unsigned(p)
+       <<" valor=0x"<<unsigned(v & 255u)
+       <<", instruccion/comando no soportado o protocolo incompleto";
+      cpu.fail(s.str(),FaultCode::UnsupportedPort);
+    }
+    if(p==0x92){if(v&1)missing("Reinicio por puerto A20 pendiente");cpu.a20_enabled=(v&2)!=0;return true;}
     if(p==0x21){pic1_=v;return true;}if(p==0xa1){pic2_=v;return true;}
     if(p==0x70){cmos_index_=v&0x7f;return true;}
     if(p==0x80)return true; // POST delay port has no guest-visible output.
