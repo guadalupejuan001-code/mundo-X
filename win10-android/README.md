@@ -89,3 +89,33 @@ instrucción cuando instales esta actualización y repitas la prueba.
 El panel ahora presenta comandos 8042, estado A20 y RAM ocupada con
 precisión de KiB; \`Arrancar BIOS\` deja de aparecer habilitado durante
 las demostraciones internas x64/Ether.
+
+## Actualización 0.1.2 — segundo bloqueo en la ISO
+
+La ejecución **real en el teléfono** llegó desde `2000:0ACE` hasta
+`2000:0ADC`:
+
+- Antes: 2.791 pasos CPU, 21 lecturas BIOS, `E6 64` sin controlador.
+- Después: 2.817 pasos CPU, 21 lecturas BIOS; comando `0xD1` aceptado,
+  un dato del controlador aceptado, A20 habilitada.
+- Nueva parada: `2000:0ADC`, `OUT 0x64, AL` con `AL=0xFF`.
+
+Según el contrato del 8042, el intervalo de comandos `0xF0…0xFF`
+pulsaría durante aproximadamente 6 ms las líneas de salida cuyos bits
+de máscara estén en cero. **0xFF deja todas esas líneas sin pulsar.**
+Por tanto, el controlador ahora acepta `0xFF` sin alterar A20,
+configuración, estado de respuestas ni provocar reset. **0xFE** y los
+demás comandos de pulso que podrían modificar líneas permanecen sin
+soporte, con fallo explícito; no se simula un reset físico sin semántica.
+
+Un programa de prueba independiente dentro de una ISO sintética
+verifica las dos direcciones exactas `2000:0ACE` y `2000:0ADC`
+ejecutando instrucciones reales del intérprete C++. Se repite mediante
+JNI en un emulador Android 15.
+
+El equipo aún **no ha probado la ISO oficial con esta versión**;
+la siguiente barrera del bootloader debe medirse de nuevo en el teléfono.
+Windows 10 completo sigue sin estar implementado.
+
+Referencia técnica:
+https://wiki.osdev.org/%228042%22_PS/2_Controller

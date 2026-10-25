@@ -30,6 +30,7 @@ jobs:
           grep -q WINDOWS_ISO_PROBE_PASS win10-evidence/native-results.txt
           grep -q WIN10_CPU_PROFILE_PASS win10-evidence/native-results.txt
           grep -q PC_8042_ISO_PASS win10-evidence/native-results.txt
+          grep -q guest_csip_FF=2000:0ADC win10-evidence/native-results.txt
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
       - uses: gradle/actions/setup-gradle@v4
@@ -66,7 +67,7 @@ jobs:
           badging=subprocess.check_output([aapt,'dump','badging',str(p)],text=True)
           permissions=subprocess.check_output([aapt,'dump','permissions',str(p)],text=True)
           m=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
-          assert m and m.groups()==('com.cosmicx.win10','2','0.1.1'),badging
+          assert m and m.groups()==('com.cosmicx.win10','3','0.1.2'),badging
           assert 'uses-permission:' not in permissions,permissions
           with zipfile.ZipFile(p) as z:
               assert z.testzip() is None
@@ -126,6 +127,8 @@ jobs:
           grep -q windows_ready=false win10-evidence/instrumentation.txt
           grep -q i8042=true win10-evidence/instrumentation.txt
           grep -q exact_guest=2000:0ACE win10-evidence/instrumentation.txt
+          grep -q ff_guest=2000:0ADC win10-evidence/instrumentation.txt
+          grep -q pulse_ff_nop=true win10-evidence/instrumentation.txt
           adb shell am start -W -n com.cosmicx.win10/.WindowsActivity \
             | tee win10-evidence/launch.txt
           sleep 3

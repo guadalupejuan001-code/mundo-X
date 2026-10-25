@@ -75,6 +75,13 @@ class Pc8042 {
         case 0xab: offer(0x00);break;                // First port test passes
         case 0xd0: offer(output_port(a20));break;    // Read output port / A20
         case 0xd1: pending_=Pending::OutputPort;break;// Next data -> A20
+        // PC/AT "pulse output line" family 0xF0..0xFF, bits 0..3
+        // are active-LOW masks. 0xFF means *none* of the four lines
+        // are pulsed; unlike 0xFE it must not trigger CPU reset.
+        // No response is queued, A20/config/output-port stay unchanged.
+        // Other 0xF0..0xFE values remain unsupported pending real
+        // output-line/reset modeling (not silently treated as no-ops).
+        case 0xff: break;
         default:return false; // Explicitly unsupported, not a fake ACK
       }
       metrics_.last_command=v;
