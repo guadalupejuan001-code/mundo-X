@@ -58,7 +58,7 @@ public final class WindowsInstrumentation extends Instrumentation {
         return b;
     }
     private static View find(View view,String description){
-        if(description.contentEquals(view.getContentDescription()))return view;
+        if(view.getContentDescription()!=null && description.contentEquals(view.getContentDescription()))return view;
         if(view instanceof ViewGroup){
             ViewGroup group=(ViewGroup)view;
             for(int i=0;i<group.getChildCount();i++){
