@@ -78,6 +78,9 @@ jobs:
               assert b'Lcom/cosmicx/win10/WindowsActivity;' in dex
               assert b'Lcom/cosmicx/pc/NativeMachine;' in dex
               assert not any(x.lower().endswith(('.iso','.wim')) for x in names)
+          original=Path('pc-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java').read_bytes()
+          copied=Path('win10-android/app/src/main/java/com/cosmicx/pc/NativeMachine.java').read_bytes()
+          assert original==copied,'JNI interface diverged from canonical Mundo X'
           data={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),
                 'bytes':p.stat().st_size,'package':m.group(1),
                 'version':m.group(3),'abis':['arm64-v8a','x86_64'],

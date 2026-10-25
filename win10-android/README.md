@@ -55,8 +55,7 @@ En Android: seleccionar ISO → ver BIOS/UEFI → pulsar **Arrancar BIOS
 La interfaz ejecuta las funciones JNI originales de
 `pc-android/app/src/main/cpp/pc_jni.cpp` y
 `pc-android/native/pc_machine.hpp`. No mantiene una implementación duplicada
-del procesador. El compilador del proyecto solo construye las fuentes ya
-presentes en Mundo X.
+del procesador. El proyecto reutiliza los fuentes C++ canónicos de Mundo X; una copia byte-por-byte de la interfaz Java NativeMachine (que no implementa ninguna instrucción de CPU) es verificada por CI contra el original.
 
 ## Próxima etapa de compatibilidad
 
