@@ -220,7 +220,8 @@ public final class MainActivity extends Activity {
         eyebrow.setLetterSpacing(0.15f);
         eyebrow.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         content.addView(eyebrow);
-        TextView title = text(getString(R.string.app_name), 28, WHITE);
+        TextView title = text(getPackageName().equals("com.cosmicx.pc.v1")
+                ? "MUNDO X PC" : getString(R.string.app_name), 28, WHITE);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setPadding(0, dp(6), 0, dp(8));
         content.addView(title);

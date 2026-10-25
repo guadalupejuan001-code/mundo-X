@@ -19,11 +19,13 @@ PY
 "$adb_bin" start-server
 "$emulator_bin" -avd cosmic-pc-test -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048 > "$evidence_dir/emulator.log" 2>&1 &
 pc_emulator_pid=$!
+pc_app_package="${PC_APP_PACKAGE:-com.cosmicx.pc}"
+pc_test_package="${PC_TEST_PACKAGE:-${pc_app_package}.test}"
 pc_evidence_collected=false
 collect_evidence() {
   timeout 20 "$adb_bin" logcat -d > "$evidence_dir/logcat.txt" 2>/dev/null || true
   for pc_file in pc-screen.png pc-tests.json pc-x64-state.json pc-enter-state.json pc-video-state.json pc-video-screen.png; do
-    if timeout 20 "$adb_bin" exec-out run-as com.cosmicx.pc cat "files/$pc_file" > "$evidence_dir/$pc_file.tmp" 2>/dev/null; then
+    if timeout 20 "$adb_bin" exec-out run-as "$pc_app_package" cat "files/$pc_file" > "$evidence_dir/$pc_file.tmp" 2>/dev/null; then
       mv "$evidence_dir/$pc_file.tmp" "$evidence_dir/$pc_file"
     else
       rm -f "$evidence_dir/$pc_file.tmp"
@@ -51,7 +53,7 @@ done
 "$adb_bin" install -r pc-dist/COSMIC-X-PC.apk
 "$adb_bin" install -r pc-dist/COSMIC-X-PC-tests.apk
 "$adb_bin" logcat -c
-timeout --kill-after=15 600 "$adb_bin" shell am instrument -w com.cosmicx.pc.test/com.cosmicx.pc.PcInstrumentation | tee "$evidence_dir/instrumentation.txt"
+timeout --kill-after=15 600 "$adb_bin" shell am instrument -w "$pc_test_package"/com.cosmicx.pc.PcInstrumentation | tee "$evidence_dir/instrumentation.txt"
 collect_evidence
 python3 - <<'PY'
 import json
