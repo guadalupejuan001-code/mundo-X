@@ -120,6 +120,18 @@ public final class WindowsInstrumentation extends Instrumentation {
                         "probe copied the ISO rather than consulting bounded headers");
                 require(!info.optBoolean("windows_installer_implemented"),
                         "false Windows 10 compatibility claim");
+                NativeLibraryDoctor.Result nativelib=
+                        NativeLibraryDoctor.inspectAndLoad(getTargetContext());
+                require(nativelib.loaded,
+                        "No carga la biblioteca en Android: "+nativelib.diagnosis);
+                require(nativelib.diagnosis.contains("libcosmic_pc.so físico=") &&
+                        nativelib.diagnosis.contains("libmx_graphics.so físico=") &&
+                        nativelib.diagnosis.contains("libc++_shared.so físico=") &&
+                        nativelib.diagnosis.contains("RESULTADO: LAS 3 BIBLIOTECAS CARGARON"),
+                        "no se verificaron las tres dependencias nativas");
+                require(nativelib.diagnosis.contains("Paquete: "+
+                        getTargetContext().getPackageName()),
+                        "paquete del loader no coincide con el ejecutado");
                 handle=NativeMachine.createWithBudget(2048,256);
                 require(handle!=0,"native x86 machine could not start");
                 JSONObject mounted=new JSONObject(NativeMachine.mount(handle,fd.getFd(),
@@ -201,7 +213,8 @@ public final class WindowsInstrumentation extends Instrumentation {
             // Validate that the user-visible app is a real ISO frontend, not
             // a pre-rendered Windows desktop.
             Intent intent=new Intent();
-            intent.setClassName("com.cosmicx.win10","com.cosmicx.win10.WindowsActivity");
+            intent.setClassName(getTargetContext().getPackageName(),
+                    "com.cosmicx.win10.WindowsActivity");
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             launched=startActivitySync(intent);
             waitForIdleSync();
@@ -212,7 +225,8 @@ public final class WindowsInstrumentation extends Instrumentation {
                     "WIN10_ISO_ANDROID_PASS bios=1 uefi=1 real_guest_boot=W "+
                     "long_mode=true ether_bytes=256 i8042=true "+
                     "exact_guest=2000:0ACE ff_guest=2000:0ADC "+
-                    "pulse_ff_nop=true windows_ready=false");
+                    "pulse_ff_nop=true native_libs_loaded=true "+
+                    "windows_ready=false");
             final Activity activity=launched;
             runOnMainSync(activity::finish);
             NativeMachine.destroy(handle);handle=0;

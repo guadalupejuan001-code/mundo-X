@@ -69,6 +69,7 @@ public final class WindowsActivity extends Activity {
     private String isoDescription="ISO no seleccionada";
     private String isoMetadata="";
     private String machineJson="{}";
+    private volatile String nativeLibraryReport="Bibliotecas sin comprobar";
     private String vgaText="";
     private TextView isoView,engineView,guestView,noticeView,headline;
     private Button pick,again,run,pause,step,reset,demoX64,demoEther,copy;
@@ -213,8 +214,9 @@ public final class WindowsActivity extends Activity {
         LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-1,dp(51));
         clp.topMargin=dp(12);display.addView(copy,clp);
         copy.setOnClickListener(v->{
-            String info="MUNDO X WINDOWS ISO LAB\n"+isoDescription+
-                "\n"+isoMetadata+"\nCPU:\n"+machineJson+"\nVIDEO:\n"+vgaText;
+            String info="MUNDO X WINDOWS ISO LAB 0.1.3\n"+isoDescription+
+                "\n"+isoMetadata+"\nLIBRERÍAS NATIVAS:\n"+nativeLibraryReport+
+                "\nCPU:\n"+machineJson+"\nVIDEO:\n"+vgaText;
             ClipboardManager board=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
             board.setPrimaryClip(ClipData.newPlainText("Mundo X ISO diagnóstico",info));
             Toast.makeText(this,"Diagnóstico copiado",Toast.LENGTH_SHORT).show();
@@ -225,12 +227,35 @@ public final class WindowsActivity extends Activity {
 
         worker.execute(()->{
             try {
+                // Validate the *installed* files and load in dependency
+                // order. This runs before NativeMachine's static initializer.
+                NativeLibraryDoctor.Result check=
+                        NativeLibraryDoctor.inspectAndLoad(getApplicationContext());
+                nativeLibraryReport=check.diagnosis;
+                if(!check.loaded) {
+                    ui.post(()->{
+                        if(closed)return;
+                        engineView.setText(check.diagnosis);
+                        engineView.setTextColor(AMBER);
+                        noticeView.setText("LIBRERÍA NATIVA NO CARGADA. Pulsa 'Copiar diagnóstico' "+
+                            "y comparte el error exacto. No se ha iniciado una CPU falsa.");
+                    });
+                    return;
+                }
                 long m=NativeMachine.createWithBudget(2048,256);
                 JSONObject status=new JSONObject(NativeMachine.inspect(m));
                 machine=m;
                 ui.post(()->showState(status));
             }catch(Exception | LinkageError error){
-                fail("No se pudo iniciar el motor x86/Ether: "+error.getMessage());
+                String reason=error.toString();
+                nativeLibraryReport+="\nERROR FINAL: "+reason;
+                ui.post(()->{
+                    if(closed)return;
+                    engineView.setText(nativeLibraryReport);
+                    engineView.setTextColor(AMBER);
+                    noticeView.setText("Fallo del motor nativo. Copia el diagnóstico de bibliotecas.");
+                });
+                fail("No se pudo iniciar el motor x86/Ether: "+reason);
             }finally{
                 working=false;ui.post(this::refreshButtons);
             }
@@ -422,7 +447,9 @@ public final class WindowsActivity extends Activity {
             " · último: 0x"+String.format(Locale.US,"%02X",kbc.optInt("last_command"))+
             "\nA20: "+(kbc.optBoolean("a20_enabled")?"habilitada":"deshabilitada");
         boolean windows=state.optBoolean("windows_ready",false);
-        final String summary="Motor: "+state.optString("engine","Mundo X x86/x64")+
+        final String summary="Bibliotecas: "+(nativeLibraryReport.contains("RESULTADO: LAS 3")?
+                "C++ / mx_graphics / cosmic_pc cargadas":"ver diagnóstico")+
+            "\nMotor: "+state.optString("engine","Mundo X x86/x64")+
             "\nEstado CPU: "+state.optString("status","...")+
             " · "+state.optString("cpu_mode","real16")+
             "\nPasos CPU: "+state.optLong("instructions")+

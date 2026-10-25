@@ -119,3 +119,42 @@ Windows 10 completo sigue sin estar implementado.
 
 Referencia técnica:
 https://wiki.osdev.org/%228042%22_PS/2_Controller
+
+
+## v0.1.3 — Native Library Fix (Samsung Android)
+
+La captura más reciente no incluye el texto completo del error de carga,
+así que no se presume una biblioteca concreta ausente. Se inspeccionó la APK
+0.1.2: contiene para `arm64-v8a` y `x86_64` las bibliotecas
+`libcosmic_pc.so`, `libmx_graphics.so`, `libc++_shared.so` y sus
+dependencias ELF son coherentes. Todas las entradas ELF y ZIP ARM64
+están alineadas a 16 KiB. Falta verificar qué error devuelve el enlace
+dinámico de Android en el teléfono.
+
+Se detectó además un problema real de distribución: APKs previas
+fueron firmadas con **certificados debug distintos en cada ejecución
+de GitHub Actions**. Android no permite actualizar directamente un
+paquete cuya firma ha cambiado. No se intenta eludir esa seguridad.
+
+El flavor `rescue` ofrece un paquete distinto
+`com.cosmicx.win10.rescue` con el mismo código original; se instala
+sin entrar en conflicto con `com.cosmicx.win10` y aparece como
+**Mundo X Windows 10 FIX**. El flavor `standard` mantiene el ID antiguo.
+
+Ambos incluyen:
+
+- `jniLibs.useLegacyPackaging=true`, que solicita al gestor Android
+  extraer las bibliotecas nativas a `ApplicationInfo.nativeLibraryDir`.
+- Carga ordenada: biblioteca de C++, puente Ether/gráficos, intérprete
+  x86 propio. Intenta ruta nativa directa únicamente si loadLibrary falla.
+- Diagnóstico en la pantalla y en el botón `Copiar diagnóstico`:
+  Android SDK, ABI del proceso, ABI disponibles, directorio nativo,
+  archivos instalados, tamaño de cada .so y error exacto del linker.
+- Ningún nuevo emulador externo ni cambio de instrucciones x86.
+
+La prueba en emulador Android 15 valida **ambos paquetes** y confirma
+carga real de las bibliotecas y ejecución de la ISO sintética. La
+compatibilidad exacta con el Samsung depende del informe en ese dispositivo.
+
+Si el flavor FIX funciona, vuelve a seleccionar tu ISO original y
+compárteme el nuevo estado CPU. **No se afirma Windows 10 funcional.**

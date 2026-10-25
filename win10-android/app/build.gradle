@@ -8,8 +8,8 @@ android {
         applicationId 'com.cosmicx.win10'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.1.2'
+        versionCode 4
+        versionName '0.1.3'
         testInstrumentationRunner 'com.cosmicx.win10.WindowsInstrumentation'
         ndk { abiFilters 'arm64-v8a','x86_64' }
         externalNativeBuild { cmake {
@@ -17,6 +17,23 @@ android {
             arguments '-DANDROID_STL=c++_shared'
         } }
     }
+    flavorDimensions 'installation'
+    productFlavors {
+        standard {
+            dimension 'installation'
+            resValue 'string', 'app_label', 'Mundo X Windows 10 Lab'
+        }
+        rescue {
+            dimension 'installation'
+            // Installs alongside earlier debug APKs whose signing keys differ
+            // between GitHub runners. No uninstall or signature bypass needed.
+            applicationIdSuffix '.rescue'
+            resValue 'string', 'app_label', 'Mundo X Windows 10 FIX'
+        }
+    }
+    // Let Android PackageManager extract .so files to nativeLibraryDir;
+    // System.load() can then produce an exact per-library error report.
+    packaging { jniLibs { useLegacyPackaging = true } }
     // Compile ORIGINAL Mundo X PC core, no vendored emulator binaries.
     externalNativeBuild {
         cmake { path '../../pc-android/app/src/main/cpp/CMakeLists.txt'; version '3.22.1' }
