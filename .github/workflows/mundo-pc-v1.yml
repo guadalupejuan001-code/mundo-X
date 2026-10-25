@@ -1,0 +1,182 @@
+name: Mundo X PC V1 — native Android standalone
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['pc-android/**','native/**','graphics-android/**','.github/workflows/mundo-pc-v1.yml']
+  push:
+    branches: [main]
+    paths: ['pc-android/**','native/**','graphics-android/**','.github/workflows/mundo-pc-v1.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pc-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify original x86/x64/Ether C++ core
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pc-v1-dist pc-v1-evidence pc-dist
+          bash pc-android/tools/test-native.sh > pc-v1-evidence/native.log 2>&1 || {
+            tail -100 pc-v1-evidence/native.log; exit 1
+          }
+          tail -15 pc-v1-evidence/native.log
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Install NDK/CMake/Android 15 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1' \
+            'platform-tools' 'emulator' 'system-images;android-35;default;x86_64'
+      - name: Restore project signing when available
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.MUNDOX_ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.MUNDOX_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$KEYSTORE_B64" && -n "$KEYSTORE_PASSWORD" ]]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/pc-v1-signing.p12"
+            printf '%s' "$KEYSTORE_PASSWORD" > "$RUNNER_TEMP/pc-v1-password.txt"
+            echo "MUNDOX_SIGNING_STORE=$RUNNER_TEMP/pc-v1-signing.p12" >> "$GITHUB_ENV"
+            echo "MUNDOX_SIGNING_PASSWORD_FILE=$RUNNER_TEMP/pc-v1-password.txt" >> "$GITHUB_ENV"
+            echo "PC_V1_SIGNING=project-persistent" >> "$GITHUB_ENV"
+          elif [[ -z "$KEYSTORE_B64" && -z "$KEYSTORE_PASSWORD" ]]; then
+            echo "PC_V1_SIGNING=ephemeral-debug" >> "$GITHUB_ENV"
+          else
+            echo 'Signing material is incomplete' >&2; exit 1
+          fi
+      - name: Build V1 APK using original PcMachine and shared Ether graphics
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p pc-android -PmundoPcV1=true --no-daemon --stacktrace \
+            :app:assembleDebug :app:assembleDebugAndroidTest \
+            > pc-v1-evidence/gradle.log 2>&1 || {
+              tail -140 pc-v1-evidence/gradle.log; exit 1
+            }
+          tail -30 pc-v1-evidence/gradle.log
+          cp pc-android/app/build/outputs/apk/debug/app-debug.apk pc-v1-dist/Mundo-X-PC-V1.apk
+          cp pc-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk pc-v1-dist/Mundo-X-PC-V1-tests.apk
+          cp pc-v1-dist/Mundo-X-PC-V1.apk pc-dist/COSMIC-X-PC.apk
+          cp pc-v1-dist/Mundo-X-PC-V1-tests.apk pc-dist/COSMIC-X-PC-tests.apk
+      - name: Check signature, package, ELF64 ARM64/x86_64 and external emulation absence
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            pc-v1-dist/Mundo-X-PC-V1.apk > pc-v1-evidence/signature.txt
+          python3 - <<'PY'
+          import hashlib,json,os,re,struct,subprocess,zipfile
+          from pathlib import Path
+          p=Path('pc-v1-dist/Mundo-X-PC-V1.apk')
+          aapt=os.environ['ANDROID_HOME']+'/build-tools/35.0.0/aapt'
+          b=subprocess.check_output([aapt,'dump','badging',str(p)],text=True)
+          permissions=subprocess.check_output([aapt,'dump','permissions',str(p)],text=True)
+          package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",b)
+          assert package and package.groups()==('com.cosmicx.pc.v1','100','1.0.0'),b
+          assert "launchable-activity: name='com.cosmicx.pc.MainActivity'" in b,b
+          assert 'uses-permission:' not in permissions,permissions
+          with zipfile.ZipFile(p) as z:
+            assert z.testzip() is None
+            names=set(z.namelist())
+            expected={f'lib/{abi}/{lib}' for abi in ('arm64-v8a','x86_64')
+                     for lib in ('libcosmic_pc.so','libmx_graphics.so','libc++_shared.so')}
+            found={n for n in names if n.startswith('lib/')}
+            assert found==expected,(found,expected)
+            for abi,machine in [('arm64-v8a',183),('x86_64',62)]:
+              for lib in ('libcosmic_pc.so','libmx_graphics.so','libc++_shared.so'):
+                elf=z.read(f'lib/{abi}/{lib}')
+                assert elf[:4]==b'\x7fELF' and elf[4:6]==b'\x02\x01'
+                assert struct.unpack_from('<H',elf,18)[0]==machine,(abi,lib)
+            dex=b''.join(z.read(n) for n in names if re.fullmatch(r'classes\d*\.dex',n))
+            for klass in (b'Lcom/cosmicx/pc/MainActivity;',
+                         b'Lcom/cosmicx/pc/NativeMachine;',
+                         b'Lcom/cosmicx/pc/PcVideoRenderer;',
+                         b'Lcom/mundox/graphics/QuantumRenderer;'):
+              assert klass in dex,klass
+            assert not any(n.lower().endswith(('.iso','.wim')) for n in names)
+          sha=hashlib.sha256(p.read_bytes()).hexdigest()
+          data={'package':package.group(1),'version':package.group(3),
+                'version_code':int(package.group(2)),
+                'sha256':sha,'bytes':p.stat().st_size,
+                'signing_mode':os.getenv('PC_V1_SIGNING','unknown'),
+                'engine':'original Mundo X native C++ x86/x64 and InfiniteCore Ether',
+                'native_abis':['arm64-v8a','x86_64'],
+                'logical_ram_bytes':2147483648,
+                'windows10_full_os_supported':False,
+                'external_emulators':[],'permissions':[]}
+          Path('pc-v1-evidence/provenance.json').write_text(json.dumps(data,indent=2)+'\n')
+          Path('pc-v1-dist/SHA256SUMS.txt').write_text(sha+'  Mundo-X-PC-V1.apk\n')
+          print(json.dumps(data))
+          PY
+      - name: Verify full PC V1 GUI/CPU/ISO/GPU/Ether on Android 15
+        shell: bash
+        timeout-minutes: 24
+        env:
+          PC_APP_PACKAGE: com.cosmicx.pc.v1
+          PC_TEST_PACKAGE: com.cosmicx.pc.v1.test
+        run: |
+          set -euo pipefail
+          sudo chmod a+rw /dev/kvm
+          bash pc-android/tools/android-test.sh
+          cp pc-evidence/instrumentation.txt pc-v1-evidence/instrumentation.txt
+          cp pc-evidence/pc-tests.json pc-v1-evidence/pc-tests.json
+          cp pc-evidence/pc-screen.png pc-v1-evidence/pc-screen.png
+          cp pc-evidence/pc-video-screen.png pc-v1-evidence/pc-video-screen.png
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          summary=Path('pc-v1-evidence/instrumentation.txt').read_text()
+          assert 'COSMIC_PC_TESTS_PASSED tests=30 failures=0' in summary
+          v=json.loads(Path('pc-v1-evidence/pc-tests.json').read_text())
+          assert v['tests']==30 and v['failures']==0
+          assert v['x64_guest_verified'] and v['infinite_guest_verified']
+          assert v['shared_session_graphics_verified'] and not v['windows_booted']
+          assert v['guest_8k_verified'] and v['output_8k_verified']
+          for name in ('pc-screen.png','pc-video-screen.png'):
+            assert Path('pc-v1-evidence',name).read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+          print('MUNDO_PC_V1_ANDROID_PASS tests=30 native_x64=1 ether=1 gpu=1 windows10_desktop=0')
+          PY
+      - name: Create release APK + ZIP for Android users
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp pc-android/RELEASE_V1.md pc-v1-dist/LEEME-V1.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('pc-v1-dist')
+          with zipfile.ZipFile(root/'Mundo-X-PC-V1.zip','w',zipfile.ZIP_DEFLATED) as z:
+            for name in ('Mundo-X-PC-V1.apk','LEEME-V1.md','SHA256SUMS.txt'):
+              z.write(root/name,name)
+          print('MUNDO_PC_V1_DISTRIBUTION_OK apk_bytes=',(root/'Mundo-X-PC-V1.apk').stat().st_size)
+          PY
+      - name: Delete temporary signing files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pc-v1-signing.p12" "$RUNNER_TEMP/pc-v1-password.txt"
+      - name: Upload verifiable app, ZIP and Android screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MUNDO-X-PC-V1-ANDROID
+          path: |
+            pc-v1-dist/**
+            pc-v1-evidence/**
+          retention-days: 30
+          if-no-files-found: warn

@@ -1,14 +1,27 @@
 plugins { id 'com.android.application' }
+// V1 is a separately installable, fully native PC shell. The original
+// com.cosmicx.pc/0.4 contract is unchanged unless -PmundoPcV1=true is passed.
+def pcV1 = project.findProperty('mundoPcV1')?.toString() == 'true'
+def stableStore = System.getenv('MUNDOX_SIGNING_STORE')
+def stablePasswordFile = System.getenv('MUNDOX_SIGNING_PASSWORD_FILE')
+def signingReady = (stableStore && stablePasswordFile)
+if ((stableStore || stablePasswordFile) && !signingReady) {
+    throw new GradleException('PC V1 signing requires keystore and password file together.')
+}
+if (signingReady && (!file(stableStore).isFile() || !file(stablePasswordFile).isFile())) {
+    throw new GradleException('Configured PC V1 signing material not found.')
+}
 android {
     namespace 'com.cosmicx.pc'
     compileSdk 35
     ndkVersion '27.2.12479018'
     defaultConfig {
-        applicationId 'com.cosmicx.pc'
+        applicationId pcV1 ? 'com.cosmicx.pc.v1' : 'com.cosmicx.pc'
+        manifestPlaceholders = [pcAppLabel: pcV1 ? 'Mundo X PC V1' : 'COSMIC X PC']
         minSdk 26
         targetSdk 35
-        versionCode 4
-        versionName '0.4.0'
+        versionCode pcV1 ? 100 : 4
+        versionName pcV1 ? '1.0.0' : '0.4.0'
         testInstrumentationRunner 'com.cosmicx.pc.PcInstrumentation'
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
         externalNativeBuild { cmake {
@@ -30,6 +43,27 @@ android {
             assets.include 'shaders/**'
         }
     }
+    // Extract native ARM64/x86_64 .so files instead of relying on direct
+    // mmap from compressed APK entries. Android 16 can then resolve explicit
+    // nativeLibraryDir dependencies and report exact loader errors.
+    packaging { jniLibs { useLegacyPackaging = true } }
+    signingConfigs {
+        if (signingReady) {
+            pcStable {
+                storeFile file(stableStore)
+                storeType 'PKCS12'
+                storePassword file(stablePasswordFile).getText('UTF-8').trim()
+                keyAlias 'mundox'
+                keyPassword storePassword
+            }
+        }
+    }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-    buildTypes { debug { debuggable true }; release { minifyEnabled false } }
+    buildTypes {
+        debug {
+            debuggable true
+            if (signingReady) signingConfig signingConfigs.pcStable
+        }
+        release { minifyEnabled false }
+    }
 }
