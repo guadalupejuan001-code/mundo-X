@@ -77,8 +77,6 @@ cosmic-android/app/src/main/java/com/mundox/cosmic/CosmicActivity.java
 app/src/main/cpp/native-lib.cpp
 app/src/main/cpp/micro-jni.cpp
 src/quantum_core.py
-src/bridge_x.py
-src/transformer_x.py
 CMakeLists.txt
 pc-android/CMakeLists.txt
 graphics-android/app/src/main/cpp/CMakeLists.txt
