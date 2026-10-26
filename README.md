@@ -6,7 +6,7 @@ COSMIC X Engine es el título del conjunto. Dentro se conserva la computación c
 
 **Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 21 de octubre de 2026.
 
-Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: **Ether**, el perfil finito de **1.000 qubits**, Graphics **4K/8K con espejos**, **Solar con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes . La [consolidación del repositorio](docs/repository-unification-2026-10-21.md) identifica los aportes recuperados, los borradores superados y la evidencia de cada plataforma.
+Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: **Ether**, el perfil finito de **1.000 qubits**, Graphics **4K/8K con espejos**, **Solar con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes. La [consolidación del repositorio](docs/repository-unification-2026-10-21.md) identifica los aportes recuperados, los borradores superados y la evidencia de cada plataforma.
 
 **Mantenimiento 25-10-2026:** la línea experimental Bridge X / Transformer X fue retirada del árbol activo al no aportar una capacidad demostrada a Ether o al núcleo cuántico. Véase [decisión técnica y restauración](docs/retired-transformer-x-2026-10-25.md).
 
