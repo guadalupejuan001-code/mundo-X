@@ -1,4 +1,5 @@
-name: MX Academia Android APK
+name: MX Visual Android APK
+
 on:
   push:
     branches: [feature/mx-academy-android-20261026]
@@ -8,10 +9,16 @@ on:
       - 'mx-academy-android/gradle.properties'
       - '.github/workflows/mx-academy-android.yml'
   workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: mx-visual-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-mx:
+  build-mx-visual:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -23,36 +30,81 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Install Android packages
+      - name: Install Android platform and native compiler
+        shell: bash
         run: |
           set -euo pipefail
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             'platforms;android-35' 'build-tools;35.0.0' \
             'ndk;27.2.12479018' 'cmake;3.22.1'
-      - name: Compile MX Academy APK
+      - name: Compile native Mundo X and visual Android UI
         run: gradle -p mx-academy-android --no-daemon :app:assembleDebug
-      - name: Verify APK and stage for download
+      - name: Verify signature and native binaries
+        shell: bash
         run: |
           set -euo pipefail
           apk=mx-academy-android/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
           unzip -l "$apk" | grep 'lib/arm64-v8a/libmxlearn.so'
+          unzip -l "$apk" | grep 'lib/x86_64/libmxlearn.so'
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "package: name='com.mundox.academy.visual'"
           mkdir -p mx-academy-android/dist
-          cp "$apk" mx-academy-android/dist/MX-Academia-preview.apk
-          (cd mx-academy-android/dist && sha256sum MX-Academia-preview.apk > SHA256SUMS.txt)
+          cp "$apk" mx-academy-android/dist/MX-Visual-v0.2.apk
+          (cd mx-academy-android/dist && sha256sum MX-Visual-v0.2.apk > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         with:
-          name: MX-Academia-Android-APK
+          name: MX-Visual-v0.2-Android-APK
           path: |
-            mx-academy-android/dist/MX-Academia-preview.apk
+            mx-academy-android/dist/MX-Visual-v0.2.apk
             mx-academy-android/dist/SHA256SUMS.txt
           if-no-files-found: error
-      - name: Commit installable preview to feature branch
+
+  android-smoke:
+    needs: build-mx-visual
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MX-Visual-v0.2-Android-APK
+          path: mx-app
+      - name: Install Android emulator
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_EVENT_NAME" != "push" || "$GITHUB_REF" != "refs/heads/feature/mx-academy-android-20261026" ]]; then exit 0; fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f mx-academy-android/dist/MX-Academia-preview.apk mx-academy-android/dist/SHA256SUMS.txt
-          git commit -m "build(mx): installable academy preview [skip ci]"
-          git push origin HEAD:"$GITHUB_REF"
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'emulator' 'platform-tools' 'system-images;android-35;default;x86_64'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            -n MXVisual -k 'system-images;android-35;default;x86_64' --force
+      - name: Launch MX Visual against Android 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/emulator/emulator" -avd MXVisual -no-window \
+            -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > emulator.log 2>&1 &
+          adb wait-for-device
+          for i in $(seq 1 100); do
+            [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]] && break
+            sleep 3
+          done
+          [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]
+          adb install mx-app/MX-Visual-v0.2.apk
+          adb shell am start -W -n com.mundox.academy.visual/com.mundox.academy.MainActivity
+          sleep 3
+          adb shell pidof com.mundox.academy.visual
+          adb shell uiautomator dump /sdcard/mx-ui.xml
+          adb exec-out cat /sdcard/mx-ui.xml > mx-ui.xml
+          grep -F 'MX  /  VISUAL' mx-ui.xml
+          if grep -E 'No se pudo calcular|Error del experimento|FATAL EXCEPTION' mx-ui.xml; then
+            echo 'Native readout or Android activity failed' >&2
+            exit 1
+          fi
+      - name: Upload UI and device diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MX-Visual-v0.2-Smoke-Logs
+          path: |
+            emulator.log
+            mx-ui.xml
+          if-no-files-found: warn
