@@ -1,5 +1,7 @@
 # Origen declarado y recorrido cuántico verificable
 
+> **Nota de mantenimiento (25-10-2026):** Bridge X y Transformer X v0.1 se retiraron de `main`. Este documento conserva su evaluación histórica y el ejemplo Python siguiente solo es ejecutable recuperando esos fuentes desde el commit `7d0e919fc13eb5340d86cb6f7cb2b6cd97172a8a`. Consulte [decisión técnica](retired-transformer-x-2026-10-25.md).
+
 ## Relato del titular
 
 El 18 de octubre de 2026, el titular explicó que comenzó preguntándose qué
@@ -47,12 +49,12 @@ memoria temporal y costo de lectura.
 `BridgeX` conserva frecuencias de bytes y fases medias de posición. Es un
 resumen con pérdida, no un codificador reversible general. Por ejemplo,
 `ABBABBBB` y `BAABBBBB` tienen los mismos conteos y las mismas direcciones de
-fase media para A y B. El cuerpo actual de `_state_for_mode`, convertido a
+fase media para A y B. El cuerpo histórico de `_state_for_mode`, convertido a
 float32, produce payloads idénticos para ambos. Se comprobó ese cuerpo extraído
 del fuente con la biblioteca estándar; la pila completa PyTorch no se ejecutó
 en esta revisión porque no estaba instalada.
 
-Con las dependencias Python del repositorio, la comprobación completa es:
+Con los archivos presentes en el commit histórico indicado, la comprobación era (no ejecutable en `main` actual):
 
 ```python
 import torch
@@ -67,7 +69,7 @@ assert torch.equal(z_a, z_b)
 
 Este límite corresponde a Bridge X. Compact y Reduced utilizan otras
 representaciones y conservan las propiedades cuánticas que comprueban sus
-respectivos exámenes. Transformer permanece separado de esos núcleos.
+respectivos exámenes. Transformer nunca llegó a integrarse en esos núcleos y se retiró del árbol activo.
 
 Las fases e interferencias también existen en sistemas ondulatorios clásicos.
 En Mundo X, el comportamiento cuántico se comprueba con estados normalizados,
