@@ -6,7 +6,9 @@ COSMIC X Engine es el título del conjunto. Dentro se conserva la computación c
 
 **Estado:** desarrollo activo · **Rama principal:** `main` · **Revisión:** 21 de octubre de 2026.
 
-Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: **Ether**, el perfil finito de **1.000 qubits**, Graphics **4K/8K con espejos**, **Solar con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes y la línea Transformer X. La [consolidación del repositorio](docs/repository-unification-2026-10-21.md) identifica los aportes recuperados, los borradores superados y la evidencia de cada plataforma.
+Esta revisión reúne los proyectos que se desarrollaron en ramas separadas: **Ether**, el perfil finito de **1.000 qubits**, Graphics **4K/8K con espejos**, **Solar con atmósferas y mapa**, y **COSMIC X PC**. Conserva los laboratorios, Ecos, la VM de 8 bits, el micromundo, los lenguajes . La [consolidación del repositorio](docs/repository-unification-2026-10-21.md) identifica los aportes recuperados, los borradores superados y la evidencia de cada plataforma.
+
+**Mantenimiento 25-10-2026:** la línea experimental Bridge X / Transformer X fue retirada del árbol activo al no aportar una capacidad demostrada a Ether o al núcleo cuántico. Véase [decisión técnica y restauración](docs/retired-transformer-x-2026-10-25.md).
 
 **InfiniteCore integrado.** El [dominio por reglas y componentes finitos](docs/infinite_core.md)
 dispone de una [sesión compartida con el emulador y el motor gráfico](docs/infinite_integration.md).
@@ -142,7 +144,6 @@ Más información: [Ether Render X y MIL](docs/ether-render-x.md) y
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
 | Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
 | Física nativa 2D y 3D | Modelos clásicos finitos con recuperación de fallos; el CLI `physics3d` ejecuta la base 3D rescatada. Sus cuerpos aún no son estado Ether ni alimentan las órbitas de Solar. | [Auditoría del núcleo](docs/repository-core-review-2026-10-21.md) |
-| Bridge X y Transformer X | Codificación de bytes en modos y modelo PyTorch entrenable. Se conserva como línea independiente; todavía no alimenta CompactCore. | [Bridge X](src/bridge_x.py), [Transformer X](src/transformer_x.py), [entrenamiento](experiments/train_file_v0_1.py) |
 
 La APK principal `com.mundox.cosmic` reúne el motor, el núcleo y los laboratorios. **Solar y PC son aplicaciones separadas dentro del mismo código fuente.** La VM didáctica de 8 bits está incluida en COSMIC; el emulador x86/x64 de PC conserva su propio destino de compilación.
 
@@ -395,33 +396,13 @@ assert ghz;
 
 La primera versión es un **lenguaje estático de circuitos**, con reglas documentadas y expansión acotada. Sus bloques se convierten en una secuencia XASM; no añade ejecución paralela ni nuevas operaciones matemáticas al motor. Consulta la [guía del lenguaje `.mx`](docs/mx_language_v0_1.md) y los ejemplos [`mx_bell.mx`](examples/mx_bell.mx), [`mx_magic.mx`](examples/mx_magic.mx) y [`mx_layers.mx`](examples/mx_layers.mx).
 
-### 7. Bridge X y Transformer X — aprendizaje sobre modos
-
-**Archivos:** [`src/bridge_x.py`](src/bridge_x.py), [`src/transformer_x.py`](src/transformer_x.py), [`experiments/train_file_v0_1.py`](experiments/train_file_v0_1.py).
-
-**Bridge X** transforma fragmentos de bytes en hasta 256 modos identificables. Para cada modo activo representa actividad y posición mediante una pareja de componentes reales e imaginarias `z = [Re, Im]`, de la que pueden obtenerse amplitud y fase.
-
-**Transformer X** es una red neuronal PyTorch real, con *TransformerEncoder*, atención y parámetros entrenables. Recibe identificadores de modo y estados complejos representados como dos números reales. Aprende a estimar una corrección:
-
-~~~text
-identidad de modo + estado (Re, Im)
-       ↓
-Transformer X
-       ↓
-corrección Δz
-       ↓
-estado estimado z + Δz
-~~~
-
-El script de entrenamiento usa ventanas consecutivas de un archivo e informa error de validación frente a una predicción identidad. **No es un modelo conversacional ni está integrado todavía a Compact Core**; el repositorio tampoco incluye un checkpoint entrenado listo para usarse como modelo general. Su utilidad práctica deberá medirse contra alternativas equivalentes.
-
-### 8. FactorizedCore y fases generales
+### 7. FactorizedCore y fases generales
 
 [FactorizedCore](native/include/mundo_x/factorized_core.hpp) conserva factores independientes y bloques, evita determinadas uniones que no generan entrelazamiento y verifica separaciones. Los ensayos de escala describen familias producto; los bloques generales siguen teniendo crecimiento exponencial. [Estructura y estabilidad](results/factorized_structure_2026-10-18.md), [ejecución en flujo](results/scale_exams_2026-10-18.md).
 
 [AdaptivePhaseCore](native/include/mundo_x/adaptive_phase_core.hpp) ejecuta fases de ángulo general y transfiere el estado producto al motor reducido cuando aparece entrelazamiento. El ejecutable `mundo_x_phase` trabaja con `.qx`; la reproducción de la primera versión permanece como `adaptive-replay`. El ensayo de sumador de 50 qubits registró 1.600 bytes de carga lógica del motor producto, 393 ejecuciones de comparación y 16 entradas adicionales. Esta ruta nativa conserva sus límites y todavía no está conectada al panel gráfico Android. [Transferencia y evidencia](docs/state-transfer.md).
 
-### 9. VM, Ecos y runtime visual
+### 8. VM, Ecos y runtime visual
 
 La VM didáctica utiliza CompactCore para cuatro registros de ocho bits y 16 bytes de RAM, con un intérprete clásico que contrasta cada instrucción. Su ejecutable restaurado `mundo_x_vm` permite ejecutar programas `.mxvm` desde terminal. [Sintaxis y comandos de la VM](docs/basis_vm_cli.md). Ecos conserva evolución, perturbación y reversión Clifford+T, con cancelación y presupuesto. [Código y modelos Android](android-experiments/README.md).
 
@@ -478,21 +459,17 @@ Para los detalles, resultados y limitaciones de cada medición:
 | `solar-android/` | Explorador solar, catálogo, modelos, texturas y pruebas. |
 | `pc-android/` | Intérprete x86/x64 propio, memoria, medios, CLI y app. |
 | `app/`, `android-experiments/` | XLab, MicroLab, VM, Ecos y experimentos Android originales. |
-| `src/`, `experiments/`, `tests/` | Referencia Python, Bridge/Transformer y experimentos. |
+| `src/`, `experiments/`, `tests/` | Referencia Python y experimentos restantes. |
 | `examples/`, `docs/`, `results/` | Programas, contratos, fuentes de datos y evidencia fechada. |
 | `tools/`, `.github/workflows/` | Auditores, benchmarks, compilación y verificación automatizada. |
 
-### Referencia Python y Transformer X
+### Referencia Python
 
 ```sh
 python -m pip install -r requirements.txt pytest
 python hello_mundo_x.py
 python -m pytest tests/test_quantum_core.py
-python src/transformer_x.py
-python experiments/train_file_v0_1.py ruta/a/un_archivo --epochs 20
 ```
-
-El entrenamiento usa ventanas del archivo indicado y guarda `transformer_x_v0_1.pt`. El repositorio conserva el programa de entrenamiento; no incluye un checkpoint general ya entrenado. [Implementación y medición](experiments/train_file_v0_1.py).
 
 ### Red experimental
 
@@ -506,7 +483,7 @@ El titular usó «computasis» como analogía de homeostasis. El controlador añ
 
 ## Alcance y autoría
 
-El proyecto conserva simulación compacta Clifford, experimentos no Clifford, lenguajes, aplicaciones y pruebas reproducibles. Quedan abiertos la escala de circuitos generales con T, la evaluación de Transformer X, la compatibilidad completa de PC y mediciones en dispositivos físicos. Los resultados disponibles no establecen una simulación eficiente de todos los estados arbitrarios ni una aceleración de hardware cuántico.
+El proyecto conserva simulación compacta Clifford, experimentos no Clifford, lenguajes, aplicaciones y pruebas reproducibles. Quedan abiertos la escala de circuitos generales con T, la compatibilidad completa de PC y mediciones en dispositivos físicos. Los resultados disponibles no establecen una simulación eficiente de todos los estados arbitrarios ni una aceleración de hardware cuántico.
 
 **Mundo X es un proyecto concebido y dirigido por el titular del repositorio.** El historial conserva implementaciones, revisiones y resultados, incluidos los negativos. [Estado histórico](PROJECT_STATUS_2026-10-14.md), [historial de `main`](https://github.com/guadalupejuan001-code/mundo-X/commits/main), [compilaciones y evidencia](https://github.com/guadalupejuan001-code/mundo-X/actions).
 
@@ -536,7 +513,6 @@ APK de la PR #34. [Diseño](docs/ether-render-x.md) ·
 | XLab, MicroLab, VM y Ecos | Mesa de circuitos, protocolos, memoria, objetos, micromundo, máquina de 8 bits y experimentos de evolución/perturbación/reversión. | [XLab](docs/xlab_0_2.md), [objetos](docs/xlab_0_3_objetos.md), [VM y Ecos](android-experiments/README.md) |
 | Lenguajes y núcleos experimentales | XASM `.x`, circuitos `.mx`, fases generales `.qx`, reducción de T y factorización con presupuestos explícitos. | [XASM](docs/xasm_v0_2.md), [.mx](docs/mx_language_v0_1.md), [fases](docs/state-transfer.md) |
 | Física nativa 2D y 3D | Modelos clásicos finitos con recuperación de fallos; el CLI `physics3d` ejecuta la base 3D rescatada. Sus cuerpos aún no son estado Ether ni alimentan las órbitas de Solar. | [Auditoría del núcleo](docs/repository-core-review-2026-10-21.md) |
-| Bridge X y Transformer X | Codificación de bytes en modos y modelo PyTorch entrenable. Se conserva como línea independiente; todavía no alimenta CompactCore. | [Bridge X](src/bridge_x.py), [Transformer X](src/transformer_x.py), [entrenamiento](experiments/train_file_v0_1.py) |
 
 La APK principal `com.mundox.cosmic` reúne el motor, el núcleo y los laboratorios. **Solar y PC son aplicaciones separadas dentro del mismo código fuente.** La VM didáctica de 8 bits está incluida en COSMIC; el emulador x86/x64 de PC conserva su propio destino de compilación.
 
@@ -789,33 +765,13 @@ assert ghz;
 
 La primera versión es un **lenguaje estático de circuitos**, con reglas documentadas y expansión acotada. Sus bloques se convierten en una secuencia XASM; no añade ejecución paralela ni nuevas operaciones matemáticas al motor. Consulta la [guía del lenguaje `.mx`](docs/mx_language_v0_1.md) y los ejemplos [`mx_bell.mx`](examples/mx_bell.mx), [`mx_magic.mx`](examples/mx_magic.mx) y [`mx_layers.mx`](examples/mx_layers.mx).
 
-### 7. Bridge X y Transformer X — aprendizaje sobre modos
-
-**Archivos:** [`src/bridge_x.py`](src/bridge_x.py), [`src/transformer_x.py`](src/transformer_x.py), [`experiments/train_file_v0_1.py`](experiments/train_file_v0_1.py).
-
-**Bridge X** transforma fragmentos de bytes en hasta 256 modos identificables. Para cada modo activo representa actividad y posición mediante una pareja de componentes reales e imaginarias `z = [Re, Im]`, de la que pueden obtenerse amplitud y fase.
-
-**Transformer X** es una red neuronal PyTorch real, con *TransformerEncoder*, atención y parámetros entrenables. Recibe identificadores de modo y estados complejos representados como dos números reales. Aprende a estimar una corrección:
-
-~~~text
-identidad de modo + estado (Re, Im)
-       ↓
-Transformer X
-       ↓
-corrección Δz
-       ↓
-estado estimado z + Δz
-~~~
-
-El script de entrenamiento usa ventanas consecutivas de un archivo e informa error de validación frente a una predicción identidad. **No es un modelo conversacional ni está integrado todavía a Compact Core**; el repositorio tampoco incluye un checkpoint entrenado listo para usarse como modelo general. Su utilidad práctica deberá medirse contra alternativas equivalentes.
-
-### 8. FactorizedCore y fases generales
+### 7. FactorizedCore y fases generales
 
 [FactorizedCore](native/include/mundo_x/factorized_core.hpp) conserva factores independientes y bloques, evita determinadas uniones que no generan entrelazamiento y verifica separaciones. Los ensayos de escala describen familias producto; los bloques generales siguen teniendo crecimiento exponencial. [Estructura y estabilidad](results/factorized_structure_2026-10-18.md), [ejecución en flujo](results/scale_exams_2026-10-18.md).
 
 [AdaptivePhaseCore](native/include/mundo_x/adaptive_phase_core.hpp) ejecuta fases de ángulo general y transfiere el estado producto al motor reducido cuando aparece entrelazamiento. El ejecutable `mundo_x_phase` trabaja con `.qx`; la reproducción de la primera versión permanece como `adaptive-replay`. El ensayo de sumador de 50 qubits registró 1.600 bytes de carga lógica del motor producto, 393 ejecuciones de comparación y 16 entradas adicionales. Esta ruta nativa conserva sus límites y todavía no está conectada al panel gráfico Android. [Transferencia y evidencia](docs/state-transfer.md).
 
-### 9. VM, Ecos y runtime visual
+### 8. VM, Ecos y runtime visual
 
 La VM didáctica utiliza CompactCore para cuatro registros de ocho bits y 16 bytes de RAM, con un intérprete clásico que contrasta cada instrucción. Su ejecutable restaurado `mundo_x_vm` permite ejecutar programas `.mxvm` desde terminal. [Sintaxis y comandos de la VM](docs/basis_vm_cli.md). Ecos conserva evolución, perturbación y reversión Clifford+T, con cancelación y presupuesto. [Código y modelos Android](android-experiments/README.md).
 
@@ -872,21 +828,17 @@ Para los detalles, resultados y limitaciones de cada medición:
 | `solar-android/` | Explorador solar, catálogo, modelos, texturas y pruebas. |
 | `pc-android/` | Intérprete x86/x64 propio, memoria, medios, CLI y app. |
 | `app/`, `android-experiments/` | XLab, MicroLab, VM, Ecos y experimentos Android originales. |
-| `src/`, `experiments/`, `tests/` | Referencia Python, Bridge/Transformer y experimentos. |
+| `src/`, `experiments/`, `tests/` | Referencia Python y experimentos restantes. |
 | `examples/`, `docs/`, `results/` | Programas, contratos, fuentes de datos y evidencia fechada. |
 | `tools/`, `.github/workflows/` | Auditores, benchmarks, compilación y verificación automatizada. |
 
-### Referencia Python y Transformer X
+### Referencia Python
 
 ```sh
 python -m pip install -r requirements.txt pytest
 python hello_mundo_x.py
 python -m pytest tests/test_quantum_core.py
-python src/transformer_x.py
-python experiments/train_file_v0_1.py ruta/a/un_archivo --epochs 20
 ```
-
-El entrenamiento usa ventanas del archivo indicado y guarda `transformer_x_v0_1.pt`. El repositorio conserva el programa de entrenamiento; no incluye un checkpoint general ya entrenado. [Implementación y medición](experiments/train_file_v0_1.py).
 
 ### Red experimental
 
@@ -900,7 +852,7 @@ El titular usó «computasis» como analogía de homeostasis. El controlador añ
 
 ## Alcance y autoría
 
-El proyecto conserva simulación compacta Clifford, experimentos no Clifford, lenguajes, aplicaciones y pruebas reproducibles. Quedan abiertos la escala de circuitos generales con T, la evaluación de Transformer X, la compatibilidad completa de PC y mediciones en dispositivos físicos. Los resultados disponibles no establecen una simulación eficiente de todos los estados arbitrarios ni una aceleración de hardware cuántico.
+El proyecto conserva simulación compacta Clifford, experimentos no Clifford, lenguajes, aplicaciones y pruebas reproducibles. Quedan abiertos la escala de circuitos generales con T, la compatibilidad completa de PC y mediciones en dispositivos físicos. Los resultados disponibles no establecen una simulación eficiente de todos los estados arbitrarios ni una aceleración de hardware cuántico.
 
 **Mundo X es un proyecto concebido y dirigido por el titular del repositorio.** El historial conserva implementaciones, revisiones y resultados, incluidos los negativos. [Estado histórico](PROJECT_STATUS_2026-10-14.md), [historial de `main`](https://github.com/guadalupejuan001-code/mundo-X/commits/main), [compilaciones y evidencia](https://github.com/guadalupejuan001-code/mundo-X/actions).
 
