@@ -1,0 +1,12 @@
+ETHER X Native Android 0.2.0
+
+STATUS
+- Java engine compiled and exercised with JDK 21 on Linux.
+- Python EXF -> Java native restore: PASS.
+- Java EXF -> Python restore: PASS.
+- Synthetic ISO9660 detection: PASS.
+- Android Manifest, MainActivity, Gradle config and GitHub Action: WRITTEN.
+- APK build/install on real Android: NOT YET VERIFIED. Android SDK/Gradle not present in this runtime.
+
+A binary APK is not included in this source archive. Use the GitHub Actions workflow
+or Android Studio to compile. Do not rename this ZIP to APK.
