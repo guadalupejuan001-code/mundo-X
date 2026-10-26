@@ -1,0 +1,58 @@
+name: MX Academia Android APK
+on:
+  push:
+    branches: [feature/mx-academy-android-20261026]
+    paths:
+      - 'mx-academy-android/app/**'
+      - 'mx-academy-android/*.gradle'
+      - 'mx-academy-android/gradle.properties'
+      - '.github/workflows/mx-academy-android.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-mx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android packages
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Compile MX Academy APK
+        run: gradle -p mx-academy-android --no-daemon :app:assembleDebug
+      - name: Verify APK and stage for download
+        run: |
+          set -euo pipefail
+          apk=mx-academy-android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          unzip -l "$apk" | grep 'lib/arm64-v8a/libmxlearn.so'
+          mkdir -p mx-academy-android/dist
+          cp "$apk" mx-academy-android/dist/MX-Academia-preview.apk
+          (cd mx-academy-android/dist && sha256sum MX-Academia-preview.apk > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MX-Academia-Android-APK
+          path: |
+            mx-academy-android/dist/MX-Academia-preview.apk
+            mx-academy-android/dist/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Commit installable preview to feature branch
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != "push" || "$GITHUB_REF" != "refs/heads/feature/mx-academy-android-20261026" ]]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f mx-academy-android/dist/MX-Academia-preview.apk mx-academy-android/dist/SHA256SUMS.txt
+          git commit -m "build(mx): installable academy preview [skip ci]"
+          git push origin HEAD:"$GITHUB_REF"
