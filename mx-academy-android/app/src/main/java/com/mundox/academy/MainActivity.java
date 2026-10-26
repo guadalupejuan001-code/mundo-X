@@ -123,7 +123,7 @@ public final class MainActivity extends Activity {
     }
     private Button button(String caption,boolean filled) {
         Button b=new Button(this);
-        b.setText(caption);b.setTextAllCaps(false);b.setTextSize(13);
+        b.setText(caption);b.setAllCaps(false);b.setTextSize(13);
         b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         b.setTextColor(filled?BG:WHITE);
         b.setBackground(shape(filled?TEAL:PANEL,13,filled?Color.TRANSPARENT:EDGE));
