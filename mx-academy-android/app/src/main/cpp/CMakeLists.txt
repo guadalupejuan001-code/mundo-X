@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(mx_academy LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_library(mxlearn SHARED mxlearn.cpp)
+target_include_directories(mxlearn PRIVATE ../../../../../native/include)
+target_compile_options(mxlearn PRIVATE -O2 -Wall -Wextra)
