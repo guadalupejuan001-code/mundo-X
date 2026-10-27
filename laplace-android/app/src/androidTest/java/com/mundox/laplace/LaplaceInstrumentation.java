@@ -48,6 +48,8 @@ public final class LaplaceInstrumentation extends Instrumentation {
         throw new AssertionError("Timed out: "+reason);
     }
     private void screenshot(String name)throws Exception{
+        // Let layout and SurfaceFlinger commit the newly rendered panel before capture.
+        Thread.sleep(700);
         Bitmap image=getUiAutomation().takeScreenshot();
         need(image!=null,"Screenshot missing: "+name);
         File dir=new File(getTargetContext().getExternalFilesDir(null),"laplace-proof");
