@@ -1,0 +1,94 @@
+name: Laplace X independent equation and Android APK
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'laplace-android/**'
+      - '.github/workflows/laplace-x-android.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: laplace-x-independent
+  cancel-in-progress: true
+jobs:
+  verify-build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Independently verify the actual 2D Laplace equation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p laplace-evidence laplace-dist /tmp/laplace-java
+          javac -encoding UTF-8 -d /tmp/laplace-java \
+            laplace-android/app/src/main/java/com/mundox/laplace/LaplaceEngine.java \
+            laplace-android/app/src/main/java/com/mundox/laplace/LaplaceAudit.java \
+            laplace-android/tests/com/mundox/laplace/LaplaceMathTest.java \
+            laplace-android/tests/com/mundox/laplace/LaplaceAuditTest.java
+          java -ea -cp /tmp/laplace-java com.mundox.laplace.LaplaceMathTest | tee laplace-evidence/analytic-oracles.txt
+          java -ea -cp /tmp/laplace-java com.mundox.laplace.LaplaceAuditTest | tee laplace-evidence/independent-audit.txt
+          grep -q 'LAPLACE_EQUATION_VERIFIED checks=131' laplace-evidence/analytic-oracles.txt
+          grep -q 'LAPLACE_AUDIT_PASS checks=114' laplace-evidence/independent-audit.txt
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Install Android 15 SDK and emulator components
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' \
+            'emulator' 'system-images;android-35;default;x86_64'
+      - name: Build independent Android app and test package
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p laplace-android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest > laplace-evidence/gradle.log 2>&1 || { tail -120 laplace-evidence/gradle.log; exit 1; }
+          cp laplace-android/app/build/outputs/apk/debug/app-debug.apk laplace-dist/LAPLACE-X-v0.1.apk
+          cp laplace-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk laplace-dist/LAPLACE-X-tests.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs laplace-dist/LAPLACE-X-v0.1.apk > laplace-evidence/signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging laplace-dist/LAPLACE-X-v0.1.apk > laplace-evidence/package.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions laplace-dist/LAPLACE-X-v0.1.apk > laplace-evidence/permissions.txt
+          grep -q "package: name='com.mundox.laplace' versionCode='1' versionName='0.1.0'" laplace-evidence/package.txt
+          grep -q 'MainActivity' laplace-evidence/package.txt
+          if grep -q 'uses-permission:' laplace-evidence/permissions.txt; then
+            echo 'Unexpected Android permissions'; cat laplace-evidence/permissions.txt; exit 1
+          fi
+          sha256sum laplace-dist/LAPLACE-X-v0.1.apk > laplace-evidence/SHA256SUMS
+      - name: Android 15 launch, four panels, equation residual and audit
+        shell: bash
+        timeout-minutes: 11
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          sudo chmod a+rw /dev/kvm
+          export ANDROID_AVD_HOME="$(mktemp -d /tmp/laplace-avd.XXXXXX)"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force -n laplace-ci -p "$ANDROID_AVD_HOME/laplace-ci.avd" -k 'system-images;android-35;default;x86_64'
+          "$ANDROID_HOME/emulator/emulator" -avd laplace-ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -memory 2048 > laplace-evidence/emulator.log 2>&1 &
+          EMU_PID=$!
+          trap 'adb logcat -d > laplace-evidence/logcat.txt 2>/dev/null || true; adb pull /sdcard/Android/data/com.mundox.laplace/files/laplace-proof laplace-evidence/ 2>/dev/null || true; kill "$EMU_PID" 2>/dev/null || true' EXIT
+          ready=false
+          for i in $(seq 1 110);do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == '1' ]];then ready=true;break;fi
+            sleep 2
+          done
+          [[ "$ready" == true ]] || { tail -80 laplace-evidence/emulator.log; exit 1; }
+          adb shell settings put system screen_off_timeout 600000
+          adb shell input keyevent 82
+          adb install -r laplace-dist/LAPLACE-X-v0.1.apk
+          adb install -r laplace-dist/LAPLACE-X-tests.apk
+          timeout --kill-after=10s 130s adb shell am instrument -w com.mundox.laplace.test/com.mundox.laplace.LaplaceInstrumentation | tee laplace-evidence/android-instrumentation.txt
+          grep -q 'LAPLACE_X_ANDROID_VERIFIED' laplace-evidence/android-instrumentation.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: LAPLACE-X-STANDALONE-APK
+          path: |
+            laplace-dist/**
+            laplace-evidence/**
+          retention-days: 30
+          if-no-files-found: warn
