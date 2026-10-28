@@ -1,0 +1,44 @@
+name: Demonio de Laplace digital - Ether XI real
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'demonio-laplace/**'
+      - '.github/workflows/demonio-laplace-ether.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  demon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Validate original, isolated Mundo X QuantumRuntime
+        run: |
+          set -euo pipefail
+          cmake -S quantum-runtime -B quantum-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build quantum-build --target mundo_x_quantum --parallel 2
+      - name: Execute the digital Laplace demon using XI and verify reality independently
+        run: |
+          set -euo pipefail
+          node --check demonio-laplace/modelo.mjs
+          node --check demonio-laplace/experimento.mjs
+          mkdir -p demon-evidence
+          node demonio-laplace/experimento.mjs ./quantum-build/mundo_x_quantum demon-evidence | tee demon-evidence/conclusion.jsonl
+          grep -q '"exactitud_cerrada":"33/33"' demon-evidence/conclusion.jsonl
+          grep -q '"prediccion_condicional":"33/33"' demon-evidence/conclusion.jsonl
+          grep -q '"divergencia_por_evento_no_observado":9' demon-evidence/conclusion.jsonl
+      - name: Reproducibility from fresh XI sessions
+        run: |
+          set -euo pipefail
+          node demonio-laplace/experimento.mjs ./quantum-build/mundo_x_quantum demon-evidence-second | tee demon-evidence/second-conclusion.jsonl
+          cmp demon-evidence/resultado.json demon-evidence-second/resultado.json
+          cmp demon-evidence/conclusion.jsonl demon-evidence/second-conclusion.jsonl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEMONIO-LAPLACE-DIGITAL-XI-EVIDENCIA
+          path: demon-evidence/**
+          if-no-files-found: error
+          retention-days: 30
