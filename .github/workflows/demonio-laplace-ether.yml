@@ -25,6 +25,7 @@ jobs:
           set -euo pipefail
           node --check demonio-laplace/modelo.mjs
           node --check demonio-laplace/experimento.mjs
+          mkdir -p demon-evidence
           node demonio-laplace/experimento.mjs ./quantum-build/mundo_x_quantum demon-evidence | tee demon-evidence/conclusion.jsonl
           grep -q '"exactitud_cerrada":"33/33"' demon-evidence/conclusion.jsonl
           grep -q '"prediccion_condicional":"33/33"' demon-evidence/conclusion.jsonl
