@@ -128,6 +128,15 @@ REVISED_SOURCES = {
     "graphics-android/app/src/main/cpp/graphics_jni.cpp": ETHER_FUSION_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/NativeCore.java": ETHER_FUSION_REFERENCE,
 }
+# The canonical X Render observer adds oriented ellipsoids and a new exactness
+# test in this audited commit. Unrelated native sources keep their historical pins.
+ELLIPSOID_RENDER_REFERENCE = "e4a896b7473e0d7a5a2ca25afe640a4f49eace75"
+ADDITIONAL_SOURCES.update({
+    "native/include/mundo_x/ether_render_spatial.hpp": ELLIPSOID_RENDER_REFERENCE,
+    "native/include/mundo_x/ether_render_engine.hpp": ELLIPSOID_RENDER_REFERENCE,
+    "native/tests/ether_ellipsoid.cpp": ELLIPSOID_RENDER_REFERENCE,
+})
+
 RESOLUTION_SOURCE = "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java"
 
 
