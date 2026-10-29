@@ -1,0 +1,23 @@
+name: Ether Render X ellipsoid exactness
+on:
+  push:
+    branches: [feature/ether-render-oriented-ellipsoids-20261029]
+    paths: ['native/include/mundo_x/ether_render_engine.hpp', 'native/include/mundo_x/ether_render_spatial.hpp', 'native/tests/ether_ellipsoid.cpp', '.github/workflows/ether-ellipsoids.yml']
+  pull_request:
+    branches: [main]
+    paths: ['native/include/mundo_x/ether_render_engine.hpp', 'native/include/mundo_x/ether_render_spatial.hpp', 'native/tests/ether_ellipsoid.cpp']
+permissions: {contents: read}
+jobs:
+  exact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check canonical X Render and independent pixel oracle
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -I native/include native/tests/ether_ellipsoid.cpp -o /tmp/ether-ellipsoid
+          /tmp/ether-ellipsoid
+          g++ -std=c++17 -O2 -Wall -Wextra -I native/include native/tests/ether_render_spatial.cpp -o /tmp/ether-spatial
+          /tmp/ether-spatial
+          g++ -std=c++17 -O2 -Wall -Wextra -I native/include native/tests/ether_surface_buffer.cpp -o /tmp/ether-surface
+          /tmp/ether-surface

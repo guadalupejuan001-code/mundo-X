@@ -27,6 +27,10 @@ class EtherRenderSpatial {
     Vec3 center{};
     double radius=1.;
     std::array<double,3> color{{1.,1.,1.}};
+    // Legacy four-field aggregate initialization remains a sphere.
+    bool ellipsoid=false;
+    Vec3 axes{1.,1.,1.};
+    double yaw=0.;
   };
   struct Pixel {
     std::int32_t body=-1;
@@ -76,9 +80,21 @@ class EtherRenderSpatial {
       throw std::invalid_argument("invalid spatial geometry");
     for(const auto c:b.color)if(!std::isfinite(c)||c<0.||c>1.)
       throw std::invalid_argument("invalid spatial color");
+    if(b.ellipsoid&&(!finite(b.axes)||b.axes.x<=0.||b.axes.y<=0.||b.axes.z<=0.||
+                     !std::isfinite(b.yaw)||b.radius<std::max({b.axes.x,b.axes.y,b.axes.z})))
+      throw std::invalid_argument("invalid spatial ellipsoid");
     for(const auto& old:bodies_)if(old.id==b.id)
       throw std::invalid_argument("duplicate spatial body ID");
     bodies_.push_back(b);dirty_=true;++revision_;
+  }
+
+  void add_ellipsoid(std::uint32_t id,Vec3 center,Vec3 axes,double yaw,
+                     std::array<double,3> color){
+    if(!finite(axes)||axes.x<=0.||axes.y<=0.||axes.z<=0.)
+      throw std::invalid_argument("ellipsoid axes must be finite positive values");
+    Body b{id,center,std::max({axes.x,axes.y,axes.z}),color};
+    b.ellipsoid=true;b.axes=axes;b.yaw=yaw;
+    add_body(b);
   }
 
   void clear_bodies(){bodies_.clear();gains_.fill(1.);dirty_=true;++revision_;}
@@ -146,12 +162,8 @@ class EtherRenderSpatial {
     Pixel best;const Body* hit=nullptr;
     for(std::size_t i=0;i<bodies_.size();++i){
       const auto& b=bodies_[i];
-      const double along=dot(offsets_[i],ray);
-      const double h2=radius2_[i]-(squared_[i]-along*along);
-      if(h2<0.)continue;
-      const double root=std::sqrt(h2);
-      double depth=along-root;if(depth<=1e-6)depth=along+root;
-      if(depth<=1e-6||depth>=best.depth)continue;
+      const double depth=intersect(i,ray);
+      if(!std::isfinite(depth)||depth>=best.depth)continue;
       best.body=static_cast<std::int32_t>(b.id);best.depth=depth;hit=&b;
     }
     return shade(best,hit,ray);
@@ -223,13 +235,7 @@ class EtherRenderSpatial {
                 [](const Body& b,std::uint32_t key){return b.id<key;});
     if(it==bodies_.end()||it->id!=id)throw std::out_of_range("surface body ID does not exist");
     const auto i=static_cast<std::size_t>(it-bodies_.begin());
-    const auto ray=ray_for(x,y);
-    const double along=dot(offsets_[i],ray);
-    const double h2=radius2_[i]-(squared_[i]-along*along);
-    if(h2<0.)return std::numeric_limits<double>::infinity();
-    const double root=std::sqrt(h2);
-    double depth=along-root;if(depth<=1e-6)depth=along+root;
-    return depth>1e-6?depth:std::numeric_limits<double>::infinity();
+    return intersect(i,ray_for(x,y));
   }
   const Stats& stats()const noexcept{return stats_;}
   const std::vector<Body>& bodies()const noexcept{return bodies_;}
@@ -354,6 +360,38 @@ class EtherRenderSpatial {
     const double ny=2.*(static_cast<double>(y)+.5)/static_cast<double>(height_)-1.;
     return normalize(add(forward_,add(mul(right_,nx*aspect_*tan_half_),mul(up_,ny*tan_half_))));
   }
+  // One intersection authority: tiled pixels, independent oracle and packed depth.
+  double intersect(std::size_t i,Vec3 ray)const{
+    const auto& b=bodies_[i];
+    if(!b.ellipsoid){
+      const double along=dot(offsets_[i],ray);
+      const double h2=radius2_[i]-(squared_[i]-along*along);
+      if(h2<0.)return std::numeric_limits<double>::infinity();
+      const double root=std::sqrt(h2);
+      double t=along-root;if(t<=1e-6)t=along+root;
+      return t>1e-6?t:std::numeric_limits<double>::infinity();
+    }
+    const double c=std::cos(b.yaw),s=std::sin(b.yaw);
+    const Vec3 p=sub(eye_,b.center);
+    const Vec3 o{(c*p.x-s*p.z)/b.axes.x,p.y/b.axes.y,
+                 (s*p.x+c*p.z)/b.axes.z};
+    const Vec3 d{(c*ray.x-s*ray.z)/b.axes.x,ray.y/b.axes.y,
+                 (s*ray.x+c*ray.z)/b.axes.z};
+    const double a=dot(d,d),h=dot(o,d);
+    const double discriminant=h*h-a*(dot(o,o)-1.);
+    if(discriminant<0.)return std::numeric_limits<double>::infinity();
+    const double root=std::sqrt(discriminant);
+    double t=(-h-root)/a;if(t<=1e-6)t=(-h+root)/a;
+    return t>1e-6?t:std::numeric_limits<double>::infinity();
+  }
+  Vec3 normal_at(const Body& b,const Vec3& point)const{
+    const Vec3 p=sub(point,b.center);
+    if(!b.ellipsoid)return normalize(p);
+    const double c=std::cos(b.yaw),s=std::sin(b.yaw);
+    const double x=(c*p.x-s*p.z)/(b.axes.x*b.axes.x);
+    const double z=(s*p.x+c*p.z)/(b.axes.z*b.axes.z);
+    return normalize(Vec3{c*x+s*z,p.y/(b.axes.y*b.axes.y),-s*x+c*z});
+  }
   Pixel shade(Pixel best,const Body* hit,const Vec3& ray)const{
     if(!hit){
       const double v=std::max(0.,std::min(1.,.025+.08*(ray.y*.5+.5)));
@@ -362,7 +400,7 @@ class EtherRenderSpatial {
       return best;
     }
     const auto point=add(eye_,mul(ray,best.depth));
-    const auto normal=normalize(sub(point,hit->center));
+    const auto normal=normal_at(*hit,point);
     static const auto light=normalize(Vec3{.37,.74,.56});
     const double l=.12+.88*std::max(0.,dot(normal,light));
     const double gain=gains_[hit->id];
@@ -378,12 +416,8 @@ class EtherRenderSpatial {
       if(best.body>=0&&near_[i]>best.depth)break;
       const auto& b=bodies_[i];
       if(tests)++*tests;
-      const double along=dot(offsets_[i],ray);
-      const double h2=radius2_[i]-(squared_[i]-along*along);
-      if(h2<0.)continue;
-      const double root=std::sqrt(h2);
-      double depth=along-root;if(depth<=1e-6)depth=along+root;
-      if(depth<=1e-6)continue;
+      const double depth=intersect(i,ray);
+      if(!std::isfinite(depth))continue;
       if(depth>best.depth||(depth==best.depth&&best.body>=0&&
          static_cast<std::int32_t>(b.id)>=best.body))continue;
       best.depth=depth;best.body=static_cast<std::int32_t>(b.id);hit=&b;

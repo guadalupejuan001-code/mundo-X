@@ -23,6 +23,11 @@ class EtherRenderEngine {
       : spatial_(width,height,tile),surface_(spatial_) {}
   void camera(Vec3 eye,Vec3 target,double fov){spatial_.set_camera(eye,target,fov);surface_.invalidate();}
   void add(Body b){spatial_.add_body(b);surface_.invalidate();}
+  void ellipsoid(std::uint32_t id,Vec3 center,Vec3 axes,double yaw,
+                 std::array<double,3> color){
+    spatial_.add_ellipsoid(id,center,axes,yaw,color);
+    surface_.invalidate();
+  }
   void clear(){spatial_.clear_bodies();surface_.invalidate();}
   void material(std::uint32_t id,double gain){spatial_.set_material_gain(id,gain);surface_.invalidate();}
   void tile(std::size_t size){spatial_.set_tile(size);surface_.invalidate();}
