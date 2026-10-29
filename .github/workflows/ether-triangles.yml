@@ -1,0 +1,32 @@
+name: Ether Render X triangle oracle
+on:
+  push:
+    branches: [feature/ether-render-native-triangles-20261029]
+    paths:
+      - 'native/include/mundo_x/ether_render_engine.hpp'
+      - 'native/include/mundo_x/ether_render_spatial.hpp'
+      - 'native/tests/ether_triangle.cpp'
+      - '.github/workflows/ether-triangles.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/include/mundo_x/ether_render_engine.hpp'
+      - 'native/include/mundo_x/ether_render_spatial.hpp'
+      - 'native/tests/ether_triangle.cpp'
+permissions: {contents: read}
+jobs:
+  exact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate X Render triangle rays and legacy surfaces
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -I native/include native/tests/ether_triangle.cpp -o /tmp/ether-triangle
+          /tmp/ether-triangle
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -I native/include native/tests/ether_ellipsoid.cpp -o /tmp/ether-ellipsoid
+          /tmp/ether-ellipsoid
+          g++ -std=c++17 -O2 -Wall -Wextra -I native/include native/tests/ether_render_spatial.cpp -o /tmp/ether-spatial
+          /tmp/ether-spatial
+          g++ -std=c++17 -O2 -Wall -Wextra -I native/include native/tests/ether_surface_buffer.cpp -o /tmp/ether-surface
+          /tmp/ether-surface

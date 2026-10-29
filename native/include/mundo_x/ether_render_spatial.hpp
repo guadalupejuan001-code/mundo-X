@@ -31,6 +31,9 @@ class EtherRenderSpatial {
     bool ellipsoid=false;
     Vec3 axes{1.,1.,1.};
     double yaw=0.;
+    // Optional analytic triangle; shares the same ID/geometry observer.
+    bool triangle=false;
+    Vec3 a{},b{},c{};
   };
   struct Pixel {
     std::int32_t body=-1;
@@ -83,6 +86,17 @@ class EtherRenderSpatial {
     if(b.ellipsoid&&(!finite(b.axes)||b.axes.x<=0.||b.axes.y<=0.||b.axes.z<=0.||
                      !std::isfinite(b.yaw)||b.radius<std::max({b.axes.x,b.axes.y,b.axes.z})))
       throw std::invalid_argument("invalid spatial ellipsoid");
+    if(b.triangle){
+      if(b.ellipsoid||!finite(b.a)||!finite(b.b)||!finite(b.c))
+        throw std::invalid_argument("invalid spatial triangle");
+      const Vec3 ab=sub(b.b,b.a),ac=sub(b.c,b.a);
+      const double area2=length(cross(ab,ac));
+      if(!std::isfinite(area2)||!(area2>1e-12))
+        throw std::invalid_argument("degenerate spatial triangle");
+      for(const auto p:{b.a,b.b,b.c})
+        if(!(length(sub(p,b.center))<=b.radius))
+          throw std::invalid_argument("triangle is outside conservative bounding sphere");
+    }
     for(const auto& old:bodies_)if(old.id==b.id)
       throw std::invalid_argument("duplicate spatial body ID");
     bodies_.push_back(b);dirty_=true;++revision_;
@@ -95,6 +109,22 @@ class EtherRenderSpatial {
     Body b{id,center,std::max({axes.x,axes.y,axes.z}),color};
     b.ellipsoid=true;b.axes=axes;b.yaw=yaw;
     add_body(b);
+  }
+
+  void add_triangle(std::uint32_t id,Vec3 a,Vec3 b,Vec3 c,
+                    std::array<double,3> color){
+    if(!finite(a)||!finite(b)||!finite(c))
+      throw std::invalid_argument("triangle vertices must be finite");
+    const Vec3 center=mul(add(add(a,b),c),1./3.);
+    if(!finite(center))throw std::invalid_argument("invalid triangle centroid");
+    const double far=std::max({length(sub(a,center)),length(sub(b,center)),
+                               length(sub(c,center))});
+    if(!std::isfinite(far))throw std::invalid_argument("invalid triangle span");
+    const double radius=far*(1.+1e-12)+1e-9;
+    if(!std::isfinite(radius))throw std::invalid_argument("invalid triangle bound");
+    Body body{id,center,radius,color};
+    body.triangle=true;body.a=a;body.b=b;body.c=c;
+    add_body(body);
   }
 
   void clear_bodies(){bodies_.clear();gains_.fill(1.);dirty_=true;++revision_;}
@@ -363,6 +393,24 @@ class EtherRenderSpatial {
   // One intersection authority: tiled pixels, independent oracle and packed depth.
   double intersect(std::size_t i,Vec3 ray)const{
     const auto& b=bodies_[i];
+    if(b.triangle){
+      // Two-sided analytic Moller-Trumbore intersection.
+      const Vec3 ab=sub(b.b,b.a),ac=sub(b.c,b.a);
+      const Vec3 p=cross(ray,ac);
+      const double determinant=dot(ab,p);
+      const double scale=length(ab)*length(ac);
+      if(std::abs(determinant)<=1e-14*scale)
+        return std::numeric_limits<double>::infinity();
+      const double inv=1./determinant;
+      const Vec3 t=sub(eye_,b.a);
+      const double u=dot(t,p)*inv;
+      if(u<0.||u>1.)return std::numeric_limits<double>::infinity();
+      const Vec3 q=cross(t,ab);
+      const double v=dot(ray,q)*inv;
+      if(v<0.||u+v>1.)return std::numeric_limits<double>::infinity();
+      const double distance=dot(ac,q)*inv;
+      return distance>1e-6?distance:std::numeric_limits<double>::infinity();
+    }
     if(!b.ellipsoid){
       const double along=dot(offsets_[i],ray);
       const double h2=radius2_[i]-(squared_[i]-along*along);
@@ -386,6 +434,11 @@ class EtherRenderSpatial {
   }
   Vec3 normal_at(const Body& b,const Vec3& point)const{
     const Vec3 p=sub(point,b.center);
+    if(b.triangle){
+      Vec3 n=normalize(cross(sub(b.b,b.a),sub(b.c,b.a)));
+      if(dot(n,sub(eye_,point))<0.)n=mul(n,-1.);
+      return n;
+    }
     if(!b.ellipsoid)return normalize(p);
     const double c=std::cos(b.yaw),s=std::sin(b.yaw);
     const double x=(c*p.x-s*p.z)/(b.axes.x*b.axes.x);
