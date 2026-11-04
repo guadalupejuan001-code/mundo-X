@@ -1,0 +1,43 @@
+name: ETHER X File Lab - Native APK
+on:
+  push:
+    branches: ['main', 'codex/etherx-android-native-20261024']
+    paths: ['etherx-android/**', '.github/workflows/etherx-android.yml']
+  pull_request:
+    branches: ['main']
+    paths: ['etherx-android/**', '.github/workflows/etherx-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Validate standalone codec
+        run: bash etherx-android/tests/test-host.sh
+      - name: Android SDK packages
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0'
+      - name: Assemble standalone ETHER X app
+        run: gradle -p etherx-android --no-daemon :app:assembleDebug
+      - name: Check APK integrity and signature
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            etherx-android/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum etherx-android/app/build/outputs/apk/debug/app-debug.apk > etherx-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ETHER-X-Android-debug
+          path: |
+            etherx-android/app/build/outputs/apk/debug/app-debug.apk
+            etherx-sha256.txt
+          if-no-files-found: error
