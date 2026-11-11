@@ -142,6 +142,15 @@ public class GpuVisualActivity extends Activity {
     public String regraphicsStatus() {
         return renderer == null ? "" : renderer.snapshot();
     }
+    void testParticleCount(int value) {
+        if (glView != null) glView.queueEvent(() -> renderer.setCount(value));
+    }
+    void testHold(boolean enabled) {
+        if (glView != null) glView.queueEvent(() -> renderer.setHold(enabled));
+    }
+    void testRegraphicsEnabled(boolean enabled) {
+        if (glView != null) glView.queueEvent(() -> renderer.setRegraphicsEnabled(enabled));
+    }
 
     private final class SceneRenderer implements GLSurfaceView.Renderer {
         private int program;
@@ -267,18 +276,28 @@ public class GpuVisualActivity extends Activity {
             frameMsSmoothed = 0f;
         }
 
-        boolean toggleRegraphics() {
-            regraphicsEnabled = !regraphicsEnabled;
+        void setRegraphicsEnabled(boolean enabled) {
+            if (regraphicsEnabled == enabled) return;
+            regraphicsEnabled = enabled;
             effectValid = false;
             lastEffectSignature = Long.MIN_VALUE;
+        }
+
+        boolean toggleRegraphics() {
+            setRegraphicsEnabled(!regraphicsEnabled);
             return regraphicsEnabled;
         }
 
-        boolean toggleHold() {
-            holdEffects = !holdEffects;
+        void setHold(boolean enabled) {
+            if (holdEffects == enabled) return;
+            holdEffects = enabled;
             heldTime = -1f;
             effectValid = false;
             lastEffectSignature = Long.MIN_VALUE;
+        }
+
+        boolean toggleHold() {
+            setHold(!holdEffects);
             return holdEffects;
         }
 
