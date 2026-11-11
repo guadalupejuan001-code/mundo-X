@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -71,6 +72,34 @@ class EtherRenderer {
     double intersection_overdraw_proxy() const {
       return ray_queries?static_cast<double>(occluded_intersections)/
           static_cast<double>(ray_queries):0.;
+    }
+  };
+  struct EffectParticle {
+    std::uint32_t id=0;
+    double screen_x=.5,screen_y=.5,radius_px=1.,alpha=1.;
+    std::uint32_t material=0;
+  };
+  struct EffectTilePlan {
+    std::size_t tile_x=0,tile_y=0,pixel_x=0,pixel_y=0,width=0,height=0;
+    std::uint64_t signature=0;
+    std::uint64_t particle_references=0;
+    std::uint64_t material_mask=0;
+    std::uint32_t material_batches=0;
+    std::uint8_t resolution_divisor=1;
+    bool active=false,changed=false,reused=false,clear_only=false;
+  };
+  struct EffectStats {
+    std::uint64_t revision=0;
+    std::size_t particles=0,visible_particles=0,culled_particles=0;
+    std::size_t active_tiles=0,changed_tiles=0,reused_tiles=0,cleared_tiles=0;
+    std::uint64_t particles_scanned=0,tile_particle_references=0;
+    std::uint64_t submitted_particle_references=0,material_batches=0;
+    std::uint64_t full_resolution_samples=0,scheduled_samples=0;
+    bool adaptive_resolution=false,temporal_reuse=false,revision_fast_path=false;
+    double plan_ms=0.;
+    double scheduled_sample_ratio() const {
+      return full_resolution_samples?
+          static_cast<double>(scheduled_samples)/static_cast<double>(full_resolution_samples):0.;
     }
   };
   struct TrainingResult {
@@ -170,6 +199,144 @@ class EtherRenderer {
     if(!enabled)tile_observations_.clear();
   }
   bool observation_enabled() const noexcept{return observation_enabled_;}
+
+  void set_effect_particles(std::vector<EffectParticle> particles,std::uint64_t revision) {
+    if(revision==0||revision<=effect_revision_)
+      throw std::invalid_argument("effect revision must increase and be nonzero");
+    for(const auto& p:particles){
+      if(!std::isfinite(p.screen_x)||!std::isfinite(p.screen_y)||
+         !std::isfinite(p.radius_px)||p.radius_px<=0.||
+         !std::isfinite(p.alpha)||p.alpha<0.||p.alpha>1.||p.material>=64)
+        throw std::invalid_argument("invalid effect particle");
+    }
+    std::sort(particles.begin(),particles.end(),[](const EffectParticle& a,const EffectParticle& b){
+      return a.id<b.id;
+    });
+    for(std::size_t i=1;i<particles.size();++i)
+      if(particles[i-1].id==particles[i].id)
+        throw std::invalid_argument("duplicate effect particle id");
+    effect_particles_=std::move(particles);
+    effect_revision_=revision;
+  }
+
+  void clear_effect_particles(std::uint64_t revision) {
+    set_effect_particles({},revision);
+  }
+
+  const std::vector<EffectTilePlan>& effect_tile_plan() const noexcept{return effect_tile_plan_;}
+
+  EffectStats plan_effects(bool adaptive_resolution=false,bool temporal_reuse=true) {
+    const auto begin=std::chrono::steady_clock::now();
+    EffectStats out;
+    out.revision=effect_revision_;out.particles=effect_particles_.size();
+    out.adaptive_resolution=adaptive_resolution;out.temporal_reuse=temporal_reuse;
+
+    const bool same_revision=effect_plan_valid_&&planned_effect_revision_==effect_revision_&&
+        planned_effect_adaptive_==adaptive_resolution;
+    if(temporal_reuse&&same_revision){
+      out.revision_fast_path=true;
+      for(auto& tile:effect_tile_plan_){
+        tile.changed=false;tile.clear_only=false;
+        tile.reused=tile.active;
+        if(tile.active){++out.active_tiles;++out.reused_tiles;}
+      }
+      out.visible_particles=planned_visible_effect_particles_;
+      out.culled_particles=out.particles-out.visible_particles;
+      out.plan_ms=std::chrono::duration<double,std::milli>(
+          std::chrono::steady_clock::now()-begin).count();
+      return out;
+    }
+
+    std::vector<EffectTilePlan> next(masks_.size());
+    for(std::size_t ty=0;ty<tiles_y_;++ty)for(std::size_t tx=0;tx<tiles_x_;++tx){
+      const auto index=ty*tiles_x_+tx;
+      auto& tile=next[index];
+      tile.tile_x=tx;tile.tile_y=ty;tile.pixel_x=tx*tile_;
+      tile.pixel_y=ty*tile_;tile.width=std::min(tile_,width_-tile.pixel_x);
+      tile.height=std::min(tile_,height_-tile.pixel_y);
+    }
+
+    out.particles_scanned=effect_particles_.size();
+    for(const auto& particle:effect_particles_){
+      if(particle.alpha==0.){++out.culled_particles;continue;}
+      const double cx=particle.screen_x*static_cast<double>(width_);
+      const double cy=particle.screen_y*static_cast<double>(height_);
+      const double r=particle.radius_px;
+      if(cx+r<0.||cy+r<0.||cx-r>=static_cast<double>(width_)||
+         cy-r>=static_cast<double>(height_)){
+        ++out.culled_particles;continue;
+      }
+      ++out.visible_particles;
+      int tx0=static_cast<int>(std::floor((cx-r)/static_cast<double>(tile_)));
+      int tx1=static_cast<int>(std::floor((cx+r)/static_cast<double>(tile_)));
+      int ty0=static_cast<int>(std::floor((cy-r)/static_cast<double>(tile_)));
+      int ty1=static_cast<int>(std::floor((cy+r)/static_cast<double>(tile_)));
+      tx0=std::max(0,tx0);ty0=std::max(0,ty0);
+      tx1=std::min(static_cast<int>(tiles_x_)-1,tx1);
+      ty1=std::min(static_cast<int>(tiles_y_)-1,ty1);
+      const auto particle_hash=effect_particle_hash(particle);
+      for(int ty=ty0;ty<=ty1;++ty)for(int tx=tx0;tx<=tx1;++tx){
+        auto& tile=next[static_cast<std::size_t>(ty)*tiles_x_+static_cast<std::size_t>(tx)];
+        tile.active=true;++tile.particle_references;
+        tile.material_mask|=std::uint64_t{1}<<particle.material;
+        tile.signature=effect_mix(tile.signature,particle_hash);
+      }
+    }
+
+    if(previous_effect_signatures_.size()!=next.size()){
+      previous_effect_signatures_.assign(next.size(),0);
+      previous_effect_active_.assign(next.size(),0);
+      effect_plan_valid_=false;
+    }
+
+    for(std::size_t index=0;index<next.size();++index){
+      auto& tile=next[index];
+      if(tile.active){
+        tile.material_batches=static_cast<std::uint32_t>(popcount(tile.material_mask));
+        if(adaptive_resolution){
+          if(tile.particle_references>256)tile.resolution_divisor=4;
+          else if(tile.particle_references>32)tile.resolution_divisor=2;
+        }
+        tile.signature=effect_mix(tile.signature,tile.material_mask);
+        tile.signature=effect_mix(tile.signature,tile.resolution_divisor);
+        ++out.active_tiles;
+      }
+      const bool was_active=index<previous_effect_active_.size()&&previous_effect_active_[index];
+      const bool unchanged=effect_plan_valid_&&
+          previous_effect_signatures_[index]==tile.signature&&was_active==tile.active;
+      tile.reused=temporal_reuse&&unchanged&&tile.active;
+      tile.changed=!temporal_reuse||!unchanged;
+      tile.clear_only=tile.changed&&!tile.active&&was_active;
+      if(tile.reused){++out.reused_tiles;continue;}
+      if(!tile.changed)continue;
+      if(tile.clear_only){++out.cleared_tiles;++out.changed_tiles;continue;}
+      if(!tile.active)continue;
+      ++out.changed_tiles;
+      out.tile_particle_references+=tile.particle_references;
+      out.submitted_particle_references+=tile.particle_references;
+      out.material_batches+=tile.material_batches;
+      const auto full=static_cast<std::uint64_t>(tile.width)*tile.height;
+      out.full_resolution_samples+=full;
+      const auto div=static_cast<std::size_t>(tile.resolution_divisor);
+      const auto sw=(tile.width+div-1)/div,sh=(tile.height+div-1)/div;
+      out.scheduled_samples+=static_cast<std::uint64_t>(sw)*sh;
+    }
+
+    previous_effect_signatures_.resize(next.size());
+    previous_effect_active_.resize(next.size());
+    for(std::size_t index=0;index<next.size();++index){
+      previous_effect_signatures_[index]=next[index].signature;
+      previous_effect_active_[index]=next[index].active?1:0;
+    }
+    effect_tile_plan_=std::move(next);
+    effect_plan_valid_=true;planned_effect_revision_=effect_revision_;
+    planned_effect_adaptive_=adaptive_resolution;
+    planned_visible_effect_particles_=out.visible_particles;
+    out.plan_ms=std::chrono::duration<double,std::milli>(
+        std::chrono::steady_clock::now()-begin).count();
+    return out;
+  }
+
   void set_tile_reuse_enabled(bool enabled) noexcept { tile_reuse_enabled_=enabled; }
   bool tile_reuse_enabled() const noexcept{return tile_reuse_enabled_;}
 
@@ -345,6 +512,23 @@ class EtherRenderer {
   static double length(Vec3 a){return std::sqrt(dot(a,a));}
   static Vec3 normalize(Vec3 a){const double n=length(a);if(!(n>1e-15))throw std::invalid_argument("zero render vector");return mul(a,1./n);}
   static std::size_t popcount(std::uint64_t v){std::size_t n=0;while(v){v&=v-1;++n;}return n;}
+  static std::uint64_t effect_mix(std::uint64_t hash,std::uint64_t value){
+    if(hash==0)hash=1469598103934665603ULL;
+    for(unsigned i=0;i<8;++i){hash^=(value>>(i*8))&0xffu;hash*=1099511628211ULL;}
+    return hash;
+  }
+  static std::uint64_t effect_bits(double value){
+    std::uint64_t bits=0;std::memcpy(&bits,&value,sizeof(bits));return bits;
+  }
+  static std::uint64_t effect_particle_hash(const EffectParticle& particle){
+    std::uint64_t hash=0;
+    hash=effect_mix(hash,particle.id);hash=effect_mix(hash,particle.material);
+    hash=effect_mix(hash,effect_bits(particle.screen_x));
+    hash=effect_mix(hash,effect_bits(particle.screen_y));
+    hash=effect_mix(hash,effect_bits(particle.radius_px));
+    hash=effect_mix(hash,effect_bits(particle.alpha));
+    return hash;
+  }
   void mark_all_tiles_dirty(){
     if(dirty_tiles_.size()!=masks_.size())dirty_tiles_.assign(masks_.size(),1);
     else std::fill(dirty_tiles_.begin(),dirty_tiles_.end(),std::uint8_t{1});
@@ -503,6 +687,13 @@ class EtherRenderer {
   std::array<double,64> quantum_gain_{};
   std::vector<Pixel> frame_;
   std::vector<TileObservation> tile_observations_;
+  std::vector<EffectParticle> effect_particles_;
+  std::vector<EffectTilePlan> effect_tile_plan_;
+  std::vector<std::uint64_t> previous_effect_signatures_;
+  std::vector<std::uint8_t> previous_effect_active_;
+  std::uint64_t effect_revision_=0,planned_effect_revision_=0;
+  std::size_t planned_visible_effect_particles_=0;
+  bool effect_plan_valid_=false,planned_effect_adaptive_=false;
   Stats stats_{};
   bool dirty_=true,planned_=false;
   bool observation_enabled_=false,tile_reuse_enabled_=false,frame_valid_=false;
