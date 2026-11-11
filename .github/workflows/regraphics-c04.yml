@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-xlab:
@@ -49,6 +49,26 @@ jobs:
           name: REgraphics-C04-XLab-APKs
           if-no-files-found: error
           path: c04-xlab/
+
+      - name: Export exact validated C04 APK to delivery branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="26913f6cf9d148f05cbecfcdef7d9667042630f588fc453a2e2fde81404d0ff8"
+          actual="$(sha256sum c04-xlab/XLab-0.3.2-debug.apk | awk '{print $1}')"
+          test "$actual" = "$expected"
+          git fetch origin artifact/regraphics-c04-xlab-export-20261111
+          git worktree add /tmp/c04-export -B artifact/regraphics-c04-xlab-export-20261111 origin/artifact/regraphics-c04-xlab-export-20261111
+          mkdir -p /tmp/c04-export/c04-delivery
+          cp c04-xlab/XLab-0.3.2-debug.apk /tmp/c04-export/c04-delivery/XLab-REgraphics-C04.apk
+          printf '%s  %s\n' "$actual" "XLab-REgraphics-C04.apk" > /tmp/c04-export/c04-delivery/SHA256SUMS.txt
+          git -C /tmp/c04-export config user.name "github-actions[bot]"
+          git -C /tmp/c04-export config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C /tmp/c04-export add c04-delivery/XLab-REgraphics-C04.apk c04-delivery/SHA256SUMS.txt
+          if ! git -C /tmp/c04-export diff --cached --quiet; then
+            git -C /tmp/c04-export commit -m "Export validated REgraphics C04 APK"
+            git -C /tmp/c04-export push origin HEAD:artifact/regraphics-c04-xlab-export-20261111
+          fi
 
   xlab-gles-validation:
     needs: build-xlab
