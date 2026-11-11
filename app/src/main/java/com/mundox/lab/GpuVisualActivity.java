@@ -139,6 +139,12 @@ public class GpuVisualActivity extends Activity {
         if (glView != null) glView.onResume();
     }
 
+    static int effectDivisorForCount(int count) {
+        if (count >= 60_000) return 4;
+        if (count >= 18_000) return 2;
+        return 1;
+    }
+
     public String regraphicsStatus() {
         return renderer == null ? "" : renderer.snapshot();
     }
@@ -364,9 +370,7 @@ public class GpuVisualActivity extends Activity {
         }
 
         private int desiredDivisor() {
-            if (count >= 60_000) return 4;
-            if (count >= 18_000) return 2;
-            return 1;
+            return effectDivisorForCount(count);
         }
 
         private void ensureEffectTarget(int divisor) {
