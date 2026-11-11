@@ -244,6 +244,47 @@ public final class XLabInstrumentation extends Instrumentation {
                 saveEvidence("xlab-objetos-draw-plan.txt", result.summary);
             });
 
+            check("regraphics_gles_effect_materialization", () -> {
+                require(GpuVisualActivity.effectDivisorForCount(6000) == 1
+                                && GpuVisualActivity.effectDivisorForCount(24000) == 2
+                                && GpuVisualActivity.effectDivisorForCount(96000) == 4,
+                        "REgraphics effect resolution policy does not map 6k/24k/96k to 1x/2x/4x");
+                Activity previous = activity;
+                ActivityMonitor monitor = addMonitor("com.mundox.lab.GpuVisualActivity", null, false);
+                GpuVisualActivity gpu = null;
+                try {
+                    main(() -> { previous.startActivity(new Intent(previous, GpuVisualActivity.class)); return null; });
+                    Activity opened = waitForMonitorWithTimeout(monitor, 30_000);
+                    require(opened instanceof GpuVisualActivity, "GPU effect experiment did not open");
+                    gpu = (GpuVisualActivity) opened; activity = gpu; waitForIdleSync();
+                    final GpuVisualActivity view = gpu;
+                    view.testParticleCount(24000);
+                    String half = awaitRegraphicsStatus(view, "divisor=2", SystemClock.uptimeMillis() + 45_000);
+                    require(half.contains("enabled=true") && half.contains("targetRatio="),
+                            "24k REgraphics path did not materialize an adaptive effect FBO: " + half);
+                    view.testHold(true);
+                    String held = awaitRegraphicsStatus(view, "reused=true", SystemClock.uptimeMillis() + 45_000);
+                    require(held.contains("hold=true") && held.contains("divisor=2"),
+                            "HOLD did not reuse the exact retained effect target: " + held);
+                    screenshot("xlab-regraphics-effects.png");
+                    view.testRegraphicsEnabled(false);
+                    String direct = awaitRegraphicsStatus(view, "enabled=false", SystemClock.uptimeMillis() + 30_000);
+                    require(direct.contains("divisor=1"),
+                            "DIRECT A/B path did not return to the full-resolution target: " + direct);
+                    saveEvidence("xlab-regraphics-effects.txt",
+                            "policy_6000=1\npolicy_24000=2\npolicy_96000=4\n"
+                                    + "half=" + half + "\nheld=" + held + "\ndirect=" + direct + "\n");
+                } finally {
+                    removeMonitor(monitor);
+                    if (gpu != null) {
+                        final GpuVisualActivity closing = gpu;
+                        main(() -> { closing.finish(); return null; });
+                        waitForIdleSync();
+                    }
+                    activity = previous;
+                }
+            });
+
             check("objects_open_edits_and_persistence", () -> {
                 ActivityMonitor monitor = addMonitor("com.mundox.lab.ObjectLabActivity", null, false);
                 try {
@@ -1129,6 +1170,16 @@ public final class XLabInstrumentation extends Instrumentation {
         try (FileOutputStream stream = new FileOutputStream(new File(directory, name))) {
             stream.write(content.getBytes("UTF-8"));
         }
+    }
+
+    private String awaitRegraphicsStatus(GpuVisualActivity view, String needle, long deadline) {
+        String state = "";
+        while (SystemClock.uptimeMillis() < deadline) {
+            state = view.regraphicsStatus();
+            if (state.contains(needle)) return state;
+            SystemClock.sleep(100L);
+        }
+        throw new AssertionError("REgraphics status never contained " + needle + "; last=" + state);
     }
 
     private void awaitStateUntil(String statusTag, String expected, long deadline) {
