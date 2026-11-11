@@ -201,3 +201,52 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build --target test_regraphics_c02_dirty_tiles -j 2
 ./build/test_regraphics_c02_dirty_tiles
 ```
+
+
+## REgraphics C03 — reutilización temporal y planificación de efectos
+
+C03 añade una capa interna de planificación de efectos a Ether Render X sin crear un motor
+separado. La entrada es una lista revisionada de partículas de efecto en coordenadas de pantalla.
+
+### Temporal exacto
+
+`set_effect_particles(..., revision)` exige una revisión creciente. Si la revisión y la política
+de resolución no cambian, `plan_effects(..., temporal_reuse=true)` entra por fast-path:
+
+- no vuelve a escanear las partículas;
+- no vuelve a enviar referencias de partículas;
+- no programa batches ni muestras de píxel;
+- conserva los tiles activos previos como reutilizables.
+
+Cuando cambia una revisión, cada tile recibe una firma determinista construida con IDs,
+posición, radio, alpha y material. Solo los tiles cuya firma cambia se vuelven a programar.
+Un tile que antes tenía efectos y queda vacío se marca como `clear_only`.
+
+### Densidad y resolución de efectos
+
+La política adaptativa es explícita y solo afecta al **buffer de efectos**:
+
+- hasta 32 referencias por tile: resolución completa;
+- 33–256 referencias: divisor 2;
+- más de 256 referencias: divisor 4.
+
+`full_resolution_samples` y `scheduled_samples` permiten medir cuánto trabajo de muestreo
+se propone. Esto es una política de calidad y **no se declara equivalente bit a bit** hasta que
+la ruta GLES física la implemente y mida.
+
+### Relación con los efectos existentes
+
+El problema que se absorbe ya existe en dos rutas de Mundo X:
+
+- `GpuVisualActivity.SceneRenderer`: puntos/partículas GPU generados proceduralmente;
+- `SolarRenderer.tracerParticles/drawOverlay`: partículas y overlays con blending.
+
+C03 no reemplaza todavía esos renderers. Produce el plan temporal/por-tile que C04 deberá
+conectar al backend GLES para que la GPU física deje de procesar regiones y efectos que no
+necesitan actualizarse.
+
+### Métricas
+
+`EffectStats` reporta partículas visibles/descartadas, tiles activos/cambiados/reutilizados,
+referencias enviadas, batches de material, muestras a resolución completa, muestras
+programadas, coste del plan y si se usó el fast-path de revisión.
