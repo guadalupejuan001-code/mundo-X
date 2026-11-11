@@ -1084,8 +1084,15 @@ public final class GraphicsInstrumentation extends Instrumentation {
         long before = activity.renderer.frameStats().renderNumber;
         gl(change);
         QuantumRenderer.Capture automatic = frame(false);
-        long updated = activity.renderer.frameStats().renderNumber;
+        QuantumRenderer.FrameStats automaticStats = activity.renderer.frameStats();
+        long updated = automaticStats.renderNumber;
         expect(updated > before, "Changed " + name + " reused a stale framebuffer");
+        if("edit".equals(name)){
+            expect(automaticStats.partialRedraw
+                    && automaticStats.redrawnPixels>0
+                    && automaticStats.redrawnPixels<(long)automaticStats.width*automaticStats.height,
+                    "Local edit did not use a bounded physical GLES redraw");
+        }
         gl(() -> activity.renderer.setFrameReuseEnabled(false));
         QuantumRenderer.Capture forced = frame(false);
         expect(automatic.changed(forced) == 0, "Frame reuse changed pixels for " + name);
@@ -1096,9 +1103,16 @@ public final class GraphicsInstrumentation extends Instrumentation {
         QuantumRenderer.FrameStats reused = activity.renderer.frameStats();
         expect(first.changed(second) == 0 && reused.frameReused && reused.renderNumber == rendered,
                 "Unchanged " + name + " did not reuse the exact completed image");
-        checks.put(new JSONObject().put("input", name).put("invalidated", true)
+        JSONObject record=new JSONObject().put("input", name).put("invalidated", true)
                 .put("forcedDifferentPixels", automatic.changed(forced)).put("repeatDifferentPixels", first.changed(second))
-                .put("reusedWithoutDrawing", true));
+                .put("reusedWithoutDrawing", true);
+        if("edit".equals(name))record.put("partialRedraw",automaticStats.partialRedraw)
+                .put("redrawnPixels",automaticStats.redrawnPixels)
+                .put("framePixels",(long)automaticStats.width*automaticStats.height)
+                .put("reusedPixelEstimate",automaticStats.reusedPixelEstimate)
+                .put("dirtyRect",new JSONArray(new int[]{automaticStats.dirtyLeft,automaticStats.dirtyBottom,
+                        automaticStats.dirtyWidth,automaticStats.dirtyHeight}));
+        checks.put(record);
     }
 
     private void frameReuseContracts() throws Exception {
