@@ -173,3 +173,31 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build --target test_regraphics_c01_observation -j 2
 ./build/test_regraphics_c01_observation
 ```
+
+
+## REgraphics C02 — Dirty Tiles y reutilización exacta
+
+C02 convierte la observación de C01 en reducción real de trabajo **dentro del núcleo canónico**.
+La reutilización sigue siendo opt-in mediante `set_tile_reuse_enabled(true)`.
+
+Contrato:
+
+- un frame idéntico reutiliza todos los tiles y no ejecuta `ray_for`, `trace_ordered`, sombreado ni pruebas de candidatos;
+- un cambio de material de un solo cuerpo invalida únicamente los tiles cuyo mask conservador contiene ese cuerpo;
+- cambios de cámara, geometría o tamaño de tile invalidan todo el framebuffer;
+- la ruta reutilizada conserva exactamente el mismo `frame_hash` que un redraw completo y sigue pudiendo verificarse contra el oráculo brute-force;
+- `rendered_tiles/reused_tiles`, `rendered_pixels/reused_pixels` y `ray_queries` miden trabajo eliminado de forma exacta;
+- `candidate_tests` solo cuenta pruebas realmente ejecutadas, por lo que un frame completamente reutilizado debe producir cero;
+- `train_tiles` desactiva temporalmente la reutilización para no confundir el entrenamiento del tamaño de tile con caché temporal.
+
+C02 todavía **no atribuye este ahorro a la Mali**. Ether Render X sigue siendo el núcleo exacto y la
+ruta GLES física se conectará después. La poda por distancia y las intersecciones ocultas siguen siendo
+señales de visibilidad CPU; no se renombran como fragment overdraw físico.
+
+Prueba:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build --target test_regraphics_c02_dirty_tiles -j 2
+./build/test_regraphics_c02_dirty_tiles
+```
