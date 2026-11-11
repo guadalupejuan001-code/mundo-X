@@ -1,0 +1,49 @@
+name: REgraphics C03 Temporal Effects
+
+on:
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/tests/regraphics_c01_observation.cpp'
+      - 'native/tests/regraphics_c02_dirty_tiles.cpp'
+      - 'native/tests/regraphics_c03_temporal_effects.cpp'
+      - 'native/tests/rule_renderer.cpp'
+      - 'CMakeLists.txt'
+      - 'tools/cosmic_source_provenance.py'
+      - 'docs/ether-render-x.md'
+      - '.github/workflows/regraphics-c03.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-c03:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build C01 C02 C03 and renderer oracle
+        run: cmake --build build --target test_regraphics_c01_observation test_regraphics_c02_dirty_tiles test_regraphics_c03_temporal_effects test_rule_renderer -j 2
+      - name: Verify audited native inventory
+        run: python3 tools/cosmic_source_provenance.py --verify .
+      - name: Run C03 temporal effect evidence
+        shell: bash
+        run: |
+          mkdir -p evidence/regraphics-c03
+          ./build/test_regraphics_c03_temporal_effects | tee evidence/regraphics-c03/temporal-effects.json
+          ./build/test_regraphics_c02_dirty_tiles | tee evidence/regraphics-c03/c02-regression.json
+          ./build/test_regraphics_c01_observation | tee evidence/regraphics-c03/c01-regression.json
+          ./build/test_rule_renderer | tee evidence/regraphics-c03/rule-renderer.json
+      - name: Run focused CTest gate
+        run: ctest --test-dir build -R '^(regraphics_c01_observation|regraphics_c02_dirty_tiles|regraphics_c03_temporal_effects|rule_renderer)$' --output-on-failure
+      - name: Upload C03 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: regraphics-c03-evidence
+          if-no-files-found: error
+          path: evidence/regraphics-c03/
