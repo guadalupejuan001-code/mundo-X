@@ -1082,7 +1082,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
 
     private void reuseAfterChange(String name, Runnable change, JSONArray checks) throws Exception {
         long before = activity.renderer.frameStats().renderNumber;
-        gl(change);
+        if("edit".equals(name)||"edit_restore".equals(name))glWithoutRender(change);
+        else gl(change);
         QuantumRenderer.Capture automatic = frame(false);
         QuantumRenderer.FrameStats automaticStats = activity.renderer.frameStats();
         long updated = automaticStats.renderNumber;
@@ -2042,6 +2043,16 @@ public final class GraphicsInstrumentation extends Instrumentation {
             activity.renderer.testCamera(count == 1 ? new float[]{5, 4, 7} : new float[]{13, 15, 19},
                     new float[]{0, 1, 0});
         });
+    }
+
+    private void glWithoutRender(Runnable action) throws Exception {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        activity.surface.queueEvent(() -> {
+            try { action.run(); } catch (Throwable caught) { error.set(caught); }
+            finally { done.countDown(); }
+        });
+        await(done, error, "GL command without intermediate render");
     }
 
     private void gl(Runnable action) throws Exception {
