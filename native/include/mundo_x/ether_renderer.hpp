@@ -30,6 +30,14 @@ class EtherRenderer {
              ((std::isinf(depth)&&std::isinf(other.depth))||depth==other.depth);
     }
   };
+  struct TileObservation {
+    std::size_t tile_x=0,tile_y=0,pixel_x=0,pixel_y=0,width=0,height=0;
+    std::size_t candidates=0;
+    std::uint64_t pixels=0,visible_pixels=0,changed_pixels=0;
+    std::uint64_t candidate_tests=0,distance_pruned_candidates=0;
+    std::uint64_t intersection_hits=0,occluded_intersections=0;
+    bool changed() const noexcept{return changed_pixels!=0;}
+  };
   struct Stats {
     std::size_t width=0,height=0,tile=0,tiles_x=0,tiles_y=0,bodies=0;
     std::uint64_t candidate_references=0,brute_references=0;
@@ -38,11 +46,27 @@ class EtherRenderer {
     std::size_t max_candidates=0,nonempty_regions=0;
     std::size_t exact_mismatches=0;
     std::uint64_t frame_hash=1469598103934665603ULL;
+    bool observation_enabled=false;
+    std::uint64_t pixel_queries=0,visible_pixels=0,background_pixels=0;
+    std::uint64_t changed_pixels=0,unchanged_pixels=0;
+    std::size_t changed_tiles=0,unchanged_tiles=0;
+    std::uint64_t intersection_hits=0,occluded_intersections=0;
+    double render_ms=0.;
     double candidate_ratio() const {
       return brute_references?static_cast<double>(candidate_references)/brute_references:0.;
     }
     double test_ratio() const {
       return brute_tests?static_cast<double>(candidate_tests)/brute_tests:0.;
+    }
+    double changed_tile_ratio() const {
+      const auto total=changed_tiles+unchanged_tiles;
+      return total?static_cast<double>(changed_tiles)/static_cast<double>(total):0.;
+    }
+    // CPU ray/intersection visibility proxy only. It is deliberately not
+    // labelled as physical GPU fragment overdraw.
+    double intersection_overdraw_proxy() const {
+      return pixel_queries?static_cast<double>(occluded_intersections)/
+          static_cast<double>(pixel_queries):0.;
     }
   };
   struct TrainingResult {
@@ -126,6 +150,12 @@ class EtherRenderer {
   const std::vector<Body>& bodies() const noexcept{return bodies_;}
   const Stats& stats() const noexcept{return stats_;}
   const std::vector<Pixel>& frame() const noexcept{return frame_;}
+  const std::vector<TileObservation>& tile_observations() const noexcept{return tile_observations_;}
+  void set_observation_enabled(bool enabled) noexcept {
+    observation_enabled_=enabled;
+    if(!enabled)tile_observations_.clear();
+  }
+  bool observation_enabled() const noexcept{return observation_enabled_;}
 
   void plan() {
     std::fill(masks_.begin(),masks_.end(),std::uint64_t{0});
@@ -146,22 +176,74 @@ class EtherRenderer {
 
   Stats render(bool compare_bruteforce=false) {
     if(dirty_||!planned_)plan();
+    const auto render_begin=std::chrono::steady_clock::now();
     stats_.candidate_tests=0;stats_.brute_tests=0;stats_.exact_mismatches=0;
     stats_.distance_pruned_candidates=0;
     stats_.frame_hash=1469598103934665603ULL;
+    stats_.observation_enabled=observation_enabled_;
+    stats_.pixel_queries=0;stats_.visible_pixels=0;stats_.background_pixels=0;
+    stats_.changed_pixels=0;stats_.unchanged_pixels=0;
+    stats_.changed_tiles=0;stats_.unchanged_tiles=0;
+    stats_.intersection_hits=0;stats_.occluded_intersections=0;
+    stats_.render_ms=0.;
+    if(observation_enabled_){
+      tile_observations_.assign(masks_.size(),TileObservation{});
+      for(std::size_t ty=0;ty<tiles_y_;++ty)for(std::size_t tx=0;tx<tiles_x_;++tx){
+        const auto index=ty*tiles_x_+tx;
+        auto& observed=tile_observations_[index];
+        observed.tile_x=tx;observed.tile_y=ty;
+        observed.pixel_x=tx*tile_;observed.pixel_y=ty*tile_;
+        observed.width=std::min(tile_,width_-observed.pixel_x);
+        observed.height=std::min(tile_,height_-observed.pixel_y);
+        observed.pixels=static_cast<std::uint64_t>(observed.width)*observed.height;
+        observed.candidates=popcount(masks_[index]);
+      }
+    }else tile_observations_.clear();
+
+    const bool have_previous=frame_valid_;
     for(std::size_t y=0;y<height_;++y)for(std::size_t x=0;x<width_;++x){
       const auto ray=ray_for(x,y);
-      const auto mask=masks_[(y/tile_)*tiles_x_+(x/tile_)];
-      Pixel optimized=trace_ordered(ray,mask,&stats_.candidate_tests,&stats_.distance_pruned_candidates);
-      frame_[y*width_+x]=optimized;
+      const auto tile_index=(y/tile_)*tiles_x_+(x/tile_);
+      const auto mask=masks_[tile_index];
+      const auto tests_before=stats_.candidate_tests;
+      const auto pruned_before=stats_.distance_pruned_candidates;
+      const auto hits_before=stats_.intersection_hits;
+      const auto occluded_before=stats_.occluded_intersections;
+      Pixel optimized=trace_ordered(
+          ray,mask,&stats_.candidate_tests,&stats_.distance_pruned_candidates,
+          observation_enabled_?&stats_.intersection_hits:nullptr,
+          observation_enabled_?&stats_.occluded_intersections:nullptr);
+      const auto frame_index=y*width_+x;
+      if(observation_enabled_){
+        ++stats_.pixel_queries;
+        if(optimized.body>=0)++stats_.visible_pixels;else ++stats_.background_pixels;
+        const bool changed=!have_previous||!(frame_[frame_index]==optimized);
+        if(changed)++stats_.changed_pixels;else ++stats_.unchanged_pixels;
+        auto& observed=tile_observations_[tile_index];
+        if(optimized.body>=0)++observed.visible_pixels;
+        if(changed)++observed.changed_pixels;
+        observed.candidate_tests+=stats_.candidate_tests-tests_before;
+        observed.distance_pruned_candidates+=stats_.distance_pruned_candidates-pruned_before;
+        observed.intersection_hits+=stats_.intersection_hits-hits_before;
+        observed.occluded_intersections+=stats_.occluded_intersections-occluded_before;
+      }
+      frame_[frame_index]=optimized;
       hash_pixel(optimized);
       if(compare_bruteforce){
         const Pixel brute=trace(ray,body_mask(),&stats_.brute_tests);
         if(!(optimized==brute))++stats_.exact_mismatches;
       }
     }
+    if(observation_enabled_){
+      for(const auto& observed:tile_observations_){
+        if(observed.changed())++stats_.changed_tiles;else ++stats_.unchanged_tiles;
+      }
+    }
+    frame_valid_=true;
     if(!compare_bruteforce)
       stats_.brute_tests=static_cast<std::uint64_t>(width_)*height_*bodies_.size();
+    stats_.render_ms=std::chrono::duration<double,std::milli>(
+        std::chrono::steady_clock::now()-render_begin).count();
     return stats_;
   }
 
@@ -315,7 +397,9 @@ class EtherRenderer {
       return distance_lower_bound_[a]<distance_lower_bound_[b];
     });
   }
-  Pixel trace_ordered(const Vec3& ray,std::uint64_t mask,std::uint64_t* tests,std::uint64_t* pruned) const {
+  Pixel trace_ordered(const Vec3& ray,std::uint64_t mask,std::uint64_t* tests,
+                      std::uint64_t* pruned,std::uint64_t* hits=nullptr,
+                      std::uint64_t* occluded=nullptr) const {
     Pixel best;const Body* hit=nullptr;std::size_t order_pos=0;
     for(;order_pos<distance_order_.size();++order_pos){
       const auto index=distance_order_[order_pos];
@@ -331,8 +415,12 @@ class EtherRenderer {
       const double root=std::sqrt(h2);
       double t=along-root;if(t<=1e-6)t=along+root;
       if(t<=1e-6)continue;
+      if(hits)++*hits;
       const auto id=static_cast<std::int32_t>(b.id);
-      if(t>best.depth||(t==best.depth&&best.body>=0&&id>=best.body))continue;
+      if(t>best.depth||(t==best.depth&&best.body>=0&&id>=best.body)){
+        if(occluded)++*occluded;
+        continue;
+      }
       best.depth=t;best.body=id;hit=&b;
     }
     if(pruned&&best.body>=0){
@@ -360,8 +448,10 @@ class EtherRenderer {
   std::vector<double> cached_center_squared_,cached_radius_squared_;
   std::array<double,64> quantum_gain_{};
   std::vector<Pixel> frame_;
+  std::vector<TileObservation> tile_observations_;
   Stats stats_{};
   bool dirty_=true,planned_=false;
+  bool observation_enabled_=false,frame_valid_=false;
 };
 
 }  // namespace mundo_x
