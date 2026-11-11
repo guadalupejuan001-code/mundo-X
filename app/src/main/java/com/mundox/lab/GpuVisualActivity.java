@@ -36,6 +36,7 @@ public class GpuVisualActivity extends Activity {
         stats.setTextColor(Color.WHITE);
         stats.setTextSize(11);
         stats.setTypeface(android.graphics.Typeface.MONOSPACE);
+        stats.setLines(6);
         stats.setPadding(12, 8, 12, 8);
         stats.setText("GPU path starting...\nCompact Core -> uniforms -> 1 GPU draw call");
         root.addView(stats, new LinearLayout.LayoutParams(
