@@ -1171,7 +1171,12 @@ public final class GraphicsInstrumentation extends Instrumentation {
             select(pick,ids); // A same-ID pick still overwrites one framebuffer pixel in debug mode.
             expect(selected.changed(frame(false)) == 0 && activity.renderer.frameStats().renderNumber > beforePick,
                     "Same-ID picking left the ID pass in the cached color image");
-            reuseAfterChange("edit", () -> activity.renderer.editSelected(1), checks);
+            // Prior instrumentation cases may leave this visible ID at any edit level,
+            // including the capped +6 state where editSelected(1) is intentionally a no-op.
+            // Normalize and settle one frame so the C04 gate always exercises a real local edit.
+            gl(() -> activity.renderer.editSelected(0));
+            frame(false);
+            reuseAfterChange("edit", () -> activity.renderer.editSelected(2), checks);
             QuantumRenderer.Snapshot edited=visualSnapshot();
             QuantumRenderer.Capture editedImage=frame(false);
             reuseAfterChange("population_shrink", () -> activity.renderer.objectCount(1), checks);
