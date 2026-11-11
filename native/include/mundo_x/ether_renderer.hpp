@@ -36,6 +36,8 @@ class EtherRenderer {
     std::uint64_t pixels=0,visible_pixels=0,changed_pixels=0;
     std::uint64_t candidate_tests=0,distance_pruned_candidates=0;
     std::uint64_t intersection_hits=0,occluded_intersections=0;
+    std::uint64_t ray_queries=0,reused_pixels=0;
+    bool reused=false;
     bool changed() const noexcept{return changed_pixels!=0;}
   };
   struct Stats {
@@ -46,10 +48,12 @@ class EtherRenderer {
     std::size_t max_candidates=0,nonempty_regions=0;
     std::size_t exact_mismatches=0;
     std::uint64_t frame_hash=1469598103934665603ULL;
-    bool observation_enabled=false;
+    bool observation_enabled=false,tile_reuse_enabled=false;
     std::uint64_t pixel_queries=0,visible_pixels=0,background_pixels=0;
+    std::uint64_t ray_queries=0,rendered_pixels=0,reused_pixels=0;
     std::uint64_t changed_pixels=0,unchanged_pixels=0;
     std::size_t changed_tiles=0,unchanged_tiles=0;
+    std::size_t rendered_tiles=0,reused_tiles=0;
     std::uint64_t intersection_hits=0,occluded_intersections=0;
     double render_ms=0.;
     double candidate_ratio() const {
@@ -65,8 +69,8 @@ class EtherRenderer {
     // CPU ray/intersection visibility proxy only. It is deliberately not
     // labelled as physical GPU fragment overdraw.
     double intersection_overdraw_proxy() const {
-      return pixel_queries?static_cast<double>(occluded_intersections)/
-          static_cast<double>(pixel_queries):0.;
+      return ray_queries?static_cast<double>(occluded_intersections)/
+          static_cast<double>(ray_queries):0.;
     }
   };
   struct TrainingResult {
@@ -85,6 +89,7 @@ class EtherRenderer {
     if(tile<8||tile>1024)throw std::invalid_argument("render tile must be 8..1024");
     tiles_x_=1+(width_-1)/tile_;tiles_y_=1+(height_-1)/tile_;
     masks_.assign(tiles_x_*tiles_y_,0);
+    dirty_tiles_.assign(masks_.size(),1);
     frame_.assign(width_*height_,Pixel{});
     quantum_gain_.fill(1.);
     set_camera({0,0,10},{0,0,0},47.);
@@ -103,7 +108,7 @@ class EtherRenderer {
     up_=normalize(cross(right_,forward_));
     tan_half_fov_=std::tan(fov_deg*std::acos(-1.)/360.);
     aspect_=static_cast<double>(width_)/static_cast<double>(height_);
-    dirty_=true;
+    mark_all_tiles_dirty();dirty_=true;
   }
 
   void add_body(const Body& body) {
@@ -117,10 +122,10 @@ class EtherRenderer {
     if(bodies_.size()>=64)throw std::length_error("render supports at most 64 bodies");
     bodies_.push_back(body);
     std::sort(bodies_.begin(),bodies_.end(),[](const Body& a,const Body& b){return a.id<b.id;});
-    dirty_=true;
+    mark_all_tiles_dirty();dirty_=true;
   }
 
-  void clear_bodies(){bodies_.clear();clear_quantum_materials();dirty_=true;}
+  void clear_bodies(){bodies_.clear();quantum_gain_.fill(1.);mark_all_tiles_dirty();dirty_=true;}
 
   bool has_body(std::uint32_t id) const noexcept {
     return std::any_of(bodies_.begin(),bodies_.end(),
@@ -136,15 +141,24 @@ class EtherRenderer {
     if(!std::isfinite(expectation)||expectation < -1.-1e-8||expectation > 1.+1e-8||
        !std::isfinite(strength)||strength<0.||strength>1.)
       throw std::invalid_argument("invalid quantum material signal or strength");
-    quantum_gain_[id]=1.+strength*std::clamp(expectation,-1.,1.);
+    const double next=1.+strength*std::clamp(expectation,-1.,1.);
+    if(quantum_gain_[id]==next)return;
+    quantum_gain_[id]=next;
+    mark_body_tiles_dirty(id);
   }
 
-  void clear_quantum_materials() noexcept { quantum_gain_.fill(1.); }
+  void clear_quantum_materials() noexcept {
+    bool changed=false;
+    for(double gain:quantum_gain_)if(gain!=1.){changed=true;break;}
+    quantum_gain_.fill(1.);
+    if(changed)mark_all_tiles_dirty();
+  }
 
   void set_tile(std::size_t tile) {
     if(tile<8||tile>1024)throw std::invalid_argument("render tile must be 8..1024");
     tile_=tile;tiles_x_=1+(width_-1)/tile_;tiles_y_=1+(height_-1)/tile_;
-    masks_.assign(tiles_x_*tiles_y_,0);dirty_=true;planned_=false;
+    masks_.assign(tiles_x_*tiles_y_,0);dirty_tiles_.assign(masks_.size(),1);
+    dirty_=true;planned_=false;
   }
 
   const std::vector<Body>& bodies() const noexcept{return bodies_;}
@@ -156,6 +170,8 @@ class EtherRenderer {
     if(!enabled)tile_observations_.clear();
   }
   bool observation_enabled() const noexcept{return observation_enabled_;}
+  void set_tile_reuse_enabled(bool enabled) noexcept { tile_reuse_enabled_=enabled; }
+  bool tile_reuse_enabled() const noexcept{return tile_reuse_enabled_;}
 
   void plan() {
     std::fill(masks_.begin(),masks_.end(),std::uint64_t{0});
@@ -181,9 +197,12 @@ class EtherRenderer {
     stats_.distance_pruned_candidates=0;
     stats_.frame_hash=1469598103934665603ULL;
     stats_.observation_enabled=observation_enabled_;
+    stats_.tile_reuse_enabled=tile_reuse_enabled_;
     stats_.pixel_queries=0;stats_.visible_pixels=0;stats_.background_pixels=0;
+    stats_.ray_queries=0;stats_.rendered_pixels=0;stats_.reused_pixels=0;
     stats_.changed_pixels=0;stats_.unchanged_pixels=0;
     stats_.changed_tiles=0;stats_.unchanged_tiles=0;
+    stats_.rendered_tiles=0;stats_.reused_tiles=0;
     stats_.intersection_hits=0;stats_.occluded_intersections=0;
     stats_.render_ms=0.;
     if(observation_enabled_){
@@ -200,20 +219,45 @@ class EtherRenderer {
       }
     }else tile_observations_.clear();
 
+    if(dirty_tiles_.size()!=masks_.size())dirty_tiles_.assign(masks_.size(),1);
     const bool have_previous=frame_valid_;
+    for(std::size_t index=0;index<masks_.size();++index){
+      const bool reused=tile_reuse_enabled_&&have_previous&&!dirty_tiles_[index];
+      if(reused)++stats_.reused_tiles;else ++stats_.rendered_tiles;
+      if(observation_enabled_)tile_observations_[index].reused=reused;
+    }
     for(std::size_t y=0;y<height_;++y)for(std::size_t x=0;x<width_;++x){
-      const auto ray=ray_for(x,y);
       const auto tile_index=(y/tile_)*tiles_x_+(x/tile_);
-      const auto mask=masks_[tile_index];
-      const auto tests_before=stats_.candidate_tests;
-      const auto pruned_before=stats_.distance_pruned_candidates;
-      const auto hits_before=stats_.intersection_hits;
-      const auto occluded_before=stats_.occluded_intersections;
-      Pixel optimized=trace_ordered(
-          ray,mask,&stats_.candidate_tests,&stats_.distance_pruned_candidates,
-          observation_enabled_?&stats_.intersection_hits:nullptr,
-          observation_enabled_?&stats_.occluded_intersections:nullptr);
+      const bool reuse=tile_reuse_enabled_&&have_previous&&!dirty_tiles_[tile_index];
       const auto frame_index=y*width_+x;
+      Pixel optimized;
+      Vec3 ray{};
+      if(reuse){
+        optimized=frame_[frame_index];
+        ++stats_.reused_pixels;
+        if(observation_enabled_)++tile_observations_[tile_index].reused_pixels;
+        if(compare_bruteforce)ray=ray_for(x,y);
+      }else{
+        ray=ray_for(x,y);
+        ++stats_.ray_queries;++stats_.rendered_pixels;
+        const auto mask=masks_[tile_index];
+        const auto tests_before=stats_.candidate_tests;
+        const auto pruned_before=stats_.distance_pruned_candidates;
+        const auto hits_before=stats_.intersection_hits;
+        const auto occluded_before=stats_.occluded_intersections;
+        optimized=trace_ordered(
+            ray,mask,&stats_.candidate_tests,&stats_.distance_pruned_candidates,
+            observation_enabled_?&stats_.intersection_hits:nullptr,
+            observation_enabled_?&stats_.occluded_intersections:nullptr);
+        if(observation_enabled_){
+          auto& observed=tile_observations_[tile_index];
+          ++observed.ray_queries;
+          observed.candidate_tests+=stats_.candidate_tests-tests_before;
+          observed.distance_pruned_candidates+=stats_.distance_pruned_candidates-pruned_before;
+          observed.intersection_hits+=stats_.intersection_hits-hits_before;
+          observed.occluded_intersections+=stats_.occluded_intersections-occluded_before;
+        }
+      }
       if(observation_enabled_){
         ++stats_.pixel_queries;
         if(optimized.body>=0)++stats_.visible_pixels;else ++stats_.background_pixels;
@@ -222,10 +266,6 @@ class EtherRenderer {
         auto& observed=tile_observations_[tile_index];
         if(optimized.body>=0)++observed.visible_pixels;
         if(changed)++observed.changed_pixels;
-        observed.candidate_tests+=stats_.candidate_tests-tests_before;
-        observed.distance_pruned_candidates+=stats_.distance_pruned_candidates-pruned_before;
-        observed.intersection_hits+=stats_.intersection_hits-hits_before;
-        observed.occluded_intersections+=stats_.occluded_intersections-occluded_before;
       }
       frame_[frame_index]=optimized;
       hash_pixel(optimized);
@@ -240,6 +280,7 @@ class EtherRenderer {
       }
     }
     frame_valid_=true;
+    std::fill(dirty_tiles_.begin(),dirty_tiles_.end(),std::uint8_t{0});
     if(!compare_bruteforce)
       stats_.brute_tests=static_cast<std::uint64_t>(width_)*height_*bodies_.size();
     stats_.render_ms=std::chrono::duration<double,std::milli>(
@@ -249,6 +290,7 @@ class EtherRenderer {
 
   TrainingResult train_tiles(const std::vector<std::size_t>& candidates={8,16,32,64,128,256}) {
     if(candidates.empty())throw std::invalid_argument("render training requires tile candidates");
+    const bool saved_reuse=tile_reuse_enabled_;tile_reuse_enabled_=false;
     TrainingResult best;bool have=false;std::uint64_t reference_hash=0;
     for(const auto tile:candidates){
       set_tile(tile);plan();
@@ -279,6 +321,7 @@ class EtherRenderer {
     best.distance_pruned_candidates=exact.distance_pruned_candidates;
     best.frame_hash=exact.frame_hash;
     if(best.exact_mismatches)throw std::runtime_error("trained render path differs from brute-force oracle");
+    tile_reuse_enabled_=saved_reuse;
     return best;
   }
 
@@ -302,6 +345,16 @@ class EtherRenderer {
   static double length(Vec3 a){return std::sqrt(dot(a,a));}
   static Vec3 normalize(Vec3 a){const double n=length(a);if(!(n>1e-15))throw std::invalid_argument("zero render vector");return mul(a,1./n);}
   static std::size_t popcount(std::uint64_t v){std::size_t n=0;while(v){v&=v-1;++n;}return n;}
+  void mark_all_tiles_dirty(){
+    if(dirty_tiles_.size()!=masks_.size())dirty_tiles_.assign(masks_.size(),1);
+    else std::fill(dirty_tiles_.begin(),dirty_tiles_.end(),std::uint8_t{1});
+  }
+  void mark_body_tiles_dirty(std::uint32_t id){
+    if(!planned_||dirty_||dirty_tiles_.size()!=masks_.size()){mark_all_tiles_dirty();return;}
+    const auto bit=std::uint64_t{1}<<id;
+    for(std::size_t index=0;index<masks_.size();++index)
+      if(masks_[index]&bit)dirty_tiles_[index]=1;
+  }
   std::uint64_t body_mask() const {
     std::uint64_t mask=0;for(const auto& b:bodies_)mask|=std::uint64_t{1}<<b.id;return mask;
   }
@@ -442,6 +495,7 @@ class EtherRenderer {
   double tan_half_fov_=0.,aspect_=1.;
   std::vector<Body> bodies_;
   std::vector<std::uint64_t> masks_;
+  std::vector<std::uint8_t> dirty_tiles_;
   std::vector<std::size_t> distance_order_;
   std::vector<double> distance_lower_bound_;
   std::vector<Vec3> cached_center_;
@@ -451,7 +505,7 @@ class EtherRenderer {
   std::vector<TileObservation> tile_observations_;
   Stats stats_{};
   bool dirty_=true,planned_=false;
-  bool observation_enabled_=false,frame_valid_=false;
+  bool observation_enabled_=false,tile_reuse_enabled_=false,frame_valid_=false;
 };
 
 }  // namespace mundo_x
