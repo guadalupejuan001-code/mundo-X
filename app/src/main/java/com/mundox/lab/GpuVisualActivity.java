@@ -36,6 +36,7 @@ public class GpuVisualActivity extends Activity {
         stats.setTextColor(Color.WHITE);
         stats.setTextSize(11);
         stats.setTypeface(android.graphics.Typeface.MONOSPACE);
+        stats.setLines(6);
         stats.setPadding(12, 8, 12, 8);
         stats.setText("GPU path starting...\nCompact Core -> uniforms -> 1 GPU draw call");
         root.addView(stats, new LinearLayout.LayoutParams(
@@ -99,6 +100,27 @@ public class GpuVisualActivity extends Activity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         root.addView(controls);
+
+        LinearLayout renderControls = new LinearLayout(this);
+        renderControls.setOrientation(LinearLayout.HORIZONTAL);
+        Button regraphics = new Button(this);
+        regraphics.setText("REgraphics ON");
+        regraphics.setOnClickListener(v -> {
+            boolean enabled = renderer.toggleRegraphics();
+            regraphics.setText(enabled ? "REgraphics ON" : "DIRECT");
+        });
+        renderControls.addView(regraphics, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button hold = new Button(this);
+        hold.setText("HOLD");
+        hold.setOnClickListener(v -> {
+            boolean frozen = renderer.toggleHold();
+            hold.setText(frozen ? "RESUME" : "HOLD");
+        });
+        renderControls.addView(hold, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        root.addView(renderControls);
         setContentView(root);
     }
 
@@ -118,15 +140,39 @@ public class GpuVisualActivity extends Activity {
         if (glView != null) glView.onResume();
     }
 
+    static int effectDivisorForCount(int count) {
+        if (count >= 60_000) return 4;
+        if (count >= 18_000) return 2;
+        return 1;
+    }
+
+    public String regraphicsStatus() {
+        return renderer == null ? "" : renderer.snapshot();
+    }
+    void testParticleCount(int value) {
+        if (glView != null) glView.queueEvent(() -> renderer.setCount(value));
+    }
+    void testHold(boolean enabled) {
+        if (glView != null) glView.queueEvent(() -> renderer.setHold(enabled));
+    }
+    void testRegraphicsEnabled(boolean enabled) {
+        if (glView != null) glView.queueEvent(() -> renderer.setRegraphicsEnabled(enabled));
+    }
+
     private final class SceneRenderer implements GLSurfaceView.Renderer {
         private int program;
+        private int compositeProgram;
         private int vao;
+        private int effectFbo;
+        private int effectTexture;
 
         private int uTime;
         private int uTouch;
         private int uFeedback;
         private int uQ;
         private int uAspect;
+        private int uPointScale;
+        private int uCompositeTexture;
 
         private volatile int count = 6000;
         volatile float touchX = 0.5f;
@@ -134,6 +180,18 @@ public class GpuVisualActivity extends Activity {
         volatile float feedback = 0f;
         final AtomicInteger pendingTouchQubit = new AtomicInteger(-1);
         private volatile boolean resetRequested = true;
+        private volatile boolean regraphicsEnabled = true;
+        private volatile boolean holdEffects = false;
+
+        private int surfaceWidth = 1, surfaceHeight = 1;
+        private int effectWidth = 1, effectHeight = 1, effectDivisor = 1;
+        private float surfaceAspect = 1f;
+        private boolean effectValid;
+        private boolean effectReused;
+        private long effectRenders;
+        private long effectReuses;
+        private long lastEffectSignature = Long.MIN_VALUE;
+        private float heldTime = -1f;
 
         private long startNs;
         private long previousFrameNs;
@@ -151,6 +209,7 @@ public class GpuVisualActivity extends Activity {
                 "uniform float uFeedback;\n" +
                 "uniform float uQ[8];\n" +
                 "uniform float uAspect;\n" +
+                "uniform float uPointScale;\n" +
                 "out vec4 vColor;\n" +
                 "flat out int vShape;\n" +
                 "uint h32(uint x){\n" +
@@ -182,7 +241,7 @@ public class GpuVisualActivity extends Activity {
                 "  vec2 ndc=pos*2.0-1.0;\n" +
                 "  ndc.x/=max(1.0,uAspect*0.58);\n" +
                 "  gl_Position=vec4(ndc,0.0,1.0);\n" +
-                "  gl_PointSize=2.0+8.0*z*(0.8+uQ[5]*0.8);\n" +
+                "  gl_PointSize=max(1.0,(2.0+8.0*z*(0.8+uQ[5]*0.8))*uPointScale);\n" +
                 "  float hue=fract(a*0.71+b*0.37+uTime*(0.018+uQ[0]*0.10)+wave*(0.02+uQ[1]*0.10)+uQ[7]+uQ[4]*0.25);\n" +
                 "  vColor=vec4(hsv2rgb(vec3(hue,0.78,1.0)),0.22+0.72*clamp(z,0.0,1.0));\n" +
                 "  vShape=int(h32(id*11u+6u)%3u);\n" +
@@ -201,11 +260,52 @@ public class GpuVisualActivity extends Activity {
                 "  fragColor=vColor;\n" +
                 "}\n";
 
+        private final String compositeVertexShader =
+                "#version 300 es\n" +
+                "precision highp float;\n" +
+                "out vec2 vUv;\n" +
+                "void main(){\n" +
+                "  vec2 p=gl_VertexID==0?vec2(-1.0,-1.0):(gl_VertexID==1?vec2(3.0,-1.0):vec2(-1.0,3.0));\n" +
+                "  vUv=p*0.5+0.5; gl_Position=vec4(p,0.0,1.0);\n" +
+                "}\n";
+        private final String compositeFragmentShader =
+                "#version 300 es\n" +
+                "precision mediump float;\n" +
+                "uniform sampler2D uTexture;\n" +
+                "in vec2 vUv; out vec4 fragColor;\n" +
+                "void main(){ fragColor=texture(uTexture,vUv); }\n";
+
         void setCount(int newCount) {
             count = newCount;
+            effectValid = false;
             previousFrameNs = 0;
             fpsSmoothed = 0f;
             frameMsSmoothed = 0f;
+        }
+
+        void setRegraphicsEnabled(boolean enabled) {
+            if (regraphicsEnabled == enabled) return;
+            regraphicsEnabled = enabled;
+            effectValid = false;
+            lastEffectSignature = Long.MIN_VALUE;
+        }
+
+        boolean toggleRegraphics() {
+            setRegraphicsEnabled(!regraphicsEnabled);
+            return regraphicsEnabled;
+        }
+
+        void setHold(boolean enabled) {
+            if (holdEffects == enabled) return;
+            holdEffects = enabled;
+            heldTime = -1f;
+            effectValid = false;
+            lastEffectSignature = Long.MIN_VALUE;
+        }
+
+        boolean toggleHold() {
+            setHold(!holdEffects);
+            return holdEffects;
         }
 
         void requestReset() {
@@ -214,6 +314,10 @@ public class GpuVisualActivity extends Activity {
             touchX = 0.5f;
             touchY = 0.5f;
             pendingTouchQubit.set(-1);
+            holdEffects = false;
+            heldTime = -1f;
+            effectValid = false;
+            lastEffectSignature = Long.MIN_VALUE;
             startNs = System.nanoTime();
             previousFrameNs = 0;
             fpsSmoothed = 0f;
@@ -223,6 +327,7 @@ public class GpuVisualActivity extends Activity {
         @Override
         public void onSurfaceCreated(GL10 unused, EGLConfig config) {
             program = linkProgram(vertexShader, fragmentShader);
+            compositeProgram = linkProgram(compositeVertexShader, compositeFragmentShader);
             GLES30.glUseProgram(program);
 
             uTime = GLES30.glGetUniformLocation(program, "uTime");
@@ -230,11 +335,20 @@ public class GpuVisualActivity extends Activity {
             uFeedback = GLES30.glGetUniformLocation(program, "uFeedback");
             uQ = GLES30.glGetUniformLocation(program, "uQ");
             uAspect = GLES30.glGetUniformLocation(program, "uAspect");
+            uPointScale = GLES30.glGetUniformLocation(program, "uPointScale");
+            GLES30.glUseProgram(compositeProgram);
+            uCompositeTexture = GLES30.glGetUniformLocation(compositeProgram, "uTexture");
 
             int[] vaos = new int[1];
             GLES30.glGenVertexArrays(1, vaos, 0);
             vao = vaos[0];
             GLES30.glBindVertexArray(vao);
+
+            int[] fb = new int[1], tex = new int[1];
+            GLES30.glGenFramebuffers(1, fb, 0);
+            GLES30.glGenTextures(1, tex, 0);
+            effectFbo = fb[0]; effectTexture = tex[0];
+            effectValid = false;
 
             GLES30.glDisable(GLES30.GL_DEPTH_TEST);
             GLES30.glEnable(GLES30.GL_BLEND);
@@ -248,10 +362,100 @@ public class GpuVisualActivity extends Activity {
 
         @Override
         public void onSurfaceChanged(GL10 unused, int width, int height) {
+            surfaceWidth = Math.max(1, width);
+            surfaceHeight = Math.max(1, height);
+            surfaceAspect = surfaceWidth / (float) surfaceHeight;
+            GLES30.glViewport(0, 0, surfaceWidth, surfaceHeight);
+            effectValid = false;
+            lastEffectSignature = Long.MIN_VALUE;
+        }
+
+        private int desiredDivisor() {
+            return effectDivisorForCount(count);
+        }
+
+        private void ensureEffectTarget(int divisor) {
+            int wantedWidth = Math.max(1, (surfaceWidth + divisor - 1) / divisor);
+            int wantedHeight = Math.max(1, (surfaceHeight + divisor - 1) / divisor);
+            if (effectWidth == wantedWidth && effectHeight == wantedHeight && effectDivisor == divisor && effectValid) return;
+            effectWidth = wantedWidth; effectHeight = wantedHeight; effectDivisor = divisor;
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, effectTexture);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+            GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8,
+                    effectWidth, effectHeight, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, effectFbo);
+            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
+                    GLES30.GL_TEXTURE_2D, effectTexture, 0);
+            int status = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER);
+            if (status != GLES30.GL_FRAMEBUFFER_COMPLETE)
+                throw new IllegalStateException("REgraphics effect FBO incomplete: 0x" + Integer.toHexString(status));
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            effectValid = false;
+            lastEffectSignature = Long.MIN_VALUE;
+        }
+
+        private long mix(long hash, int value) {
+            long v = value & 0xffffffffL;
+            for (int i = 0; i < 4; i++) {
+                hash ^= (v >>> (i * 8)) & 255L;
+                hash *= 1099511628211L;
+            }
+            return hash;
+        }
+
+        private long effectSignature(float time, int divisor) {
+            long hash = 1469598103934665603L;
+            hash = mix(hash, count); hash = mix(hash, divisor);
+            hash = mix(hash, Float.floatToRawIntBits(time));
+            hash = mix(hash, Float.floatToRawIntBits(touchX));
+            hash = mix(hash, Float.floatToRawIntBits(touchY));
+            hash = mix(hash, Float.floatToRawIntBits(feedback));
+            if (q != null) for (int i = 0; i < Math.min(8, q.length); i++)
+                hash = mix(hash, Float.floatToRawIntBits(q[i]));
+            return hash;
+        }
+
+        private void renderParticles(int target, int width, int height, float time, float pointScale) {
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, target);
             GLES30.glViewport(0, 0, width, height);
-            float aspect = width / (float) Math.max(1, height);
+            GLES30.glClearColor(0.01f, 0.02f, 0.05f, 1f);
+            GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
             GLES30.glUseProgram(program);
-            GLES30.glUniform1f(uAspect, aspect);
+            GLES30.glBindVertexArray(vao);
+            GLES30.glUniform1f(uTime, time);
+            GLES30.glUniform2f(uTouch, touchX, 1f - touchY);
+            GLES30.glUniform1f(uFeedback, feedback);
+            GLES30.glUniform1f(uAspect, surfaceAspect);
+            GLES30.glUniform1f(uPointScale, pointScale);
+            if (q != null && q.length >= 8) GLES30.glUniform1fv(uQ, 8, q, 0);
+            GLES30.glEnable(GLES30.GL_BLEND);
+            GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA);
+            GLES30.glDrawArrays(GLES30.GL_POINTS, 0, count);
+        }
+
+        private void compositeEffect() {
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            GLES30.glViewport(0, 0, surfaceWidth, surfaceHeight);
+            GLES30.glDisable(GLES30.GL_BLEND);
+            GLES30.glUseProgram(compositeProgram);
+            GLES30.glBindVertexArray(vao);
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, effectTexture);
+            GLES30.glUniform1i(uCompositeTexture, 0);
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
+        }
+
+        String snapshot() {
+            long targetPixels = (long)effectWidth * effectHeight;
+            long surfacePixels = (long)surfaceWidth * surfaceHeight;
+            return String.format(Locale.US,
+                    "enabled=%s hold=%s divisor=%d target=%dx%d surface=%dx%d targetRatio=%.5f reused=%s renders=%d reuses=%d",
+                    regraphicsEnabled, holdEffects, effectDivisor, effectWidth, effectHeight,
+                    surfaceWidth, surfaceHeight, surfacePixels == 0 ? 0.0 : targetPixels / (double)surfacePixels,
+                    effectReused, effectRenders, effectReuses);
         }
 
         @Override
@@ -270,24 +474,35 @@ public class GpuVisualActivity extends Activity {
             if (resetRequested) {
                 q = NativeCore.quantumVisualStep(-1, true);
                 resetRequested = false;
-            } else {
+            } else if (!holdEffects) {
                 q = NativeCore.quantumVisualStep(
                         pendingTouchQubit.getAndSet(-1), false);
             }
 
-            feedback *= 0.985f;
-            float time = (now - startNs) / 1_000_000_000f;
+            if (!holdEffects) feedback *= 0.985f;
+            float liveTime = (now - startNs) / 1_000_000_000f;
+            if (holdEffects) {
+                if (heldTime < 0f) heldTime = liveTime;
+            } else heldTime = -1f;
+            float time = holdEffects ? heldTime : liveTime;
 
-            GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT);
-            GLES30.glUseProgram(program);
-            GLES30.glBindVertexArray(vao);
-            GLES30.glUniform1f(uTime, time);
-            GLES30.glUniform2f(uTouch, touchX, 1f - touchY);
-            GLES30.glUniform1f(uFeedback, feedback);
-            if (q != null && q.length >= 8) {
-                GLES30.glUniform1fv(uQ, 8, q, 0);
+            effectReused = false;
+            if (!regraphicsEnabled) {
+                effectDivisor = 1; effectWidth = surfaceWidth; effectHeight = surfaceHeight;
+                effectValid = false; lastEffectSignature = Long.MIN_VALUE;
+                renderParticles(0, surfaceWidth, surfaceHeight, time, 1f);
+            } else {
+                int divisor = desiredDivisor();
+                ensureEffectTarget(divisor);
+                long signature = effectSignature(time, divisor);
+                if (effectValid && signature == lastEffectSignature) {
+                    effectReused = true; effectReuses++;
+                } else {
+                    renderParticles(effectFbo, effectWidth, effectHeight, time, 1f / divisor);
+                    effectValid = true; lastEffectSignature = signature; effectRenders++;
+                }
+                compositeEffect();
             }
-            GLES30.glDrawArrays(GLES30.GL_POINTS, 0, count);
 
             if (now - statsNs >= 250_000_000L) {
                 statsNs = now;
@@ -308,11 +523,18 @@ public class GpuVisualActivity extends Activity {
 
                     StringBuilder out = new StringBuilder();
                     out.append(String.format(Locale.US,
-                            "mode=COMPACT->GPU objects=%d fps=%.1f frame=%.2f ms\n",
+                            "mode=%s objects=%d fps=%.1f frame=%.2f ms\n",
+                            regraphicsEnabled ? "REGRAPHICS->GLES" : "DIRECT->GLES",
                             showCount, showFps, showMs));
+                    long targetPixels=(long)effectWidth*effectHeight,surfacePixels=(long)surfaceWidth*surfaceHeight;
                     out.append(String.format(Locale.US,
-                            "draw_calls/frame=1 logical_state=%d B process_PSS=%d kB\n",
-                            logicalBytes, pssKb));
+                            "effect_target=%dx%d / %dx%d divisor=%d samples=%.1f%% reused=%s hold=%s\n",
+                            effectWidth,effectHeight,surfaceWidth,surfaceHeight,effectDivisor,
+                            surfacePixels==0?0.0:100.0*targetPixels/surfacePixels,effectReused,holdEffects));
+                    out.append(String.format(Locale.US,
+                            "particle_draws/frame=%d composite_draws/frame=%d renders=%d reuses=%d logical_state=%d B process_PSS=%d kB\n",
+                            regraphicsEnabled?(effectReused?0:1):1,regraphicsEnabled?1:0,
+                            effectRenders,effectReuses,logicalBytes,pssKb));
                     out.append(String.format(Locale.US,
                             "CompactCore=32q core_bytes=%d step=%.0f\n",
                             coreBytes, step));

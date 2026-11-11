@@ -1082,10 +1082,35 @@ public final class GraphicsInstrumentation extends Instrumentation {
 
     private void reuseAfterChange(String name, Runnable change, JSONArray checks) throws Exception {
         long before = activity.renderer.frameStats().renderNumber;
-        gl(change);
+        if("edit".equals(name)||"edit_restore".equals(name))glWithoutRender(change);
+        else gl(change);
         QuantumRenderer.Capture automatic = frame(false);
-        long updated = activity.renderer.frameStats().renderNumber;
+        QuantumRenderer.FrameStats automaticStats = activity.renderer.frameStats();
+        long updated = automaticStats.renderNumber;
         expect(updated > before, "Changed " + name + " reused a stale framebuffer");
+        if("edit".equals(name)){
+            long framePixels=(long)automaticStats.width*automaticStats.height;
+            if(automaticStats.mirrorMode==QuantumRenderer.MIRRORS_OFF){
+                expect(automaticStats.partialRedraw
+                        && automaticStats.redrawnPixels>0
+                        && automaticStats.redrawnPixels<framePixels
+                        && automaticStats.partialMirrorSafe,
+                        "Local edit did not use a bounded physical GLES redraw: pending="
+                                +automaticStats.partialEditPending+" stable="+automaticStats.partialStableInputs
+                                +" mirrorSafe="+automaticStats.partialMirrorSafe
+                                +" redrawn="+automaticStats.redrawnPixels
+                                +" frame="+framePixels
+                                +" rect="+automaticStats.dirtyLeft+","+automaticStats.dirtyBottom+","
+                                +automaticStats.dirtyWidth+"x"+automaticStats.dirtyHeight);
+            }else{
+                expect(!automaticStats.partialRedraw
+                        && automaticStats.redrawnPixels==framePixels
+                        && !automaticStats.partialMirrorSafe,
+                        "Mirrored edit did not conservatively fall back to a full GLES redraw: mode="
+                                +automaticStats.mirrorMode+" mirrorSafe="+automaticStats.partialMirrorSafe
+                                +" redrawn="+automaticStats.redrawnPixels+" frame="+framePixels);
+            }
+        }
         gl(() -> activity.renderer.setFrameReuseEnabled(false));
         QuantumRenderer.Capture forced = frame(false);
         expect(automatic.changed(forced) == 0, "Frame reuse changed pixels for " + name);
@@ -1096,9 +1121,18 @@ public final class GraphicsInstrumentation extends Instrumentation {
         QuantumRenderer.FrameStats reused = activity.renderer.frameStats();
         expect(first.changed(second) == 0 && reused.frameReused && reused.renderNumber == rendered,
                 "Unchanged " + name + " did not reuse the exact completed image");
-        checks.put(new JSONObject().put("input", name).put("invalidated", true)
+        JSONObject record=new JSONObject().put("input", name).put("invalidated", true)
                 .put("forcedDifferentPixels", automatic.changed(forced)).put("repeatDifferentPixels", first.changed(second))
-                .put("reusedWithoutDrawing", true));
+                .put("reusedWithoutDrawing", true);
+        if("edit".equals(name))record.put("partialRedraw",automaticStats.partialRedraw)
+                .put("mirrorMode",automaticStats.mirrorMode)
+                .put("mirrorSafe",automaticStats.partialMirrorSafe)
+                .put("redrawnPixels",automaticStats.redrawnPixels)
+                .put("framePixels",(long)automaticStats.width*automaticStats.height)
+                .put("reusedPixelEstimate",automaticStats.reusedPixelEstimate)
+                .put("dirtyRect",new JSONArray(new int[]{automaticStats.dirtyLeft,automaticStats.dirtyBottom,
+                        automaticStats.dirtyWidth,automaticStats.dirtyHeight}));
+        checks.put(record);
     }
 
     private void frameReuseContracts() throws Exception {
@@ -1137,7 +1171,12 @@ public final class GraphicsInstrumentation extends Instrumentation {
             select(pick,ids); // A same-ID pick still overwrites one framebuffer pixel in debug mode.
             expect(selected.changed(frame(false)) == 0 && activity.renderer.frameStats().renderNumber > beforePick,
                     "Same-ID picking left the ID pass in the cached color image");
-            reuseAfterChange("edit", () -> activity.renderer.editSelected(1), checks);
+            // Prior instrumentation cases may leave this visible ID at any edit level,
+            // including the capped +6 state where editSelected(1) is intentionally a no-op.
+            // Normalize and settle one frame so the C04 gate always exercises a real local edit.
+            gl(() -> activity.renderer.editSelected(0));
+            frame(false);
+            reuseAfterChange("edit", () -> activity.renderer.editSelected(2), checks);
             QuantumRenderer.Snapshot edited=visualSnapshot();
             QuantumRenderer.Capture editedImage=frame(false);
             reuseAfterChange("population_shrink", () -> activity.renderer.objectCount(1), checks);
@@ -2009,6 +2048,16 @@ public final class GraphicsInstrumentation extends Instrumentation {
             activity.renderer.testCamera(count == 1 ? new float[]{5, 4, 7} : new float[]{13, 15, 19},
                     new float[]{0, 1, 0});
         });
+    }
+
+    private void glWithoutRender(Runnable action) throws Exception {
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        activity.surface.queueEvent(() -> {
+            try { action.run(); } catch (Throwable caught) { error.set(caught); }
+            finally { done.countDown(); }
+        });
+        await(done, error, "GL command without intermediate render");
     }
 
     private void gl(Runnable action) throws Exception {

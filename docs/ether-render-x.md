@@ -250,3 +250,54 @@ necesitan actualizarse.
 `EffectStats` reporta partículas visibles/descartadas, tiles activos/cambiados/reutilizados,
 referencias enviadas, batches de material, muestras a resolución completa, muestras
 programadas, coste del plan y si se usó el fast-path de revisión.
+
+
+## REgraphics C04 — materialización física GLES
+
+C04 conecta las decisiones de C02/C03 a dos renderers Android existentes. No crea un motor
+gráfico paralelo.
+
+### Dirty redraw físico
+
+`graphics-android/QuantumRenderer` conserva el FBO terminado. Cuando la única mutación
+desde el último frame es una edición visual de un único objeto:
+
+1. compara una firma estable que excluye únicamente el contenido de ediciones;
+2. calcula un rectángulo conservador de la proyección del objeto, incluyendo el rango máximo
+   permitido de altura, animación y acoplamiento;
+3. activa `GL_SCISSOR_TEST`;
+4. limpia y ejecuta el shader de escena únicamente dentro de ese rectángulo;
+5. conserva intactos los demás píxeles del FBO.
+
+`FrameStats` expone `partialRedraw`, `redrawnPixels`, `reusedPixelEstimate` y el rectángulo
+físico. La instrumentación compara esa salida contra un redraw completo y exige igualdad exacta.
+Cámara, tiempo, núcleo, seed, resolución, presentación u otros cambios siguen forzando redraw total.
+
+### Efectos densos físicos
+
+`GpuVisualActivity.SceneRenderer`, el experimento GLES de partículas ya existente, recibe una
+ruta REgraphics seleccionable:
+
+- 6.000 partículas: FBO de efectos 1×;
+- 24.000 partículas: FBO de efectos 1/2 por eje;
+- 96.000 partículas: FBO de efectos 1/4 por eje;
+- una composición fullscreen lleva el resultado retenido a la superficie Android.
+
+El point size se escala con el divisor para que la reducción del target no multiplique
+artificialmente el tamaño visual de las partículas.
+
+La firma temporal incluye población, divisor, tiempo, touch, feedback y los ocho observables
+visuales. Si la firma es idéntica, el FBO de partículas se reutiliza y el frame solo ejecuta
+la composición final. El control HOLD congela exactamente esas entradas para demostrar esta ruta
+sin fingir reuse durante una animación que realmente cambia.
+
+La ruta DIRECT permanece disponible para A/B y dibuja las partículas directamente a la superficie
+a resolución completa.
+
+### Evidencia y límites
+
+La CI Android ejecuta estas rutas mediante GLES/SwiftShader para demostrar comandos, framebuffer,
+exactitud e integración. Ese resultado **no es una medición de Mali ni FPS de teléfono**.
+La prueba final debe ejecutarse en el dispositivo y comparar DIRECT vs REgraphics con el mismo
+conteo/escena, especialmente 96k, registrando frame time, presentación y cualquier timer GPU
+disponible.
