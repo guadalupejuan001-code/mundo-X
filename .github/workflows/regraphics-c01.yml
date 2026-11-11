@@ -1,0 +1,40 @@
+name: REgraphics C01 Pixel Observability
+
+on:
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/ether_renderer.hpp'
+      - 'native/tests/regraphics_c01_observation.cpp'
+      - 'native/tests/rule_renderer.cpp'
+      - 'CMakeLists.txt'
+      - 'docs/ether-render-x.md'
+      - '.github/workflows/regraphics-c01.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-c01:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build focused render tests
+        run: cmake --build build --target test_regraphics_c01_observation test_rule_renderer -j 2
+      - name: Run C01 exactness and observer-cost test
+        shell: bash
+        run: |
+          mkdir -p evidence/regraphics-c01
+          ./build/test_regraphics_c01_observation | tee evidence/regraphics-c01/observation.json
+          ./build/test_rule_renderer | tee evidence/regraphics-c01/rule-renderer.json
+      - name: Run focused CTest gate
+        run: ctest --test-dir build -R '^(regraphics_c01_observation|rule_renderer)$' --output-on-failure
+      - name: Upload C01 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: regraphics-c01-evidence
+          if-no-files-found: error
+          path: evidence/regraphics-c01/
