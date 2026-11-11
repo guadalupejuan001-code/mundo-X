@@ -656,7 +656,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             if(frameReused){reusedFrames++;pendingEditDirtyId=-1;}
             else {
                 DirtyRect region=null;
-                if(frameReuseEnabled&&!synchronousTiming&&pendingEditDirtyId>=0&&stableFrameKey.matches())
+                if(frameReuseEnabled&&!synchronousTiming&&mirrorMode==MIRRORS_OFF&&pendingEditDirtyId>=0&&stableFrameKey.matches())
                     region=editedObjectRect(pendingEditDirtyId);
                 if(region!=null&&region.pixels()<(long)width*height){
                     elapsed=drawRegion(debug,region);partialRedraw=true;
