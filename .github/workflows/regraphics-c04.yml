@@ -87,3 +87,71 @@ jobs:
           name: REgraphics-C04-XLab-GLES-Evidence
           if-no-files-found: warn
           path: ui-evidence/**
+
+  build-graphics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install graphics Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"             'platforms;android-35' 'build-tools;35.0.0'             'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Build graphics APK and instrumentation
+        shell: bash
+        run: |
+          gradle -p graphics-android --no-daemon --stacktrace             :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Stage graphics artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p c04-graphics-apks
+          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk c04-graphics-apks/COSMIC-X-Engine.apk
+          cp graphics-android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk             c04-graphics-apks/COSMIC-X-Engine-tests.apk
+          sha256sum c04-graphics-apks/COSMIC-X-Engine.apk c04-graphics-apks/COSMIC-X-Engine-tests.apk             | sed 's#c04-graphics-apks/##' > c04-graphics-apks/SHA256SUMS.txt
+          git rev-parse HEAD > c04-graphics-apks/build-commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: REgraphics-C04-Graphics-APKs
+          if-no-files-found: error
+          path: c04-graphics-apks/
+
+  graphics-gles-validation:
+    needs: build-graphics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: REgraphics-C04-Graphics-APKs
+          path: c04-graphics-apks
+      - name: Enable graphics Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"             'emulator' 'platform-tools' 'system-images;android-35;google_apis;x86_64'
+      - name: Run physical GLES/scissor instrumentation
+        shell: bash
+        env:
+          GRAPHICS_APK_DIR: c04-graphics-apks
+          GRAPHICS_EVIDENCE_DIR: c04-graphics-evidence
+          GRAPHICS_TEST_TIMEOUT: '1000'
+        run: bash tools/graphics-emulator-test.sh
+      - name: Upload C04 graphics evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: REgraphics-C04-Graphics-GLES-Evidence
+          if-no-files-found: warn
+          path: c04-graphics-evidence/**
