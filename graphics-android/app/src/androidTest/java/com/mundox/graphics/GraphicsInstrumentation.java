@@ -1088,16 +1088,27 @@ public final class GraphicsInstrumentation extends Instrumentation {
         long updated = automaticStats.renderNumber;
         expect(updated > before, "Changed " + name + " reused a stale framebuffer");
         if("edit".equals(name)){
-            expect(automaticStats.partialRedraw
-                    && automaticStats.redrawnPixels>0
-                    && automaticStats.redrawnPixels<(long)automaticStats.width*automaticStats.height,
-                    "Local edit did not use a bounded physical GLES redraw: pending="
-                            +automaticStats.partialEditPending+" stable="+automaticStats.partialStableInputs
-                            +" mirrorSafe="+automaticStats.partialMirrorSafe
-                            +" redrawn="+automaticStats.redrawnPixels
-                            +" frame="+((long)automaticStats.width*automaticStats.height)
-                            +" rect="+automaticStats.dirtyLeft+","+automaticStats.dirtyBottom+","
-                            +automaticStats.dirtyWidth+"x"+automaticStats.dirtyHeight);
+            long framePixels=(long)automaticStats.width*automaticStats.height;
+            if(automaticStats.mirrorMode==QuantumRenderer.MIRRORS_OFF){
+                expect(automaticStats.partialRedraw
+                        && automaticStats.redrawnPixels>0
+                        && automaticStats.redrawnPixels<framePixels
+                        && automaticStats.partialMirrorSafe,
+                        "Local edit did not use a bounded physical GLES redraw: pending="
+                                +automaticStats.partialEditPending+" stable="+automaticStats.partialStableInputs
+                                +" mirrorSafe="+automaticStats.partialMirrorSafe
+                                +" redrawn="+automaticStats.redrawnPixels
+                                +" frame="+framePixels
+                                +" rect="+automaticStats.dirtyLeft+","+automaticStats.dirtyBottom+","
+                                +automaticStats.dirtyWidth+"x"+automaticStats.dirtyHeight);
+            }else{
+                expect(!automaticStats.partialRedraw
+                        && automaticStats.redrawnPixels==framePixels
+                        && !automaticStats.partialMirrorSafe,
+                        "Mirrored edit did not conservatively fall back to a full GLES redraw: mode="
+                                +automaticStats.mirrorMode+" mirrorSafe="+automaticStats.partialMirrorSafe
+                                +" redrawn="+automaticStats.redrawnPixels+" frame="+framePixels);
+            }
         }
         gl(() -> activity.renderer.setFrameReuseEnabled(false));
         QuantumRenderer.Capture forced = frame(false);
