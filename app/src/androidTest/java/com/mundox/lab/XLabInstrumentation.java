@@ -271,6 +271,8 @@ public final class XLabInstrumentation extends Instrumentation {
                     String direct = awaitRegraphicsStatus(view, "enabled=false", SystemClock.uptimeMillis() + 30_000);
                     require(direct.contains("divisor=1"),
                             "DIRECT A/B path did not return to the full-resolution target: " + direct);
+                    require(statusToken(half,"surface=").equals(statusToken(direct,"surface=")),
+                            "DIRECT and REgraphics changed physical surface dimensions: half="+half+" direct="+direct);
                     saveEvidence("xlab-regraphics-effects.txt",
                             "policy_6000=1\npolicy_24000=2\npolicy_96000=4\n"
                                     + "half=" + half + "\nheld=" + held + "\ndirect=" + direct + "\n");
@@ -1170,6 +1172,14 @@ public final class XLabInstrumentation extends Instrumentation {
         try (FileOutputStream stream = new FileOutputStream(new File(directory, name))) {
             stream.write(content.getBytes("UTF-8"));
         }
+    }
+
+    private static String statusToken(String state,String key) {
+        int start=state.indexOf(key);
+        if(start<0)return "";
+        start+=key.length();
+        int end=state.indexOf(' ',start);
+        return end<0?state.substring(start):state.substring(start,end);
     }
 
     private String awaitRegraphicsStatus(GpuVisualActivity view, String needle, long deadline) {
