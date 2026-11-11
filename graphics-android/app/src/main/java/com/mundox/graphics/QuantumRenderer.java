@@ -37,7 +37,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         /** Actual framebuffer mode and its FIT destination, in Android top-left coordinates. */
         public final int resolutionMode,viewWidth,viewHeight,displayLeft,displayTop,displayWidth,displayHeight;
         public final long coreRevision,coreEpoch,frameNumber,renderNumber,reusedFrames;
-        public final boolean frameReused,partialRedraw;
+        public final boolean frameReused,partialRedraw,partialEditPending,partialStableInputs,partialMirrorSafe;
         public final long redrawnPixels,reusedPixelEstimate;
         public final int dirtyLeft,dirtyBottom,dirtyWidth,dirtyHeight;
         public final boolean infinite;
@@ -50,7 +50,9 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;coreEpoch=r.uploadedEpoch;infinite=r.core.isInfinite();
             mirrorMode=r.mirrorMode;mirrorBudget=r.mirrorBudget;
             frameNumber=r.drawNumber;renderNumber=r.renderNumber;reusedFrames=r.reusedFrames;frameReused=r.frameReused;
-            partialRedraw=r.partialRedraw;redrawnPixels=r.redrawnPixels;
+            partialRedraw=r.partialRedraw;partialEditPending=r.partialEditPending;
+            partialStableInputs=r.partialStableInputs;partialMirrorSafe=r.partialMirrorSafe;
+            redrawnPixels=r.redrawnPixels;
             reusedPixelEstimate=Math.max(0L,(long)width*height-redrawnPixels);
             dirtyLeft=r.partialLeft;dirtyBottom=r.partialBottom;dirtyWidth=r.partialWidth;dirtyHeight=r.partialHeight;
             drawMs=elapsed;device=r.device;gpuSynchronized=r.synchronousTiming;
@@ -212,6 +214,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private long renderNumber,reusedFrames,editUploadRevision;
     private int activeEditCount;
     private boolean frameReused,frameReuseEnabled=true,partialRedraw;
+    private boolean partialEditPending,partialStableInputs,partialMirrorSafe;
     private long redrawnPixels;
     private int partialLeft,partialBottom,partialWidth,partialHeight;
     private int pendingEditDirtyId=-1;
@@ -652,11 +655,14 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             // Synchronous timing always measures actual drawing, never reuse or partial paths.
             frameReused=frameReuseEnabled&&!synchronousTiming&&frameKey.matches();
             partialRedraw=false;partialLeft=partialBottom=partialWidth=partialHeight=0;redrawnPixels=0;
+            partialEditPending=pendingEditDirtyId>=0;
+            partialStableInputs=stableFrameKey.matches();
+            partialMirrorSafe=mirrorMode==MIRRORS_OFF;
             double elapsed=0;
             if(frameReused){reusedFrames++;pendingEditDirtyId=-1;}
             else {
                 DirtyRect region=null;
-                if(frameReuseEnabled&&!synchronousTiming&&mirrorMode==MIRRORS_OFF&&pendingEditDirtyId>=0&&stableFrameKey.matches())
+                if(frameReuseEnabled&&!synchronousTiming&&partialMirrorSafe&&partialEditPending&&partialStableInputs)
                     region=editedObjectRect(pendingEditDirtyId);
                 if(region!=null&&region.pixels()<(long)width*height){
                     elapsed=drawRegion(debug,region);partialRedraw=true;
