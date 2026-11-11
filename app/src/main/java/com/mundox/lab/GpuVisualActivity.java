@@ -396,7 +396,7 @@ public class GpuVisualActivity extends Activity {
             lastEffectSignature = Long.MIN_VALUE;
         }
 
-        private static long mix(long hash, int value) {
+        private long mix(long hash, int value) {
             long v = value & 0xffffffffL;
             for (int i = 0; i < 4; i++) {
                 hash ^= (v >>> (i * 8)) & 255L;
