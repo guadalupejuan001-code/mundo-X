@@ -37,7 +37,9 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         /** Actual framebuffer mode and its FIT destination, in Android top-left coordinates. */
         public final int resolutionMode,viewWidth,viewHeight,displayLeft,displayTop,displayWidth,displayHeight;
         public final long coreRevision,coreEpoch,frameNumber,renderNumber,reusedFrames;
-        public final boolean frameReused;
+        public final boolean frameReused,partialRedraw;
+        public final long redrawnPixels,reusedPixelEstimate;
+        public final int dirtyLeft,dirtyBottom,dirtyWidth,dirtyHeight;
         public final boolean infinite;
         /** CPU submission wall time by default; includes driver completion only when gpuSynchronized. */
         public final double drawMs;
@@ -48,6 +50,9 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             observables=r.coefficients.length;selectedId=r.selected;coreRevision=r.uploadedCore;coreEpoch=r.uploadedEpoch;infinite=r.core.isInfinite();
             mirrorMode=r.mirrorMode;mirrorBudget=r.mirrorBudget;
             frameNumber=r.drawNumber;renderNumber=r.renderNumber;reusedFrames=r.reusedFrames;frameReused=r.frameReused;
+            partialRedraw=r.partialRedraw;redrawnPixels=r.redrawnPixels;
+            reusedPixelEstimate=Math.max(0L,(long)width*height-redrawnPixels);
+            dirtyLeft=r.partialLeft;dirtyBottom=r.partialBottom;dirtyWidth=r.partialWidth;dirtyHeight=r.partialHeight;
             drawMs=elapsed;device=r.device;gpuSynchronized=r.synchronousTiming;
             resolutionMode=r.resolutionMode;viewWidth=r.viewWidth;viewHeight=r.viewHeight;
             displayLeft=r.display.left;displayTop=r.display.top;
@@ -206,8 +211,12 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     private long drawNumber;
     private long renderNumber,reusedFrames,editUploadRevision;
     private int activeEditCount;
-    private boolean frameReused,frameReuseEnabled=true;
+    private boolean frameReused,frameReuseEnabled=true,partialRedraw;
+    private long redrawnPixels;
+    private int partialLeft,partialBottom,partialWidth,partialHeight;
+    private int pendingEditDirtyId=-1;
     private final ExactFrameKey frameKey=new ExactFrameKey();
+    private final ExactFrameKey stableFrameKey=new ExactFrameKey();
     /** Exact uniform/stamp comparison: no lossy hash and no framebuffer copy. */
     private static final class ExactFrameKey {
         private final long[] candidate=new long[64],rendered=new long[64];
@@ -524,6 +533,52 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         if(wait)glFinish();
         double elapsed=(System.nanoTime()-started)/1e6;check("Observación");return elapsed;
     }
+    private static final class DirtyRect {
+        final int left,bottom,width,height;
+        DirtyRect(int left,int bottom,int width,int height){
+            this.left=left;this.bottom=bottom;this.width=width;this.height=height;
+        }
+        long pixels(){return (long)width*height;}
+    }
+    private DirtyRect editedObjectRect(int id){
+        if(id<0||id>=count||width<1||height<1)return null;
+        int side=(int)Math.ceil(Math.sqrt(count));float c=(side-1)*.5f;
+        float centerX=(id%side-c)*2.2f,centerZ=(id/side-c)*2.2f;
+        // Maximum possible edited height under the public state range, ±8% time
+        // modulation and ±25% visual coupling. This deliberately over-bounds
+        // both the old and new object so removed/taller edits remain exact.
+        final float top=6.6f,half=.40f;
+        float angle=timeValue*.12f,ca=(float)Math.cos(angle),sa=(float)Math.sin(angle);
+        float minX=Float.POSITIVE_INFINITY,maxX=Float.NEGATIVE_INFINITY;
+        float minY=Float.POSITIVE_INFINITY,maxY=Float.NEGATIVE_INFINITY;
+        float[] local=new float[4],clip=new float[4];
+        for(int ix=0;ix<2;ix++)for(int iz=0;iz<2;iz++)for(int iy=0;iy<2;iy++){
+            float x=centerX+(ix==0?-half:half),z=centerZ+(iz==0?-half:half),y=iy==0?0f:top;
+            float wx=ca*x+sa*z,wz=-sa*x+ca*z;
+            local[0]=wx;local[1]=y;local[2]=wz;local[3]=1f;
+            Matrix.multiplyMV(clip,0,vp,0,local,0);
+            if(!(clip[3]>1e-5f)||!finite(clip[0])||!finite(clip[1])||!finite(clip[3]))
+                return new DirtyRect(0,0,width,height);
+            float nx=clip[0]/clip[3],ny=clip[1]/clip[3];
+            minX=Math.min(minX,nx);maxX=Math.max(maxX,nx);
+            minY=Math.min(minY,ny);maxY=Math.max(maxY,ny);
+        }
+        final int margin=8;
+        int left=(int)Math.floor((minX*.5f+.5f)*width)-margin;
+        int right=(int)Math.ceil((maxX*.5f+.5f)*width)+margin;
+        int bottom=(int)Math.floor((minY*.5f+.5f)*height)-margin;
+        int topPixel=(int)Math.ceil((maxY*.5f+.5f)*height)+margin;
+        left=Math.max(0,Math.min(width,left));right=Math.max(0,Math.min(width,right));
+        bottom=Math.max(0,Math.min(height,bottom));topPixel=Math.max(0,Math.min(height,topPixel));
+        if(right<=left||topPixel<=bottom)return new DirtyRect(0,0,width,height);
+        return new DirtyRect(left,bottom,right-left,topPixel-bottom);
+    }
+    private double drawRegion(int debug,DirtyRect region){
+        drawState(debug,width,height);glEnable(GL_SCISSOR_TEST);
+        glScissor(region.left,region.bottom,region.width,region.height);
+        try{return drawTarget(fbo,width,height,0,0,synchronousTiming);}
+        finally{glDisable(GL_SCISSOR_TEST);}
+    }
     private double draw(int debug){
         drawState(debug,width,height);return drawTarget(fbo,width,height,0,0,synchronousTiming);
     }
@@ -539,6 +594,20 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         frameKey.integer(coefficients.length);frameKey.integer(editTexture);frameKey.integer(quantumTexture);
         frameKey.real(near);frameKey.real(far);frameKey.real(aspect);frameKey.real(cameraFov);
         frameKey.vector(eye);frameKey.vector(forward);frameKey.vector(right);frameKey.vector(up);frameKey.vector(vp);
+    }
+    /** Same frame identity as describeFrame, except sparse edit contents/count.
+     * If this matches, a pending single-object edit may be redrawn through one
+     * conservative scissor rectangle without touching retained pixels elsewhere. */
+    private void describeStableFrame(int debug){
+        stableFrameKey.begin();
+        stableFrameKey.integer(program);stableFrameKey.integer(fbo);stableFrameKey.integer(width);stableFrameKey.integer(height);
+        stableFrameKey.integer(count);stableFrameKey.integer(selected);stableFrameKey.integer(debug);stableFrameKey.integer(presentation);
+        stableFrameKey.integer(mirrorMode);stableFrameKey.integer(mirrorBudget);stableFrameKey.integer(mirrorFold?1:0);
+        stableFrameKey.real(mirrorReflectance);stableFrameKey.integer(seed);stableFrameKey.real(timeValue);stableFrameKey.real(strength);
+        stableFrameKey.integer(uploadedCore);stableFrameKey.integer(uploadedEpoch);stableFrameKey.integer(uploadedProgram);
+        stableFrameKey.integer(coefficients.length);stableFrameKey.integer(editTexture);stableFrameKey.integer(quantumTexture);
+        stableFrameKey.real(near);stableFrameKey.real(far);stableFrameKey.real(aspect);stableFrameKey.real(cameraFov);
+        stableFrameKey.vector(eye);stableFrameKey.vector(forward);stableFrameKey.vector(right);stableFrameKey.vector(up);stableFrameKey.vector(vp);
     }
     private int pickId(int x,int y){
         // Keep the full projection and viewport: the selected fragment uses
@@ -570,7 +639,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             if(framebufferDirty)sizeFramebuffer();sync();camera();
             if(pickPending){
                 // The scissored ID pass writes into the color framebuffer, even if selection stays unchanged.
-                frameKey.invalidate();
+                frameKey.invalidate();stableFrameKey.invalidate();
                 if(display.contains(pickX,pickY)){
                     int x=display.framebufferX(pickX),y=height-1-display.framebufferY(pickY);
                     selected=pickId(x,y);
@@ -579,12 +648,25 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
                 pickPending=false;pickX=-1;pickY=-1;
             }
             CaptureListener requested=capture;int debug=requested==null?0:captureDebug;
-            selectOpticalProgram();describeFrame(debug);
-            // Synchronous timing always measures actual drawing, never the reuse path.
+            selectOpticalProgram();describeFrame(debug);describeStableFrame(debug);
+            // Synchronous timing always measures actual drawing, never reuse or partial paths.
             frameReused=frameReuseEnabled&&!synchronousTiming&&frameKey.matches();
+            partialRedraw=false;partialLeft=partialBottom=partialWidth=partialHeight=0;redrawnPixels=0;
             double elapsed=0;
-            if(frameReused)reusedFrames++;
-            else {elapsed=draw(debug);frameKey.remember();renderNumber++;}
+            if(frameReused){reusedFrames++;pendingEditDirtyId=-1;}
+            else {
+                DirtyRect region=null;
+                if(frameReuseEnabled&&!synchronousTiming&&pendingEditDirtyId>=0&&stableFrameKey.matches())
+                    region=editedObjectRect(pendingEditDirtyId);
+                if(region!=null&&region.pixels()<(long)width*height){
+                    elapsed=drawRegion(debug,region);partialRedraw=true;
+                    partialLeft=region.left;partialBottom=region.bottom;partialWidth=region.width;partialHeight=region.height;
+                    redrawnPixels=region.pixels();
+                }else{
+                    elapsed=draw(debug);redrawnPixels=(long)width*height;
+                }
+                frameKey.remember();stableFrameKey.remember();pendingEditDirtyId=-1;renderNumber++;
+            }
             glBindFramebuffer(GL_FRAMEBUFFER,fbo);
             Capture pixels=requested==null?null:read();
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDisable(GL_SCISSOR_TEST);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
@@ -634,6 +716,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
             else {core.resetGraph();observables=core.visualProgram();}
         }
         uploadedCore=-1;uploadedEpoch=-1;uploadedProgram=-1;edits.clear();editsDirty=true;selected=-1;pickX=-1;pickY=-1;pickPending=false;timeValue=0;
+        pendingEditDirtyId=-2;stableFrameKey.invalidate();
     }
     public void setTime(float seconds){
         if(!finite(seconds)||Math.abs(seconds)>1_000_000)throw new IllegalArgumentException("Tiempo fuera del rango del proyecto");
@@ -670,7 +753,7 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
     /** Explicit opt-in for a completion-time benchmark; normal frames never force glFinish. */
     public void setSynchronousTiming(boolean enabled){synchronousTiming=enabled;}
     /** Reference mode for A/B validation; does not change world data or optical settings. */
-    public void setFrameReuseEnabled(boolean enabled){frameReuseEnabled=enabled;frameKey.invalidate();}
+    public void setFrameReuseEnabled(boolean enabled){frameReuseEnabled=enabled;frameKey.invalidate();stableFrameKey.invalidate();pendingEditDirtyId=-1;}
     public void orbit(float dx,float dy){
         if(!finite(dx)||!finite(dy))throw new IllegalArgumentException("Movimiento de cámara inválido");
         yaw=(yaw+dx*.006f)%(float)(Math.PI*2);pitch=Math.max(.04f,Math.min(1.52f,pitch+dy*.005f));overrideEye=null;overrideTarget=null;cameraFov=48;
@@ -713,10 +796,15 @@ public final class QuantumRenderer implements GLSurfaceView.Renderer {
         if(action==-1)action=7;
         if(action<0||action>7)throw new IllegalArgumentException("Edición inválida");
         if(selected<0||selected>=count)return;
-        int value=action==1?Math.min(6,edits.getOrDefault(selected,0)+1):action;
+        int previous=edits.getOrDefault(selected,0);
+        int value=action==1?Math.min(6,previous+1):action;
+        if(value==previous)return;
         if(value!=0&&!edits.containsKey(selected)&&edits.size()>=100_000)
             throw new IllegalStateException("El proyecto alcanzó 100.000 ediciones");
-        if(value==0)edits.remove(selected);else edits.put(selected,value);editsDirty=true;
+        if(value==0)edits.remove(selected);else edits.put(selected,value);
+        editsDirty=true;
+        if(pendingEditDirtyId==-1||pendingEditDirtyId==selected)pendingEditDirtyId=selected;
+        else pendingEditDirtyId=-2;
     }
     public void requestCapture(boolean ids,CaptureListener listener){
         if(listener==null)throw new IllegalArgumentException("Falta el receptor de captura");
