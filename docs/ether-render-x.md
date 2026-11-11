@@ -138,3 +138,38 @@ estabilidad de candidatos. Es una simulación por CPU; **no hay aceleración
 cuántica física ni backend GLES propio de Ether Render X** todavía.
 Se mantienen los renderizadores de producción hasta disponer de paridad funcional
 y una comparación de rendimiento favorable.
+
+
+## REgraphics C01 — observación de trabajo por píxel y tile
+
+C01 añade instrumentación **opt-in** al núcleo canónico sin cambiar la imagen ni activar
+todavía dirty rendering. `EtherRenderer::set_observation_enabled(true)` publica:
+
+- píxeles visibles/de fondo y píxeles cambiados/iguales frente al frame anterior;
+- tiles cambiados/iguales y un mapa `TileObservation` con área, candidatos y trabajo;
+- pruebas de candidatos y candidatos podados por distancia por tile;
+- intersecciones exactas y las intersecciones que quedan ocultas por una superficie más cercana;
+- `render_ms` para medir el coste total de la ruta observada frente a la misma ruta sin observador.
+
+La métrica `intersection_overdraw_proxy()` **no es overdraw físico de fragmentos GPU**:
+Ether Render X todavía es un renderer exacto por rayos en CPU y no dispone de transparencia,
+partículas ni backend GLES propio. El nombre conserva esa frontera para que C01 no atribuya
+a la Mali trabajo que aquí no se puede observar. El overdraw/fragmentos físicos de efectos
+deberán medirse en el adaptador GLES cuando esa ruta se integre.
+
+Contrato de C01:
+
+1. observación desactivada por defecto;
+2. mismo `frame_hash` y cero diferencias con el oráculo al activar/desactivar observación;
+3. el mapa de tiles debe sumar exactamente el framebuffer y los contadores globales;
+4. un frame idéntico debe producir cero píxeles/tiles cambiados;
+5. una modificación visual localizada debe marcar solo las regiones afectadas;
+6. el coste del observador se reporta, no se supone gratuito.
+
+Prueba:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build --target test_regraphics_c01_observation -j 2
+./build/test_regraphics_c01_observation
+```
