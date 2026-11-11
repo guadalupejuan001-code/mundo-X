@@ -1124,6 +1124,8 @@ public final class GraphicsInstrumentation extends Instrumentation {
                 .put("forcedDifferentPixels", automatic.changed(forced)).put("repeatDifferentPixels", first.changed(second))
                 .put("reusedWithoutDrawing", true);
         if("edit".equals(name))record.put("partialRedraw",automaticStats.partialRedraw)
+                .put("mirrorMode",automaticStats.mirrorMode)
+                .put("mirrorSafe",automaticStats.partialMirrorSafe)
                 .put("redrawnPixels",automaticStats.redrawnPixels)
                 .put("framePixels",(long)automaticStats.width*automaticStats.height)
                 .put("reusedPixelEstimate",automaticStats.reusedPixelEstimate)
