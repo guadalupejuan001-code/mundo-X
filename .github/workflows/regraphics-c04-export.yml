@@ -1,0 +1,53 @@
+name: Export REgraphics C04 XLab APK
+
+on:
+  push:
+    branches:
+      - artifact/regraphics-c04-xlab-export-20261111
+    paths:
+      - '.github/workflows/regraphics-c04-export.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Download exact validated C04 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: REgraphics-C04-XLab-APKs
+          path: downloaded-c04
+          github-token: ${{ github.token }}
+          run-id: 43087267905
+
+      - name: Verify and stage exact APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find downloaded-c04 -type f -name 'XLab-0.3.2-debug.apk' -print -quit)"
+          test -n "$apk"
+          actual="$(sha256sum "$apk" | awk '{print $1}')"
+          expected="26913f6cf9d148f05cbecfcdef7d9667042630f588fc453a2e2fde81404d0ff8"
+          test "$actual" = "$expected"
+          mkdir -p c04-delivery
+          cp "$apk" c04-delivery/XLab-REgraphics-C04.apk
+          printf '%s  %s\n' "$actual" "XLab-REgraphics-C04.apk" > c04-delivery/SHA256SUMS.txt
+
+      - name: Commit delivery copy to export branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add c04-delivery/XLab-REgraphics-C04.apk c04-delivery/SHA256SUMS.txt
+          git commit -m "Export validated REgraphics C04 XLab APK"
+          git push origin HEAD:artifact/regraphics-c04-xlab-export-20261111
