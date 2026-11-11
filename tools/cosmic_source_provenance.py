@@ -47,7 +47,9 @@ ETHER_RENDER_INTEGRATION_REFERENCE = "2de68561ef0f2c9208e6f151dd163db996e2133c"
 MIL_RENDER_INTEGRATION_REFERENCE = "0817158c866e5708991355b0464b961e09304307"
 SPATIAL_RENDER_REFERENCE = "db79b0a1e805ccadcf3172abbf8966501ebea872"
 ETHER_ENGINE_FACADE_REFERENCE = "ce6f48a1a0cad4d00bc83e79b25d7c4f2e1b0e39"
-SURFACE_BUFFER_REFERENCE = "e295da32e682db8bf681598dda86a2a4a8142db6"\nREGRAPHICS_C01_REFERENCE = "0dec22163840557cec097f44632aeb129b2f1a6b"\nREGRAPHICS_C02_REFERENCE = "535d3f9809a1f861d5c335a118e54e7eacabe7bf"
+SURFACE_BUFFER_REFERENCE = "e295da32e682db8bf681598dda86a2a4a8142db6"
+REGRAPHICS_C01_REFERENCE = "0dec22163840557cec097f44632aeb129b2f1a6b"
+REGRAPHICS_C02_REFERENCE = "535d3f9809a1f861d5c335a118e54e7eacabe7bf"
 SOURCE_SCOPES = (
     "native",
     "graphics-android/app/src/main/cpp",
@@ -98,7 +100,9 @@ ADDITIONAL_SOURCES = {
     "native/tests/ether_frame.cpp": ETHER_FUSION_REFERENCE,
     "native/tests/ether_fusion.cpp": AUDIT_REFERENCE,
     "native/tests/quantum_algorithms.cpp": QUANTUM_ALGORITHMS_REFERENCE,
-    "native/include/mundo_x/ether_renderer.hpp": REGRAPHICS_C02_REFERENCE,\n    "native/tests/regraphics_c01_observation.cpp": REGRAPHICS_C01_REFERENCE,\n    "native/tests/regraphics_c02_dirty_tiles.cpp": REGRAPHICS_C02_REFERENCE,
+    "native/include/mundo_x/ether_renderer.hpp": REGRAPHICS_C02_REFERENCE,
+    "native/tests/regraphics_c01_observation.cpp": REGRAPHICS_C01_REFERENCE,
+    "native/tests/regraphics_c02_dirty_tiles.cpp": REGRAPHICS_C02_REFERENCE,
     "native/include/mundo_x/ether_mil_bridge.hpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "native/tests/ether_mil_renderer.cpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "native/include/mundo_x/ether_render_spatial.hpp": SURFACE_BUFFER_REFERENCE,
