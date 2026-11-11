@@ -1091,7 +1091,13 @@ public final class GraphicsInstrumentation extends Instrumentation {
             expect(automaticStats.partialRedraw
                     && automaticStats.redrawnPixels>0
                     && automaticStats.redrawnPixels<(long)automaticStats.width*automaticStats.height,
-                    "Local edit did not use a bounded physical GLES redraw");
+                    "Local edit did not use a bounded physical GLES redraw: pending="
+                            +automaticStats.partialEditPending+" stable="+automaticStats.partialStableInputs
+                            +" mirrorSafe="+automaticStats.partialMirrorSafe
+                            +" redrawn="+automaticStats.redrawnPixels
+                            +" frame="+((long)automaticStats.width*automaticStats.height)
+                            +" rect="+automaticStats.dirtyLeft+","+automaticStats.dirtyBottom+","
+                            +automaticStats.dirtyWidth+"x"+automaticStats.dirtyHeight);
         }
         gl(() -> activity.renderer.setFrameReuseEnabled(false));
         QuantumRenderer.Capture forced = frame(false);
