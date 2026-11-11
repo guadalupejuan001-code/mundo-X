@@ -11,6 +11,10 @@ on:
       - 'CMakeLists.txt'
       - 'tools/cosmic_source_provenance.py'
       - 'docs/ether-render-x.md'
+      - 'app/src/main/java/com/mundox/lab/GpuVisualActivity.java'
+      - 'app/src/androidTest/java/com/mundox/lab/XLabInstrumentation.java'
+      - 'graphics-android/app/src/main/java/com/mundox/graphics/QuantumRenderer.java'
+      - 'graphics-android/app/src/androidTest/java/com/mundox/graphics/GraphicsInstrumentation.java'
       - '.github/workflows/regraphics-c03.yml'
   workflow_dispatch:
 
@@ -47,3 +51,71 @@ jobs:
           name: regraphics-c03-evidence
           if-no-files-found: error
           path: evidence/regraphics-c03/
+
+  c04-build-xlab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"             'platforms;android-35' 'build-tools;35.0.0'             'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Build XLab app and instrumentation
+        run: gradle --no-daemon --no-configuration-cache :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Stage C04 APKs
+        shell: bash
+        run: |
+          mkdir -p c04-xlab
+          cp app/build/outputs/apk/debug/app-debug.apk c04-xlab/XLab-0.3.2-debug.apk
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk c04-xlab/XLab-instrumentation.apk
+          sha256sum c04-xlab/*.apk | tee c04-xlab/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: REgraphics-C04-XLab-APKs
+          if-no-files-found: error
+          path: c04-xlab/
+
+  c04-xlab-gles:
+    needs: c04-build-xlab
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: REgraphics-C04-XLab-APKs
+          path: ui-apks
+      - name: Enable Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"             'emulator' 'platform-tools' 'system-images;android-35;default;x86_64'
+      - name: Execute XLab GLES path
+        run: bash tools/android/xlab-emulator-smoke.sh
+      - name: Require C04 physical-effect evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ui-evidence/xlab-regraphics-effects.txt
+          grep -q 'policy_96000=4' ui-evidence/xlab-regraphics-effects.txt
+          grep -q 'divisor=2' ui-evidence/xlab-regraphics-effects.txt
+          grep -q 'reused=true' ui-evidence/xlab-regraphics-effects.txt
+          grep -q 'enabled=false' ui-evidence/xlab-regraphics-effects.txt
+      - name: Upload C04 GLES evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: REgraphics-C04-XLab-GLES-Evidence
+          if-no-files-found: warn
+          path: ui-evidence/**
