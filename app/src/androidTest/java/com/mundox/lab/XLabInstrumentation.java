@@ -262,20 +262,28 @@ public final class XLabInstrumentation extends Instrumentation {
                     String half = awaitRegraphicsStatus(view, "divisor=2", SystemClock.uptimeMillis() + 45_000);
                     require(half.contains("enabled=true") && half.contains("targetRatio="),
                             "24k REgraphics path did not materialize an adaptive effect FBO: " + half);
+
+                    view.testParticleCount(96000);
+                    String extreme = awaitRegraphicsStatus(view, "divisor=4", SystemClock.uptimeMillis() + 60_000);
+                    double extremeRatio=Double.parseDouble(statusToken(extreme,"targetRatio="));
+                    require(extreme.contains("enabled=true") && extremeRatio>0 && extremeRatio<.08,
+                            "96k REgraphics path did not physically materialize the quarter-resolution effect FBO: " + extreme);
+
                     view.testHold(true);
                     String held = awaitRegraphicsStatus(view, "reused=true", SystemClock.uptimeMillis() + 45_000);
-                    require(held.contains("hold=true") && held.contains("divisor=2"),
-                            "HOLD did not reuse the exact retained effect target: " + held);
+                    require(held.contains("hold=true") && held.contains("divisor=4"),
+                            "HOLD did not reuse the exact retained 96k effect target: " + held);
                     screenshot("xlab-regraphics-effects.png");
                     view.testRegraphicsEnabled(false);
                     String direct = awaitRegraphicsStatus(view, "enabled=false", SystemClock.uptimeMillis() + 30_000);
                     require(direct.contains("divisor=1"),
                             "DIRECT A/B path did not return to the full-resolution target: " + direct);
-                    require(statusToken(half,"surface=").equals(statusToken(direct,"surface=")),
-                            "DIRECT and REgraphics changed physical surface dimensions: half="+half+" direct="+direct);
+                    require(statusToken(extreme,"surface=").equals(statusToken(direct,"surface=")),
+                            "DIRECT and REgraphics changed physical surface dimensions: extreme="+extreme+" direct="+direct);
                     saveEvidence("xlab-regraphics-effects.txt",
                             "policy_6000=1\npolicy_24000=2\npolicy_96000=4\n"
-                                    + "half=" + half + "\nheld=" + held + "\ndirect=" + direct + "\n");
+                                    + "half=" + half + "\nextreme=" + extreme
+                                    + "\nheld=" + held + "\ndirect=" + direct + "\n");
                 } finally {
                     removeMonitor(monitor);
                     if (gpu != null) {
