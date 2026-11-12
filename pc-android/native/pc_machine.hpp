@@ -4,6 +4,8 @@
 #include "demo_boot.hpp"
 #include "long_mode_guest.hpp"
 #include "quantum_device.hpp"
+#include "mundo_x/autonomous_core_c02.hpp"
+#include <future>
 #include "quantum_guest.hpp"
 #include "pc_video.hpp"
 #include "graphics_demo.hpp"
@@ -33,6 +35,7 @@ class PcMachine {
   Cpu cpu;
   const std::shared_ptr<mundo_x::InfiniteSession> quantum_session;
   PcQuantumDevice quantum_device;
+  std::shared_ptr<mundo_x::AutonomousCore> quantum_scheduler_;
   bool waiting_key=false;
   std::string host_error, boot_kind="none", pending;
   std::uint64_t disk_reads=0;
@@ -134,13 +137,85 @@ class PcMachine {
     if(waiting_key){cpu.set_reg16(0,std::uint16_t(scan)<<8|ascii);waiting_key=false;}
     else if(keys_.size()<256)keys_.push_back(std::uint16_t(scan)<<8|ascii);
   }
+  // A single C01 worker owns only the dispatch policy. PC memory windows, GUI
+  // and guest ports continue sharing the exact original InfiniteSession.
+  void quantum_autonomous_enable(bool enabled) {
+    if (enabled == bool(quantum_scheduler_)) return;
+    if (enabled) {
+      auto scheduler = std::make_shared<mundo_x::AutonomousCore>(quantum_session);
+      quantum_device.use_scheduler(scheduler);
+      quantum_scheduler_ = std::move(scheduler);
+    } else {
+      quantum_device.use_scheduler({});
+      quantum_scheduler_->shutdown();
+      quantum_scheduler_.reset();
+    }
+  }
+
+  // Run 12 copies of the current program against the current *private*
+  // checkpoint per worker-count; never promote workers into the live PC owner.
+  void quantum_workers_benchmark(const std::string& program) {
+    try {
+      if (program.empty() || program.size() > PcQuantumDevice::max_request_bytes)
+        throw std::length_error("Programa XI para C02 fuera de 1..65536 bytes");
+      const auto original = quantum_session->snapshot();
+      const auto background = quantum_session->background();
+      std::ostringstream report;
+      report << "C02 · XI aislado (12 tareas por configuración)";
+      for (unsigned count : {1u, 2u, 4u}) {
+        mundo_x::AutonomousCoreC02::Options options;
+        options.workers = count;
+        mundo_x::AutonomousCoreC02 pool(options, {}, {}, background, quantum_session->limits());
+        pool.import_idle_snapshot(original);
+        const auto begin = std::chrono::steady_clock::now();
+        std::vector<std::future<mundo_x::AutonomousCoreC02::Outcome>> tasks;
+        for (unsigned job = 0; job < 12; ++job)
+          tasks.push_back(pool.submit(program, mundo_x::AutonomousCoreC02::Priority::Normal,
+                                      mundo_x::AutonomousCoreC02::Mode::Isolated));
+        std::string first_response;
+        bool have_first = false;
+        for (auto& task : tasks) {
+          const auto result = task.get();
+          if (!result.ok || result.committed || !result.isolated)
+            throw std::runtime_error("C02 isolated XI failed: " + result.error);
+          if (have_first && first_response != result.output)
+            throw std::runtime_error("C02 workers returned different deterministic XI outputs");
+          first_response = result.output;
+          have_first = true;
+        }
+        const auto elapsed = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - begin).count();
+        if (pool.snapshot() != original)
+          throw std::runtime_error("C02 modified its own authority in isolated mode");
+        const auto metrics = pool.telemetry();
+        if (metrics.completed != 12 || metrics.active != 0 || metrics.reserved_program_bytes != 0)
+          throw std::runtime_error("C02 lost tasks or memory reservations");
+        report << "\n" << count << " workers: " << std::fixed << std::setprecision(2)
+               << elapsed << " ms · " << (elapsed > 0 ? 12000.0 / elapsed : 0.0)
+               << " tareas/s · pico " << metrics.peak_active;
+      }
+      if (quantum_session->snapshot() != original)
+        throw std::runtime_error("PC live state changed during isolated benchmark");
+      quantum_output_ = report.str();
+      quantum_error_.clear();
+      quantum_truncated_ = false;
+    } catch (const std::exception& error) { quantum_error_ = error.what(); }
+  }
+
   // Host commands use the same session as guest ports, but do not consume or
   // replace the guest's in-progress request/response. Expected errors are local.
   void quantum_command(const std::string& program) {
     try {
       if(program.size()>PcQuantumDevice::max_request_bytes)
         throw std::length_error("Quantum request exceeds 65536 bytes");
-      auto output=quantum_session->execute(program);
+      std::string output;
+      if (quantum_scheduler_) {
+        auto task = quantum_scheduler_->submit(program, mundo_x::AutonomousCore::Priority::Interactive).get();
+        if (!task.ok) throw std::runtime_error(task.error);
+        output = std::move(task.output);
+      } else {
+        output = quantum_session->execute(program);
+      }
       quantum_truncated_=output.size()>8192;
       if(quantum_truncated_)output.resize(8192);
       quantum_output_=std::move(output);quantum_error_.clear();
@@ -182,7 +257,8 @@ class PcMachine {
     const auto& observation=quantum_observation_;
     const auto limits=quantum_session->limits();
     std::ostringstream o;
-    o<<"{\"engine\":\"InfiniteCore\",\"background\":"<<quote(quantum_session->background()==mundo_x::InfiniteCore::Background::Zero?"zero":"bell")
+    o<<"{\"engine\":\"InfiniteCore\",\"scheduler_c01\":"<<(quantum_scheduler_?"true":"false")
+     <<",\"isolated_workers_c02_available\":true,\"background\":"<<quote(quantum_session->background()==mundo_x::InfiniteCore::Background::Zero?"zero":"bell")
      <<",\"epoch\":"<<observation.epoch<<",\"revision\":"<<observation.revision
      <<",\"active_qubits\":"<<observation.stats.active_qubits<<",\"components\":"<<observation.stats.components
      <<",\"largest_component\":"<<observation.stats.largest_component<<",\"tableau_bytes\":"<<observation.stats.tableau_bytes
