@@ -1,0 +1,86 @@
+name: Ether Core - equivalence and A/B optimization
+
+on:
+  push:
+    branches: [perf/ether-core-exact-20261112]
+    paths:
+      - 'native/include/mundo_x/ether_core.hpp'
+      - 'native/tests/ether_core_optimization_*.cpp'
+      - 'tools/ether_core_opt_compare.py'
+      - '.github/workflows/ether-core-exact-optimization.yml'
+      - 'docs/ether-core-optimization-2026-11-12.md'
+  pull_request:
+    paths:
+      - 'native/include/mundo_x/ether_core.hpp'
+      - 'native/tests/ether_core_optimization_*.cpp'
+      - 'tools/ether_core_opt_compare.py'
+      - '.github/workflows/ether-core-exact-optimization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-original-semantics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin pre-optimization Ether baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/ether-original 6f36ba5701efcedd5173fb8107db1994328c5810
+          test "$(git -C /tmp/ether-original rev-parse HEAD)" = 6f36ba5701efcedd5173fb8107db1994328c5810
+          mkdir -p ether-evidence
+          git rev-parse HEAD > ether-evidence/candidate-commit.txt
+      - name: Compile identical deterministic test against original and candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variant in original candidate; do
+            if [ "$variant" = original ]; then inc=/tmp/ether-original/native/include; else inc=native/include; fi
+            g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I"$inc" \
+              native/tests/ether_core_optimization_equivalence.cpp -o "/tmp/ether-equivalence-$variant"
+            "/tmp/ether-equivalence-$variant" | tee "ether-evidence/equivalence-$variant.json"
+            g++ -std=c++17 -O3 -Wall -Wextra -Werror -pthread -I"$inc" \
+              native/tests/ether_core_optimization_benchmark.cpp -o "/tmp/ether-benchmark-$variant"
+          done
+          cmp ether-evidence/equivalence-original.json ether-evidence/equivalence-candidate.json
+      - name: Existing native Ether contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B /tmp/ether-opt-build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/ether-opt-build --parallel 2 \
+            --target test_ether_core test_ether_rules test_ether_memory test_ether_fusion \
+                     test_ether_frame test_ether_batch test_infinite_core test_infinite_session
+          ctest --test-dir /tmp/ether-opt-build --output-on-failure \
+            -R '^(ether_core|ether_rules|ether_memory|ether_fusion|ether_frame|ether_batch|infinite_core|infinite_session)$' \
+            | tee ether-evidence/ctest.txt
+      - name: Sanitizers and invalid input contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -pthread -I native/include native/tests/ether_core_optimization_equivalence.cpp \
+            -o /tmp/ether-sanitized
+          ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 \
+            /tmp/ether-sanitized | tee ether-evidence/sanitized.json
+          cmp ether-evidence/equivalence-original.json ether-evidence/sanitized.json
+      - name: Measured paired benchmark (host CPU, not Android)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/ether_core_opt_compare.py \
+            /tmp/ether-benchmark-original /tmp/ether-benchmark-candidate \
+            ether-evidence/paired-benchmark.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Ether-exact-optimization-evidence
+          path: ether-evidence
+          if-no-files-found: warn
