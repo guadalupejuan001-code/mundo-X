@@ -1,0 +1,51 @@
+name: REVERSE Windows C04 - guest IDT exceptions
+on:
+  push:
+    branches: ["feature/reverse-windows-c04-*"]
+  pull_request:
+    paths:
+      - 'pc-android/native/x86_cpu.hpp'
+      - 'pc-android/native/tests/x86_idt_c04_test.cpp'
+      - '.github/workflows/reverse-windows-c04-idt.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c04-guest-idt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build C04 plus original CPU regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/c04 build/c04-evidence
+          CXX="${CXX:-g++}"
+          common=(-std=c++17 -O2 -pthread -I native/include -I pc-android/native)
+          for test in x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
+            "$CXX" "${common[@]}" "pc-android/native/tests/${test}.cpp" -o "build/c04/${test}"
+          done
+      - name: Execute authentic guest x86 / x64 instruction paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
+            "build/c04/${test}" > "build/c04-evidence/${test}.log" 2>&1 || {
+              cat "build/c04-evidence/${test}.log"
+              exit 1
+            }
+            tail -8 "build/c04-evidence/${test}.log"
+          done
+          grep -q 'REVERSE_WINDOWS_C04_IDT_PASS' build/c04-evidence/x86_idt_c04_test.log
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverse-windows-c04-guest-idt
+          path: build/c04-evidence/*.log
+          if-no-files-found: warn
