@@ -680,11 +680,13 @@ class Cpu {
   }
   void dispatch_idt(std::uint8_t vector, std::uint64_t resume_ip,
                     bool software, bool has_error, std::uint32_t error) {
-    // C04: 32/64-bit same-CPL, ring0-only interrupt and trap gates.
-    // C05 will add cross-privilege, TSS/IST, ring3, and compatibility mode.
+    // CPU, not the guest, reads the IDT/GDT/TSS with supervisor privileges.
+    // Guest code still obeys its actual CPL and page U/S permissions.
     const bool long_gate = is_long_mode();
     if (!long_gate && (!cache_[CS].big || (efer & 0x400)))
       fail("protected16/compatibility IDT gates not implemented", FaultCode::UnsupportedState);
+    const auto old_cpl = cpl();
+    SupervisorAccess system(*this);
     const unsigned length = long_gate ? 16U : 8U;
     const auto slot = std::uint64_t(vector) * length;
     if (slot + length - 1 > idtr.limit || idtr.base > UINT64_MAX - slot - length)
@@ -695,40 +697,73 @@ class Cpu {
     const auto low = read_linear(address, 8);
     const auto high = long_gate ? read_linear(address + 8, 8) : 0;
     const auto selector = std::uint16_t((low >> 16) & 0xffffU);
-    const auto reserved = (low >> 32) & 255U;
+    const auto ist = unsigned((low >> 32) & 7U);
+    const auto reserved = unsigned((low >> 35) & 31U);
     const auto attr = unsigned((low >> 40) & 255U);
     const auto type = attr & 31U;
-    if ((type != 0xe && type != 0xf) || !selector)
+    if ((type != 0xe && type != 0xf) || !(selector & 0xfffcU))
       fail("IDT gate is not a 32/64 interrupt or trap gate", FaultCode::ProtectionFault);
     if (!(attr & 0x80)) fail("IDT gate not present", FaultCode::ProtectionFault);
-    if (software && ((segments[CS] & 3U) > ((attr >> 5) & 3U)))
+    if (software && old_cpl > ((attr >> 5) & 3U))
       fail("INT gate DPL check failed", FaultCode::ProtectionFault);
-    if (reserved || (long_gate && (high >> 32)))
-      fail("IDT IST/reserved fields require later CPU support", FaultCode::UnsupportedState);
+    if (reserved || (!long_gate && ist) || (long_gate && (high >> 32)))
+      fail("IDT gate reserved fields are set", FaultCode::ProtectionFault);
     const auto target_ip = (low & 0xffffU) | (((low >> 48) & 0xffffU) << 16) |
                            ((high & 0xffffffffULL) << 32);
     if (long_gate && !canonical(target_ip))
       fail("noncanonical IDT handler RIP", FaultCode::ProtectionFault);
-    if (selector & 3U)
-      fail("cross-privilege IDT selector requires C05", FaultCode::UnsupportedState);
     const auto target_cache = descriptor(selector);
     if (!target_cache.code || (long_gate && !target_cache.long_code) ||
         (!long_gate && !target_cache.big))
-      fail("IDT destination is not a compatible ring0 code segment", FaultCode::ProtectionFault);
-    const unsigned width = long_gate ? 8U : 4U;
+      fail("IDT destination is not a compatible code segment", FaultCode::ProtectionFault);
+    const auto target_cpl = target_cache.conforming ? old_cpl : unsigned(target_cache.dpl);
+    if (target_cache.dpl > old_cpl ||
+        target_cpl > old_cpl || (target_cpl != 0 && target_cpl != 3))
+      fail("IDT destination privilege transition not supported", FaultCode::ProtectionFault);
+    const bool switch_cpl = target_cpl < old_cpl;
     const auto original_cs = segments[CS], original_ss = segments[SS];
-    const auto original_rsp = regs[ESP];
-    const auto original_flags = eflags;
-    if (long_gate) {
-      // 64-bit hardware stacks SS:RSP even without changing CPL.
-      push(original_ss, 8); push(original_rsp, 8);
+    const auto original_rsp = regs[ESP], original_flags = eflags;
+    const unsigned width = long_gate ? 8U : 4U;
+    if (switch_cpl || (long_gate && ist)) {
+      if (!tr.valid) fail("interrupt stack switch needs a loaded TSS", FaultCode::ProtectionFault);
+      std::uint64_t new_rsp = 0;
+      if (long_gate) {
+        const auto tss_offset = ist ? 36U + (ist-1U)*8U : 4U;
+        if (tr.limit < tss_offset+7U)
+          fail("TSS does not contain the requested 64-bit stack", FaultCode::ProtectionFault);
+        new_rsp = read_linear(tr.base+tss_offset,8);
+        if (!canonical(new_rsp) || !new_rsp)
+          fail("TSS provided a noncanonical or null RSP", FaultCode::ProtectionFault);
+        // Null ring0 SS is allowed during the IA-32e interrupt stack switch.
+        segments[SS] = 0;
+        cache_[SS] = SegmentCache{};
+        regs[ESP] = new_rsp;
+      } else {
+        if (!switch_cpl || target_cpl != 0 || tr.limit < 9)
+          fail("protected32 stack switch requires TSS SS0:ESP0", FaultCode::UnsupportedState);
+        new_rsp = read_linear(tr.base+4,4);
+        const auto ss0 = std::uint16_t(read_linear(tr.base+8,2));
+        const auto ss_cache = descriptor(ss0);
+        if (!ss_cache.valid || ss_cache.code || !ss_cache.writable ||
+            ss_cache.dpl != 0 || (ss0 & 3U))
+          fail("protected32 TSS SS0 must be writable ring0 data", FaultCode::ProtectionFault);
+        segments[SS] = ss0;
+        cache_[SS] = ss_cache;
+        put_reg(ESP,4,new_rsp);
+      }
     }
-    push(original_flags, width); push(original_cs, width); push(resume_ip, width);
-    if (has_error) push(error, width);
-    segments[CS] = selector;
+    if (long_gate) {
+      // 64-bit gate pushes SS:RSP even for a same-CPL interrupt.
+      push(original_ss,8); push(original_rsp,8);
+    } else if (switch_cpl) {
+      push(original_ss,4); push(original_rsp,4);
+    }
+    push(original_flags,width);push(original_cs,width);push(resume_ip,width);
+    if (has_error) push(error,width);
+    segments[CS] = std::uint16_t((selector & ~3U) | target_cpl);
     cache_[CS] = target_cache;
-    jump(target_ip, width);
-    if (type == 0xe) eflags &= ~IF; // trap gates preserve IF
+    jump(target_ip,width);
+    if (type == 0xe) eflags &= ~IF;
     eflags &= ~TF;
   }
 
