@@ -554,18 +554,19 @@ class EtherCore {
 
   static void toggle_z(Pauli& p, const std::string& address,
                        const QueryLimits& limits, std::size_t& peak) {
-    // One ordered lookup replaces get_bits -> find -> map::operator[].
-    // Existing cells were already checked when inserted. A new Z-only
-    // neighbour still observes the original address and support budgets.
-    auto it = p.cells.lower_bound(address);
-    if (it != p.cells.end() && !AddressLess{}(address, it->first)) {
+    // A single find covers the common in-place update/cancellation path.
+    // Unlike lower_bound+equality, find avoids an extra full decimal-key
+    // comparison for long addresses. New Z-only neighbours retain the exact
+    // digit and site budget checks before their insertion.
+    auto it = p.cells.find(address);
+    if (it != p.cells.end()) {
       it->second.z = !it->second.z;
       if (!it->second.x && !it->second.z) p.cells.erase(it);
     } else {
       check_address(address, limits);
       if (p.cells.size() >= limits.max_sites)
         throw std::length_error("Ether query cone site budget exceeded");
-      p.cells.emplace_hint(it, address, Bits{false, true});
+      p.cells.emplace(address, Bits{false, true});
     }
     peak = std::max(peak, p.cells.size());
   }
