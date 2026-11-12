@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build/native
-for name in sparse_ram x86_cpu x86_cpu_profile x86_group6_0f00 x86_long_mode x86_alu64_oracle x86_enter_oracle boot_media windows_iso_probe pc_machine pc_group6_iso pc_8042 pc_iso pc_memory pc_memory_fabric pc_video pc_quantum pc_autonomous; do
+for name in sparse_ram x86_cpu x86_cpu_profile x86_group6_0f00 x86_long_mode x86_idt_c04 x86_cpl_c05 x86_bus_c06 x86_alu64_oracle x86_enter_oracle boot_media windows_iso_probe pc_machine pc_group6_iso pc_8042 pc_iso pc_memory pc_memory_fabric pc_video pc_quantum pc_autonomous; do
   g++ -std=c++17 -O2 -pthread -Wall -Wextra -Wpedantic -I../native/include "native/tests/${name}_test.cpp" -o "build/native/${name}_test"
   if "build/native/${name}_test"; then
     :
