@@ -433,6 +433,14 @@ public final class PcInstrumentation extends Instrumentation {
         require(NativeMachine.quantumSnapshot(h).equals(saved),"failed JNI command preserves complete state");
         NativeMachine.quantumReset(h,"bell");s=state(NativeMachine.quantumRestore(h,saved));
         require(s.getJSONObject("quantum").getJSONArray("values").getDouble(0)==1,"snapshot restores exact observed state");
+        JSONObject scheduler=state(NativeMachine.quantumAutonomousSet(h,true)).getJSONObject("quantum");
+        require(scheduler.getBoolean("scheduler_c01"),"C01 should bind to the original guest session");
+        String originalPcSnapshot=NativeMachine.quantumSnapshot(h);
+        JSONObject independent=state(NativeMachine.quantumWorkersBenchmark(h,"x 345\nprobz 345\n")).getJSONObject("quantum");
+        require(independent.getString("error").isEmpty()&&independent.getString("output").contains("4 workers:"),
+                "C02 native worker benchmark should report actual results");
+        require(originalPcSnapshot.equals(NativeMachine.quantumSnapshot(h)),
+                "C02 workers must leave the exact PC state and RNG unchanged");
         pass("host InfiniteCore commands + huge addresses + atomic snapshot restore");
         for(boolean longMode:new boolean[]{false,true}){
             NativeMachine.bootQuantumDemo(h,longMode);s=drain(h);
@@ -519,6 +527,17 @@ public final class PcInstrumentation extends Instrumentation {
         click(a,"Aplicar programa");waitText(a,"XX=1 · YY=-1 · ZZ=1");
         require(coupledBefore.changed(frame(a,true))==0,"UI Z inverse restores exact coupled pixels");
         JSONObject etherContract=etherProgramRoundtrip(a,activityCore,coupledBefore);
+        String beforeWorkers=activityCore.snapshot().infiniteSnapshot;
+        runOnMainSync(()->((EditText)tagged(a.getWindow().getDecorView(),"pc-quantum-program"))
+                .setText("x 345\nprobz 345\n"));
+        click(a,"Planificador C01: desactivado");
+        waitText(a,"Planificador C01: activado");
+        click(a,"Medir C02 · 1/2/4 workers aislados");
+        waitText(a,"4 workers:");
+        require(beforeWorkers.equals(activityCore.snapshot().infiniteSnapshot),
+                "Android UI benchmark must leave guest and renderer core unchanged");
+        click(a,"Planificador C01: activado");
+        waitText(a,"Planificador C01: desactivado");
         long unchangedEpoch=renderer(a).frameStats().coreEpoch;
         String oversized="x 0\n"+new String(new char[65533]).replace('\0',' ');
         runOnMainSync(()->{EditText editor=(EditText)tagged(a.getWindow().getDecorView(),"pc-quantum-program");editor.setText(oversized);require(editor.getText().length()==oversized.length(),"pasted program must not be silently truncated");});
