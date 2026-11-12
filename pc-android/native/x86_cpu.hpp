@@ -74,7 +74,8 @@ class Cpu {
     std::uint64_t base = 0;
     std::uint32_t limit = 0xffff;
     bool valid = true, code = false, writable = true, readable = true,
-         big = false, long_code = false;
+         big = false, long_code = false, conforming = false;
+    std::uint8_t dpl = 0;
   };
 
   std::array<std::uint64_t, 16> regs{};
@@ -134,6 +135,7 @@ class Cpu {
   }
   bool is_long_mode() const { return (efer & 0x400) && cache_[CS].long_code; }
   bool is_real_mode() const { return !(cr0 & 1); }
+  unsigned cpl() const { return is_real_mode() ? 0U : unsigned(segments[CS] & 3U); }
   const char* mode_name() const {
     if (is_real_mode()) return "real16";
     if (is_long_mode()) return "long64";
@@ -184,8 +186,8 @@ class Cpu {
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
     try {
-      if ((segments[CS] & 3) && !is_real_mode())
-        fail("only ring 0 execution is implemented", FaultCode::UnsupportedState);
+      if (!is_real_mode() && cpl() != 0 && cpl() != 3)
+        fail("only CPL0/CPL3 are modeled", FaultCode::UnsupportedState);
       if (eflags & (TF | 0x20000U))
         fail("single-step trap / virtual-8086 state is not implemented", FaultCode::UnsupportedState);
       std::uint8_t op;
@@ -297,6 +299,17 @@ class Cpu {
   std::uint64_t start_ip_ = 0, cursor_ = 0;
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
+  // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
+  // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
+  bool supervisor_internal_ = false;
+  struct SupervisorAccess {
+    Cpu& cpu;
+    bool old;
+    explicit SupervisorAccess(Cpu& owner) : cpu(owner), old(owner.supervisor_internal_) {
+      cpu.supervisor_internal_ = true;
+    }
+    ~SupervisorAccess() { cpu.supervisor_internal_ = old; }
+  };
 
   void rollback(const Snapshot& s) {
     // Only our architectural state and write* calls are transactional. Host
@@ -733,7 +746,7 @@ class Cpu {
 
 inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   if (selector & 4) fail("LDT selectors are not implemented", FaultCode::UnsupportedState);
-  if (selector & 3) fail("only ring-0 segment selectors are implemented", FaultCode::UnsupportedState);
+  SupervisorAccess system(*this);
   const std::uint32_t offset = selector & 0xfff8U;
   if (!offset || offset + 7 > gdtr.limit)
     fail("selector outside GDT or null code/stack selector", FaultCode::ProtectionFault);
@@ -750,6 +763,8 @@ inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   result.limit = (raw & 0xffffU) | ((raw >> 32) & 0xf0000U);
   if (attributes & 8) result.limit = (result.limit << 12) | 0xfffU;
   result.code = (access & 8) != 0;
+  result.dpl = std::uint8_t((access >> 5) & 3U);
+  result.conforming = result.code && (access & 4U);
   result.readable = !result.code || (access & 2);
   result.writable = !result.code && (access & 2);
   result.big = (attributes & 4) != 0;
@@ -771,8 +786,7 @@ inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
     return;
   }
   if ((selector & 0xfffcU) == 0) {
-    if (segment == SS && !is_long_mode()) fail("null protected-mode SS", FaultCode::ProtectionFault);
-    if (selector & 3) fail("only ring-0 null selectors are implemented", FaultCode::UnsupportedState);
+    if (segment == SS) fail("null SS is not implemented for this privilege profile", FaultCode::ProtectionFault);
     segments[segment] = selector; cache_[segment].valid = false;
     // AMD64 preserves the FS/GS hidden base when loading a null selector.
     return;
@@ -780,6 +794,13 @@ inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
   const auto value = descriptor(selector);
   if ((segment == SS && (value.code || !value.writable)) || (value.code && !value.readable))
     fail("segment type is invalid for this data/stack register", FaultCode::ProtectionFault);
+  const auto requested = unsigned(selector & 3U), privilege = cpl();
+  if (segment == SS) {
+    if (requested != privilege || value.dpl != privilege)
+      fail("stack selector RPL/DPL must equal CPL", FaultCode::ProtectionFault);
+  } else if (!value.conforming && std::max(requested, privilege) > value.dpl) {
+    fail("data selector DPL/RPL access denied", FaultCode::ProtectionFault);
+  }
   segments[segment] = selector; cache_[segment] = value;
   if (segment == FS) fs_base = value.base;
   if (segment == GS) gs_base = value.base;
@@ -791,7 +812,10 @@ inline void Cpu::far_transfer(std::uint16_t selector, std::uint64_t target, unsi
   }
   const auto value = descriptor(selector);
   if (!value.code) fail("far transfer target is not a code segment", FaultCode::ProtectionFault);
-  segments[CS] = selector; cache_[CS] = value;
+  if ((selector & 3U) > cpl() ||
+      (value.conforming ? value.dpl > cpl() : value.dpl != cpl()))
+    fail("far control transfer privilege check failed", FaultCode::ProtectionFault);
+  segments[CS] = std::uint16_t((selector & ~3U) | cpl()); cache_[CS] = value;
   jump(target, value.long_code ? 8 : bytes);
 }
 
@@ -872,6 +896,7 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
   Trap trap{FaultCode::PageFault, reason};
   trap.address = address;
   trap.error = (present ? 1U : 0U) | (access == Access::Write ? 2U : 0U) |
+               ((cpl() == 3 && !supervisor_internal_) ? 4U : 0U) |
                (reserved ? 8U : 0U) | (access == Access::Execute ? 16U : 0U);
   throw trap;
 }
@@ -884,7 +909,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
   if (!canonical(address)) fail("non-canonical page-walk address", FaultCode::ProtectionFault);
   constexpr std::uint64_t address_mask = 0x000ffffffffff000ULL;
   std::uint64_t table = cr3 & address_mask;
-  bool writable = true, executable = true;
+  bool writable = true, executable = true, user_access = true;
+  const bool user_mode = cpl() == 3 && !supervisor_internal_;
   for (unsigned level = 4; level != 0; --level) {
     const unsigned shift = 12 + 9 * (level - 1);
     const auto entry_address = table + (((address >> shift) & 0x1ffU) * 8);
@@ -900,11 +926,14 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
     if (large && (entry & 0x1fe000U))
       page_fault(address, access, true, true, "2-MiB page physical base is misaligned");
     writable = writable && (entry & 2);
+    user_access = user_access && (entry & 4);
     executable = executable && !(entry >> 63);
     const bool leaf = level == 1 || large;
     if (leaf) {
-      if (access == Access::Write && !writable && (cr0 & 0x10000U))
-        page_fault(address, access, true, false, "supervisor write denied by page permissions / CR0.WP");
+      if (user_mode && !user_access)
+        page_fault(address, access, true, false, "CPL3 access denied by U/S page permissions");
+      if (access == Access::Write && !writable && (user_mode || (cr0 & 0x10000U)))
+        page_fault(address, access, true, false, "page is read-only for this privilege");
       if (access == Access::Execute && !executable)
         page_fault(address, access, true, false, "instruction fetch denied by NX page permissions");
     }
