@@ -140,6 +140,18 @@ ADDITIONAL_SOURCES.update({
     "native/tests/ether_triangle.cpp": TRIANGLE_RENDER_REFERENCE,
 })
 
+# Ether Core exact optimization: these source bytes are now independently
+# reviewed against immutable main and verified in PR #82 (2,583 exhaustive/
+# randomized cases, 8 native contracts, ASan/UBSan and paired A/B timings).
+# Keep the strict inventory and byte equality checks: register the new tests
+# and the exact modified core against their immutable source revision.
+ETHER_EXACT_OPT_REFERENCE = "8d06ad20ada2a2aa30b16eaa6bdc3cd53b3959be"
+ADDITIONAL_SOURCES.update({
+    "native/include/mundo_x/ether_core.hpp": ETHER_EXACT_OPT_REFERENCE,
+    "native/tests/ether_core_optimization_equivalence.cpp": ETHER_EXACT_OPT_REFERENCE,
+    "native/tests/ether_core_optimization_benchmark.cpp": ETHER_EXACT_OPT_REFERENCE,
+})
+
 RESOLUTION_SOURCE = "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java"
 
 
