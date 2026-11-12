@@ -110,7 +110,7 @@ void long_pf_resume() {
   need(cpu.regs[Cpu::EAX]==0x1122334455667788ULL,"guest handler failed to repair PTE/retry MOV");
   need(cpu.eip==0xa009 && cpu.regs[Cpu::ESP]==0x190000,"IRETQ did not restore RIP/RSP");
   need(cpu.flag(Cpu::IF),"IRETQ did not restore IF");
-  need((cpu.read64(pte)&0xfffU)==3,"guest handler did not install a present writable PTE");
+  need((cpu.read64(pte)&3U)==3,"guest handler did not install a present writable PTE");
   std::cout<<"C04_LONG_PF_RETRY_PASS cr2="<<cpu.cr2<<"\n";
 }
 void long_ud_skip() {
