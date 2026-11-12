@@ -799,7 +799,7 @@ inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   const unsigned access = (raw >> 40) & 0xffU, attributes = (raw >> 52) & 15U;
   if (!(access & 0x80)) fail("segment descriptor not present", FaultCode::ProtectionFault);
   if (!(access & 0x10)) fail("system segments, call gates and task switches are not implemented", FaultCode::UnsupportedState);
-  if (access & 0x60) fail("only DPL 0 segments are implemented", FaultCode::UnsupportedState);
+  // DPL0..3 are valid; caller enforces CPL/RPL privilege rules.
   if (access & 4) fail("conforming code / expand-down segments are not implemented", FaultCode::UnsupportedState);
   SegmentCache result;
   result.base = ((raw >> 16) & 0xffffffU) | ((raw >> 32) & 0xff000000U);
