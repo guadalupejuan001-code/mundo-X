@@ -239,8 +239,10 @@ class Cpu {
           }
         };
         if (deliver(unsigned(vector), vector == 14 || vector == 13, t.error) ||
-            deliver(8, true, 0)) // Nested delivery failure -> #DF.
+            deliver(8, true, 0)) { // Nested delivery failure -> #DF.
+          fault.reset(); // A guest-handled event must not leave a host fault latched.
           return StepResult::Executed;
+        }
         fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_,
                       t.reason + " (guest IDT delivery failed; triple fault)", t.address, t.error};
         return StepResult::Faulted;
