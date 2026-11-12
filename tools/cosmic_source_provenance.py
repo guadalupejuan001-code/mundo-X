@@ -23,6 +23,8 @@ INFINITE_REFERENCE = "a2de628ffec3d3b3c3cf797a0bac3e42984b5471"
 INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
 # Immutable first commit that contains the two new opt-in C01 scheduler sources.
 AUTONOMOUS_C01_REFERENCE = "a41f1b07313406cc5f3a6f083b9851d682d50a7f"
+# Immutable candidate commit introducing the isolated C02 headers and exact tests.
+AUTONOMOUS_C02_REFERENCE = "8e4ce1c0d2ee830919c7a1c2bad89abe0393b102"
 ETHER_REFERENCE = "d351e83ca3be47fa63a14c462b358ac0cb5d65d7"
 ETHER_INTEGRATION_REFERENCE = "61917d9c00d90f384a7d98f4f83c5a81399576e8"
 ETHER_FUSION_REFERENCE = "d4b9893ddec9c6fbce3911f3db349b1011686538"
@@ -96,6 +98,9 @@ ADDITIONAL_SOURCES = {
     "native/tests/infinite_session.cpp": INTEGRATION_REFERENCE,
     "native/include/mundo_x/autonomous_core.hpp": AUTONOMOUS_C01_REFERENCE,
     "native/tests/autonomous_core.cpp": AUTONOMOUS_C01_REFERENCE,
+    "native/include/mundo_x/autonomous_core_c02.hpp": AUTONOMOUS_C02_REFERENCE,
+    "native/tests/autonomous_core_c02.cpp": AUTONOMOUS_C02_REFERENCE,
+    "native/tests/autonomous_core_c02_benchmark.cpp": AUTONOMOUS_C02_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": ETHER_FUSION_REFERENCE,
     "native/include/mundo_x/ether_core.hpp": INTERVAL_EVALUATION_REFERENCE,
     "native/tests/ether_core.cpp": ETHER_REFERENCE,
