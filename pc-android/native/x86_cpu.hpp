@@ -280,6 +280,41 @@ class Cpu {
     return StepResult::Faulted;
   }
 
+  // External hardware IRQ is not a software INT: it ignores gate DPL,
+  // uses the next instruction's IP and obeys IF. Pending IRQs remain with PIC.
+  bool raise_external_irq(std::uint8_t vector) {
+    if (!flag(IF) || fault) return false;
+    const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
+                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted};
+    start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
+    try {
+      if (is_real_mode()) {
+        const auto entry=std::uint32_t(vector)*4;
+        if(entry+3>idtr.limit)
+          fail("hardware IRQ vector is outside real-mode IVT",FaultCode::SegmentLimit);
+        const auto target=read16(idtr.base+entry);
+        const auto segment=read16(idtr.base+entry+2);
+        push(eflags,2);push(segments[CS],2);push(eip,2);
+        eflags &= ~(IF|TF);
+        segments[CS]=segment;
+        jump(target,2);
+      } else {
+        dispatch_idt(vector,eip,false,false,0);
+      }
+      halted=false;
+      transaction_=false;journal_.clear();
+      return true;
+    } catch (const Trap& t) {
+      rollback(before);
+      fault=Fault{t.code,start_cs_,start_ip_,0,{},"hardware IRQ delivery: "+t.reason,t.address,t.error};
+      if(t.code==FaultCode::PageFault)cr2=t.address;
+    } catch(const std::exception& e) {
+      rollback(before);
+      fault=Fault{FaultCode::HostError,start_cs_,start_ip_,0,{},std::string("hardware IRQ delivery: ")+e.what()};
+    }
+    return false;
+  }
+
  private:
   struct Trap : std::runtime_error {
     FaultCode code;
