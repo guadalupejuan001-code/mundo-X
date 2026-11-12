@@ -627,19 +627,26 @@ class Cpu {
     put_index(r, index(r) + (flag(DF) ? -std::uint64_t(bytes) : bytes));
   }
   std::uint32_t port_in(std::uint16_t port, unsigned bytes) {
+    if (cpl() > ((eflags >> 12) & 3U))
+      fail("CPL exceeds IOPL for IN (TSS I/O bitmap not modeled)", FaultCode::ProtectionFault);
     if (!in_hook) fail("IN has no port backend", FaultCode::UnsupportedPort);
     const auto value = in_hook(port, bytes);
     if (!value) fail("IN port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
     return *value & mask(bytes);
   }
   void port_out(std::uint16_t port, unsigned bytes, std::uint32_t value) {
+    if (cpl() > ((eflags >> 12) & 3U))
+      fail("CPL exceeds IOPL for OUT (TSS I/O bitmap not modeled)", FaultCode::ProtectionFault);
     if (!out_hook || !out_hook(port, bytes, value & mask(bytes)))
       fail("OUT port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
   }
   void restore_flags(std::uint32_t value, unsigned bytes) {
     if (value & TF) fail("trap flag requires an unimplemented debug exception", FaultCode::UnsupportedState);
     // POPFD cannot change VM/RF; accepted bits exclude reserved flags.
-    constexpr std::uint32_t writable = 0x00247fd5U;
+    std::uint32_t writable = 0x00247fd5U;
+    // POPF at CPL3 cannot change IOPL; IF is preserved unless CPL<=IOPL.
+    if (cpl() != 0) writable &= ~0x3000U;
+    if (cpl() > ((eflags >> 12) & 3U)) writable &= ~IF;
     const auto bits = writable & mask(bytes);
     eflags = (eflags & ~bits) | (value & bits) | 2;
   }
@@ -1303,6 +1310,8 @@ inline void Cpu::extended() {
         write_cr0((cr0 & ~15U) | value | (cr0 & 1)); return;
       }
       if (m.group > 3) fail("system group-7 instruction not implemented", FaultCode::UnsupportedOpcode);
+      if (cpl() != 0 && m.group >= 2)
+        fail("LGDT/LIDT require CPL0", FaultCode::ProtectionFault);
       require_memory(m.rm);
       const unsigned base_bytes = is_long_mode() ? 8 : 4;
       const auto address = segment_linear(m.rm.segment, operand_offset(m.rm), base_bytes + 2,
@@ -1322,8 +1331,11 @@ inline void Cpu::extended() {
       }
       return;
     }
-    case 0x06: cr0 &= ~8U; return;  // CLTS; no floating-point execution is claimed.
+    case 0x06:
+      if (cpl() != 0) fail("CLTS requires CPL0", FaultCode::ProtectionFault);
+      cr0 &= ~8U; return;  // no floating-point execution is claimed.
     case 0x20: case 0x22: {
+      if (cpl() != 0) fail("MOV CR requires CPL0", FaultCode::ProtectionFault);
       const auto m = modrm();
       if (!m.rm.is_register) fail("MOV CR requires a register operand", FaultCode::InvalidInstruction);
       if (m.reg != 0 && m.reg != 2 && m.reg != 3 && m.reg != 4)
@@ -1340,8 +1352,10 @@ inline void Cpu::extended() {
       return;
     }
     case 0x30:
+      if (cpl() != 0) fail("WRMSR requires CPL0", FaultCode::ProtectionFault);
       write_msr(std::uint32_t(regs[ECX]), (std::uint64_t(std::uint32_t(regs[EDX])) << 32) | std::uint32_t(regs[EAX])); return;
     case 0x32: {
+      if (cpl() != 0) fail("RDMSR requires CPL0", FaultCode::ProtectionFault);
       const auto value = read_msr(std::uint32_t(regs[ECX]));
       put_reg(EAX, 4, value); put_reg(EDX, 4, value >> 32); return;
     }
@@ -1660,13 +1674,19 @@ inline void Cpu::execute(std::uint8_t op) {
       far_transfer(cs, target, bytes); return;
     }
     case 0xeb: { const auto disp = signed_value(immediate(1), 1); relative(disp, bytes); return; }
-    case 0xf4: halted = true; return;
+    case 0xf4:
+      if (cpl() != 0) fail("HLT requires CPL0", FaultCode::ProtectionFault);
+      halted = true; return;
     case 0xf5: set_flag(CF, !flag(CF)); return;
     case 0xf6: case 0xf7: { const auto m = modrm(); group3(m, (op & 1U) ? bytes : 1); return; }
     case 0xf8: set_flag(CF, false); return;
     case 0xf9: set_flag(CF, true); return;
-    case 0xfa: set_flag(IF, false); return;
-    case 0xfb: set_flag(IF, true); return;
+    case 0xfa:
+      if (cpl() > ((eflags >> 12) & 3U)) fail("CLI requires IOPL", FaultCode::ProtectionFault);
+      set_flag(IF, false); return;
+    case 0xfb:
+      if (cpl() > ((eflags >> 12) & 3U)) fail("STI requires IOPL", FaultCode::ProtectionFault);
+      set_flag(IF, true); return;
     case 0xfc: set_flag(DF, false); return;
     case 0xfd: set_flag(DF, true); return;
     case 0xfe: case 0xff: {
