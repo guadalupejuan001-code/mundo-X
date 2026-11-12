@@ -99,6 +99,11 @@ class Cpu {
   // Widths are BYTES (1, 2, or 4). A missing/declined hook is a fault.
   std::function<std::optional<std::uint32_t>(std::uint16_t, unsigned)> in_hook;
   std::function<bool(std::uint16_t, unsigned, std::uint32_t)> out_hook;
+  // A device claims individual physical bus bytes, including MMIO above RAM.
+  // A claimed but unreadable/unwritable address faults rather than becoming RAM.
+  std::function<bool(std::uint64_t)> mmio_claim_hook;
+  std::function<std::optional<std::uint8_t>(std::uint64_t)> mmio_read_hook;
+  std::function<bool(std::uint64_t, std::uint8_t)> mmio_write_hook;
 
   explicit Cpu(std::size_t ram_bytes = 2 * 1024 * 1024)
       : Cpu(ram_bytes, MemoryFabric::default_budget(ram_bytes)) {}
@@ -154,11 +159,27 @@ class Cpu {
 
   // Physical BUS accesses: A20 masking applies. Direct memory[] access is for
   // host image loading and bypasses CPU bus semantics and the write journal.
-  std::uint8_t read8(std::uint64_t address) const { return memory[physical_index(address)]; }
+  std::uint8_t read8(std::uint64_t address) const {
+    const auto bus=bus_address(address);
+    if (mmio_claim_hook && mmio_claim_hook(bus)) {
+      if (mmio_read_hook) {
+        const auto byte=mmio_read_hook(bus);
+        if (byte) return *byte;
+      }
+      fail("claimed MMIO read is unsupported",FaultCode::UnsupportedPort);
+    }
+    return memory[physical_index(address)];
+  }
   std::uint16_t read16(std::uint64_t address) const { return std::uint16_t(read_physical(address, 2)); }
   std::uint32_t read32(std::uint64_t address) const { return std::uint32_t(read_physical(address, 4)); }
   std::uint64_t read64(std::uint64_t address) const { return read_physical(address, 8); }
   void write8(std::uint64_t address, std::uint8_t value) {
+    const auto bus=bus_address(address);
+    if (mmio_claim_hook && mmio_claim_hook(bus)) {
+      if (!mmio_write_hook || !mmio_write_hook(bus,value))
+        fail("claimed MMIO write is unsupported",FaultCode::UnsupportedPort);
+      return; // device-side MMIO writes cannot be reversed by RAM journaling
+    }
     const auto index = physical_index(address);
     memory.prepare_write(index, 1);
     if (transaction_) journal_.emplace_back(index, std::uint8_t(memory[index]));
@@ -259,6 +280,41 @@ class Cpu {
     return StepResult::Faulted;
   }
 
+  // External hardware IRQ is not a software INT: it ignores gate DPL,
+  // uses the next instruction's IP and obeys IF. Pending IRQs remain with PIC.
+  bool raise_external_irq(std::uint8_t vector) {
+    if (!flag(IF) || fault) return false;
+    const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
+                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted};
+    start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
+    try {
+      if (is_real_mode()) {
+        const auto entry=std::uint32_t(vector)*4;
+        if(entry+3>idtr.limit)
+          fail("hardware IRQ vector is outside real-mode IVT",FaultCode::SegmentLimit);
+        const auto target=read16(idtr.base+entry);
+        const auto segment=read16(idtr.base+entry+2);
+        push(eflags,2);push(segments[CS],2);push(eip,2);
+        eflags &= ~(IF|TF);
+        segments[CS]=segment;
+        jump(target,2);
+      } else {
+        dispatch_idt(vector,eip,false,false,0);
+      }
+      halted=false;
+      transaction_=false;journal_.clear();
+      return true;
+    } catch (const Trap& t) {
+      rollback(before);
+      fault=Fault{t.code,start_cs_,start_ip_,0,{},"hardware IRQ delivery: "+t.reason,t.address,t.error};
+      if(t.code==FaultCode::PageFault)cr2=t.address;
+    } catch(const std::exception& e) {
+      rollback(before);
+      fault=Fault{FaultCode::HostError,start_cs_,start_ip_,0,{},std::string("hardware IRQ delivery: ")+e.what()};
+    }
+    return false;
+  }
+
  private:
   struct Trap : std::runtime_error {
     FaultCode code;
@@ -327,15 +383,22 @@ class Cpu {
     if (r >= 16) throw std::out_of_range("register index");
   }
   enum class Access { Read, Write, Execute };
+  std::uint64_t bus_address(std::uint64_t address) const {
+    return a20_enabled ? address : address & ~std::uint64_t{0x100000};
+  }
+  bool mmio_at(std::uint64_t address) const {
+    return mmio_claim_hook && mmio_claim_hook(bus_address(address));
+  }
   std::size_t physical_index(std::uint64_t address) const {
-    const std::uint64_t bus = a20_enabled ? address : address & ~std::uint64_t{0x100000};
+    const std::uint64_t bus = bus_address(address);
     if (bus >= memory.size()) fail("physical RAM access outside allocation", FaultCode::MemoryBounds);
     return bus;
   }
   void preflight(std::uint64_t address, unsigned bytes) const {
     if (bytes == 0 || address > std::numeric_limits<std::uint64_t>::max() - (bytes - 1))
       fail("physical address overflow", FaultCode::MemoryBounds);
-    for (unsigned i = 0; i < bytes; ++i) (void)physical_index(address + i);
+    for (unsigned i = 0; i < bytes; ++i)
+      if (!mmio_at(address + i)) (void)physical_index(address + i);
   }
   std::uint64_t read_physical(std::uint64_t address, unsigned bytes) const {
     preflight(address, bytes);
@@ -345,8 +408,12 @@ class Cpu {
   }
   void write_physical(std::uint64_t address, unsigned bytes, std::uint64_t value) {
     preflight(address, bytes);
-    const auto first = physical_index(address), last = physical_index(address + bytes - 1);
-    if (last == first + bytes - 1) memory.prepare_write(first, bytes);
+    bool ram_only=true;
+    for (unsigned i=0;i<bytes;++i) ram_only &= !mmio_at(address+i);
+    if (ram_only) {
+      const auto first = physical_index(address), last = physical_index(address + bytes - 1);
+      if (last == first + bytes - 1) memory.prepare_write(first, bytes);
+    }
     for (unsigned i = 0; i < bytes; ++i) write8(address + i, std::uint8_t(value >> (8U * i)));
   }
   static bool canonical(std::uint64_t value) {
@@ -420,16 +487,19 @@ class Cpu {
       const unsigned chunk = std::min<unsigned>(bytes - done, 0x1000U - unsigned(linear & 0xfffU));
       for (unsigned i = 0; i < chunk; ++i) {
         physical[done + i] = first_physical + i;
-        (void)physical_index(physical[done + i]);
+        if (!mmio_at(physical[done + i])) (void)physical_index(physical[done + i]);
       }
       done += chunk;
     }
-    bool contiguous = true;
-    const auto first = physical_index(physical[0]);
-    for (unsigned i = 1; i < bytes; ++i)
-      if (physical_index(physical[i]) != first + i) contiguous = false;
-    if (contiguous) memory.prepare_write(first, bytes);
-    else for (unsigned i = 0; i < bytes; ++i) memory.prepare_write(physical_index(physical[i]), 1);
+    bool contiguous=true,ram_only=true;
+    for (unsigned i=0;i<bytes;++i) if (mmio_at(physical[i])) ram_only=false;
+    if (ram_only) {
+      const auto first=physical_index(physical[0]);
+      for(unsigned i=1;i<bytes;++i)
+        if(physical_index(physical[i])!=first+i)contiguous=false;
+      if(contiguous)memory.prepare_write(first,bytes);
+      else for(unsigned i=0;i<bytes;++i)memory.prepare_write(physical_index(physical[i]),1);
+    }
     for (unsigned i = 0; i < bytes; ++i)
       write8(physical[i], std::uint8_t(value >> (8U * i)));
   }
