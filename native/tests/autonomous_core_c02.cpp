@@ -52,14 +52,14 @@ void admission_tests() {
         "unsupported host probe retains configured fixed cap");
 
   std::atomic<std::uint64_t> available{200};
-  C02::Options small;
-  small.workers = 1;
-  small.max_queued = 2;
-  small.max_program_bytes = 1000;
-  small.max_queue_bytes = 1000;
-  small.host_reserve_bytes = 100;
-  small.admission_share_percent = 50;
-  C02 manager(small, [&] { return available.load(); });
+  C02::Options restricted;
+  restricted.workers = 1;
+  restricted.max_queued = 2;
+  restricted.max_program_bytes = 1000;
+  restricted.max_queue_bytes = 1000;
+  restricted.host_reserve_bytes = 100;
+  restricted.admission_share_percent = 50;
+  C02 manager(restricted, [&] { return available.load(); });
   rejects([&] { manager.submit(std::string(60, ' ')); },
           "memory pressure rejects admission before allocating XI state");
   available.store(1000);
