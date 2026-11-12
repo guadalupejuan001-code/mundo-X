@@ -211,6 +211,19 @@ class AutonomousCoreC02 {
   }
 
   // The snapshot belongs to the authority, not an individual worker.
+  // Explicitly imports an authenticated host snapshot into this *private*
+  // scheduler only while idle. Host memory, guest devices and renderers remain
+  // attached to the original InfiniteSession; C02 never commits back to it.
+  // A failed import leaves the candidate authority unchanged.
+  void import_idle_snapshot(const std::string& saved) {
+    if (saved.size() > options_.max_queue_bytes)
+      throw std::length_error("C02 host snapshot exceeds import memory ceiling");
+    std::scoped_lock<std::mutex, std::mutex> lock(queue_mutex_, authority_mutex_);
+    if (stopping_ || queued_ || active_)
+      throw std::runtime_error("C02 snapshot import requires an idle live scheduler");
+    authority_.restore(saved);
+  }
+
   std::string snapshot() const {
     std::lock_guard<std::mutex> lock(authority_mutex_);
     return authority_.snapshot();

@@ -130,6 +130,12 @@ JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootLongModeDemo(JNI
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootQuantumDemo(JNIEnv* e,jclass,jlong h,jboolean long_mode){return action(e,h,[&](auto& m){m.boot_quantum_demo(long_mode==JNI_TRUE);});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_bootQuantumPhaseDemo(JNIEnv* e,jclass,jlong h){return action(e,h,[](auto& m){m.boot_quantum_demo(false,true);});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumCommand(JNIEnv* e,jclass,jlong h,jstring program){return quantum_action(e,h,[&](auto& m){m.quantum_command(ascii(e,program,cosmic_pc::PcQuantumDevice::max_request_bytes));});}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumAutonomousSet(JNIEnv* e,jclass,jlong h,jboolean enabled){
+  return quantum_action(e,h,[&](auto& m){m.quantum_autonomous_enable(enabled==JNI_TRUE);});
+}
+JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumWorkersBenchmark(JNIEnv* e,jclass,jlong h,jstring program){
+  return quantum_action(e,h,[&](auto& m){m.quantum_workers_benchmark(ascii(e,program,cosmic_pc::PcQuantumDevice::max_request_bytes));});
+}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumReset(JNIEnv* e,jclass,jlong h,jstring background){return quantum_action(e,h,[&](auto& m){m.quantum_reset(ascii(e,background,4));});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumProbe(JNIEnv* e,jclass,jlong h,jstring first,jstring second){return quantum_action(e,h,[&](auto& m){m.quantum_probe(ascii(e,first,4096),ascii(e,second,4096));});}
 JNIEXPORT jstring JNICALL Java_com_cosmicx_pc_NativeMachine_quantumRestore(JNIEnv* e,jclass,jlong h,jstring snapshot){return quantum_action(e,h,[&](auto& m){m.quantum_restore(ascii(e,snapshot,16*1024*1024));});}

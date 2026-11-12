@@ -2,7 +2,7 @@ name: Mundo X PC V1 — native Android standalone
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/infinite-autonomous-c02-independent-workers-20261112]
     paths: ['pc-android/**','native/**','graphics-android/**','.github/workflows/mundo-pc-v1.yml']
   push:
     branches: [main]

@@ -159,6 +159,8 @@ public final class MainActivity extends Activity {
     private Button quantumRunButton, quantumZeroButton, quantumBellButton, quantumProbeButton;
     private Button quantumSaveButton, quantumOpenButton, quantumDemoButton, quantum64DemoButton;
     private Button quantumPhaseDemoButton;
+    private Button quantumC01Button, quantumC02Button;
+    private boolean quantumC01Enabled = false;
     private Button quantumCouplingButton;
     private boolean quantumCoupled = true;
     private float quantumTouchX, quantumTouchY;
@@ -489,6 +491,19 @@ public final class MainActivity extends Activity {
             final String program = quantumProgram.getText().toString();
             operate(() -> NativeMachine.quantumCommand(machine, program));
         });
+        quantumC01Button = button("Planificador C01: desactivado", false);
+        quantumC01Button.setContentDescription("pc-autonomous-c01-toggle");
+        panel.addView(quantumC01Button, new LinearLayout.LayoutParams(-1, dp(48)));
+        quantumC01Button.setOnClickListener(v ->
+                operate(() -> NativeMachine.quantumAutonomousSet(machine, !quantumC01Enabled)));
+        quantumC02Button = button("Medir C02 · 1/2/4 workers aislados", false);
+        quantumC02Button.setContentDescription("pc-autonomous-c02-benchmark");
+        panel.addView(quantumC02Button, new LinearLayout.LayoutParams(-1, dp(48)));
+        quantumC02Button.setOnClickListener(v -> {
+            final String program = quantumProgram.getText().toString();
+            operate(() -> NativeMachine.quantumWorkersBenchmark(machine, program));
+        });
+        panel.addView(text("C01 ordena peticiones del huésped y del editor; C02 mide copias privadas y nunca cambia el núcleo activo.", 11, MUTED));
         LinearLayout resets = row(panel);
         quantumZeroButton = button("Fondo cero", false);
         quantumBellButton = button("Fondo Bell", false);
@@ -1066,6 +1081,10 @@ public final class MainActivity extends Activity {
 
     private void applyQuantumSnapshot(JSONObject quantum) {
         if (quantum == null) return;
+        quantumC01Enabled = quantum.optBoolean("scheduler_c01", false);
+        if (quantumC01Button != null)
+            quantumC01Button.setText(quantumC01Enabled
+                    ? "Planificador C01: activado" : "Planificador C01: desactivado");
         JSONArray values = quantum.optJSONArray("values");
         StringBuilder correlations = new StringBuilder();
         String[] labels = {"XX", "YY", "ZZ", "ZI", "IZ"};
@@ -1224,6 +1243,7 @@ public final class MainActivity extends Activity {
         enabled(quantumProbeButton, usable); enabled(quantumSaveButton, usable); enabled(quantumOpenButton, usable);
         enabled(quantumDemoButton, usable); enabled(quantum64DemoButton, usable);
         enabled(quantumPhaseDemoButton, usable);
+        enabled(quantumC01Button, usable); enabled(quantumC02Button, usable);
         quantumProgram.setEnabled(usable); quantumFirst.setEnabled(usable); quantumSecond.setEnabled(usable);
         if (running) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

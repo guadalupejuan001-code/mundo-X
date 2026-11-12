@@ -44,6 +44,13 @@ endif()
 # Existing finite runners retain their own register contracts.
 add_executable(mundo_x_infinite native/src/infinite_runner.cpp)
 target_include_directories(mundo_x_infinite PRIVATE native/include)
+# Additive native C02 consumer. The original mundo_x_infinite CLI is untouched.
+add_executable(mundo_x_autonomous tools/autonomous_runner.cpp)
+target_include_directories(mundo_x_autonomous PRIVATE native/include)
+target_link_libraries(mundo_x_autonomous PRIVATE Threads::Threads)
+if (MSVC)
+  set_property(TARGET mundo_x_autonomous PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 if (MSVC)
   set_property(TARGET mundo_x_infinite PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
@@ -95,6 +102,15 @@ if (BUILD_TESTING)
   target_link_libraries(test_infinite_session PRIVATE Threads::Threads)
   target_link_libraries(test_autonomous_core PRIVATE Threads::Threads)
   target_link_libraries(test_autonomous_core_c02 PRIVATE Threads::Threads)
+  add_test(NAME autonomous_cli_isolated
+    COMMAND mundo_x_autonomous --workers 2 --mode isolated
+      "${CMAKE_CURRENT_SOURCE_DIR}/examples/autonomous_c03.xi"
+      "${CMAKE_CURRENT_SOURCE_DIR}/examples/autonomous_c03.xi")
+  add_test(NAME autonomous_cli_transactional
+    COMMAND mundo_x_autonomous --workers 2 --mode transactional
+      "${CMAKE_CURRENT_SOURCE_DIR}/examples/autonomous_c03.xi"
+      "${CMAKE_CURRENT_SOURCE_DIR}/examples/autonomous_c03.xi")
+  set_tests_properties(autonomous_cli_isolated autonomous_cli_transactional PROPERTIES TIMEOUT 60)
   add_executable(autonomous_core_c02_benchmark native/tests/autonomous_core_c02_benchmark.cpp)
   target_include_directories(autonomous_core_c02_benchmark PRIVATE native/include)
   target_link_libraries(autonomous_core_c02_benchmark PRIVATE Threads::Threads)

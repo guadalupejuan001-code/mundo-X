@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mundo_x/infinite_session.hpp"
+#include "mundo_x/autonomous_core.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +32,14 @@ class PcQuantumDevice {
       : session_(std::move(session)) {
     if (!session_) throw std::invalid_argument("Quantum device requires a session");
   }
+
+  // Opt-in: guest requests and host editor share C01's original session owner.
+  void use_scheduler(std::shared_ptr<mundo_x::AutonomousCore> scheduler) {
+    if (scheduler && scheduler->session().get() != session_.get())
+      throw std::invalid_argument("C01 scheduler does not own the PC quantum session");
+    scheduler_ = std::move(scheduler);
+  }
+  bool uses_scheduler() const noexcept { return bool(scheduler_); }
 
   void clear() noexcept {
     used_ = offset_ = fallback_size_ = 0;
@@ -85,6 +94,7 @@ class PcQuantumDevice {
 
  private:
   std::shared_ptr<Session> session_;
+  std::shared_ptr<mundo_x::AutonomousCore> scheduler_;
   std::array<char, max_request_bytes> request_{};
   std::size_t used_ = 0, offset_ = 0, fallback_size_ = 0;
   std::string response_;
@@ -114,7 +124,15 @@ class PcQuantumDevice {
     if (overflow_) { fail("Quantum request was truncated; clear the channel"); return; }
     try {
       // InfiniteSession completes validation/output allocation before committing.
-      auto response = session_->execute(std::string(request_.data(), used_));
+      std::string response;
+      if (scheduler_) {
+        auto outcome = scheduler_->submit(std::string(request_.data(), used_),
+            mundo_x::AutonomousCore::Priority::Interactive).get();
+        if (!outcome.ok) throw std::runtime_error(outcome.error);
+        response = std::move(outcome.output);
+      } else {
+        response = session_->execute(std::string(request_.data(), used_));
+      }
       response_ = std::move(response);
       used_ = offset_ = fallback_size_ = 0;
       error_ = false;
