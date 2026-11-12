@@ -192,15 +192,18 @@ class EtherCore {
     std::size_t address_bytes = 0, active_sites = 0;
     for (const auto& term : terms) {
       check_address(term.address, limits);
-      const auto address = canonical(term.address);
-      // Retain identity entries until validation finishes, so they also catch
-      // aliases without a second tree of every address. Erase them below.
-      auto inserted = p.cells.emplace(address, Bits{});
+      auto address = canonical(term.address);
+      // Move the validated canonical key into its map node instead of
+      // copying long decimal addresses twice. try_emplace also avoids a
+      // transient allocation for duplicate keys, while preserving the exact
+      // duplicate-address error and pre-validation order.
+      auto inserted = p.cells.try_emplace(std::move(address), Bits{});
       if (!inserted.second)
         throw std::invalid_argument("duplicate canonical address in Pauli query");
-      if (address.size() > std::numeric_limits<std::size_t>::max() - address_bytes)
+      const auto length = inserted.first->first.size();
+      if (length > std::numeric_limits<std::size_t>::max() - address_bytes)
         throw std::length_error("Pauli address text overflows");
-      address_bytes += address.size();
+      address_bytes += length;
       auto& bits = inserted.first->second;
       switch (term.axis) {
         case 'I': break;
@@ -551,9 +554,19 @@ class EtherCore {
 
   static void toggle_z(Pauli& p, const std::string& address,
                        const QueryLimits& limits, std::size_t& peak) {
-    auto bits = get_bits(p,address);
-    bits.z = !bits.z;
-    set_bits(p,address,bits.x,bits.z,limits);
+    // One ordered lookup replaces get_bits -> find -> map::operator[].
+    // Existing cells were already checked when inserted. A new Z-only
+    // neighbour still observes the original address and support budgets.
+    auto it = p.cells.lower_bound(address);
+    if (it != p.cells.end() && !AddressLess{}(address, it->first)) {
+      it->second.z = !it->second.z;
+      if (!it->second.x && !it->second.z) p.cells.erase(it);
+    } else {
+      check_address(address, limits);
+      if (p.cells.size() >= limits.max_sites)
+        throw std::length_error("Ether query cone site budget exceeded");
+      p.cells.emplace_hint(it, address, Bits{false, true});
+    }
     peak = std::max(peak, p.cells.size());
   }
 
