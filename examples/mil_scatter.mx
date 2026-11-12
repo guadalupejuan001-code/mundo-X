@@ -1,0 +1,6 @@
+// MX: own language -> XASM -> independent coherent scattering backend.
+// Two distinguishable particles, periodic 1-D lattice; not hadron physics.
+let sites = 32;
+let steps = 80;
+scatter(sites, steps, 1000, 5000); // hopping J=1, repulsive contact U=5
+scatter(sites, steps, 1000, 0);    // free control for comparison

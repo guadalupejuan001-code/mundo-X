@@ -53,8 +53,9 @@ inline bool gate(const std::string& name) {
   return name == "h" || name == "x" || name == "z" || name == "s" ||
          name == "t" || name == "cx" || name == "cz";
 }
+inline bool physics_command(const std::string& name) { return name == "scatter"; }
 inline bool reserved(const std::string& name) {
-  return gate(name) || name == "q" || name == "backend" || name == "let" ||
+  return gate(name) || physics_command(name) || name == "q" || name == "backend" || name == "let" ||
          name == "qubits" || name == "repeat" || name == "as" ||
          name == "circuit" || name == "show" || name == "bytes" || name == "assert";
 }
@@ -294,7 +295,7 @@ class Parser {
       result.name = identifier().text;
       expect(";");
     } else {
-      if (reserved(token.text) && !gate(token.text)) fail(token.at, "unexpected keyword '" + token.text + "'");
+      if (reserved(token.text) && !gate(token.text) && !physics_command(token.text)) fail(token.at, "unexpected keyword '" + token.text + "'");
       result.kind = Statement::Kind::Invoke;
       result.name = token.text;
       expect("(");
@@ -341,7 +342,8 @@ class Compiler {
     }
     Frame root;
     for (const auto& statement : statements_) validate_root(statement, root);
-    if (!qubits_declared_) fail({1, 1}, "program must declare qubits");
+    if (!qubits_declared_ && !scattering_seen_)
+      fail({1, 1}, "program must declare qubits or execute scatter");
     for (const auto& statement : statements_) {
       if (statement.kind != Statement::Kind::Circuit) continue;
       auto& circuit = circuits_.at(statement.name);
@@ -358,7 +360,7 @@ class Compiler {
     }
     expanding_ = true;
     emit("backend " + result_.backend, backend_at_);
-    emit("qubits " + std::to_string(result_.qubits), qubits_at_);
+    if (qubits_declared_) emit("qubits " + std::to_string(result_.qubits), qubits_at_);
     Frame expansion;
     for (const auto& statement : statements_) expand(statement, expansion, 0, true);
     return std::move(result_);
@@ -431,21 +433,27 @@ class Compiler {
     } else fail(statement.at, "unknown assertion '" + name + "'");
   }
   std::vector<Value> arguments(const Statement& statement, const Frame& frame) {
-    const bool builtin = gate(statement.name);
+    const bool quantum_gate = gate(statement.name);
+    const bool physics = physics_command(statement.name);
+    const bool builtin = quantum_gate || physics;
     const Statement* definition = nullptr;
     if (!builtin) {
       const auto found = circuits_.find(statement.name);
       if (found == circuits_.end()) fail(statement.at, "unknown circuit '" + statement.name + "'");
       definition = found->second.statement;
     }
-    const auto expected = builtin ? ((statement.name == "cx" || statement.name == "cz") ? 2U : 1U) : definition->parameters.size();
+    const auto expected = physics ? 4U :
+        (quantum_gate ? ((statement.name == "cx" || statement.name == "cz") ? 2U : 1U)
+                      : definition->parameters.size());
     if (statement.arguments.size() != expected) fail(statement.at, "wrong argument count for '" + statement.name + "'");
     if (statement.name == "t" && result_.backend != "reduced") fail(statement.at, "t requires backend reduced");
     std::vector<Value> values;
     values.reserve(expected);
     for (std::size_t i = 0; i < expected; ++i) {
       const auto value = evaluate(*statement.arguments[i], frame);
-      require_type(value, builtin ? Type::Qubit : definition->parameters[i].type, statement.arguments[i]->at);
+      require_type(value, physics ? Type::Count :
+          (quantum_gate ? Type::Qubit : definition->parameters[i].type),
+          statement.arguments[i]->at);
       values.push_back(value);
     }
     if ((statement.name == "cx" || statement.name == "cz") && values[0].known && values[1].known && values[0].number == values[1].number)
@@ -513,10 +521,14 @@ class Compiler {
       }
       default: break;
     }
-    if (!frame.register_visible && !frame.circuit_body) fail(statement.at, "declare qubits before operations");
+    if (!frame.register_visible && !frame.circuit_body &&
+        !(statement.kind == Statement::Kind::Invoke && physics_command(statement.name)))
+      fail(statement.at, "declare qubits before operations");
     if (statement.kind == Statement::Kind::Invoke) {
       arguments(statement, frame);
-      if (!gate(statement.name) && circuit) circuit->calls.emplace_back(statement.name, statement.at);
+      if (physics_command(statement.name)) scattering_seen_ = true;
+      if (!gate(statement.name) && !physics_command(statement.name) && circuit)
+        circuit->calls.emplace_back(statement.name, statement.at);
     } else if (statement.kind == Statement::Kind::Assert) assertion(statement);
   }
   std::size_t check_calls(const std::string& name, std::size_t depth, MxSourceLocation at) {
@@ -561,7 +573,7 @@ class Compiler {
       }
       case Statement::Kind::Invoke: {
         const auto values = arguments(statement, frame);
-        if (gate(statement.name)) {
+        if (gate(statement.name) || physics_command(statement.name)) {
           if (statement.name == "t" && result_.t_gates >= 128) fail(statement.at, "reduced program exceeds 128 T gates");
           std::string line = statement.name;
           for (const auto& value : values) line += " " + std::to_string(value.number);
@@ -595,6 +607,7 @@ class Compiler {
   MxSourceLocation qubits_at_;
   bool backend_declared_ = false;
   bool qubits_declared_ = false;
+  bool scattering_seen_ = false;
   bool expanding_ = false;
   std::size_t work_ = 0;
 };
