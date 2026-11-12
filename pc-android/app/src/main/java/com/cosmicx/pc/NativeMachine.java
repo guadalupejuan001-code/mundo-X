@@ -21,6 +21,10 @@ public final class NativeMachine {
     public static native String bootQuantumPhaseDemo(long machine);
     /** Atomic ASCII .xi request, at most 65536 bytes; errors live in state.quantum.error. */
     public static native String quantumCommand(long machine, String program);
+    /** Opt-in C01 serial dispatcher; keeps the guest/host original InfiniteSession. */
+    public static native String quantumAutonomousSet(long machine, boolean enabled);
+    /** Run independent XI copies with 1/2/4 C02 workers; never commits to the guest state. */
+    public static native String quantumWorkersBenchmark(long machine, String program);
     public static native String quantumReset(long machine, String background);
     /** Exact decimal strings; visualizes XX, YY, ZZ, ZI and IZ on the same session. */
     public static native String quantumProbe(long machine, String first, String second);
