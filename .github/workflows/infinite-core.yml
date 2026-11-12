@@ -75,7 +75,7 @@ jobs:
         run: |
           cmake --build infinite-build --config Release --parallel 2 --target \
             mundo_x_infinite test_infinite_address test_infinite_core \
-            test_infinite_tensor test_infinite_session test_autonomous_core test_infinite_bridge test_infinite_extreme infinite_scale \
+            test_infinite_tensor test_infinite_session test_autonomous_core test_autonomous_core_c02 autonomous_core_c02_benchmark test_infinite_bridge test_infinite_extreme infinite_scale \
             test_ether_core test_ether_frame test_ether_fusion test_ether_rules test_ether_memory test_ether_batch test_ether_mil_renderer \
             test_ether_render_spatial test_ether_surface_buffer \
             test_compact_measurement mundo_x_native_tests \
@@ -84,7 +84,7 @@ jobs:
       - name: Check exact operations, CLI and original CompactCore compatibility
         run: |
           ctest --test-dir infinite-build -C Release --output-on-failure \
-            -R '^(infinite_|ether_|autonomous_core$|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
+            -R '^(infinite_|ether_|autonomous_core(_c02)?$|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
             --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \
             | tee infinite-evidence/ctest.log
       - name: Check the production Java and JNI shared session
@@ -103,6 +103,15 @@ jobs:
           cp examples/infinite_*.xi infinite-evidence/
           cp docs/infinite_core.md infinite-evidence/
           cat infinite-evidence/scale.json
+      - name: Benchmark independent XI jobs with 1, 2 and 4 workers
+        timeout-minutes: 3
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            infinite-build/Release/autonomous_core_c02_benchmark.exe > infinite-evidence/autonomous-c02-benchmark.json
+          else
+            infinite-build/autonomous_core_c02_benchmark > infinite-evidence/autonomous-c02-benchmark.json
+          fi
+          cat infinite-evidence/autonomous-c02-benchmark.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
