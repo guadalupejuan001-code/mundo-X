@@ -60,10 +60,11 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     private FrameLayout root;
     private LinearLayout header,bottom,bodyCard,quickRow,flight,altitudeRow;
     private TextView nameLabel,kindLabel,statsLabel,dateLabel,engineLabel,legendLabel,hintLabel;
-    private Button fieldButton,pauseButton,scaleButton,flightButton,hideButton,qualityButton,entryButton,altitudeButton;
+    private Button fieldButton,pauseButton,scaleButton,flightButton,hideButton,qualityButton,entryButton,altitudeButton,pngButton;
     private Joystick joystick;
     private boolean fields=false,wind=true,orbits=true,realScale=false,paused=false,freeFlight=false,cleanView=false,resumed;
     private boolean fluidPreview;
+    private boolean cinematic=false;
     private boolean uhd4k=false,uhd8k=false,entryActive=false,atmospheres=true,localPhysics=false,pngDestinationOpen;
     private volatile boolean destroyed;
     private double desiredEntryAltitude=35;
@@ -93,11 +94,12 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         SharedPreferences prefs=getSharedPreferences("solar",MODE_PRIVATE);
         body=clamp(prefs.getInt("body",3),-1,SolarData.BODIES.length-1);
         speedIndex=clamp(prefs.getInt("speed",6),0,SPEEDS.length-1);
-        quality=clamp(prefs.getInt("quality",960),480,1440);
+        quality=clamp(prefs.getInt("quality",BuildConfig.SOLAR_SHOWCASE_DEFAULT?1280:960),480,1440);
         int defaultMode=BuildConfig.SOLAR_DEFAULT_MODE;
         uhd4k=prefs.getBoolean("uhd4k",defaultMode==1);uhd8k=prefs.getBoolean("uhd8k",defaultMode==2);
         if(uhd8k)uhd4k=false;
         fluidPreview=prefs.getBoolean("fluidPreview",defaultMode==0)&&!uhd4k&&!uhd8k;
+        cinematic=prefs.getBoolean("cinematic",BuildConfig.SOLAR_SHOWCASE_DEFAULT);
         atmospheres=prefs.getBoolean("atmospheres",true);localPhysics=prefs.getBoolean("localPhysics",false);
         entryActive=prefs.getBoolean("entry",false);
         desiredEntryAltitude=Double.longBitsToDouble(prefs.getLong("entryAltitude",Double.doubleToLongBits(35)));
@@ -117,6 +119,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             quality=clamp(saved.getInt("quality",quality),480,1440);
             uhd4k=saved.getBoolean("uhd4k",uhd4k);uhd8k=saved.getBoolean("uhd8k",uhd8k);if(uhd8k)uhd4k=false;
             fluidPreview=saved.getBoolean("fluidPreview",fluidPreview)&&!uhd4k&&!uhd8k;
+            cinematic=saved.getBoolean("cinematic",cinematic);
             atmospheres=saved.getBoolean("atmospheres",atmospheres);localPhysics=saved.getBoolean("localPhysics",localPhysics);
             entryActive=saved.getBoolean("entry",entryActive);
             desiredEntryAltitude=saved.getDouble("entryAltitude",desiredEntryAltitude);
@@ -134,6 +137,7 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
             observer.setRealScale(realScale);observer.setQuality(quality);
             if(uhd8k)observer.setUhd8k(true);else observer.setUhd4k(uhd4k);
             if(fluidPreview)observer.setAdaptivePreview(true);
+            observer.setCinematic(cinematic);
             observer.setAtmosphereEnabled(atmospheres);observer.setLocalPhysics(localPhysics);
             if(body<0)observer.overview();else observer.focus(body);
             if(entryActive&&body>0){
@@ -211,8 +215,12 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         LinearLayout journey=row();journey.setPadding(0,dp(5),0,0);
         entryButton=button("↓  Descender",0,this::enterSelectedBody);
         journey.addView(entryButton,new LinearLayout.LayoutParams(0,dp(44),1));
-        Button png=button("Guardar PNG",0,this::exportPng);
-        journey.addView(png,new LinearLayout.LayoutParams(0,dp(44),1));bottom.addView(journey);
+        pngButton=button(cinematic?"Foto 4K":"Guardar PNG",0,this::exportPng);
+        journey.addView(pngButton,new LinearLayout.LayoutParams(0,dp(44),1));
+        Button present=button("Presentar",0,this::enterPresentation);
+        present.setContentDescription("Activar Cine X y una vista limpia de alta calidad");
+        journey.addView(present,new LinearLayout.LayoutParams(0,dp(44),1));
+        bottom.addView(journey);
         altitudeRow=row();
         altitudeRow.addView(button("−  Bajar",0,()->stepAltitude(.65)),new LinearLayout.LayoutParams(0,dp(43),1));
         altitudeButton=button("Altitud",0,this::altitudeDialog);
@@ -252,6 +260,22 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
     private void toggleFields(){fields=!fields;final boolean b=fields;runGL(()->observer.setFields(b));updateButtons();updateBody();}
     private void togglePause(){paused=!paused;final boolean b=paused;runGL(()->observer.setPaused(b));surface.setPausedRendering(b);updateButtons();}
     private void toggleFlight(){if(entryActive){exitEntry();return;}freeFlight=!freeFlight;final boolean b=freeFlight;runGL(()->observer.setFreeFlight(b));updateButtons();}
+    private void setCinematic(boolean enabled){
+        cinematic=enabled;
+        runGL(()->observer.setCinematic(enabled));
+        if(pngButton!=null)pngButton.setText(enabled?"Foto 4K":"Guardar PNG");
+    }
+    /** One tap: show the current camera with optical detail and fewer controls. */
+    private void enterPresentation(){
+        setCinematic(true);
+        quality=1280;fluidPreview=true;uhd4k=uhd8k=false;resolutionMessage=null;
+        runGL(()->{
+            observer.setUhd8k(false);observer.setUhd4k(false);
+            observer.setQuality(1280);observer.setAdaptivePreview(true);
+        });
+        if(!cleanView)toggleClean();
+        updateButtons();
+    }
     private void toggleClean(){
         cleanView=!cleanView;bottom.setVisibility(cleanView?View.GONE:View.VISIBLE);flight.setVisibility(cleanView?View.GONE:View.VISIBLE);
         dateLabel.setVisibility(cleanView?View.GONE:View.VISIBLE);engineLabel.setVisibility(cleanView?View.GONE:View.VISIBLE);
@@ -267,7 +291,8 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         entryButton.setText(entryActive?"↑  Regresar a órbita":"↓  Descender");entryButton.setEnabled(body>0);
         entryButton.setAlpha(body>0?1f:.5f);altitudeRow.setVisibility(entryActive?View.VISIBLE:View.GONE);
         qualityButton.setText(uhd8k?"8K UHD":uhd4k?"4K UHD":fluidPreview?"Auto fluido":"Calidad");
-        qualityButton.setTextColor(uhd4k||uhd8k?GOLD:fluidPreview?TEAL:TEXT);
+        qualityButton.setTextColor(cinematic?GOLD:uhd4k||uhd8k?GOLD:fluidPreview?TEAL:TEXT);
+        if(pngButton!=null)pngButton.setText(cinematic?"Foto 4K":"Guardar PNG");
         if(root!=null)root.requestApplyInsets();
     }
     private void updateBody(){
@@ -433,14 +458,49 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         if(observer==null||observer.failure!=null){message("Espera a que la escena esté disponible.");return;}
         String token=UUID.randomUUID().toString();
         if(!PNG_OWNER.compareAndSet(null,token)){message("Hay una imagen pendiente de guardar.");return;}
-        pngToken=token;pngDestinationOpen=false;final SolarRenderer source=observer;
-        message("Preparando la imagen a resolución completa…");
+        pngToken=token;pngDestinationOpen=false;
+        final SolarRenderer source=observer;
+        // In Cine X, take a real 4K frame rather than enlarging the adaptive
+        // viewport. The user's live render mode is restored on the GL thread.
+        final boolean photo4k=cinematic&&!uhd4k&&!uhd8k;
+        message(photo4k?"Preparando foto Cine X en 4K real…":
+                "Preparando la imagen a la resolución seleccionada…");
         runGL(()->{
-            try{source.requestCapture(image->{
-                if(destroyed){PNG_OWNER.compareAndSet(token,null);return;}
-                try{images.execute(()->stagePng(image,token));}
-                catch(Exception error){PNG_OWNER.compareAndSet(token,null);message("No se pudo preparar PNG: "+error.getMessage());}
-            });}catch(Exception error){PNG_OWNER.compareAndSet(token,null);message("No se pudo capturar: "+error.getMessage());}
+            final int previousQuality=source.qualityLimit();
+            final boolean previousAuto=source.isAdaptivePreviewEnabled();
+            try{
+                if(photo4k)source.setUhd4k(true);
+                source.requestCapture(image->{
+                    if(photo4k){
+                        source.setUhd4k(false);
+                        source.setQuality(previousQuality);
+                        if(previousAuto)source.setAdaptivePreview(true);
+                        if(surface!=null&&!destroyed)surface.requestRender();
+                    }
+                    if(destroyed){PNG_OWNER.compareAndSet(token,null);return;}
+                    if(image==null||image.rgba==null){
+                        PNG_OWNER.compareAndSet(token,null);
+                        message("No se pudo generar el fotograma. Se conservó el visor.");return;
+                    }
+                    if(photo4k&&!((image.width==2160&&image.height==3840)||
+                                  (image.width==3840&&image.height==2160))){
+                        PNG_OWNER.compareAndSet(token,null);
+                        message("La GPU no pudo crear la foto 4K. No se exportó una imagen ampliada.");
+                        return;
+                    }
+                    try{images.execute(()->stagePng(image,token));}
+                    catch(Exception error){PNG_OWNER.compareAndSet(token,null);
+                        message("No se pudo preparar PNG: "+error.getMessage());}
+                });
+            }catch(Exception|OutOfMemoryError error){
+                if(photo4k){
+                    source.setUhd4k(false);source.setQuality(previousQuality);
+                    if(previousAuto)source.setAdaptivePreview(true);
+                    if(surface!=null&&!destroyed)surface.requestRender();
+                }
+                PNG_OWNER.compareAndSet(token,null);
+                message("No se pudo capturar: "+error.getMessage());
+            }
         });
     }
     private void stagePng(SolarRenderer.Capture image,String token){
@@ -555,6 +615,9 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         addToggle(content,"Gravedad local durante descenso",localPhysics,b->{localPhysics=b;runGL(()->observer.setLocalPhysics(b));updateBody();});
         content.addView(label("Exploración amplía los cuerpos y comprime distancias para verlos juntos. Proporciones reales conserva sus tamaños y distancias; usa los destinos para acercarte.",12,MUTED,false));
         content.addView(section("CALIDAD DE IMAGEN"));
+        addToggle(content,"Cine X · atmósferas, estrellas y anillos",cinematic,b->setCinematic(b));
+        content.addView(label("Efecto óptico ilustrativo. Mantiene las órbitas, la física y Ether; puede aumentar el coste de GPU.",12,MUTED,false));
+        content.addView(button("Presentar · Cine X + visor fluido + pantalla limpia",0,this::enterPresentation));
         content.addView(button("Auto fluido · 480–1280 px",0,this::setFluidQuality));
         LinearLayout qualities=row();int[] sizes={640,960,1440};String[] labels={"Ahorro","Equilibrada","Alta"};
         for(int i=0;i<sizes.length;i++){final int px=sizes[i];Button b=button(labels[i],0,()->setAdaptiveQuality(px));qualities.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));}content.addView(qualities);
@@ -682,14 +745,14 @@ public final class SolarActivity extends Activity implements SolarRenderer.Liste
         getSharedPreferences("solar",MODE_PRIVATE).edit().putInt("body",body).putInt("speed",speedIndex)
                 .putInt("quality",quality).putInt("preset",quantum.preset()).putBoolean("fields",fields)
                 .putBoolean("wind",wind).putBoolean("orbits",orbits).putBoolean("realScale",realScale)
-                .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k).putBoolean("uhd8k",uhd8k).putBoolean("fluidPreview",fluidPreview).putBoolean("atmospheres",atmospheres).putBoolean("localPhysics",localPhysics)
+                .putBoolean("paused",paused).putBoolean("uhd4k",uhd4k).putBoolean("uhd8k",uhd8k).putBoolean("fluidPreview",fluidPreview).putBoolean("cinematic",cinematic).putBoolean("atmospheres",atmospheres).putBoolean("localPhysics",localPhysics)
                 .putBoolean("entry",entryActive).putLong("entryAltitude",Double.doubleToLongBits(desiredEntryAltitude))
                 .putString("entryPose",poseText(pose)).apply();
     }
     @Override protected void onSaveInstanceState(Bundle state){
         super.onSaveInstanceState(state);state.putInt("body",body);state.putInt("speed",speedIndex);state.putBoolean("fields",fields);state.putBoolean("wind",wind);state.putBoolean("orbits",orbits);state.putBoolean("realScale",realScale);state.putBoolean("paused",paused);
         if(observer!=null)state.putDouble("jd",observer.julianDate());if(quantum!=null)state.putInt("preset",quantum.preset());
-        state.putInt("quality",quality);state.putBoolean("uhd4k",uhd4k);state.putBoolean("uhd8k",uhd8k);state.putBoolean("fluidPreview",fluidPreview);state.putBoolean("atmospheres",atmospheres);state.putBoolean("localPhysics",localPhysics);
+        state.putInt("quality",quality);state.putBoolean("uhd4k",uhd4k);state.putBoolean("uhd8k",uhd8k);state.putBoolean("fluidPreview",fluidPreview);state.putBoolean("cinematic",cinematic);state.putBoolean("atmospheres",atmospheres);state.putBoolean("localPhysics",localPhysics);
         state.putBoolean("entry",entryActive);state.putDouble("entryAltitude",desiredEntryAltitude);
         state.putDoubleArray("entryPose",observer==null?null:observer.entryState());
         if(pngDestinationOpen&&pngToken!=null){state.putBoolean("pngDestinationOpen",true);state.putString("pngToken",pngToken);}
