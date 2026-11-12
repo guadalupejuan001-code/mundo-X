@@ -87,7 +87,7 @@ int main() {
     {
       Scheduler::Limits limits;
       limits.max_queued = 2;
-      limits.max_program_bytes = 4;
+      limits.max_program_bytes = 5;
       limits.max_queued_bytes = 8;
       Scheduler bounded(original, limits);
       expect_failure([&] { bounded.submit("probz 0\n"); },
