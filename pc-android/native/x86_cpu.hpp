@@ -369,6 +369,16 @@ class Cpu {
     }
     const auto& cache = cache_[segment];
     if (!cache.valid) fail("null/unusable protected-mode segment", FaultCode::ProtectionFault);
+    if (!supervisor_internal_ && segment != CS) {
+      const auto privilege = cpl();
+      const auto requested = unsigned(segments[segment] & 3U);
+      if (segment == SS) {
+        if (requested != privilege || cache.dpl != privilege)
+          fail("protected32 SS RPL/DPL does not match CPL", FaultCode::ProtectionFault);
+      } else if (!cache.conforming && std::max(privilege,requested) > cache.dpl) {
+        fail("protected32 data-segment privilege check failed", FaultCode::ProtectionFault);
+      }
+    }
     if (bytes == 0 || offset > cache.limit || bytes - 1 > cache.limit - offset)
       fail("protected-mode segment limit exceeded", FaultCode::SegmentLimit);
     if ((access == Access::Write && (cache.code || !cache.writable)) ||
@@ -1254,7 +1264,7 @@ inline void Cpu::extended() {
             const bool present = (access & 0x80u) != 0;
             const bool code = (access & 8u) != 0;
             const bool conforming = code && (access & 4u);
-            const bool accessible = ((access >> 5) & 3u) >= (selector & 3u);
+            const bool accessible = ((access >> 5) & 3u) >= std::max<unsigned>(cpl(),selector & 3u);
             const bool privilege_ok = conforming || accessible;
             const bool read_ok = !code || (access & 2u);
             const bool write_ok = !code && (access & 2u);
@@ -1342,6 +1352,7 @@ inline void Cpu::extended() {
       const auto m = modrm();
       if (m.group == 4) { put(m.rm, m.rm.is_register ? bytes : 2, cr0); return; }
       if (m.group == 6) {
+        if (cpl() != 0) fail("LMSW requires CPL0", FaultCode::ProtectionFault);
         const auto value = get(m.rm, 2) & 15;
         write_cr0((cr0 & ~15U) | value | (cr0 & 1)); return;
       }
@@ -1697,6 +1708,20 @@ inline void Cpu::execute(std::uint8_t op) {
         segments[SS] = std::uint16_t(saved_ss);
         cache_[SS] = saved_stack;
         put_reg(ESP, long_return ? 8U : 4U, saved_rsp);
+      }
+      if (outer) {
+        // IRET to a less-privileged ring invalidates inaccessible DS/ES/FS/GS.
+        // FS/GS MSR bases persist across selector invalidation.
+        for (unsigned seg : {unsigned(DS),unsigned(ES),unsigned(FS),unsigned(GS)}) {
+          const auto& descriptor_cache = cache_[seg];
+          if (!descriptor_cache.valid) continue;
+          const auto rpl = unsigned(segments[seg] & 3U);
+          if (!descriptor_cache.conforming &&
+              std::max(target_cpl,rpl) > descriptor_cache.dpl) {
+            segments[seg] = 0;
+            cache_[seg].valid = false;
+          }
+        }
       }
       jump(target, n);
       return;
