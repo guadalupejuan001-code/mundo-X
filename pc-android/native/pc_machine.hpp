@@ -42,6 +42,9 @@ class PcMachine {
   // Optional external motherboard clock/IRQ polling hook. C06 owners must
   // operate on the SAME Cpu instance; reset() deliberately preserves hooks.
   std::function<void()> device_step_hook;
+  // Invoked only after reset finished reloading RAM, boot sector and BIOS BDA.
+  // A motherboard can then restore ACPI tables and power-on device registers.
+  std::function<void()> device_reset_hook;
   // The hooks capture this address; instances must remain at a stable address.
   PcMachine(const PcMachine&)=delete;
   PcMachine& operator=(const PcMachine&)=delete;
@@ -125,7 +128,7 @@ class PcMachine {
     cpu.memory.write_block(std::size_t(plan_.load_segment)*16,plan_.image.data(),plan_.image.size());
     // BIOS data area: video mode 3, 80 columns, page0, conventional RAM.
     cpu.write16(0x410,0x0020);cpu.write16(0x413,640);cpu.write8(0x449,3);cpu.write16(0x44a,80);cpu.write16(0x44c,4000);
-    cpu.write8(0x484,24);cpu.write8(0x475,plan_.drive==0x80?1:0);clear_screen();started_=std::chrono::steady_clock::now();
+    cpu.write8(0x484,24);cpu.write8(0x475,plan_.drive==0x80?1:0);clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
   }
   void run(unsigned budget) {
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault)return;
