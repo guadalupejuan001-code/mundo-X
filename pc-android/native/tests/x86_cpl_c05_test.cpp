@@ -92,20 +92,28 @@ void long_cpl3_tss_pf(){
                   0xb8,0,0,0x1a,0,0x50,0x9c,
                   0xb8,0x23,0,0,0,0x50,
                   0xb8,0,0x10,0x01,0,0x50,0xcf});
-  // User: INT80, then denied CLI and denied HLT, then read and write of
-  // supervisor-only kernel data (error bits 5/7), finally INT81 to kernel.
+  // User: legal DPL3 data load with RPL0, denied DPL0 data load,
+  // denied SS selector RPL0, then denied CLI/HLT and two U/S page faults.
+  // R10 holds the size of the faulting privileged instruction for #GP IRET.
   code(cpu,0x11000,{
        0xb8,0x44,0x33,0x22,0x11,0xcd,0x80,
-       0xbb,0x88,0x77,0x66,0x55,0xfa,0xf4,
+       0xbb,0x88,0x77,0x66,0x55,
+       0x41,0xba,0x02,0,0,0,
+       0xb8,0x28,0,0,0,0x8e,0xd8,
+       0xb8,0x10,0,0,0,0x8e,0xd8,
+       0xb8,0x28,0,0,0,0x8e,0xd0,
+       0x41,0xba,0x01,0,0,0,
+       0xfa,0xf4,
        0x48,0x8b,0x0c,0x25,0x00,0x60,0x01,0x00,
        0x48,0x89,0x04,0x25,0x00,0x60,0x01,0x00,
        0xcd,0x81});
   // Kernel INT80 handler: guest writes an observable marker, then IRETQ.
   code(cpu,0x13000,{0xb8,0xef,0xbe,0xad,0xde,
                    0xa3,0x00,0x60,0x01,0,0,0,0,0,0xcf});
-  // #GP has a 64-bit error code; save it to R9, advance saved RIP one byte.
+  // #GP saves its error code in R9; advance restart RIP by guest R10
+  // (2 bytes for MOV segment, 1 for CLI/HLT), then IRETQ.
   code(cpu,0x13200,{0x4c,0x8b,0x0c,0x24,
-                    0x48,0x83,0x44,0x24,0x08,0x01,
+                    0x4c,0x01,0x54,0x24,0x08,
                     0x48,0x83,0xc4,0x08,0xcf});
   // #PF has a 64-bit error code; save it to RDX, skip 8-byte MOV.
   code(cpu,0x13300,{0x48,0x8b,0x14,0x24,
@@ -145,7 +153,8 @@ void long_cpl3_tss_pf(){
   need(cpu.halted&&cpu.cpl()==0&&cpu.eip==0x13401,"guest exit gate did not reach kernel HLT");
   need(entered_user&&entered_kernel&&returned_user&&interrupts==1,
        "kernel -> user -> kernel -> user real transition incomplete");
-  need(general==2,"CPL3 CLI and HLT must each generate #GP");
+  need(general==4,"CPL3 DPL0 DS, mismatched SS, CLI and HLT must each generate #GP");
+  need(cpu.segments[Cpu::DS]==0x28,"DPL3 DS/RPL0 load was not allowed or denied DPL0 DS mutated selector");
   need(page_errors.size()==2 && page_errors[0]==5 && page_errors[1]==7,
        "CPL3 supervisor read/write must set #PF P=1 and U/S=1, with W/R bit");
   need(cpu.read32(0x16000)==0xdeadbeef,"kernel marker overwritten by user");
