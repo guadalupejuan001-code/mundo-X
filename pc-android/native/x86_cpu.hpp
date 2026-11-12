@@ -220,6 +220,31 @@ class Cpu {
       rollback(before);
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
+      const int vector = exception_vector(t.code);
+      // Synchronous architectural exception: restart faulting instruction
+      // after the guest handler completes. Unsupported/host failures stop.
+      if (vector >= 0 && !is_real_mode() &&
+          (is_long_mode() || (!(efer & 0x400) && cache_[CS].big))) {
+        auto deliver = [&](unsigned number, bool with_error, std::uint32_t code) -> bool {
+          try {
+            transaction_ = true;
+            dispatch_idt(std::uint8_t(number), start_ip_, false, with_error, code);
+            transaction_ = false; journal_.clear();
+            ++instructions; // bounded interpreter step, not retired opcode
+            return true;
+          } catch (const std::exception&) {
+            rollback(before); // Undo any partial frame/descriptor writes.
+            if (t.code == FaultCode::PageFault) cr2 = t.address;
+            return false;
+          }
+        };
+        if (deliver(unsigned(vector), vector == 14 || vector == 13, t.error) ||
+            deliver(8, true, 0)) // Nested delivery failure -> #DF.
+          return StepResult::Executed;
+        fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_,
+                      t.reason + " (guest IDT delivery failed; triple fault)", t.address, t.error};
+        return StepResult::Faulted;
+      }
     } catch (const MemoryFabric::BudgetExceeded& e) {
       rollback(before);
       fault = Fault{FaultCode::MemoryBudget, start_cs_, start_ip_, opcode_, decoded_, e.what()};
@@ -1541,10 +1566,31 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0xcd: { const auto vector = fetch8(); interrupt(vector); return; }
     case 0xce: if (flag(OF)) interrupt(4); return;
     case 0xcf: {
-      if (!is_real_mode()) fail("protected/long-mode IRET is not implemented", FaultCode::UnsupportedState);
-      const auto target = pop(bytes); const auto cs = std::uint16_t(pop(bytes)); const auto flags = pop(bytes);
-      if (flags & 0x20000U) fail("IRET virtual-8086 transition is not implemented", FaultCode::UnsupportedState);
-      far_transfer(cs, target, bytes); restore_flags(std::uint32_t(flags), bytes); return;
+      if (is_real_mode()) {
+        const auto target = pop(bytes); const auto cs = std::uint16_t(pop(bytes)); const auto flags = pop(bytes);
+        if (flags & 0x20000U) fail("IRET virtual-8086 transition is not implemented", FaultCode::UnsupportedState);
+        far_transfer(cs, target, bytes); restore_flags(std::uint32_t(flags), bytes); return;
+      }
+      const bool long_return = is_long_mode();
+      if (!long_return && (!cache_[CS].big || (efer & 0x400)))
+        fail("protected16/compatibility IRET not implemented", FaultCode::UnsupportedState);
+      if (long_return && operand_override_)
+        fail("16-bit IRET in long mode is not implemented", FaultCode::UnsupportedState);
+      const unsigned n = long_return ? 8U : 4U;
+      const auto target = pop(n), raw_cs = pop(n), flags = pop(n);
+      if (raw_cs > 0xffffU || (raw_cs & 3U))
+        fail("IRET cross-privilege return requires C05", FaultCode::UnsupportedState);
+      std::uint64_t saved_rsp = 0, saved_ss = 0;
+      if (long_return) {
+        saved_rsp = pop(8); saved_ss = pop(8);
+        if (saved_ss != segments[SS] || !canonical(saved_rsp))
+          fail("IRET ring change/invalid stack requires C05", FaultCode::UnsupportedState);
+      }
+      if (flags & 0x20000U) fail("IRET virtual-8086 transition not implemented", FaultCode::UnsupportedState);
+      far_transfer(std::uint16_t(raw_cs), target, n);
+      restore_flags(std::uint32_t(flags), 4);
+      if (long_return) regs[ESP] = saved_rsp;
+      return;
     }
     case 0xd7: {
       const auto address = (index(EBX) + reg8(EAX)) & mask(address_width());
