@@ -75,7 +75,7 @@ jobs:
         run: |
           cmake --build infinite-build --config Release --parallel 2 --target \
             mundo_x_infinite test_infinite_address test_infinite_core \
-            test_infinite_tensor test_infinite_session test_infinite_bridge test_infinite_extreme infinite_scale \
+            test_infinite_tensor test_infinite_session test_autonomous_core test_infinite_bridge test_infinite_extreme infinite_scale \
             test_ether_core test_ether_frame test_ether_fusion test_ether_rules test_ether_memory test_ether_batch test_ether_mil_renderer \
             test_ether_render_spatial test_ether_surface_buffer \
             test_compact_measurement mundo_x_native_tests \
@@ -84,7 +84,7 @@ jobs:
       - name: Check exact operations, CLI and original CompactCore compatibility
         run: |
           ctest --test-dir infinite-build -C Release --output-on-failure \
-            -R '^(infinite_|ether_|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
+            -R '^(infinite_|ether_|autonomous_core$|compact_measurement$|native_core_and_xasm$|core_1000$|engine_session$)' \
             --output-junit "$GITHUB_WORKSPACE/infinite-evidence/ctest.xml" \
             | tee infinite-evidence/ctest.log
       - name: Check the production Java and JNI shared session
