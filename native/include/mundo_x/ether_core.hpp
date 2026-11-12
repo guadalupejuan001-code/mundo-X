@@ -193,11 +193,10 @@ class EtherCore {
     for (const auto& term : terms) {
       check_address(term.address, limits);
       auto address = canonical(term.address);
-      // Move the validated canonical key into its map node instead of
-      // copying long decimal addresses twice. try_emplace also avoids a
-      // transient allocation for duplicate keys, while preserving the exact
-      // duplicate-address error and pre-validation order.
-      auto inserted = p.cells.try_emplace(std::move(address), Bits{});
+      // Move the validated canonical key directly into the map node rather
+      // than copying long decimal addresses again. emplace keeps the native
+      // node construction path; duplicate aliases retain the same rejection.
+      auto inserted = p.cells.emplace(std::move(address), Bits{});
       if (!inserted.second)
         throw std::invalid_argument("duplicate canonical address in Pauli query");
       const auto length = inserted.first->first.size();
