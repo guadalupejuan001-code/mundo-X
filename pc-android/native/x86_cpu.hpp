@@ -722,7 +722,8 @@ class Cpu {
       fail("IDT destination privilege transition not supported", FaultCode::ProtectionFault);
     const bool switch_cpl = target_cpl < old_cpl;
     const auto original_cs = segments[CS], original_ss = segments[SS];
-    const auto original_rsp = regs[ESP], original_flags = eflags;
+    const auto original_rsp = regs[ESP];
+    const auto original_flags = eflags;
     const unsigned width = long_gate ? 8U : 4U;
     if (switch_cpl || (long_gate && ist)) {
       if (!tr.valid) fail("interrupt stack switch needs a loaded TSS", FaultCode::ProtectionFault);
