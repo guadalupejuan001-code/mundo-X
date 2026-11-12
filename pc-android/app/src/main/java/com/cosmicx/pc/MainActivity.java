@@ -1243,6 +1243,7 @@ public final class MainActivity extends Activity {
         enabled(quantumProbeButton, usable); enabled(quantumSaveButton, usable); enabled(quantumOpenButton, usable);
         enabled(quantumDemoButton, usable); enabled(quantum64DemoButton, usable);
         enabled(quantumPhaseDemoButton, usable);
+        enabled(quantumC01Button, usable); enabled(quantumC02Button, usable);
         quantumProgram.setEnabled(usable); quantumFirst.setEnabled(usable); quantumSecond.setEnabled(usable);
         if (running) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
