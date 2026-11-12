@@ -42,6 +42,15 @@ jobs:
             tail -8 "build/c04-evidence/${test}.log"
           done
           grep -q 'REVERSE_WINDOWS_C04_IDT_PASS' build/c04-evidence/x86_idt_c04_test.log
+      - name: Run complete original COSMIC PC native suite and demos
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash pc-android/tools/test-native.sh > build/c04-evidence/native-full.log 2>&1 || {
+            tail -160 build/c04-evidence/native-full.log
+            exit 1
+          }
+          tail -35 build/c04-evidence/native-full.log
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
