@@ -70,8 +70,12 @@ void start(Cpu& cpu,bool long_mode=true) {
 }
 void expect_next(Cpu& cpu,std::uint64_t handler,unsigned vector) {
   const auto before=cpu.instructions;
-  need(cpu.step()==StepResult::Executed && !cpu.fault,"guest exception did not enter IDT");
-  need(cpu.eip==handler,"unexpected IDT handler for vector "+std::to_string(vector));
+  const auto result=cpu.step();
+  need(result==StepResult::Executed && !cpu.fault,
+       "guest exception failed IDT vector "+std::to_string(vector)+
+       (cpu.fault ? ": "+cpu.fault->describe() : ": no CPU fault"));
+  need(cpu.eip==handler,"unexpected IDT handler vector "+std::to_string(vector)+
+       " actual RIP="+std::to_string(cpu.eip)+" mode="+cpu.mode_name());
   need(cpu.instructions==before+1,"guest exception did not advance interpreter step");
 }
 void long_pf_resume() {
