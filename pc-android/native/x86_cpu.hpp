@@ -695,7 +695,8 @@ class Cpu {
       fail("IDT destination is not a compatible ring0 code segment", FaultCode::ProtectionFault);
     const unsigned width = long_gate ? 8U : 4U;
     const auto original_cs = segments[CS], original_ss = segments[SS];
-    const auto original_rsp = regs[ESP], original_flags = eflags;
+    const auto original_rsp = regs[ESP];
+    const auto original_flags = eflags;
     if (long_gate) {
       // 64-bit hardware stacks SS:RSP even without changing CPL.
       push(original_ss, 8); push(original_rsp, 8);
