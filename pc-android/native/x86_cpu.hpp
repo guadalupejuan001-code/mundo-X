@@ -1658,19 +1658,46 @@ inline void Cpu::execute(std::uint8_t op) {
       if (long_return && operand_override_)
         fail("16-bit IRET in long mode is not implemented", FaultCode::UnsupportedState);
       const unsigned n = long_return ? 8U : 4U;
+      const auto original_cpl = cpl();
       const auto target = pop(n), raw_cs = pop(n), flags = pop(n);
-      if (raw_cs > 0xffffU || (raw_cs & 3U))
-        fail("IRET cross-privilege return requires C05", FaultCode::UnsupportedState);
+      if (raw_cs > 0xffffU || (flags & 0x20000U))
+        fail("IRET invalid selector/virtual-8086 transition", FaultCode::ProtectionFault);
+      const auto target_cpl = unsigned(raw_cs & 3U);
+      if (target_cpl < original_cpl || (target_cpl != 0 && target_cpl != 3))
+        fail("IRET cannot elevate privilege", FaultCode::ProtectionFault);
+      const auto code = descriptor(std::uint16_t(raw_cs));
+      if (!code.code || (code.conforming ? code.dpl > target_cpl : code.dpl != target_cpl) ||
+          (long_return ? !code.long_code : !code.big))
+        fail("IRET code selector DPL/RPL/type mismatch", FaultCode::ProtectionFault);
+      const bool outer = target_cpl > original_cpl;
       std::uint64_t saved_rsp = 0, saved_ss = 0;
-      if (long_return) {
-        saved_rsp = pop(8); saved_ss = pop(8);
-        if (saved_ss != segments[SS] || !canonical(saved_rsp))
-          fail("IRET ring change/invalid stack requires C05", FaultCode::UnsupportedState);
+      SegmentCache saved_stack{};
+      if (long_return || outer) {
+        saved_rsp = pop(n);
+        saved_ss = pop(n);
+        if (saved_ss > 0xffffU || (long_return && !canonical(saved_rsp)))
+          fail("IRET invalid SS/RSP", FaultCode::ProtectionFault);
+        if (saved_ss == 0 && long_return && target_cpl == 0) {
+          saved_stack = SegmentCache{}; // null SS is valid for IA-32e ring0
+        } else {
+          if ((saved_ss & 3U) != target_cpl)
+            fail("IRET SS selector RPL differs from return CPL", FaultCode::ProtectionFault);
+          saved_stack = descriptor(std::uint16_t(saved_ss));
+          if (saved_stack.code || !saved_stack.writable || saved_stack.dpl != target_cpl)
+            fail("IRET stack selector DPL/type mismatch", FaultCode::ProtectionFault);
+        }
       }
-      if (flags & 0x20000U) fail("IRET virtual-8086 transition not implemented", FaultCode::UnsupportedState);
-      far_transfer(std::uint16_t(raw_cs), target, n);
+      // The IRET instruction is still executing at its originating CPL.
+      // Restore privileged IF/IOPL before switching the CS CPL to ring3.
       restore_flags(std::uint32_t(flags), 4);
-      if (long_return) regs[ESP] = saved_rsp;
+      segments[CS] = std::uint16_t(raw_cs);
+      cache_[CS] = code;
+      if (long_return || outer) {
+        segments[SS] = std::uint16_t(saved_ss);
+        cache_[SS] = saved_stack;
+        put_reg(ESP, long_return ? 8U : 4U, saved_rsp);
+      }
+      jump(target, n);
       return;
     }
     case 0xd7: {
