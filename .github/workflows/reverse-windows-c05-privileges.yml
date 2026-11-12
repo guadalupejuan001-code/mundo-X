@@ -1,0 +1,62 @@
+name: REVERSE Windows C05 - real CPL3 TSS and paging
+on:
+  push:
+    branches: ["feature/reverse-windows-c05-*"]
+  pull_request:
+    paths:
+      - 'pc-android/native/x86_cpu.hpp'
+      - 'pc-android/native/tests/x86_idt_c04_test.cpp'
+      - 'pc-android/native/tests/x86_cpl_c05_test.cpp'
+      - '.github/workflows/reverse-windows-c05-privileges.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c05-cpl3-tss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build C04 plus original CPU regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/c05 build/c05-evidence
+          CXX="${CXX:-g++}"
+          common=(-std=c++17 -O2 -pthread -I native/include -I pc-android/native)
+          for test in x86_cpl_c05_test x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
+            "$CXX" "${common[@]}" "pc-android/native/tests/${test}.cpp" -o "build/c05/${test}"
+          done
+      - name: Execute authentic guest x86 / x64 instruction paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in x86_cpl_c05_test x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
+            "build/c05/${test}" > "build/c05-evidence/${test}.log" 2>&1 || {
+              cat "build/c05-evidence/${test}.log"
+              exit 1
+            }
+            tail -8 "build/c05-evidence/${test}.log"
+          done
+          grep -q 'REVERSE_WINDOWS_C04_IDT_PASS' build/c05-evidence/x86_idt_c04_test.log
+          grep -q 'REVERSE_WINDOWS_C05_CPL3_PASS' build/c05-evidence/x86_cpl_c05_test.log
+      - name: Run complete original COSMIC PC native suite and demos
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash pc-android/tools/test-native.sh > build/c05-evidence/native-full.log 2>&1 || {
+            tail -160 build/c05-evidence/native-full.log
+            exit 1
+          }
+          tail -35 build/c05-evidence/native-full.log
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverse-windows-c05-cpl3-tss
+          path: build/c05-evidence/*.log
+          if-no-files-found: warn

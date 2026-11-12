@@ -74,7 +74,8 @@ class Cpu {
     std::uint64_t base = 0;
     std::uint32_t limit = 0xffff;
     bool valid = true, code = false, writable = true, readable = true,
-         big = false, long_code = false;
+         big = false, long_code = false, conforming = false;
+    std::uint8_t dpl = 0;
   };
 
   std::array<std::uint64_t, 16> regs{};
@@ -134,6 +135,7 @@ class Cpu {
   }
   bool is_long_mode() const { return (efer & 0x400) && cache_[CS].long_code; }
   bool is_real_mode() const { return !(cr0 & 1); }
+  unsigned cpl() const { return is_real_mode() ? 0U : unsigned(segments[CS] & 3U); }
   const char* mode_name() const {
     if (is_real_mode()) return "real16";
     if (is_long_mode()) return "long64";
@@ -184,8 +186,8 @@ class Cpu {
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
     try {
-      if ((segments[CS] & 3) && !is_real_mode())
-        fail("only ring 0 execution is implemented", FaultCode::UnsupportedState);
+      if (!is_real_mode() && cpl() != 0 && cpl() != 3)
+        fail("only CPL0/CPL3 are modeled", FaultCode::UnsupportedState);
       if (eflags & (TF | 0x20000U))
         fail("single-step trap / virtual-8086 state is not implemented", FaultCode::UnsupportedState);
       std::uint8_t op;
@@ -297,6 +299,17 @@ class Cpu {
   std::uint64_t start_ip_ = 0, cursor_ = 0;
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
+  // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
+  // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
+  bool supervisor_internal_ = false;
+  struct SupervisorAccess {
+    Cpu& cpu;
+    bool old;
+    explicit SupervisorAccess(Cpu& owner) : cpu(owner), old(owner.supervisor_internal_) {
+      cpu.supervisor_internal_ = true;
+    }
+    ~SupervisorAccess() { cpu.supervisor_internal_ = old; }
+  };
 
   void rollback(const Snapshot& s) {
     // Only our architectural state and write* calls are transactional. Host
@@ -356,6 +369,16 @@ class Cpu {
     }
     const auto& cache = cache_[segment];
     if (!cache.valid) fail("null/unusable protected-mode segment", FaultCode::ProtectionFault);
+    if (!supervisor_internal_ && segment != CS) {
+      const auto privilege = cpl();
+      const auto requested = unsigned(segments[segment] & 3U);
+      if (segment == SS) {
+        if (requested != privilege || cache.dpl != privilege)
+          fail("protected32 SS RPL/DPL does not match CPL", FaultCode::ProtectionFault);
+      } else if (!cache.conforming && std::max(privilege,requested) > cache.dpl) {
+        fail("protected32 data-segment privilege check failed", FaultCode::ProtectionFault);
+      }
+    }
     if (bytes == 0 || offset > cache.limit || bytes - 1 > cache.limit - offset)
       fail("protected-mode segment limit exceeded", FaultCode::SegmentLimit);
     if ((access == Access::Write && (cache.code || !cache.writable)) ||
@@ -614,19 +637,26 @@ class Cpu {
     put_index(r, index(r) + (flag(DF) ? -std::uint64_t(bytes) : bytes));
   }
   std::uint32_t port_in(std::uint16_t port, unsigned bytes) {
+    if (cpl() > ((eflags >> 12) & 3U))
+      fail("CPL exceeds IOPL for IN (TSS I/O bitmap not modeled)", FaultCode::ProtectionFault);
     if (!in_hook) fail("IN has no port backend", FaultCode::UnsupportedPort);
     const auto value = in_hook(port, bytes);
     if (!value) fail("IN port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
     return *value & mask(bytes);
   }
   void port_out(std::uint16_t port, unsigned bytes, std::uint32_t value) {
+    if (cpl() > ((eflags >> 12) & 3U))
+      fail("CPL exceeds IOPL for OUT (TSS I/O bitmap not modeled)", FaultCode::ProtectionFault);
     if (!out_hook || !out_hook(port, bytes, value & mask(bytes)))
       fail("OUT port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
   }
   void restore_flags(std::uint32_t value, unsigned bytes) {
     if (value & TF) fail("trap flag requires an unimplemented debug exception", FaultCode::UnsupportedState);
     // POPFD cannot change VM/RF; accepted bits exclude reserved flags.
-    constexpr std::uint32_t writable = 0x00247fd5U;
+    std::uint32_t writable = 0x00247fd5U;
+    // POPF at CPL3 cannot change IOPL; IF is preserved unless CPL<=IOPL.
+    if (cpl() != 0) writable &= ~0x3000U;
+    if (cpl() > ((eflags >> 12) & 3U)) writable &= ~IF;
     const auto bits = writable & mask(bytes);
     eflags = (eflags & ~bits) | (value & bits) | 2;
   }
@@ -660,11 +690,13 @@ class Cpu {
   }
   void dispatch_idt(std::uint8_t vector, std::uint64_t resume_ip,
                     bool software, bool has_error, std::uint32_t error) {
-    // C04: 32/64-bit same-CPL, ring0-only interrupt and trap gates.
-    // C05 will add cross-privilege, TSS/IST, ring3, and compatibility mode.
+    // CPU, not the guest, reads the IDT/GDT/TSS with supervisor privileges.
+    // Guest code still obeys its actual CPL and page U/S permissions.
     const bool long_gate = is_long_mode();
     if (!long_gate && (!cache_[CS].big || (efer & 0x400)))
       fail("protected16/compatibility IDT gates not implemented", FaultCode::UnsupportedState);
+    const auto old_cpl = cpl();
+    SupervisorAccess system(*this);
     const unsigned length = long_gate ? 16U : 8U;
     const auto slot = std::uint64_t(vector) * length;
     if (slot + length - 1 > idtr.limit || idtr.base > UINT64_MAX - slot - length)
@@ -675,40 +707,74 @@ class Cpu {
     const auto low = read_linear(address, 8);
     const auto high = long_gate ? read_linear(address + 8, 8) : 0;
     const auto selector = std::uint16_t((low >> 16) & 0xffffU);
-    const auto reserved = (low >> 32) & 255U;
+    const auto ist = unsigned((low >> 32) & 7U);
+    const auto reserved = unsigned((low >> 35) & 31U);
     const auto attr = unsigned((low >> 40) & 255U);
     const auto type = attr & 31U;
-    if ((type != 0xe && type != 0xf) || !selector)
+    if ((type != 0xe && type != 0xf) || !(selector & 0xfffcU))
       fail("IDT gate is not a 32/64 interrupt or trap gate", FaultCode::ProtectionFault);
     if (!(attr & 0x80)) fail("IDT gate not present", FaultCode::ProtectionFault);
-    if (software && ((segments[CS] & 3U) > ((attr >> 5) & 3U)))
+    if (software && old_cpl > ((attr >> 5) & 3U))
       fail("INT gate DPL check failed", FaultCode::ProtectionFault);
-    if (reserved || (long_gate && (high >> 32)))
-      fail("IDT IST/reserved fields require later CPU support", FaultCode::UnsupportedState);
+    if (reserved || (!long_gate && ist) || (long_gate && (high >> 32)))
+      fail("IDT gate reserved fields are set", FaultCode::ProtectionFault);
     const auto target_ip = (low & 0xffffU) | (((low >> 48) & 0xffffU) << 16) |
                            ((high & 0xffffffffULL) << 32);
     if (long_gate && !canonical(target_ip))
       fail("noncanonical IDT handler RIP", FaultCode::ProtectionFault);
-    if (selector & 3U)
-      fail("cross-privilege IDT selector requires C05", FaultCode::UnsupportedState);
     const auto target_cache = descriptor(selector);
     if (!target_cache.code || (long_gate && !target_cache.long_code) ||
         (!long_gate && !target_cache.big))
-      fail("IDT destination is not a compatible ring0 code segment", FaultCode::ProtectionFault);
-    const unsigned width = long_gate ? 8U : 4U;
+      fail("IDT destination is not a compatible code segment", FaultCode::ProtectionFault);
+    const auto target_cpl = target_cache.conforming ? old_cpl : unsigned(target_cache.dpl);
+    if (target_cache.dpl > old_cpl ||
+        target_cpl > old_cpl || (target_cpl != 0 && target_cpl != 3))
+      fail("IDT destination privilege transition not supported", FaultCode::ProtectionFault);
+    const bool switch_cpl = target_cpl < old_cpl;
     const auto original_cs = segments[CS], original_ss = segments[SS];
     const auto original_rsp = regs[ESP];
     const auto original_flags = eflags;
-    if (long_gate) {
-      // 64-bit hardware stacks SS:RSP even without changing CPL.
-      push(original_ss, 8); push(original_rsp, 8);
+    const unsigned width = long_gate ? 8U : 4U;
+    if (switch_cpl || (long_gate && ist)) {
+      if (!tr.valid) fail("interrupt stack switch needs a loaded TSS", FaultCode::ProtectionFault);
+      std::uint64_t new_rsp = 0;
+      if (long_gate) {
+        const auto tss_offset = ist ? 36U + (ist-1U)*8U : 4U;
+        if (tr.limit < tss_offset+7U)
+          fail("TSS does not contain the requested 64-bit stack", FaultCode::ProtectionFault);
+        new_rsp = read_linear(tr.base+tss_offset,8);
+        if (!canonical(new_rsp) || !new_rsp)
+          fail("TSS provided a noncanonical or null RSP", FaultCode::ProtectionFault);
+        // Null ring0 SS is allowed during the IA-32e interrupt stack switch.
+        segments[SS] = 0;
+        cache_[SS] = SegmentCache{};
+        regs[ESP] = new_rsp;
+      } else {
+        if (!switch_cpl || target_cpl != 0 || tr.limit < 9)
+          fail("protected32 stack switch requires TSS SS0:ESP0", FaultCode::UnsupportedState);
+        new_rsp = read_linear(tr.base+4,4);
+        const auto ss0 = std::uint16_t(read_linear(tr.base+8,2));
+        const auto ss_cache = descriptor(ss0);
+        if (!ss_cache.valid || ss_cache.code || !ss_cache.writable ||
+            ss_cache.dpl != 0 || (ss0 & 3U))
+          fail("protected32 TSS SS0 must be writable ring0 data", FaultCode::ProtectionFault);
+        segments[SS] = ss0;
+        cache_[SS] = ss_cache;
+        put_reg(ESP,4,new_rsp);
+      }
     }
-    push(original_flags, width); push(original_cs, width); push(resume_ip, width);
-    if (has_error) push(error, width);
-    segments[CS] = selector;
+    if (long_gate) {
+      // 64-bit gate pushes SS:RSP even for a same-CPL interrupt.
+      push(original_ss,8); push(original_rsp,8);
+    } else if (switch_cpl) {
+      push(original_ss,4); push(original_rsp,4);
+    }
+    push(original_flags,width);push(original_cs,width);push(resume_ip,width);
+    if (has_error) push(error,width);
+    segments[CS] = std::uint16_t((selector & ~3U) | target_cpl);
     cache_[CS] = target_cache;
-    jump(target_ip, width);
-    if (type == 0xe) eflags &= ~IF; // trap gates preserve IF
+    jump(target_ip,width);
+    if (type == 0xe) eflags &= ~IF;
     eflags &= ~TF;
   }
 
@@ -733,7 +799,7 @@ class Cpu {
 
 inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   if (selector & 4) fail("LDT selectors are not implemented", FaultCode::UnsupportedState);
-  if (selector & 3) fail("only ring-0 segment selectors are implemented", FaultCode::UnsupportedState);
+  SupervisorAccess system(*this);
   const std::uint32_t offset = selector & 0xfff8U;
   if (!offset || offset + 7 > gdtr.limit)
     fail("selector outside GDT or null code/stack selector", FaultCode::ProtectionFault);
@@ -743,13 +809,15 @@ inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   const unsigned access = (raw >> 40) & 0xffU, attributes = (raw >> 52) & 15U;
   if (!(access & 0x80)) fail("segment descriptor not present", FaultCode::ProtectionFault);
   if (!(access & 0x10)) fail("system segments, call gates and task switches are not implemented", FaultCode::UnsupportedState);
-  if (access & 0x60) fail("only DPL 0 segments are implemented", FaultCode::UnsupportedState);
+  // DPL0..3 are valid; caller enforces CPL/RPL privilege rules.
   if (access & 4) fail("conforming code / expand-down segments are not implemented", FaultCode::UnsupportedState);
   SegmentCache result;
   result.base = ((raw >> 16) & 0xffffffU) | ((raw >> 32) & 0xff000000U);
   result.limit = (raw & 0xffffU) | ((raw >> 32) & 0xf0000U);
   if (attributes & 8) result.limit = (result.limit << 12) | 0xfffU;
   result.code = (access & 8) != 0;
+  result.dpl = std::uint8_t((access >> 5) & 3U);
+  result.conforming = result.code && (access & 4U);
   result.readable = !result.code || (access & 2);
   result.writable = !result.code && (access & 2);
   result.big = (attributes & 4) != 0;
@@ -771,8 +839,7 @@ inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
     return;
   }
   if ((selector & 0xfffcU) == 0) {
-    if (segment == SS && !is_long_mode()) fail("null protected-mode SS", FaultCode::ProtectionFault);
-    if (selector & 3) fail("only ring-0 null selectors are implemented", FaultCode::UnsupportedState);
+    if (segment == SS) fail("null SS is not implemented for this privilege profile", FaultCode::ProtectionFault);
     segments[segment] = selector; cache_[segment].valid = false;
     // AMD64 preserves the FS/GS hidden base when loading a null selector.
     return;
@@ -780,6 +847,13 @@ inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
   const auto value = descriptor(selector);
   if ((segment == SS && (value.code || !value.writable)) || (value.code && !value.readable))
     fail("segment type is invalid for this data/stack register", FaultCode::ProtectionFault);
+  const auto requested = unsigned(selector & 3U), privilege = cpl();
+  if (segment == SS) {
+    if (requested != privilege || value.dpl != privilege)
+      fail("stack selector RPL/DPL must equal CPL", FaultCode::ProtectionFault);
+  } else if (!value.conforming && std::max(requested, privilege) > value.dpl) {
+    fail("data selector DPL/RPL access denied", FaultCode::ProtectionFault);
+  }
   segments[segment] = selector; cache_[segment] = value;
   if (segment == FS) fs_base = value.base;
   if (segment == GS) gs_base = value.base;
@@ -791,7 +865,10 @@ inline void Cpu::far_transfer(std::uint16_t selector, std::uint64_t target, unsi
   }
   const auto value = descriptor(selector);
   if (!value.code) fail("far transfer target is not a code segment", FaultCode::ProtectionFault);
-  segments[CS] = selector; cache_[CS] = value;
+  if ((selector & 3U) > cpl() ||
+      (value.conforming ? value.dpl > cpl() : value.dpl != cpl()))
+    fail("far control transfer privilege check failed", FaultCode::ProtectionFault);
+  segments[CS] = std::uint16_t((selector & ~3U) | cpl()); cache_[CS] = value;
   jump(target, value.long_code ? 8 : bytes);
 }
 
@@ -872,6 +949,7 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
   Trap trap{FaultCode::PageFault, reason};
   trap.address = address;
   trap.error = (present ? 1U : 0U) | (access == Access::Write ? 2U : 0U) |
+               ((cpl() == 3 && !supervisor_internal_) ? 4U : 0U) |
                (reserved ? 8U : 0U) | (access == Access::Execute ? 16U : 0U);
   throw trap;
 }
@@ -884,7 +962,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
   if (!canonical(address)) fail("non-canonical page-walk address", FaultCode::ProtectionFault);
   constexpr std::uint64_t address_mask = 0x000ffffffffff000ULL;
   std::uint64_t table = cr3 & address_mask;
-  bool writable = true, executable = true;
+  bool writable = true, executable = true, user_access = true;
+  const bool user_mode = cpl() == 3 && !supervisor_internal_;
   for (unsigned level = 4; level != 0; --level) {
     const unsigned shift = 12 + 9 * (level - 1);
     const auto entry_address = table + (((address >> shift) & 0x1ffU) * 8);
@@ -900,11 +979,14 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
     if (large && (entry & 0x1fe000U))
       page_fault(address, access, true, true, "2-MiB page physical base is misaligned");
     writable = writable && (entry & 2);
+    user_access = user_access && (entry & 4);
     executable = executable && !(entry >> 63);
     const bool leaf = level == 1 || large;
     if (leaf) {
-      if (access == Access::Write && !writable && (cr0 & 0x10000U))
-        page_fault(address, access, true, false, "supervisor write denied by page permissions / CR0.WP");
+      if (user_mode && !user_access)
+        page_fault(address, access, true, false, "CPL3 access denied by U/S page permissions");
+      if (access == Access::Write && !writable && (user_mode || (cr0 & 0x10000U)))
+        page_fault(address, access, true, false, "page is read-only for this privilege");
       if (access == Access::Execute && !executable)
         page_fault(address, access, true, false, "instruction fetch denied by NX page permissions");
     }
@@ -1182,7 +1264,7 @@ inline void Cpu::extended() {
             const bool present = (access & 0x80u) != 0;
             const bool code = (access & 8u) != 0;
             const bool conforming = code && (access & 4u);
-            const bool accessible = ((access >> 5) & 3u) >= (selector & 3u);
+            const bool accessible = ((access >> 5) & 3u) >= std::max<unsigned>(cpl(),selector & 3u);
             const bool privilege_ok = conforming || accessible;
             const bool read_ok = !code || (access & 2u);
             const bool write_ok = !code && (access & 2u);
@@ -1270,10 +1352,13 @@ inline void Cpu::extended() {
       const auto m = modrm();
       if (m.group == 4) { put(m.rm, m.rm.is_register ? bytes : 2, cr0); return; }
       if (m.group == 6) {
+        if (cpl() != 0) fail("LMSW requires CPL0", FaultCode::ProtectionFault);
         const auto value = get(m.rm, 2) & 15;
         write_cr0((cr0 & ~15U) | value | (cr0 & 1)); return;
       }
       if (m.group > 3) fail("system group-7 instruction not implemented", FaultCode::UnsupportedOpcode);
+      if (cpl() != 0 && m.group >= 2)
+        fail("LGDT/LIDT require CPL0", FaultCode::ProtectionFault);
       require_memory(m.rm);
       const unsigned base_bytes = is_long_mode() ? 8 : 4;
       const auto address = segment_linear(m.rm.segment, operand_offset(m.rm), base_bytes + 2,
@@ -1293,8 +1378,11 @@ inline void Cpu::extended() {
       }
       return;
     }
-    case 0x06: cr0 &= ~8U; return;  // CLTS; no floating-point execution is claimed.
+    case 0x06:
+      if (cpl() != 0) fail("CLTS requires CPL0", FaultCode::ProtectionFault);
+      cr0 &= ~8U; return;  // no floating-point execution is claimed.
     case 0x20: case 0x22: {
+      if (cpl() != 0) fail("MOV CR requires CPL0", FaultCode::ProtectionFault);
       const auto m = modrm();
       if (!m.rm.is_register) fail("MOV CR requires a register operand", FaultCode::InvalidInstruction);
       if (m.reg != 0 && m.reg != 2 && m.reg != 3 && m.reg != 4)
@@ -1311,8 +1399,10 @@ inline void Cpu::extended() {
       return;
     }
     case 0x30:
+      if (cpl() != 0) fail("WRMSR requires CPL0", FaultCode::ProtectionFault);
       write_msr(std::uint32_t(regs[ECX]), (std::uint64_t(std::uint32_t(regs[EDX])) << 32) | std::uint32_t(regs[EAX])); return;
     case 0x32: {
+      if (cpl() != 0) fail("RDMSR requires CPL0", FaultCode::ProtectionFault);
       const auto value = read_msr(std::uint32_t(regs[ECX]));
       put_reg(EAX, 4, value); put_reg(EDX, 4, value >> 32); return;
     }
@@ -1580,19 +1670,60 @@ inline void Cpu::execute(std::uint8_t op) {
       if (long_return && operand_override_)
         fail("16-bit IRET in long mode is not implemented", FaultCode::UnsupportedState);
       const unsigned n = long_return ? 8U : 4U;
+      const auto original_cpl = cpl();
       const auto target = pop(n), raw_cs = pop(n), flags = pop(n);
-      if (raw_cs > 0xffffU || (raw_cs & 3U))
-        fail("IRET cross-privilege return requires C05", FaultCode::UnsupportedState);
+      if (raw_cs > 0xffffU || (flags & 0x20000U))
+        fail("IRET invalid selector/virtual-8086 transition", FaultCode::ProtectionFault);
+      const auto target_cpl = unsigned(raw_cs & 3U);
+      if (target_cpl < original_cpl || (target_cpl != 0 && target_cpl != 3))
+        fail("IRET cannot elevate privilege", FaultCode::ProtectionFault);
+      const auto code = descriptor(std::uint16_t(raw_cs));
+      if (!code.code || (code.conforming ? code.dpl > target_cpl : code.dpl != target_cpl) ||
+          (long_return ? !code.long_code : !code.big))
+        fail("IRET code selector DPL/RPL/type mismatch", FaultCode::ProtectionFault);
+      const bool outer = target_cpl > original_cpl;
       std::uint64_t saved_rsp = 0, saved_ss = 0;
-      if (long_return) {
-        saved_rsp = pop(8); saved_ss = pop(8);
-        if (saved_ss != segments[SS] || !canonical(saved_rsp))
-          fail("IRET ring change/invalid stack requires C05", FaultCode::UnsupportedState);
+      SegmentCache saved_stack{};
+      if (long_return || outer) {
+        saved_rsp = pop(n);
+        saved_ss = pop(n);
+        if (saved_ss > 0xffffU || (long_return && !canonical(saved_rsp)))
+          fail("IRET invalid SS/RSP", FaultCode::ProtectionFault);
+        if (saved_ss == 0 && long_return && target_cpl == 0) {
+          saved_stack = SegmentCache{}; // null SS is valid for IA-32e ring0
+        } else {
+          if ((saved_ss & 3U) != target_cpl)
+            fail("IRET SS selector RPL differs from return CPL", FaultCode::ProtectionFault);
+          saved_stack = descriptor(std::uint16_t(saved_ss));
+          if (saved_stack.code || !saved_stack.writable || saved_stack.dpl != target_cpl)
+            fail("IRET stack selector DPL/type mismatch", FaultCode::ProtectionFault);
+        }
       }
-      if (flags & 0x20000U) fail("IRET virtual-8086 transition not implemented", FaultCode::UnsupportedState);
-      far_transfer(std::uint16_t(raw_cs), target, n);
+      // The IRET instruction is still executing at its originating CPL.
+      // Restore privileged IF/IOPL before switching the CS CPL to ring3.
       restore_flags(std::uint32_t(flags), 4);
-      if (long_return) regs[ESP] = saved_rsp;
+      segments[CS] = std::uint16_t(raw_cs);
+      cache_[CS] = code;
+      if (long_return || outer) {
+        segments[SS] = std::uint16_t(saved_ss);
+        cache_[SS] = saved_stack;
+        put_reg(ESP, long_return ? 8U : 4U, saved_rsp);
+      }
+      if (outer) {
+        // IRET to a less-privileged ring invalidates inaccessible DS/ES/FS/GS.
+        // FS/GS MSR bases persist across selector invalidation.
+        for (unsigned seg : {unsigned(DS),unsigned(ES),unsigned(FS),unsigned(GS)}) {
+          const auto& descriptor_cache = cache_[seg];
+          if (!descriptor_cache.valid) continue;
+          const auto rpl = unsigned(segments[seg] & 3U);
+          if (!descriptor_cache.conforming &&
+              std::max(target_cpl,rpl) > descriptor_cache.dpl) {
+            segments[seg] = 0;
+            cache_[seg].valid = false;
+          }
+        }
+      }
+      jump(target, n);
       return;
     }
     case 0xd7: {
@@ -1631,13 +1762,19 @@ inline void Cpu::execute(std::uint8_t op) {
       far_transfer(cs, target, bytes); return;
     }
     case 0xeb: { const auto disp = signed_value(immediate(1), 1); relative(disp, bytes); return; }
-    case 0xf4: halted = true; return;
+    case 0xf4:
+      if (cpl() != 0) fail("HLT requires CPL0", FaultCode::ProtectionFault);
+      halted = true; return;
     case 0xf5: set_flag(CF, !flag(CF)); return;
     case 0xf6: case 0xf7: { const auto m = modrm(); group3(m, (op & 1U) ? bytes : 1); return; }
     case 0xf8: set_flag(CF, false); return;
     case 0xf9: set_flag(CF, true); return;
-    case 0xfa: set_flag(IF, false); return;
-    case 0xfb: set_flag(IF, true); return;
+    case 0xfa:
+      if (cpl() > ((eflags >> 12) & 3U)) fail("CLI requires IOPL", FaultCode::ProtectionFault);
+      set_flag(IF, false); return;
+    case 0xfb:
+      if (cpl() > ((eflags >> 12) & 3U)) fail("STI requires IOPL", FaultCode::ProtectionFault);
+      set_flag(IF, true); return;
     case 0xfc: set_flag(DF, false); return;
     case 0xfd: set_flag(DF, true); return;
     case 0xfe: case 0xff: {
