@@ -39,6 +39,9 @@ class PcMachine {
   bool waiting_key=false;
   std::string host_error, boot_kind="none", pending;
   std::uint64_t disk_reads=0;
+  // Optional external motherboard clock/IRQ polling hook. C06 owners must
+  // operate on the SAME Cpu instance; reset() deliberately preserves hooks.
+  std::function<void()> device_step_hook;
   // The hooks capture this address; instances must remain at a stable address.
   PcMachine(const PcMachine&)=delete;
   PcMachine& operator=(const PcMachine&)=delete;
@@ -125,12 +128,20 @@ class PcMachine {
     cpu.write8(0x484,24);cpu.write8(0x475,plan_.drive==0x80?1:0);clear_screen();started_=std::chrono::steady_clock::now();
   }
   void run(unsigned budget) {
-    if(!reader_||!host_error.empty()||waiting_key||cpu.fault||cpu.halted)return;
+    if(!reader_||!host_error.empty()||waiting_key||cpu.fault)return;
+    if(cpu.halted&&!device_step_hook)return;
     budget=std::min(budget,50000u);
     for(unsigned i=0;i<budget&&!waiting_key;++i){
-      auto r=cpu.step();
+      // Devices can tick and deliver an enabled IRQ between guest instructions;
+      // a pending timer IRQ may wake a halted CPU without a synthetic opcode.
+      if(device_step_hook) device_step_hook();
+      if(cpu.fault) {
+        pending="La placa base virtual no pudo entregar la interrupción.";
+        break;
+      }
+      const auto r=cpu.step();
       if(r==StepResult::Faulted){pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
-      if(r==StepResult::Halted)break;
+      if(r==StepResult::Halted&&!device_step_hook)break;
     }
   }
   void key(std::uint8_t ascii,std::uint8_t scan) {
