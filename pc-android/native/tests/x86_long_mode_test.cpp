@@ -424,8 +424,11 @@ void paging_and_fault_tests() {
   expect_fault(cpu, FaultCode::ProtectionFault, "non-canonical address");
 
   program(cpu, {0xcd,0x10}); bool called = false;
+  cpu.idtr = {0, 0}; // no guest gate is configured: must not invent a BIOS service.
   cpu.interrupt_hook = [&](Cpu&,std::uint8_t) { called = true; return true; };
-  expect_fault(cpu, FaultCode::UnsupportedState, "long-mode INT stops before BIOS hook");
+  expect_fault(cpu, FaultCode::ProtectionFault, "long-mode INT without a valid IDT stops before BIOS hook");
+  check(cpu.fault->reason.find("triple fault") != std::string::npos,
+        "invalid IDT must produce explicit unhandled/triple-fault diagnostic");
   check(!called, "BIOS is never substituted for a long-mode IDT");
   // CPUID is now implemented, but must declare only the emulated features.
   program(cpu, {0x0f,0xa2});
