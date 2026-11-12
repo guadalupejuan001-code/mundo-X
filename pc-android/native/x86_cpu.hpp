@@ -604,8 +604,10 @@ class Cpu {
     eflags = (eflags & ~bits) | (value & bits) | 2;
   }
   void interrupt(std::uint8_t vector) {
-    if (!is_real_mode())
-      fail("protected/long-mode IDT delivery is not implemented; BIOS hooks are real-mode only", FaultCode::UnsupportedState);
+    if (!is_real_mode()) {
+      dispatch_idt(vector, cursor_, true, false, 0);
+      return;
+    }
     eip = cursor_ & 0xffffU; ip_written_ = true;
     if (interrupt_hook && interrupt_hook(*this, vector)) return;
     const auto table_offset = std::uint32_t(vector) * 4;
@@ -617,6 +619,69 @@ class Cpu {
     push(eflags, 2); push(segments[CS], 2); push(eip, 2);
     eflags &= ~(IF | TF);
     segments[CS] = new_cs; jump(new_ip, 2);
+  }
+
+  static int exception_vector(FaultCode code) {
+    switch (code) {
+      case FaultCode::DivideError: return 0;      // #DE
+      case FaultCode::InvalidInstruction: return 6; // #UD, not missing opcodes
+      case FaultCode::ProtectionFault:
+      case FaultCode::SegmentLimit: return 13;    // #GP
+      case FaultCode::PageFault: return 14;        // #PF
+      default: return -1; // Unsupported opcodes and host/resource failures.
+    }
+  }
+  void dispatch_idt(std::uint8_t vector, std::uint64_t resume_ip,
+                    bool software, bool has_error, std::uint32_t error) {
+    // C04: 32/64-bit same-CPL, ring0-only interrupt and trap gates.
+    // C05 will add cross-privilege, TSS/IST, ring3, and compatibility mode.
+    const bool long_gate = is_long_mode();
+    if (!long_gate && (!cache_[CS].big || (efer & 0x400)))
+      fail("protected16/compatibility IDT gates not implemented", FaultCode::UnsupportedState);
+    const unsigned length = long_gate ? 16U : 8U;
+    const auto slot = std::uint64_t(vector) * length;
+    if (slot + length - 1 > idtr.limit || idtr.base > UINT64_MAX - slot - length)
+      fail("interrupt vector outside guest IDT", FaultCode::ProtectionFault);
+    const auto address = idtr.base + slot;
+    if (long_gate && (!canonical(address) || !canonical(address + length - 1)))
+      fail("noncanonical IDT entry", FaultCode::ProtectionFault);
+    const auto low = read_linear(address, 8);
+    const auto high = long_gate ? read_linear(address + 8, 8) : 0;
+    const auto selector = std::uint16_t((low >> 16) & 0xffffU);
+    const auto reserved = (low >> 32) & 255U;
+    const auto attr = unsigned((low >> 40) & 255U);
+    const auto type = attr & 31U;
+    if ((type != 0xe && type != 0xf) || !selector)
+      fail("IDT gate is not a 32/64 interrupt or trap gate", FaultCode::ProtectionFault);
+    if (!(attr & 0x80)) fail("IDT gate not present", FaultCode::ProtectionFault);
+    if (software && ((segments[CS] & 3U) > ((attr >> 5) & 3U)))
+      fail("INT gate DPL check failed", FaultCode::ProtectionFault);
+    if (reserved || (long_gate && (high >> 32)))
+      fail("IDT IST/reserved fields require later CPU support", FaultCode::UnsupportedState);
+    const auto target_ip = (low & 0xffffU) | (((low >> 48) & 0xffffU) << 16) |
+                           ((high & 0xffffffffULL) << 32);
+    if (long_gate && !canonical(target_ip))
+      fail("noncanonical IDT handler RIP", FaultCode::ProtectionFault);
+    if (selector & 3U)
+      fail("cross-privilege IDT selector requires C05", FaultCode::UnsupportedState);
+    const auto target_cache = descriptor(selector);
+    if (!target_cache.code || (long_gate && !target_cache.long_code) ||
+        (!long_gate && !target_cache.big))
+      fail("IDT destination is not a compatible ring0 code segment", FaultCode::ProtectionFault);
+    const unsigned width = long_gate ? 8U : 4U;
+    const auto original_cs = segments[CS], original_ss = segments[SS];
+    const auto original_rsp = regs[ESP], original_flags = eflags;
+    if (long_gate) {
+      // 64-bit hardware stacks SS:RSP even without changing CPL.
+      push(original_ss, 8); push(original_rsp, 8);
+    }
+    push(original_flags, width); push(original_cs, width); push(resume_ip, width);
+    if (has_error) push(error, width);
+    segments[CS] = selector;
+    cache_[CS] = target_cache;
+    jump(target_ip, width);
+    if (type == 0xe) eflags &= ~IF; // trap gates preserve IF
+    eflags &= ~TF;
   }
 
   void string_operation(std::uint8_t op);
