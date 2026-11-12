@@ -1,0 +1,19 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.mundox.worldlink'
+    compileSdk 35
+    defaultConfig {
+        // This ID MUST match the installed phone app for Wear Data Layer pairing.
+        applicationId 'com.mundox.graphics'
+        minSdk 30
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+    buildTypes { debug { minifyEnabled false } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+dependencies { implementation 'com.google.android.gms:play-services-wearable:20.0.1' }

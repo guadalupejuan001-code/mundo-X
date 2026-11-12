@@ -1,0 +1,81 @@
+name: Mundo X WorldLink - Phone and Watch APK
+
+on:
+  pull_request:
+    paths:
+      - 'watch-link/**'
+      - 'graphics-android/**'
+      - 'native/**'
+      - '.github/workflows/worldlink-android.yml'
+  push:
+    branches: [main, 'codex/worldlink-watch-body-20261023']
+    paths:
+      - 'watch-link/**'
+      - 'graphics-android/**'
+      - 'native/**'
+      - '.github/workflows/worldlink-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-paired-apks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android 35 and native toolchains
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            'platforms;android-35' 'build-tools;35.0.0' \
+            'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Test deliberate wrist gesture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/worldlink-java-test
+          javac -d /tmp/worldlink-java-test \
+            graphics-android/app/src/main/java/com/mundox/graphics/WearLinkRules.java \
+            watch-link/test/WearLinkRulesCheck.java
+          java -cp /tmp/worldlink-java-test WearLinkRulesCheck
+      - name: Build both signed APKs with same debug key
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p graphics-android --no-daemon --stacktrace :app:assembleDebug
+          gradle -p watch-link --no-daemon --stacktrace :app:assembleDebug
+      - name: Package and verify signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p worldlink-dist
+          cp graphics-android/app/build/outputs/apk/debug/app-debug.apk \
+            worldlink-dist/Mundo-X-WorldLink-phone.apk
+          cp watch-link/app/build/outputs/apk/debug/app-debug.apk \
+            worldlink-dist/Mundo-X-WorldLink-watch.apk
+          for f in worldlink-dist/*.apk; do
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$f"
+            "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$f" | head -n 3
+          done
+          sha256sum worldlink-dist/*.apk > worldlink-dist/SHA256SUMS.txt
+          git rev-parse HEAD > worldlink-dist/commit.txt
+      - name: Upload paired APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mundo-X-WorldLink-phone-watch
+          path: worldlink-dist/**
+          if-no-files-found: error
+          retention-days: 14
