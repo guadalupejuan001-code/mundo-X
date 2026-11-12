@@ -19,7 +19,7 @@ on:
       - 'CMakeLists.txt'
       - '.github/workflows/infinite-core.yml'
   pull_request:
-    branches: [main]
+    branches: [main, feature/infinite-autonomous-c01-20261112]
     paths:
       - 'native/include/mundo_x/**'
       - 'native/src/infinite_*.cpp'
