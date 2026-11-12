@@ -166,7 +166,10 @@ void protected32_cpl3(){
                   0xcf});
   code(cpu,0x11000,{0xb8,0x34,0x12,0,0,0xcd,0x80,
                    0xbb,0x78,0x56,0,0,0xcd,0x81});
-  code(cpu,0x13000,{0xc7,0x05,0x00,0x60,0x01,0,0xef,0xbe,0xad,0xde,
+  // IDT entry does not automatically reload DS; the kernel must do so
+  // after the outer-privilege IRET invalidates its old user-inaccessible DS.
+  code(cpu,0x13000,{0xb8,0x10,0,0,0,0x8e,0xd8,
+                    0xc7,0x05,0x00,0x60,0x01,0,0xef,0xbe,0xad,0xde,
                     0xcf});
   code(cpu,0x13400,{0xf4});
   cpu.regs[Cpu::ESP]=0x1e0000;
@@ -177,6 +180,7 @@ void protected32_cpl3(){
     if(status==StepResult::Faulted)throw std::runtime_error(cpu.fault->describe());
     if(cpu.cpl()==3&&cpu.eip==0x11000){
       entered_user=true;
+      need(cpu.segments[Cpu::DS]==0,"outer-ring IRETD did not invalidate kernel DS");
       need(cpu.regs[Cpu::ESP]==0x1a0000&&cpu.segments[Cpu::SS]==0x2b,
            "IRETD did not enter protected32 CPL3 with correct stack");
     }
