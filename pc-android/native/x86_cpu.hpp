@@ -205,6 +205,7 @@ class Cpu {
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     system_call_msrs_ = {};
     tsc_offset_ = 0;
+    halted_clock_steps_ = 0;
     apic_task_priority_ = 0;
     apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
@@ -230,6 +231,8 @@ class Cpu {
   bool apic_global_enabled() const noexcept { return (apic_base_ & kApicEnable) != 0; }
   bool local_apic_present() const noexcept { return local_apic_present_; }
   void set_local_apic_present(bool present) noexcept { local_apic_present_ = present; }
+  // A machine with live devices still spends a virtual cycle in HLT.
+  void advance_halted_clock() noexcept { ++halted_clock_steps_; }
   const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
   unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
   bool rep_batch_candidate() const noexcept {
@@ -593,8 +596,10 @@ class Cpu {
   static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
   static constexpr std::uint64_t kTscTicksPerStep = 64;
   std::uint64_t tsc_offset_ = 0;
-  // A deterministic guest clock advances by 64 ticks per interpreter step.
-  std::uint64_t timestamp_counter() const noexcept { return tsc_offset_ + instructions * kTscTicksPerStep; }
+  std::uint64_t halted_clock_steps_ = 0;
+  std::uint64_t timestamp_counter() const noexcept {
+    return tsc_offset_ + (instructions + halted_clock_steps_) * kTscTicksPerStep;
+  }
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
   // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
@@ -2715,7 +2720,7 @@ inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
 
 inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
   if (number == kTscMsr) {
-    tsc_offset_ = value - instructions * kTscTicksPerStep;
+    tsc_offset_ += value - timestamp_counter();
     return;
   }
   if (number == 0x1bU) {
