@@ -149,6 +149,20 @@ ADDITIONAL_SOURCES.update({
     "native/tests/ether_triangle.cpp": TRIANGLE_RENDER_REFERENCE,
 })
 
+ETHER_NEXT_PC_REFERENCE = "78091b93dcc8995f8902ba703342f34a5f0458d8"
+ADDITIONAL_SOURCES.update(dict.fromkeys((
+    "native/include/mundo_x/ether_core.hpp",
+    "native/include/mundo_x/experimental/ether_transform.hpp",
+    "native/include/mundo_x/infinite_core.hpp",
+    "native/include/mundo_x/infinite_session.hpp",
+    "native/include/mundo_x/inverse_memory.hpp",
+    "native/src/ether_neon.cpp",
+    "native/src/ether_transform.cpp",
+    "native/tests/ether_fusion.cpp",
+    "native/tests/ether_next.cpp",
+    "native/tests/ether_next_quantum.cpp",
+), ETHER_NEXT_PC_REFERENCE))
+
 RESOLUTION_SOURCE = "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java"
 
 
