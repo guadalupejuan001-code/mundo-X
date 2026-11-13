@@ -93,6 +93,31 @@ class Cpu {
   // Used to prove that multi-byte accesses do not repeat the same walk.
   std::uint64_t page_walks = 0;
 
+  struct StepTrace {
+    std::uint64_t sequence=0, rip_before=0, rip_after=0;
+    std::uint16_t cs_before=0, cs_after=0, opcode=0;
+    std::uint32_t flags_before=0, flags_after=0;
+    std::uint64_t rsp_before=0, rsp_after=0, cr2=0, cr3=0;
+    std::uint64_t page_walks_delta=0;
+    std::string mode_before,mode_after,outcome;
+    std::vector<std::uint8_t> decoded_bytes;
+    int delivered_vector=-1;
+    std::uint32_t delivered_error=0;
+    std::uint64_t delivered_linear=0;
+    std::optional<Fault> terminal_fault;
+  };
+  // Observation only: callback runs AFTER a bounded guest CPU step finishes.
+  // When unset, it does not decode extra instructions or allocate trace data.
+  std::function<void(const StepTrace&)> step_trace_hook;
+  struct IrqTrace {
+    std::uint8_t vector=0;
+    std::uint16_t cs_before=0,cs_after=0;
+    std::uint64_t rip_before=0,rip_after=0;
+    std::uint64_t sequence=0;
+    bool delivered=false;
+  };
+  std::function<void(const IrqTrace&)> irq_trace_hook;
+
   // true: the host BIOS handled INT, with EIP already past the instruction.
   // false: execute the guest IVT handler with a real interrupt stack frame.
   std::function<bool(Cpu&, std::uint8_t)> interrupt_hook;
@@ -200,6 +225,39 @@ class Cpu {
     if (halted) return StepResult::Halted;
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
                           cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted};
+    const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
+    const auto trace_walks_before=page_walks;
+    int delivered_vector=-1;
+    std::uint32_t delivered_error=0;
+    std::uint64_t delivered_linear=0;
+    auto publish_trace=[&]() noexcept {
+      if(!step_trace_hook)return;
+      try {
+        StepTrace record;
+        record.sequence=instructions;
+        record.rip_before=before.eip;record.rip_after=eip;
+        record.cs_before=before.segments[CS];record.cs_after=segments[CS];
+        record.opcode=opcode_;record.flags_before=before.eflags;record.flags_after=eflags;
+        record.rsp_before=before.regs[ESP];record.rsp_after=regs[ESP];
+        record.cr2=cr2;record.cr3=cr3;
+        record.page_walks_delta=page_walks-trace_walks_before;
+        record.mode_before=trace_mode_before;record.mode_after=mode_name();
+        record.outcome=fault?"fault":delivered_vector>=0?"exception-delivered":
+                       halted?"halted":"executed";
+        record.decoded_bytes=decoded_;
+        record.delivered_vector=delivered_vector;
+        record.delivered_error=delivered_error;
+        record.delivered_linear=delivered_linear;
+        record.terminal_fault=fault;
+        step_trace_hook(record);
+      }catch(...){
+        // Instrumentation is never allowed to mutate or fail the guest step.
+      }
+    };
+    struct TraceGuard {
+      decltype(publish_trace)& callback;
+      ~TraceGuard() noexcept {callback();}
+    } trace_guard{publish_trace};
     start_ip_ = eip; start_cs_ = segments[CS]; cursor_ = eip;
     decoded_.clear(); journal_.clear(); opcode_ = 0;
     operand_override_ = address_override_ = false; rex_ = 0;
@@ -254,6 +312,9 @@ class Cpu {
             dispatch_idt(std::uint8_t(number), start_ip_, false, with_error, code);
             transaction_ = false; journal_.clear();
             ++instructions; // bounded interpreter step, not retired opcode
+            delivered_vector=int(number);
+            delivered_error=code;
+            delivered_linear=t.address;
             return true;
           } catch (const std::exception&) {
             rollback(before); // Undo any partial frame/descriptor writes.
@@ -303,6 +364,12 @@ class Cpu {
       }
       halted=false;
       transaction_=false;journal_.clear();
+      if(irq_trace_hook) {
+        try {
+          irq_trace_hook(IrqTrace{vector,before.segments[CS],segments[CS],
+                                 before.eip,eip,instructions,true});
+        }catch(...){ /* IRQ observation must not alter the guest */ }
+      }
       return true;
     } catch (const Trap& t) {
       rollback(before);
