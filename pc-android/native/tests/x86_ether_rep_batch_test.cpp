@@ -231,6 +231,27 @@ void copy_under_pressure() {
           "copied page writes must not alias the source");
 }
 
+void resident_copy() {
+  constexpr std::uint64_t from = 0x1101, to = 0x2203;
+  constexpr std::array<std::uint8_t, 5> input{0xf5,0x10,0x34,0x77,0x98};
+  MemoryFabric memory(0x4000);
+  memory.write_block(from, input.data(), input.size());
+  require(!memory.try_copy_resident_block(from, to, input.size()) && memory.allocated_pages() == 1,
+          "resident copy must leave unallocated destinations to the ordinary path");
+  memory.fill(to - 1, 0x5a, input.size() + 2);
+  require(memory.try_copy_resident_block(from, to, input.size()), "expected direct resident copy");
+  std::array<std::uint8_t, input.size()> output;
+  memory.read_block(to, output.data(), output.size());
+  require(output == input && memory.read_byte(to - 1) == 0x5a &&
+          memory.read_byte(to + input.size()) == 0x5a, "resident copy changed bytes outside the span");
+  require(!memory.try_copy_resident_block(from, from + 1, input.size()) &&
+          !memory.try_copy_resident_block(from, 0x1ffe, input.size()),
+          "overlapping or cross-page blocks must use the regular path");
+  memory.attach_window(to + 1, 1, [](std::uint64_t){return std::uint8_t{0};},
+                       [](std::uint64_t,std::uint8_t){});
+  require(!memory.try_copy_resident_block(from, to, input.size()), "Ether callbacks must remain observable");
+}
+
 struct BenchResult {
   std::uint64_t steps = 0;
   std::int64_t host_us = 0;
@@ -279,6 +300,7 @@ int main() {
     a20_alias();
     irq_checkpoint();
     copy_under_pressure();
+    resident_copy();
     const auto scalar = measure(false), batched = measure(true);
     require(scalar.steps == batched.steps && batched.batches > 0 && batched.patterns == 256 &&
             !scalar.patterns, "REP changed step count or failed to compact full STOS pages");

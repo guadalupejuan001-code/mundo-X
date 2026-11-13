@@ -251,6 +251,13 @@ class Cpu {
   // Keep device observations on their original guest instruction boundaries.
   // Returns only complete shift/rotate/LOOP iterations within the granted budget.
   unsigned try_shift_loop_batch(unsigned step_budget);
+  bool zero_loop_batch_candidate() const noexcept {
+    return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
+           decoded_.size() == 2 && decoded_[0] == 0x75 && decoded_[1] == 0xf7 &&
+           eip <= UINT32_MAX - 8 && start_ip_ == eip + 7 && cursor_ == eip + 9 &&
+           !is_real_mode() && !(efer & 0x400U) && cache_[CS].big;
+  }
+  unsigned try_zero_loop_batch(unsigned step_budget);
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -2974,6 +2981,60 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 
 #include "x86_shift_loop.inc"
 
+inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
+  constexpr unsigned steps_per_iteration = 4;
+  if (step_budget < steps_per_iteration || !zero_loop_batch_candidate() ||
+      fault || halted || transaction_ || interrupt_shadow_ ||
+      (eflags & (TF | 0x20000U)) || (cr0 & 0x80000000U) ||
+      (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook)
+    return 0;
+
+  // MOV BYTE [EDX],0; INC EDX; SUB ECX,1; JNZ to MOV.
+  static constexpr std::array<std::uint8_t, 9> expected{{
+      0xc6, 0x02, 0x00, 0x42, 0x83, 0xe9, 0x01, 0x75, 0xf7}};
+  static constexpr std::array<std::uint8_t, MemoryFabric::kPageSize> zero{};
+  const auto remaining = std::uint32_t(regs[ECX]);
+  const auto dst = std::uint32_t(regs[EDX]);
+  if (!remaining) return 0;
+
+  unsigned count = std::min(remaining, step_budget / steps_per_iteration);
+  try {
+    const auto linear_code = segment_linear(CS, eip, expected.size(), Access::Execute);
+    if (expected.size() - 1 > UINT32_MAX - linear_code ||
+        !bulk_ram_range(linear_code, expected.size())) return 0;
+    const auto code = bus_address(linear_code);
+    std::array<std::uint8_t, expected.size()> current;
+    memory.read_block(code, current.data(), current.size());
+    if (current != expected) return 0;
+
+    const auto linear = segment_linear(DS, dst, 1, Access::Write);
+    const auto target = bus_address(linear);
+    const auto room = unsigned(zero.size() - target % zero.size());
+    count = std::min(count, room);
+    if (count < 2 || count - 1 > UINT32_MAX - dst) return 0;
+    (void)segment_linear(DS, dst, count, Access::Write);
+    if (!bulk_ram_range(linear, count) ||
+        (target < code + current.size() && code < target + count)) return 0;
+
+    // Preflight one page as in the scalar store. If backing fails, the
+    // interpreter still reports the exact failing guest instruction.
+    memory.write_block(target, zero.data(), count);
+    if (count == room) memory.compact_repeating_page(target);
+  } catch (const std::exception&) {
+    return 0;
+  }
+
+  put_reg(EDX, 4, std::uint64_t(dst) + count);
+  // The last SUB replaces every flag affected by INC. Use the scalar ALU.
+  put_reg(ECX, 4, alu(5, remaining - count + 1, 1, 4));
+  ip_written_ = remaining != count;
+  if (!ip_written_) eip = cursor_ & code_mask();
+  eflags |= 2;
+  const auto steps = count * steps_per_iteration;
+  instructions += steps;
+  return steps;
+}
+
 inline void Cpu::string_operation(std::uint8_t op) {
   if (repeat_ && index(ECX) == 0) return;
   const unsigned bytes = (op & 1U) ? (op < 0x70 ? (op32_ ? 4 : 2) : width()) : 1;
@@ -3554,6 +3615,11 @@ inline void Cpu::extended() {
         mxcsr=candidate;
       }else write_linear(address,4,mxcsr);
       return;
+    }
+    case 0x1f: { // Multi-byte NOP (0F 1F /0).
+      if (modrm().group != 0)
+        fail("reserved multi-byte NOP encoding", FaultCode::InvalidInstruction);
+      return; // Decode the full operand without accessing its address.
     }
     case 0x18: { // PREFETCHNTA/T0/T1/T2, advisory memory hints.
       const auto m=modrm();require_memory(m.rm);
