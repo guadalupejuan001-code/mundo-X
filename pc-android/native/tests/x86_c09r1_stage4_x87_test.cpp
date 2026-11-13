@@ -80,6 +80,20 @@ void precision_mode(std::uint16_t control){
   execute(cpu,{0xd8,0xc1});           // FADD ST0,ST1
   need(cpu.fpu_control==control,"x87 FLDCW failed to install PC/RC");
   need(((cpu.fpu_status>>11)&7U)==6,"x87 FADD unexpectedly changed TOP");
+  // Golden instruction results captured from a real x86 FXSAVE oracle.
+  // These must match on ARM64 as well, where there is no native x87.
+  const std::uint16_t golden_fsw=control==0x087f?0x3220:
+     (control==0x027f||control==0x037f)?0x3000:0x3020;
+  const std::uint64_t golden_sig=control==0x087f?
+     0x8000010000000000ULL:
+     (control==0x027f||control==0x037f)?
+     0x8000004000000000ULL:0x8000000000000000ULL;
+  std::uint64_t observed_sig=0;
+  for(unsigned i=0;i<8;++i)
+    observed_sig|=std::uint64_t(cpu.x87[6][i])<<(8*i);
+  need(cpu.fpu_status==golden_fsw && observed_sig==golden_sig &&
+       cpu.x87[6][8]==0xff && cpu.x87[6][9]==0x3f,
+       "x87 PC/RC result must match embedded native x86 golden on ALL hosts");
 #if defined(__x86_64__) || defined(__i386__)
   alignas(16)std::array<std::uint8_t,512> backup{},observed{};
   float input{};std::memcpy(&input,&tiny,4);
