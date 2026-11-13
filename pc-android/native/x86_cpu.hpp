@@ -12,6 +12,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
+#include <cstring>
 #include <functional>
 #include <iomanip>
 #include <limits>
@@ -28,7 +30,7 @@ namespace cosmic_pc {
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget
+  PageFault, MemoryBudget, DeviceNotAvailable
 };
 
 struct Fault {
@@ -86,6 +88,13 @@ class Cpu {
   std::array<std::array<std::uint8_t,16>,16> xmm{};
   std::uint32_t mxcsr=0x1f80;
   static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
+  // Eight physical 80-bit x87 registers. Full x87 tags are stored in
+  // physical order (R0..R7); status[13:11] records TOP. No host stack.
+  using Extended80 = std::array<std::uint8_t,10>;
+  std::array<Extended80,8> x87{};
+  std::uint16_t fpu_control=0x037f, fpu_status=0, fpu_tags=0xffff;
+  std::uint16_t fpu_opcode=0, fpu_cs=0, fpu_ds=0;
+  std::uint64_t fpu_ip=0, fpu_dp=0;
   DescriptorTable gdtr{0, 0}, idtr{0x3ff, 0};
   SystemRegister ldtr{}, tr{};
   MemoryFabric memory;
@@ -146,6 +155,8 @@ class Cpu {
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
   void reset(std::uint16_t cs = 0, std::uint64_t ip = 0x7c00) {
     regs.fill(0); xmm={}; mxcsr=0x1f80;
+    x87={};fpu_control=0x037f;fpu_status=0;fpu_tags=0xffff;
+    fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
     segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
@@ -230,7 +241,8 @@ class Cpu {
     if (halted) return StepResult::Halted;
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
                           cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
-                          xmm,mxcsr};
+                          xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -355,7 +367,8 @@ class Cpu {
     if (!flag(IF) || fault) return false;
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
                           cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
-                          xmm,mxcsr};
+                          xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -412,6 +425,9 @@ class Cpu {
     bool a20, halted;
     std::array<std::array<std::uint8_t,16>,16> xmm;
     std::uint32_t mxcsr;
+    std::array<Extended80,8> x87;
+    std::uint16_t fpu_control,fpu_status,fpu_tags,fpu_opcode,fpu_cs,fpu_ds;
+    std::uint64_t fpu_ip,fpu_dp;
   };
   struct Operand {
     bool is_register = false;
@@ -455,7 +471,10 @@ class Cpu {
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
     gdtr = s.gdtr; idtr = s.idtr;
     ldtr = s.ldtr; tr = s.tr;
-    xmm=s.xmm;mxcsr=s.mxcsr;
+    xmm=s.xmm;mxcsr=s.mxcsr;x87=s.x87;
+    fpu_control=s.fpu_control;fpu_status=s.fpu_status;fpu_tags=s.fpu_tags;
+    fpu_opcode=s.fpu_opcode;fpu_cs=s.fpu_cs;fpu_ds=s.fpu_ds;
+    fpu_ip=s.fpu_ip;fpu_dp=s.fpu_dp;
     a20_enabled = s.a20; halted = s.halted;
   }
   static void check_register(unsigned r) {
@@ -686,6 +705,192 @@ class Cpu {
     if (operand.is_register) put_reg(operand.index, bytes, value);
     else write_segment(operand.segment, operand_offset(operand), bytes, value);
   }
+  void fpu_init() {
+    fpu_control=0x037f;fpu_status=0;fpu_tags=0xffff;
+    fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
+    // x87 register data becomes architecturally empty; data bits are stale.
+  }
+  unsigned fpu_top() const {return unsigned((fpu_status>>11)&7U);}
+  unsigned fpu_slot(unsigned logical) const {return (fpu_top()+logical)&7U;}
+  unsigned fpu_tag(unsigned slot) const {return (fpu_tags>>(2*slot))&3U;}
+  void fpu_tag_set(unsigned slot,unsigned tag) {
+    fpu_tags=std::uint16_t((fpu_tags&~(3U<<(2*slot)))|((tag&3U)<<(2*slot)));
+  }
+  static std::uint64_t ext_significand(const Extended80& value) {
+    std::uint64_t v=0;for(unsigned i=0;i<8;++i)v|=std::uint64_t(value[i])<<(8*i);
+    return v;
+  }
+  static unsigned ext_biased_exp(const Extended80& value) {
+    return unsigned(value[8])|((unsigned(value[9])&0x7fU)<<8);
+  }
+  static unsigned classify_ext(const Extended80& value) {
+    const auto exp=ext_biased_exp(value);
+    const auto sig=ext_significand(value);
+    if(!exp&&!sig)return 1U; // zero
+    if(exp==0x7fff||!exp||!(sig&(1ULL<<63)))return 2U; // special
+    return 0U; // valid finite normal
+  }
+  static Extended80 extended_from_long_double(long double value) {
+    Extended80 bytes{};
+    const bool negative=std::signbit(value);
+    const auto magnitude=std::fabs(value);
+    std::uint64_t sig=0;unsigned exponent=0;
+    if(std::isnan(value)) {exponent=0x7fff;sig=0xc000000000000000ULL;}
+    else if(std::isinf(value)) {exponent=0x7fff;sig=0x8000000000000000ULL;}
+    else if(magnitude!=0) {
+      int binexp=0;
+      const auto fraction=std::frexp(magnitude,&binexp);
+      const auto biased=binexp-1+16383;
+      if(biased<=0||biased>=0x7fff)
+        throw std::runtime_error("x87 extended exponent outside finite implementation");
+      exponent=unsigned(biased);
+      sig=static_cast<std::uint64_t>(std::ldexp(fraction,64));
+    }
+    for(unsigned i=0;i<8;++i)bytes[i]=std::uint8_t(sig>>(8*i));
+    bytes[8]=std::uint8_t(exponent);
+    bytes[9]=std::uint8_t((exponent>>8)|(negative?0x80U:0));
+    return bytes;
+  }
+  static long double extended_to_long_double(const Extended80& value) {
+    const auto exponent=ext_biased_exp(value);
+    const auto significand=ext_significand(value);
+    const bool sign=(value[9]&0x80U)!=0;
+    long double result=0;
+    if(exponent==0x7fff) {
+      result=significand==0x8000000000000000ULL
+          ?std::numeric_limits<long double>::infinity()
+          :std::numeric_limits<long double>::quiet_NaN();
+    }else if(exponent||significand) {
+      const auto e=(exponent?int(exponent):1)-16383-63;
+      result=std::ldexp(static_cast<long double>(significand),e);
+    }
+    return sign?-result:result;
+  }
+  void fpu_push(Extended80 value) {
+    const auto top=(fpu_top()+7U)&7U;
+    if(fpu_tag(top)!=3U)
+      fail("x87 stack overflow exception handling not implemented",FaultCode::UnsupportedState);
+    x87[top]=value;
+    fpu_tag_set(top,classify_ext(value));
+    fpu_status=std::uint16_t((fpu_status&~0x3800U)|(top<<11));
+  }
+  Extended80 fpu_peek(unsigned logical=0) const {
+    const auto slot=fpu_slot(logical);
+    if(fpu_tag(slot)==3U)
+      fail("x87 stack underflow exception handling not implemented",FaultCode::UnsupportedState);
+    return x87[slot];
+  }
+  void fpu_pop() {
+    const auto top=fpu_top();
+    if(fpu_tag(top)==3U)
+      fail("x87 pop of empty register",FaultCode::UnsupportedState);
+    fpu_tag_set(top,3);
+    fpu_status=std::uint16_t((fpu_status&~0x3800U)|(((top+1U)&7U)<<11));
+  }
+  void require_fpu() const {
+    if(cr0&0xcU)fail("x87 CR0.TS/EM device unavailable",FaultCode::DeviceNotAvailable);
+  }
+  static std::uint16_t load16(const std::array<std::uint8_t,512>& src,unsigned off) {
+    return std::uint16_t(src[off])|(std::uint16_t(src[off+1])<<8);
+  }
+  static std::uint32_t load32(const std::array<std::uint8_t,512>& src,unsigned off) {
+    std::uint32_t result=0;
+    for(unsigned i=0;i<4;++i)result|=std::uint32_t(src[off+i])<<(i*8);
+    return result;
+  }
+  static std::uint64_t load64(const std::array<std::uint8_t,512>& src,unsigned off) {
+    return std::uint64_t(load32(src,off))|(std::uint64_t(load32(src,off+4))<<32);
+  }
+  static void store16(std::array<std::uint8_t,512>& dst,unsigned off,std::uint16_t value) {
+    dst[off]=std::uint8_t(value);dst[off+1]=std::uint8_t(value>>8);
+  }
+  static void store32(std::array<std::uint8_t,512>& dst,unsigned off,std::uint32_t value) {
+    for(unsigned i=0;i<4;++i)dst[off+i]=std::uint8_t(value>>(8*i));
+  }
+  static void store64(std::array<std::uint8_t,512>& dst,unsigned off,std::uint64_t value) {
+    store32(dst,off,std::uint32_t(value));store32(dst,off+4,std::uint32_t(value>>32));
+  }
+  void fxstate(const Operand& memory_operand,bool restore) {
+    require_memory(memory_operand);
+    require_fpu();
+    if(!(cr4&0x200U))
+      fail("FXSAVE/FXRSTOR require OSFXSR in this CPU profile",FaultCode::InvalidInstruction);
+    const auto address=segment_linear(memory_operand.segment,operand_offset(memory_operand),
+                                      512,restore?Access::Read:Access::Write);
+    if(address&15U)fail("FXSAVE/FXRSTOR require 16-byte aligned memory",FaultCode::ProtectionFault);
+    // Validate the ENTIRE 512-byte window before changing CPU state or RAM.
+    // Explicit MMIO rejection: these operations are not device DMA commands.
+    for(unsigned i=0;i<512;++i) {
+      const auto p=translate(address+i,restore?Access::Read:Access::Write);
+      if(mmio_at(p))
+        fail("FXSAVE/FXRSTOR on MMIO cannot be atomic",FaultCode::UnsupportedState);
+      (void)physical_index(p);
+    }
+    std::array<std::uint8_t,512> buffer{};
+    if(restore) {
+      for(unsigned i=0;i<416;++i)
+        buffer[i]=std::uint8_t(read_linear(address+i,1));
+      const auto candidate_mxcsr=load32(buffer,24);
+      if(candidate_mxcsr&~kMxcsrMask)
+        fail("FXRSTOR reserved MXCSR bit",FaultCode::ProtectionFault);
+      // Parse and validate entire image before committing any CPU state.
+      const auto new_control=load16(buffer,0);
+      auto new_status=load16(buffer,2);
+      const auto abridged=buffer[4];
+      const auto new_opcode=load16(buffer,6);
+      const bool wide_pointers=is_long_mode()&&(rex_&8);
+      const auto new_ip=wide_pointers?load64(buffer,8):load32(buffer,8);
+      const auto new_dp=wide_pointers?load64(buffer,16):load32(buffer,16);
+      const auto new_cs=wide_pointers?std::uint16_t{0}:load16(buffer,12);
+      const auto new_ds=wide_pointers?std::uint16_t{0}:load16(buffer,20);
+      std::array<Extended80,8> new_regs{};
+      std::uint16_t new_tags=0xffff;
+      // FXSAVE stores DATA in logical ST(0..7) order, while FTW bits
+      // describe PHYSICAL R(0..7) tags. Recover the physical data slots
+      // using the TOP field from the saved x87 status word.
+      const auto new_top=(new_status>>11)&7U;
+      for(unsigned i=0;i<8;++i) {
+        const unsigned physical=(new_top+i)&7U;
+        for(unsigned j=0;j<10;++j)
+          new_regs[physical][j]=buffer[32+16*i+j];
+      }
+      for(unsigned physical=0;physical<8;++physical)
+        if(abridged&(1U<<physical))
+          new_tags=std::uint16_t(
+              (new_tags&~(3U<<(2*physical)))|
+              (classify_ext(new_regs[physical])<<(2*physical)));
+
+      std::array<std::array<std::uint8_t,16>,16> new_xmm=xmm;
+      for(unsigned i=0;i<xmm_count();++i)
+        for(unsigned j=0;j<16;++j)new_xmm[i][j]=buffer[160+16*i+j];
+      fpu_control=new_control;fpu_status=new_status;fpu_tags=new_tags;
+      fpu_opcode=new_opcode;fpu_ip=new_ip;fpu_dp=new_dp;
+      fpu_cs=new_cs;fpu_ds=new_ds;x87=new_regs;
+      mxcsr=candidate_mxcsr;xmm=new_xmm;
+    }else{
+      store16(buffer,0,fpu_control);store16(buffer,2,fpu_status);
+      for(unsigned i=0;i<8;++i)
+        if(fpu_tag(i)!=3U)buffer[4]|=std::uint8_t(1U<<i);
+      store16(buffer,6,fpu_opcode);
+      const bool wide_pointers=is_long_mode()&&(rex_&8);
+      if(wide_pointers){
+        store64(buffer,8,fpu_ip);store64(buffer,16,fpu_dp);
+      }else {
+        store32(buffer,8,std::uint32_t(fpu_ip));store16(buffer,12,fpu_cs);
+        store32(buffer,16,std::uint32_t(fpu_dp));store16(buffer,20,fpu_ds);
+      }
+      store32(buffer,24,mxcsr);store32(buffer,28,kMxcsrMask);
+      // X87 saved data ST(i) is LOGICAL, not the physical R(i)
+      // position indicated by the separate abridged tag mask.
+      for(unsigned i=0;i<8;++i)
+        for(unsigned j=0;j<10;++j)
+          buffer[32+16*i+j]=x87[fpu_slot(i)][j];
+      for(unsigned i=0;i<xmm_count();++i)
+        for(unsigned j=0;j<16;++j)buffer[160+16*i+j]=xmm[i][j];
+      // Intel reserves bytes 464-511 for software; never overwrite them.
+      for(unsigned i=0;i<464;++i)write_linear(address+i,1,buffer[i]);
+    }
+  }
   unsigned xmm_count() const {return is_long_mode()?16U:8U;}
   void require_xmm(unsigned index) const {
     if(index>=xmm_count())fail("XMM register index unavailable",FaultCode::InvalidInstruction);
@@ -694,9 +899,9 @@ class Cpu {
     if(!(cr4&0x200U))
       fail("SSE2 requires CR4.OSFXSR",FaultCode::InvalidInstruction);
     if(cr0&0x4U)
-      fail("SSE2 disabled by CR0.EM",FaultCode::InvalidInstruction);
+      fail("SSE2 disabled by CR0.EM",FaultCode::DeviceNotAvailable);
     if(cr0&0x8U)
-      fail("SSE2 task-switched CR0.TS",FaultCode::InvalidInstruction);
+      fail("SSE2 task-switched CR0.TS",FaultCode::DeviceNotAvailable);
   }
   std::array<std::uint8_t,16> read_xmm_operand(const Operand& m,bool aligned) {
     if(m.is_register){require_xmm(m.index);return xmm[m.index];}
@@ -717,6 +922,83 @@ class Cpu {
       (void)physical_index(p);
     }
     for(unsigned i=0;i<16;++i)write_linear(address+i,1,value[i]);
+  }
+  static std::uint64_t packed_lane(const std::array<std::uint8_t,16>& value,
+                                   unsigned offset,unsigned size) {
+    std::uint64_t result=0;
+    for(unsigned i=0;i<size;++i)result|=std::uint64_t(value[offset+i])<<(8*i);
+    return result;
+  }
+  static void packed_set(std::array<std::uint8_t,16>& value,
+                         unsigned offset,unsigned size,std::uint64_t bits) {
+    for(unsigned i=0;i<size;++i)value[offset+i]=std::uint8_t(bits>>(8*i));
+  }
+  void sse_integer(unsigned opcode) {
+    if(!operand_override_||repeat_)
+      fail("packed integer SSE2 requires 66 prefix",FaultCode::UnsupportedOpcode);
+    require_sse_state();
+    const auto m=modrm();require_xmm(m.reg);
+    const auto lhs=xmm[m.reg],rhs=read_xmm_operand(m.rm,false);
+    auto result=lhs;
+    switch(opcode){
+      case 0xdb: case 0xdf: case 0xeb: { // PAND, PANDN, POR
+        for(unsigned i=0;i<16;++i)
+          result[i]=opcode==0xdb?std::uint8_t(lhs[i]&rhs[i]):
+                    opcode==0xdf?std::uint8_t(~lhs[i]&rhs[i]):
+                                     std::uint8_t(lhs[i]|rhs[i]);
+        break;
+      }
+      case 0x60: case 0x61: case 0x62: case 0x6c:
+      case 0x68: case 0x69: case 0x6a: case 0x6d: { // PUNPCK low/high
+        const bool high=(opcode==0x68||opcode==0x69||opcode==0x6a||opcode==0x6d);
+        const unsigned size=(opcode==0x60||opcode==0x68)?1U:
+                            (opcode==0x61||opcode==0x69)?2U:
+                            (opcode==0x62||opcode==0x6a)?4U:8U;
+        const unsigned first=high?8U:0U;
+        for(unsigned i=0;i<8U/size;++i){
+          for(unsigned j=0;j<size;++j) {
+            result[(2*i)*size+j]=lhs[first+i*size+j];
+            result[(2*i+1)*size+j]=rhs[first+i*size+j];
+          }
+        }
+        break;
+      }
+      default: { // Packed integer arithmetic, comparisons, logical shifts
+        const bool is_compare=(opcode>=0x74&&opcode<=0x76)||
+                               (opcode>=0x64&&opcode<=0x66);
+        const bool is_add=(opcode>=0xfc&&opcode<=0xfe)||opcode==0xd4;
+        const bool is_sub=(opcode>=0xf8&&opcode<=0xfa)||opcode==0xfb;
+        const bool is_shift=(opcode>=0xd1&&opcode<=0xd3)||
+                             (opcode>=0xf1&&opcode<=0xf3);
+        if(!is_compare&&!is_add&&!is_sub&&!is_shift)
+          fail("packed SSE2 arithmetic opcode not implemented",FaultCode::UnsupportedOpcode);
+        const unsigned size=
+          (opcode==0x74||opcode==0x64||opcode==0xfc||opcode==0xf8)?1U:
+          (opcode==0x75||opcode==0x65||opcode==0xfd||opcode==0xf9||
+           opcode==0xd1||opcode==0xf1)?2U:
+          (opcode==0x76||opcode==0x66||opcode==0xfe||opcode==0xfa||
+           opcode==0xd2||opcode==0xf2)?4U:8U;
+        const auto lane_mask=size==8?UINT64_MAX:((1ULL<<(8*size))-1);
+        const auto count=is_shift?packed_lane(rhs,0,8):0ULL;
+        for(unsigned offset=0;offset<16;offset+=size){
+          const auto l=packed_lane(lhs,offset,size);
+          const auto r=packed_lane(rhs,offset,size);
+          std::uint64_t next=0;
+          if(is_compare) {
+            const bool matches=opcode>=0x74?
+                l==r:signed_value(l,size)>signed_value(r,size);
+            next=matches?lane_mask:0;
+          }else if(is_add)next=(l+r)&lane_mask;
+          else if(is_sub)next=(l-r)&lane_mask;
+          else if(count>=size*8)next=0;
+          else if(opcode>=0xf1&&opcode<=0xf3)next=(l<<count)&lane_mask;
+          else next=l>>count;
+          packed_set(result,offset,size,next);
+        }
+        break;
+      }
+    }
+    xmm[m.reg]=result; // packed integer SSE2 leaves EFLAGS unchanged
   }
   void require_memory(const Operand& operand) const {
     if (operand.is_register) fail("instruction requires a memory operand", FaultCode::InvalidInstruction);
@@ -862,7 +1144,8 @@ class Cpu {
   static int exception_vector(FaultCode code) {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
-      case FaultCode::InvalidInstruction: return 6; // #UD, not missing opcodes
+      case FaultCode::InvalidInstruction: return 6;
+      case FaultCode::DeviceNotAvailable: return 7; // #NM // #UD, not missing opcodes
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
       case FaultCode::PageFault: return 14;        // #PF
@@ -1415,6 +1698,101 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0xdb: case 0xdf: case 0xeb: // PAND/PANDN/POR
+    case 0x60: case 0x61: case 0x62: case 0x6c: // PUNPCKL
+    case 0x68: case 0x69: case 0x6a: case 0x6d: // PUNPCKH
+    case 0x74: case 0x75: case 0x76: // PCMPEQ
+    case 0x64: case 0x65: case 0x66: // PCMPGT
+    case 0xfc: case 0xfd: case 0xfe: case 0xd4: // PADD
+    case 0xf8: case 0xf9: case 0xfa: case 0xfb: // PSUB
+    case 0xd1: case 0xd2: case 0xd3: // PSRL
+    case 0xf1: case 0xf2: case 0xf3: // PSLL
+      sse_integer(op); return;
+    case 0x73: { // PSRLDQ /3, PSLLDQ /7
+      if(!operand_override_||repeat_)
+        fail("byte shift requires mandatory 66",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();
+      if(!m.rm.is_register||(m.group!=3&&m.group!=7))
+        fail("unsupported 0F 73 group opcode",FaultCode::UnsupportedOpcode);
+      require_xmm(m.rm.index);
+      const auto count=unsigned(immediate(1));
+      const auto source=xmm[m.rm.index];
+      auto& dest=xmm[m.rm.index];
+      for(unsigned i=0;i<16;++i) {
+        const int src=m.group==3?int(i)+int(count):int(i)-int(count);
+        dest[i]=src>=0&&src<16?source[unsigned(src)]:0;
+      }
+      return;
+    }
+    case 0x70: { // PSHUFD xmm, xmm/m128, imm8
+      if(!operand_override_||repeat_)
+        fail("PSHUFD requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      // Consume the immediate BEFORE resolving RIP-relative memory operands.
+      const auto order=unsigned(immediate(1));
+      const auto source=read_xmm_operand(m.rm,false);
+      for(unsigned lane=0;lane<4;++lane)
+        packed_set(xmm[m.reg],lane*4,4,
+                   packed_lane(source,((order>>(lane*2))&3U)*4,4));
+      return;
+    }
+    case 0xd7: { // PMOVMSKB r32, xmm
+      if(!operand_override_||repeat_)
+        fail("PMOVMSKB requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();
+      if(!m.rm.is_register)
+        fail("PMOVMSKB source must be XMM register",FaultCode::InvalidInstruction);
+      require_xmm(m.rm.index);
+      std::uint32_t mask=0;
+      for(unsigned i=0;i<16;++i)mask|=std::uint32_t(xmm[m.rm.index][i]>>7)<<i;
+      put_reg(m.reg,4,mask);
+      return;
+    }
+    case 0x6e: case 0x7e: { // 66 MOVD/MOVQ, F3 MOVQ xmm load
+      if(!operand_override_&&!(op==0x7e&&repeat_==0xf3))
+        fail("MOVD/MOVQ mandatory prefix missing",FaultCode::UnsupportedOpcode);
+      if(operand_override_&&repeat_)
+        fail("conflicting MOVD/MOVQ prefixes",FaultCode::InvalidInstruction);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const unsigned n=(is_long_mode()&&(rex_&8))||repeat_==0xf3?8U:4U;
+      if(op==0x6e||(op==0x7e&&repeat_==0xf3)) {
+        const auto value=(op==0x7e&&repeat_==0xf3&&m.rm.is_register)
+          ?(require_xmm(m.rm.index),packed_lane(xmm[m.rm.index],0,8))
+          :get(m.rm,n);
+        xmm[m.reg].fill(0);
+        packed_set(xmm[m.reg],0,n,value);
+      }else{
+        put(m.rm,n,packed_lane(xmm[m.reg],0,n));
+      }
+      return;
+    }
+    case 0xd6: { // 66 MOVQ xmm/m64, xmm low64
+      if(!operand_override_||repeat_)
+        fail("MOVQ xmm store requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const auto low=packed_lane(xmm[m.reg],0,8);
+      if(m.rm.is_register) {
+        require_xmm(m.rm.index);
+        xmm[m.rm.index].fill(0);
+        packed_set(xmm[m.rm.index],0,8,low);
+      }else put(m.rm,8,low);
+      return;
+    }
+    case 0x10: case 0x11: case 0x28: case 0x29: { // MOVUPD/MOVAPD
+      if(!operand_override_||repeat_)
+        fail("MOVUPD/MOVAPD requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const bool aligned=op==0x28||op==0x29;
+      if(op==0x10||op==0x28)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
+      else write_xmm_operand(m.rm,xmm[m.reg],aligned);
+      return;
+    }
     case 0x6f: case 0x7f: { // 66 MOVDQA / F3 MOVDQU
       if(!operand_override_&&repeat_!=0xf3)
         fail("SSE2 MOVDQA/MOVDQU requires 66/F3 prefix",FaultCode::UnsupportedOpcode);
@@ -1436,10 +1814,11 @@ inline void Cpu::extended() {
       for(unsigned i=0;i<16;++i)xmm[m.reg][i]^=rhs[i];
       return;
     }
-    case 0xae: { // FXSAVE/FXRSTOR not yet implemented; MXCSR loads/stores
+    case 0xae: { // FXSAVE/FXRSTOR m512byte and LDMXCSR/STMXCSR
       const auto m=modrm();require_memory(m.rm);
+      if(m.group==0||m.group==1){fxstate(m.rm,m.group==1);return;}
       if(m.group!=2&&m.group!=3)
-        fail("FXSAVE/FXRSTOR and other 0F AE states pending",FaultCode::UnsupportedOpcode);
+        fail("0F AE operation not implemented",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto address=segment_linear(m.rm.segment,operand_offset(m.rm),4,
                                        m.group==2?Access::Read:Access::Write);
@@ -1874,6 +2253,13 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x98:
       put_reg(EAX, bytes, std::uint64_t(signed_value(get_reg(EAX, bytes / 2), bytes / 2))); return;
     case 0x99: put_reg(EDX, bytes, (get_reg(EAX, bytes) & sign_bit(bytes)) ? mask(bytes) : 0); return;
+    case 0x9b: { // FWAIT: deliver pending exceptions where modeled.
+      if((cr0&0x8U)&&(cr0&0x2U))
+        fail("FWAIT with TS and MP",FaultCode::DeviceNotAvailable);
+      if(fpu_status&0x0080U)
+        fail("pending x87 exception delivery not implemented",FaultCode::UnsupportedState);
+      return;
+    }
     case 0x9a: {
       const auto target = immediate(bytes); const auto cs = std::uint16_t(immediate(2));
       push(segments[CS], bytes); push(cursor_ & mask(bytes), bytes); far_transfer(cs, target, bytes); return;
@@ -2000,6 +2386,116 @@ inline void Cpu::execute(std::uint8_t op) {
       }
       jump(target, n);
       return;
+    }
+    case 0xd8: case 0xd9: case 0xdb: case 0xdc:
+    case 0xdd: case 0xde: case 0xdf: { // Foundational x87 FPU opcodes
+      require_fpu();
+      const auto encoding=fetch8();
+      const auto group=(encoding>>3)&7U;
+      if(encoding>=0xc0) {
+        const auto reg=unsigned(encoding&7U);
+        if(op==0xdb && encoding==0xe3){ // FNINIT
+          fpu_init();return;
+        }
+        if(op==0xdb && encoding==0xe2){ // FNCLEX
+          fpu_status=std::uint16_t(fpu_status&~0x80ffU);return;
+        }
+        if(op==0xd9 && encoding==0xd0)return; // FNOP
+        if(op==0xd9 && (encoding==0xe8||encoding==0xee)) {
+          // FLD1 / FLDZ (exact 80-bit architectural constants).
+          Extended80 value{};
+          if(encoding==0xe8) {
+            value[7]=0x80;value[8]=0xff;value[9]=0x3f;
+          }
+          fpu_push(value);fpu_ip=start_ip_;fpu_cs=start_cs_;return;
+        }
+        if(op==0xd9 && (encoding&0xf8U)==0xc0) {
+          fpu_push(fpu_peek(reg));fpu_ip=start_ip_;return; // FLD ST(i)
+        }
+        if(op==0xd9 && (encoding&0xf8U)==0xc8) { // FXCH ST(i)
+          const auto first=fpu_slot(0),other=fpu_slot(reg);
+          if(fpu_tag(first)==3U||fpu_tag(other)==3U)
+            fail("FXCH empty register handling pending",FaultCode::UnsupportedState);
+          std::swap(x87[first],x87[other]);
+          const auto first_tag=fpu_tag(first),other_tag=fpu_tag(other);
+          fpu_tag_set(first,other_tag);fpu_tag_set(other,first_tag);
+          return;
+        }
+        if(op==0xdd && (encoding&0xf8U)==0xd8) { // FSTP ST(i)
+          const auto value=fpu_peek();
+          const auto slot=fpu_slot(reg);
+          if(reg==0){fpu_pop();return;}
+          x87[slot]=value;fpu_tag_set(slot,classify_ext(value));fpu_pop();
+          return;
+        }
+        if(op==0xdf && encoding==0xe0) { // FNSTSW AX
+          set_reg16(EAX,fpu_status);return;
+        }
+        if(op==0xd8 && (encoding&0xf8U)==0xc0) { // FADD ST0,ST(i)
+          if((fpu_control&0x0c00U)!=0)
+            fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
+          const auto a=extended_to_long_double(fpu_peek());
+          const auto b=extended_to_long_double(fpu_peek(reg));
+          const auto result=extended_from_long_double(a+b);
+          const auto slot=fpu_slot(0);
+          x87[slot]=result;fpu_tag_set(slot,classify_ext(result));
+          fpu_ip=start_ip_;return;
+        }
+        fail("x87 register opcode pending for full FPU",FaultCode::UnsupportedOpcode);
+      }
+      // Decoding a legacy memory ModRM after consuming its byte: rewind so
+      // the canonical ModRM parser handles displacement/SIB and segment.
+      --cursor_;decoded_.pop_back();
+      const auto m=modrm();
+      require_memory(m.rm);
+      const auto data_width=(op==0xd9||op==0xd8)?4U:
+                            (op==0xdd||op==0xdc)?8U:2U;
+      if((op==0xd9||op==0xdd)&&group==0) { // FLD m32real/m64real
+        const auto raw=get(m.rm,data_width);
+        long double number=0;
+        if(data_width==4){
+          const auto bits=std::uint32_t(raw);
+          float value=0;std::memcpy(&value,&bits,sizeof(value));
+          number=static_cast<long double>(value);
+        }else{
+          const auto bits=raw;
+          double value=0;std::memcpy(&value,&bits,sizeof(value));
+          number=static_cast<long double>(value);
+        }
+        fpu_push(extended_from_long_double(number));
+        fpu_ip=start_ip_;fpu_cs=start_cs_;
+        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
+        return;
+      }
+      if((op==0xd9||op==0xdd)&&group==3) { // FSTP m32real/m64real
+        if((fpu_control&0x0c00U)!=0)
+          fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
+        const auto number=extended_to_long_double(fpu_peek());
+        if(data_width==4){
+          const auto converted=static_cast<float>(number);
+          std::uint32_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
+          put(m.rm,4,bits);
+        }else{
+          const auto converted=static_cast<double>(number);
+          std::uint64_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
+          put(m.rm,8,bits);
+        }
+        fpu_pop();
+        fpu_ip=start_ip_;fpu_cs=start_cs_;
+        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
+        return;
+      }
+      if(op==0xd9&&group==5) { // FLDCW m16
+        fpu_control=std::uint16_t(get(m.rm,2));
+        return;
+      }
+      if(op==0xd9&&group==7) { // FNSTCW m16
+        put(m.rm,2,fpu_control);return;
+      }
+      if(op==0xdd&&group==7) { // FNSTSW m16
+        put(m.rm,2,fpu_status);return;
+      }
+      fail("x87 memory opcode pending for full FPU",FaultCode::UnsupportedOpcode);
     }
     case 0xd7: {
       const auto address = (index(EBX) + reg8(EAX)) & mask(address_width());
