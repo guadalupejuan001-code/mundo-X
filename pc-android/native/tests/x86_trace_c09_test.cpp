@@ -43,14 +43,14 @@ void fault_trace(){
   Cpu cpu(2*1024*1024);
   cpu.reset(0,0x1200);
   cpu.a20_enabled=true;
-  cpu.memory[0x1200]=0xf0; cpu.memory[0x1201]=0x90; // LOCK NOP explicitly unsupported.
+  cpu.memory[0x1200]=0xf0; cpu.memory[0x1201]=0x90; // LOCK NOP is architecturally invalid.
   std::vector<Cpu::StepTrace> events;
   cpu.step_trace_hook=[&](const Cpu::StepTrace& event){events.push_back(event);};
   need(cpu.step()==StepResult::Faulted&&cpu.fault.has_value(),
        "LOCK prefix must remain a reported terminal fault");
   need(events.size()==1&&events[0].outcome=="fault"&&
        events[0].terminal_fault.has_value()&&
-       events[0].terminal_fault->code==cosmic_pc::FaultCode::UnsupportedState &&
+       events[0].terminal_fault->code==cosmic_pc::FaultCode::InvalidInstruction &&
        events[0].decoded_bytes==std::vector<std::uint8_t>({0xf0,0x90}) &&
        events[0].rip_before==0x1200&&events[0].rip_after==0x1200,
        "fault trace lost exact opcode bytes / original fault RIP");
