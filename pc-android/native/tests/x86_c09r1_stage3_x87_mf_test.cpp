@@ -39,8 +39,9 @@ void masked(){
   alignas(16)std::array<std::uint8_t,512> preserved{};
   std::uint16_t native_status=0;
   asm volatile("fxsave %0":"=m"(preserved)::"memory");
-  asm volatile("fninit; fldz; fld1; fdiv %%st(1),%%st(0); fnstsw %0"
-               :"=a"(native_status)::"memory");
+  const float zero=0.0f;
+  asm volatile("fninit; fld1; fdivs %1; fnstsw %0"
+               :"=a"(native_status):"m"(zero):"memory");
   asm volatile("fxrstor %0"::"m"(preserved):"memory");
   need((native_status&0x85U)==(cpu.fpu_status&0x85U),
        "masked x87 divide-zero status differs from real x86 hardware");
@@ -92,7 +93,7 @@ void deferred_mf(){
   one(cpu); // FWAIT, no exception
   need(cpu.eip==0xa007&&cpu.step()==StepResult::Halted,
        "after FNCLEX, FWAIT should complete then HLT");
-  std::cout<<"C09R1_X87_DEFERRED_MF_CLTS_CONTEXT_PASS vector16=1\n";
+  std::cout<<"C09R1_X87_DEFERRED_MF_FNCLEX_CONTEXT_PASS vector16=1\n";
 }
 }
 int main(){
