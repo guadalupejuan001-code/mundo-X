@@ -13,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include <cfenv>
+#include <algorithm>
 #include <cstring>
 #include <functional>
 #include <iomanip>
@@ -30,7 +32,7 @@ namespace cosmic_pc {
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget, DeviceNotAvailable
+  PageFault, MemoryBudget, DeviceNotAvailable, SimdFloatingPoint, X87FloatingPoint
 };
 
 struct Fault {
@@ -282,6 +284,7 @@ class Cpu {
     op32_ = is_long_mode() || (!is_real_mode() && cache_[CS].big);
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
+    pending_simd_flags_=0;
     try {
       if (!is_real_mode() && cpl() != 0 && cpl() != 3)
         fail("only CPL0/CPL3 are modeled", FaultCode::UnsupportedState);
@@ -319,6 +322,10 @@ class Cpu {
       return halted ? StepResult::Halted : StepResult::Executed;
     } catch (const Trap& t) {
       rollback(before);
+      // Intel preserves MXCSR sticky status across #XM/#UD on an unmasked
+      // SIMD arithmetic exception even when the instruction does not retire.
+      // Snapshot rollback must NOT erase these architecturally sticky flags.
+      if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
       const int vector = exception_vector(t.code);
@@ -338,6 +345,7 @@ class Cpu {
             return true;
           } catch (const std::exception&) {
             rollback(before); // Undo any partial frame/descriptor writes.
+            if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
             if (t.code == FaultCode::PageFault) cr2 = t.address;
             return false;
           }
@@ -452,6 +460,7 @@ class Cpu {
   // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
   // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
   bool supervisor_internal_ = false;
+  std::uint32_t pending_simd_flags_=0;
   struct SupervisorAccess {
     Cpu& cpu;
     bool old;
@@ -730,6 +739,45 @@ class Cpu {
     if(exp==0x7fff||!exp||!(sig&(1ULL<<63)))return 2U; // special
     return 0U; // valid finite normal
   }
+  // IEEE binary32 / binary64 -> 80-bit extended is always exact. Decode
+  // exponent and fraction directly, independent of whether Android's
+  // long double is IEEE binary128 or the x86 host's extended80 format.
+  static Extended80 extended_from_ieee(std::uint64_t raw,unsigned width) {
+    if(width!=4&&width!=8)
+      throw std::runtime_error("x87 FLD IEEE source width invalid");
+    const unsigned frac_bits=width==4?23U:52U;
+    const unsigned exp_bits=width==4?8U:11U;
+    const int bias=width==4?127:1023;
+    const auto frac_mask=(std::uint64_t{1}<<frac_bits)-1U;
+    const auto exp_mask=(1U<<exp_bits)-1U;
+    const auto fraction=raw&frac_mask;
+    const auto exponent=unsigned((raw>>frac_bits)&exp_mask);
+    const auto sign=((raw>>(frac_bits+exp_bits))&1U)!=0;
+    std::uint64_t significand=0;
+    unsigned extended_exp=0;
+    if(exponent==exp_mask) {
+      extended_exp=0x7fff;
+      significand=(1ULL<<63)|(fraction<<(63-frac_bits));
+      // Do not pretend to model the pending unmasked sNaN x87 flags yet.
+      if(fraction && !(fraction&(1ULL<<(frac_bits-1))))
+        throw std::runtime_error("signaling NaN in x87 FLD requires exception model");
+    }else if(exponent||fraction) {
+      int e=exponent?int(exponent)-bias:1-bias;
+      significand=(exponent?(1ULL<<frac_bits):0ULL)|fraction;
+      if(!exponent)
+        while(!(significand&(1ULL<<frac_bits))) {
+          significand<<=1;--e;
+        }
+      extended_exp=unsigned(e+16383);
+      significand<<=(63-frac_bits);
+    }
+    Extended80 out{};
+    for(unsigned byte=0;byte<8;++byte)
+      out[byte]=std::uint8_t(significand>>(byte*8));
+    out[8]=std::uint8_t(extended_exp);
+    out[9]=std::uint8_t((extended_exp>>8)|(sign?0x80U:0U));
+    return out;
+  }
   static Extended80 extended_from_long_double(long double value) {
     Extended80 bytes{};
     const bool negative=std::signbit(value);
@@ -932,6 +980,224 @@ class Cpu {
   static void packed_set(std::array<std::uint8_t,16>& value,
                          unsigned offset,unsigned size,std::uint64_t bits) {
     for(unsigned i=0;i<size;++i)value[offset+i]=std::uint8_t(bits>>(8*i));
+  }
+  // The host rounding environment is borrowed for ONE guest operation and
+  // restored even on exceptions. Volatile arithmetic forces a runtime FP op
+  // at -O2; oracle tests compare status/results to real x86 hardware.
+  struct HostRound {
+    std::fenv_t saved{};
+    bool valid=false;
+    explicit HostRound(std::uint32_t csr) {
+      valid=std::fegetenv(&saved)==0;
+      if(!valid)throw std::runtime_error("host IEEE floating environment unavailable");
+      const int mode=((csr>>13)&3U)==0?FE_TONEAREST:
+                     ((csr>>13)&3U)==1?FE_DOWNWARD:
+                     ((csr>>13)&3U)==2?FE_UPWARD:FE_TOWARDZERO;
+      if(std::fesetround(mode)!=0)
+        throw std::runtime_error("host IEEE rounding mode unsupported");
+      (void)std::feclearexcept(FE_ALL_EXCEPT);
+    }
+    ~HostRound() noexcept {if(valid)(void)std::fesetenv(&saved);}
+    std::uint32_t status() const {
+      const int f=std::fetestexcept(FE_ALL_EXCEPT);
+      return ((f&FE_INVALID)?1U:0U)|((f&FE_DIVBYZERO)?4U:0U)|
+             ((f&FE_OVERFLOW)?8U:0U)|((f&FE_UNDERFLOW)?16U:0U)|
+             ((f&FE_INEXACT)?32U:0U);
+    }
+  };
+  static double fp64_from_bits(std::uint64_t bits) {
+    double result{};std::memcpy(&result,&bits,sizeof(result));return result;
+  }
+  static std::uint64_t fp64_bits(double value) {
+    std::uint64_t bits{};std::memcpy(&bits,&value,sizeof(bits));return bits;
+  }
+  static bool fp64_subnormal(std::uint64_t raw) {
+    return (raw&0x7ff0000000000000ULL)==0 &&
+           (raw&0x000fffffffffffffULL)!=0;
+  }
+  static bool fp64_nan(std::uint64_t raw) {
+    return (raw&0x7ff0000000000000ULL)==0x7ff0000000000000ULL &&
+           (raw&0x000fffffffffffffULL)!=0;
+  }
+  static bool fp64_snan(std::uint64_t raw) {
+    return fp64_nan(raw) && !(raw&(1ULL<<51));
+  }
+  void simd_status(std::uint32_t flags) {
+    flags&=0x3fU;
+    if(!flags)return;
+    mxcsr|=flags;
+    std::uint32_t unmasked=0;
+    for(unsigned bit=0;bit<6;++bit)
+      if((flags&(1U<<bit)) && !(mxcsr&(1U<<(bit+7))))
+        unmasked|=1U<<bit;
+    if(unmasked) {
+      pending_simd_flags_|=flags;
+      if(!(cr4&0x400U))
+        fail("unmasked SSE2 exception requires CR4.OSXMMEXCPT (#UD)",
+             FaultCode::InvalidInstruction);
+      fail("unmasked SSE2 SIMD floating point exception (#XM)",
+           FaultCode::SimdFloatingPoint);
+    }
+  }
+  std::uint64_t sse64_source(const Operand& source) {
+    if(source.is_register){
+      require_xmm(source.index);
+      return packed_lane(xmm[source.index],0,8);
+    }
+    return read_segment(source.segment,operand_offset(source),8);
+  }
+  void sse64_store(const Operand& destination,std::uint64_t bits) {
+    if(destination.is_register) {
+      require_xmm(destination.index);
+      packed_set(xmm[destination.index],0,8,bits);
+    }else write_segment(destination.segment,operand_offset(destination),8,bits);
+  }
+  // Returns a single rounded IEEE-754 binary64 result and ORs its sticky
+  // status into MXCSR. No destination is modified before the status checks.
+  std::uint64_t simd_double_op(std::uint8_t opcode,
+                               std::uint64_t left_raw,std::uint64_t right_raw) {
+    std::uint32_t status=0;
+    if((opcode!=0x51&&fp64_subnormal(left_raw)) ||
+       fp64_subnormal(right_raw))status|=2U;
+    if((opcode==0x5d||opcode==0x5f) &&
+       (fp64_nan(left_raw)||fp64_nan(right_raw))) {
+      if(fp64_snan(left_raw)||fp64_snan(right_raw))status|=1U;
+      simd_status(status);
+      // MIN/MAX return the second source for unordered or equal values,
+      // preserving its NaN payload and negative zero bits unchanged.
+      return right_raw;
+    }
+    if(opcode==0x5d||opcode==0x5f) {
+      const double l=fp64_from_bits(left_raw),r=fp64_from_bits(right_raw);
+      simd_status(status);
+      if(l==r)return right_raw;
+      return opcode==0x5d?(l<r?left_raw:right_raw):
+                             (l>r?left_raw:right_raw);
+    }
+    const double left=fp64_from_bits(left_raw);
+    const double right=fp64_from_bits(right_raw);
+    double rounded=0;
+    {
+      HostRound rounding(mxcsr);
+      volatile double a=left,b=right;
+      switch(opcode) {
+        case 0x58:{volatile double t=a+b;rounded=t;break;} // ADD
+        case 0x5c:{volatile double t=a-b;rounded=t;break;} // SUB
+        case 0x59:{volatile double t=a*b;rounded=t;break;} // MUL
+        case 0x5e:{volatile double t=a/b;rounded=t;break;} // DIV
+        case 0x51:{volatile double t=std::sqrt(b);rounded=t;break;} // SQRT(src)
+        default:fail("unsupported SSE2 binary64 operation",FaultCode::UnsupportedOpcode);
+      }
+      status|=rounding.status();
+    }
+    auto bits=fp64_bits(rounded);
+    // MXCSR.FTZ flushes subnormal results and sets UE and PE; DE on input
+    // remains a separate flag. DAZ is not advertised by kMxcsrMask.
+    if((mxcsr&0x8000U) && fp64_subnormal(bits)) {
+      bits&=0x8000000000000000ULL;
+      status|=16U|32U;
+    }
+    simd_status(status);
+    return bits;
+  }
+  void sse2_float(unsigned opcode) {
+    const bool scalar=repeat_==0xf2;
+    const bool packed=operand_override_ && repeat_==0;
+    if(!scalar&&!packed)
+      fail("SSE2 binary64 requires F2 scalar or 66 packed prefix",
+           FaultCode::UnsupportedOpcode);
+    require_sse_state();
+    const auto m=modrm();
+    require_xmm(m.reg);
+    const auto before=xmm[m.reg];
+    auto result=before;
+    if(scalar) {
+      const auto src=sse64_source(m.rm);
+      const auto dest=packed_lane(before,0,8);
+      packed_set(result,0,8,simd_double_op(std::uint8_t(opcode),dest,src));
+    }else{
+      const auto rhs=read_xmm_operand(m.rm,false);
+      // Stage both lanes before commit. An unmasked exception must not
+      // modify the destination even if lane0 completed successfully.
+      for(unsigned lane=0;lane<2;++lane) {
+        const auto at=lane*8U;
+        packed_set(result,at,8,simd_double_op(std::uint8_t(opcode),
+                    packed_lane(before,at,8),packed_lane(rhs,at,8)));
+      }
+    }
+    xmm[m.reg]=result;
+  }
+  void sse2_scalar_misc(unsigned opcode) {
+    require_sse_state();
+    const auto m=modrm();
+    const bool compare=opcode==0x2e||opcode==0x2f;
+    if(compare) {
+      if(!operand_override_||repeat_)
+        fail("UCOMISD/COMISD require 66",FaultCode::UnsupportedOpcode);
+      require_xmm(m.reg);
+      const auto left_raw=packed_lane(xmm[m.reg],0,8);
+      const auto right_raw=sse64_source(m.rm);
+      std::uint32_t status=0;
+      if(fp64_subnormal(left_raw)||fp64_subnormal(right_raw))status|=2U;
+      const bool unordered=fp64_nan(left_raw)||fp64_nan(right_raw);
+      if(unordered && (opcode==0x2f||
+                       fp64_snan(left_raw)||fp64_snan(right_raw)))
+        status|=1U;
+      simd_status(status);
+      const auto lhs=fp64_from_bits(left_raw),rhs=fp64_from_bits(right_raw);
+      const bool z=unordered||lhs==rhs;
+      const bool p=unordered;
+      const bool c=unordered||lhs<rhs;
+      eflags&=~std::uint32_t(CF|PF|AF|ZF|SF|OF);
+      set_flag(ZF,z);set_flag(PF,p);set_flag(CF,c);
+      return;
+    }
+    if(repeat_!=0xf2||operand_override_)
+      fail("F2 SSE2 scalar conversion prefix required",FaultCode::UnsupportedOpcode);
+    if(opcode==0x2a) { // CVTSI2SD xmm, r/m32 or r/m64 with REX.W
+      require_xmm(m.reg);
+      const unsigned bytes=is_long_mode()&&(rex_&8U)?8U:4U;
+      const auto integer=signed_value(get(m.rm,bytes),bytes);
+      std::uint32_t status=0;
+      double rounded=0;
+      {
+        HostRound mode(mxcsr);
+        volatile std::int64_t input=integer;
+        volatile double converted=static_cast<double>(input);
+        rounded=converted;
+        status|=mode.status();
+      }
+      simd_status(status);
+      packed_set(xmm[m.reg],0,8,fp64_bits(rounded));
+      return;
+    }
+    if(opcode==0x2c||opcode==0x2d) { // CVTTSD2SI / CVTSD2SI
+      const unsigned bytes=is_long_mode()&&(rex_&8U)?8U:4U;
+      const auto raw=sse64_source(m.rm);
+      const auto value=fp64_from_bits(raw);
+      std::uint32_t status=fp64_subnormal(raw)?2U:0U;
+      long double rounded=0;
+      {
+        HostRound mode(mxcsr);
+        volatile double input=value;
+        // CVTT always truncates, CVT uses MXCSR.RC (nearest even etc).
+        volatile double result=opcode==0x2c?std::trunc(input):std::rint(input);
+        rounded=static_cast<long double>(result);
+        status|=mode.status();
+      }
+      const auto lower=bytes==8?-0x1p63L:-0x1p31L;
+      const auto upper=bytes==8?0x1p63L:0x1p31L;
+      const bool invalid=!std::isfinite(value)||rounded<lower||rounded>=upper;
+      if(invalid){status|=1U;status&=~32U;}
+      else if(static_cast<long double>(value)!=rounded)status|=32U;
+      simd_status(status);
+      const auto indefinite=bytes==8?(1ULL<<63):(1ULL<<31);
+      if(invalid)put_reg(m.reg,bytes,indefinite);
+      else put_reg(m.reg,bytes,
+        std::uint64_t(static_cast<std::int64_t>(rounded)));
+      return;
+    }
+    fail("unsupported SSE2 scalar conversion",FaultCode::UnsupportedOpcode);
   }
   void sse_integer(unsigned opcode) {
     if(!operand_override_||repeat_)
@@ -1145,7 +1411,9 @@ class Cpu {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
       case FaultCode::InvalidInstruction: return 6;
-      case FaultCode::DeviceNotAvailable: return 7; // #NM // #UD, not missing opcodes
+      case FaultCode::DeviceNotAvailable: return 7; // #NM
+      case FaultCode::SimdFloatingPoint: return 19; // #XM/#XF
+      case FaultCode::X87FloatingPoint: return 16; // #MF deferred x87 error
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
       case FaultCode::PageFault: return 14;        // #PF
@@ -1377,7 +1645,7 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE, PGE. With no TLB, PGE has no cached translations to retain.
-  constexpr std::uint32_t supported = 0x000002b0U; // + CR4.OSFXSR, no OSXSAVE
+  constexpr std::uint32_t supported = 0x000006b0U; // OSFXSR and OSXMMEXCPT, no OSXSAVE
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   cr4 = std::uint32_t(value);
@@ -1695,6 +1963,24 @@ inline void Cpu::extended() {
     std::uint64_t swapped = 0;
     for (unsigned i = 0; i < bytes; ++i) swapped = (swapped << 8) | ((value >> (8 * i)) & 0xff);
     put_reg(r, bytes, swapped);
+    return;
+  }
+  if(op==0x58||op==0x59||op==0x5c||op==0x5e||
+     op==0x51||op==0x5d||op==0x5f) {
+    sse2_float(op);return;
+  }
+  if(op==0x2a||op==0x2c||op==0x2d||op==0x2e||op==0x2f) {
+    sse2_scalar_misc(op);return;
+  }
+  if((op==0x10||op==0x11)&&repeat_==0xf2) { // MOVSD xmm/m64
+    if(operand_override_)fail("conflicting MOVSD prefixes",FaultCode::InvalidInstruction);
+    require_sse_state();
+    const auto m=modrm();require_xmm(m.reg);
+    if(op==0x10) {
+      const auto bits=sse64_source(m.rm);
+      if(!m.rm.is_register)xmm[m.reg].fill(0); // MOVSD memory load zeros high64
+      packed_set(xmm[m.reg],0,8,bits);
+    }else sse64_store(m.rm,packed_lane(xmm[m.reg],0,8));
     return;
   }
   switch (op) {
@@ -2253,11 +2539,13 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x98:
       put_reg(EAX, bytes, std::uint64_t(signed_value(get_reg(EAX, bytes / 2), bytes / 2))); return;
     case 0x99: put_reg(EDX, bytes, (get_reg(EAX, bytes) & sign_bit(bytes)) ? mask(bytes) : 0); return;
-    case 0x9b: { // FWAIT: deliver pending exceptions where modeled.
+    case 0x9b: { // FWAIT: x87 deferred unmasked exceptions.
       if((cr0&0x8U)&&(cr0&0x2U))
         fail("FWAIT with TS and MP",FaultCode::DeviceNotAvailable);
-      if(fpu_status&0x0080U)
-        fail("pending x87 exception delivery not implemented",FaultCode::UnsupportedState);
+      if(fpu_status&0x0080U) {
+        if(cr0&0x20U)fail("pending unmasked x87 exception (#MF)",FaultCode::X87FloatingPoint);
+        fail("legacy x87 FERR#/IRQ13 delivery not modeled",FaultCode::UnsupportedState);
+      }
       return;
     }
     case 0x9a: {
@@ -2431,14 +2719,47 @@ inline void Cpu::execute(std::uint8_t op) {
         if(op==0xdf && encoding==0xe0) { // FNSTSW AX
           set_reg16(EAX,fpu_status);return;
         }
-        if(op==0xd8 && (encoding&0xf8U)==0xc0) { // FADD ST0,ST(i)
-          if((fpu_control&0x0c00U)!=0)
-            fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
-          const auto a=extended_to_long_double(fpu_peek());
-          const auto b=extended_to_long_double(fpu_peek(reg));
-          const auto result=extended_from_long_double(a+b);
+        if(op==0xd8 && ((encoding&0xf8U)==0xc0 ||
+                       (encoding&0xf8U)==0xc8 ||
+                       (encoding&0xf8U)==0xe0 ||
+                       (encoding&0xf8U)==0xf0)) { // FADD/FMUL/FSUB/FDIV ST0,STi
+          if(fpu_status&0x0080U)
+            fail("x87 pending exception must be serviced before arithmetic",
+                 (cr0&0x20U)?FaultCode::X87FloatingPoint:FaultCode::UnsupportedState);
+          // Only full extended precision and round-to-nearest are modeled.
+          // A different precision/RC is rejected rather than silently using
+          // the host's 64/113-bit long double rounding.
+          if((fpu_control&0x0f00U)!=0x0300U)
+            fail("x87 non-extended-precision or non-nearest rounding pending",
+                 FaultCode::UnsupportedState);
+          const auto lhs=extended_to_long_double(fpu_peek());
+          const auto rhs=extended_to_long_double(fpu_peek(reg));
+          long double answer=0;
+          std::uint32_t flags=0;
+          {
+            HostRound rounding(0x1f80);
+            volatile long double a=lhs,b=rhs;
+            if((encoding&0xf8U)==0xc0) {
+              volatile long double result=a+b;answer=result;
+            }else if((encoding&0xf8U)==0xc8) {
+              volatile long double result=a*b;answer=result;
+            }else if((encoding&0xf8U)==0xe0) {
+              volatile long double result=a-b;answer=result;
+            }else{
+              volatile long double result=a/b;answer=result;
+            }
+            flags|=rounding.status();
+          }
+          // Intel keeps the top-of-stack unmodified when an exception is
+          // unmasked. The #MF is deferred until FWAIT or a waiting x87 op.
+          fpu_status|=std::uint16_t(flags);
+          if(flags&~std::uint32_t(fpu_control)&0x3fU){
+            fpu_status|=0x8080U; // ES+B; FNSTSW exposes sticky condition.
+            return;
+          }
+          const auto converted=extended_from_long_double(answer);
           const auto slot=fpu_slot(0);
-          x87[slot]=result;fpu_tag_set(slot,classify_ext(result));
+          x87[slot]=converted;fpu_tag_set(slot,classify_ext(converted));
           fpu_ip=start_ip_;return;
         }
         fail("x87 register opcode pending for full FPU",FaultCode::UnsupportedOpcode);
@@ -2452,17 +2773,7 @@ inline void Cpu::execute(std::uint8_t op) {
                             (op==0xdd||op==0xdc)?8U:2U;
       if((op==0xd9||op==0xdd)&&group==0) { // FLD m32real/m64real
         const auto raw=get(m.rm,data_width);
-        long double number=0;
-        if(data_width==4){
-          const auto bits=std::uint32_t(raw);
-          float value=0;std::memcpy(&value,&bits,sizeof(value));
-          number=static_cast<long double>(value);
-        }else{
-          const auto bits=raw;
-          double value=0;std::memcpy(&value,&bits,sizeof(value));
-          number=static_cast<long double>(value);
-        }
-        fpu_push(extended_from_long_double(number));
+        fpu_push(extended_from_ieee(raw,data_width));
         fpu_ip=start_ip_;fpu_cs=start_cs_;
         fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
         return;
