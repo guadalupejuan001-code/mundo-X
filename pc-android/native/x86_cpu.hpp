@@ -1018,7 +1018,8 @@ class Cpu {
   std::uint64_t simd_double_op(std::uint8_t opcode,
                                std::uint64_t left_raw,std::uint64_t right_raw) {
     std::uint32_t status=0;
-    if(fp64_subnormal(left_raw) || fp64_subnormal(right_raw))status|=2U;
+    if((opcode!=0x51&&fp64_subnormal(left_raw)) ||
+       fp64_subnormal(right_raw))status|=2U;
     if((opcode==0x5d||opcode==0x5f) &&
        (fp64_nan(left_raw)||fp64_nan(right_raw))) {
       if(fp64_snan(left_raw)||fp64_snan(right_raw))status|=1U;
@@ -1922,6 +1923,24 @@ inline void Cpu::extended() {
     std::uint64_t swapped = 0;
     for (unsigned i = 0; i < bytes; ++i) swapped = (swapped << 8) | ((value >> (8 * i)) & 0xff);
     put_reg(r, bytes, swapped);
+    return;
+  }
+  if(op==0x58||op==0x59||op==0x5c||op==0x5e||
+     op==0x51||op==0x5d||op==0x5f) {
+    sse2_float(op);return;
+  }
+  if(op==0x2a||op==0x2c||op==0x2d||op==0x2e||op==0x2f) {
+    sse2_scalar_misc(op);return;
+  }
+  if((op==0x10||op==0x11)&&repeat_==0xf2) { // MOVSD xmm/m64
+    if(operand_override_)fail("conflicting MOVSD prefixes",FaultCode::InvalidInstruction);
+    require_sse_state();
+    const auto m=modrm();require_xmm(m.reg);
+    if(op==0x10) {
+      const auto bits=sse64_source(m.rm);
+      if(!m.rm.is_register)xmm[m.reg].fill(0); // MOVSD memory load zeros high64
+      packed_set(xmm[m.reg],0,8,bits);
+    }else sse64_store(m.rm,packed_lane(xmm[m.reg],0,8));
     return;
   }
   switch (op) {
