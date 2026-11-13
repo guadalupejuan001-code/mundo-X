@@ -1,0 +1,86 @@
+name: REVERSE Windows C09R1 stage4 - DAZ FTZ x87 precision and FP context
+on:
+  push:
+    branches: ["feature/c09r1-*"]
+  pull_request:
+    paths:
+      - 'pc-android/native/x86_cpu.hpp'
+      - 'pc-android/native/tests/x86_idt_c04_test.cpp'
+      - 'pc-android/native/tests/x86_cpl_c05_test.cpp'
+      - 'pc-android/native/tests/x86_bus_c06_test.cpp'
+      - 'pc-android/native/tests/x86_port_pio_c07_test.cpp'
+      - 'pc-android/native/tests/x86_trace_c09_test.cpp'
+      - 'pc-android/native/tests/x86_windows10_c09r_cpu_readiness_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_xmm_subset_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_fxstate_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_fp_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage4_mxcsr_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_ring3_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_x87_precision_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_x87_mf_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_sse2_packed_test.cpp'
+      - 'pc-android/native/pc_machine.hpp'
+      - '.github/workflows/reverse-windows-c09r1-stage4-fp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c09r-readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build C04 plus original CPU regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/c09r build/c09rr-evidence
+          CXX="${CXX:-g++}"
+          common=(-std=c++17 -O2 -pthread -I native/include -I pc-android/native)
+          for test in x86_c09r1_stage4_mxcsr_test x86_c09r1_stage3_x87_mf_test x86_c09r1_stage3_x87_precision_test x86_c09r1_stage3_ring3_test x86_c09r1_stage3_fp_test x86_c09r1_sse2_packed_test x86_c09r1_fxstate_test x86_c09r1_xmm_subset_test x86_windows10_c09r_cpu_readiness_test x86_trace_c09_test x86_port_pio_c07_test x86_bus_c06_test x86_cpl_c05_test x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
+            "$CXX" "${common[@]}" "pc-android/native/tests/${test}.cpp" -o "build/c09r/${test}"
+          done
+      - name: Execute authentic guest x86 / x64 instruction paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in x86_c09r1_stage4_mxcsr_test x86_c09r1_stage3_x87_mf_test x86_c09r1_stage3_x87_precision_test x86_c09r1_stage3_ring3_test x86_c09r1_stage3_fp_test x86_c09r1_sse2_packed_test x86_c09r1_fxstate_test x86_c09r1_xmm_subset_test x86_windows10_c09r_cpu_readiness_test x86_trace_c09_test x86_port_pio_c07_test x86_bus_c06_test x86_cpl_c05_test x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
+            "build/c09r/${test}" > "build/c09rr-evidence/${test}.log" 2>&1 || {
+              cat "build/c09rr-evidence/${test}.log"
+              exit 1
+            }
+            tail -8 "build/c09rr-evidence/${test}.log"
+          done
+          grep -q 'REVERSE_WINDOWS_C04_IDT_PASS' build/c09rr-evidence/x86_idt_c04_test.log
+          grep -q 'REVERSE_WINDOWS_C05_CPL3_PASS' build/c09rr-evidence/x86_cpl_c05_test.log
+          grep -q 'REVERSE_WINDOWS_C06_BUS_CPU_PASS' build/c09rr-evidence/x86_bus_c06_test.log
+          grep -q 'REVERSE_WINDOWS_C07_CPU_PIO_PASS' build/c09rr-evidence/x86_port_pio_c07_test.log
+          grep -q 'REVERSE_WINDOWS_C09_CPU_TRACE_PASS' build/c09rr-evidence/x86_trace_c09_test.log
+          grep -q 'C09R1_XMM_MXCSR_SUBSET_PASS' build/c09rr-evidence/x86_c09r1_xmm_subset_test.log
+          grep -q 'REVERSE_WINDOWS_C09R1_FPU_FXSTATE_PASS' build/c09rr-evidence/x86_c09r1_fxstate_test.log
+          grep -q 'REVERSE_WINDOWS_C09R1_SSE2_PACKED_PASS' build/c09rr-evidence/x86_c09r1_sse2_packed_test.log
+          grep -q 'REVERSE_WINDOWS_C09R1_SSE2_FP_PASS' build/c09rr-evidence/x86_c09r1_stage3_fp_test.log
+          grep -q 'REVERSE_WINDOWS_C09R1_RING3_FPU_PASS' build/c09rr-evidence/x86_c09r1_stage3_ring3_test.log
+          grep -q 'REVERSE_WINDOWS_C09R1_X87_PRECISION_PASS' build/c09rr-evidence/x86_c09r1_stage3_x87_precision_test.log
+          grep -q 'REVERSE_WINDOWS_C09R1_X87_MF_PASS' build/c09rr-evidence/x86_c09r1_stage3_x87_mf_test.log
+          grep -q 'REVERSE_WINDOWS_C09R1_STAGE4_MXCSR_PASS' build/c09rr-evidence/x86_c09r1_stage4_mxcsr_test.log
+      - name: Run complete original COSMIC PC native suite and demos
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash pc-android/tools/test-native.sh > build/c09rr-evidence/native-full.log 2>&1 || {
+            tail -160 build/c09rr-evidence/native-full.log
+            exit 1
+          }
+          tail -35 build/c09rr-evidence/native-full.log
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverse-windows-c09r-readiness
+          path: build/c09rr-evidence/*.log
+          if-no-files-found: warn
