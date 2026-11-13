@@ -1441,7 +1441,7 @@ inline void Cpu::extended() {
       if(m.group!=2&&m.group!=3)
         fail("FXSAVE/FXRSTOR and other 0F AE states pending",FaultCode::UnsupportedOpcode);
       require_sse_state();
-      const auto address=segment_linear(m.rm.segment,operand_offset(m),4,
+      const auto address=segment_linear(m.rm.segment,operand_offset(m.rm),4,
                                        m.group==2?Access::Read:Access::Write);
       if(m.group==2){
         const auto candidate=std::uint32_t(read_linear(address,4));
