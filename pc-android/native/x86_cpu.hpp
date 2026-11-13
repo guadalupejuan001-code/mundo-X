@@ -13,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include <cfenv>
+#include <algorithm>
 #include <cstring>
 #include <functional>
 #include <iomanip>
@@ -30,7 +32,7 @@ namespace cosmic_pc {
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget, DeviceNotAvailable
+  PageFault, MemoryBudget, DeviceNotAvailable, SimdFloatingPoint
 };
 
 struct Fault {
@@ -282,6 +284,7 @@ class Cpu {
     op32_ = is_long_mode() || (!is_real_mode() && cache_[CS].big);
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
+    pending_simd_flags_=0;
     try {
       if (!is_real_mode() && cpl() != 0 && cpl() != 3)
         fail("only CPL0/CPL3 are modeled", FaultCode::UnsupportedState);
@@ -319,6 +322,10 @@ class Cpu {
       return halted ? StepResult::Halted : StepResult::Executed;
     } catch (const Trap& t) {
       rollback(before);
+      // Intel preserves MXCSR sticky status across #XM/#UD on an unmasked
+      // SIMD arithmetic exception even when the instruction does not retire.
+      // Snapshot rollback must NOT erase these architecturally sticky flags.
+      if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
       const int vector = exception_vector(t.code);
@@ -338,6 +345,7 @@ class Cpu {
             return true;
           } catch (const std::exception&) {
             rollback(before); // Undo any partial frame/descriptor writes.
+            if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
             if (t.code == FaultCode::PageFault) cr2 = t.address;
             return false;
           }
@@ -452,6 +460,7 @@ class Cpu {
   // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
   // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
   bool supervisor_internal_ = false;
+  std::uint32_t pending_simd_flags_=0;
   struct SupervisorAccess {
     Cpu& cpu;
     bool old;
@@ -1145,7 +1154,8 @@ class Cpu {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
       case FaultCode::InvalidInstruction: return 6;
-      case FaultCode::DeviceNotAvailable: return 7; // #NM // #UD, not missing opcodes
+      case FaultCode::DeviceNotAvailable: return 7; // #NM
+      case FaultCode::SimdFloatingPoint: return 19; // #XM/#XF
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
       case FaultCode::PageFault: return 14;        // #PF
@@ -1377,7 +1387,7 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE, PGE. With no TLB, PGE has no cached translations to retain.
-  constexpr std::uint32_t supported = 0x000002b0U; // + CR4.OSFXSR, no OSXSAVE
+  constexpr std::uint32_t supported = 0x000006b0U; // OSFXSR and OSXMMEXCPT, no OSXSAVE
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   cr4 = std::uint32_t(value);
