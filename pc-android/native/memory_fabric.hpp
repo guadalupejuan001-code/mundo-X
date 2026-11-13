@@ -215,6 +215,11 @@ class MemoryFabric {
     return ram_.try_copy_repeating_page(source, target);
   }
 
+  bool try_copy_resident_block(std::uint64_t source, std::uint64_t target, std::size_t count) {
+    if (overlaps_window(source, count) || overlaps_window(target, count)) return false;
+    return ram_.try_copy_resident_block(source, target, count);
+  }
+
   // The Ether window does not reserve classical pages. Provider-side qstore8
   // commits a complete byte atomically; CPU rollback restores the old byte.
   void prepare_write(std::uint64_t offset, std::size_t count) {

@@ -272,6 +272,27 @@ public:
         }
     }
 
+    // Both pages must already be dense. This keeps the source alive without
+    // pinning or eviction and avoids copying via a temporary buffer.
+    bool try_copy_resident_block(std::uint64_t source, std::uint64_t target,
+                                 std::size_t count) {
+        check_range(source, count);
+        check_range(target, count);
+        const auto from_offset = static_cast<std::size_t>(source % kPageSize);
+        const auto to_offset = static_cast<std::size_t>(target % kPageSize);
+        if (!count || count > kPageSize - from_offset || count > kPageSize - to_offset ||
+            (source < target + count && target < source + count)) return false;
+        const auto* from = find_slot(source / kPageSize);
+        auto* to = find_slot(target / kPageSize);
+        if (!from || !from->dense || !to || !to->dense) return false;
+        if (backing_) {
+            from->recently_used = true;
+            mark_write(*to);
+        }
+        std::memcpy(to->dense->data() + to_offset, from->dense->data() + from_offset, count);
+        return true;
+    }
+
     // Borrow the exact compact representation of a full source page. The
     // destination has independent slots, so later guest writes never alias.
     bool try_copy_repeating_page(std::uint64_t source, std::uint64_t target) {

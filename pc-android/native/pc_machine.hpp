@@ -68,6 +68,7 @@ class PcMachine {
   struct BootAcceleration {
     std::uint64_t batches=0, rep_elements=0, bytes=0;
     std::uint64_t shift_loop_batches=0, shift_loop_steps=0;
+    std::uint64_t zero_loop_batches=0, zero_loop_steps=0;
   };
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
@@ -489,25 +490,32 @@ class PcMachine {
   std::uint64_t next_ram_compaction_=kRamCompactionInterval;
   unsigned run_boot_batch(unsigned limit) {
     const bool rep=cpu.rep_batch_candidate();
-    if(!rep&&!cpu.shift_loop_batch_candidate())return 0;
+    const bool shift=!rep&&cpu.shift_loop_batch_candidate();
+    if(!rep&&!shift&&!cpu.zero_loop_batch_candidate())return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;
       limit=std::min(limit,device_batch_limit_hook(limit));
     }
-    // A shift loop contains different opcodes. Execute the sampled step
+    // A loop contains different opcodes. Execute the sampled step
     // individually so its address and bytes remain exact.
     if(!rep&&boot_hotspots_)limit=std::min(limit,boot_hotspots_->steps_before_sample());
     if(limit<2)return 0;
-    const auto completed=rep?cpu.try_rep_batch(limit):cpu.try_shift_loop_batch(limit);
+    unsigned completed=0;
+    if(rep)completed=cpu.try_rep_batch(limit);
+    else if(shift)completed=cpu.try_shift_loop_batch(limit);
+    else completed=cpu.try_zero_loop_batch(limit);
     if(!completed)return 0;
     if(device_step_hook)device_batch_advance_hook(completed-1);
     if(rep) {
       ++boot_acceleration_.batches;
       boot_acceleration_.rep_elements+=completed;
       boot_acceleration_.bytes+=cpu.last_rep_batch_bytes();
-    } else {
+    } else if(shift) {
       ++boot_acceleration_.shift_loop_batches;
       boot_acceleration_.shift_loop_steps+=completed;
+    } else {
+      ++boot_acceleration_.zero_loop_batches;
+      boot_acceleration_.zero_loop_steps+=completed;
     }
     return completed;
   }

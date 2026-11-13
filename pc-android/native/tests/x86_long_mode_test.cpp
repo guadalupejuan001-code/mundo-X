@@ -92,6 +92,42 @@ void boot_and_register_tests() {
   check(cpu.regs[Cpu::EAX] == cpu.cr0, "SMSW r64 in long mode preserves PG in the returned value");
 }
 
+void multibyte_nops() {
+  Cpu cpu(8U << 20); boot(cpu);
+  constexpr std::uint64_t observed_rip = 0x2a5a73aa;
+  constexpr std::uint64_t physical = 0x400000 + (observed_rip & 0x1fffff);
+  cpu.write64(0x3000 + 8 * (observed_rip >> 21), 0x400083);
+  // The report ended after 66 0F 1F. Supply a SIB and disp32, with a
+  // non-canonical effective address to catch any operand data access.
+  program(cpu, {0x66,0x0f,0x1f,0x84,0x0b,0,0,0,0,0x0f,0x1f,0xc0,0xf4}, physical);
+  cpu.eip = observed_rip;
+  cpu.regs[Cpu::EBX] = 0x0000800000000000ULL;
+  cpu.regs[Cpu::ECX] = 1;
+  cpu.eflags = 2 | Cpu::CF | Cpu::ZF | Cpu::IF | Cpu::OF;
+  const auto registers = cpu.regs;
+  const auto flags = cpu.eflags;
+  one(cpu);
+  check(cpu.eip == observed_rip + 9 && cpu.last_decoded_bytes().size() == 9,
+        "66 0F 1F consumes the full SIB and displacement at the reported RIP");
+  one(cpu);
+  check(cpu.eip == observed_rip + 12 && cpu.regs == registers && cpu.eflags == flags,
+        "memory-form and register-form NOPs preserve registers and flags");
+  one(cpu);
+  check(cpu.halted, "execution continues at the instruction after both NOPs");
+
+  cpu.idtr = {0, 0};
+  program(cpu, {0xf0,0x0f,0x1f,0x03});
+  expect_fault(cpu, FaultCode::InvalidInstruction, "LOCK multi-byte NOP raises #UD");
+  program(cpu, {0x66,0x0f,0x1f}, 0x1ffffd);
+  expect_fault(cpu, FaultCode::PageFault, "multi-byte NOP must fetch its ModR/M");
+  check(cpu.cr2 == 0x200000, "instruction fetch across the unmapped code boundary sets CR2");
+
+  cpu.reset(0, 0xa000);
+  program(cpu, {0x0f,0x1f,0x86,0x34,0x12,0xf4});
+  one(cpu);
+  check(cpu.eip == 0xa005, "multi-byte NOP consumes the 16-bit addressing displacement");
+}
+
 void addressing_stack_and_alu_tests() {
   Cpu cpu; boot(cpu);
   // C7: effective RIP must follow displacement AND immediate, not ModRM alone.
@@ -578,7 +614,8 @@ void implicit_arithmetic64() {
 
 int main() {
   try {
-    boot_and_register_tests(); addressing_stack_and_alu_tests(); enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
+    boot_and_register_tests(); multibyte_nops(); addressing_stack_and_alu_tests();
+    enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); paging_and_fault_tests(); conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
