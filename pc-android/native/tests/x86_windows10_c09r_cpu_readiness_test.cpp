@@ -130,10 +130,16 @@ void cpuid_profile() {
   check((ext[2]&((1u<<0)|(1u<<8)))==((1u<<0)|(1u<<8)),
         "LAHF/SAHF and PREFETCHW features missing from CPUID");
   check((ext[3]&(1u<<20))!=0,"NX feature lost");
-  // Lock is legal only for implemented atomic memory operations.
-  program(cpu,0x1000,{0xf0,0x01,0x00});
-  check(cpu.step()==StepResult::Faulted&&cpu.fault,
-        "LOCK ADD not implemented must fail explicitly");
+  // LOCK is legal on a writable destination in memory, never on registers.
+  cpu.set_reg16(Cpu::EBX,0x6000);cpu.set_reg16(Cpu::ESI,0);
+  cpu.set_reg16(Cpu::EAX,2);cpu.write16(0x6000,1);
+  program(cpu,0x1000,{0xf0,0x01,0x00}); // LOCK ADD [BX+SI],AX.
+  check(cpu.step()==StepResult::Executed&&cpu.read16(0x6000)==3,
+        "LOCK ADD memory destination must execute");
+  program(cpu,0x1000,{0xf0,0x01,0xc3}); // LOCK ADD BX,AX.
+  check(cpu.step()==StepResult::Faulted&&cpu.fault&&
+        cpu.fault->code==cosmic_pc::FaultCode::InvalidInstruction,
+        "LOCK ADD register destination must raise #UD");
   std::cout<<"C09R_CPUID_TRUTHFUL_PROFILE_PASS cx16=1 sse2=0 x87=0\n";
 }
 }

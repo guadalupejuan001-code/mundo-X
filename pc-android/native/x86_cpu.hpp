@@ -486,6 +486,7 @@ class Cpu {
     bool rip_relative = false;
   };
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
+  using AtomicRam = std::array<std::size_t, 16>;
 
   bool op32_ = false, addr32_ = false, ip_written_ = false, transaction_ = false;
   bool operand_override_ = false, address_override_ = false, lock_prefix_ = false;
@@ -791,6 +792,59 @@ class Cpu {
   void put(const Operand& operand, unsigned bytes, std::uint64_t value) {
     if (operand.is_register) put_reg(operand.index, bytes, value);
     else write_segment(operand.segment, operand_offset(operand), bytes, value);
+  }
+  void require_lock_destination(const Operand& operand, bool modifies_memory = true) const {
+    if (lock_prefix_ && (operand.is_register || !modifies_memory))
+      fail("LOCK requires a writable memory destination", FaultCode::InvalidInstruction);
+  }
+  AtomicRam atomic_ram(std::uint64_t address, unsigned bytes) {
+    AtomicRam indices{};
+    // The single-vCPU board ticks between instructions. Resolve all page and
+    // bus addresses before reading the operand, using write-sense access for RMW.
+    for (unsigned done = 0; done < bytes;) {
+      const auto linear = address + done;
+      const auto physical = translate(linear, Access::Write);
+      const auto chunk = std::min(bytes - done, 0x1000U - unsigned(linear & 0xfffU));
+      for (unsigned i = 0; i < chunk; ++i) {
+        const auto bus = physical + i;
+        if (mmio_at(bus))
+          fail("atomic memory operation on MMIO is unsupported", FaultCode::UnsupportedState);
+        const auto index = physical_index(bus);
+        if (index >= memory.window_base() && index - memory.window_base() < memory.window_bytes())
+          fail("atomic memory operation on the Ether window is unsupported", FaultCode::UnsupportedState);
+        indices[done + i] = index;
+      }
+      done += chunk;
+    }
+    return indices;
+  }
+  std::uint64_t read_atomic_ram(const AtomicRam& indices, unsigned offset, unsigned bytes) const {
+    std::uint64_t value = 0;
+    for (unsigned i = 0; i < bytes; ++i)
+      value |= std::uint64_t(memory.read_byte(indices[offset + i])) << (8U * i);
+    return value;
+  }
+  void write_atomic_ram(const AtomicRam& indices, unsigned offset, unsigned bytes,
+                        std::uint64_t value) {
+    for (unsigned i = 0; i < bytes; ++i) {
+      const auto index = indices[offset + i];
+      const auto previous = memory.read_byte(index);
+      const auto next = std::uint8_t(value >> (8U * i));
+      if (previous == next) continue;
+      journal_.emplace_back(index, previous);
+      memory.write_byte(index, next);
+    }
+  }
+  template<class Update>
+  void modify_operand(const Operand& operand, unsigned bytes, Update update,
+                      bool implicit_atomic = false) {
+    if (!operand.is_register && (lock_prefix_ || implicit_atomic)) {
+      const auto address = segment_linear(operand.segment, operand_offset(operand), bytes, Access::Write);
+      const auto indices = atomic_ram(address, bytes);
+      write_atomic_ram(indices, 0, bytes, update(read_atomic_ram(indices, 0, bytes)));
+    } else {
+      put(operand, bytes, update(get(operand, bytes)));
+    }
   }
   void fpu_init() {
     fpu_control=0x037f;fpu_status=0;fpu_tags=0xffff;
@@ -2173,6 +2227,13 @@ inline void Cpu::multiply_signed(unsigned destination, std::uint64_t a,
 }
 
 inline void Cpu::group3(const ModRM& m, unsigned bytes) {
+  require_lock_destination(m.rm, m.group == 2 || m.group == 3);
+  if (m.group == 2 || m.group == 3) {
+    modify_operand(m.rm, bytes, [&](std::uint64_t old) {
+      return m.group == 2 ? ~old : alu(5, 0, old, bytes);
+    });
+    return;
+  }
   if (m.group == 0) {
     const auto value = arithmetic_immediate(bytes); // RIP base follows the complete instruction.
     (void)alu(4, get(m.rm, bytes), value, bytes); return;
@@ -2184,8 +2245,6 @@ inline void Cpu::group3(const ModRM& m, unsigned bytes) {
   const auto maximum = mask(bytes);
   switch (m.group) {
     case 1: fail("reserved group-3 encoding", FaultCode::InvalidInstruction);
-    case 2: put(m.rm, bytes, ~operand); return;
-    case 3: put(m.rm, bytes, alu(5, 0, operand, bytes)); return;
     case 4: case 5: {
       std::uint64_t product;
       bool overflow;
@@ -2239,9 +2298,14 @@ inline void Cpu::group3(const ModRM& m, unsigned bytes) {
 inline void Cpu::extended() {
   const auto op = fetch8(); opcode_ = std::uint16_t(0x0f00U | op);
   const auto bytes = width();
-  if (lock_prefix_ && op != 0xc7)
-    fail("LOCK prefix is supported only on 0F C7 /1 CMPXCHG8B/16B",
-         FaultCode::UnsupportedState);
+  if (lock_prefix_) {
+    switch (op) {
+      case 0xab: case 0xb3: case 0xbb: case 0xba:
+      case 0xb0: case 0xb1: case 0xc0: case 0xc1: case 0xc7:
+        break;
+      default: fail("LOCK prefix is invalid for this opcode", FaultCode::InvalidInstruction);
+    }
+  }
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
@@ -2484,6 +2548,60 @@ inline void Cpu::extended() {
       (void)operand_offset(m.rm);
       return;
     }
+    case 0xa3: case 0xab: case 0xb3: case 0xbb: case 0xba: { // BT, BTS, BTR, BTC.
+      auto m = modrm();
+      const unsigned operation = op == 0xba ? m.group : 4U + ((op - 0xa3U) >> 3);
+      if (operation < 4) fail("reserved bit-test encoding", FaultCode::InvalidInstruction);
+      const auto index = op == 0xba ? immediate(1) : get_reg(m.reg, bytes);
+      const unsigned bits = 8U * bytes, bit = unsigned(index & (bits - 1));
+      require_lock_destination(m.rm, operation != 4);
+      if (op != 0xba && !m.rm.is_register) {
+        // Register indices name a signed bit position in a memory bit string.
+        const auto element = (signed_value(index, bytes) - bit) / bits;
+        m.rm.offset += std::uint64_t(element) * bytes;
+      }
+      const auto bit_mask = std::uint64_t{1} << bit;
+      if (operation == 4) set_flag(CF, (get(m.rm, bytes) & bit_mask) != 0);
+      else modify_operand(m.rm, bytes, [&](std::uint64_t old) {
+        set_flag(CF, (old & bit_mask) != 0);
+        if (operation == 5) return old | bit_mask;
+        if (operation == 6) return old & ~bit_mask;
+        return old ^ bit_mask;
+      });
+      return;
+    }
+    case 0xb0: case 0xb1: { // CMPXCHG r/m, reg.
+      const auto m = modrm();
+      const unsigned amount = op == 0xb0 ? 1 : bytes;
+      require_lock_destination(m.rm);
+      const auto accumulator = get_reg(EAX, amount);
+      const auto source = get_reg(m.reg, amount);
+      if (m.rm.is_register) {
+        const auto old = get(m.rm, amount);
+        (void)alu(7, accumulator, old, amount);
+        if (flag(ZF)) put(m.rm, amount, source);
+        else put_reg(EAX, amount, old);
+      } else {
+        modify_operand(m.rm, amount, [&](std::uint64_t old) {
+          (void)alu(7, accumulator, old, amount);
+          if (flag(ZF)) return source;
+          put_reg(EAX, amount, old);
+          return old;
+        }, true); // A failed comparison still requires a write-capable operand.
+      }
+      return;
+    }
+    case 0xc0: case 0xc1: { // XADD r/m, reg.
+      const auto m = modrm();
+      const unsigned amount = op == 0xc0 ? 1 : bytes;
+      require_lock_destination(m.rm);
+      const auto source = get_reg(m.reg, amount);
+      modify_operand(m.rm, amount, [&](std::uint64_t old) {
+        put_reg(m.reg, amount, old);
+        return alu(0, old, source, amount);
+      });
+      return;
+    }
     case 0xc7: { // CMPXCHG8B / CMPXCHG16B, /1 memory only.
       const auto m=modrm();
       if(m.group!=1 || m.rm.is_register)
@@ -2495,31 +2613,19 @@ inline void Cpu::extended() {
       if(large && (address&15U))
         fail("CMPXCHG16B requires 16-byte aligned address",
              FaultCode::ProtectionFault);
-      // Resolve and preflight every byte before ANY write to preserve the
-      // observable all-or-nothing comparison on our single guest vCPU.
-      // Claimed MMIO cannot provide a 128-bit atomic transaction; reject it.
-      for(unsigned offset=0;offset<amount;++offset) {
-        // CMPXCHG8B may straddle a 4-KiB page. Translate each byte
-        // before accessing memory; never guess physical contiguity.
-        const auto p=translate(address+offset,Access::Write);
-        if(mmio_at(p))
-          fail("atomic memory operation on MMIO is unsupported",
-               FaultCode::UnsupportedState);
-        (void)physical_index(p);
-      }
-      const auto low=read_linear(address,large?8:4);
-      const auto high=read_linear(address+(large?8:4),large?8:4);
-      const auto rax=get_reg(EAX,large?8:4);
-      const auto rdx=get_reg(EDX,large?8:4);
+      const auto indices=atomic_ram(address,amount);
+      const unsigned half=amount/2;
+      const auto low=read_atomic_ram(indices,0,half);
+      const auto high=read_atomic_ram(indices,half,half);
+      const auto rax=get_reg(EAX,half);
+      const auto rdx=get_reg(EDX,half);
       const bool equal=low==rax && high==rdx;
       if(equal) {
-        // CPU::step() journals both writes; a failure in the second half
-        // rolls back the first half. No additional CPU or host atomic claim.
-        write_linear(address,large?8:4,get_reg(EBX,large?8:4));
-        write_linear(address+(large?8:4),large?8:4,get_reg(ECX,large?8:4));
+        write_atomic_ram(indices,0,half,get_reg(EBX,half));
+        write_atomic_ram(indices,half,half,get_reg(ECX,half));
       }else{
-        put_reg(EAX,large?8:4,low);
-        put_reg(EDX,large?8:4,high);
+        put_reg(EAX,half,low);
+        put_reg(EDX,half,high);
       }
       set_flag(ZF,equal);
       return;
@@ -2774,8 +2880,14 @@ inline void Cpu::extended() {
 }
 
 inline void Cpu::execute(std::uint8_t op) {
-  if(lock_prefix_ && op!=0x0f)
-    fail("LOCK prefix on unsupported instruction", FaultCode::UnsupportedState);
+  if (lock_prefix_ && !(op <= 0x31 && (op & 7U) <= 1)) {
+    switch (op) {
+      case 0x0f: case 0x80: case 0x81: case 0x83: case 0x86: case 0x87:
+      case 0xf6: case 0xf7: case 0xfe: case 0xff:
+        break;
+      default: fail("LOCK prefix is invalid for this opcode", FaultCode::InvalidInstruction);
+    }
+  }
   const unsigned bytes = width();
   const unsigned stack_bytes = stack_operand_width();
   const unsigned encoded_register = (op & 7U) + ((rex_ & 1) ? 8 : 0);
@@ -2797,11 +2909,16 @@ inline void Cpu::execute(std::uint8_t op) {
       if (operation != 7) put_reg(EAX, w, result);
     } else {
       const auto m = modrm();
-      const auto a = (form & 2U) ? get_reg(m.reg, w) : get(m.rm, w);
-      const auto b = (form & 2U) ? get(m.rm, w) : get_reg(m.reg, w);
-      const auto result = alu(operation, a, b, w);
-      if (operation != 7) {
-        if (form & 2U) put_reg(m.reg, w, result); else put(m.rm, w, result);
+      require_lock_destination(m.rm);
+      if (form & 2U) {
+        const auto result = alu(operation, get_reg(m.reg, w), get(m.rm, w), w);
+        if (operation != 7) put_reg(m.reg, w, result);
+      } else if (operation == 7) {
+        (void)alu(operation, get(m.rm, w), get_reg(m.reg, w), w);
+      } else {
+        modify_operand(m.rm, w, [&](std::uint64_t old) {
+          return alu(operation, old, get_reg(m.reg, w), w);
+        });
       }
     }
     return;
@@ -2860,8 +2977,9 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x80: case 0x81: case 0x83: {
       const auto m = modrm(); const unsigned w = op == 0x80 ? 1 : bytes;
       const auto value = op == 0x83 ? std::uint64_t(signed_value(immediate(1), 1)) : arithmetic_immediate(w);
-      const auto result = alu(m.group, get(m.rm, w), value, w);
-      if (m.group != 7) put(m.rm, w, result);
+      require_lock_destination(m.rm, m.group != 7);
+      if (m.group == 7) (void)alu(m.group, get(m.rm, w), value, w);
+      else modify_operand(m.rm, w, [&](std::uint64_t old) { return alu(m.group, old, value, w); });
       return;
     }
     case 0x84: case 0x85: {
@@ -2870,7 +2988,12 @@ inline void Cpu::execute(std::uint8_t op) {
     }
     case 0x86: case 0x87: {
       const auto m = modrm(); const unsigned w = op == 0x86 ? 1 : bytes;
-      const auto old = get(m.rm, w); put(m.rm, w, get_reg(m.reg, w)); put_reg(m.reg, w, old); return;
+      require_lock_destination(m.rm);
+      const auto source = get_reg(m.reg, w);
+      std::uint64_t old = 0;
+      modify_operand(m.rm, w, [&](std::uint64_t value) { old = value; return source; }, true);
+      put_reg(m.reg, w, old);
+      return;
     }
     case 0x88: case 0x89: case 0x8a: case 0x8b: {
       const auto m = modrm(); const unsigned w = (op & 1U) ? bytes : 1;
@@ -3221,9 +3344,12 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0xfd: set_flag(DF, true); return;
     case 0xfe: case 0xff: {
       const auto m = modrm(); const unsigned w = op == 0xfe ? 1 : bytes;
+      require_lock_destination(m.rm, m.group < 2);
       if (m.group < 2) {
-        const bool old_cf = flag(CF); const auto value = alu(m.group == 0 ? 0 : 5, get(m.rm, w), 1, w);
-        put(m.rm, w, value); set_flag(CF, old_cf); return;
+        const bool old_cf = flag(CF);
+        modify_operand(m.rm, w, [&](std::uint64_t old) { return alu(m.group == 0 ? 0 : 5, old, 1, w); });
+        set_flag(CF, old_cf);
+        return;
       }
       if (op == 0xfe || m.group == 7) fail("reserved group-4/group-5 encoding", FaultCode::InvalidInstruction);
       if (m.group == 6) { const auto value = get(m.rm, stack_bytes); push(value, stack_bytes); return; }

@@ -17,6 +17,7 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 namespace cosmic_pc {
@@ -25,6 +26,16 @@ namespace cosmic_pc {
 class PcMachine {
  public:
   using Reader=std::function<bool(std::uint64_t,std::uint8_t*,std::size_t)>;
+  enum class GuestRestart { None, A20Port, KeyboardController, BiosBootstrap };
+  struct BootModeProgress {
+    std::uint64_t changes=0, step=0;
+    std::string_view from, to;
+  };
+
+  // The owner may flush storage and select boot media once run() returns.
+  void enable_guest_restart() noexcept { guest_restart_enabled_=true; }
+  GuestRestart guest_restart() const noexcept { return guest_restart_; }
+  const BootModeProgress& boot_mode_progress() const noexcept { return boot_mode_progress_; }
   // One page at the unused tail of the reserved 128-MiB VBE aperture stays
   // outside normal guest RAM. Its first 256 bytes are backed by Ether Memory.
   // The maximum 8K framebuffer ends 1,507,328 bytes before this page.
@@ -117,6 +128,8 @@ class PcMachine {
     quantum_output_.clear();quantum_error_.clear();quantum_truncated_=false;
     quantum_cache_valid_=false;
     host_error.clear();pending.clear();waiting_key=false;keys_.clear();disk_reads=0;last_disk_status_=0;
+    guest_restart_=GuestRestart::None;
+    boot_mode_progress_={};
     video_mode_=3;video_.text_mode(3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
     kbc_.reset();  // Controller, command/data latches and A20 protocol reset together.
     if(!reader_)return;
@@ -131,19 +144,33 @@ class PcMachine {
     cpu.write8(0x484,24);cpu.write8(0x475,plan_.drive==0x80?1:0);clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
   }
   void run(unsigned budget) {
-    if(!reader_||!host_error.empty()||waiting_key||cpu.fault)return;
+    if(!reader_||!host_error.empty()||waiting_key||cpu.fault||guest_restart_!=GuestRestart::None)return;
     if(cpu.halted&&!device_step_hook)return;
     budget=std::min(budget,50000u);
+    const char* last_mode=cpu.mode_name();
+    const auto observe_mode=[&]() {
+      const char* mode=cpu.mode_name();
+      if(mode!=last_mode) {
+        if(std::string_view(mode)!=last_mode)
+          boot_mode_progress_={boot_mode_progress_.changes+1,cpu.instructions,last_mode,mode};
+        last_mode=mode;
+      }
+    };
     for(unsigned i=0;i<budget&&!waiting_key;++i){
       // Devices can tick and deliver an enabled IRQ between guest instructions;
       // a pending timer IRQ may wake a halted CPU without a synthetic opcode.
-      if(device_step_hook) device_step_hook();
+      if(device_step_hook) {
+        device_step_hook();
+        observe_mode();
+      }
       if(cpu.fault) {
         pending="La placa base virtual no pudo entregar la interrupción.";
         break;
       }
       const auto r=cpu.step();
-      if(r==StepResult::Faulted){pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
+      observe_mode();
+      if(r==StepResult::Faulted){guest_restart_=GuestRestart::None;pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
+      if(guest_restart_!=GuestRestart::None)break;
       if(r==StepResult::Halted&&!device_step_hook)break;
     }
   }
@@ -371,6 +398,9 @@ class PcMachine {
   }
   PcVideo video_;
   Pc8042 kbc_;  // Owned subset of physical PC/AT 8042; no simulated IRQs.
+  bool guest_restart_enabled_=false;
+  GuestRestart guest_restart_=GuestRestart::None;
+  BootModeProgress boot_mode_progress_;
   Reader reader_;
   std::uint64_t media_bytes_=0;
   BootPlan plan_{};
@@ -513,7 +543,11 @@ class PcMachine {
       case 0x16:{const auto fn=hi(0);if(fn==0||fn==0x10){if(keys_.empty())waiting_key=true;else{cpu.set_reg16(0,keys_.front());keys_.pop_front();}return true;}if(fn==1||fn==0x11){zero(keys_.empty());if(!keys_.empty())cpu.set_reg16(0,keys_.front());return true;}if(fn==2){low(0,0);return true;}missing("Servicio de teclado BIOS no implementado");}
       case 0x1a:if(hi(0)==0){const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started_).count();const std::uint32_t ticks=ms*182/10000;cpu.set_reg16(1,ticks>>16);cpu.set_reg16(2,ticks&0xffff);low(0,0);carry(false);return true;}carry(true);return true;
       case 0x18:missing("BIOS: el invitado no encontró un sistema arrancable (INT 18h)");
-      case 0x19:missing("BIOS: el invitado solicita reiniciar el arranque (INT 19h); usa Reiniciar");
+      case 0x19:
+        if(!guest_restart_enabled_)
+          missing("BIOS: el invitado solicita reiniciar el arranque (INT 19h); usa Reiniciar");
+        guest_restart_=GuestRestart::BiosBootstrap;
+        return true;
       default:{std::ostringstream s;s<<"Interrupción 0x"<<std::hex<<unsigned(n)<<" pendiente";missing(s.str());}
     }
   }
@@ -532,14 +566,25 @@ class PcMachine {
     if(p==PcQuantumDevice::data_port||p==PcQuantumDevice::control_port)return quantum_device.output(p,width,v);
     if(width!=1)return false;
     if(p==0x64 || p==0x60) {
-      if(kbc_.output(p,width,v,cpu.a20_enabled))return true;
+      bool reset_requested=false;
+      if(kbc_.output(p,width,v,cpu.a20_enabled,guest_restart_enabled_?&reset_requested:nullptr)) {
+        if(reset_requested)guest_restart_=GuestRestart::KeyboardController;
+        return true;
+      }
       std::ostringstream s;
       s<<"Controlador 8042: OUT 0x"<<std::hex<<unsigned(p)
        <<" valor=0x"<<unsigned(v & 255u)
        <<", instruccion/comando no soportado o protocolo incompleto";
       cpu.fail(s.str(),FaultCode::UnsupportedPort);
     }
-    if(p==0x92){if(v&1)missing("Reinicio por puerto A20 pendiente");cpu.a20_enabled=(v&2)!=0;return true;}
+    if(p==0x92){
+      if(v&1) {
+        if(!guest_restart_enabled_)missing("Reinicio por puerto A20 pendiente");
+        guest_restart_=GuestRestart::A20Port;
+      }
+      cpu.a20_enabled=(v&2)!=0;
+      return true;
+    }
     if(p==0x21){pic1_=v;return true;}if(p==0xa1){pic2_=v;return true;}
     if(p==0x70){cmos_index_=v&0x7f;return true;}
     if(p==0x80)return true; // POST delay port has no guest-visible output.

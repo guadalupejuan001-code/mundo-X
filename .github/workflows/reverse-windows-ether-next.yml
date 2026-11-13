@@ -9,7 +9,11 @@ on:
       - "native/include/mundo_x/experimental/ether_transform.hpp"
       - "native/src/ether_*.cpp"
       - "pc-android/native/x86_cpu.hpp"
+      - "pc-android/native/pc_8042.hpp"
+      - "pc-android/native/pc_machine.hpp"
+      - "pc-android/native/tests/pc_8042_test.cpp"
       - "pc-android/native/tests/x86_cpu_profile_test.cpp"
+      - "pc-android/native/tests/x86_lock_rmw_test.cpp"
       - "pc-android/native/tests/x86_protected_real_transition_test.cpp"
   workflow_dispatch:
 
@@ -56,3 +60,9 @@ jobs:
           set -euo pipefail
           cmake --build build/ether-next --parallel 2 --target x86_cpu_profile_test
           ctest --test-dir build/ether-next --output-on-failure -V -R '^x86_cpu_profile$'
+      - name: Verify atomic instructions, guest reset signals and boot milestones
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/ether-next --parallel 2 --target x86_lock_rmw_test pc_8042_test
+          ctest --test-dir build/ether-next --output-on-failure -V -R '^(x86_lock_rmw|pc_8042)$'
