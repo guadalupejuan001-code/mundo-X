@@ -2069,6 +2069,13 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x98:
       put_reg(EAX, bytes, std::uint64_t(signed_value(get_reg(EAX, bytes / 2), bytes / 2))); return;
     case 0x99: put_reg(EDX, bytes, (get_reg(EAX, bytes) & sign_bit(bytes)) ? mask(bytes) : 0); return;
+    case 0x9b: { // FWAIT: deliver pending exceptions where modeled.
+      if((cr0&0x8U)&&(cr0&0x2U))
+        fail("FWAIT with TS and MP",FaultCode::DeviceNotAvailable);
+      if(fpu_status&0x0080U)
+        fail("pending x87 exception delivery not implemented",FaultCode::UnsupportedState);
+      return;
+    }
     case 0x9a: {
       const auto target = immediate(bytes); const auto cs = std::uint16_t(immediate(2));
       push(segments[CS], bytes); push(cursor_ & mask(bytes), bytes); far_transfer(cs, target, bytes); return;
@@ -2195,6 +2202,116 @@ inline void Cpu::execute(std::uint8_t op) {
       }
       jump(target, n);
       return;
+    }
+    case 0xd8: case 0xd9: case 0xdb: case 0xdc:
+    case 0xdd: case 0xde: case 0xdf: { // Foundational x87 FPU opcodes
+      require_fpu();
+      const auto encoding=fetch8();
+      const auto group=(encoding>>3)&7U;
+      if(encoding>=0xc0) {
+        const auto reg=unsigned(encoding&7U);
+        if(op==0xdb && encoding==0xe3){ // FNINIT
+          fpu_init();return;
+        }
+        if(op==0xdb && encoding==0xe2){ // FNCLEX
+          fpu_status=std::uint16_t(fpu_status&~0x80ffU);return;
+        }
+        if(op==0xd9 && encoding==0xd0)return; // FNOP
+        if(op==0xd9 && (encoding==0xe8||encoding==0xee)) {
+          // FLD1 / FLDZ (exact 80-bit architectural constants).
+          Extended80 value{};
+          if(encoding==0xe8) {
+            value[7]=0x80;value[8]=0xff;value[9]=0x3f;
+          }
+          fpu_push(value);fpu_ip=start_ip_;fpu_cs=start_cs_;return;
+        }
+        if(op==0xd9 && (encoding&0xf8U)==0xc0) {
+          fpu_push(fpu_peek(reg));fpu_ip=start_ip_;return; // FLD ST(i)
+        }
+        if(op==0xd9 && (encoding&0xf8U)==0xc8) { // FXCH ST(i)
+          const auto first=fpu_slot(0),other=fpu_slot(reg);
+          if(fpu_tag(first)==3U||fpu_tag(other)==3U)
+            fail("FXCH empty register handling pending",FaultCode::UnsupportedState);
+          std::swap(x87[first],x87[other]);
+          const auto first_tag=fpu_tag(first),other_tag=fpu_tag(other);
+          fpu_tag_set(first,other_tag);fpu_tag_set(other,first_tag);
+          return;
+        }
+        if(op==0xdd && (encoding&0xf8U)==0xd8) { // FSTP ST(i)
+          const auto value=fpu_peek();
+          const auto slot=fpu_slot(reg);
+          if(reg==0){fpu_pop();return;}
+          x87[slot]=value;fpu_tag_set(slot,classify_ext(value));fpu_pop();
+          return;
+        }
+        if(op==0xdf && encoding==0xe0) { // FNSTSW AX
+          set_reg16(EAX,fpu_status);return;
+        }
+        if(op==0xd8 && (encoding&0xf8U)==0xc0) { // FADD ST0,ST(i)
+          if((fpu_control&0x0c00U)!=0)
+            fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
+          const auto a=extended_to_long_double(fpu_peek());
+          const auto b=extended_to_long_double(fpu_peek(reg));
+          const auto result=extended_from_long_double(a+b);
+          const auto slot=fpu_slot(0);
+          x87[slot]=result;fpu_tag_set(slot,classify_ext(result));
+          fpu_ip=start_ip_;return;
+        }
+        fail("x87 register opcode pending for full FPU",FaultCode::UnsupportedOpcode);
+      }
+      // Decoding a legacy memory ModRM after consuming its byte: rewind so
+      // the canonical ModRM parser handles displacement/SIB and segment.
+      --cursor_;decoded_.pop_back();
+      const auto m=modrm();
+      require_memory(m.rm);
+      const auto data_width=(op==0xd9||op==0xd8)?4U:
+                            (op==0xdd||op==0xdc)?8U:2U;
+      if((op==0xd9||op==0xdd)&&group==0) { // FLD m32real/m64real
+        const auto raw=get(m.rm,data_width);
+        long double number=0;
+        if(data_width==4){
+          const auto bits=std::uint32_t(raw);
+          float value=0;std::memcpy(&value,&bits,sizeof(value));
+          number=static_cast<long double>(value);
+        }else{
+          const auto bits=raw;
+          double value=0;std::memcpy(&value,&bits,sizeof(value));
+          number=static_cast<long double>(value);
+        }
+        fpu_push(extended_from_long_double(number));
+        fpu_ip=start_ip_;fpu_cs=start_cs_;
+        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
+        return;
+      }
+      if((op==0xd9||op==0xdd)&&group==3) { // FSTP m32real/m64real
+        if((fpu_control&0x0c00U)!=0)
+          fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
+        const auto number=extended_to_long_double(fpu_peek());
+        if(data_width==4){
+          const auto converted=static_cast<float>(number);
+          std::uint32_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
+          put(m.rm,4,bits);
+        }else{
+          const auto converted=static_cast<double>(number);
+          std::uint64_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
+          put(m.rm,8,bits);
+        }
+        fpu_pop();
+        fpu_ip=start_ip_;fpu_cs=start_cs_;
+        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
+        return;
+      }
+      if(op==0xd9&&group==5) { // FLDCW m16
+        fpu_control=std::uint16_t(get(m.rm,2));
+        return;
+      }
+      if(op==0xd9&&group==7) { // FNSTCW m16
+        put(m.rm,2,fpu_control);return;
+      }
+      if(op==0xdd&&group==7) { // FNSTSW m16
+        put(m.rm,2,fpu_status);return;
+      }
+      fail("x87 memory opcode pending for full FPU",FaultCode::UnsupportedOpcode);
     }
     case 0xd7: {
       const auto address = (index(EBX) + reg8(EAX)) & mask(address_width());
