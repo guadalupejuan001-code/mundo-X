@@ -814,10 +814,26 @@ class Cpu {
     }
     return sign?-result:result;
   }
+  static Extended80 x87_indefinite() {
+    Extended80 value{};
+    value[7]=0xc0;value[8]=0xff;value[9]=0xff;
+    return value; // sign=1, exponent=all ones, QNaN integer/quiet bits
+  }
+  void fpu_stack_fault(bool overflow) {
+    // Native x87 preserves a deferred IE+SF fault when unmasked. C1 reflects
+    // overflow (1) versus underflow (0). The TOP remains unchanged until
+    // a masked stack operation commits; #MF may later be raised by FWAIT.
+    fpu_status=std::uint16_t((fpu_status&~0x0200U)|0x0041U|
+                              (overflow?0x0200U:0U));
+    if(!(fpu_control&1U))fpu_status|=0x8080U; // ES+B
+  }
   void fpu_push(Extended80 value) {
     const auto top=(fpu_top()+7U)&7U;
-    if(fpu_tag(top)!=3U)
-      fail("x87 stack overflow exception handling not implemented",FaultCode::UnsupportedState);
+    if(fpu_tag(top)!=3U) {
+      fpu_stack_fault(true);
+      if(!(fpu_control&1U))return; // unmasked: no TOP/data update
+      value=x87_indefinite(); // masked: push Intel indefinite 80-bit
+    } else fpu_status=std::uint16_t(fpu_status&~0x0200U);
     x87[top]=value;
     fpu_tag_set(top,classify_ext(value));
     fpu_status=std::uint16_t((fpu_status&~0x3800U)|(top<<11));
@@ -830,8 +846,11 @@ class Cpu {
   }
   void fpu_pop() {
     const auto top=fpu_top();
-    if(fpu_tag(top)==3U)
-      fail("x87 pop of empty register",FaultCode::UnsupportedState);
+    if(fpu_tag(top)==3U) {
+      fpu_stack_fault(false);
+      if(!(fpu_control&1U))return;
+      // Underflow masked: pop empty register, preserve all other tags.
+    }else fpu_status=std::uint16_t(fpu_status&~0x0200U);
     fpu_tag_set(top,3);
     fpu_status=std::uint16_t((fpu_status&~0x3800U)|(((top+1U)&7U)<<11));
   }
@@ -2721,9 +2740,9 @@ inline void Cpu::execute(std::uint8_t op) {
           return;
         }
         if(op==0xdd && (encoding&0xf8U)==0xd8) { // FSTP ST(i)
+          if(reg==0){fpu_pop();return;} // handles empty TOP stack fault
           const auto value=fpu_peek();
           const auto slot=fpu_slot(reg);
-          if(reg==0){fpu_pop();return;}
           x87[slot]=value;fpu_tag_set(slot,classify_ext(value));fpu_pop();
           return;
         }
