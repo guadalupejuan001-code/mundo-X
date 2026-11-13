@@ -12,6 +12,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
+#include <cstring>
 #include <functional>
 #include <iomanip>
 #include <limits>
@@ -86,6 +88,13 @@ class Cpu {
   std::array<std::array<std::uint8_t,16>,16> xmm{};
   std::uint32_t mxcsr=0x1f80;
   static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
+  // Eight physical 80-bit x87 registers. Full x87 tags are stored in
+  // physical order (R0..R7); status[13:11] records TOP. No host stack.
+  using Extended80 = std::array<std::uint8_t,10>;
+  std::array<Extended80,8> x87{};
+  std::uint16_t fpu_control=0x037f, fpu_status=0, fpu_tags=0xffff;
+  std::uint16_t fpu_opcode=0, fpu_cs=0, fpu_ds=0;
+  std::uint64_t fpu_ip=0, fpu_dp=0;
   DescriptorTable gdtr{0, 0}, idtr{0x3ff, 0};
   SystemRegister ldtr{}, tr{};
   MemoryFabric memory;
@@ -146,6 +155,8 @@ class Cpu {
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
   void reset(std::uint16_t cs = 0, std::uint64_t ip = 0x7c00) {
     regs.fill(0); xmm={}; mxcsr=0x1f80;
+    x87={};fpu_control=0x037f;fpu_status=0;fpu_tags=0xffff;
+    fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
     segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
@@ -230,7 +241,8 @@ class Cpu {
     if (halted) return StepResult::Halted;
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
                           cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
-                          xmm,mxcsr};
+                          xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -355,7 +367,8 @@ class Cpu {
     if (!flag(IF) || fault) return false;
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
                           cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
-                          xmm,mxcsr};
+                          xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -412,6 +425,9 @@ class Cpu {
     bool a20, halted;
     std::array<std::array<std::uint8_t,16>,16> xmm;
     std::uint32_t mxcsr;
+    std::array<Extended80,8> x87;
+    std::uint16_t fpu_control,fpu_status,fpu_tags,fpu_opcode,fpu_cs,fpu_ds;
+    std::uint64_t fpu_ip,fpu_dp;
   };
   struct Operand {
     bool is_register = false;
@@ -455,7 +471,10 @@ class Cpu {
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
     gdtr = s.gdtr; idtr = s.idtr;
     ldtr = s.ldtr; tr = s.tr;
-    xmm=s.xmm;mxcsr=s.mxcsr;
+    xmm=s.xmm;mxcsr=s.mxcsr;x87=s.x87;
+    fpu_control=s.fpu_control;fpu_status=s.fpu_status;fpu_tags=s.fpu_tags;
+    fpu_opcode=s.fpu_opcode;fpu_cs=s.fpu_cs;fpu_ds=s.fpu_ds;
+    fpu_ip=s.fpu_ip;fpu_dp=s.fpu_dp;
     a20_enabled = s.a20; halted = s.halted;
   }
   static void check_register(unsigned r) {
