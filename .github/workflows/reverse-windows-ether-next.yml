@@ -13,6 +13,9 @@ on:
       - "pc-android/native/pc_machine.hpp"
       - "pc-android/native/tests/pc_8042_test.cpp"
       - "pc-android/native/tests/x86_cpu_profile_test.cpp"
+      - "pc-android/native/tests/x86_sse2_packed_oracle_test.cpp"
+      - "pc-android/native/tests/x86_c09r1_stage5_cvt_fxsr_test.cpp"
+      - "pc-android/native/tests/x86_sse_fp32_test.cpp"
       - "pc-android/native/tests/x86_lock_rmw_test.cpp"
       - "pc-android/native/tests/x86_protected_real_transition_test.cpp"
   workflow_dispatch:
@@ -66,3 +69,9 @@ jobs:
           set -euo pipefail
           cmake --build build/ether-next --parallel 2 --target x86_lock_rmw_test pc_8042_test
           ctest --test-dir build/ether-next --output-on-failure -V -R '^(x86_lock_rmw|pc_8042)$'
+      - name: Verify packed integers, SSE arithmetic, conversions and FXSR controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/ether-next --parallel 2 --target x86_sse2_packed_oracle_test x86_c09r1_stage5_cvt_fxsr_test x86_sse_fp32_test
+          ctest --test-dir build/ether-next --output-on-failure -V -R '^(x86_sse2_packed_oracle|x86_c09r1_stage5_cvt_fxsr|x86_sse_fp32)$'
