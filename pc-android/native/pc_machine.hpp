@@ -54,7 +54,7 @@ class PcMachine {
   static constexpr std::uint64_t kEtherMemoryLogicalByteBase = 1000000000000ULL;
   static constexpr std::uint64_t kMaxPhysicalBytes = 1ULL << 32;
   static constexpr std::uint64_t kIoApicAddress = 0xfec00000ULL;
-  static constexpr std::uint64_t kLocalApicAddress = 0xfee00000ULL;
+  static constexpr std::uint64_t kLocalApicAddress = Cpu::kLocalApicAddress;
   static constexpr std::uint64_t max_ram_mib() noexcept {
     return std::min<std::uint64_t>(kMaxPhysicalBytes, std::numeric_limits<std::size_t>::max()) >> 20;
   }

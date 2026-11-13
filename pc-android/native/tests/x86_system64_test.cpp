@@ -13,6 +13,7 @@ using cosmic_pc::FaultCode;
 using cosmic_pc::StepResult;
 
 constexpr std::uint32_t kEfer = 0xc0000080U;
+constexpr std::uint32_t kApicBase = 0x1bU;
 constexpr std::uint32_t kStar = 0xc0000081U;
 constexpr std::uint32_t kLstar = 0xc0000082U;
 constexpr std::uint32_t kCstar = 0xc0000083U;
@@ -210,6 +211,57 @@ void privilege_canonical_reset() {
   program(cpu, {0x0f, 0x05});
   fault(cpu, FaultCode::InvalidInstruction, "disabled SYSCALL must raise #UD");
 }
+
+void apic_msr() {
+  Cpu cpu(4U << 20);
+  boot(cpu);
+  constexpr std::uint64_t base = Cpu::kLocalApicAddress;
+  constexpr std::uint64_t bsp = 1U << 8, enabled = 1U << 11;
+  check(read_msr(cpu, kApicBase) == (base | bsp | enabled) && cpu.apic_global_enabled(),
+        "the bootstrap CPU must reset with its local APIC at the board's MMIO base and enabled");
+  write_msr(cpu, kApicBase, base);
+  check(read_msr(cpu, kApicBase) == base && !cpu.apic_global_enabled(),
+        "WRMSR must clear the writable BSP and global-enable bits");
+  write_msr(cpu, kApicBase, base | enabled);
+  check(read_msr(cpu, kApicBase) == (base | enabled) && cpu.apic_global_enabled(),
+        "WRMSR must re-enable xAPIC without rewriting the BSP bit");
+  for (const auto invalid : {base | enabled | (1U << 10), base | 1, base | (std::uint64_t{1} << 32)}) {
+    program(cpu, {0x0f, 0x30});
+    cpu.regs[Cpu::ECX] = kApicBase;
+    cpu.regs[Cpu::EDX] = invalid >> 32;
+    cpu.regs[Cpu::EAX] = std::uint32_t(invalid);
+    fault(cpu, FaultCode::ProtectionFault, "the guest MSR must reject x2APIC and reserved bits");
+    check(read_msr(cpu, kApicBase) == (base | enabled), "rejected WRMSR changed APIC state");
+  }
+  program(cpu, {0x0f, 0x30});
+  cpu.regs[Cpu::ECX] = kApicBase;
+  cpu.regs[Cpu::EAX] = 0xfee01800U;
+  cpu.regs[Cpu::EDX] = 0;
+  fault(cpu, FaultCode::UnsupportedState, "the virtual board does not relocate its APIC MMIO page");
+  check(read_msr(cpu, kApicBase) == (base | enabled), "rejected APIC relocation changed the base");
+
+  // A warm CPU reset restores the default even after software disables xAPIC.
+  write_msr(cpu, kApicBase, base);
+  configure(cpu);
+  check(read_msr(cpu, kApicBase) == (base | bsp | enabled),
+        "CPU reset did not restore xAPIC enable and bootstrap status");
+  program(cpu, {0x48, 0x0f, 0x07});
+  cpu.regs[Cpu::ECX] = kUser;
+  cpu.regs[Cpu::R11] = 2;
+  step(cpu);
+  program(cpu, {0x0f, 0x32}, kUser);
+  cpu.regs[Cpu::ECX] = kApicBase;
+  fault(cpu, FaultCode::ProtectionFault, "APIC_BASE RDMSR requires CPL0");
+  program(cpu, {0x0f, 0x30}, kUser);
+  cpu.regs[Cpu::ECX] = kApicBase;
+  fault(cpu, FaultCode::ProtectionFault, "APIC_BASE WRMSR requires CPL0");
+
+  boot(cpu);
+  program(cpu, {0x0f, 0xa2});
+  cpu.regs[Cpu::EAX] = 1;
+  step(cpu);
+  check(!(cpu.regs[Cpu::EDX] & (1U << 9)), "CPUID must leave full APIC capability unadvertised");
+}
 } // namespace
 
 int main() {
@@ -217,8 +269,9 @@ int main() {
     call_and_return();
     compatibility_and_invalid_modes();
     privilege_canonical_reset();
+    apic_msr();
     std::cout << "X86_SYSTEM64_PASS checks=" << checks
-              << " syscall=1 sysret64=1 sysret32=1 swapgs=1 msr_roundtrip=1\n";
+              << " syscall=1 sysret64=1 sysret32=1 swapgs=1 msr_roundtrip=1 apic_base=1\n";
   } catch (const std::exception& error) {
     std::cerr << "X86_SYSTEM64_FAIL " << error.what() << '\n';
     return 1;

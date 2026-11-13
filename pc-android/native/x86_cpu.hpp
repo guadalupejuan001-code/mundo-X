@@ -71,6 +71,7 @@ enum class StepResult { Executed, Halted, Faulted, WaitingForX87 };
 
 class Cpu {
  public:
+  static constexpr std::uint64_t kLocalApicAddress = 0xfee00000ULL;
   enum Register : unsigned { EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI, R8, R9, R10, R11, R12, R13, R14, R15 };
   enum Segment : unsigned { ES, CS, SS, DS, FS, GS };
   static constexpr std::uint32_t CF = 0x0001, PF = 0x0004, AF = 0x0010,
@@ -205,6 +206,7 @@ class Cpu {
     system_call_msrs_ = {};
     tsc_offset_ = 0;
     apic_task_priority_ = 0;
+    apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     cache_[CS].selector = cs; cache_[CS].base = std::uint64_t(cs) << 4;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
@@ -225,6 +227,7 @@ class Cpu {
   // CR8 and local APIC MMIO share this architectural task-priority byte.
   std::uint8_t apic_task_priority() const noexcept { return apic_task_priority_; }
   void set_apic_task_priority(std::uint8_t value) noexcept { apic_task_priority_ = value; }
+  bool apic_global_enabled() const noexcept { return (apic_base_ & kApicEnable) != 0; }
   const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
   unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
   bool rep_batch_candidate() const noexcept {
@@ -329,7 +332,7 @@ class Cpu {
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
                           cr2, cr3, efer, fs_base, gs_base, system_call_msrs_, gdtr, idtr, ldtr, tr, a20_enabled, halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_task_priority_};
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_base_,apic_task_priority_};
     const bool was_shadowed=interrupt_shadow_;
     interrupt_shadow_=false;
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
@@ -496,7 +499,7 @@ class Cpu {
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
                           cr2,cr3,efer,fs_base,gs_base,system_call_msrs_,gdtr,idtr,ldtr,tr,a20_enabled,halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_task_priority_};
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_base_,apic_task_priority_};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -558,7 +561,7 @@ class Cpu {
     std::array<Extended80,8> x87;
     std::uint16_t fpu_control,fpu_status,fpu_tags,fpu_opcode,fpu_cs,fpu_ds;
     std::uint64_t fpu_ip,fpu_dp;
-    std::uint64_t tsc_offset;
+    std::uint64_t tsc_offset, apic_base;
     std::uint8_t apic_task_priority;
   };
   struct Operand {
@@ -576,6 +579,8 @@ class Cpu {
   bool operand_override_ = false, address_override_ = false, lock_prefix_ = false;
   std::uint8_t rex_ = 0;
   std::uint8_t apic_task_priority_ = 0;
+  static constexpr std::uint64_t kApicBsp = 1U << 8, kApicEnable = 1U << 11;
+  std::uint64_t apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
   std::array<SegmentCache, 6> cache_{};
   SystemCallMsrs system_call_msrs_;
   int override_ = -1;
@@ -623,6 +628,7 @@ class Cpu {
     fpu_opcode=s.fpu_opcode;fpu_cs=s.fpu_cs;fpu_ds=s.fpu_ds;
     fpu_ip=s.fpu_ip;fpu_dp=s.fpu_dp;
     tsc_offset_ = s.tsc_offset;
+    apic_base_ = s.apic_base;
     apic_task_priority_ = s.apic_task_priority;
     a20_enabled = s.a20; halted = s.halted;
   }
@@ -2690,6 +2696,7 @@ inline void Cpu::write_cr4(std::uint64_t value) {
 
 inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
   if (number == kTscMsr) return timestamp_counter();
+  if (number == 0x1bU) return apic_base_;
   if (number == 0xc0000080U) return efer;
   if (number == 0xc0000081U) return system_call_msrs_.star;
   if (number == 0xc0000082U) return system_call_msrs_.lstar;
@@ -2706,6 +2713,16 @@ inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
 inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
   if (number == kTscMsr) {
     tsc_offset_ = value - instructions * kTscTicksPerStep;
+    return;
+  }
+  if (number == 0x1bU) {
+    constexpr std::uint64_t address_mask = 0xfffff000ULL; // CPUID.MAXPHYADDR = 32.
+    if (value & ~(address_mask | kApicBsp | kApicEnable))
+      fail("IA32_APIC_BASE reserved bits or unsupported x2APIC mode", FaultCode::ProtectionFault);
+    // The virtual board reserves exactly this local APIC MMIO page.
+    if ((value & address_mask) != kLocalApicAddress)
+      fail("the virtual local APIC cannot be relocated", FaultCode::UnsupportedState);
+    apic_base_ = value;
     return;
   }
   if (number == 0xc0000080U) {
