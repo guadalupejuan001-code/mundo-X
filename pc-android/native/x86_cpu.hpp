@@ -10,6 +10,8 @@
 // instructions counts these bounded execution steps, not hardware retired ops.
 
 #include <array>
+#include <algorithm>
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -28,7 +30,7 @@ namespace cosmic_pc {
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget
+  PageFault, MemoryBudget, DeviceNotAvailable
 };
 
 struct Fault {
@@ -78,6 +80,16 @@ class Cpu {
     std::uint8_t dpl = 0;
   };
 
+  // CPU-owned architectural x87 and XMM state. These are exact guest bits,
+  // not host floating-point SIMD registers or a second execution engine.
+  struct ExtendedState {
+    std::array<std::array<std::uint8_t,16>,16> xmm{};
+    std::array<std::array<std::uint8_t,10>,8> st{};
+    std::uint32_t mxcsr=0x1f80;
+    std::uint16_t fcw=0x037f,fsw=0,fop=0;
+    std::uint8_t ftw=0; // abridged FTW: physical register nonempty mask
+  };
+  ExtendedState fx{};
   std::array<std::uint64_t, 16> regs{};
   std::array<std::uint16_t, 6> segments{};
   std::uint64_t eip = 0x7c00, cr2 = 0, cr3 = 0, efer = 0, fs_base = 0, gs_base = 0;
@@ -142,6 +154,7 @@ class Cpu {
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
   void reset(std::uint16_t cs = 0, std::uint64_t ip = 0x7c00) {
     regs.fill(0); segments.fill(0); segments[CS] = cs;
+    fx=ExtendedState{};
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
@@ -224,7 +237,7 @@ class Cpu {
     if (fault) return StepResult::Faulted;
     if (halted) return StepResult::Halted;
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
-                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted};
+                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted, fx};
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -348,7 +361,7 @@ class Cpu {
   bool raise_external_irq(std::uint8_t vector) {
     if (!flag(IF) || fault) return false;
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
-                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted};
+                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,fx};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -403,6 +416,7 @@ class Cpu {
     DescriptorTable gdtr, idtr;
     SystemRegister ldtr, tr;
     bool a20, halted;
+    ExtendedState fx;
   };
   struct Operand {
     bool is_register = false;
@@ -413,6 +427,374 @@ class Cpu {
     bool rip_relative = false;
   };
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
+
+  // Internal architectural state helpers. No host SSE, no Qiskit, no second
+  // CPU/FPU. 80-bit values are preserved as EXACT 10-byte guest encodings.
+  static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
+  void require_x87() const {
+    if(cr0 & 0x4U) fail("CR0.EM requests x87 emulation",FaultCode::DeviceNotAvailable);
+    if(cr0 & 0x8U) fail("CR0.TS blocks x87 instructions",FaultCode::DeviceNotAvailable);
+  }
+  void require_xmm() const {
+    if(!(cr4 & 0x200U) || (cr0 & 0x4U))
+      fail("SSE register operations require CR4.OSFXSR and CR0.EM=0",
+           FaultCode::InvalidInstruction);
+    if(cr0 & 0x8U)
+      fail("CR0.TS prevents SIMD state use",FaultCode::DeviceNotAvailable);
+  }
+  unsigned fp_top() const {return (fx.fsw>>11)&7U;}
+  void fp_top_set(unsigned top) {
+    fx.fsw=std::uint16_t((fx.fsw&~0x3800U)|((top&7U)<<11));
+  }
+  void fp_push(std::array<std::uint8_t,10> value) {
+    const auto next=(fp_top()+7U)&7U;
+    if(fx.ftw & (1U<<next))
+      fail("x87 stack overflow requires unmodeled exception status",
+           FaultCode::UnsupportedState);
+    fx.st[next]=value;
+    fx.ftw|=std::uint8_t(1U<<next);
+    fp_top_set(next);
+  }
+  std::array<std::uint8_t,10> fp_pop() {
+    const auto top=fp_top();
+    if(!(fx.ftw&(1U<<top)))
+      fail("x87 stack underflow requires unmodeled exception status",
+           FaultCode::UnsupportedState);
+    const auto data=fx.st[top];
+    fx.ftw&=std::uint8_t(~(1U<<top));
+    fp_top_set((top+1U)&7U);
+    return data;
+  }
+  static std::array<std::uint8_t,10> fp_one() {
+    std::array<std::uint8_t,10> b{};
+    b[7]=0x80;b[8]=0xff;b[9]=0x3f;
+    return b;
+  }
+  bool execute_x87(std::uint8_t opcode) {
+    if(opcode<0xd8||opcode>0xdf)return false;
+    require_x87();
+    const auto modrm_byte=fetch8();
+    if(opcode==0xdb && modrm_byte==0xe3) { // FNINIT, no WAIT prefix
+      fx.fcw=0x037f;fx.fsw=0;fx.ftw=0;fx.fop=0;
+      fx.st={};return true;
+    }
+    if(opcode==0xdb && modrm_byte==0xe2) { // FNCLEX
+      fx.fsw&=std::uint16_t(~0x80ffU);return true;
+    }
+    if(opcode==0xdf && modrm_byte==0xe0) { // FNSTSW AX
+      set_reg16(EAX,fx.fsw);return true;
+    }
+    if(opcode==0xd9 && modrm_byte==0xe8) {fp_push(fp_one());return true;}
+    if(opcode==0xd9 && modrm_byte==0xee) {fp_push({});return true;}
+    if(opcode==0xd9 && modrm_byte==0xe0) { // FCHS ST(0)
+      const auto top=fp_top();
+      if(!(fx.ftw&(1U<<top)))fail("FCHS empty ST0",FaultCode::UnsupportedState);
+      fx.st[top][9]^=0x80;return true;
+    }
+    if(opcode==0xd9 && modrm_byte==0xe1) { // FABS ST(0)
+      const auto top=fp_top();
+      if(!(fx.ftw&(1U<<top)))fail("FABS empty ST0",FaultCode::UnsupportedState);
+      fx.st[top][9]&=0x7f;return true;
+    }
+    // Raw FLD ST(i) / FXCH ST(i) preserve ALL 80 bits.
+    if(opcode==0xd9 && (modrm_byte&0xf8)==0xc0) {
+      const auto at=(fp_top()+(modrm_byte&7U))&7U;
+      if(!(fx.ftw&(1U<<at)))fail("FLD empty ST(i)",FaultCode::UnsupportedState);
+      fp_push(fx.st[at]);return true;
+    }
+    if(opcode==0xd9 && (modrm_byte&0xf8)==0xc8) {
+      const auto at=(fp_top()+(modrm_byte&7U))&7U;
+      if(!(fx.ftw&(1U<<at))||!(fx.ftw&(1U<<fp_top())))
+        fail("FXCH empty FPU slot",FaultCode::UnsupportedState);
+      std::swap(fx.st[at],fx.st[fp_top()]);return true;
+    }
+    // Only forms with explicit, implemented architectural semantics are
+    // decoded; arithmetic is not approximated by host double/long double.
+    const auto group=(modrm_byte>>3)&7U;
+    const auto mode=modrm_byte>>6;
+    if(mode==3)fail("x87 opcode form not implemented",FaultCode::UnsupportedOpcode);
+    // We have already fetched the ModRM byte: decode displacement now, using
+    // the same canonical ModRM decoder by re-reading the byte from guest code.
+    --cursor_;decoded_.pop_back();
+    const auto m=modrm();
+    if(opcode==0xd9 && (group==5||group==7)) { // FLDCW / FNSTCW
+      const auto addr=segment_linear(m.rm.segment,operand_offset(m.rm),2,
+                                  group==5?Access::Read:Access::Write);
+      if(group==5) fx.fcw=std::uint16_t(read_linear(addr,2));
+      else write_linear(addr,2,fx.fcw);
+      return true;
+    }
+    if(opcode==0xdb && (group==5||group==7)) { // FLD/FSTP m80
+      const auto addr=segment_linear(m.rm.segment,operand_offset(m.rm),10,
+                                  group==5?Access::Read:Access::Write);
+      if(group==5) {
+        std::array<std::uint8_t,10> image{};
+        for(unsigned i=0;i<10;++i)image[i]=std::uint8_t(read_linear(addr+i,1));
+        fp_push(image);
+      } else {
+        if(!(fx.ftw&(1U<<fp_top())))
+          fail("FSTP empty ST0",FaultCode::UnsupportedState);
+        const auto value=fx.st[fp_top()];
+        for(unsigned i=0;i<10;++i)write_linear(addr+i,1,value[i]);
+        (void)fp_pop();
+      }
+      return true;
+    }
+    fail("x87 arithmetic or opcode is not yet implemented",FaultCode::UnsupportedOpcode);
+  }
+  bool execute_fxstate(std::uint8_t opcode) {
+    if(opcode!=0xae)return false;
+    const auto m=modrm();
+    require_memory(m.rm);
+    if(m.group>3)fail("0F AE group opcode not implemented",FaultCode::UnsupportedOpcode);
+    require_x87(); // FXSAVE/FXRSTOR are blocked by TS and EM.
+    const auto n=m.group<=1?512U:4U;
+    const auto addr=segment_linear(m.rm.segment,operand_offset(m.rm),
+                  n,m.group==0||m.group==3?Access::Write:Access::Read);
+    if(m.group<=1 && (addr&15U))
+      fail("FXSAVE/FXRSTOR require 16-byte alignment",FaultCode::ProtectionFault);
+    if(m.group>=2 && !(cr4&0x200U))
+      fail("LDMXCSR/STMXCSR require CR4.OSFXSR",FaultCode::InvalidInstruction);
+    // Reject device MMIO for extended state operations. The CPU journal
+    // reverses RAM writes, but cannot reverse device side effects.
+    // One translation per guest 4-KiB page, NOT one page walk per byte.
+    // This preserves exact physical bytes without materializing device RAM.
+    for(unsigned position=0;position<n;) {
+      const auto physical=translate(addr+position,
+                      m.group==0||m.group==3?Access::Write:Access::Read);
+      const unsigned chunk=std::min<unsigned>(n-position,
+                           4096U-unsigned((addr+position)&4095U));
+      for(unsigned j=0;j<chunk;++j) {
+        if(mmio_at(physical+j))fail("FXSTATE on MMIO unsupported",
+                                     FaultCode::UnsupportedState);
+        (void)physical_index(physical+j);
+      }
+      position+=chunk;
+    }
+    if(m.group==2) { // LDMXCSR m32: GP on reserved bits, no mutation
+      const auto incoming=std::uint32_t(read_linear(addr,4));
+      if(incoming & ~kMxcsrMask)
+        fail("LDMXCSR reserved bits",FaultCode::ProtectionFault);
+      fx.mxcsr=incoming;return true;
+    }
+    if(m.group==3) {write_linear(addr,4,fx.mxcsr);return true;}
+    if(m.group==0) {
+      // FXSAVE m512: preserve architecturally reserved/software bytes,
+      // only update defined fields. Does not store MMX (not advertised).
+      std::array<std::uint8_t,512> data{};
+      for(unsigned i=0;i<512;i+=8) {
+        const auto word=read_linear(addr+i,8);
+        for(unsigned j=0;j<8;++j)data[i+j]=std::uint8_t(word>>(8*j));
+      }
+      const auto store16=[&](unsigned off,std::uint16_t v) {
+        data[off]=std::uint8_t(v);data[off+1]=std::uint8_t(v>>8);
+      };
+      const auto store32=[&](unsigned off,std::uint32_t v) {
+        for(unsigned i=0;i<4;++i)data[off+i]=std::uint8_t(v>>(i*8));
+      };
+      store16(0,fx.fcw);store16(2,fx.fsw);
+      data[4]=fx.ftw;
+      store16(6,fx.fop);
+      for(unsigned i=0;i<8;++i)
+        std::copy(fx.st[i].begin(),fx.st[i].end(),data.begin()+32+i*16);
+      if(cr4&0x200U) {
+        store32(24,fx.mxcsr);store32(28,kMxcsrMask);
+        for(unsigned i=0;i<(is_long_mode()?16U:8U);++i)
+          std::copy(fx.xmm[i].begin(),fx.xmm[i].end(),data.begin()+160+i*16);
+      }
+      for(unsigned i=0;i<512;i+=8) {
+        std::uint64_t word=0;
+        for(unsigned j=0;j<8;++j)word|=std::uint64_t(data[i+j])<<(8*j);
+        write_linear(addr+i,8,word);
+      }
+      return true;
+    }
+    // FXRSTOR: read & validate a complete 512-byte state before commit.
+    std::array<std::uint8_t,512> bytes{};
+    for(unsigned i=0;i<512;i+=8) {
+      const auto word=read_linear(addr+i,8);
+      for(unsigned j=0;j<8;++j)bytes[i+j]=std::uint8_t(word>>(8*j));
+    }
+    ExtendedState restored=fx;
+    restored.fcw=std::uint16_t(bytes[0]|(unsigned(bytes[1])<<8));
+    restored.fsw=std::uint16_t(bytes[2]|(unsigned(bytes[3])<<8));
+    restored.ftw=bytes[4];restored.fop=std::uint16_t(bytes[6]|(unsigned(bytes[7])<<8));
+    for(unsigned i=0;i<8;++i)
+      std::copy_n(bytes.data()+32+i*16,10,restored.st[i].data());
+    if(cr4&0x200U) {
+      const auto mxcsr=std::uint32_t(bytes[24])|(std::uint32_t(bytes[25])<<8)|
+                       (std::uint32_t(bytes[26])<<16)|(std::uint32_t(bytes[27])<<24);
+      if(mxcsr & ~kMxcsrMask)
+        fail("FXRSTOR MXCSR reserved bits",FaultCode::ProtectionFault);
+      restored.mxcsr=mxcsr;
+      for(unsigned i=0;i<(is_long_mode()?16U:8U);++i)
+        std::copy_n(bytes.data()+160+i*16,16,restored.xmm[i].data());
+    }
+    fx=std::move(restored);
+    return true;
+  }
+
+  using Xmm=std::array<std::uint8_t,16>;
+  static std::uint64_t lane(const Xmm& x,unsigned offset,unsigned width) {
+    std::uint64_t result=0;
+    for(unsigned i=0;i<width;++i)
+      result|=std::uint64_t(x.at(offset+i))<<(i*8);
+    return result;
+  }
+  static void set_lane(Xmm& x,unsigned offset,unsigned width,std::uint64_t v) {
+    for(unsigned i=0;i<width;++i)
+      x.at(offset+i)=std::uint8_t(v>>(i*8));
+  }
+  Xmm read_xmm_operand(const Operand& o,bool aligned,unsigned bytes=16) {
+    Xmm result{};
+    if(o.is_register) {
+      result=fx.xmm.at(o.index);
+      return result;
+    }
+    const auto address=segment_linear(o.segment,operand_offset(o),bytes,Access::Read);
+    if(aligned && (address&15U))
+      fail("aligned 128-bit SIMD memory operand required",
+           FaultCode::ProtectionFault);
+    for(unsigned position=0;position<bytes;) {
+      const unsigned count=std::min(8U,bytes-position);
+      const auto word=read_linear(address+position,count);
+      for(unsigned i=0;i<count;++i)
+        result[position+i]=std::uint8_t(word>>(8*i));
+      position+=count;
+    }
+    return result;
+  }
+  void write_xmm_operand(const Operand& o,const Xmm& value,
+                         bool aligned,unsigned bytes=16) {
+    if(o.is_register) {
+      if(bytes==16)fx.xmm.at(o.index)=value;
+      else std::copy_n(value.begin(),bytes,fx.xmm.at(o.index).begin());
+      return;
+    }
+    const auto address=segment_linear(o.segment,operand_offset(o),bytes,Access::Write);
+    if(aligned && (address&15U))
+      fail("aligned 128-bit SIMD memory operand required",
+           FaultCode::ProtectionFault);
+    // Prevalidate all memory bytes before writing. The CPU journal will
+    // restore memory and SIMD state if any subsequent page walk fails.
+    for(unsigned position=0;position<bytes;) {
+      const auto p=translate(address+position,Access::Write);
+      const unsigned count=std::min<unsigned>(bytes-position,
+                                    4096U-unsigned((address+position)&4095U));
+      for(unsigned i=0;i<count;++i){
+        if(mmio_at(p+i))
+          fail("128-bit SIMD writes to device MMIO are unsupported",
+               FaultCode::UnsupportedState);
+        (void)physical_index(p+i);
+      }
+      position+=count;
+    }
+    for(unsigned position=0;position<bytes;){
+      const unsigned count=std::min(8U,bytes-position);
+      std::uint64_t word=0;
+      for(unsigned i=0;i<count;++i)
+        word|=std::uint64_t(value[position+i])<<(8*i);
+      write_linear(address+position,count,word);
+      position+=count;
+    }
+  }
+  bool execute_sse_subset(unsigned op) {
+    const bool p66=operand_override_ && !repeat_;
+    const bool pf3=repeat_==0xf3 && !operand_override_;
+    const bool pf2=repeat_==0xf2 && !operand_override_;
+    const bool aligned=p66&&(op==0x6f||op==0x7f||op==0x28||op==0x29);
+    const bool mov128=((p66||pf3)&&(op==0x6f||op==0x7f))||
+                       (p66&&(op==0x10||op==0x11||op==0x28||op==0x29));
+    const bool mov_scalar=(pf2||pf3)&&(op==0x10||op==0x11);
+    const bool mov_gpr=p66&&(op==0x6e||op==0x7e);
+    const bool packed=p66&&
+      (op==0xef||op==0xdb||op==0xeb||op==0xdf||op==0xd4||
+       op==0xfc||op==0xfd||op==0xfe||op==0xf8||op==0xf9||
+       op==0xfa||op==0xfb||op==0x74||op==0x75||op==0x76||
+       op==0x70||op==0x73);
+    if(!mov128&&!mov_scalar&&!mov_gpr&&!packed)return false;
+    require_xmm();
+    const auto m=modrm();
+    if(m.reg>=fx.xmm.size() || (m.rm.is_register&&m.rm.index>=fx.xmm.size()))
+      fail("XMM register encoding outside 0..15",FaultCode::InvalidInstruction);
+    if(mov_gpr) {
+      const unsigned n=(is_long_mode()&&(rex_&8U))?8U:4U;
+      if(op==0x6e) {
+        Xmm out{};
+        set_lane(out,0,n,get(m.rm,n));
+        fx.xmm[m.reg]=out;
+      }else {
+        put(m.rm,n,lane(fx.xmm[m.reg],0,n));
+      }
+      return true;
+    }
+    if(mov_scalar) {
+      const unsigned n=pf2?8U:4U;
+      if(op==0x10) {
+        const auto from=read_xmm_operand(m.rm,false,n);
+        auto dest=fx.xmm[m.reg];
+        if(!m.rm.is_register)dest={}; // scalar memory load clears upper XMM
+        std::copy_n(from.begin(),n,dest.begin());
+        fx.xmm[m.reg]=dest;
+      }else {
+        write_xmm_operand(m.rm,fx.xmm[m.reg],false,n);
+      }
+      return true;
+    }
+    if(mov128) {
+      if(op==0x6f||op==0x10||op==0x28)
+        fx.xmm[m.reg]=read_xmm_operand(m.rm,aligned);
+      else
+        write_xmm_operand(m.rm,fx.xmm[m.reg],aligned);
+      return true;
+    }
+    if(op==0x73) {
+      if(!m.rm.is_register)
+        fail("PSLLDQ/PSRLDQ require XMM register destination",FaultCode::InvalidInstruction);
+      const auto shift=std::min<unsigned>(fetch8(),16);
+      Xmm output{},src=fx.xmm[m.rm.index];
+      if(m.group==7) {
+        for(unsigned i=shift;i<16;++i)output[i]=src[i-shift];
+      }else if(m.group==3) {
+        for(unsigned i=0;i+shift<16;++i)output[i]=src[i+shift];
+      }else fail("SSE2 shift operation unsupported",FaultCode::UnsupportedOpcode);
+      fx.xmm[m.rm.index]=output;
+      return true;
+    }
+    const auto src=read_xmm_operand(m.rm,false);
+    auto output=fx.xmm[m.reg];
+    if(op==0x70) {
+      const auto selector=fetch8();
+      for(unsigned i=0;i<4;++i) {
+        const auto from=((selector>>(i*2))&3U)*4U;
+        for(unsigned j=0;j<4;++j)output[4*i+j]=src[from+j];
+      }
+      fx.xmm[m.reg]=output;return true;
+    }
+    if(op==0xef||op==0xdb||op==0xeb||op==0xdf) {
+      for(unsigned i=0;i<16;++i) {
+        switch(op) {
+          case 0xef:output[i]^=src[i];break; // PXOR
+          case 0xdb:output[i]&=src[i];break; // PAND
+          case 0xeb:output[i]|=src[i];break; // POR
+          case 0xdf:output[i]=std::uint8_t((~output[i])&src[i]);break; // PANDN
+        }
+      }
+    }else {
+      const unsigned width=(op==0xd4||op==0xfb)?8U:
+        (op==0xfe||op==0xfa||op==0x76)?4U:
+        (op==0xfd||op==0xf9||op==0x75)?2U:1U;
+      for(unsigned i=0;i<16;i+=width) {
+        const auto lhs=lane(output,i,width),rhs=lane(src,i,width);
+        const bool equal=op==0x74||op==0x75||op==0x76;
+        const bool sub=op==0xf8||op==0xf9||op==0xfa||op==0xfb;
+        set_lane(output,i,width,equal?(lhs==rhs?(width==8?UINT64_MAX:((1ULL<<(width*8))-1)):0):
+                 sub?(lhs-rhs):(lhs+rhs));
+      }
+    }
+    fx.xmm[m.reg]=output;
+    return true;
+  }
 
   bool op32_ = false, addr32_ = false, ip_written_ = false, transaction_ = false;
   bool operand_override_ = false, address_override_ = false, lock_prefix_ = false;
@@ -446,7 +828,7 @@ class Cpu {
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
     gdtr = s.gdtr; idtr = s.idtr;
     ldtr = s.ldtr; tr = s.tr;
-    a20_enabled = s.a20; halted = s.halted;
+    a20_enabled = s.a20; halted = s.halted; fx=s.fx;
   }
   static void check_register(unsigned r) {
     if (r >= 16) throw std::out_of_range("register index");
@@ -820,6 +1202,7 @@ class Cpu {
   static int exception_vector(FaultCode code) {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
+      case FaultCode::DeviceNotAvailable: return 7; // #NM
       case FaultCode::InvalidInstruction: return 6; // #UD, not missing opcodes
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
@@ -1052,7 +1435,9 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE, PGE. With no TLB, PGE has no cached translations to retain.
-  constexpr std::uint32_t supported = 0x000000b0U;
+  // OSFXSR(9), OSXMMEXCPT(10) explicitly owned by the guest; neither
+  // enables a CPUID SSE2 claim until the instruction subset is complete.
+  constexpr std::uint32_t supported = 0x000006b0U;
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   cr4 = std::uint32_t(value);
@@ -1356,6 +1741,8 @@ inline void Cpu::extended() {
   if (lock_prefix_ && op != 0xc7)
     fail("LOCK prefix is supported only on 0F C7 /1 CMPXCHG8B/16B",
          FaultCode::UnsupportedState);
+  if(op==0xae && execute_fxstate(op))return;
+  if(execute_sse_subset(op))return;
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
@@ -1677,6 +2064,15 @@ inline void Cpu::execute(std::uint8_t op) {
     fail("LOCK prefix on unsupported instruction", FaultCode::UnsupportedState);
   const unsigned bytes = width();
   const unsigned stack_bytes = stack_operand_width();
+  if(op>=0xd8 && op<=0xdf) {
+    (void)execute_x87(op);
+    return;
+  }
+  if(op==0x9b) {
+    if((cr0&0x8U)&&(cr0&0x2U))
+      fail("FWAIT CR0.TS+MP requires #NM",FaultCode::DeviceNotAvailable);
+    return;
+  }
   const unsigned encoded_register = (op & 7U) + ((rex_ & 1) ? 8 : 0);
   if (is_long_mode()) {
     switch (op) {
