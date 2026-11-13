@@ -145,6 +145,35 @@ void expect_null_rejected(Cpu& cpu, std::uint16_t selector) {
         "invalid MOV SS must leave architectural registers and IP intact");
 }
 
+void interrupt_return_widths() {
+  Cpu cpu(8U << 20);
+  for (const auto width : {2U, 4U, 8U}) {
+    boot_to(cpu, "long64");
+    if (width == 2) program(cpu, {0x66, 0xcf});
+    else if (width == 4) program(cpu, {0xcf});
+    else program(cpu, {0x48, 0xcf});
+    constexpr std::uint64_t frame = 0x19000;
+    constexpr std::uint64_t continuation = 0xa200;
+    constexpr std::uint64_t stack = 0x7910;
+    const auto selector = cpu.segments[Cpu::CS];
+    const auto padded_selector = 0xdbaddadbfeed0000ULL | selector;
+    const auto padded_null = 0xfeeddbaddadb0000ULL;
+    const std::array<std::uint64_t, 5> slots{
+        continuation, padded_selector, 2U | Cpu::IF | Cpu::CF, stack, padded_null};
+    for (unsigned i = 0; i < slots.size(); ++i) {
+      const auto address = frame + i * width;
+      for (unsigned byte = 0; byte < width; ++byte)
+        cpu.write8(address + byte, std::uint8_t(slots[i] >> (byte * 8)));
+    }
+    cpu.regs[Cpu::ESP] = frame;
+    step(cpu);
+    check(cpu.is_long_mode() && cpu.eip == continuation &&
+              cpu.regs[Cpu::ESP] == stack && cpu.segments[Cpu::SS] == 0 &&
+              cpu.segments[Cpu::CS] == selector && cpu.flag(Cpu::IF) && cpu.flag(Cpu::CF),
+          "each IRET operand width must consume its own frame and ignore selector padding");
+  }
+}
+
 void rejected_selectors() {
   for (const auto* mode : {"protected32", "compat32", "long64"}) {
     Cpu cpu(8U << 20);
@@ -200,6 +229,7 @@ void lss_load() {
 int main() {
   try {
     observed_mov_ss();
+    interrupt_return_widths();
     rejected_selectors();
     lss_load();
     std::cout << "X86_LONG_NULL_SS_PASS checks=" << checks

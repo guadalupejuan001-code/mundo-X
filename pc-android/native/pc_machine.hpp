@@ -426,6 +426,21 @@ class PcMachine {
      <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\""
      <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
      <<",\"engine\":\"cosmic-pc-own-x86\""
+     <<",\"page_walks\":"<<cpu.page_walks;
+    if(cpu.fault) {
+      o<<",\"fault_context\":{\"cpl\":"<<cpu.cpl()
+       <<",\"ss\":"<<cpu.segments[Cpu::SS]
+       <<",\"cr0_hex\":"<<quote(hex64(cpu.cr0))
+       <<",\"cr2_hex\":"<<quote(hex64(cpu.cr2))
+       <<",\"cr3_hex\":"<<quote(hex64(cpu.cr3))
+       <<",\"cr4_hex\":"<<quote(hex64(cpu.cr4))
+       <<",\"efer_hex\":"<<quote(hex64(cpu.efer))
+       <<",\"idtr_base_hex\":"<<quote(hex64(cpu.idtr.base))
+       <<",\"idtr_limit\":"<<cpu.idtr.limit
+       <<",\"linear_address_hex\":"<<quote(hex64(cpu.fault->linear_address))
+       <<",\"error_code\":"<<cpu.fault->error_code<<'}';
+    }
+    o
      <<",\"system_registers\":{\"ldtr_selector\":"<<cpu.ldtr.selector
      <<",\"ldtr_valid\":"<<(cpu.ldtr.valid?"true":"false")
      <<",\"ldtr_base\":"<<cpu.ldtr.base

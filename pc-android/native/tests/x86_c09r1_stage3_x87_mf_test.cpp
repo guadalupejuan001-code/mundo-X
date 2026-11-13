@@ -170,7 +170,7 @@ void deferred_mf(){
   cpu.write64(cpu.idtr.base+16*16,gate);
   cpu.write64(cpu.idtr.base+16*16+8,0);
   // FNCLEX then IRETQ removes pending x87 condition; FWAIT retries.
-  put(cpu,isr,{0xdb,0xe2,0xcf});
+  put(cpu,isr,{0xdb,0xe2,0x48,0xcf});
   put(cpu,0xa000,{0xd9,0xee,0xd9,0xe8,0xd8,0xf1,0x9b,0xf4});
   cpu.regs[Cpu::ESP]=0x190000;
   cpu.eip=0xa000;cpu.halted=false;cpu.fault.reset();

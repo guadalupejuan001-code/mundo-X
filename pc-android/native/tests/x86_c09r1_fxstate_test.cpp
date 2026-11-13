@@ -373,7 +373,7 @@ void nm_guest_handler_recovery(){
   cpu.write64(cpu.idtr.base+7*16,low);
   cpu.write64(cpu.idtr.base+7*16+8,0);
   // Guest #NM handler executes CLTS; IRETQ retries the exact FXSAVE64.
-  const std::array<std::uint8_t,3> handler{{0x0f,0x06,0xcf}};
+  const std::array<std::uint8_t,4> handler{{0x0f,0x06,0x48,0xcf}};
   cpu.memory.write_block(target,handler.data(),handler.size());
   const std::array<std::uint8_t,10> main{{
      0x48,0x0f,0xae,0x04,0x25,0x00,0x40,0,0,0xf4

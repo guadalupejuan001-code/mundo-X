@@ -79,7 +79,7 @@ void handled_ud_trace(){
       (std::uint64_t(0x8e)<<40)|(((dest>>16)&0xffffULL)<<48);
   cpu.write64(at,gate);cpu.write64(at+8,0);
   const std::uint8_t code[]{0x0f,0x0b,0xf4};
-  const std::uint8_t handler[]{0x48,0x83,0x04,0x24,0x02,0xcf};
+  const std::uint8_t handler[]{0x48,0x83,0x04,0x24,0x02,0x48,0xcf};
   cpu.memory.write_block(0xa000,code,sizeof(code));
   cpu.memory.write_block(dest,handler,sizeof(handler));
   std::vector<Cpu::StepTrace> events;

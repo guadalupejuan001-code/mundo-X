@@ -240,7 +240,7 @@ void enter_leave_paging_fault_tests() {
 
   // A high canonical stack with a one-byte reservation enters the address gap.
   cpu.write64(0x1000 + 256 * 8, 0x2003);
-  expect_rollback({0xc8, 1, 0, 0}, 0xffff800000000008ULL, 0x9000, FaultCode::ProtectionFault, 0, 0, 0);
+  expect_rollback({0xc8, 1, 0, 0}, 0xffff800000000008ULL, 0x9000, FaultCode::StackFault, 0, 0, 0);
 
   cpu.write64(0x4000 + 11 * 8, 0);
   program(cpu, {0xc8, 0, 0}, 0xaffd); cpu.regs[Cpu::ESP] = 0xe010;
@@ -442,7 +442,7 @@ void paging_and_fault_tests() {
   constexpr std::uint32_t features=(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
   check(cpu.step()==StepResult::Executed && (cpu.regs[Cpu::EDX]&(features|1U))==features,
         "long-mode CPUID must expose CMOV and the verified SIMD features and keep FPU clear");
-  program(cpu, {0x0f,0x05}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "unimplemented SYSCALL stops explicitly");
+  program(cpu, {0x0f,0x05}); expect_fault(cpu, FaultCode::InvalidInstruction, "SYSCALL requires EFER.SCE");
   program(cpu, {0x0f,0x22,0xe0}); cpu.regs[Cpu::EAX] = 0;
   expect_fault(cpu, FaultCode::ProtectionFault, "PAE cannot be cleared while LMA");
   check(cpu.cr4 == 0x20, "failed control-register write preserves CR4");
