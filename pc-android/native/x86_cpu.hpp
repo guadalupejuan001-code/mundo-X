@@ -1718,8 +1718,9 @@ inline void Cpu::extended() {
         fail("PSHUFD requires 66 prefix",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
-      const auto source=read_xmm_operand(m.rm,false);
+      // Consume the immediate BEFORE resolving RIP-relative memory operands.
       const auto order=unsigned(immediate(1));
+      const auto source=read_xmm_operand(m.rm,false);
       for(unsigned lane=0;lane<4;++lane)
         packed_set(xmm[m.reg],lane*4,4,
                    packed_lane(source,((order>>(lane*2))&3U)*4,4));
