@@ -55,6 +55,12 @@ class InfiniteCore {
   // address. T and arbitrary phase operations are deliberately unsupported.
   struct Gate { char op; std::string first, second; };
   struct Term { std::string address; char axis; };
+  // Work performed by the last committed nonempty finite-gate batch. These
+  // diagnostics are per owner and are not part of quantum state or snapshots.
+  struct GateWorkStats {
+    std::size_t input_gates = 0, executed_gates = 0, cancelled_gates = 0;
+    std::size_t pullback_builds = 0, pullback_hits = 0;
+  };
   struct Stats {
     std::size_t active_qubits = 0;
     std::size_t components = 0;
@@ -106,6 +112,7 @@ class InfiniteCore {
 
   Background background() const { return background_; }
   const Limits& limits() const { return limits_; }
+  GateWorkStats gate_work_stats() const noexcept { return gate_work_stats_; }
   std::size_t ether_rule_count() const noexcept { return state_->ether.rule_count(); }
   EtherCore::Stats ether_stats() const {
     auto out = ether_query_stats_;
@@ -271,9 +278,12 @@ class InfiniteCore {
     const auto normalized = normalize_gates(gates);
     require_next_revision();
     auto candidate = std::make_shared<State>(*state_);
-    for (const auto& gate : normalized) apply_physical_gate(*candidate, gate);
+    PullbackCache pullbacks;
+    for (const auto& gate : normalized) apply_physical_gate(*candidate, gate, pullbacks);
     ++candidate->revision;
     state_.swap(candidate);
+    gate_work_stats_ = {gates.size(), normalized.size(), gates.size() - normalized.size(),
+                        pullbacks.builds, pullbacks.hits};
   }
 
   // Finite Hermitian Pauli products only. Duplicate canonical addresses are
@@ -290,6 +300,17 @@ class InfiniteCore {
   struct ObserverCache {
     std::vector<std::unique_ptr<mundo_x_bridge::PauliObserver>> slots;
     std::size_t builds = 0, payload_bytes = 0;
+  };
+  // The Ether frame is immutable throughout apply(). Cache only its signed
+  // observable images, never answers depending on the changing finite state.
+  // Scope and bounds prevent stale images after restore/global layers and
+  // unbounded retention on large batches or addresses.
+  struct PullbackCache {
+    using Key = std::vector<std::pair<std::string, char>>;
+    std::map<Key, EtherCore::Observable> images;
+    std::size_t terms = 0, address_bytes = 0, builds = 0, hits = 0;
+    static constexpr std::size_t max_entries = 64, max_terms = 4096;
+    static constexpr std::size_t max_address_bytes = 1024 * 1024;
   };
   friend class InfiniteSession;
 
@@ -601,6 +622,44 @@ class InfiniteCore {
       }
       normalized.push_back({gate.op, std::move(first), std::move(second)});
     }
+    if (normalized.size() < 2) return normalized;
+    // All syntax/address validation above must finish before elimination.
+    // Two identical involutions cancel if neither operand was touched between
+    // them. Disjoint gates commute, but no other commutation is assumed.
+    const auto none = normalized.size();
+    struct Dependency { std::size_t first, second; bool live = true; };
+    std::vector<Dependency> dependencies(normalized.size(), {none, none, true});
+    std::map<std::string, std::size_t> latest;
+    const auto previous = [&](const std::string& address) {
+      const auto found = latest.find(address);
+      return found == latest.end() ? none : found->second;
+    };
+    for (std::size_t i = 0; i < normalized.size(); ++i) {
+      const auto& gate = normalized[i];
+      const auto first = previous(gate.first);
+      const auto second = gate.second.empty() ? none : previous(gate.second);
+      dependencies[i] = {first, second, true};
+      if (gate.op != 'S' && first != none &&
+          (gate.second.empty() || first == second)) {
+        const auto& earlier = normalized[first];
+        if (earlier.op == gate.op && earlier.first == gate.first &&
+            earlier.second == gate.second) {
+          dependencies[first].live = dependencies[i].live = false;
+          latest[gate.first] = dependencies[first].first;
+          if (!gate.second.empty()) latest[gate.second] = dependencies[first].second;
+          continue;
+        }
+      }
+      latest[gate.first] = i;
+      if (!gate.second.empty()) latest[gate.second] = i;
+    }
+    std::size_t write = 0;
+    for (std::size_t i = 0; i < normalized.size(); ++i) {
+      if (!dependencies[i].live) continue;
+      if (write != i) normalized[write] = std::move(normalized[i]);
+      ++write;
+    }
+    normalized.resize(write);
     return normalized;
   }
 
@@ -728,10 +787,39 @@ class InfiniteCore {
     parity_basis(state, p, true);
   }
 
-  void apply_physical_gate(State& state, const Gate& gate) const {
+  void apply_physical_gate(State& state, const Gate& gate, PullbackCache& cache) const {
     if (state.ether.rule_count() == 0) { apply_gate(state, gate); return; }
     const auto rotate = [&](std::vector<Term> terms, unsigned turns) {
-      rotate_pauli(state, pull_pauli(state, terms), turns);
+      PullbackCache::Key key;
+      key.reserve(terms.size());
+      for (const auto& term : terms) key.emplace_back(term.address, term.axis);
+      const auto found = cache.images.find(key);
+      if (found != cache.images.end()) {
+        ++cache.hits;
+        rotate_pauli(state, found->second, turns);
+        return;
+      }
+      auto pulled = pull_pauli(state, terms);
+      ++cache.builds;
+      std::size_t address_bytes = 0;
+      bool fits = true;
+      const auto count_address = [&](const std::string& address) {
+        if (address.size() > PullbackCache::max_address_bytes - address_bytes) fits = false;
+        else address_bytes += address.size();
+      };
+      for (const auto& term : key) count_address(term.first);
+      for (const auto& term : pulled.terms) count_address(term.address);
+      if (cache.images.size() < PullbackCache::max_entries &&
+          pulled.terms.size() <= PullbackCache::max_terms - cache.terms &&
+          fits &&
+          address_bytes <= PullbackCache::max_address_bytes - cache.address_bytes) {
+        cache.terms += pulled.terms.size();
+        cache.address_bytes += address_bytes;
+        const auto inserted = cache.images.emplace(std::move(key), std::move(pulled));
+        rotate_pauli(state, inserted.first->second, turns);
+      } else {
+        rotate_pauli(state, pulled, turns);
+      }
     };
     switch (gate.op) {
       case 'X': case 'Y': case 'Z': rotate({{gate.first, gate.op}}, 2); break;
@@ -748,9 +836,9 @@ class InfiniteCore {
         rotate({{gate.first, 'Z'}, {gate.second, 'Z'}}, 3);
         break;
       case 'C':
-        apply_physical_gate(state, {'H', gate.second, {}});
-        apply_physical_gate(state, {'D', gate.first, gate.second});
-        apply_physical_gate(state, {'H', gate.second, {}});
+        apply_physical_gate(state, {'H', gate.second, {}}, cache);
+        apply_physical_gate(state, {'D', gate.first, gate.second}, cache);
+        apply_physical_gate(state, {'H', gate.second, {}}, cache);
         break;
       default: throw std::logic_error("unvalidated physical gate");
     }
@@ -932,6 +1020,7 @@ class InfiniteCore {
   // Query diagnostics are per-owner, outside the immutable shared State.
   // They never alter the quantum revision or a portable snapshot.
   mutable EtherCore::Stats ether_query_stats_;
+  GateWorkStats gate_work_stats_;
 };
 
 } // namespace mundo_x

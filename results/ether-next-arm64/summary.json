@@ -1,0 +1,27 @@
+{
+  "code_sha": "b6b92553d06af9cae270191dab0b11b928484217",
+  "native_run": "https://github.com/guadalupejuan001-code/mundo-X/actions/runs/43379283032",
+  "native_job": 131733009810,
+  "artifact_id": 14016545018,
+  "native_runner": "ubuntu-24.04-arm",
+  "emulation": false,
+  "host_sse2_oracle": true,
+  "original_regressions_passed": {
+    "ether_core": 522,
+    "ether_frame": 54,
+    "ether_rules": 799838,
+    "ether_memory": 24,
+    "infinite_core": 220433,
+    "infinite_session": 31269,
+    "ether_fusion": 17767,
+    "inverse_memory": 160
+  },
+  "focused_quantum_checks": 1553,
+  "limits": [
+    "Pure register integer SSE2 blocks only",
+    "No canonical CPU loop integration; C09R-1 untouched",
+    "FP/x87 and guest memory fallback",
+    "Linux little-endian AArch64 ASIMD; no spills beyond 24 SIMD registers",
+    "Straight-line emitted instruction counts; no PMU or application speedup claim"
+  ]
+}

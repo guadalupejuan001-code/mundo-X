@@ -1,0 +1,45 @@
+
+raw-neon.bin:     file format binary
+
+
+Disassembly of section .data:
+
+0000000000000000 <.data>:
+   0:	d503245f 	bti	c
+   4:	3dc00400 	ldr	q0, [x0, #16]
+   8:	3dc00801 	ldr	q1, [x0, #32]
+   c:	4ea18402 	add	v2.4s, v0.4s, v1.4s
+  10:	4ea18403 	add	v3.4s, v0.4s, v1.4s
+  14:	3dc01004 	ldr	q4, [x0, #64]
+  18:	6e241c84 	eor	v4.16b, v4.16b, v4.16b
+  1c:	4ea48442 	add	v2.4s, v2.4s, v4.4s
+  20:	6ea18442 	sub	v2.4s, v2.4s, v1.4s
+  24:	3dc01405 	ldr	q5, [x0, #80]
+  28:	6e251ca5 	eor	v5.16b, v5.16b, v5.16b
+  2c:	4ea31ca5 	orr	v5.16b, v5.16b, v3.16b
+  30:	3dc01c06 	ldr	q6, [x0, #112]
+  34:	3dc02007 	ldr	q7, [x0, #128]
+  38:	4ee784c6 	add	v6.2d, v6.2d, v7.2d
+  3c:	6ee784c6 	sub	v6.2d, v6.2d, v7.2d
+  40:	3dc02407 	ldr	q7, [x0, #144]
+  44:	3dc02810 	ldr	q16, [x0, #160]
+  48:	6e301ce7 	eor	v7.16b, v7.16b, v16.16b
+  4c:	6e301ce7 	eor	v7.16b, v7.16b, v16.16b
+  50:	3dc02c10 	ldr	q16, [x0, #176]
+  54:	4e301e10 	and	v16.16b, v16.16b, v16.16b
+  58:	4ea18400 	add	v0.4s, v0.4s, v1.4s
+  5c:	3dc03801 	ldr	q1, [x0, #224]
+  60:	3dc03c11 	ldr	q17, [x0, #240]
+  64:	4e718421 	add	v1.8h, v1.8h, v17.8h
+  68:	6e718421 	sub	v1.8h, v1.8h, v17.8h
+  6c:	3d800002 	str	q2, [x0]
+  70:	3d800c03 	str	q3, [x0, #48]
+  74:	3d801004 	str	q4, [x0, #64]
+  78:	3d801405 	str	q5, [x0, #80]
+  7c:	3d801806 	str	q6, [x0, #96]
+  80:	3d802407 	str	q7, [x0, #144]
+  84:	3d802c10 	str	q16, [x0, #176]
+  88:	3d803000 	str	q0, [x0, #192]
+  8c:	3d803400 	str	q0, [x0, #208]
+  90:	3d803801 	str	q1, [x0, #224]
+  94:	d65f03c0 	ret

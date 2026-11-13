@@ -192,6 +192,14 @@ class InverseMemory {
     std::vector<std::uint8_t> bytes;
     bytes.reserve(count);
     auto address = canonical(first);
+    // A pure background projects directly from its rule. Validate the last
+    // requested address first; every intermediate decimal address is shorter
+    // or equal, so no per-byte lookup or revalidation is necessary.
+    if (overrides_->empty() && bindings_->empty()) {
+      if (count > 1) (void)add_small(address, count - 1, limits_.max_address_digits);
+      bytes.assign(count, background_);
+      return bytes;
+    }
     for (std::size_t i = 0; i < count; ++i) {
       const auto value = read(address, core);
       if (!value.deterministic)

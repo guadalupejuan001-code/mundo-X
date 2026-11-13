@@ -1,0 +1,21 @@
+
+neon.bin:     file format binary
+
+
+Disassembly of section .data:
+
+0000000000000000 <.data>:
+   0:	d503245f 	bti	c
+   4:	4f00e400 	movi	v0.16b, #0x0
+   8:	3dc00401 	ldr	q1, [x0, #16]
+   c:	3dc00802 	ldr	q2, [x0, #32]
+  10:	4ea28422 	add	v2.4s, v1.4s, v2.4s
+  14:	3dc01c03 	ldr	q3, [x0, #112]
+  18:	3d800001 	str	q1, [x0]
+  1c:	3d800c02 	str	q2, [x0, #48]
+  20:	3d801000 	str	q0, [x0, #64]
+  24:	3d801402 	str	q2, [x0, #80]
+  28:	3d801803 	str	q3, [x0, #96]
+  2c:	3d803002 	str	q2, [x0, #192]
+  30:	3d803402 	str	q2, [x0, #208]
+  34:	d65f03c0 	ret
