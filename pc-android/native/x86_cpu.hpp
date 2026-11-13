@@ -705,6 +705,180 @@ class Cpu {
     if (operand.is_register) put_reg(operand.index, bytes, value);
     else write_segment(operand.segment, operand_offset(operand), bytes, value);
   }
+  void fpu_init() {
+    fpu_control=0x037f;fpu_status=0;fpu_tags=0xffff;
+    fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
+    // x87 register data becomes architecturally empty; data bits are stale.
+  }
+  unsigned fpu_top() const {return unsigned((fpu_status>>11)&7U);}
+  unsigned fpu_slot(unsigned logical) const {return (fpu_top()+logical)&7U;}
+  unsigned fpu_tag(unsigned slot) const {return (fpu_tags>>(2*slot))&3U;}
+  void fpu_tag_set(unsigned slot,unsigned tag) {
+    fpu_tags=std::uint16_t((fpu_tags&~(3U<<(2*slot)))|((tag&3U)<<(2*slot)));
+  }
+  static std::uint64_t ext_significand(const Extended80& value) {
+    std::uint64_t v=0;for(unsigned i=0;i<8;++i)v|=std::uint64_t(value[i])<<(8*i);
+    return v;
+  }
+  static unsigned ext_biased_exp(const Extended80& value) {
+    return unsigned(value[8])|((unsigned(value[9])&0x7fU)<<8);
+  }
+  static unsigned classify_ext(const Extended80& value) {
+    const auto exp=ext_biased_exp(value);
+    const auto sig=ext_significand(value);
+    if(!exp&&!sig)return 1U; // zero
+    if(exp==0x7fff||!exp||!(sig&(1ULL<<63)))return 2U; // special
+    return 0U; // valid finite normal
+  }
+  static Extended80 extended_from_long_double(long double value) {
+    Extended80 bytes{};
+    const bool negative=std::signbit(value);
+    const auto magnitude=std::fabs(value);
+    std::uint64_t sig=0;unsigned exponent=0;
+    if(std::isnan(value)) {exponent=0x7fff;sig=0xc000000000000000ULL;}
+    else if(std::isinf(value)) {exponent=0x7fff;sig=0x8000000000000000ULL;}
+    else if(magnitude!=0) {
+      int binexp=0;
+      const auto fraction=std::frexp(magnitude,&binexp);
+      const auto biased=binexp-1+16383;
+      if(biased<=0||biased>=0x7fff)
+        throw std::runtime_error("x87 extended exponent outside finite implementation");
+      exponent=unsigned(biased);
+      sig=static_cast<std::uint64_t>(std::ldexp(fraction,64));
+    }
+    for(unsigned i=0;i<8;++i)bytes[i]=std::uint8_t(sig>>(8*i));
+    bytes[8]=std::uint8_t(exponent);
+    bytes[9]=std::uint8_t((exponent>>8)|(negative?0x80U:0));
+    return bytes;
+  }
+  static long double extended_to_long_double(const Extended80& value) {
+    const auto exponent=ext_biased_exp(value);
+    const auto significand=ext_significand(value);
+    const bool sign=(value[9]&0x80U)!=0;
+    long double result=0;
+    if(exponent==0x7fff) {
+      result=significand==0x8000000000000000ULL
+          ?std::numeric_limits<long double>::infinity()
+          :std::numeric_limits<long double>::quiet_NaN();
+    }else if(exponent||significand) {
+      const auto e=(exponent?int(exponent):1)-16383-63;
+      result=std::ldexp(static_cast<long double>(significand),e);
+    }
+    return sign?-result:result;
+  }
+  void fpu_push(Extended80 value) {
+    const auto top=(fpu_top()+7U)&7U;
+    if(fpu_tag(top)!=3U)
+      fail("x87 stack overflow exception handling not implemented",FaultCode::UnsupportedState);
+    x87[top]=value;
+    fpu_tag_set(top,classify_ext(value));
+    fpu_status=std::uint16_t((fpu_status&~0x3800U)|(top<<11));
+  }
+  Extended80 fpu_peek(unsigned logical=0) const {
+    const auto slot=fpu_slot(logical);
+    if(fpu_tag(slot)==3U)
+      fail("x87 stack underflow exception handling not implemented",FaultCode::UnsupportedState);
+    return x87[slot];
+  }
+  void fpu_pop() {
+    const auto top=fpu_top();
+    if(fpu_tag(top)==3U)
+      fail("x87 pop of empty register",FaultCode::UnsupportedState);
+    fpu_tag_set(top,3);
+    fpu_status=std::uint16_t((fpu_status&~0x3800U)|(((top+1U)&7U)<<11));
+  }
+  void require_fpu() const {
+    if(cr0&0xcU)fail("x87 CR0.TS/EM device unavailable",FaultCode::DeviceNotAvailable);
+  }
+  static std::uint16_t load16(const std::array<std::uint8_t,512>& src,unsigned off) {
+    return std::uint16_t(src[off])|(std::uint16_t(src[off+1])<<8);
+  }
+  static std::uint32_t load32(const std::array<std::uint8_t,512>& src,unsigned off) {
+    std::uint32_t result=0;
+    for(unsigned i=0;i<4;++i)result|=std::uint32_t(src[off+i])<<(i*8);
+    return result;
+  }
+  static std::uint64_t load64(const std::array<std::uint8_t,512>& src,unsigned off) {
+    return std::uint64_t(load32(src,off))|(std::uint64_t(load32(src,off+4))<<32);
+  }
+  static void store16(std::array<std::uint8_t,512>& dst,unsigned off,std::uint16_t value) {
+    dst[off]=std::uint8_t(value);dst[off+1]=std::uint8_t(value>>8);
+  }
+  static void store32(std::array<std::uint8_t,512>& dst,unsigned off,std::uint32_t value) {
+    for(unsigned i=0;i<4;++i)dst[off+i]=std::uint8_t(value>>(8*i));
+  }
+  static void store64(std::array<std::uint8_t,512>& dst,unsigned off,std::uint64_t value) {
+    store32(dst,off,std::uint32_t(value));store32(dst,off+4,std::uint32_t(value>>32));
+  }
+  void fxstate(const Operand& memory_operand,bool restore) {
+    require_memory(memory_operand);
+    require_fpu();
+    if(!(cr4&0x200U))
+      fail("FXSAVE/FXRSTOR require OSFXSR in this CPU profile",FaultCode::InvalidInstruction);
+    const auto address=segment_linear(memory_operand.segment,operand_offset(memory_operand),
+                                      512,restore?Access::Read:Access::Write);
+    if(address&15U)fail("FXSAVE/FXRSTOR require 16-byte aligned memory",FaultCode::ProtectionFault);
+    // Validate the ENTIRE 512-byte window before changing CPU state or RAM.
+    // Explicit MMIO rejection: these operations are not device DMA commands.
+    for(unsigned i=0;i<512;++i) {
+      const auto p=translate(address+i,restore?Access::Read:Access::Write);
+      if(mmio_at(p))
+        fail("FXSAVE/FXRSTOR on MMIO cannot be atomic",FaultCode::UnsupportedState);
+      (void)physical_index(p);
+    }
+    std::array<std::uint8_t,512> buffer{};
+    if(restore) {
+      for(unsigned i=0;i<416;++i)
+        buffer[i]=std::uint8_t(read_linear(address+i,1));
+      const auto candidate_mxcsr=load32(buffer,24);
+      if(candidate_mxcsr&~kMxcsrMask)
+        fail("FXRSTOR reserved MXCSR bit",FaultCode::ProtectionFault);
+      // Parse and validate entire image before committing any CPU state.
+      const auto new_control=load16(buffer,0);
+      auto new_status=load16(buffer,2);
+      const auto abridged=buffer[4];
+      const auto new_opcode=load16(buffer,6);
+      const bool wide_pointers=is_long_mode()&&(rex_&8);
+      const auto new_ip=wide_pointers?load64(buffer,8):load32(buffer,8);
+      const auto new_dp=wide_pointers?load64(buffer,16):load32(buffer,16);
+      const auto new_cs=wide_pointers?std::uint16_t{0}:load16(buffer,12);
+      const auto new_ds=wide_pointers?std::uint16_t{0}:load16(buffer,20);
+      std::array<Extended80,8> new_regs{};
+      std::uint16_t new_tags=0xffff;
+      for(unsigned i=0;i<8;++i) {
+        for(unsigned j=0;j<10;++j)new_regs[i][j]=buffer[32+16*i+j];
+        if(abridged&(1U<<i))
+          new_tags=std::uint16_t((new_tags&~(3U<<(2*i)))|
+                            (classify_ext(new_regs[i])<<(2*i)));
+      }
+      std::array<std::array<std::uint8_t,16>,16> new_xmm=xmm;
+      for(unsigned i=0;i<xmm_count();++i)
+        for(unsigned j=0;j<16;++j)new_xmm[i][j]=buffer[160+16*i+j];
+      fpu_control=new_control;fpu_status=new_status;fpu_tags=new_tags;
+      fpu_opcode=new_opcode;fpu_ip=new_ip;fpu_dp=new_dp;
+      fpu_cs=new_cs;fpu_ds=new_ds;x87=new_regs;
+      mxcsr=candidate_mxcsr;xmm=new_xmm;
+    }else{
+      store16(buffer,0,fpu_control);store16(buffer,2,fpu_status);
+      for(unsigned i=0;i<8;++i)
+        if(fpu_tag(i)!=3U)buffer[4]|=std::uint8_t(1U<<i);
+      store16(buffer,6,fpu_opcode);
+      const bool wide_pointers=is_long_mode()&&(rex_&8);
+      if(wide_pointers){
+        store64(buffer,8,fpu_ip);store64(buffer,16,fpu_dp);
+      }else {
+        store32(buffer,8,std::uint32_t(fpu_ip));store16(buffer,12,fpu_cs);
+        store32(buffer,16,std::uint32_t(fpu_dp));store16(buffer,20,fpu_ds);
+      }
+      store32(buffer,24,mxcsr);store32(buffer,28,kMxcsrMask);
+      for(unsigned i=0;i<8;++i)
+        for(unsigned j=0;j<10;++j)buffer[32+16*i+j]=x87[i][j];
+      for(unsigned i=0;i<xmm_count();++i)
+        for(unsigned j=0;j<16;++j)buffer[160+16*i+j]=xmm[i][j];
+      // Intel reserves bytes 464-511 for software; never overwrite them.
+      for(unsigned i=0;i<464;++i)write_linear(address+i,1,buffer[i]);
+    }
+  }
   unsigned xmm_count() const {return is_long_mode()?16U:8U;}
   void require_xmm(unsigned index) const {
     if(index>=xmm_count())fail("XMM register index unavailable",FaultCode::InvalidInstruction);
