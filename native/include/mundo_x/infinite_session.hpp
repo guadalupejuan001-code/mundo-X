@@ -66,6 +66,9 @@ class InfiniteSession {
   EtherCore::Stats ether_stats() const {
     std::lock_guard<std::mutex> lock(mutex_); return core_.ether_stats();
   }
+  InfiniteCore::GateWorkStats gate_work_stats() const {
+    std::lock_guard<std::mutex> lock(mutex_); return core_.gate_work_stats();
+  }
 
   void apply(const std::vector<Gate>& gates) {
     validate_gate_transport(gates);

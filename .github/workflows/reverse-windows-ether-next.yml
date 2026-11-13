@@ -1,0 +1,44 @@
+name: Ether Next in the canonical Windows guest CPU
+
+on:
+  push:
+    branches: ["feature/reverse-windows-ether-next-*"]
+  pull_request:
+    paths:
+      - ".github/workflows/reverse-windows-ether-next.yml"
+      - "native/include/mundo_x/experimental/ether_transform.hpp"
+      - "native/src/ether_*.cpp"
+      - "pc-android/native/x86_cpu.hpp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-cpu:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test the original Ether Next and canonical guest integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -m
+          cmake -S . -B build/ether-next -DCMAKE_BUILD_TYPE=Release -DMUNDO_X_ETHER_NEXT=ON
+          cmake --build build/ether-next --parallel 2 \
+            --target test_ether_next test_ether_next_quantum x86_ether_next_guest_test
+          ctest --test-dir build/ether-next --output-on-failure -V -R '^ether_next'
+      - name: Replay protected-mode entry with the inherited stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -pthread -I native/include \
+            pc-android/native/tests/x86_group6_0f00_test.cpp -o build/ether-next/protected-entry
+          build/ether-next/protected-entry | tee build/ether-next/protected-entry.log
+          grep -Fq 'protected_entry_stack=1' build/ether-next/protected-entry.log

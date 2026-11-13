@@ -29,6 +29,9 @@
 #include <xmmintrin.h>
 #endif
 #include "memory_fabric.hpp"
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+#include "mundo_x/experimental/ether_transform.hpp"
+#endif
 
 namespace cosmic_pc {
 
@@ -83,6 +86,7 @@ class Cpu {
     bool valid = true, code = false, writable = true, readable = true,
          big = false, long_code = false, conforming = false;
     std::uint8_t dpl = 0;
+    bool inherited_from_real_mode = false;
   };
 
   std::array<std::uint64_t, 16> regs{};
@@ -93,6 +97,30 @@ class Cpu {
   std::array<std::array<std::uint8_t,16>,16> xmm{};
   std::uint32_t mxcsr=0x1f80;
   static constexpr std::uint32_t kMxcsrMask=0x0000ffffU; // DAZ bit6, FTZ bit15, all status/masks
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+  struct EtherNextStats {
+    std::uint64_t native_instructions = 0;
+    mundo_x::ether_next::Cache::Stats cache;
+  };
+  // An explicit host policy for a subset already implemented by the
+  // interpreter. Guest-visible CPUID is independent of this optimization.
+  void enable_ether_next(bool enabled = true) noexcept {
+    ether_next_enabled_ = enabled;
+    if (!enabled) ether_next_cache_.invalidate();
+  }
+  bool ether_next_enabled() const noexcept { return ether_next_enabled_; }
+  static constexpr bool ether_next_native_host() noexcept {
+#if defined(__aarch64__) && defined(__linux__) && \
+    defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    return true;
+#else
+    return false;
+#endif
+  }
+  EtherNextStats ether_next_stats() const noexcept {
+    return {ether_next_native_instructions_, ether_next_cache_.stats()};
+  }
+#endif
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -186,7 +214,10 @@ class Cpu {
   }
   bool is_long_mode() const { return (efer & 0x400) && cache_[CS].long_code; }
   bool is_real_mode() const { return !(cr0 & 1); }
-  unsigned cpl() const { return is_real_mode() ? 0U : unsigned(segments[CS] & 3U); }
+  unsigned cpl() const {
+    return is_real_mode() || cache_[CS].inherited_from_real_mode
+        ? 0U : unsigned(segments[CS] & 3U);
+  }
   const char* mode_name() const {
     if (is_real_mode()) return "real16";
     if (is_long_mode()) return "long64";
@@ -464,6 +495,11 @@ class Cpu {
   // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
   bool supervisor_internal_ = false;
   std::uint32_t pending_simd_flags_=0;
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+  mundo_x::ether_next::Cache ether_next_cache_{32};
+  std::uint64_t ether_next_native_instructions_ = 0;
+  bool ether_next_enabled_ = false;
+#endif
   struct SupervisorAccess {
     Cpu& cpu;
     bool old;
@@ -548,12 +584,15 @@ class Cpu {
     if (!cache.valid) fail("null/unusable protected-mode segment", FaultCode::ProtectionFault);
     if (!supervisor_internal_ && segment != CS) {
       const auto privilege = cpl();
-      const auto requested = unsigned(segments[segment] & 3U);
+      // On entry to protected mode the visible selector is still a real-mode
+      // segment value. Its low bits become RPL only after a descriptor load.
+      const auto requested = cache.inherited_from_real_mode
+          ? 0U : unsigned(segments[segment] & 3U);
       if (segment == SS) {
         if (requested != privilege || cache.dpl != privilege)
-          fail("protected32 SS RPL/DPL does not match CPL", FaultCode::ProtectionFault);
+          fail("protected-mode SS RPL/DPL does not match CPL", FaultCode::ProtectionFault);
       } else if (!cache.conforming && std::max(privilege,requested) > cache.dpl) {
-        fail("protected32 data-segment privilege check failed", FaultCode::ProtectionFault);
+        fail("protected-mode data-segment privilege check failed", FaultCode::ProtectionFault);
       }
     }
     if (bytes == 0 || offset > cache.limit || bytes - 1 > cache.limit - offset)
@@ -1012,6 +1051,26 @@ class Cpu {
     if(cr0&0x8U)
       fail("SSE2 task-switched CR0.TS",FaultCode::DeviceNotAvailable);
   }
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+  bool try_ether_next(const ModRM& operands) {
+    if (!ether_next_native_host() || !ether_next_enabled_ ||
+        !operands.rm.is_register || !is_long_mode() || override_ >= 0 ||
+        address_override_ || lock_prefix_ || step_trace_hook || irq_trace_hook)
+      return false;
+    // The caller already validated this specific SSE2 register opcode and
+    // its architectural state. Reuse the bytes fetched for this instruction.
+    // Cpu::step still owns RIP, retirement, rollback, and device boundaries.
+    mundo_x::ether_next::Guard guard;
+    guard.sse2_enabled = true;
+    guard.osfxsr = (cr4 & 0x200U) != 0;
+    guard.cr0_em = (cr0 & 4U) != 0;
+    guard.cr0_ts = (cr0 & 8U) != 0;
+    guard.single_step = flag(TF);
+    if (!ether_next_cache_.execute(decoded_, xmm, guard)) return false;
+    ++ether_next_native_instructions_;
+    return true;
+  }
+#endif
   std::array<std::uint8_t,16> read_xmm_operand(const Operand& m,bool aligned) {
     if(m.is_register){require_xmm(m.index);return xmm[m.index];}
     const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Read);
@@ -1379,6 +1438,16 @@ class Cpu {
       fail("packed integer SSE2 requires 66 prefix",FaultCode::UnsupportedOpcode);
     require_sse_state();
     const auto m=modrm();require_xmm(m.reg);
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+    switch (opcode) {
+      case 0xdb: case 0xdf: case 0xeb: // PAND/PANDN/POR
+      case 0xfc: case 0xfd: case 0xfe: case 0xd4: // PADD
+      case 0xf8: case 0xf9: case 0xfa: case 0xfb: // PSUB
+        if (try_ether_next(m)) return;
+        break;
+      default: break;
+    }
+#endif
     const auto lhs=xmm[m.reg],rhs=read_xmm_operand(m.rm,true);
     auto result=lhs;
     switch(opcode){
@@ -1801,6 +1870,7 @@ inline void Cpu::write_cr0(std::uint64_t value) {
     for (unsigned s = 0; s < 6; ++s) {
       cache_[s] = SegmentCache{}; cache_[s].base = std::uint64_t(segments[s]) << 4;
       cache_[s].code = s == CS; cache_[s].writable = s != CS;
+      cache_[s].inherited_from_real_mode = true;
     }
   }
   cr0 = std::uint32_t(value) | 0x10U;
@@ -2320,6 +2390,9 @@ inline void Cpu::extended() {
         fail("conflicting SSE2 mandatory prefixes",FaultCode::InvalidInstruction);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+      if (try_ether_next(m)) return;
+#endif
       const bool aligned=operand_override_;
       if(op==0x6f)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
       else write_xmm_operand(m.rm,xmm[m.reg],aligned);
@@ -2330,6 +2403,9 @@ inline void Cpu::extended() {
         fail("PXOR xmm requires 66 prefix",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+      if (try_ether_next(m)) return;
+#endif
       const auto rhs=read_xmm_operand(m.rm,true);
       for(unsigned i=0;i<16;++i)xmm[m.reg][i]^=rhs[i];
       return;

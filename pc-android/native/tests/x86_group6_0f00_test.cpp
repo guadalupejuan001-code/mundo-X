@@ -63,6 +63,66 @@ void fail(Cpu& cpu,FaultCode code,const char* explanation) {
   check(cpu.eflags==initial_eflags && cpu.ldtr.selector==before_ldtr &&
         cpu.tr.selector==before_tr, "fault must preserve FLAGS and system registers");
 }
+void check_protected_entry_stack() {
+  Cpu cpu(2*1024*1024);
+  cpu.reset(0x2000,0x0830);
+  cpu.gdtr={0x17,0x3000};
+  cpu.write64(0x3008,descriptor(0x20000,0xffff,0x9a)); // Protected CS, 16-bit.
+  cpu.write64(0x3010,descriptor(0x40000,0xffff,0x92)); // Protected SS, 16-bit.
+  const std::vector<std::uint8_t> enter{
+      0xfa,                           // CLI
+      0xb8,0x13,0x03,                 // MOV AX,0313 (real-mode SS, low bits 3)
+      0x8e,0xd0,                      // MOV SS,AX
+      0xbc,0x4c,0x0c,                 // MOV SP,0c4c
+      0xb8,0x11,0x00,                 // MOV AX,0011 (ET, PE)
+      0x0f,0x22,0xc0,                 // MOV CR0,EAX
+      0x6a,0x50,                      // PUSH 0x50 on the inherited stack
+      0xea,0x60,0x08,0x08,0x00};      // JMP FAR 0008:0860
+  // The first PUSH is at 2000:083f.
+  cpu.memory.write_block(0x20830,enter.data(),enter.size());
+  const std::vector<std::uint8_t> protected_code{
+      0x5b,                           // POP BX on the same inherited stack
+      0xb8,0x13,0x00,                 // MOV AX,0013 (RPL3, descriptor DPL0)
+      0x8e,0xd0,                      // MOV SS,AX must still fail
+      0xb8,0x10,0x00,                 // MOV AX,0010 (valid ring0 stack)
+      0x8e,0xd0,                      // MOV SS,AX
+      0x6a,0x51};                     // PUSH on the protected descriptor's base
+  cpu.memory.write_block(0x20860,protected_code.data(),protected_code.size());
+  for (unsigned i=0;i<6;++i) one(cpu,"real-to-protected setup");
+  check(cpu.eip==0x083f && std::string(cpu.mode_name())=="protected16" &&
+        cpu.cpl()==0 && cpu.segments[Cpu::SS]==0x0313,
+        "MOV CR0.PE enters protected16 at CPL0 with inherited SS");
+  one(cpu,"PUSH imm8 immediately after setting PE");
+  check(cpu.reg16(Cpu::ESP)==0x0c4a && cpu.read16(0x03130+0x0c4a)==0x0050,
+        "PUSH uses inherited real-mode SS base and 16-bit SP");
+  one(cpu,"protected16 far jump");
+  one(cpu,"POP after CS reload with inherited SS");
+  check(cpu.reg16(Cpu::EBX)==0x0050 && cpu.reg16(Cpu::ESP)==0x0c4c,
+        "Far jump leaves inherited SS in use until an explicit reload");
+  one(cpu,"load invalid protected stack selector");
+  fail(cpu,FaultCode::ProtectionFault,"MOV SS must reject protected RPL3 at CPL0");
+  check(cpu.segments[Cpu::SS]==0x0313,
+        "A rejected protected SS reload keeps the inherited selector");
+  cpu.fault.reset();
+  cpu.eip+=2;
+  one(cpu,"load valid protected stack selector");
+  one(cpu,"reload SS from the GDT");
+  one(cpu,"PUSH after reloading protected SS");
+  check(cpu.segments[Cpu::SS]==0x10 && cpu.reg16(Cpu::ESP)==0x0c4a &&
+        cpu.read16(0x40000+0x0c4a)==0x0051 && cpu.read16(0x03130+0x0c4a)==0x0050,
+        "A valid protected SS reload uses its GDT base and preserves old stack memory");
+
+  cpu.reset(0x2003,0x0830); // Real-mode CS low bits must not become CPL3.
+  cpu.memory.write_block(0x20860,enter.data(),enter.size());
+  for (unsigned i=0;i<6;++i) one(cpu,"real-to-protected setup with nonzero CS low bits");
+  check(cpu.cpl()==0 && cpu.segments[Cpu::CS]==0x2003,
+        "Inherited real-mode CS does not set protected CPL");
+  cpu.set_reg16(Cpu::ESP,1);
+  const auto boundary_byte=cpu.read8(0x03130+0xffff);
+  fail(cpu,FaultCode::SegmentLimit,"Inherited stack still checks the 64 KiB segment limit");
+  check(cpu.reg16(Cpu::ESP)==1 && cpu.read8(0x03130+0xffff)==boundary_byte,
+        "Out-of-limit PUSH must not move SP or write memory");
+}
 void check_group6() {
   Cpu cpu(2*1024*1024);
   program(cpu,{0x0f,0x00,0xc0});
@@ -240,11 +300,12 @@ void check_group6() {
 }
 int main() {
  try {
+    check_protected_entry_stack();
     check_group6();
     std::cout<<"WIN10_GROUP6_0F00_PASS checks="<<checks
              <<" protected16=1 ModRM=1 SLDT=1 STR=1 LLDT=1 LTR=1"
              <<" VERR=1 VERW=1 TSS_busy=1 LDT=1 rollback=1"
-             <<" windows_ready=0\n";
+             <<" protected_entry_stack=1 windows_ready=0\n";
     return 0;
  } catch(const std::exception& e) {
     std::cerr<<"WIN10_GROUP6_0F00_FAIL: "<<e.what()<<'\n';
