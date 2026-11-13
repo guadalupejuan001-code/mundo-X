@@ -82,6 +82,10 @@ class Cpu {
   std::array<std::uint16_t, 6> segments{};
   std::uint64_t eip = 0x7c00, cr2 = 0, cr3 = 0, efer = 0, fs_base = 0, gs_base = 0;
   std::uint32_t eflags = 2, cr0 = 0x10, cr4 = 0;
+  // Architectural XMM/MXCSR owned by the original guest CPU.
+  std::array<std::array<std::uint8_t,16>,16> xmm{};
+  std::uint32_t mxcsr=0x1f80;
+  static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
   DescriptorTable gdtr{0, 0}, idtr{0x3ff, 0};
   SystemRegister ldtr{}, tr{};
   MemoryFabric memory;
@@ -141,7 +145,8 @@ class Cpu {
 
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
   void reset(std::uint16_t cs = 0, std::uint64_t ip = 0x7c00) {
-    regs.fill(0); segments.fill(0); segments[CS] = cs;
+    regs.fill(0); xmm={}; mxcsr=0x1f80;
+    segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
@@ -224,7 +229,8 @@ class Cpu {
     if (fault) return StepResult::Faulted;
     if (halted) return StepResult::Halted;
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
-                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted};
+                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
+                          xmm,mxcsr};
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -348,7 +354,8 @@ class Cpu {
   bool raise_external_irq(std::uint8_t vector) {
     if (!flag(IF) || fault) return false;
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
-                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted};
+                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
+                          xmm,mxcsr};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -403,6 +410,8 @@ class Cpu {
     DescriptorTable gdtr, idtr;
     SystemRegister ldtr, tr;
     bool a20, halted;
+    std::array<std::array<std::uint8_t,16>,16> xmm;
+    std::uint32_t mxcsr;
   };
   struct Operand {
     bool is_register = false;
@@ -1052,7 +1061,7 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE, PGE. With no TLB, PGE has no cached translations to retain.
-  constexpr std::uint32_t supported = 0x000000b0U;
+  constexpr std::uint32_t supported = 0x000002b0U; // + CR4.OSFXSR, no OSXSAVE
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   cr4 = std::uint32_t(value);
