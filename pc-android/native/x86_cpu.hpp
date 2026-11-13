@@ -1397,9 +1397,10 @@ inline void Cpu::extended() {
       // Resolve and preflight every byte before ANY write to preserve the
       // observable all-or-nothing comparison on our single guest vCPU.
       // Claimed MMIO cannot provide a 128-bit atomic transaction; reject it.
-      const auto first=translate(address,Access::Write);
       for(unsigned offset=0;offset<amount;++offset) {
-        const auto p=offset<8?first+offset:translate(address+offset,Access::Write);
+        // CMPXCHG8B may straddle a 4-KiB page. Translate each byte
+        // before accessing memory; never guess physical contiguity.
+        const auto p=translate(address+offset,Access::Write);
         if(mmio_at(p))
           fail("atomic memory operation on MMIO is unsupported",
                FaultCode::UnsupportedState);
