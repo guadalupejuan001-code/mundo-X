@@ -686,6 +686,38 @@ class Cpu {
     if (operand.is_register) put_reg(operand.index, bytes, value);
     else write_segment(operand.segment, operand_offset(operand), bytes, value);
   }
+  unsigned xmm_count() const {return is_long_mode()?16U:8U;}
+  void require_xmm(unsigned index) const {
+    if(index>=xmm_count())fail("XMM register index unavailable",FaultCode::InvalidInstruction);
+  }
+  void require_sse_state() const {
+    if(!(cr4&0x200U))
+      fail("SSE2 requires CR4.OSFXSR",FaultCode::InvalidInstruction);
+    if(cr0&0x4U)
+      fail("SSE2 disabled by CR0.EM",FaultCode::InvalidInstruction);
+    if(cr0&0x8U)
+      fail("SSE2 task-switched CR0.TS",FaultCode::InvalidInstruction);
+  }
+  std::array<std::uint8_t,16> read_xmm_operand(const Operand& m,bool aligned) {
+    if(m.is_register){require_xmm(m.index);return xmm[m.index];}
+    const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Read);
+    if(aligned&&(address&15U))fail("aligned SSE2 operand requires 16-byte alignment",FaultCode::ProtectionFault);
+    std::array<std::uint8_t,16> result{};
+    for(unsigned i=0;i<16;++i)result[i]=std::uint8_t(read_linear(address+i,1));
+    return result;
+  }
+  void write_xmm_operand(const Operand& m,const std::array<std::uint8_t,16>& value,bool aligned) {
+    if(m.is_register){require_xmm(m.index);xmm[m.index]=value;return;}
+    const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Write);
+    if(aligned&&(address&15U))fail("aligned SSE2 operand requires 16-byte alignment",FaultCode::ProtectionFault);
+    // Preflight the entire destination before the first guest byte write.
+    for(unsigned i=0;i<16;++i){
+      const auto p=translate(address+i,Access::Write);
+      if(mmio_at(p))fail("128-bit SSE2 MMIO write unsupported",FaultCode::UnsupportedState);
+      (void)physical_index(p);
+    }
+    for(unsigned i=0;i<16;++i)write_linear(address+i,1,value[i]);
+  }
   void require_memory(const Operand& operand) const {
     if (operand.is_register) fail("instruction requires a memory operand", FaultCode::InvalidInstruction);
   }
@@ -1383,6 +1415,42 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0x6f: case 0x7f: { // 66 MOVDQA / F3 MOVDQU
+      if(!operand_override_&&repeat_!=0xf3)
+        fail("SSE2 MOVDQA/MOVDQU requires 66/F3 prefix",FaultCode::UnsupportedOpcode);
+      if(operand_override_&&repeat_)
+        fail("conflicting SSE2 mandatory prefixes",FaultCode::InvalidInstruction);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const bool aligned=operand_override_;
+      if(op==0x6f)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
+      else write_xmm_operand(m.rm,xmm[m.reg],aligned);
+      return;
+    }
+    case 0xef: { // 66 PXOR xmm, xmm/m128
+      if(!operand_override_||repeat_)
+        fail("PXOR xmm requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const auto rhs=read_xmm_operand(m.rm,false);
+      for(unsigned i=0;i<16;++i)xmm[m.reg][i]^=rhs[i];
+      return;
+    }
+    case 0xae: { // FXSAVE/FXRSTOR not yet implemented; MXCSR loads/stores
+      const auto m=modrm();require_memory(m.rm);
+      if(m.group!=2&&m.group!=3)
+        fail("FXSAVE/FXRSTOR and other 0F AE states pending",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto address=segment_linear(m.rm.segment,operand_offset(m),4,
+                                       m.group==2?Access::Read:Access::Write);
+      if(m.group==2){
+        const auto candidate=std::uint32_t(read_linear(address,4));
+        if(candidate&~kMxcsrMask)
+          fail("LDMXCSR reserved bits",FaultCode::ProtectionFault);
+        mxcsr=candidate;
+      }else write_linear(address,4,mxcsr);
+      return;
+    }
     case 0x0d: { // AMD PREFETCH/PREFETCHW advisory hints.
       const auto m=modrm();
       require_memory(m.rm);
