@@ -260,7 +260,7 @@ class Cpu {
     } trace_guard{publish_trace};
     start_ip_ = eip; start_cs_ = segments[CS]; cursor_ = eip;
     decoded_.clear(); journal_.clear(); opcode_ = 0;
-    operand_override_ = address_override_ = false; rex_ = 0;
+    operand_override_ = address_override_ = lock_prefix_ = false; rex_ = 0;
     op32_ = is_long_mode() || (!is_real_mode() && cache_[CS].big);
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
@@ -283,8 +283,10 @@ class Cpu {
         if (op == 0x64) { override_ = FS; rex_ = 0; continue; }
         if (op == 0x65) { override_ = GS; rex_ = 0; continue; }
         opcode_ = op;
-        if (op == 0xf0)
-          fail("LOCK prefix is not implemented", FaultCode::UnsupportedState);
+        if (op == 0xf0) {
+          if (lock_prefix_) fail("duplicate LOCK prefix", FaultCode::InvalidInstruction);
+          lock_prefix_=true;rex_=0;continue;
+        }
         break;
       }
       op32_ = (is_long_mode() || (!is_real_mode() && cache_[CS].big)) != operand_override_;
@@ -413,7 +415,7 @@ class Cpu {
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
 
   bool op32_ = false, addr32_ = false, ip_written_ = false, transaction_ = false;
-  bool operand_override_ = false, address_override_ = false;
+  bool operand_override_ = false, address_override_ = false, lock_prefix_ = false;
   std::uint8_t rex_ = 0;
   std::array<SegmentCache, 6> cache_{};
   int override_ = -1;
@@ -1351,6 +1353,9 @@ inline void Cpu::group3(const ModRM& m, unsigned bytes) {
 inline void Cpu::extended() {
   const auto op = fetch8(); opcode_ = std::uint16_t(0x0f00U | op);
   const auto bytes = width();
+  if (lock_prefix_ && op != 0xc7)
+    fail("LOCK prefix is supported only on 0F C7 /1 CMPXCHG8B/16B",
+         FaultCode::UnsupportedState);
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
@@ -1368,6 +1373,56 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0x0d: { // AMD PREFETCH/PREFETCHW advisory hints.
+      const auto m=modrm();
+      require_memory(m.rm);
+      if(m.group!=1)
+        fail("only PREFETCHW /1 is modeled", FaultCode::UnsupportedOpcode);
+      // PREFETCHW is a non-faulting hint. Decode the effective address but
+      // do NOT read or materialize any RAM, page tables, QSSD or MMIO.
+      (void)operand_offset(m.rm);
+      return;
+    }
+    case 0xc7: { // CMPXCHG8B / CMPXCHG16B, /1 memory only.
+      const auto m=modrm();
+      if(m.group!=1 || m.rm.is_register)
+        fail("0F C7 requires /1 memory operand", FaultCode::InvalidInstruction);
+      const bool large=is_long_mode() && (rex_&8);
+      const unsigned amount=large?16U:8U;
+      const auto address=segment_linear(m.rm.segment,operand_offset(m.rm),
+                                        amount,Access::Write);
+      if(large && (address&15U))
+        fail("CMPXCHG16B requires 16-byte aligned address",
+             FaultCode::ProtectionFault);
+      // Resolve and preflight every byte before ANY write to preserve the
+      // observable all-or-nothing comparison on our single guest vCPU.
+      // Claimed MMIO cannot provide a 128-bit atomic transaction; reject it.
+      for(unsigned offset=0;offset<amount;++offset) {
+        // CMPXCHG8B may straddle a 4-KiB page. Translate each byte
+        // before accessing memory; never guess physical contiguity.
+        const auto p=translate(address+offset,Access::Write);
+        if(mmio_at(p))
+          fail("atomic memory operation on MMIO is unsupported",
+               FaultCode::UnsupportedState);
+        (void)physical_index(p);
+      }
+      const auto low=read_linear(address,large?8:4);
+      const auto high=read_linear(address+(large?8:4),large?8:4);
+      const auto rax=get_reg(EAX,large?8:4);
+      const auto rdx=get_reg(EDX,large?8:4);
+      const bool equal=low==rax && high==rdx;
+      if(equal) {
+        // CPU::step() journals both writes; a failure in the second half
+        // rolls back the first half. No additional CPU or host atomic claim.
+        write_linear(address,large?8:4,get_reg(EBX,large?8:4));
+        write_linear(address+(large?8:4),large?8:4,get_reg(ECX,large?8:4));
+      }else{
+        put_reg(EAX,large?8:4,low);
+        put_reg(EDX,large?8:4,high);
+      }
+      set_flag(ZF,equal);
+      return;
+    }
     case 0x00: { // Group 6: SLDT, STR, LLDT, LTR, VERR, VERW
       const auto m = modrm(); // Always decode ModRM before any unsupported fault.
       if (is_real_mode())
@@ -1567,15 +1622,18 @@ inline void Cpu::extended() {
         ebx=word(0);edx=word(4);ecx=word(8);
       }else if(leaf==1){
         eax=0x00000663U; // modeled family/model/stepping
-        // TSC, MSR, PAE(long-mode). Do NOT advertise SSE/SSE2, x87,
-        // APIC, AVX, 3D, or interrupt/device capabilities not implemented.
-        edx=(1U<<4)|(1U<<5)|(1U<<6);
+        // TSC, MSR, PAE, and tested atomic CMPXCHG16B only.
+        // Never claim SSE2/x87/APIC until guest instructions really work.
+        edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8); // CMPXCHG8B
+        ecx=(1U<<13); // CMPXCHG16B guest primitive
+
       }else if(leaf==7 && subleaf==0){
         // Extended feature bits remain zero: no SMEP/AVX2/etc.
       }else if(leaf==0x80000000U){
         eax=0x80000008U;
       }else if(leaf==0x80000001U){
         edx=(1U<<20)|(1U<<29); // NX and modeled IA-32e long mode
+        ecx=(1U<<0)|(1U<<8); // tested LAHF/SAHF and non-faulting PREFETCHW
       }else if(leaf==0x80000008U){
         eax=32U|(48U<<8); // physical-address and virtual-address bit sizes
       }
@@ -1615,6 +1673,8 @@ inline void Cpu::extended() {
 }
 
 inline void Cpu::execute(std::uint8_t op) {
+  if(lock_prefix_ && op!=0x0f)
+    fail("LOCK prefix on unsupported instruction", FaultCode::UnsupportedState);
   const unsigned bytes = width();
   const unsigned stack_bytes = stack_operand_width();
   const unsigned encoded_register = (op & 7U) + ((rex_ & 1) ? 8 : 0);

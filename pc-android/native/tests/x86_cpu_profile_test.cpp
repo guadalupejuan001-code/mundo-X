@@ -37,6 +37,8 @@ int main(){
         start(cpu,1);
         need((cpu.regs[Cpu::EDX]&(1U<<4))!=0,"TSC declared feature");
         need((cpu.regs[Cpu::EDX]&(1U<<6))!=0,"PAE declared for IA-32e");
+        need((cpu.regs[Cpu::EDX]&(1U<<8))!=0,"CMPXCHG8B must be advertised after test");
+        need((cpu.regs[Cpu::ECX]&(1U<<13))!=0,"CMPXCHG16B required for Windows x64");
         need((cpu.regs[Cpu::EDX]&(1U<<26))==0,"must not claim unimplemented SSE2");
         need((cpu.regs[Cpu::EDX]&(1U<<0))==0,"must not claim x87");
         need((cpu.regs[Cpu::ECX]&(1U<<28))==0,"must not claim AVX");
@@ -48,6 +50,8 @@ int main(){
         start(cpu,0x80000001U);
         need((cpu.regs[Cpu::EDX]&(1U<<29))!=0,"64-bit modeled feature");
         need((cpu.regs[Cpu::EDX]&(1U<<20))!=0,"NX modeled feature");
+        need((cpu.regs[Cpu::ECX]&(1U<<0))!=0,"LAHF/SAHF long64 bit expected");
+        need((cpu.regs[Cpu::ECX]&(1U<<8))!=0,"PREFETCHW declared after x86 opcode implementation");
         start(cpu,0x80000008U);
         need((cpu.regs[Cpu::EAX]&255)==32,"physical bits");
         need(((cpu.regs[Cpu::EAX]>>8)&255)==48,"virtual bits");
