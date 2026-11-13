@@ -82,6 +82,10 @@ class Cpu {
   std::array<std::uint16_t, 6> segments{};
   std::uint64_t eip = 0x7c00, cr2 = 0, cr3 = 0, efer = 0, fs_base = 0, gs_base = 0;
   std::uint32_t eflags = 2, cr0 = 0x10, cr4 = 0;
+  // Architectural XMM/MXCSR owned by the original guest CPU.
+  std::array<std::array<std::uint8_t,16>,16> xmm{};
+  std::uint32_t mxcsr=0x1f80;
+  static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
   DescriptorTable gdtr{0, 0}, idtr{0x3ff, 0};
   SystemRegister ldtr{}, tr{};
   MemoryFabric memory;
@@ -141,7 +145,8 @@ class Cpu {
 
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
   void reset(std::uint16_t cs = 0, std::uint64_t ip = 0x7c00) {
-    regs.fill(0); segments.fill(0); segments[CS] = cs;
+    regs.fill(0); xmm={}; mxcsr=0x1f80;
+    segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
@@ -224,7 +229,8 @@ class Cpu {
     if (fault) return StepResult::Faulted;
     if (halted) return StepResult::Halted;
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
-                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted};
+                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
+                          xmm,mxcsr};
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -348,7 +354,8 @@ class Cpu {
   bool raise_external_irq(std::uint8_t vector) {
     if (!flag(IF) || fault) return false;
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
-                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted};
+                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
+                          xmm,mxcsr};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -403,6 +410,8 @@ class Cpu {
     DescriptorTable gdtr, idtr;
     SystemRegister ldtr, tr;
     bool a20, halted;
+    std::array<std::array<std::uint8_t,16>,16> xmm;
+    std::uint32_t mxcsr;
   };
   struct Operand {
     bool is_register = false;
@@ -446,6 +455,7 @@ class Cpu {
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
     gdtr = s.gdtr; idtr = s.idtr;
     ldtr = s.ldtr; tr = s.tr;
+    xmm=s.xmm;mxcsr=s.mxcsr;
     a20_enabled = s.a20; halted = s.halted;
   }
   static void check_register(unsigned r) {
@@ -675,6 +685,38 @@ class Cpu {
   void put(const Operand& operand, unsigned bytes, std::uint64_t value) {
     if (operand.is_register) put_reg(operand.index, bytes, value);
     else write_segment(operand.segment, operand_offset(operand), bytes, value);
+  }
+  unsigned xmm_count() const {return is_long_mode()?16U:8U;}
+  void require_xmm(unsigned index) const {
+    if(index>=xmm_count())fail("XMM register index unavailable",FaultCode::InvalidInstruction);
+  }
+  void require_sse_state() const {
+    if(!(cr4&0x200U))
+      fail("SSE2 requires CR4.OSFXSR",FaultCode::InvalidInstruction);
+    if(cr0&0x4U)
+      fail("SSE2 disabled by CR0.EM",FaultCode::InvalidInstruction);
+    if(cr0&0x8U)
+      fail("SSE2 task-switched CR0.TS",FaultCode::InvalidInstruction);
+  }
+  std::array<std::uint8_t,16> read_xmm_operand(const Operand& m,bool aligned) {
+    if(m.is_register){require_xmm(m.index);return xmm[m.index];}
+    const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Read);
+    if(aligned&&(address&15U))fail("aligned SSE2 operand requires 16-byte alignment",FaultCode::ProtectionFault);
+    std::array<std::uint8_t,16> result{};
+    for(unsigned i=0;i<16;++i)result[i]=std::uint8_t(read_linear(address+i,1));
+    return result;
+  }
+  void write_xmm_operand(const Operand& m,const std::array<std::uint8_t,16>& value,bool aligned) {
+    if(m.is_register){require_xmm(m.index);xmm[m.index]=value;return;}
+    const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Write);
+    if(aligned&&(address&15U))fail("aligned SSE2 operand requires 16-byte alignment",FaultCode::ProtectionFault);
+    // Preflight the entire destination before the first guest byte write.
+    for(unsigned i=0;i<16;++i){
+      const auto p=translate(address+i,Access::Write);
+      if(mmio_at(p))fail("128-bit SSE2 MMIO write unsupported",FaultCode::UnsupportedState);
+      (void)physical_index(p);
+    }
+    for(unsigned i=0;i<16;++i)write_linear(address+i,1,value[i]);
   }
   void require_memory(const Operand& operand) const {
     if (operand.is_register) fail("instruction requires a memory operand", FaultCode::InvalidInstruction);
@@ -1052,7 +1094,7 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE, PGE. With no TLB, PGE has no cached translations to retain.
-  constexpr std::uint32_t supported = 0x000000b0U;
+  constexpr std::uint32_t supported = 0x000002b0U; // + CR4.OSFXSR, no OSXSAVE
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   cr4 = std::uint32_t(value);
@@ -1373,6 +1415,42 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0x6f: case 0x7f: { // 66 MOVDQA / F3 MOVDQU
+      if(!operand_override_&&repeat_!=0xf3)
+        fail("SSE2 MOVDQA/MOVDQU requires 66/F3 prefix",FaultCode::UnsupportedOpcode);
+      if(operand_override_&&repeat_)
+        fail("conflicting SSE2 mandatory prefixes",FaultCode::InvalidInstruction);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const bool aligned=operand_override_;
+      if(op==0x6f)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
+      else write_xmm_operand(m.rm,xmm[m.reg],aligned);
+      return;
+    }
+    case 0xef: { // 66 PXOR xmm, xmm/m128
+      if(!operand_override_||repeat_)
+        fail("PXOR xmm requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const auto rhs=read_xmm_operand(m.rm,false);
+      for(unsigned i=0;i<16;++i)xmm[m.reg][i]^=rhs[i];
+      return;
+    }
+    case 0xae: { // FXSAVE/FXRSTOR not yet implemented; MXCSR loads/stores
+      const auto m=modrm();require_memory(m.rm);
+      if(m.group!=2&&m.group!=3)
+        fail("FXSAVE/FXRSTOR and other 0F AE states pending",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto address=segment_linear(m.rm.segment,operand_offset(m.rm),4,
+                                       m.group==2?Access::Read:Access::Write);
+      if(m.group==2){
+        const auto candidate=std::uint32_t(read_linear(address,4));
+        if(candidate&~kMxcsrMask)
+          fail("LDMXCSR reserved bits",FaultCode::ProtectionFault);
+        mxcsr=candidate;
+      }else write_linear(address,4,mxcsr);
+      return;
+    }
     case 0x0d: { // AMD PREFETCH/PREFETCHW advisory hints.
       const auto m=modrm();
       require_memory(m.rm);
