@@ -557,10 +557,19 @@ class Cpu {
       fail("LDMXCSR/STMXCSR require CR4.OSFXSR",FaultCode::InvalidInstruction);
     // Reject device MMIO for extended state operations. The CPU journal
     // reverses RAM writes, but cannot reverse device side effects.
-    for(unsigned i=0;i<n;++i){
-      const auto physical=translate(addr+i,m.group==0||m.group==3?Access::Write:Access::Read);
-      if(mmio_at(physical))fail("FXSTATE on MMIO unsupported",FaultCode::UnsupportedState);
-      (void)physical_index(physical);
+    // One translation per guest 4-KiB page, NOT one page walk per byte.
+    // This preserves exact physical bytes without materializing device RAM.
+    for(unsigned position=0;position<n;) {
+      const auto physical=translate(addr+position,
+                      m.group==0||m.group==3?Access::Write:Access::Read);
+      const unsigned chunk=std::min<unsigned>(n-position,
+                           4096U-unsigned((addr+position)&4095U));
+      for(unsigned j=0;j<chunk;++j) {
+        if(mmio_at(physical+j))fail("FXSTATE on MMIO unsupported",
+                                     FaultCode::UnsupportedState);
+        (void)physical_index(physical+j);
+      }
+      position+=chunk;
     }
     if(m.group==2) { // LDMXCSR m32: GP on reserved bits, no mutation
       const auto incoming=std::uint32_t(read_linear(addr,4));
@@ -573,7 +582,10 @@ class Cpu {
       // FXSAVE m512: preserve architecturally reserved/software bytes,
       // only update defined fields. Does not store MMX (not advertised).
       std::array<std::uint8_t,512> data{};
-      for(unsigned i=0;i<512;++i)data[i]=std::uint8_t(read_linear(addr+i,1));
+      for(unsigned i=0;i<512;i+=8) {
+        const auto word=read_linear(addr+i,8);
+        for(unsigned j=0;j<8;++j)data[i+j]=std::uint8_t(word>>(8*j));
+      }
       const auto store16=[&](unsigned off,std::uint16_t v) {
         data[off]=std::uint8_t(v);data[off+1]=std::uint8_t(v>>8);
       };
@@ -590,12 +602,19 @@ class Cpu {
         for(unsigned i=0;i<(is_long_mode()?16U:8U);++i)
           std::copy(fx.xmm[i].begin(),fx.xmm[i].end(),data.begin()+160+i*16);
       }
-      for(unsigned i=0;i<512;++i)write_linear(addr+i,1,data[i]);
+      for(unsigned i=0;i<512;i+=8) {
+        std::uint64_t word=0;
+        for(unsigned j=0;j<8;++j)word|=std::uint64_t(data[i+j])<<(8*j);
+        write_linear(addr+i,8,word);
+      }
       return true;
     }
     // FXRSTOR: read & validate a complete 512-byte state before commit.
     std::array<std::uint8_t,512> bytes{};
-    for(unsigned i=0;i<512;++i)bytes[i]=std::uint8_t(read_linear(addr+i,1));
+    for(unsigned i=0;i<512;i+=8) {
+      const auto word=read_linear(addr+i,8);
+      for(unsigned j=0;j<8;++j)bytes[i+j]=std::uint8_t(word>>(8*j));
+    }
     ExtendedState restored=fx;
     restored.fcw=std::uint16_t(bytes[0]|(unsigned(bytes[1])<<8));
     restored.fsw=std::uint16_t(bytes[2]|(unsigned(bytes[3])<<8));
@@ -636,8 +655,13 @@ class Cpu {
     if(aligned && (address&15U))
       fail("aligned 128-bit SIMD memory operand required",
            FaultCode::ProtectionFault);
-    for(unsigned i=0;i<bytes;++i)
-      result[i]=std::uint8_t(read_linear(address+i,1));
+    for(unsigned position=0;position<bytes;) {
+      const unsigned count=std::min(8U,bytes-position);
+      const auto word=read_linear(address+position,count);
+      for(unsigned i=0;i<count;++i)
+        result[position+i]=std::uint8_t(word>>(8*i));
+      position+=count;
+    }
     return result;
   }
   void write_xmm_operand(const Operand& o,const Xmm& value,
@@ -653,14 +677,26 @@ class Cpu {
            FaultCode::ProtectionFault);
     // Prevalidate all memory bytes before writing. The CPU journal will
     // restore memory and SIMD state if any subsequent page walk fails.
-    for(unsigned i=0;i<bytes;++i) {
-      const auto p=translate(address+i,Access::Write);
-      if(mmio_at(p))
-        fail("128-bit SIMD writes to device MMIO are unsupported",
-             FaultCode::UnsupportedState);
-      (void)physical_index(p);
+    for(unsigned position=0;position<bytes;) {
+      const auto p=translate(address+position,Access::Write);
+      const unsigned count=std::min<unsigned>(bytes-position,
+                                    4096U-unsigned((address+position)&4095U));
+      for(unsigned i=0;i<count;++i){
+        if(mmio_at(p+i))
+          fail("128-bit SIMD writes to device MMIO are unsupported",
+               FaultCode::UnsupportedState);
+        (void)physical_index(p+i);
+      }
+      position+=count;
     }
-    for(unsigned i=0;i<bytes;++i)write_linear(address+i,1,value[i]);
+    for(unsigned position=0;position<bytes;){
+      const unsigned count=std::min(8U,bytes-position);
+      std::uint64_t word=0;
+      for(unsigned i=0;i<count;++i)
+        word|=std::uint64_t(value[position+i])<<(8*i);
+      write_linear(address+position,count,word);
+      position+=count;
+    }
   }
   bool execute_sse_subset(unsigned op) {
     const bool p66=operand_override_ && !repeat_;
