@@ -109,6 +109,14 @@ class Cpu {
   // Observation only: callback runs AFTER a bounded guest CPU step finishes.
   // When unset, it does not decode extra instructions or allocate trace data.
   std::function<void(const StepTrace&)> step_trace_hook;
+  struct IrqTrace {
+    std::uint8_t vector=0;
+    std::uint16_t cs_before=0,cs_after=0;
+    std::uint64_t rip_before=0,rip_after=0;
+    std::uint64_t sequence=0;
+    bool delivered=false;
+  };
+  std::function<void(const IrqTrace&)> irq_trace_hook;
 
   // true: the host BIOS handled INT, with EIP already past the instruction.
   // false: execute the guest IVT handler with a real interrupt stack frame.
@@ -356,6 +364,12 @@ class Cpu {
       }
       halted=false;
       transaction_=false;journal_.clear();
+      if(irq_trace_hook) {
+        try {
+          irq_trace_hook(IrqTrace{vector,before.segments[CS],segments[CS],
+                                 before.eip,eip,instructions,true});
+        }catch(...){ /* IRQ observation must not alter the guest */ }
+      }
       return true;
     } catch (const Trap& t) {
       rollback(before);
