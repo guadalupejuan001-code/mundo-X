@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for test in x86_c09r1_stage3_fp_test x86_c09r1_sse2_packed_test x86_c09r1_fxstate_test x86_c09r1_xmm_subset_test x86_windows10_c09r_cpu_readiness_test x86_trace_c09_test x86_port_pio_c07_test x86_bus_c06_test x86_cpl_c05_test x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
+          for test in x86_c09r1_stage3_x87_precision_test x86_c09r1_stage3_ring3_test x86_c09r1_stage3_fp_test x86_c09r1_sse2_packed_test x86_c09r1_fxstate_test x86_c09r1_xmm_subset_test x86_windows10_c09r_cpu_readiness_test x86_trace_c09_test x86_port_pio_c07_test x86_bus_c06_test x86_cpl_c05_test x86_idt_c04_test x86_long_mode_test x86_cpu_profile_test x86_group6_0f00_test; do
             "build/c09r/${test}" > "build/c09rr-evidence/${test}.log" 2>&1 || {
               cat "build/c09rr-evidence/${test}.log"
               exit 1
