@@ -32,6 +32,7 @@
 #include "x86_ext80.hpp"
 #include "x86_wide_integer.hpp"
 #include "../../native/include/mundo_x/experimental/ether_memory_block.hpp"
+#include "../../native/include/mundo_x/experimental/ether_shift_loop.hpp"
 #if defined(MUNDO_X_PC_ETHER_NEXT)
 #include "mundo_x/experimental/ether_transform.hpp"
 #endif
@@ -227,6 +228,14 @@ class Cpu {
   // The machine must bound this budget by the next device observation. Zero
   // means call step() for the original fault/IO behavior and diagnostics.
   unsigned try_rep_batch(unsigned budget);
+  bool shift_loop_batch_candidate() const noexcept {
+    return opcode_ == 0xe2 && ip_written_ && start_cs_ == segments[CS] &&
+           decoded_.size() == 2 && decoded_[0] == 0xe2 && decoded_[1] == 0xfa &&
+           eip <= 0xfffa && start_ip_ == eip + 4 && cursor_ == eip + 6 && code_mask() == 0xffff;
+  }
+  // Keep device observations on their original guest instruction boundaries.
+  // Returns only complete shift/rotate/LOOP iterations within the granted budget.
+  unsigned try_shift_loop_batch(unsigned step_budget);
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -2633,6 +2642,8 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
   }
 }
 
+#include "x86_shift_loop.inc"
+
 inline void Cpu::string_operation(std::uint8_t op) {
   if (repeat_ && index(ECX) == 0) return;
   const unsigned bytes = (op & 1U) ? (op < 0x70 ? (op32_ ? 4 : 2) : width()) : 1;
@@ -3251,6 +3262,28 @@ inline void Cpu::extended() {
       });
       return;
     }
+    case 0xbc: case 0xbd: { // BSF, BSR.
+      // Without BMI1 or ABM, an F3 prefix also decodes as BSF or BSR.
+      const auto m = modrm();
+      auto source = get(m.rm, bytes);
+      set_flag(ZF, source == 0);
+      // The architecture leaves the zero-input destination undefined.
+      if (source == 0) return;
+      unsigned index = 0;
+      if (op == 0xbc) {
+        while ((source & 1) == 0) {
+          source >>= 1;
+          ++index;
+        }
+      } else {
+        while (source > 1) {
+          source >>= 1;
+          ++index;
+        }
+      }
+      put_reg(m.reg, bytes, index);
+      return;
+    }
     case 0xb0: case 0xb1: { // CMPXCHG r/m, reg.
       const auto m = modrm();
       const unsigned amount = op == 0xb0 ? 1 : bytes;
@@ -3432,6 +3465,16 @@ inline void Cpu::extended() {
     }
     case 0x01: {
       const auto m = modrm();
+      if (m.group == 7) { // INVLPG m
+        if (is_long_mode() && m.rm.is_register && (m.rm.index & 7U) == EAX)
+          fail("SWAPGS is not implemented", FaultCode::UnsupportedOpcode);
+        require_memory(m.rm);
+        if (cpl() != 0) fail("INVLPG requires CPL0", FaultCode::ProtectionFault);
+        // The operand supplies an address without accessing the segment or
+        // the target page. There is no cached translation to invalidate.
+        // A noncanonical address in 64-bit mode also has no effect.
+        return;
+      }
       if (m.group == 4) { put(m.rm, m.rm.is_register ? bytes : 2, cr0); return; }
       if (m.group == 6) {
         if (cpl() != 0) fail("LMSW requires CPL0", FaultCode::ProtectionFault);

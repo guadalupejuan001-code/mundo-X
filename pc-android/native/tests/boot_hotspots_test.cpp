@@ -139,6 +139,53 @@ void guest_boot() {
   pc.enable_boot_hotspots(false);
   expect(!pc.boot_hotspots(), "disabling profiling should restore the uninstrumented configuration");
 }
+
+void shift_loop_boot() {
+  cosmic_pc::PcMachine pc;
+  using cosmic_pc::Cpu;
+  std::array<std::uint8_t, 512> disk{};
+  constexpr std::array<std::uint8_t, 20> program{
+      0xfa,                    // CLI.
+      0xb8, 0xa5, 0x82,        // MOV AX, 82a5h.
+      0xba, 0x7d, 0xa2,        // MOV DX, a27dh.
+      0xb9, 0xff, 0xff,        // MOV CX, ffffh.
+      0xd1, 0xea,              // SHR DX, 1.
+      0xd1, 0xd8,              // RCR AX, 1.
+      0xe2, 0xfa,              // LOOP back to SHR.
+      0x0f, 0xbc, 0xc2,        // BSF AX, DX.
+      0xf4,                    // HLT.
+  };
+  std::copy(program.begin(), program.end(), disk.begin());
+  disk[510] = 0x55;
+  disk[511] = 0xaa;
+  pc.mount([&](std::uint64_t offset, std::uint8_t* dest, std::size_t len) {
+    if (offset > disk.size() || len > disk.size() - offset) return false;
+    std::copy_n(disk.data() + offset, len, dest);
+    return true;
+  }, disk.size(), "raw");
+  pc.enable_boot_hotspots();
+
+  auto execute_guest = [&] {
+    for (unsigned slice = 0; slice < 80 && !pc.cpu.halted && !pc.cpu.fault; ++slice) pc.run(4087);
+    expect(pc.cpu.halted && !pc.cpu.fault, "boot guest must reach HLT past BSF");
+    expect(pc.cpu.instructions == 196611 && pc.cpu.reg16(Cpu::ECX) == 0 &&
+               pc.cpu.reg16(Cpu::EDX) == 0 && (pc.cpu.eflags & 0x40),
+           "shift loop and zero-source BSF must match architectural state");
+    const auto report = json(*pc.boot_hotspots());
+    expect(report.find("\"bytes\":\"d1ea\"") != std::string::npos &&
+               report.find("\"bytes\":\"d1d8\"") != std::string::npos &&
+               report.find("\"bytes\":\"e2fa\"") != std::string::npos,
+           "profiler should retain each shift-loop opcode");
+    return without_elapsed(report);
+  };
+  const auto scalar = execute_guest();
+  pc.reset();
+  pc.enable_boot_acceleration();
+  expect(execute_guest() == scalar, "shift batches changed a profiler sample");
+  expect(pc.boot_acceleration().shift_loop_steps > 190'000 &&
+             pc.boot_acceleration().shift_loop_batches > 1,
+         "fixture did not exercise batched shift loops");
+}
 }  // namespace
 
 int main() {
@@ -146,7 +193,9 @@ int main() {
     sampling_and_bulk();
     bounded_hotspots();
     guest_boot();
-    std::cout << "BOOT_HOTSPOTS_PASS jittered=1 bulk_equivalent=1 bounded_top=8 guest_boot=1\n";
+    shift_loop_boot();
+    std::cout << "BOOT_HOTSPOTS_PASS jittered=1 bulk_equivalent=1 bounded_top=8 guest_boot=1"
+                 " shift_loop=1 bit_scan=1\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "BOOT_HOTSPOTS_FAIL " << error.what() << '\n';

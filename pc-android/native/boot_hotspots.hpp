@@ -18,6 +18,9 @@ class BootHotspots {
   bool wants_sample(std::uint64_t steps = 1) const noexcept {
     return steps >= until_sample_;
   }
+  unsigned steps_before_sample() const noexcept {
+    return static_cast<unsigned>(until_sample_ - 1);
+  }
 
   // The caller records the decoded instruction for every crossed sample.
   // Aggregation is valid when a bulk execution finishes a single REP opcode.
