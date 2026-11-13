@@ -213,6 +213,7 @@ class PcMachine {
       const auto ip=cpu.eip;
       const auto* mode=last_mode;
       const auto before=cpu.instructions;
+      if(cpu.halted)cpu.advance_halted_clock();
       if(boot_acceleration_enabled_&&budget-i>1) {
         if(const auto completed=run_boot_batch(budget-i)) {
           sample_boot(mode,cs,ip,completed);
