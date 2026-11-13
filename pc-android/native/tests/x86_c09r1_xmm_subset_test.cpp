@@ -49,7 +49,7 @@ int main(){
   ok(cpu.mxcsr==0x1f80&&cpu.xmm[0][0]==0&&cpu.cr4==0,
      "reset must clear XMM/OSFXSR and default MXCSR");
   std::cout<<"C09R1_XMM_MXCSR_SUBSET_PASS checks="<<checks
-           <<" sse2_cpuid=0 fxsave=0 x87=0 windows_ready=0\n";
+           <<" windows_ready=0\n";
   return 0;
  }catch(const std::exception& e){
   std::cerr<<"C09R1_XMM_MXCSR_SUBSET_FAIL "<<e.what()<<"\n";return 1;

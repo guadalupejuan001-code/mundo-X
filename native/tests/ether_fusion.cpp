@@ -341,7 +341,10 @@ void boundary_correlations_and_cancellation() {
         "new global frame ignored an existing signed finite correction");
 
   Core compact; compact.h_all(); compact.cz_neighbors();
-  compact.apply({{'Z', "0", ""}, {'Z', "0", ""}});
+  // Separate transactions deliberately create materialized state to compact;
+  // one Z/Z batch is now eliminated before any state needs materializing.
+  compact.apply({{'Z', "0", ""}});
+  compact.apply({{'Z', "0", ""}});
   const auto frame = compact.ether_rule_count();
   require(compact.compact_background() > 0 && compact.stats().active_qubits == 0,
           "restored frame-relative background was not released");

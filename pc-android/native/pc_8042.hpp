@@ -57,7 +57,7 @@ class Pc8042 {
   }
 
   bool output(std::uint16_t port,unsigned width,std::uint32_t value,
-              bool& a20) noexcept {
+              bool& a20,bool* reset_requested=nullptr) noexcept {
     if(width!=1 || (port!=0x64 && port!=0x60))return false;
     const auto v=std::uint8_t(value);
     if(port==0x64) {
@@ -75,13 +75,13 @@ class Pc8042 {
         case 0xab: offer(0x00);break;                // First port test passes
         case 0xd0: offer(output_port(a20));break;    // Read output port / A20
         case 0xd1: pending_=Pending::OutputPort;break;// Next data -> A20
-        // PC/AT "pulse output line" family 0xF0..0xFF, bits 0..3
-        // are active-LOW masks. 0xFF means *none* of the four lines
-        // are pulsed; unlike 0xFE it must not trigger CPU reset.
-        // No response is queued, A20/config/output-port stay unchanged.
-        // Other 0xF0..0xFE values remain unsupported pending real
-        // output-line/reset modeling (not silently treated as no-ops).
-        case 0xff: break;
+        // The active-low 0xFE mask pulses only the reset line. The host
+        // must handle it after the current guest instruction retires.
+        case 0xfe:
+          if(!reset_requested)return false;
+          *reset_requested=true;
+          break;
+        case 0xff: break; // All lines inactive, no response or state change.
         default:return false; // Explicitly unsupported, not a fake ACK
       }
       metrics_.last_command=v;
@@ -96,9 +96,10 @@ class Pc8042 {
       config_=v;
       pending_=Pending::None;
     }else if(pending_==Pending::OutputPort) {
-      // Low output-port bit asserts hardware reset. We must not silently
-      // ignore it or treat it as a successful Windows boot.
-      if(!(v&1))return false;
+      if(!(v&1)) {
+        if(!reset_requested)return false;
+        *reset_requested=true;
+      }
       a20=(v&2)!=0;
       output_port_latched_=v;
       pending_=Pending::None;

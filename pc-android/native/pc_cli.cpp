@@ -17,7 +17,12 @@ int main(int argc,char** argv){
       else if(a=="--image"&&i+1<argc)path=argv[++i];
       else if(a=="--max-instructions"&&i+1<argc){const auto s=std::string(argv[++i]);std::size_t pos=0;budget=std::stoull(s,&pos);if(pos!=s.size()||budget==0||budget>100000000)throw std::runtime_error("Presupuesto fuera de 1..100000000");}
       else if(a=="--write-demo"&&i+1<argc)write_path=argv[++i];
-      else if((a=="--ram-mib"||a=="--resident-mib")&&i+1<argc){const auto s=std::string(argv[++i]);std::size_t pos=0;const auto n=std::stoull(s,&pos);if(pos!=s.size()||n<1||n>2048)throw std::runtime_error("RAM fuera de 1..2048 MiB");if(a=="--ram-mib")ram_mib=n;else resident_mib=n;}
+      else if((a=="--ram-mib"||a=="--resident-mib")&&i+1<argc){
+        const auto s=std::string(argv[++i]);std::size_t pos=0;const auto n=std::stoull(s,&pos);
+        const auto limit=cosmic_pc::PcMachine::max_ram_mib();
+        if(pos!=s.size()||n<1||n>limit)throw std::runtime_error("RAM fuera de 1.."+std::to_string(limit)+" MiB");
+        if(a=="--ram-mib")ram_mib=n;else resident_mib=n;
+      }
       else throw std::runtime_error("Uso: cosmic_pc_cli [--demo | --demo64 | --demo-quantum | --demo-quantum64 | --image ruta] [--quantum programa.xi] [--ram-mib N] [--resident-mib N] [--max-instructions N] [--write-demo ruta]");
     }
     if(long_demo&&(!path.empty()||auto_key))throw std::runtime_error("Elige un solo origen de arranque");

@@ -231,16 +231,90 @@ void real_iso_guest(){
   check(pc.cpu.fault->reason.find("valor=0xfe")!=std::string::npos,
         "unknown 8042 command byte is visible for future ISO debugging");
 }
+
+void mount_raw(PcMachine& pc, std::initializer_list<std::uint8_t> code) {
+  auto disk=std::make_shared<Bytes>(512,0);
+  std::copy(code.begin(),code.end(),disk->begin());
+  (*disk)[510]=0x55;(*disk)[511]=0xaa;
+  pc.mount([disk](std::uint64_t at,std::uint8_t* out,std::size_t len){
+    if(at>disk->size()||len>disk->size()-at)return false;
+    std::memcpy(out,disk->data()+at,len);return true;
+  },disk->size(),"raw");
+}
+
+void opted_in_guest_restart() {
+  using Restart=PcMachine::GuestRestart;
+  PcMachine pc;
+  pc.enable_guest_restart();
+  unsigned resets=0,device_ticks=0;
+  pc.device_reset_hook=[&](){++resets;};
+  pc.device_step_hook=[&](){++device_ticks;};
+  const auto check_request=[&](Restart expected,unsigned instructions,unsigned next_offset){
+    const auto resets_before=resets;
+    const auto ticks_before=device_ticks;
+    pc.run(100);
+    check(pc.guest_restart()==expected && !pc.cpu.fault,"guest restart reason was not latched");
+    check(pc.cpu.instructions==instructions && pc.cpu.eip==0x7c00+next_offset && !pc.cpu.halted,
+          "guest restart must stop at the instruction boundary before the following HLT");
+    check(resets==resets_before,"guest restart ran a device reset inside an active boot slice");
+    pc.run(100);
+    check(pc.cpu.instructions==instructions && device_ticks==ticks_before+instructions,
+          "pending restart must stop subsequent CPU and device progress");
+  };
+  mount_raw(pc,{0xb0,0x03,0xe6,0x92,0xf4}); // MOV AL,3; OUT 92h,AL; HLT
+  check_request(Restart::A20Port,2,4);
+  check(pc.cpu.a20_enabled,"fast reset write also preserves the requested A20 level");
+  mount_raw(pc,{0xb0,0xfe,0xe6,0x64,0xf4}); // MOV AL,FEh; OUT 64h,AL; HLT
+  check(pc.guest_restart()==Restart::None,"mount must clear the consumed restart request");
+  check_request(Restart::KeyboardController,2,4);
+  check(pc.json().find("\"last_command\":254")!=std::string::npos,
+        "8042 restart pulse must appear in controller diagnostics");
+  mount_raw(pc,{0xb0,0xd1,0xe6,0x64,0xb0,0x00,0xe6,0x60,0xf4});
+  check_request(Restart::KeyboardController,4,8);
+  check(!pc.cpu.a20_enabled,"8042 D1 payload must still update A20");
+  mount_raw(pc,{0xcd,0x19,0xf4}); // INT 19h; HLT
+  check_request(Restart::BiosBootstrap,1,2);
+  pc.reset();
+  check(pc.guest_restart()==Restart::None && pc.cpu.instructions==0,
+        "manual reset must clear the request and preserve restart opt-in");
+  check_request(Restart::BiosBootstrap,1,2);
+  mount_raw(pc,{0xb0,0xff,0xe6,0x64,0xb0,0x02,0xe6,0x92,0xf4});
+  pc.run(20);
+  check(pc.guest_restart()==Restart::None && pc.cpu.halted && !pc.cpu.fault,
+        "8042 no-pulse and A20-only writes must not trigger a restart");
+}
+
+void exact_guest_mode_progress() {
+  PcMachine pc;
+  pc.boot_long_mode_demo();
+  check(pc.boot_mode_progress().changes==0 && pc.boot_mode_progress().from.empty(),
+        "guest mode progress starts empty");
+  pc.run(10000);
+  const auto progress=pc.boot_mode_progress();
+  check(!pc.cpu.fault && pc.cpu.halted && progress.changes==4 &&
+        progress.from=="compat32" && progress.to=="long64" &&
+        progress.step>0 && progress.step<pc.cpu.instructions,
+        "one slice must preserve every real/protected/compat/long mode transition");
+  pc.reset();
+  check(pc.boot_mode_progress().changes==0 && pc.boot_mode_progress().step==0,
+        "guest mode milestone resets with the machine");
+  while(!pc.cpu.halted && !pc.cpu.fault && pc.cpu.instructions<10000)pc.run(1);
+  check(pc.boot_mode_progress().step==progress.step &&
+        pc.boot_mode_progress().changes==progress.changes,
+        "mode milestone must be independent of the host's boot slice size");
+}
 }
 int main(){
  try{
    controller_contract();
    real_iso_guest();
+   opted_in_guest_restart();
+   exact_guest_mode_progress();
    std::cout<<"PC_8042_ISO_PASS checks="<<checks
             <<" guest_csip_D1=2000:0ACE"
             <<" guest_csip_FF=2000:0ADC"
             <<" command_FF=0x64 no_pulse=1"
-            <<" payload_DF=0x60 a20=true windows_ready=false\n";
+            <<" payload_DF=0x60 a20=true guest_restart=true mode_progress=true windows_ready=false\n";
    return 0;
  }catch(const std::exception& e){
    std::cerr<<"PC_8042_ISO_FAIL "<<e.what()<<"\n";

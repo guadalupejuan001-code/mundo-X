@@ -1,5 +1,6 @@
 #include "../pc_machine.hpp"
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace {
@@ -68,6 +69,37 @@ int main() {
             need(pc.cpu.read32(0x9010) == (index == 3 ? 2u : 1u),
                  "E820 must reserve VRAM while leaving higher physical RAM usable");
             need(pc.cpu.regs[3] == (index == 3 ? 4u : 0u), "E820 enumeration completion");
+        }
+
+        if (PcMachine::max_ram_mib() >= 4096) {
+            constexpr auto physical = PcMachine::kMaxPhysicalBytes;
+            PcMachine high(static_cast<std::size_t>(physical), 768 * MiB);
+            const auto e820 = [&](std::uint8_t index) {
+                boot(high, {0x66,0xb8,0x20,0xe8,0,0, 0x66,0xba,0x50,0x41,0x4d,0x53,
+                            0x66,0xb9,0x18,0,0,0, 0x66,0xbb,index,0,0,0, 0xbf,0,0x90, 0xcd,0x15,0xf4});
+                drain(high);
+                need(!high.cpu.fault && high.cpu.halted && !high.cpu.flag(cosmic_pc::Cpu::CF), "4 GiB E820 guest query");
+            };
+            e820(4);
+            need(high.cpu.read64(0x9000) == 0x48000000 &&
+                 high.cpu.read64(0x9008) == PcMachine::kIoApicAddress - 0x48000000 &&
+                 high.cpu.read32(0x9010) == 1 && high.cpu.regs[3] == 5,
+                 "Usable upper RAM must end at the high MMIO area");
+            e820(5);
+            need(high.cpu.read64(0x9000) == PcMachine::kIoApicAddress &&
+                 high.cpu.read64(0x9008) == physical - PcMachine::kIoApicAddress &&
+                 high.cpu.read32(0x9010) == 2 && high.cpu.regs[3] == 0,
+                 "E820 must reserve IOAPIC and LAPIC before completing");
+            need(high.usable_ram_bytes() == PcMachine::kIoApicAddress - cosmic_pc::PcVideo::kApertureBytes - 0x60000,
+                 "Usable RAM count must exclude the high MMIO, VGA and BIOS ranges");
+            high.cpu.write32(PcMachine::kIoApicAddress - 4, 0x12345678);
+            need(high.cpu.read32(PcMachine::kIoApicAddress - 4) == 0x12345678 &&
+                 high.cpu.memory.allocated_bytes() < MiB, "High guest RAM must have sparse backing");
+            boot(high, {0xb8,0x01,0xe8,0xcd,0x15,0xf4});
+            drain(high);
+            need(!high.cpu.fault && high.cpu.reg16(0) == 15360 && high.cpu.reg16(3) == (1024-16)*16 &&
+                 high.cpu.reg16(1) == high.cpu.reg16(0) && high.cpu.reg16(2) == high.cpu.reg16(3),
+                 "E801 must describe only contiguous extended RAM before video memory");
         }
 
         // A dword store straddles two new pages with only one page of budget left.

@@ -85,7 +85,7 @@ int main(){
   require(c.step()==StepResult::Faulted && c.mxcsr==0x1fc0,
           "reserved MXCSR bit must fault without mutating MXCSR");
   std::cout<<"C09R1_STAGE4_DAZ_FTZ_PASS checks="<<checks
-           <<" CPUID_SSE2=false Windows_booted=false\n";
+           <<" Windows_booted=false\n";
   return 0;
  }catch(const std::exception& e){
   std::cerr<<"C09R1_STAGE4_DAZ_FTZ_FAIL "<<e.what()<<"\n";return 1;

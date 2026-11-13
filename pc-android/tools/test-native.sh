@@ -2,8 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build/native
-for name in sparse_ram x86_cpu x86_cpu_profile x86_group6_0f00 x86_long_mode x86_idt_c04 x86_cpl_c05 x86_bus_c06 x86_port_pio_c07 x86_trace_c09 x86_windows10_c09r_cpu_readiness x86_c09r1_xmm_subset x86_c09r1_fxstate x86_c09r1_sse2_packed x86_c09r1_stage3_fp x86_c09r1_stage3_ring3 x86_c09r1_stage3_x87_precision x86_c09r1_stage3_x87_mf x86_c09r1_stage4_daz_ftz x86_c09r1_stage4_mxcsr x86_c09r1_stage4_x87 x86_c09r1_stage4_sse2_misc x86_c09r1_stage4_packed_cvt x86_alu64_oracle x86_enter_oracle boot_media windows_iso_probe pc_machine pc_group6_iso pc_8042 pc_iso pc_memory pc_memory_fabric pc_video pc_quantum pc_autonomous; do
-  g++ -std=c++17 -O2 -pthread -Wall -Wextra -Wpedantic -I../native/include "native/tests/${name}_test.cpp" -o "build/native/${name}_test"
+for name in sparse_ram x86_cpu x86_cpu_profile x86_group6_0f00 x86_protected_real_transition x86_lock_rmw x86_long_mode x86_idt_c04 x86_cpl_c05 x86_bus_c06 x86_port_pio_c07 x86_trace_c09 x86_windows10_c09r_cpu_readiness x86_c09r1_xmm_subset x86_c09r1_fxstate x86_c09r1_sse2_packed x86_c09r1_stage3_fp x86_c09r1_stage3_ring3 x86_c09r1_stage3_x87_precision x86_c09r1_stage3_x87_mf x86_c09r1_stage4_daz_ftz x86_c09r1_stage4_mxcsr x86_c09r1_stage4_x87 x86_c09r1_stage4_sse2_misc x86_c09r1_stage4_packed_cvt x86_sse2_packed_oracle x86_c09r1_stage5_cvt_fxsr x86_sse_fp32 x86_sse_legacy_forms x86_mmx x86_x87_arithmetic_oracle x86_x87_state x86_alu64_oracle x86_enter_oracle boot_media windows_iso_probe pc_machine pc_group6_iso pc_8042 pc_iso pc_memory pc_memory_fabric pc_video pc_quantum pc_autonomous; do
+  g++ -std=c++17 -O2 -frounding-math -pthread -Wall -Wextra -Wpedantic -I../native/include "native/tests/${name}_test.cpp" -o "build/native/${name}_test"
   if "build/native/${name}_test"; then
     :
   else
@@ -11,7 +11,7 @@ for name in sparse_ram x86_cpu x86_cpu_profile x86_group6_0f00 x86_long_mode x86
     if [[ "$pc_test_status" != 77 || ( "$name" != x86_alu64_oracle && "$name" != x86_enter_oracle ) ]]; then exit "$pc_test_status"; fi
   fi
 done
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -I../native/include native/pc_cli.cpp -o build/native/cosmic_pc_cli
+g++ -std=c++17 -O2 -frounding-math -Wall -Wextra -Wpedantic -I../native/include native/pc_cli.cpp -o build/native/cosmic_pc_cli
 build/native/cosmic_pc_cli --demo --write-demo build/native/cosmic-x86-demo.img
 build/native/cosmic_pc_cli --demo64 --ram-mib 2048 --resident-mib 1024 --write-demo build/native/cosmic-x64-demo.img
 build/native/cosmic_pc_cli --demo-quantum --write-demo build/native/cosmic-quantum-x86.img

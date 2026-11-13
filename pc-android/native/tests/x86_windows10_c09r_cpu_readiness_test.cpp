@@ -124,17 +124,24 @@ void cpuid_profile() {
   const auto basic=cpuid(1);
   check((basic[2]&(1u<<13))!=0,"CX16 must be advertised after implementation");
   check((basic[3]&(1u<<8))!=0,"CX8 must be advertised after implementation");
-  check((basic[3]&(1u<<26))==0,"must NOT advertise SSE2 yet");
+  constexpr std::uint32_t simd=(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
+  check((basic[3]&simd)==simd,"verified MMX/FXSR/SSE/SSE2 missing from CPUID");
   check((basic[3]&(1u<<0))==0,"must NOT advertise x87 yet");
   const auto ext=cpuid(0x80000001u);
   check((ext[2]&((1u<<0)|(1u<<8)))==((1u<<0)|(1u<<8)),
         "LAHF/SAHF and PREFETCHW features missing from CPUID");
   check((ext[3]&(1u<<20))!=0,"NX feature lost");
-  // Lock is legal only for implemented atomic memory operations.
-  program(cpu,0x1000,{0xf0,0x01,0x00});
-  check(cpu.step()==StepResult::Faulted&&cpu.fault,
-        "LOCK ADD not implemented must fail explicitly");
-  std::cout<<"C09R_CPUID_TRUTHFUL_PROFILE_PASS cx16=1 sse2=0 x87=0\n";
+  // LOCK is legal on a writable destination in memory, never on registers.
+  cpu.set_reg16(Cpu::EBX,0x6000);cpu.set_reg16(Cpu::ESI,0);
+  cpu.set_reg16(Cpu::EAX,2);cpu.write16(0x6000,1);
+  program(cpu,0x1000,{0xf0,0x01,0x00}); // LOCK ADD [BX+SI],AX.
+  check(cpu.step()==StepResult::Executed&&cpu.read16(0x6000)==3,
+        "LOCK ADD memory destination must execute");
+  program(cpu,0x1000,{0xf0,0x01,0xc3}); // LOCK ADD BX,AX.
+  check(cpu.step()==StepResult::Faulted&&cpu.fault&&
+        cpu.fault->code==cosmic_pc::FaultCode::InvalidInstruction,
+        "LOCK ADD register destination must raise #UD");
+  std::cout<<"C09R_CPUID_TRUTHFUL_PROFILE_PASS cx16=1 mmx=1 fxsr=1 sse=1 sse2=1 x87=0\n";
 }
 }
 int main(){

@@ -92,9 +92,69 @@ void external_irq_guest() {
        "IRET did not restore real-mode external IRQ frame");
   std::cout<<"C06_EXTERNAL_IVT_IRQ_PASS masked=1 handler=1\n";
 }
+void interrupt_shadow_guest() {
+  Cpu cpu;
+  auto program=[&](std::initializer_list<std::uint8_t> bytes,bool enabled=false){
+    cpu.reset(0,0x1000);
+    cpu.regs[Cpu::ESP]=0x8800;
+    cpu.set_flag(Cpu::IF,enabled);
+    cpu.memory.write_block(0x1000,bytes.begin(),bytes.size());
+    cpu.write16(0x20*4,0x1100);cpu.write16(0x20*4+2,0);
+    cpu.write8(0x1100,0xcf); // IRET
+  };
+  auto step=[&]{
+    const auto result=cpu.step();
+    if(result==StepResult::Faulted)throw std::runtime_error(cpu.fault->describe());
+    return result;
+  };
+
+  program({0xfb,0xfa,0xfb,0xfb,0xf4}); // STI; CLI; STI; STI; HLT
+  step();
+  need(cpu.flag(Cpu::IF)&&!cpu.raise_external_irq(0x20)&&cpu.eip==0x1001,
+       "STI must set IF immediately and defer a maskable interrupt one boundary");
+  step();
+  need(!cpu.flag(Cpu::IF)&&!cpu.raise_external_irq(0x20)&&cpu.eip==0x1002,
+       "CLI must run before a pending interrupt after STI");
+  step();
+  need(!cpu.raise_external_irq(0x20)&&cpu.eip==0x1003,"second STI did not block");
+  step();
+  need(cpu.raise_external_irq(0x20)&&cpu.read16(0x87fa)==0x1004,
+       "STI with IF already set must leave the following boundary interruptible");
+
+  for(bool via_pop:{false,true}) {
+    if(via_pop)program({0x17,0xbc,0x00,0x90,0x90},true); // POP SS; MOV SP,9000h
+    else program({0x8e,0xd0,0xbc,0x00,0x90,0x90},true); // MOV SS,AX; MOV SP,9000h
+    cpu.set_reg16(Cpu::EAX,0x0200);
+    cpu.write16(0x8800,0x0200);
+    step();
+    need(cpu.segments[Cpu::SS]==0x0200&&!cpu.raise_external_irq(0x20),
+         "stack-segment load must defer interrupts until the stack pointer changes");
+    step();
+    need(cpu.raise_external_irq(0x20)&&cpu.read16(0xaffa)==(via_pop?0x1004:0x1005),
+         "IRQ after SS reload must use the updated segmented stack and IP");
+    step();
+    need(cpu.eip==(via_pop?0x1004U:0x1005U)&&cpu.reg16(Cpu::ESP)==0x9000,
+         "IRET must return to the instruction after the protected stack-pointer load");
+  }
+
+  program({0xfb,0x0f,0x0b,0xf4}); // STI; UD2
+  cpu.write16(6*4,0x1200);cpu.write16(6*4+2,0);
+  cpu.write8(0x1200,0xfb); // Re-enable IF in the #UD handler.
+  cpu.write8(0x1201,0x90);
+  step();step();
+  need(cpu.eip==0x1200&&cpu.read16(0x87fa)==0x1001,
+       "synchronous #UD must enter immediately during the maskable IRQ shadow");
+  step();
+  need(!cpu.raise_external_irq(0x20)&&cpu.eip==0x1201,
+       "synchronous exception must clear the previous shadow before handler STI");
+  step();
+  need(cpu.raise_external_irq(0x20)&&cpu.read16(0x87f4)==0x1202,
+       "handler STI shadow did not expire at the next instruction");
+  std::cout<<"C03_MASKABLE_IRQ_SHADOW_PASS sti=1 mov_ss=1 pop_ss=1 exception=1\n";
+}
 }
 int main(){
-  try{mmio_guest();external_irq_guest();
+  try{mmio_guest();external_irq_guest();interrupt_shadow_guest();
     std::cout<<"REVERSE_WINDOWS_C06_BUS_CPU_PASS checks="<<checks
              <<" windows_booted=false mmio=true external_irq=true\n";return 0;
   }catch(const std::exception& e){

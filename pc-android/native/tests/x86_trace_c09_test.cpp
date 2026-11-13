@@ -43,14 +43,14 @@ void fault_trace(){
   Cpu cpu(2*1024*1024);
   cpu.reset(0,0x1200);
   cpu.a20_enabled=true;
-  cpu.memory[0x1200]=0xf0; cpu.memory[0x1201]=0x90; // LOCK NOP explicitly unsupported.
+  cpu.memory[0x1200]=0xf0; cpu.memory[0x1201]=0x90; // LOCK NOP is architecturally invalid.
   std::vector<Cpu::StepTrace> events;
   cpu.step_trace_hook=[&](const Cpu::StepTrace& event){events.push_back(event);};
   need(cpu.step()==StepResult::Faulted&&cpu.fault.has_value(),
        "LOCK prefix must remain a reported terminal fault");
   need(events.size()==1&&events[0].outcome=="fault"&&
        events[0].terminal_fault.has_value()&&
-       events[0].terminal_fault->code==cosmic_pc::FaultCode::UnsupportedState &&
+       events[0].terminal_fault->code==cosmic_pc::FaultCode::InvalidInstruction &&
        events[0].decoded_bytes==std::vector<std::uint8_t>({0xf0,0x90}) &&
        events[0].rip_before==0x1200&&events[0].rip_after==0x1200,
        "fault trace lost exact opcode bytes / original fault RIP");
@@ -79,7 +79,7 @@ void handled_ud_trace(){
       (std::uint64_t(0x8e)<<40)|(((dest>>16)&0xffffULL)<<48);
   cpu.write64(at,gate);cpu.write64(at+8,0);
   const std::uint8_t code[]{0x0f,0x0b,0xf4};
-  const std::uint8_t handler[]{0x48,0x83,0x04,0x24,0x02,0xcf};
+  const std::uint8_t handler[]{0x48,0x83,0x04,0x24,0x02,0x48,0xcf};
   cpu.memory.write_block(0xa000,code,sizeof(code));
   cpu.memory.write_block(dest,handler,sizeof(handler));
   std::vector<Cpu::StepTrace> events;

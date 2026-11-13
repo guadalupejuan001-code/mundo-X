@@ -127,7 +127,7 @@ int main(){
   try{
     conversions();exceptions();
     std::cout<<"REVERSE_WINDOWS_C09R1_STAGE4_PACKED_CVT_PASS checks="<<checks
-             <<" Windows_booted=false cpuid_sse2=false\n";
+             <<" Windows_booted=false\n";
     return 0;
   }catch(const std::exception& e){
     std::cerr<<"REVERSE_WINDOWS_C09R1_STAGE4_PACKED_CVT_FAIL "<<e.what()<<"\n";

@@ -160,7 +160,7 @@ int main(){
  try{
    compares();moves_and_logic();memory_alignment();
    std::cout<<"REVERSE_WINDOWS_C09R1_STAGE4_SSE2_MISC_PASS checks="<<checks
-            <<" cpuid_sse2=false windows_iso_used=false\n";
+            <<" windows_iso_used=false\n";
    return 0;
  }catch(const std::exception& e){
    std::cerr<<"REVERSE_WINDOWS_C09R1_STAGE4_SSE2_MISC_FAIL "<<e.what()<<"\n";return 1;

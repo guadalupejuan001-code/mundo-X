@@ -183,7 +183,7 @@ void exception_and_context(){
   const auto gate=(handler&0xffffULL)|(std::uint64_t(0x18)<<16)|
       (std::uint64_t(0x8e)<<40)|((handler>>16)<<48);
   cpu.write64(cpu.idtr.base+19*16,gate);cpu.write64(cpu.idtr.base+19*16+8,0);
-  const std::uint8_t isr[]{0x48,0x83,0x04,0x24,0x04,0xcf}; // ADD saved RIP,4; IRETQ
+  const std::uint8_t isr[]{0x48,0x83,0x04,0x24,0x04,0x48,0xcf}; // ADD saved RIP,4; IRETQ
   cpu.memory.write_block(handler,isr,sizeof(isr));
   const std::uint8_t instruction[]{0xf2,0x0f,0x5e,0xc1,0xf4};
   cpu.memory.write_block(0xa000,instruction,sizeof(instruction));
@@ -230,7 +230,7 @@ int main(){
     conversions_and_compare();
     exception_and_context();
     std::cout<<"REVERSE_WINDOWS_C09R1_SSE2_FP_PASS checks="<<checks
-             <<" windows_iso_used=false sse2_cpuid=false x87_cpuid=false\n";
+             <<" windows_iso_used=false\n";
     return 0;
   }catch(const std::exception& error){
     std::cerr<<"REVERSE_WINDOWS_C09R1_SSE2_FP_FAIL "<<error.what()<<"\n";

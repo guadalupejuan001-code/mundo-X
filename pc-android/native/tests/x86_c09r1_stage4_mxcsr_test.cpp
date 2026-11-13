@@ -243,7 +243,7 @@ int main(){
     daz_oracle();ftz_oracle();packed_exception_union();nan_compare();
     host_controls_do_not_change_guest();
     std::cout<<"REVERSE_WINDOWS_C09R1_STAGE4_MXCSR_PASS checks="<<checks
-             <<" iso_used=false cpuid_sse2=false\n";
+             <<" iso_used=false\n";
     return 0;
   }catch(const std::exception& error){
     std::cerr<<"REVERSE_WINDOWS_C09R1_STAGE4_MXCSR_FAIL "<<error.what()<<"\n";

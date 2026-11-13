@@ -91,7 +91,7 @@ void long_cpl3_tss_pf(){
   code(cpu,0xa100,{0xb8,0x2b,0,0,0,0x50,
                   0xb8,0,0,0x1a,0,0x50,0x9c,
                   0xb8,0x23,0,0,0,0x50,
-                  0xb8,0,0x10,0x01,0,0x50,0xcf});
+                  0xb8,0,0x10,0x01,0,0x50,0x48,0xcf});
   // User: legal DPL3 data load with RPL0, denied DPL0 data load,
   // denied SS selector RPL0, then denied CLI/HLT and two U/S page faults.
   // R10 holds the size of the faulting privileged instruction for #GP IRET.
@@ -109,16 +109,16 @@ void long_cpl3_tss_pf(){
        0xcd,0x81});
   // Kernel INT80 handler: guest writes an observable marker, then IRETQ.
   code(cpu,0x13000,{0xb8,0xef,0xbe,0xad,0xde,
-                   0xa3,0x00,0x60,0x01,0,0,0,0,0,0xcf});
+                   0xa3,0x00,0x60,0x01,0,0,0,0,0,0x48,0xcf});
   // #GP saves its error code in R9; advance restart RIP by guest R10
   // (2 bytes for MOV segment, 1 for CLI/HLT), then IRETQ.
   code(cpu,0x13200,{0x4c,0x8b,0x0c,0x24,
                     0x4c,0x01,0x54,0x24,0x08,
-                    0x48,0x83,0xc4,0x08,0xcf});
+                    0x48,0x83,0xc4,0x08,0x48,0xcf});
   // #PF has a 64-bit error code; save it to RDX, skip 8-byte MOV.
   code(cpu,0x13300,{0x48,0x8b,0x14,0x24,
                     0x48,0x83,0x44,0x24,0x08,0x08,
-                    0x48,0x83,0xc4,0x08,0xcf});
+                    0x48,0x83,0xc4,0x08,0x48,0xcf});
   code(cpu,0x13400,{0xf4});
   cpu.eflags=2|Cpu::IF;cpu.eip=0xa100;
   unsigned interrupts=0,general=0;std::vector<std::uint64_t> page_errors;
@@ -208,11 +208,89 @@ void protected32_cpl3(){
   need(cpu.read32(0x16000)==0xdeadbeef,"protected32 kernel guest marker wrong");
   std::cout<<"C05_PROTECTED32_RING3_TSS_PASS\n";
 }
+void protected16_x87(){
+  Cpu cpu(2*1024*1024);
+  cpu.reset(0,0xa000);cpu.a20_enabled=true;
+  constexpr std::uint64_t gdt_base=0x14000,idt_base=0x15000,tss=0x18000;
+  cpu.gdtr={0x37,gdt_base};cpu.idtr={0x7ff,idt_base};
+  cpu.write64(gdt_base+0x08,0x00009a020000ffffULL); // kernel code at 0x20000
+  cpu.write64(gdt_base+0x10,0x000092030000ffffULL); // kernel stack at 0x30000
+  cpu.write64(gdt_base+0x20,0x0000fa024000ffffULL); // user code at 0x24000
+  cpu.write64(gdt_base+0x28,0x0000f2040000ffffULL); // user stack at 0x40000
+  cpu.write64(gdt_base+0x30,0x000081018000002bULL); // available 16-bit TSS
+  cpu.write16(tss+2,0x1000);cpu.write16(tss+4,0x10); // SP0, SS0
+  code(cpu,0xa000,{0xb8,0x31,0,0x0f,0x22,0xc0,0xea,0,1,8,0});
+  code(cpu,0x20100,{0xb8,0x10,0,0x8e,0xd0,0xbc,0,0x18,
+                   0xb8,0x30,0,0x0f,0x00,0xd8,
+                   0x6a,0x2b,0x68,0,0x20,0x68,0x02,0x02,
+                   0x6a,0x23,0x68,0,1,0xcf});
+  code(cpu,0x24100,{0xd9,0xee,0xd9,0xe8,0xd8,0xf1,0x9b,0x90});
+  code(cpu,0x20200,{0xdb,0xe2,0xcf}); // FNCLEX, IRET
+  cpu.write64(idt_base+16*8,0x0000870000080200ULL); // 16-bit trap gate
+  cpu.fpu_control&=std::uint16_t(~4U);
+  for(unsigned i=0;i<14;++i)one(cpu);
+  need(cpu.cpl()==3&&cpu.eip==0x100&&cpu.reg16(Cpu::ESP)==0x2000&&cpu.tr.tss16,
+       "use IRET to enter a protected16 user with a real 286 TSS");
+  for(unsigned i=0;i<4;++i)one(cpu);
+  need(cpu.cpl()==0&&cpu.eip==0x200&&(cpu.eflags&Cpu::IF)&&cpu.reg16(Cpu::ESP)==0xff6,
+       "protected16 #MF must enter its 16-bit trap gate and use TSS SP0:SS0");
+  need(cpu.read16(0x30ff6)==0x106&&cpu.read16(0x30ff8)==0x23&&
+       cpu.read16(0x30ffa)==0x202&&cpu.read16(0x30ffc)==0x2000&&cpu.read16(0x30ffe)==0x2b,
+       "16-bit exception frame must encode the original IP, CS, FLAGS, SP and SS");
+  one(cpu);one(cpu);one(cpu);
+  need(cpu.cpl()==3&&cpu.eip==0x107&&cpu.reg16(Cpu::ESP)==0x2000&&!(cpu.fpu_status&0x80),
+       "16-bit IRET must return to user FWAIT and retry with the cleared condition");
+  // A 32-bit interrupt gate may target 16-bit code and expects IRETD.
+  cpu.eip=0x106;cpu.fpu_status=0x8084;
+  cpu.write64(idt_base+16*8,0x00008e0000080200ULL);
+  code(cpu,0x20200,{0xdb,0xe2,0x66,0xcf});
+  one(cpu);
+  need(cpu.cpl()==0&&cpu.eip==0x200&&!(cpu.eflags&Cpu::IF)&&cpu.reg16(Cpu::ESP)==0xfec&&
+       cpu.read32(0x30fec)==0x106&&cpu.read32(0x30ff8)==0x2000,
+       "32-bit gate must use doubleword frames even with both code segments 16-bit");
+  one(cpu);one(cpu);one(cpu);
+  need(cpu.cpl()==3&&cpu.eip==0x107&&(cpu.eflags&Cpu::IF),
+       "16-bit code must return from a 32-bit interrupt gate with IRETD");
+  std::cout<<"C02_PROTECTED16_X87_MF_PASS legacy_gates=2 tss16=1\n";
+}
+void compatibility_x87(){
+  Cpu cpu(64ULL*1024*1024,16ULL*1024*1024);
+  for(bool code32:{false,true}) {
+    boot(cpu,true);user_paging(cpu);gdt(cpu,true);
+    cpu.write64(cpu.gdtr.base+0x20,code32?0x00cffa000000ffffULL:0x0000fa011000ffffULL);
+    cpu.write64(cpu.tr.base+4,0x1d0007); // See that the aligned RSP is used.
+    gate(cpu,16,0x13000,true,0x8e);
+    code(cpu,0x13000,{0xdb,0xe2,0x48,0xcf}); // FNCLEX, IRETQ.
+    code(cpu,0x11000,{0xd9,0xee,0xd9,0xe8,0xd8,0xf1,0x9b,0x90});
+    code(cpu,0xa100,{0x6a,0x2b,0x68,0xf9,0xff,0x19,0,0x9c,0x6a,0x23,
+                    0x50,0x48,0xcf});
+    cpu.cr0|=0x20U;cpu.fpu_control&=std::uint16_t(~4U);
+    cpu.eflags=2|Cpu::IF;cpu.eip=0xa100;cpu.regs[Cpu::EAX]=code32?0x11000:0;
+    cpu.regs[Cpu::ESP]=0x1e0000;
+    for(unsigned i=0;i<6;++i)one(cpu);
+    const std::uint64_t start=code32?0x11000:0;
+    need(cpu.cpl()==3&&!cpu.is_long_mode()&&cpu.eip==start&&cpu.regs[Cpu::ESP]==0x19fff9,
+         "long IRETQ must enter the selected compatibility code and stack");
+    for(unsigned i=0;i<4;++i)one(cpu);
+    const auto frame=cpu.regs[Cpu::ESP];
+    need(cpu.cpl()==0&&cpu.is_long_mode()&&cpu.eip==0x13000&&frame==0x1d0000-40,
+         "compatibility #MF must use the 64-bit interrupt gate and aligned TSS stack");
+    need(cpu.read64(frame)==start+6&&cpu.read64(frame+8)==0x23&&cpu.read64(frame+16)==0x202&&
+         cpu.read64(frame+24)==0x19fff9&&cpu.read64(frame+32)==0x2b,
+         "compatibility #MF must save restart IP, user CS, FLAGS, original RSP, and user SS");
+    one(cpu);one(cpu);one(cpu);
+    need(cpu.cpl()==3&&!cpu.is_long_mode()&&cpu.eip==start+7&&cpu.regs[Cpu::ESP]==0x19fff9,
+         "handler IRETQ must return to compatibility FWAIT and preserve the original stack");
+  }
+  std::cout<<"C02_COMPATIBILITY_X87_MF_PASS compat16=1 compat32=1 aligned_tss_stack=1\n";
+}
 }
 int main(){
   try{
     long_cpl3_tss_pf();
     protected32_cpl3();
+    protected16_x87();
+    compatibility_x87();
     std::cout<<"REVERSE_WINDOWS_C05_CPL3_PASS checks="<<checks
              <<" ring3=true tss=true page_user_bit=true windows_booted=false\n";
     return 0;

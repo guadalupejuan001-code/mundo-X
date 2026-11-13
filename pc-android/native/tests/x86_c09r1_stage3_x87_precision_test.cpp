@@ -59,9 +59,15 @@ void invalid_signaling_nan(){
   Cpu cpu(2*1024*1024);
   execute(cpu,true);
   cpu.write64(0x5000,0x7ff0000000000001ULL);
-  need(cpu.step()==StepResult::Faulted&&cpu.fault&&
-       cpu.fpu_tags==0xffff,
-       "until unmasked sNaN semantics exist, no incorrect FLD result may commit");
+  need(cpu.step()==StepResult::Executed&&cpu.fpu_status==0x3801&&
+       cpu.x87[7][1]==8&&cpu.x87[7][7]==0xc0&&
+       cpu.x87[7][8]==0xff&&cpu.x87[7][9]==0x7f,
+       "masked FLD must quiet a signaling binary64 NaN and retain its payload");
+  execute(cpu,true);
+  cpu.fpu_control&=std::uint16_t(~1U);
+  need(cpu.step()==StepResult::Executed&&cpu.fpu_status==0x8081&&
+       cpu.fpu_tags==0xffff&&cpu.fpu_opcode==0x506,
+       "unmasked signaling NaN in FLD must defer invalid and leave the stack empty");
 }
 }
 int main(){

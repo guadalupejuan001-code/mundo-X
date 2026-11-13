@@ -2,9 +2,9 @@
 
 // COSMIC PC: an original, bounded x86 interpreter.
 // Instruction encodings and architectural semantics follow the Intel SDM.
-// This is not a complete x86 processor: unsupported instructions/states stop
-// with an explicit fault. Ring-0 protected/long-mode execution is a limited
-// subset, not a Windows-compatible CPU. No x87, APIC, privilege switching or JIT.
+// Unsupported instructions and states stop with an explicit fault. The CPU
+// models a subset of x86 real, protected and long modes, including CPL0/CPL3
+// privilege transitions and guest x87, MMX and XMM state.
 // Each step executes one instruction, or ONE element of a REP string operation,
 // so an untrusted guest cannot monopolize a host thread inside a single step.
 // instructions counts these bounded execution steps, not hardware retired ops.
@@ -29,13 +29,21 @@
 #include <xmmintrin.h>
 #endif
 #include "memory_fabric.hpp"
+#include "x86_ext80.hpp"
+#include "x86_wide_integer.hpp"
+#include "../../native/include/mundo_x/experimental/ether_memory_block.hpp"
+#include "../../native/include/mundo_x/experimental/ether_shift_loop.hpp"
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+#include "mundo_x/experimental/ether_transform.hpp"
+#endif
 
 namespace cosmic_pc {
 
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget, DeviceNotAvailable, SimdFloatingPoint, X87FloatingPoint
+  PageFault, MemoryBudget, DeviceNotAvailable, SimdFloatingPoint, X87FloatingPoint,
+  StackFault, SegmentNotPresent
 };
 
 struct Fault {
@@ -59,10 +67,11 @@ struct Fault {
   }
 };
 
-enum class StepResult { Executed, Halted, Faulted };
+enum class StepResult { Executed, Halted, Faulted, WaitingForX87 };
 
 class Cpu {
  public:
+  static constexpr std::uint64_t kLocalApicAddress = 0xfee00000ULL;
   enum Register : unsigned { EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI, R8, R9, R10, R11, R12, R13, R14, R15 };
   enum Segment : unsigned { ES, CS, SS, DS, FS, GS };
   static constexpr std::uint32_t CF = 0x0001, PF = 0x0004, AF = 0x0010,
@@ -76,13 +85,17 @@ class Cpu {
     std::uint64_t base = 0;
     std::uint32_t limit = 0;
     bool valid = false;
+    bool tss16 = false;
   };
   struct SegmentCache {
     std::uint64_t base = 0;
     std::uint32_t limit = 0xffff;
+    std::uint16_t selector = 0;
     bool valid = true, code = false, writable = true, readable = true,
          big = false, long_code = false, conforming = false;
     std::uint8_t dpl = 0;
+    bool inherited_from_real_mode = false;
+    bool expand_down = false;
   };
 
   std::array<std::uint64_t, 16> regs{};
@@ -93,6 +106,30 @@ class Cpu {
   std::array<std::array<std::uint8_t,16>,16> xmm{};
   std::uint32_t mxcsr=0x1f80;
   static constexpr std::uint32_t kMxcsrMask=0x0000ffffU; // DAZ bit6, FTZ bit15, all status/masks
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+  struct EtherNextStats {
+    std::uint64_t native_instructions = 0;
+    mundo_x::ether_next::Cache::Stats cache;
+  };
+  // An explicit host policy for a subset already implemented by the
+  // interpreter. Guest-visible CPUID is independent of this optimization.
+  void enable_ether_next(bool enabled = true) noexcept {
+    ether_next_enabled_ = enabled;
+    if (!enabled) ether_next_cache_.invalidate();
+  }
+  bool ether_next_enabled() const noexcept { return ether_next_enabled_; }
+  static constexpr bool ether_next_native_host() noexcept {
+#if defined(__aarch64__) && defined(__linux__) && \
+    defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    return true;
+#else
+    return false;
+#endif
+  }
+  EtherNextStats ether_next_stats() const noexcept {
+    return {ether_next_native_instructions_, ether_next_cache_.stats()};
+  }
+#endif
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -145,6 +182,8 @@ class Cpu {
   // A device claims individual physical bus bytes, including MMIO above RAM.
   // A claimed but unreadable/unwritable address faults rather than becoming RAM.
   std::function<bool(std::uint64_t)> mmio_claim_hook;
+  // False certifies that no byte in this already A20-normalized span is MMIO.
+  std::function<bool(std::uint64_t, std::size_t)> mmio_range_claim_hook;
   std::function<std::optional<std::uint8_t>(std::uint64_t)> mmio_read_hook;
   std::function<bool(std::uint64_t, std::uint8_t)> mmio_write_hook;
 
@@ -164,12 +203,49 @@ class Cpu {
     fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
     segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
+    system_call_msrs_ = {};
+    tsc_offset_ = 0;
+    apic_task_priority_ = 0;
+    apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
+    cache_[CS].selector = cs; cache_[CS].base = std::uint64_t(cs) << 4;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
     ldtr = {}; tr = {};
+    x87_ignne_ = false;
+    interrupt_shadow_ = false;
+    last_rep_batch_bytes_ = 0;
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
     transaction_ = false; journal_.clear(); decoded_.clear();
   }
+  // This CPU asserts FERR# as soon as the unmasked condition is pending.
+  // An asserted IGNNE# allows a waiting instruction to execute while the
+  // existing error remains visible to the external circuit.
+  bool x87_ferr_asserted() const noexcept {
+    return !(cr0 & 0x20U) && (fpu_status & 0x0080U);
+  }
+  void set_x87_ignne(bool active) noexcept { x87_ignne_ = active; }
+  // CR8 and local APIC MMIO share this architectural task-priority byte.
+  std::uint8_t apic_task_priority() const noexcept { return apic_task_priority_; }
+  void set_apic_task_priority(std::uint8_t value) noexcept { apic_task_priority_ = value; }
+  bool apic_global_enabled() const noexcept { return (apic_base_ & kApicEnable) != 0; }
+  const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
+  unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
+  bool rep_batch_candidate() const noexcept {
+    return repeat_ && start_ip_ == eip && start_cs_ == segments[CS] &&
+           (opcode_ == 0xa4 || opcode_ == 0xa5 || opcode_ == 0xaa || opcode_ == 0xab) &&
+           decoded_.size() >= 2;
+  }
+  // The machine must bound this budget by the next device observation. Zero
+  // means call step() for the original fault/IO behavior and diagnostics.
+  unsigned try_rep_batch(unsigned budget);
+  bool shift_loop_batch_candidate() const noexcept {
+    return opcode_ == 0xe2 && ip_written_ && start_cs_ == segments[CS] &&
+           decoded_.size() == 2 && decoded_[0] == 0xe2 && decoded_[1] == 0xfa &&
+           eip <= 0xfffa && start_ip_ == eip + 4 && cursor_ == eip + 6 && code_mask() == 0xffff;
+  }
+  // Keep device observations on their original guest instruction boundaries.
+  // Returns only complete shift/rotate/LOOP iterations within the granted budget.
+  unsigned try_shift_loop_batch(unsigned step_budget);
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -186,9 +262,15 @@ class Cpu {
   }
   bool is_long_mode() const { return (efer & 0x400) && cache_[CS].long_code; }
   bool is_real_mode() const { return !(cr0 & 1); }
-  unsigned cpl() const { return is_real_mode() ? 0U : unsigned(segments[CS] & 3U); }
+  std::uint32_t real_mode_segment_address(unsigned segment, std::uint16_t offset) const {
+    return std::uint32_t(segment_linear(segment, offset, 1, Access::Read));
+  }
+  unsigned cpl() const {
+    return is_real_mode() || cache_[CS].inherited_from_real_mode
+        ? 0U : unsigned(segments[CS] & 3U);
+  }
   const char* mode_name() const {
-    if (is_real_mode()) return "real16";
+    if (is_real_mode()) return cache_[CS].big ? "real32" : "real16";
     if (is_long_mode()) return "long64";
     if (efer & 0x400) return cache_[CS].big ? "compat32" : "compat16";
     return cache_[CS].big ? "protected32" : "protected16";
@@ -199,8 +281,10 @@ class Cpu {
     eflags |= 2;
   }
   [[noreturn]] void fail(const std::string& reason,
-                         FaultCode code = FaultCode::HostError) const {
-    throw Trap{code, reason};
+                         FaultCode code = FaultCode::HostError, std::uint32_t error = 0) const {
+    Trap trap{code, reason};
+    trap.error = error;
+    throw trap;
   }
 
   // Physical BUS accesses: A20 masking applies. Direct memory[] access is for
@@ -244,15 +328,19 @@ class Cpu {
   StepResult step() {
     if (fault) return StepResult::Faulted;
     if (halted) return StepResult::Halted;
+    const auto memory_writes = memory.pin_writes();
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
-                          cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
+                          cr2, cr3, efer, fs_base, gs_base, system_call_msrs_, gdtr, idtr, ldtr, tr, a20_enabled, halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_base_,apic_task_priority_};
+    const bool was_shadowed=interrupt_shadow_;
+    interrupt_shadow_=false;
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
     std::uint32_t delivered_error=0;
     std::uint64_t delivered_linear=0;
+    bool waiting_for_x87=false;
     auto publish_trace=[&]() noexcept {
       if(!step_trace_hook)return;
       try {
@@ -266,7 +354,7 @@ class Cpu {
         record.page_walks_delta=page_walks-trace_walks_before;
         record.mode_before=trace_mode_before;record.mode_after=mode_name();
         record.outcome=fault?"fault":delivered_vector>=0?"exception-delivered":
-                       halted?"halted":"executed";
+                       waiting_for_x87?"waiting-for-x87":halted?"halted":"executed";
         record.decoded_bytes=decoded_;
         record.delivered_vector=delivered_vector;
         record.delivered_error=delivered_error;
@@ -284,7 +372,7 @@ class Cpu {
     start_ip_ = eip; start_cs_ = segments[CS]; cursor_ = eip;
     decoded_.clear(); journal_.clear(); opcode_ = 0;
     operand_override_ = address_override_ = lock_prefix_ = false; rex_ = 0;
-    op32_ = is_long_mode() || (!is_real_mode() && cache_[CS].big);
+    op32_ = is_long_mode() || cache_[CS].big;
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
     pending_simd_flags_=0;
@@ -313,16 +401,24 @@ class Cpu {
         }
         break;
       }
-      op32_ = (is_long_mode() || (!is_real_mode() && cache_[CS].big)) != operand_override_;
+      op32_ = (is_long_mode() || cache_[CS].big) != operand_override_;
       addr32_ = is_long_mode() ? address_override_
-          : ((!is_real_mode() && cache_[CS].big) != address_override_);
+          : (cache_[CS].big != address_override_);
       execute(op);
       if (fault) fail(fault->reason, fault->code);
+      // Only the first instruction in a consecutive blocking sequence
+      // inhibits IRQ delivery. A bounded REP step consumes the shadow at
+      // the first interruptible element boundary.
+      if(was_shadowed)interrupt_shadow_=false;
       if (!ip_written_) eip = cursor_ & code_mask();
       eflags |= 2;
       ++instructions;
       transaction_ = false; journal_.clear();
       return halted ? StepResult::Halted : StepResult::Executed;
+    } catch (const WaitingForX87&) {
+      rollback(before);
+      waiting_for_x87=true;
+      return StepResult::WaitingForX87;
     } catch (const Trap& t) {
       rollback(before);
       // Intel preserves MXCSR sticky status across #XM/#UD on an unmasked
@@ -332,10 +428,32 @@ class Cpu {
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
       const int vector = exception_vector(t.code);
+      const bool real_fp_exception = t.code == FaultCode::X87FloatingPoint ||
+          t.code == FaultCode::SimdFloatingPoint || t.code == FaultCode::DeviceNotAvailable ||
+          t.code == FaultCode::InvalidInstruction;
+      if (is_real_mode() && real_fp_exception) {
+        // Deliver FP/SIMD exception vectors regardless of IF or BIOS hooks.
+        // An empty or inaccessible vector preserves the terminal diagnostic.
+        try {
+          transaction_ = true;
+          const auto target = real_ivt_target(std::uint8_t(vector));
+          if (target.cs || target.ip) {
+            dispatch_real_interrupt(target, start_ip_);
+            transaction_ = false; journal_.clear();
+            ++instructions;
+            delivered_vector = vector;
+            fault.reset();
+            return StepResult::Executed;
+          }
+          transaction_ = false;
+        } catch (const std::exception&) {
+          rollback(before);
+          if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
+        }
+      }
       // Synchronous architectural exception: restart faulting instruction
       // after the guest handler completes. Unsupported/host failures stop.
-      if (vector >= 0 && !is_real_mode() &&
-          (is_long_mode() || (!(efer & 0x400) && cache_[CS].big))) {
+      if (vector >= 0 && !is_real_mode()) {
         auto deliver = [&](unsigned number, bool with_error, std::uint32_t code) -> bool {
           try {
             transaction_ = true;
@@ -353,7 +471,7 @@ class Cpu {
             return false;
           }
         };
-        if (deliver(unsigned(vector), vector == 14 || vector == 13, t.error) ||
+        if (deliver(unsigned(vector), vector >= 11 && vector <= 14, t.error) ||
             deliver(8, true, 0)) { // Nested delivery failure -> #DF.
           fault.reset(); // A guest-handled event must not leave a host fault latched.
           return StepResult::Executed;
@@ -373,25 +491,19 @@ class Cpu {
   }
 
   // External hardware IRQ is not a software INT: it ignores gate DPL,
-  // uses the next instruction's IP and obeys IF. Pending IRQs remain with PIC.
+  // uses the next instruction's IP and obeys IF and the interrupt shadow.
+  // Pending IRQs remain with the originating device/controller.
   bool raise_external_irq(std::uint8_t vector) {
-    if (!flag(IF) || fault) return false;
+    if (!flag(IF) || interrupt_shadow_ || fault) return false;
+    const auto memory_writes = memory.pin_writes();
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
-                          cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
+                          cr2,cr3,efer,fs_base,gs_base,system_call_msrs_,gdtr,idtr,ldtr,tr,a20_enabled,halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_base_,apic_task_priority_};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
-        const auto entry=std::uint32_t(vector)*4;
-        if(entry+3>idtr.limit)
-          fail("hardware IRQ vector is outside real-mode IVT",FaultCode::SegmentLimit);
-        const auto target=read16(idtr.base+entry);
-        const auto segment=read16(idtr.base+entry+2);
-        push(eflags,2);push(segments[CS],2);push(eip,2);
-        eflags &= ~(IF|TF);
-        segments[CS]=segment;
-        jump(target,2);
+        dispatch_real_interrupt(real_ivt_target(vector), eip);
       } else {
         dispatch_idt(vector,eip,false,false,0);
       }
@@ -416,6 +528,11 @@ class Cpu {
   }
 
  private:
+  struct WaitingForX87 {};
+  bool x87_ignne_ = false;
+  bool interrupt_shadow_ = false;
+  unsigned last_rep_batch_bytes_ = 0;
+
   struct Trap : std::runtime_error {
     FaultCode code;
     std::string reason;
@@ -424,6 +541,10 @@ class Cpu {
     Trap(FaultCode c, std::string message)
         : std::runtime_error(message), code(c), reason(std::move(message)) {}
   };
+  struct SystemCallMsrs {
+    std::uint64_t star = 0, lstar = 0, cstar = 0, kernel_gs_base = 0;
+    std::uint32_t fmask = 0;
+  };
   struct Snapshot {
     std::array<std::uint64_t, 16> regs;
     std::array<std::uint16_t, 6> segments;
@@ -431,6 +552,7 @@ class Cpu {
     std::uint64_t eip;
     std::uint32_t eflags, cr0, cr4;
     std::uint64_t cr2, cr3, efer, fs_base, gs_base;
+    SystemCallMsrs system_call_msrs;
     DescriptorTable gdtr, idtr;
     SystemRegister ldtr, tr;
     bool a20, halted;
@@ -439,6 +561,8 @@ class Cpu {
     std::array<Extended80,8> x87;
     std::uint16_t fpu_control,fpu_status,fpu_tags,fpu_opcode,fpu_cs,fpu_ds;
     std::uint64_t fpu_ip,fpu_dp;
+    std::uint64_t tsc_offset, apic_base;
+    std::uint8_t apic_task_priority;
   };
   struct Operand {
     bool is_register = false;
@@ -449,21 +573,36 @@ class Cpu {
     bool rip_relative = false;
   };
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
+  using AtomicRam = std::array<std::size_t, 16>;
 
   bool op32_ = false, addr32_ = false, ip_written_ = false, transaction_ = false;
   bool operand_override_ = false, address_override_ = false, lock_prefix_ = false;
   std::uint8_t rex_ = 0;
+  std::uint8_t apic_task_priority_ = 0;
+  static constexpr std::uint64_t kApicBsp = 1U << 8, kApicEnable = 1U << 11;
+  std::uint64_t apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
   std::array<SegmentCache, 6> cache_{};
+  SystemCallMsrs system_call_msrs_;
   int override_ = -1;
   std::uint8_t repeat_ = 0;
   std::uint16_t start_cs_ = 0, opcode_ = 0;
   std::uint64_t start_ip_ = 0, cursor_ = 0;
+  static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
+  static constexpr std::uint64_t kTscTicksPerStep = 64;
+  std::uint64_t tsc_offset_ = 0;
+  // A deterministic guest clock advances by 64 ticks per interpreter step.
+  std::uint64_t timestamp_counter() const noexcept { return tsc_offset_ + instructions * kTscTicksPerStep; }
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
   // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
   // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
   bool supervisor_internal_ = false;
   std::uint32_t pending_simd_flags_=0;
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+  mundo_x::ether_next::Cache ether_next_cache_{32};
+  std::uint64_t ether_next_native_instructions_ = 0;
+  bool ether_next_enabled_ = false;
+#endif
   struct SupervisorAccess {
     Cpu& cpu;
     bool old;
@@ -481,12 +620,16 @@ class Cpu {
     regs = s.regs; segments = s.segments; eip = s.eip; eflags = s.eflags;
     cache_ = s.cache; cr0 = s.cr0; cr4 = s.cr4; cr2 = s.cr2; cr3 = s.cr3;
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
+    system_call_msrs_ = s.system_call_msrs;
     gdtr = s.gdtr; idtr = s.idtr;
     ldtr = s.ldtr; tr = s.tr;
     xmm=s.xmm;mxcsr=s.mxcsr;x87=s.x87;
     fpu_control=s.fpu_control;fpu_status=s.fpu_status;fpu_tags=s.fpu_tags;
     fpu_opcode=s.fpu_opcode;fpu_cs=s.fpu_cs;fpu_ds=s.fpu_ds;
     fpu_ip=s.fpu_ip;fpu_dp=s.fpu_dp;
+    tsc_offset_ = s.tsc_offset;
+    apic_base_ = s.apic_base;
+    apic_task_priority_ = s.apic_task_priority;
     a20_enabled = s.a20; halted = s.halted;
   }
   static void check_register(unsigned r) {
@@ -498,6 +641,15 @@ class Cpu {
   }
   bool mmio_at(std::uint64_t address) const {
     return mmio_claim_hook && mmio_claim_hook(bus_address(address));
+  }
+  bool bulk_ram_range(std::uint64_t address, unsigned bytes) const {
+    if (!bytes || address > UINT64_MAX - (bytes - 1)) return false;
+    const auto bus = bus_address(address);
+    if (bus >= memory.size() || bytes > memory.size() - bus ||
+        bus_address(address + bytes - 1) != bus + bytes - 1) return false;
+    if (mmio_claim_hook && (!mmio_range_claim_hook || mmio_range_claim_hook(bus, bytes))) return false;
+    return !(memory.has_window() && bus < memory.window_base() + memory.window_bytes() &&
+             memory.window_base() < bus + bytes);
   }
   std::size_t physical_index(std::uint64_t address) const {
     const std::uint64_t bus = bus_address(address);
@@ -529,35 +681,65 @@ class Cpu {
   static bool canonical(std::uint64_t value) {
     return (value >> 48) == ((value & (std::uint64_t{1} << 47)) ? 0xffffU : 0U);
   }
+  std::uint64_t real_segment_base(unsigned segment) const noexcept {
+    // Host setup can assign a public visible selector before running guest
+    // code. A guest segment load always updates both representations.
+    const auto& cache = cache_[segment];
+    return cache.selector == segments[segment]
+        ? cache.base : std::uint64_t(segments[segment]) << 4;
+  }
+  void reload_real_segment(unsigned segment, std::uint16_t selector) {
+    auto& cache = cache_[segment];
+    segments[segment] = selector;
+    cache.selector = selector;
+    cache.base = std::uint64_t(selector) << 4;
+    cache.valid = true;
+    // A real-mode load changes the base without reloading limit or D/B.
+    cache.inherited_from_real_mode = true;
+  }
   std::uint64_t segment_linear(unsigned segment, std::uint64_t offset,
                                unsigned bytes, Access access) const {
     if (segment >= 6) fail("segment index", FaultCode::InvalidInstruction);
     if (is_real_mode()) {
-      if (offset > 0xffffU || bytes == 0 || offset + bytes > 0x10000ULL)
-        fail("real-mode segment limit (64 KiB) exceeded", FaultCode::SegmentLimit);
-      return (std::uint64_t(segments[segment]) << 4) + offset;
+      const auto& cache = cache_[segment];
+      if (!cache.valid) fail("null/unusable real-mode segment", FaultCode::ProtectionFault);
+      // Keep legacy CS overrides usable in real mode. Other registers retain
+      // the memory permissions of the descriptors loaded in protected mode.
+      if (segment != CS && ((access == Access::Write && !cache.writable) ||
+                           (access == Access::Read && !cache.readable)))
+        fail("real-mode segment access denied", FaultCode::ProtectionFault);
+      const auto limit = cache.limit;
+      if (bytes == 0 || offset > limit || bytes - 1 > limit - offset)
+        fail("real-mode segment limit exceeded", FaultCode::SegmentLimit);
+      return std::uint32_t(real_segment_base(segment) + offset);
     }
     if (is_long_mode()) {
       const auto base = segment == FS ? fs_base : segment == GS ? gs_base : 0;
       const auto address = base + offset;
       if (!canonical(address) || bytes == 0 || address > UINT64_MAX - (bytes - 1) || !canonical(address + bytes - 1))
-        fail("non-canonical long-mode address", FaultCode::ProtectionFault);
+        fail("non-canonical long-mode address", segment == SS ? FaultCode::StackFault : FaultCode::ProtectionFault);
       return address;
     }
     const auto& cache = cache_[segment];
     if (!cache.valid) fail("null/unusable protected-mode segment", FaultCode::ProtectionFault);
     if (!supervisor_internal_ && segment != CS) {
       const auto privilege = cpl();
-      const auto requested = unsigned(segments[segment] & 3U);
+      // On entry to protected mode the visible selector is still a real-mode
+      // segment value. Its low bits become RPL only after a descriptor load.
+      const auto requested = cache.inherited_from_real_mode
+          ? 0U : unsigned(segments[segment] & 3U);
       if (segment == SS) {
         if (requested != privilege || cache.dpl != privilege)
-          fail("protected32 SS RPL/DPL does not match CPL", FaultCode::ProtectionFault);
+          fail("protected-mode SS RPL/DPL does not match CPL", FaultCode::ProtectionFault);
       } else if (!cache.conforming && std::max(privilege,requested) > cache.dpl) {
-        fail("protected32 data-segment privilege check failed", FaultCode::ProtectionFault);
+        fail("protected-mode data-segment privilege check failed", FaultCode::ProtectionFault);
       }
     }
-    if (bytes == 0 || offset > cache.limit || bytes - 1 > cache.limit - offset)
-      fail("protected-mode segment limit exceeded", FaultCode::SegmentLimit);
+    const auto upper = cache.expand_down ? (cache.big ? 0xffffffffU : 0xffffU) : cache.limit;
+    if (bytes == 0 || offset > upper || bytes - 1 > upper - offset ||
+        (cache.expand_down && offset <= cache.limit))
+      fail("protected-mode segment limit exceeded",
+           segment == SS && (efer & 0x400U) ? FaultCode::StackFault : FaultCode::SegmentLimit);
     if ((access == Access::Write && (cache.code || !cache.writable)) ||
         (access == Access::Read && cache.code && !cache.readable) ||
         (access == Access::Execute && !cache.code))
@@ -622,8 +804,8 @@ class Cpu {
   unsigned width() const { return is_long_mode() && (rex_ & 8) ? 8 : op32_ ? 4 : 2; }
   unsigned address_width() const { return is_long_mode() ? (addr32_ ? 4 : 8) : addr32_ ? 4 : 2; }
   unsigned stack_operand_width() const { return is_long_mode() ? (operand_override_ && !(rex_ & 8) ? 2 : 8) : width(); }
-  unsigned stack_address_width() const { return is_long_mode() ? 8 : !is_real_mode() && cache_[SS].big ? 4 : 2; }
-  std::uint64_t code_mask() const { return is_long_mode() ? UINT64_MAX : !is_real_mode() && cache_[CS].big ? 0xffffffffULL : 0xffffULL; }
+  unsigned stack_address_width() const { return is_long_mode() ? 8 : cache_[SS].big ? 4 : 2; }
+  std::uint64_t code_mask() const { return is_long_mode() ? UINT64_MAX : cache_[CS].big ? 0xffffffffULL : 0xffffULL; }
   static std::uint64_t mask(unsigned bytes) { return bytes == 8 ? UINT64_MAX : ((std::uint64_t{1} << (8U * bytes)) - 1); }
   static std::uint64_t sign_bit(unsigned bytes) { return std::uint64_t{1} << (8U * bytes - 1); }
   static std::int64_t signed_value(std::uint64_t value, unsigned bytes) {
@@ -717,10 +899,70 @@ class Cpu {
     if (operand.is_register) put_reg(operand.index, bytes, value);
     else write_segment(operand.segment, operand_offset(operand), bytes, value);
   }
+  void require_lock_destination(const Operand& operand, bool modifies_memory = true) const {
+    if (lock_prefix_ && (operand.is_register || !modifies_memory))
+      fail("LOCK requires a writable memory destination", FaultCode::InvalidInstruction);
+  }
+  AtomicRam atomic_ram(std::uint64_t address, unsigned bytes) {
+    AtomicRam indices{};
+    // The single-vCPU board ticks between instructions. Resolve all page and
+    // bus addresses before reading the operand, using write-sense access for RMW.
+    for (unsigned done = 0; done < bytes;) {
+      const auto linear = address + done;
+      const auto physical = translate(linear, Access::Write);
+      const auto chunk = std::min(bytes - done, 0x1000U - unsigned(linear & 0xfffU));
+      for (unsigned i = 0; i < chunk; ++i) {
+        const auto bus = physical + i;
+        if (mmio_at(bus))
+          fail("atomic memory operation on MMIO is unsupported", FaultCode::UnsupportedState);
+        const auto index = physical_index(bus);
+        if (index >= memory.window_base() && index - memory.window_base() < memory.window_bytes())
+          fail("atomic memory operation on the Ether window is unsupported", FaultCode::UnsupportedState);
+        indices[done + i] = index;
+      }
+      done += chunk;
+    }
+    return indices;
+  }
+  std::uint64_t read_atomic_ram(const AtomicRam& indices, unsigned offset, unsigned bytes) const {
+    std::uint64_t value = 0;
+    for (unsigned i = 0; i < bytes; ++i)
+      value |= std::uint64_t(memory.read_byte(indices[offset + i])) << (8U * i);
+    return value;
+  }
+  void write_atomic_ram(const AtomicRam& indices, unsigned offset, unsigned bytes,
+                        std::uint64_t value) {
+    for (unsigned i = 0; i < bytes; ++i) {
+      const auto index = indices[offset + i];
+      const auto previous = memory.read_byte(index);
+      const auto next = std::uint8_t(value >> (8U * i));
+      if (previous == next) continue;
+      journal_.emplace_back(index, previous);
+      memory.write_byte(index, next);
+    }
+  }
+  template<class Update>
+  void modify_operand(const Operand& operand, unsigned bytes, Update update,
+                      bool implicit_atomic = false) {
+    if (!operand.is_register && (lock_prefix_ || implicit_atomic)) {
+      const auto address = segment_linear(operand.segment, operand_offset(operand), bytes, Access::Write);
+      const auto indices = atomic_ram(address, bytes);
+      write_atomic_ram(indices, 0, bytes, update(read_atomic_ram(indices, 0, bytes)));
+    } else {
+      put(operand, bytes, update(get(operand, bytes)));
+    }
+  }
   void fpu_init() {
     fpu_control=0x037f;fpu_status=0;fpu_tags=0xffff;
     fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
     // x87 register data becomes architecturally empty; data bits are stale.
+  }
+  void fpu_recompute_summary() noexcept {
+    if(fpu_status&~fpu_control&0x3fU)fpu_status|=0x8080U;
+    else fpu_status&=~std::uint16_t(0x8080U);
+  }
+  static constexpr std::uint16_t fpu_normalize_control(std::uint16_t word) noexcept {
+    return std::uint16_t((word&0x1f3fU)|0x0040U);
   }
   unsigned fpu_top() const {return unsigned((fpu_status>>11)&7U);}
   unsigned fpu_slot(unsigned logical) const {return (fpu_top()+logical)&7U;}
@@ -761,9 +1003,6 @@ class Cpu {
     if(exponent==exp_mask) {
       extended_exp=0x7fff;
       significand=(1ULL<<63)|(fraction<<(63-frac_bits));
-      // Do not pretend to model the pending unmasked sNaN x87 flags yet.
-      if(fraction && !(fraction&(1ULL<<(frac_bits-1))))
-        throw std::runtime_error("signaling NaN in x87 FLD requires exception model");
     }else if(exponent||fraction) {
       int e=exponent?int(exponent)-bias:1-bias;
       significand=(exponent?(1ULL<<frac_bits):0ULL)|fraction;
@@ -781,42 +1020,6 @@ class Cpu {
     out[9]=std::uint8_t((extended_exp>>8)|(sign?0x80U:0U));
     return out;
   }
-  static Extended80 extended_from_long_double(long double value) {
-    Extended80 bytes{};
-    const bool negative=std::signbit(value);
-    const auto magnitude=std::fabs(value);
-    std::uint64_t sig=0;unsigned exponent=0;
-    if(std::isnan(value)) {exponent=0x7fff;sig=0xc000000000000000ULL;}
-    else if(std::isinf(value)) {exponent=0x7fff;sig=0x8000000000000000ULL;}
-    else if(magnitude!=0) {
-      int binexp=0;
-      const auto fraction=std::frexp(magnitude,&binexp);
-      const auto biased=binexp-1+16383;
-      if(biased<=0||biased>=0x7fff)
-        throw std::runtime_error("x87 extended exponent outside finite implementation");
-      exponent=unsigned(biased);
-      sig=static_cast<std::uint64_t>(std::ldexp(fraction,64));
-    }
-    for(unsigned i=0;i<8;++i)bytes[i]=std::uint8_t(sig>>(8*i));
-    bytes[8]=std::uint8_t(exponent);
-    bytes[9]=std::uint8_t((exponent>>8)|(negative?0x80U:0));
-    return bytes;
-  }
-  static long double extended_to_long_double(const Extended80& value) {
-    const auto exponent=ext_biased_exp(value);
-    const auto significand=ext_significand(value);
-    const bool sign=(value[9]&0x80U)!=0;
-    long double result=0;
-    if(exponent==0x7fff) {
-      result=significand==0x8000000000000000ULL
-          ?std::numeric_limits<long double>::infinity()
-          :std::numeric_limits<long double>::quiet_NaN();
-    }else if(exponent||significand) {
-      const auto e=(exponent?int(exponent):1)-16383-63;
-      result=std::ldexp(static_cast<long double>(significand),e);
-    }
-    return sign?-result:result;
-  }
   static Extended80 x87_indefinite() {
     Extended80 value{};
     value[7]=0xc0;value[8]=0xff;value[9]=0xff;
@@ -830,44 +1033,27 @@ class Cpu {
                               (overflow?0x0200U:0U));
     if(!(fpu_control&1U))fpu_status|=0x8080U; // ES+B
   }
-  void round_x87_precision(Extended80& bits,std::uint32_t& flags) {
-    // C1 describes this operation's rounding, while PE is sticky.
-    fpu_status=std::uint16_t(fpu_status&~0x0200U);
-    const unsigned pc=(fpu_control>>8)&3U;
-    if(pc==1)fail("reserved x87 PC=01",FaultCode::UnsupportedState);
-    const unsigned precision=pc==0?24U:pc==2?53U:64U;
-    if(precision==64)return;
-    auto exponent=ext_biased_exp(bits);
-    auto significand=ext_significand(bits);
-    if(exponent==0x7fff||!significand)return; // NaN, infinity or zero
-    if(!exponent)fail("extended subnormal x87 arithmetic rounding pending",
-                      FaultCode::UnsupportedState);
-    const unsigned drop=64-precision;
-    const auto lowmask=(std::uint64_t{1}<<drop)-1;
-    const auto lost=significand&lowmask;
-    if(!lost)return;
-    const auto half=std::uint64_t{1}<<(drop-1);
-    auto keep=significand>>drop;
-    const unsigned rc=(fpu_control>>10)&3U;
-    const bool negative=(bits[9]&0x80U)!=0;
-    const bool increment=rc==0?(lost>half||(lost==half&&(keep&1))):
-                         rc==1?negative:rc==2?!negative:false;
-    flags|=32U; // x87 PE: result changed by precision narrowing
-    // Intel C1 indicates the last rounded result was rounded upwards.
-    if(increment)fpu_status|=0x0200U;
-    if(increment){
-      ++keep;
-      if(keep==(std::uint64_t{1}<<precision)){
-        keep>>=1;++exponent;
-        if(exponent>=0x7fff)
-          fail("narrow precision x87 overflow pending",FaultCode::UnsupportedState);
-      }
-    }
-    significand=keep<<drop;
-    for(unsigned byte=0;byte<8;++byte)
-      bits[byte]=std::uint8_t(significand>>(byte*8));
-    bits[8]=std::uint8_t(exponent);
-    bits[9]=std::uint8_t((exponent>>8)|(negative?0x80U:0));
+  void fpu_arithmetic_result(const x87_numeric::Result& result, unsigned slot, bool pop) {
+    using namespace x87_numeric;
+    fpu_status=std::uint16_t((fpu_status&~0x0200U) | (result.rounded_up?0x0200U:0U) |
+                             result.exceptions);
+    const auto unmasked=result.exceptions&~fpu_control&0x3fU;
+    if(unmasked) fpu_status|=0x8080U; // ES+B; the next waiting instruction raises #MF.
+    // Invalid operands and division by zero leave the destination unchanged.
+    // Range exceptions with x87 register destinations use a biased exponent.
+    if(unmasked&(Invalid|Denormal|DivideByZero)) return;
+    x87[slot]=result.value;
+    fpu_tag_set(slot,classify_ext(result.value));
+    if(pop) fpu_retire_pop();
+  }
+  void fpu_arithmetic(unsigned group,const Extended80& lhs,const Extended80& rhs,
+                      unsigned slot,bool pop=false,bool memory_denormal=false) {
+    if(((fpu_control>>8)&3U)==1U) fail("reserved x87 PC=01",FaultCode::UnsupportedState);
+    fpu_arithmetic_result(x87_numeric::arithmetic(group,lhs,rhs,fpu_control,memory_denormal),slot,pop);
+  }
+  void fpu_sqrt() {
+    if(((fpu_control>>8)&3U)==1U) fail("reserved x87 PC=01",FaultCode::UnsupportedState);
+    fpu_arithmetic_result(x87_numeric::square_root(fpu_peek(),fpu_control),fpu_slot(0),false);
   }
   void fpu_push(Extended80 value) {
     const auto top=(fpu_top()+7U)&7U;
@@ -886,19 +1072,10 @@ class Cpu {
       fail("x87 stack underflow exception handling not implemented",FaultCode::UnsupportedState);
     return x87[slot];
   }
-  void fpu_pop() {
-    const auto top=fpu_top();
-    if(fpu_tag(top)==3U) {
-      fpu_stack_fault(false);
-      if(!(fpu_control&1U))return;
-      // Underflow masked: pop empty register, preserve all other tags.
-    }else fpu_status=std::uint16_t(fpu_status&~0x0200U);
-    fpu_tag_set(top,3);
-    fpu_status=std::uint16_t((fpu_status&~0x3800U)|(((top+1U)&7U)<<11));
-  }
   void require_fpu() const {
     if(cr0&0xcU)fail("x87 CR0.TS/EM device unavailable",FaultCode::DeviceNotAvailable);
   }
+#include "x86_x87_state.inc"
   static std::uint16_t load16(const std::array<std::uint8_t,512>& src,unsigned off) {
     return std::uint16_t(src[off])|(std::uint16_t(src[off+1])<<8);
   }
@@ -922,31 +1099,43 @@ class Cpu {
   void fxstate(const Operand& memory_operand,bool restore) {
     require_memory(memory_operand);
     require_fpu();
-    if(!(cr4&0x200U))
-      fail("FXSAVE/FXRSTOR require OSFXSR in this CPU profile",FaultCode::InvalidInstruction);
-    const auto address=segment_linear(memory_operand.segment,operand_offset(memory_operand),
-                                      512,restore?Access::Read:Access::Write);
+    // With OSFXSR clear the x87 image is still available. This CPU profile
+    // omits the implementation-dependent XMM and MXCSR fields in that mode.
+    const bool save_simd = (cr4 & 0x200U) != 0;
+    const auto access=restore?Access::Read:Access::Write;
+    const auto address=segment_linear(memory_operand.segment,operand_offset(memory_operand),512,access);
     if(address&15U)fail("FXSAVE/FXRSTOR require 16-byte aligned memory",FaultCode::ProtectionFault);
-    // Validate the ENTIRE 512-byte window before changing CPU state or RAM.
-    // Explicit MMIO rejection: these operations are not device DMA commands.
-    for(unsigned i=0;i<512;++i) {
-      const auto p=translate(address+i,restore?Access::Read:Access::Write);
-      if(mmio_at(p))
-        fail("FXSAVE/FXRSTOR on MMIO cannot be atomic",FaultCode::UnsupportedState);
-      (void)physical_index(p);
+    // The architecture checks all 512 bytes, including the software tail.
+    // Preflight both pages exactly once before accessing the state image.
+    std::array<std::size_t,512> indices{};
+    for(unsigned offset=0;offset<indices.size();) {
+      const auto linear=address+offset;
+      const auto physical=translate(linear,access);
+      const auto count=std::min(unsigned(indices.size())-offset,0x1000U-unsigned(linear&0xfffU));
+      for(unsigned i=0;i<count;++i) {
+        const auto bus=physical+i;
+        if(mmio_at(bus))fail("FXSAVE/FXRSTOR requires RAM",FaultCode::UnsupportedState);
+        const auto index=physical_index(bus);
+        if(index>=memory.window_base() && index-memory.window_base()<memory.window_bytes())
+          fail("FXSAVE/FXRSTOR cannot access the Ether window",FaultCode::UnsupportedState);
+        indices[offset+i]=index;
+      }
+      offset+=count;
     }
     std::array<std::uint8_t,512> buffer{};
     if(restore) {
-      for(unsigned i=0;i<416;++i)
-        buffer[i]=std::uint8_t(read_linear(address+i,1));
-      const auto candidate_mxcsr=load32(buffer,24);
-      if(candidate_mxcsr&~kMxcsrMask)
+      for(unsigned i=0;i<(save_simd?416U:160U);++i) {
+        if(!save_simd&&i>=24&&i<32)continue;
+        buffer[i]=memory.read_byte(indices[i]);
+      }
+      const auto candidate_mxcsr=save_simd?load32(buffer,24):mxcsr;
+      if(save_simd&&(candidate_mxcsr&~kMxcsrMask))
         fail("FXRSTOR reserved MXCSR bit",FaultCode::ProtectionFault);
       // Parse and validate entire image before committing any CPU state.
-      const auto new_control=load16(buffer,0);
-      auto new_status=load16(buffer,2);
+      const auto new_control=fpu_normalize_control(load16(buffer,0));
+      const auto new_status=load16(buffer,2);
       const auto abridged=buffer[4];
-      const auto new_opcode=load16(buffer,6);
+      const auto new_opcode=std::uint16_t(load16(buffer,6)&0x7ffU);
       const bool wide_pointers=is_long_mode()&&(rex_&8);
       const auto new_ip=wide_pointers?load64(buffer,8):load32(buffer,8);
       const auto new_dp=wide_pointers?load64(buffer,16):load32(buffer,16);
@@ -970,9 +1159,11 @@ class Cpu {
               (classify_ext(new_regs[physical])<<(2*physical)));
 
       std::array<std::array<std::uint8_t,16>,16> new_xmm=xmm;
-      for(unsigned i=0;i<xmm_count();++i)
-        for(unsigned j=0;j<16;++j)new_xmm[i][j]=buffer[160+16*i+j];
+      if(save_simd)
+        for(unsigned i=0;i<xmm_count();++i)
+          for(unsigned j=0;j<16;++j)new_xmm[i][j]=buffer[160+16*i+j];
       fpu_control=new_control;fpu_status=new_status;fpu_tags=new_tags;
+      fpu_recompute_summary();
       fpu_opcode=new_opcode;fpu_ip=new_ip;fpu_dp=new_dp;
       fpu_cs=new_cs;fpu_ds=new_ds;x87=new_regs;
       mxcsr=candidate_mxcsr;xmm=new_xmm;
@@ -980,7 +1171,7 @@ class Cpu {
       store16(buffer,0,fpu_control);store16(buffer,2,fpu_status);
       for(unsigned i=0;i<8;++i)
         if(fpu_tag(i)!=3U)buffer[4]|=std::uint8_t(1U<<i);
-      store16(buffer,6,fpu_opcode);
+      store16(buffer,6,fpu_opcode&0x7ffU);
       const bool wide_pointers=is_long_mode()&&(rex_&8);
       if(wide_pointers){
         store64(buffer,8,fpu_ip);store64(buffer,16,fpu_dp);
@@ -988,16 +1179,22 @@ class Cpu {
         store32(buffer,8,std::uint32_t(fpu_ip));store16(buffer,12,fpu_cs);
         store32(buffer,16,std::uint32_t(fpu_dp));store16(buffer,20,fpu_ds);
       }
-      store32(buffer,24,mxcsr);store32(buffer,28,kMxcsrMask);
+      if(save_simd) {
+        store32(buffer,24,mxcsr);store32(buffer,28,kMxcsrMask);
+      }
       // X87 saved data ST(i) is LOGICAL, not the physical R(i)
       // position indicated by the separate abridged tag mask.
       for(unsigned i=0;i<8;++i)
         for(unsigned j=0;j<10;++j)
           buffer[32+16*i+j]=x87[fpu_slot(i)][j];
-      for(unsigned i=0;i<xmm_count();++i)
-        for(unsigned j=0;j<16;++j)buffer[160+16*i+j]=xmm[i][j];
+      if(save_simd)
+        for(unsigned i=0;i<xmm_count();++i)
+          for(unsigned j=0;j<16;++j)buffer[160+16*i+j]=xmm[i][j];
       // Intel reserves bytes 464-511 for software; never overwrite them.
-      for(unsigned i=0;i<464;++i)write_linear(address+i,1,buffer[i]);
+      for(unsigned i=0;i<464;++i) {
+        if(!save_simd&&((i>=24&&i<32)||(i>=160&&i<416)))continue;
+        write8(indices[i],buffer[i]);
+      }
     }
   }
   unsigned xmm_count() const {return is_long_mode()?16U:8U;}
@@ -1008,10 +1205,30 @@ class Cpu {
     if(!(cr4&0x200U))
       fail("SSE2 requires CR4.OSFXSR",FaultCode::InvalidInstruction);
     if(cr0&0x4U)
-      fail("SSE2 disabled by CR0.EM",FaultCode::DeviceNotAvailable);
+      fail("SSE2 disabled by CR0.EM",FaultCode::InvalidInstruction);
     if(cr0&0x8U)
       fail("SSE2 task-switched CR0.TS",FaultCode::DeviceNotAvailable);
   }
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+  bool try_ether_next(const ModRM& operands) {
+    if (!ether_next_native_host() || !ether_next_enabled_ ||
+        !operands.rm.is_register || !is_long_mode() || override_ >= 0 ||
+        address_override_ || lock_prefix_ || step_trace_hook || irq_trace_hook)
+      return false;
+    // The caller already validated this specific SSE2 register opcode and
+    // its architectural state. Reuse the bytes fetched for this instruction.
+    // Cpu::step still owns RIP, retirement, rollback, and device boundaries.
+    mundo_x::ether_next::Guard guard;
+    guard.sse2_enabled = true;
+    guard.osfxsr = (cr4 & 0x200U) != 0;
+    guard.cr0_em = (cr0 & 4U) != 0;
+    guard.cr0_ts = (cr0 & 8U) != 0;
+    guard.single_step = flag(TF);
+    if (!ether_next_cache_.execute(decoded_, xmm, guard)) return false;
+    ++ether_next_native_instructions_;
+    return true;
+  }
+#endif
   std::array<std::uint8_t,16> read_xmm_operand(const Operand& m,bool aligned) {
     if(m.is_register){require_xmm(m.index);return xmm[m.index];}
     const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Read);
@@ -1031,6 +1248,33 @@ class Cpu {
       (void)physical_index(p);
     }
     for(unsigned i=0;i<16;++i)write_linear(address+i,1,value[i]);
+  }
+  void masked_store(const std::array<std::uint8_t,16>& data,
+                    const std::array<std::uint8_t,16>& mask_bytes,unsigned bytes) {
+    const auto segment=override_>=0?unsigned(override_):DS;
+    const auto address=segment_linear(segment,get_reg(EDI,address_width()),bytes,Access::Write);
+    std::array<std::uint64_t,16> physical{};
+    // Match the modelled Intel behavior: even masked-off addresses are
+    // checked, but only selected bytes reach the memory bus as stores.
+    for(unsigned done=0;done<bytes;){
+      const auto linear=address+done;
+      const auto first=translate(linear,Access::Write);
+      const auto count=std::min(bytes-done,0x1000U-unsigned(linear&0xfffU));
+      for(unsigned i=0;i<count;++i){
+        const auto bus=first+i;
+        physical[done+i]=bus;
+        if(mask_bytes[done+i]&0x80U){
+          if(mmio_at(bus))
+            fail("masked SIMD store cannot write MMIO",FaultCode::UnsupportedState);
+          (void)physical_index(bus);
+        }
+      }
+      done+=count;
+    }
+    for(unsigned i=0;i<bytes;++i)
+      if(mask_bytes[i]&0x80U)memory.prepare_write(physical_index(physical[i]),1);
+    for(unsigned i=0;i<bytes;++i)
+      if(mask_bytes[i]&0x80U)write8(physical[i],data[i]);
   }
   static std::uint64_t packed_lane(const std::array<std::uint8_t,16>& value,
                                    unsigned offset,unsigned size) {
@@ -1092,6 +1336,58 @@ class Cpu {
   static bool fp64_snan(std::uint64_t raw) {
     return fp64_nan(raw) && !(raw&(1ULL<<51));
   }
+  static std::uint32_t fp32_bits(float value) {
+    std::uint32_t bits{};std::memcpy(&bits,&value,sizeof(bits));return bits;
+  }
+  static std::uint32_t sse_approximate_lane(std::uint32_t raw,bool rsqrt) {
+    const auto sign=raw&0x80000000U;
+    const auto magnitude=raw&0x7fffffffU;
+    if(magnitude>0x7f800000U)return raw|0x00400000U;
+    if(magnitude<0x00800000U)return sign|0x7f800000U; // Signed zero or denormal.
+    if(rsqrt&&sign)return 0xffc00000U;
+    if(magnitude==0x7f800000U)return sign;
+    float value;
+    std::memcpy(&value,&raw,sizeof(value));
+    // The architectural accuracy bound does not prescribe a lookup table.
+    // Round using nearest regardless of guest MXCSR and discard host flags.
+    HostRound nearest(0x1f80);
+    volatile double input=value;
+    volatile float approximate=static_cast<float>(1.0/(rsqrt?std::sqrt(input):input));
+    const auto result=fp32_bits(approximate);
+    return (result&0x7f800000U)?result:sign; // RCP always flushes tiny results.
+  }
+  void sse_approximate(unsigned opcode) {
+    if(operand_override_||(repeat_&&repeat_!=0xf3))
+      fail("invalid reciprocal SSE prefix",FaultCode::InvalidInstruction);
+    require_sse_state();
+    const auto m=modrm();require_xmm(m.reg);
+    const bool scalar=repeat_==0xf3,rsqrt=opcode==0x52;
+    auto result=xmm[m.reg];
+    if(scalar)packed_set(result,0,4,sse_approximate_lane(sse32_source(m.rm),rsqrt));
+    else {
+      const auto source=read_xmm_operand(m.rm,true);
+      for(unsigned offset=0;offset<16;offset+=4)
+        packed_set(result,offset,4,sse_approximate_lane(std::uint32_t(packed_lane(source,offset,4)),rsqrt));
+    }
+    xmm[m.reg]=result;
+  }
+  static bool fp32_denormal(std::uint32_t raw) {
+    return (raw&0x7f800000U)==0 && (raw&0x007fffffU)!=0;
+  }
+  static bool fp32_nan(std::uint32_t raw) {
+    return (raw&0x7f800000U)==0x7f800000U && (raw&0x007fffffU)!=0;
+  }
+  static bool fp32_snan(std::uint32_t raw) {
+    return fp32_nan(raw) && !(raw&0x00400000U);
+  }
+  std::uint32_t fp32_apply_daz(std::uint32_t raw) const {
+    return (mxcsr&0x40U)&&fp32_denormal(raw) ? raw&0x80000000U : raw;
+  }
+  static std::uint32_t fp32_order_key(std::uint32_t raw) {
+    constexpr std::uint32_t sign=0x80000000U;
+    if((raw&~sign)==0)raw=0;
+    return (raw&sign)?~raw:(raw^sign);
+  }
   static std::uint64_t fp64_order_key(std::uint64_t raw) {
     // For ordered operands the sign-adjusted bit pattern sorts numerically.
     // The two signed zeros compare equal.
@@ -1103,9 +1399,6 @@ class Cpu {
     if((mxcsr&0x40U)&&fp64_subnormal(raw))
       return raw&0x8000000000000000ULL;
     return raw;
-  }
-  static std::uint32_t fp64_denormal_status(std::uint64_t left,std::uint64_t right) {
-    return fp64_subnormal(left)||fp64_subnormal(right)?2U:0U;
   }
   void simd_status(std::uint32_t flags) {
     flags&=0x3fU;
@@ -1130,96 +1423,158 @@ class Cpu {
     }
     return read_segment(source.segment,operand_offset(source),8);
   }
-  void sse64_store(const Operand& destination,std::uint64_t bits) {
-    if(destination.is_register) {
-      require_xmm(destination.index);
-      packed_set(xmm[destination.index],0,8,bits);
-    }else write_segment(destination.segment,operand_offset(destination),8,bits);
+  std::uint32_t sse32_source(const Operand& source) {
+    if(source.is_register){require_xmm(source.index);return std::uint32_t(packed_lane(xmm[source.index],0,4));}
+    return std::uint32_t(get(source,4));
   }
-  // Returns a binary64 result and accumulates its status for the instruction.
-  std::uint64_t simd_double_op(std::uint8_t opcode,
-                               std::uint64_t left_raw,std::uint64_t right_raw,
-                               std::uint32_t& status) {
-    // Aggregate status across BOTH packed lanes before deciding whether #XM
-    // is raised; an unmasked exception must not commit a partial vector.
-    left_raw=opcode==0x51?0:fp64_apply_daz(left_raw);
-    right_raw=fp64_apply_daz(right_raw);
+  template<typename Float>
+  Float compute_simd_float(unsigned opcode,volatile Float a,volatile Float b) {
+    switch(opcode) {
+      case 0x58:{volatile Float result=a+b;return result;}
+      case 0x5c:{volatile Float result=a-b;return result;}
+      case 0x59:{volatile Float result=a*b;return result;}
+      case 0x5e:{volatile Float result=a/b;return result;}
+      case 0x51:{volatile Float result=std::sqrt(b);return result;}
+      default:fail("unsupported SSE floating-point operation",FaultCode::UnsupportedOpcode);
+    }
+  }
+  template<typename Bits>
+  static std::pair<Bits,int> simd_normalized(Bits magnitude) {
+    constexpr bool single=sizeof(Bits)==4;
+    constexpr unsigned shift=single?23:52;
+    constexpr int bias=single?127:1023;
+    constexpr auto fraction=(Bits{1}<<shift)-1;
+    auto exponent=int(magnitude>>shift);
+    if(!exponent) {
+      exponent=1;
+      while(!(magnitude&(Bits{1}<<shift))){magnitude<<=1;--exponent;}
+    }
+    return {(Bits(bias)<<shift)|(magnitude&fraction),exponent-bias};
+  }
+  template<typename Float, typename Bits>
+  Bits simd_float_op(unsigned opcode,Bits left_raw,Bits right_raw,std::uint32_t& status) {
+    constexpr bool single=sizeof(Bits)==4;
+    constexpr Bits sign=Bits{1}<<(sizeof(Bits)*8-1);
+    constexpr Bits quiet=Bits{1}<<(single?22:51);
+    constexpr Bits indefinite=static_cast<Bits>(single?0xffc00000ULL:0xfff8000000000000ULL);
+    constexpr Bits min_normal=Bits{1}<<(single?23:52);
+    constexpr Bits infinity=static_cast<Bits>(single?0x7f800000ULL:0x7ff0000000000000ULL);
+    const auto nan=[](Bits raw) { if constexpr(single)return fp32_nan(raw);else return fp64_nan(raw); };
+    const auto denormal=[](Bits raw) { if constexpr(single)return fp32_denormal(raw);else return fp64_subnormal(raw); };
+    const auto order=[](Bits raw) { if constexpr(single)return fp32_order_key(raw);else return fp64_order_key(raw); };
+    const auto daz=[&](Bits raw) { return (mxcsr&0x40U)&&denormal(raw)?raw&~(sign-1):raw; };
+    left_raw=opcode==0x51?0:daz(left_raw);
+    right_raw=daz(right_raw);
     const bool minmax=opcode==0x5d||opcode==0x5f;
-    if(fp64_nan(left_raw)||fp64_nan(right_raw)) {
-      if(minmax||fp64_snan(left_raw)||fp64_snan(right_raw))status|=1U;
+    const bool left_nan=nan(left_raw),right_nan=nan(right_raw);
+    if(left_nan||right_nan) {
+      if(minmax||(left_nan&&!(left_raw&quiet))||(right_nan&&!(right_raw&quiet)))status|=1U;
       // MIN/MAX select the second operand unchanged. Arithmetic quiets
       // the first NaN in operand order, preserving its sign and payload.
       if(minmax)return right_raw;
-      return (fp64_nan(left_raw)?left_raw:right_raw)|(1ULL<<51);
+      return (left_nan?left_raw:right_raw)|quiet;
     }
-    status|=fp64_denormal_status(left_raw,right_raw);
+    const auto left_magnitude=left_raw&~sign,right_magnitude=right_raw&~sign;
+    if(opcode==0x51&&(right_raw&sign)&&right_magnitude) {
+      status|=1U;return indefinite; // Invalid precedes denormal on a negative root.
+    }
+    if(opcode==0x5e&&left_magnitude&&left_magnitude<infinity&&!right_magnitude) {
+      status|=4U;return ((left_raw^right_raw)&sign)|infinity; // Divide-by-zero suppresses DE.
+    }
+    const bool denormal_source=denormal(left_raw)||denormal(right_raw);
+    if(denormal_source) {
+      status|=2U;
+      if(!(mxcsr&(1U<<8)))return indefinite; // Unmasked DE precedes arithmetic.
+    }
     if(minmax) {
-      const auto l=fp64_order_key(left_raw),r=fp64_order_key(right_raw);
+      const auto l=order(left_raw),r=order(right_raw);
       if(l==r)return right_raw;
       return opcode==0x5d?(l<r?left_raw:right_raw):
                              (l>r?left_raw:right_raw);
     }
-    const double left=fp64_from_bits(left_raw);
-    const double right=fp64_from_bits(right_raw);
-    double rounded=0;
+    Float left{},right{},rounded{};
+    std::memcpy(&left,&left_raw,sizeof(left));
+    std::memcpy(&right,&right_raw,sizeof(right));
     std::uint32_t result_status=0;
     {
       HostRound rounding(mxcsr);
-      volatile double a=left,b=right;
-      switch(opcode) {
-        case 0x58:{volatile double t=a+b;rounded=t;break;} // ADD
-        case 0x5c:{volatile double t=a-b;rounded=t;break;} // SUB
-        case 0x59:{volatile double t=a*b;rounded=t;break;} // MUL
-        case 0x5e:{volatile double t=a/b;rounded=t;break;} // DIV
-        case 0x51:{volatile double t=std::sqrt(b);rounded=t;break;} // SQRT(src)
-        default:fail("unsupported SSE2 binary64 operation",FaultCode::UnsupportedOpcode);
-      }
+      rounded=compute_simd_float(opcode,left,right);
       result_status=rounding.status();
     }
     if(result_status&1U) {
       status|=result_status;
-      return 0xfff8000000000000ULL; // Intel's indefinite result.
+      return indefinite;
     }
-    auto bits=fp64_bits(rounded);
-    const bool tiny=fp64_subnormal(bits);
-    if(!(mxcsr&(1U<<11))&&(tiny||(result_status&16U))) {
-      // Exact tiny results also trap. Rounding to a subnormal is part of
-      // the masked response, so its precision loss is not reported here.
-      result_status=(result_status&~32U)|16U;
+    Bits bits{};std::memcpy(&bits,&rounded,sizeof(bits));
+    const auto magnitude=bits&~sign;
+    bool tiny=magnitude<min_normal&&(magnitude||(result_status&16U));
+    std::uint32_t normal_precision=result_status&32U;
+    const bool near_tiny=magnitude<=min_normal&&(magnitude||(result_status&16U));
+    const bool overflow_traps=(result_status&8U)&&!(mxcsr&(1U<<10));
+    if((near_tiny||overflow_traps)&&(result_status&32U)&&
+       (opcode==0x59||opcode==0x5e||overflow_traps)) {
+      // Intel detects tininess from the arithmetic rounded at its precision
+      // with an unbounded exponent. Rescale the original significands to a
+      // portable normal operation, avoiding host underflow/tininess policy.
+      constexpr int bias=single?127:1023;
+      constexpr unsigned shift=single?23:52;
+      auto l=simd_normalized(left_magnitude),r=simd_normalized(right_magnitude);
+      if(opcode==0x58||opcode==0x5c) {
+        // Overflowing finite sums cannot be produced by a zero plus a
+        // representable operand. Uniform rescaling preserves their sum.
+        const auto maximum=std::max(l.second,r.second);
+        const auto scale=[&](auto& value) {
+          const auto exponent=std::max(1,bias+value.second-maximum);
+          value.first=(value.first&(min_normal-1))|(Bits(exponent)<<shift);
+        };
+        scale(l);scale(r);
+      }
+      const auto lbits=l.first|(left_raw&sign),rbits=r.first|(right_raw&sign);
+      Float a{},b{};
+      std::memcpy(&a,&lbits,sizeof(a));std::memcpy(&b,&rbits,sizeof(b));
+      HostRound rounding(mxcsr);
+      volatile Float normal=compute_simd_float(opcode,a,b);
+      const Float normal_value=normal;
+      Bits normalized{};std::memcpy(&normalized,&normal_value,sizeof(normalized));
+      if(near_tiny) {
+        const auto exponent=int((normalized&~sign)>>shift)-bias+l.second+
+                            (opcode==0x59?r.second:-r.second);
+        tiny=exponent<1-bias;
+      }
+      normal_precision=rounding.status()&32U;
+    }
+    if(overflow_traps)result_status=(result_status&~32U)|normal_precision;
+    result_status&=~16U;
+    if(tiny&&!(mxcsr&(1U<<11))) {
+      result_status=(result_status&~32U)|16U|normal_precision;
     }else if((mxcsr&0x8000U)&&tiny) {
-      bits&=0x8000000000000000ULL;
+      bits&=sign;
       result_status|=16U|32U;
-    }
+    }else if(tiny&&(result_status&32U))result_status|=16U;
     status|=result_status;
     return bits;
   }
-  void sse2_float(unsigned opcode) {
-    const bool scalar=repeat_==0xf2 && !operand_override_;
-    const bool packed=operand_override_ && repeat_==0;
-    if(!scalar&&!packed)
-      fail("SSE2 binary64 requires F2 scalar or 66 packed prefix",
-           FaultCode::UnsupportedOpcode);
+  void sse_float(unsigned opcode) {
+    if(operand_override_&&repeat_)
+      fail("conflicting SSE floating-point prefixes",FaultCode::InvalidInstruction);
+    const bool scalar=repeat_!=0;
+    const bool single=repeat_==0xf3 || (!scalar&&!operand_override_);
+    const unsigned n=single?4:8;
     require_sse_state();
     const auto m=modrm();
     require_xmm(m.reg);
     const auto before=xmm[m.reg];
     auto result=before;
     std::uint32_t aggregated_status=0;
-    if(scalar) {
-      const auto src=sse64_source(m.rm);
-      const auto dest=packed_lane(before,0,8);
-      packed_set(result,0,8,simd_double_op(std::uint8_t(opcode),
-                                           dest,src,aggregated_status));
-    }else{
-      const auto rhs=read_xmm_operand(m.rm,true);
-      // Stage both lanes before commit. An unmasked exception must not
-      // modify the destination even if lane0 completed successfully.
-      for(unsigned lane=0;lane<2;++lane) {
-        const auto at=lane*8U;
-        packed_set(result,at,8,simd_double_op(std::uint8_t(opcode),
-                    packed_lane(before,at,8),packed_lane(rhs,at,8),
-                    aggregated_status));
-      }
+    std::array<std::uint8_t,16> source{};
+    if(!scalar)source=read_xmm_operand(m.rm,true);
+    else if(m.rm.is_register){require_xmm(m.rm.index);source=xmm[m.rm.index];}
+    else packed_set(source,0,n,get(m.rm,n));
+    for(unsigned at=0;at<(scalar?n:16U);at+=n) {
+      const auto left=packed_lane(before,at,n),right=packed_lane(source,at,n);
+      const auto value=single?std::uint64_t(simd_float_op<float>(opcode,std::uint32_t(left),std::uint32_t(right),aggregated_status)):
+                              simd_float_op<double>(opcode,left,right,aggregated_status);
+      packed_set(result,at,n,value);
     }
     simd_status(aggregated_status);
     xmm[m.reg]=result;
@@ -1228,9 +1583,10 @@ class Cpu {
                                     bool truncate,std::uint32_t& status) {
     // These conversions honor DAZ without raising a denormal-operand
     // exception. Rounding a nonzero subnormal to an integer raises PE.
-    const auto value=fp64_from_bits(fp64_apply_daz(raw));
-    if(std::isfinite(value)) {
+    raw=fp64_apply_daz(raw);
+    if((raw&0x7ff0000000000000ULL)!=0x7ff0000000000000ULL) {
       HostRound mode(mxcsr);
+      const auto value=fp64_from_bits(raw);
       volatile double input=value;
       volatile double rounded=truncate?std::trunc(input):std::rint(input);
       const double limit=bytes==8?0x1p63:0x1p31;
@@ -1247,55 +1603,197 @@ class Cpu {
     const auto m=modrm();
     const bool compare=opcode==0x2e||opcode==0x2f;
     if(compare) {
-      if(!operand_override_||repeat_)
-        fail("UCOMISD/COMISD require 66",FaultCode::UnsupportedOpcode);
+      if(repeat_)fail("invalid UCOMIS/COMIS prefix",FaultCode::InvalidInstruction);
       require_xmm(m.reg);
       std::uint32_t status=0;
-      const auto left_raw=fp64_apply_daz(packed_lane(xmm[m.reg],0,8));
-      const auto right_raw=fp64_apply_daz(sse64_source(m.rm));
-      const bool unordered=fp64_nan(left_raw)||fp64_nan(right_raw);
-      if(!unordered)status=fp64_denormal_status(left_raw,right_raw);
-      if(unordered && (opcode==0x2f||
-                       fp64_snan(left_raw)||fp64_snan(right_raw)))
-        status|=1U;
+      bool unordered,equal,less,signaling,denormal;
+      if(operand_override_) {
+        const auto left=fp64_apply_daz(packed_lane(xmm[m.reg],0,8));
+        const auto right=fp64_apply_daz(sse64_source(m.rm));
+        unordered=fp64_nan(left)||fp64_nan(right);
+        signaling=fp64_snan(left)||fp64_snan(right);
+        denormal=fp64_subnormal(left)||fp64_subnormal(right);
+        equal=fp64_order_key(left)==fp64_order_key(right);
+        less=fp64_order_key(left)<fp64_order_key(right);
+      }else {
+        const auto left=fp32_apply_daz(std::uint32_t(packed_lane(xmm[m.reg],0,4)));
+        const auto right=fp32_apply_daz(sse32_source(m.rm));
+        unordered=fp32_nan(left)||fp32_nan(right);
+        signaling=fp32_snan(left)||fp32_snan(right);
+        denormal=fp32_denormal(left)||fp32_denormal(right);
+        equal=fp32_order_key(left)==fp32_order_key(right);
+        less=fp32_order_key(left)<fp32_order_key(right);
+      }
+      if(!unordered&&denormal)status|=2U;
+      if(unordered&&(opcode==0x2f||signaling))status|=1U;
       simd_status(status);
-      const auto lhs=fp64_order_key(left_raw),rhs=fp64_order_key(right_raw);
-      const bool z=unordered||lhs==rhs;
-      const bool p=unordered;
-      const bool c=unordered||lhs<rhs;
       eflags&=~std::uint32_t(CF|PF|AF|ZF|SF|OF);
-      set_flag(ZF,z);set_flag(PF,p);set_flag(CF,c);
+      set_flag(ZF,unordered||equal);set_flag(PF,unordered);set_flag(CF,unordered||less);
       return;
     }
-    if(repeat_!=0xf2||operand_override_)
-      fail("F2 SSE2 scalar conversion prefix required",FaultCode::UnsupportedOpcode);
-    if(opcode==0x2a) { // CVTSI2SD xmm, r/m32 or r/m64 with REX.W
+    if(!repeat_||operand_override_)
+      fail("scalar SSE conversion requires F2 or F3",FaultCode::UnsupportedOpcode);
+    const bool single=repeat_==0xf3;
+    if(opcode==0x2a) { // CVTSI2SS/CVTSI2SD
       require_xmm(m.reg);
       const unsigned bytes=is_long_mode()&&(rex_&8U)?8U:4U;
       const auto integer=signed_value(get(m.rm,bytes),bytes);
       std::uint32_t status=0;
-      double rounded=0;
+      std::uint64_t result=0;
       {
         HostRound mode(mxcsr);
         volatile std::int64_t input=integer;
-        volatile double converted=static_cast<double>(input);
-        rounded=converted;
+        if(single) {
+          volatile float converted=static_cast<float>(input);
+          result=fp32_bits(converted);
+        }else {
+          volatile double converted=static_cast<double>(input);
+          result=fp64_bits(converted);
+        }
         status|=mode.status();
       }
       simd_status(status);
-      packed_set(xmm[m.reg],0,8,fp64_bits(rounded));
+      packed_set(xmm[m.reg],0,single?4:8,result);
       return;
     }
-    if(opcode==0x2c||opcode==0x2d) { // CVTTSD2SI / CVTSD2SI
+    if(opcode==0x2c||opcode==0x2d) { // CVTT/CVT SS/SD to a GPR.
       const unsigned bytes=is_long_mode()&&(rex_&8U)?8U:4U;
       std::uint32_t status=0;
-      const auto converted=sse2_fp64_to_integer(sse64_source(m.rm),bytes,
-                                                opcode==0x2c,status);
+      const auto converted=single?sse_fp32_to_integer(sse32_source(m.rm),bytes,opcode==0x2c,status):
+          sse2_fp64_to_integer(sse64_source(m.rm),bytes,opcode==0x2c,status);
       simd_status(status);
       put_reg(m.reg,bytes,converted);
       return;
     }
     fail("unsupported SSE2 scalar conversion",FaultCode::UnsupportedOpcode);
+  }
+  static std::uint64_t fp32_promote(std::uint32_t raw) {
+    constexpr auto fraction_mask=0x007fffffU;
+    const auto sign=std::uint64_t(raw&0x80000000U)<<32;
+    const auto exponent=(raw>>23)&0xffU;
+    auto fraction=raw&fraction_mask;
+    if(exponent==0xffU)
+      return sign|0x7ff0000000000000ULL|(std::uint64_t(fraction)<<29);
+    if(exponent)
+      return sign|(std::uint64_t(exponent+896U)<<52)|(std::uint64_t(fraction)<<29);
+    if(!fraction)return sign;
+    unsigned exp=897;
+    while(!(fraction&0x00800000U)){fraction<<=1;--exp;}
+    return sign|(std::uint64_t(exp)<<52)|(std::uint64_t(fraction&fraction_mask)<<29);
+  }
+  std::uint64_t sse_fp32_to_integer(std::uint32_t raw,unsigned bytes,
+                                     bool truncate,std::uint32_t& status) {
+    return sse2_fp64_to_integer(fp32_promote(fp32_apply_daz(raw)),bytes,truncate,status);
+  }
+  std::uint64_t sse2_widen_fp32(std::uint32_t raw,std::uint32_t& status) const {
+    raw=fp32_apply_daz(raw);
+    const auto promoted=fp32_promote(raw);
+    if(fp32_snan(raw)) {
+      status|=1U;
+      return promoted|(1ULL<<51);
+    }
+    if(fp32_denormal(raw))status|=2U;
+    return promoted;
+  }
+  std::uint32_t sse2_narrow_fp64(std::uint64_t raw,std::uint32_t& status) {
+    raw=fp64_apply_daz(raw);
+    const auto sign=std::uint32_t((raw>>32)&0x80000000U);
+    if(fp64_nan(raw)) {
+      if(fp64_snan(raw))status|=1U;
+      return sign|0x7fc00000U|std::uint32_t((raw>>29)&0x003fffffU);
+    }
+    if(fp64_subnormal(raw))status|=2U;
+    std::uint32_t result=0;
+    std::uint32_t flags=0;
+    {
+      HostRound mode(mxcsr);
+      volatile double source=fp64_from_bits(raw);
+      volatile float rounded=static_cast<float>(source);
+      result=fp32_bits(rounded);
+      flags=mode.status();
+    }
+    if((flags&8U)&&!(mxcsr&(1U<<10))) {
+      // The unmasked result keeps binary32 precision with an unbounded
+      // exponent. Losing only exponent range does not signal precision.
+      flags=(flags&~32U)|((raw&0x1fffffffU)?32U:0U);
+    }
+    constexpr auto single_min_normal=0x3810000000000000ULL;
+    const auto magnitude=raw&0x7fffffffffffffffULL;
+    if(magnitude&&magnitude<single_min_normal) {
+      // x86 tests tininess after rounding to 24 significant bits with an
+      // unbounded exponent, before applying the binary32 subnormal range.
+      const auto rc=(mxcsr>>13)&3U;
+      const bool away=(rc==1&&sign)||(rc==2&&!sign);
+      const bool tiny=rc==0?magnitude<0x380ffffff0000000ULL:
+                      away?magnitude<=0x380fffffe0000000ULL:true;
+      flags&=~16U;
+      if(tiny&&!(mxcsr&(1U<<11))) {
+        // Unmasked underflow reports only precision lost in the unbounded
+        // rounding, independently of rounded bits in the stored format.
+        auto normalized=magnitude;
+        if(fp64_subnormal(raw)) {
+          while(!(normalized&(1ULL<<52)))normalized<<=1;
+        }
+        flags=(flags&~32U)|16U|((normalized&0x1fffffffU)?32U:0U);
+      }else if(tiny&&(mxcsr&0x8000U)) {
+        result=sign;
+        flags|=16U|32U;
+      }else if(tiny&&(flags&32U)) {
+        flags|=16U;
+      }
+    }
+    status|=flags;
+    return result;
+  }
+  void sse2_convert_precision() { // 0F 5A: binary32/binary64
+    if(operand_override_&&repeat_)
+      fail("conflicting SSE2 conversion prefixes",FaultCode::InvalidInstruction);
+    require_sse_state();
+    const auto m=modrm();
+    require_xmm(m.reg);
+    const bool scalar=repeat_!=0;
+    const bool widen=repeat_==0xf3||(!scalar&&!operand_override_);
+    auto result=scalar?xmm[m.reg]:std::array<std::uint8_t,16>{};
+    std::uint32_t status=0;
+    if(widen) {
+      const auto source=scalar?sse32_source(m.rm):sse64_source(m.rm);
+      packed_set(result,0,8,sse2_widen_fp32(std::uint32_t(source),status));
+      if(!scalar)packed_set(result,8,8,sse2_widen_fp32(std::uint32_t(source>>32),status));
+    }else if(scalar) {
+      packed_set(result,0,4,sse2_narrow_fp64(sse64_source(m.rm),status));
+    }else{
+      const auto source=read_xmm_operand(m.rm,true);
+      for(unsigned lane=0;lane<2;++lane)
+        packed_set(result,lane*4,4,sse2_narrow_fp64(packed_lane(source,lane*8,8),status));
+    }
+    simd_status(status);
+    xmm[m.reg]=result;
+  }
+  void sse2_convert_dword() { // 0F 5B: binary32/signed32
+    if(repeat_==0xf2||(operand_override_&&repeat_))
+      fail("invalid SSE2 dword conversion prefix",FaultCode::InvalidInstruction);
+    require_sse_state();
+    const auto m=modrm();
+    require_xmm(m.reg);
+    const auto source=read_xmm_operand(m.rm,true);
+    std::array<std::uint8_t,16> result{};
+    std::uint32_t status=0;
+    if(!operand_override_&&!repeat_) {
+      HostRound mode(mxcsr);
+      for(unsigned lane=0;lane<4;++lane) {
+        volatile std::int64_t input=signed_value(packed_lane(source,lane*4,4),4);
+        volatile float rounded=static_cast<float>(input);
+        packed_set(result,lane*4,4,fp32_bits(rounded));
+      }
+      status=mode.status();
+    }else{
+      for(unsigned lane=0;lane<4;++lane) {
+        const auto raw=std::uint32_t(packed_lane(source,lane*4,4));
+        packed_set(result,lane*4,4,sse_fp32_to_integer(raw,4,repeat_==0xf3,status));
+      }
+    }
+    simd_status(status);
+    xmm[m.reg]=result;
   }
   void sse2_convert_packed() { // F3 CVTDQ2PD, F2 CVTPD2DQ, 66 CVTTPD2DQ
     const bool dq_to_pd=repeat_==0xf3 && !operand_override_;
@@ -1332,10 +1830,11 @@ class Cpu {
     }
     xmm[m.reg]=result; // upper64 zero for packed FP->DQ
   }
-  void sse2_cmp_vector(bool scalar) {
-    if((scalar&&(repeat_!=0xf2||operand_override_))||
-       (!scalar&&(!operand_override_||repeat_)))
-      fail("CMPPD/CMPSD require F2 or 66 prefix",FaultCode::UnsupportedOpcode);
+  void sse_cmp_vector() {
+    if(operand_override_&&repeat_)fail("conflicting SSE CMP prefixes",FaultCode::InvalidInstruction);
+    const bool scalar=repeat_!=0;
+    const bool single=repeat_==0xf3||(!scalar&&!operand_override_);
+    const unsigned n=single?4:8;
     require_sse_state();
     const auto m=modrm();
     require_xmm(m.reg);
@@ -1344,20 +1843,31 @@ class Cpu {
     const auto before=xmm[m.reg];
     auto result=before;
     std::array<std::uint8_t,16> source{};
-    if(scalar)packed_set(source,0,8,sse64_source(m.rm));
+    if(scalar)packed_set(source,0,n,single?sse32_source(m.rm):sse64_source(m.rm));
     else source=read_xmm_operand(m.rm,true);
     std::uint32_t status=0;
     const bool signaling=(predicate==1U||predicate==2U||
                           predicate==5U||predicate==6U);
-    for(unsigned lane=0;lane<(scalar?1U:2U);++lane){
-      const unsigned off=lane*8U;
-      const auto left=fp64_apply_daz(packed_lane(before,off,8));
-      const auto right=fp64_apply_daz(packed_lane(source,off,8));
-      const bool unordered=fp64_nan(left)||fp64_nan(right);
-      if(!unordered)status|=fp64_denormal_status(left,right);
-      if((unordered&&signaling)||fp64_snan(left)||fp64_snan(right))
-        status|=1U;
-      const auto a=fp64_order_key(left),b=fp64_order_key(right);
+    for(unsigned off=0;off<(scalar?n:16U);off+=n){
+      bool unordered,snan,denormal;
+      std::uint64_t a,b;
+      if(single) {
+        const auto left=fp32_apply_daz(std::uint32_t(packed_lane(before,off,n)));
+        const auto right=fp32_apply_daz(std::uint32_t(packed_lane(source,off,n)));
+        unordered=fp32_nan(left)||fp32_nan(right);
+        snan=fp32_snan(left)||fp32_snan(right);
+        denormal=fp32_denormal(left)||fp32_denormal(right);
+        a=fp32_order_key(left);b=fp32_order_key(right);
+      }else {
+        const auto left=fp64_apply_daz(packed_lane(before,off,n));
+        const auto right=fp64_apply_daz(packed_lane(source,off,n));
+        unordered=fp64_nan(left)||fp64_nan(right);
+        snan=fp64_snan(left)||fp64_snan(right);
+        denormal=fp64_subnormal(left)||fp64_subnormal(right);
+        a=fp64_order_key(left);b=fp64_order_key(right);
+      }
+      if(!unordered&&denormal)status|=2U;
+      if((unordered&&signaling)||snan)status|=1U;
       bool matching=false;
       switch(predicate){
         case 0:matching=!unordered&&a==b;break;          // EQ
@@ -1369,24 +1879,80 @@ class Cpu {
         case 6:matching=unordered||!(a<=b);break;         // NLE
         case 7:matching=!unordered;break;                // ORD
       }
-      packed_set(result,off,8,matching?UINT64_MAX:0);
+      packed_set(result,off,n,matching?UINT64_MAX:0);
     }
     simd_status(status); // all lanes first, then exception before commit
     xmm[m.reg]=result;
+  }
+  static void shift_packed_lanes(std::array<std::uint8_t,16>& value,
+                                 unsigned bytes, std::uint64_t count, unsigned operation,
+                                 unsigned vector_bytes = 16) {
+    const unsigned bits = 8U * bytes;
+    const auto lane_mask = mask(bytes);
+    // /2 = logical right, /4 = arithmetic right, /6 = logical left.
+    if (operation == 4) count = std::min<std::uint64_t>(count, bits - 1);
+    else if (count >= bits) { value.fill(0); return; }
+    if (count == 0) return;
+    for (unsigned offset = 0; offset < vector_bytes; offset += bytes) {
+      const auto lane = packed_lane(value, offset, bytes);
+      auto shifted = operation == 6 ? lane << count : lane >> count;
+      if (operation == 4 && (lane & sign_bit(bytes)))
+        shifted |= lane_mask ^ (lane_mask >> count);
+      packed_set(value, offset, bytes, shifted);
+    }
+  }
+  void sse_integer_shift_immediate(unsigned opcode) {
+    if (!operand_override_ || repeat_)
+      fail("packed integer immediate shift requires 66", FaultCode::UnsupportedOpcode);
+    require_sse_state();
+    const auto m = modrm();
+    const bool byte_shift = opcode == 0x73 && (m.group == 3 || m.group == 7);
+    const bool lane_shift = m.group == 2 || m.group == 6 || (opcode != 0x73 && m.group == 4);
+    if (!m.rm.is_register || (!byte_shift && !lane_shift))
+      fail("invalid packed integer immediate shift", FaultCode::InvalidInstruction);
+    require_xmm(m.rm.index);
+    const auto count = unsigned(immediate(1));
+    auto& dest = xmm[m.rm.index];
+    if (!byte_shift) {
+      shift_packed_lanes(dest, 2U << (opcode - 0x71U), count, m.group);
+      return;
+    }
+    const auto source = dest;
+    for (unsigned i = 0; i < 16; ++i) {
+      const int src = m.group == 3 ? int(i) + int(count) : int(i) - int(count);
+      dest[i] = src >= 0 && src < 16 ? source[unsigned(src)] : 0;
+    }
   }
   void sse_integer(unsigned opcode) {
     if(!operand_override_||repeat_)
       fail("packed integer SSE2 requires 66 prefix",FaultCode::UnsupportedOpcode);
     require_sse_state();
     const auto m=modrm();require_xmm(m.reg);
-    const auto lhs=xmm[m.reg],rhs=read_xmm_operand(m.rm,true);
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+    switch (opcode) {
+      case 0xdb: case 0xdf: case 0xeb: // PAND/PANDN/POR
+      case 0xfc: case 0xfd: case 0xfe: case 0xd4: // PADD
+      case 0xf8: case 0xf9: case 0xfa: case 0xfb: // PSUB
+        if (try_ether_next(m)) return;
+        break;
+      default: break;
+    }
+#endif
+    xmm[m.reg]=packed_integer_result<16>(opcode,xmm[m.reg],read_xmm_operand(m.rm,true));
+  }
+  template<unsigned vector_bytes>
+  std::array<std::uint8_t,16> packed_integer_result(unsigned opcode,
+        const std::array<std::uint8_t,16>& lhs,const std::array<std::uint8_t,16>& rhs) {
+    static_assert(vector_bytes == 8 || vector_bytes == 16);
+    constexpr unsigned half=vector_bytes/2;
     auto result=lhs;
     switch(opcode){
-      case 0xdb: case 0xdf: case 0xeb: { // PAND, PANDN, POR
-        for(unsigned i=0;i<16;++i)
+      case 0xdb: case 0xdf: case 0xeb: case 0xef: { // PAND, PANDN, POR, PXOR
+        for(unsigned i=0;i<vector_bytes;++i)
           result[i]=opcode==0xdb?std::uint8_t(lhs[i]&rhs[i]):
                     opcode==0xdf?std::uint8_t(~lhs[i]&rhs[i]):
-                                     std::uint8_t(lhs[i]|rhs[i]);
+                                     opcode==0xeb?std::uint8_t(lhs[i]|rhs[i]):
+                                     std::uint8_t(lhs[i]^rhs[i]);
         break;
       }
       case 0x60: case 0x61: case 0x62: case 0x6c:
@@ -1395,8 +1961,8 @@ class Cpu {
         const unsigned size=(opcode==0x60||opcode==0x68)?1U:
                             (opcode==0x61||opcode==0x69)?2U:
                             (opcode==0x62||opcode==0x6a)?4U:8U;
-        const unsigned first=high?8U:0U;
-        for(unsigned i=0;i<8U/size;++i){
+        const unsigned first=high?half:0U;
+        for(unsigned i=0;i<half/size;++i){
           for(unsigned j=0;j<size;++j) {
             result[(2*i)*size+j]=lhs[first+i*size+j];
             result[(2*i+1)*size+j]=rhs[first+i*size+j];
@@ -1404,24 +1970,106 @@ class Cpu {
         }
         break;
       }
-      default: { // Packed integer arithmetic, comparisons, logical shifts
+      case 0x63: case 0x67: case 0x6b: { // PACKSSWB, PACKUSWB, PACKSSDW.
+        const unsigned bytes = opcode == 0x6b ? 2U : 1U;
+        const auto low = opcode == 0x67 ? 0 : -(std::int64_t{1} << (8U * bytes - 1));
+        const auto high = opcode == 0x67 ? 255 : -low - 1;
+        for (unsigned lane = 0; lane < half / bytes; ++lane) {
+          const auto at = lane * bytes;
+          const auto l = signed_value(packed_lane(lhs, at * 2, bytes * 2), bytes * 2);
+          const auto r = signed_value(packed_lane(rhs, at * 2, bytes * 2), bytes * 2);
+          packed_set(result, at, bytes, std::uint64_t(std::clamp(l, low, high)));
+          packed_set(result, at + half, bytes, std::uint64_t(std::clamp(r, low, high)));
+        }
+        break;
+      }
+      case 0xd8: case 0xd9: case 0xdc: case 0xdd:
+      case 0xe8: case 0xe9: case 0xec: case 0xed: { // Saturating PADD/PSUB.
+        const unsigned bytes = (opcode & 1U) + 1;
+        const bool is_signed = (opcode & 0x20U) != 0;
+        const bool subtract = (opcode & 4U) == 0;
+        const auto low = is_signed ? -(std::int64_t{1} << (8U * bytes - 1)) : 0;
+        const auto high = is_signed ? -low - 1 : std::int64_t(mask(bytes));
+        for (unsigned at = 0; at < vector_bytes; at += bytes) {
+          const auto left = packed_lane(lhs, at, bytes), right = packed_lane(rhs, at, bytes);
+          const auto l = is_signed ? signed_value(left, bytes) : std::int64_t(left);
+          const auto r = is_signed ? signed_value(right, bytes) : std::int64_t(right);
+          const auto answer = std::clamp(subtract ? l - r : l + r, low, high);
+          packed_set(result, at, bytes, std::uint64_t(answer));
+        }
+        break;
+      }
+      case 0xd5: case 0xe4: case 0xe5: { // PMULLW, PMULHUW, PMULHW.
+        for (unsigned at = 0; at < vector_bytes; at += 2) {
+          const auto l = packed_lane(lhs, at, 2), r = packed_lane(rhs, at, 2);
+          const auto product = opcode == 0xe5
+              ? std::uint64_t(signed_value(l, 2) * signed_value(r, 2)) : l * r;
+          packed_set(result, at, 2, opcode == 0xd5 ? product : product >> 16);
+        }
+        break;
+      }
+      case 0xf4: { // PMULUDQ multiplies even dwords into qwords.
+        for (unsigned at = 0; at < vector_bytes; at += 8)
+          packed_set(result, at, 8, packed_lane(lhs, at, 4) * packed_lane(rhs, at, 4));
+        break;
+      }
+      case 0xf5: { // PMADDWD wraps the sum of two signed word products.
+        for (unsigned at = 0; at < vector_bytes; at += 4) {
+          const auto first = signed_value(packed_lane(lhs, at, 2), 2) *
+                             signed_value(packed_lane(rhs, at, 2), 2);
+          const auto second = signed_value(packed_lane(lhs, at + 2, 2), 2) *
+                              signed_value(packed_lane(rhs, at + 2, 2), 2);
+          packed_set(result, at, 4, std::uint64_t(first + second));
+        }
+        break;
+      }
+      case 0xda: case 0xde: case 0xea: case 0xee: { // PMINUB, PMAXUB, PMINSW, PMAXSW.
+        const unsigned bytes = (opcode & 0x20U) ? 2U : 1U;
+        const bool maximum = (opcode & 4U) != 0;
+        for (unsigned at = 0; at < vector_bytes; at += bytes) {
+          const auto left = packed_lane(lhs, at, bytes), right = packed_lane(rhs, at, bytes);
+          const auto l = bytes == 2 ? signed_value(left, bytes) : std::int64_t(left);
+          const auto r = bytes == 2 ? signed_value(right, bytes) : std::int64_t(right);
+          packed_set(result, at, bytes, std::uint64_t(maximum ? std::max(l, r) : std::min(l, r)));
+        }
+        break;
+      }
+      case 0xe0: case 0xe3: { // PAVGB/PAVGW round the unsigned mean upward.
+        const unsigned bytes = (opcode & 1U) + 1;
+        for (unsigned at = 0; at < vector_bytes; at += bytes) {
+          const auto l = packed_lane(lhs, at, bytes), r = packed_lane(rhs, at, bytes);
+          packed_set(result, at, bytes, (l + r + 1) / 2);
+        }
+        break;
+      }
+      case 0xf6: { // PSADBW writes one zero-extended sum per qword.
+        for (unsigned at = 0; at < vector_bytes; at += 8) {
+          unsigned sum = 0;
+          for (unsigned i = at; i < at + 8; ++i)
+            sum += lhs[i] >= rhs[i] ? lhs[i] - rhs[i] : rhs[i] - lhs[i];
+          packed_set(result, at, 8, sum);
+        }
+        break;
+      }
+      case 0xd1: case 0xd2: case 0xd3: // PSRLW/D/Q.
+      case 0xe1: case 0xe2:            // PSRAW/D.
+      case 0xf1: case 0xf2: case 0xf3: // PSLLW/D/Q.
+        shift_packed_lanes(result, 2U << ((opcode & 3U) - 1), packed_lane(rhs, 0, 8),
+                           opcode < 0xe0 ? 2 : opcode < 0xf0 ? 4 : 6,vector_bytes);
+        break;
+      default: { // Packed integer wrapping arithmetic and comparisons.
         const bool is_compare=(opcode>=0x74&&opcode<=0x76)||
                                (opcode>=0x64&&opcode<=0x66);
         const bool is_add=(opcode>=0xfc&&opcode<=0xfe)||opcode==0xd4;
         const bool is_sub=(opcode>=0xf8&&opcode<=0xfa)||opcode==0xfb;
-        const bool is_shift=(opcode>=0xd1&&opcode<=0xd3)||
-                             (opcode>=0xf1&&opcode<=0xf3);
-        if(!is_compare&&!is_add&&!is_sub&&!is_shift)
+        if(!is_compare&&!is_add&&!is_sub)
           fail("packed SSE2 arithmetic opcode not implemented",FaultCode::UnsupportedOpcode);
         const unsigned size=
           (opcode==0x74||opcode==0x64||opcode==0xfc||opcode==0xf8)?1U:
-          (opcode==0x75||opcode==0x65||opcode==0xfd||opcode==0xf9||
-           opcode==0xd1||opcode==0xf1)?2U:
-          (opcode==0x76||opcode==0x66||opcode==0xfe||opcode==0xfa||
-           opcode==0xd2||opcode==0xf2)?4U:8U;
+          (opcode==0x75||opcode==0x65||opcode==0xfd||opcode==0xf9)?2U:
+          (opcode==0x76||opcode==0x66||opcode==0xfe||opcode==0xfa)?4U:8U;
         const auto lane_mask=size==8?UINT64_MAX:((1ULL<<(8*size))-1);
-        const auto count=is_shift?packed_lane(rhs,0,8):0ULL;
-        for(unsigned offset=0;offset<16;offset+=size){
+        for(unsigned offset=0;offset<vector_bytes;offset+=size){
           const auto l=packed_lane(lhs,offset,size);
           const auto r=packed_lane(rhs,offset,size);
           std::uint64_t next=0;
@@ -1429,18 +2077,15 @@ class Cpu {
             const bool matches=opcode>=0x74?
                 l==r:signed_value(l,size)>signed_value(r,size);
             next=matches?lane_mask:0;
-          }else if(is_add)next=(l+r)&lane_mask;
-          else if(is_sub)next=(l-r)&lane_mask;
-          else if(count>=size*8)next=0;
-          else if(opcode>=0xf1&&opcode<=0xf3)next=(l<<count)&lane_mask;
-          else next=l>>count;
+          }else next=is_add?l+r:l-r;
           packed_set(result,offset,size,next);
         }
         break;
       }
     }
-    xmm[m.reg]=result; // packed integer SSE2 leaves EFLAGS unchanged
+    return result;
   }
+#include "x86_mmx.inc"
   void require_memory(const Operand& operand) const {
     if (operand.is_register) fail("instruction requires a memory operand", FaultCode::InvalidInstruction);
   }
@@ -1564,22 +2209,38 @@ class Cpu {
     const auto bits = writable & mask(bytes);
     eflags = (eflags & ~bits) | (value & bits) | 2;
   }
+  struct RealInterruptTarget { std::uint16_t cs, ip; };
+  RealInterruptTarget real_ivt_target(std::uint8_t vector) {
+    const auto offset = std::uint32_t(vector) * 4;
+    if (offset + 3 > idtr.limit || idtr.base > UINT64_MAX - offset - 3)
+      fail("interrupt vector exceeds real-mode IVT limit", FaultCode::SegmentLimit);
+    const auto ip = read16(idtr.base + offset);
+    return {read16(idtr.base + offset + 2), ip};
+  }
+  void dispatch_real_interrupt(RealInterruptTarget target, std::uint64_t resume_ip) {
+    // Real-mode IVT delivery saves FLAGS, CS and IP as three words.
+    push(eflags, 2); push(segments[CS], 2); push(resume_ip, 2);
+    eflags &= ~(IF | TF);
+    far_transfer(target.cs, target.ip, 2);
+  }
   void interrupt(std::uint8_t vector) {
     if (!is_real_mode()) {
       dispatch_idt(vector, cursor_, true, false, 0);
       return;
     }
-    eip = cursor_ & 0xffffU; ip_written_ = true;
+    eip = cursor_ & code_mask(); ip_written_ = true;
     if (interrupt_hook && interrupt_hook(*this, vector)) return;
-    const auto table_offset = std::uint32_t(vector) * 4;
-    if (table_offset + 3 > idtr.limit) fail("interrupt vector exceeds IDTR limit", FaultCode::SegmentLimit);
-    const auto new_ip = read16(idtr.base + table_offset);
-    const auto new_cs = read16(idtr.base + table_offset + 2);
-    // Real-mode IVT delivery always saves FLAGS, CS and IP as three words;
-    // unlike CALL, an operand-size prefix does not widen this frame.
-    push(eflags, 2); push(segments[CS], 2); push(eip, 2);
-    eflags &= ~(IF | TF);
-    segments[CS] = new_cs; jump(new_ip, 2);
+    dispatch_real_interrupt(real_ivt_target(vector), eip);
+  }
+
+  static SegmentCache null_stack_cache(std::uint16_t selector) noexcept {
+    // 64-bit stack addressing ignores SS. Legacy and compatibility
+    // code still check the cache, so the null descriptor is unusable.
+    SegmentCache stack;
+    stack.selector = selector;
+    stack.dpl = std::uint8_t(selector & 3U);
+    stack.valid = false;
+    return stack;
   }
 
   static int exception_vector(FaultCode code) {
@@ -1589,6 +2250,8 @@ class Cpu {
       case FaultCode::DeviceNotAvailable: return 7; // #NM
       case FaultCode::SimdFloatingPoint: return 19; // #XM/#XF
       case FaultCode::X87FloatingPoint: return 16; // #MF deferred x87 error
+      case FaultCode::SegmentNotPresent: return 11; // #NP
+      case FaultCode::StackFault: return 12;       // #SS
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
       case FaultCode::PageFault: return 14;        // #PF
@@ -1597,13 +2260,9 @@ class Cpu {
   }
   void dispatch_idt(std::uint8_t vector, std::uint64_t resume_ip,
                     bool software, bool has_error, std::uint32_t error) {
-    // CPU, not the guest, reads the IDT/GDT/TSS with supervisor privileges.
-    // Guest code still obeys its actual CPL and page U/S permissions.
-    const bool long_gate = is_long_mode();
-    if (!long_gate && (!cache_[CS].big || (efer & 0x400)))
-      fail("protected16/compatibility IDT gates not implemented", FaultCode::UnsupportedState);
+    // EFER.LMA selects the IDT format, including for compatibility code.
+    const bool long_gate = (efer & 0x400U) != 0;
     const auto old_cpl = cpl();
-    SupervisorAccess system(*this);
     const unsigned length = long_gate ? 16U : 8U;
     const auto slot = std::uint64_t(vector) * length;
     if (slot + length - 1 > idtr.limit || idtr.base > UINT64_MAX - slot - length)
@@ -1611,27 +2270,31 @@ class Cpu {
     const auto address = idtr.base + slot;
     if (long_gate && (!canonical(address) || !canonical(address + length - 1)))
       fail("noncanonical IDT entry", FaultCode::ProtectionFault);
-    const auto low = read_linear(address, 8);
-    const auto high = long_gate ? read_linear(address + 8, 8) : 0;
+    std::uint64_t low = 0, high = 0;
+    {
+      SupervisorAccess system(*this);
+      low = read_linear(address, 8);
+      if (long_gate) high = read_linear(address + 8, 8);
+    }
     const auto selector = std::uint16_t((low >> 16) & 0xffffU);
     const auto ist = unsigned((low >> 32) & 7U);
     const auto reserved = unsigned((low >> 35) & 31U);
     const auto attr = unsigned((low >> 40) & 255U);
     const auto type = attr & 31U;
-    if ((type != 0xe && type != 0xf) || !(selector & 0xfffcU))
-      fail("IDT gate is not a 32/64 interrupt or trap gate", FaultCode::ProtectionFault);
+    const bool gate16 = !long_gate && (type == 6 || type == 7);
+    if ((!gate16 && type != 0xe && type != 0xf) || !(selector & 0xfffcU))
+      fail("IDT gate is not an interrupt or trap gate for this mode", FaultCode::ProtectionFault);
     if (!(attr & 0x80)) fail("IDT gate not present", FaultCode::ProtectionFault);
     if (software && old_cpl > ((attr >> 5) & 3U))
       fail("INT gate DPL check failed", FaultCode::ProtectionFault);
     if (reserved || (!long_gate && ist) || (long_gate && (high >> 32)))
       fail("IDT gate reserved fields are set", FaultCode::ProtectionFault);
-    const auto target_ip = (low & 0xffffU) | (((low >> 48) & 0xffffU) << 16) |
+    const auto target_ip = (low & 0xffffU) | (gate16 ? 0 : ((low >> 48) & 0xffffU) << 16) |
                            ((high & 0xffffffffULL) << 32);
     if (long_gate && !canonical(target_ip))
       fail("noncanonical IDT handler RIP", FaultCode::ProtectionFault);
     const auto target_cache = descriptor(selector);
-    if (!target_cache.code || (long_gate && !target_cache.long_code) ||
-        (!long_gate && !target_cache.big))
+    if (!target_cache.code || (long_gate && (!target_cache.long_code || target_cache.big)))
       fail("IDT destination is not a compatible code segment", FaultCode::ProtectionFault);
     const auto target_cpl = target_cache.conforming ? old_cpl : unsigned(target_cache.dpl);
     if (target_cache.dpl > old_cpl ||
@@ -1641,68 +2304,111 @@ class Cpu {
     const auto original_cs = segments[CS], original_ss = segments[SS];
     const auto original_rsp = regs[ESP];
     const auto original_flags = eflags;
-    const unsigned width = long_gate ? 8U : 4U;
+    const unsigned width = long_gate ? 8U : gate16 ? 2U : 4U;
     if (switch_cpl || (long_gate && ist)) {
       if (!tr.valid) fail("interrupt stack switch needs a loaded TSS", FaultCode::ProtectionFault);
-      std::uint64_t new_rsp = 0;
+      SupervisorAccess system(*this);
       if (long_gate) {
         const auto tss_offset = ist ? 36U + (ist-1U)*8U : 4U;
         if (tr.limit < tss_offset+7U)
           fail("TSS does not contain the requested 64-bit stack", FaultCode::ProtectionFault);
-        new_rsp = read_linear(tr.base+tss_offset,8);
+        const auto new_rsp = read_linear(tr.base+tss_offset,8);
         if (!canonical(new_rsp) || !new_rsp)
           fail("TSS provided a noncanonical or null RSP", FaultCode::ProtectionFault);
-        // Null ring0 SS is allowed during the IA-32e interrupt stack switch.
-        segments[SS] = 0;
-        cache_[SS] = SegmentCache{};
+        // IA-32e selects a null SS with the handler's RPL on a stack switch.
+        segments[SS] = std::uint16_t(target_cpl);
+        cache_[SS] = null_stack_cache(segments[SS]);
         regs[ESP] = new_rsp;
       } else {
-        if (!switch_cpl || target_cpl != 0 || tr.limit < 9)
-          fail("protected32 stack switch requires TSS SS0:ESP0", FaultCode::UnsupportedState);
-        new_rsp = read_linear(tr.base+4,4);
-        const auto ss0 = std::uint16_t(read_linear(tr.base+8,2));
+        const unsigned sp_offset = tr.tss16 ? 2U : 4U;
+        const unsigned sp_width = tr.tss16 ? 2U : 4U;
+        const auto ss_offset = sp_offset + sp_width;
+        if (tr.limit < ss_offset+1)
+          fail("TSS does not contain the requested protected-mode stack", FaultCode::ProtectionFault);
+        const auto new_sp = read_linear(tr.base+sp_offset,sp_width);
+        const auto ss0 = std::uint16_t(read_linear(tr.base+ss_offset,2));
         const auto ss_cache = descriptor(ss0);
         if (!ss_cache.valid || ss_cache.code || !ss_cache.writable ||
-            ss_cache.dpl != 0 || (ss0 & 3U))
-          fail("protected32 TSS SS0 must be writable ring0 data", FaultCode::ProtectionFault);
+            ss_cache.dpl != target_cpl || (ss0 & 3U) != target_cpl)
+          fail("TSS stack selector must be writable data for the handler CPL", FaultCode::ProtectionFault);
         segments[SS] = ss0;
         cache_[SS] = ss_cache;
-        put_reg(ESP,4,new_rsp);
+        put_reg(ESP,4,new_sp);
       }
     }
+    // The destination stack uses the handler's address size and privilege.
+    // For a compatibility-mode source, switch CS before pushing on the
+    // 64-bit stack so the pushes do not use that source's 16/32-bit SS cache.
+    segments[CS] = std::uint16_t((selector & ~3U) | target_cpl);
+    cache_[CS] = target_cache;
+    cache_[CS].selector = segments[CS];
     if (long_gate) {
+      regs[ESP] &= ~std::uint64_t{15};
       // 64-bit gate pushes SS:RSP even for a same-CPL interrupt.
       push(original_ss,8); push(original_rsp,8);
     } else if (switch_cpl) {
-      push(original_ss,4); push(original_rsp,4);
+      push(original_ss,width); push(original_rsp,width);
     }
     push(original_flags,width);push(original_cs,width);push(resume_ip,width);
     if (has_error) push(error,width);
-    segments[CS] = std::uint16_t((selector & ~3U) | target_cpl);
-    cache_[CS] = target_cache;
     jump(target_ip,width);
-    if (type == 0xe) eflags &= ~IF;
-    eflags &= ~TF;
+    if (type == 6 || type == 0xe) eflags &= ~IF;
+    eflags &= ~(TF | 0x34000U); // Clear NT/RF/VM after saving their image.
   }
 
   void string_operation(std::uint8_t op);
   void shift(const ModRM& m, unsigned bytes, unsigned count);
   void double_shift(const ModRM& m, unsigned bytes, unsigned count, bool left);
   void group3(const ModRM& m, unsigned bytes);
+  void group3_wide(unsigned operation, std::uint64_t operand);
   void multiply_signed(unsigned destination, std::uint64_t a, std::uint64_t b, unsigned bytes);
   SegmentCache descriptor(std::uint16_t selector);
+  struct TransferDescriptor {
+    SegmentCache segment;
+    std::uint64_t address;
+    unsigned access;
+    bool stack;
+  };
+  static SegmentCache decode_descriptor(std::uint16_t selector, std::uint64_t raw) noexcept;
+  TransferDescriptor descriptor_for_transfer(std::uint16_t selector, bool stack = false,
+                                               bool allow_system = false);
+  void check_transfer_descriptor_present(const TransferDescriptor& descriptor) const;
+  void commit_transfer_descriptor(const TransferDescriptor& descriptor);
+  void invalidate_outer_data_segments(unsigned target_cpl) noexcept;
   void load_segment(unsigned segment, std::uint16_t selector);
   void far_transfer(std::uint16_t selector, std::uint64_t target, unsigned bytes);
+  void far_return(unsigned bytes, std::uint16_t adjustment);
+  void indirect_far_branch(const Operand& source, unsigned bytes, bool call);
   void write_cr0(std::uint64_t value);
   void write_cr3(std::uint64_t value);
   void write_cr4(std::uint64_t value);
   void write_msr(std::uint32_t number, std::uint64_t value);
   std::uint64_t read_msr(std::uint32_t number);
+  void system_call_segments(std::uint16_t cs, std::uint16_t ss, bool code64);
+  void system_call(bool returning);
   [[noreturn]] void page_fault(std::uint64_t address, Access access,
                               bool present, bool reserved, const std::string& reason) const;
   void extended();
   void execute(std::uint8_t op);
 };
+
+inline Cpu::SegmentCache Cpu::decode_descriptor(std::uint16_t selector, std::uint64_t raw) noexcept {
+  const unsigned access = (raw >> 40) & 0xffU, attributes = (raw >> 52) & 15U;
+  SegmentCache result;
+  result.selector = selector;
+  result.base = ((raw >> 16) & 0xffffffU) | ((raw >> 32) & 0xff000000U);
+  result.limit = (raw & 0xffffU) | ((raw >> 32) & 0xf0000U);
+  if (attributes & 8) result.limit = (result.limit << 12) | 0xfffU;
+  result.code = (access & 8) != 0;
+  result.dpl = std::uint8_t((access >> 5) & 3U);
+  result.conforming = result.code && (access & 4U);
+  result.expand_down = !result.code && (access & 4U);
+  result.readable = !result.code || (access & 2);
+  result.writable = !result.code && (access & 2);
+  result.big = (attributes & 4) != 0;
+  result.long_code = result.code && (attributes & 2);
+  return result;
+}
 
 inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   if (selector & 4) fail("LDT selectors are not implemented", FaultCode::UnsupportedState);
@@ -1716,19 +2422,10 @@ inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   const unsigned access = (raw >> 40) & 0xffU, attributes = (raw >> 52) & 15U;
   if (!(access & 0x80)) fail("segment descriptor not present", FaultCode::ProtectionFault);
   if (!(access & 0x10)) fail("system segments, call gates and task switches are not implemented", FaultCode::UnsupportedState);
-  // DPL0..3 are valid; caller enforces CPL/RPL privilege rules.
-  if (access & 4) fail("conforming code / expand-down segments are not implemented", FaultCode::UnsupportedState);
-  SegmentCache result;
-  result.base = ((raw >> 16) & 0xffffffU) | ((raw >> 32) & 0xff000000U);
-  result.limit = (raw & 0xffffU) | ((raw >> 32) & 0xf0000U);
-  if (attributes & 8) result.limit = (result.limit << 12) | 0xfffU;
-  result.code = (access & 8) != 0;
-  result.dpl = std::uint8_t((access >> 5) & 3U);
-  result.conforming = result.code && (access & 4U);
-  result.readable = !result.code || (access & 2);
-  result.writable = !result.code && (access & 2);
-  result.big = (attributes & 4) != 0;
-  result.long_code = result.code && (attributes & 2);
+  const auto result = decode_descriptor(selector, raw);
+  // Retain the legacy loader's supported descriptor profile.
+  if (result.conforming || result.expand_down)
+    fail("conforming code / expand-down segments are not implemented", FaultCode::UnsupportedState);
   if ((result.long_code && result.big) || (!result.code && (attributes & 2)))
     fail("invalid segment L/D attributes", FaultCode::ProtectionFault);
   if (result.long_code && !(efer & 0x400))
@@ -1738,16 +2435,73 @@ inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   return result;
 }
 
+inline Cpu::TransferDescriptor Cpu::descriptor_for_transfer(std::uint16_t selector, bool stack,
+                                                              bool allow_system) {
+  const auto error = selector & 0xfffcU;
+  if (error == 0) fail("null far transfer selector", FaultCode::ProtectionFault);
+  const bool local = (selector & 4U) != 0;
+  const auto base = local ? ldtr.base : gdtr.base;
+  const auto limit = local ? ldtr.limit : gdtr.limit;
+  const auto offset = selector & 0xfff8U;
+  if ((local && !ldtr.valid) || offset + 7 > limit || base > UINT64_MAX - offset - 7 ||
+      !canonical(base + offset) || !canonical(base + offset + 7))
+    fail("far transfer selector outside descriptor table", FaultCode::ProtectionFault, error);
+  const auto address = base + offset;
+  SupervisorAccess system(*this);
+  const auto raw = read_linear(address, 8);
+  const auto access = unsigned((raw >> 40) & 0xffU);
+  if ((access & 0x10U) == 0) {
+    if (allow_system && (access & 0xfU) == 0xcU)
+      fail("IA-32e far transfer through a call gate is not implemented", FaultCode::UnsupportedState);
+    fail("invalid system descriptor for a far transfer", FaultCode::ProtectionFault, error);
+  }
+  const auto segment = decode_descriptor(selector, raw);
+  if (segment.long_code && segment.big)
+    fail("invalid far code descriptor L/D attributes", FaultCode::ProtectionFault, error);
+  return {segment, address + 5, access, stack};
+}
+
+inline void Cpu::check_transfer_descriptor_present(const TransferDescriptor& descriptor) const {
+  if ((descriptor.access & 0x80U) == 0)
+    fail("far transfer segment not present",
+         descriptor.stack ? FaultCode::StackFault : FaultCode::SegmentNotPresent,
+         descriptor.segment.selector & 0xfffcU);
+}
+
+inline void Cpu::commit_transfer_descriptor(const TransferDescriptor& descriptor) {
+  if ((descriptor.access & 1U) == 0) {
+    SupervisorAccess system(*this);
+    write_linear(descriptor.address, 1, descriptor.access | 1U);
+  }
+}
+
+inline void Cpu::invalidate_outer_data_segments(unsigned target_cpl) noexcept {
+  for (unsigned segment : {unsigned(DS), unsigned(ES), unsigned(FS), unsigned(GS)}) {
+    auto& value = cache_[segment];
+    if ((segments[segment] & 0xfffcU) != 0 &&
+        (value.conforming || value.dpl >= target_cpl)) continue;
+    segments[segment] = 0;
+    value.selector = 0;
+    value.valid = false;
+  }
+}
+
 inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
   if (segment >= 6 || segment == CS) fail("invalid segment load", FaultCode::InvalidInstruction);
   if (is_real_mode()) {
-    segments[segment] = selector;
-    cache_[segment] = SegmentCache{}; cache_[segment].base = std::uint64_t(selector) << 4;
+    reload_real_segment(segment, selector);
     return;
   }
   if ((selector & 0xfffcU) == 0) {
-    if (segment == SS) fail("null SS is not implemented for this privilege profile", FaultCode::ProtectionFault);
-    segments[segment] = selector; cache_[segment].valid = false;
+    if (segment == SS) {
+      const auto privilege = cpl();
+      if (!is_long_mode() || privilege == 3 || (selector & 3U) != privilege)
+        fail("null SS requires 64-bit mode, CPL below 3, and matching RPL", FaultCode::ProtectionFault);
+      segments[SS] = selector;
+      cache_[SS] = null_stack_cache(selector);
+      return;
+    }
+    segments[segment] = selector; cache_[segment].selector = selector; cache_[segment].valid = false;
     // AMD64 preserves the FS/GS hidden base when loading a null selector.
     return;
   }
@@ -1768,7 +2522,9 @@ inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
 
 inline void Cpu::far_transfer(std::uint16_t selector, std::uint64_t target, unsigned bytes) {
   if (is_real_mode()) {
-    segments[CS] = selector; jump(target, bytes); return;
+    jump(target, bytes);
+    reload_real_segment(CS, selector);
+    return;
   }
   const auto value = descriptor(selector);
   if (!value.code) fail("far transfer target is not a code segment", FaultCode::ProtectionFault);
@@ -1776,7 +2532,119 @@ inline void Cpu::far_transfer(std::uint16_t selector, std::uint64_t target, unsi
       (value.conforming ? value.dpl > cpl() : value.dpl != cpl()))
     fail("far control transfer privilege check failed", FaultCode::ProtectionFault);
   segments[CS] = std::uint16_t((selector & ~3U) | cpl()); cache_[CS] = value;
+  cache_[CS].selector = segments[CS];
   jump(target, value.long_code ? 8 : bytes);
+}
+
+inline void Cpu::far_return(unsigned bytes, std::uint16_t adjustment) {
+  if (!(efer & 0x400U)) {
+    const auto target = pop(bytes);
+    const auto selector = std::uint16_t(pop(bytes));
+    far_transfer(selector, target, bytes);
+    const auto stack_width = stack_address_width();
+    put_reg(ESP, stack_width, get_reg(ESP, stack_width) + adjustment);
+    return;
+  }
+
+  // RETF's frame is sized by the operand size (not the near RET default).
+  // Validate and read it using the original stack, before changing CS or SS.
+  const auto stack_width = stack_address_width();
+  const auto original_sp = get_reg(ESP, stack_width);
+  (void)segment_linear(SS, original_sp, 2 * bytes, Access::Read);
+  const auto target = pop(bytes);
+  const auto selector = std::uint16_t(pop(bytes));
+  const auto code = descriptor_for_transfer(selector);
+  const auto new_cpl = unsigned(selector & 3U);
+  const auto old_cpl = cpl();
+  const auto selector_error = selector & 0xfffcU;
+  if (!code.segment.code || new_cpl < old_cpl ||
+      (code.segment.conforming ? code.segment.dpl > new_cpl : code.segment.dpl != new_cpl))
+    fail("far return code selector type or privilege mismatch", FaultCode::ProtectionFault, selector_error);
+  check_transfer_descriptor_present(code);
+  if (new_cpl != 0 && new_cpl != 3)
+    fail("far return privilege level is not implemented", FaultCode::UnsupportedState);
+
+  put_reg(ESP, stack_width, get_reg(ESP, stack_width) + adjustment);
+  const auto check_target = [&] {
+    if (code.segment.long_code ? !canonical(target) : target > code.segment.limit)
+      fail("far return target outside code segment", FaultCode::ProtectionFault);
+  };
+  if (new_cpl > old_cpl) {
+    (void)segment_linear(SS, original_sp, 4 * bytes + adjustment, Access::Read);
+    const auto saved_sp = pop(bytes);
+    const auto saved_ss = std::uint16_t(pop(bytes));
+    const auto stack = descriptor_for_transfer(saved_ss, true);
+    if (stack.segment.code || !stack.segment.writable || stack.segment.dpl != new_cpl ||
+        (saved_ss & 3U) != new_cpl)
+      fail("far return stack selector type or privilege mismatch", FaultCode::ProtectionFault,
+           saved_ss & 0xfffcU);
+    check_transfer_descriptor_present(stack);
+    check_target();
+    commit_transfer_descriptor(code);
+    commit_transfer_descriptor(stack);
+    segments[SS] = saved_ss;
+    cache_[SS] = stack.segment;
+    regs[ESP] = saved_sp;
+    const auto new_stack_width = code.segment.long_code ? 8U : stack.segment.big ? 4U : 2U;
+    put_reg(ESP, new_stack_width, get_reg(ESP, new_stack_width) + adjustment);
+    invalidate_outer_data_segments(new_cpl);
+  } else {
+    check_target();
+    commit_transfer_descriptor(code);
+  }
+  // The high half of RSP is undefined when entering compatibility mode.
+  // Use the full original RSP for the frame above, then retain just ESP.
+  if (!code.segment.long_code) regs[ESP] = std::uint32_t(regs[ESP]);
+  segments[CS] = selector;
+  cache_[CS] = code.segment;
+  eip = target;
+  ip_written_ = true;
+}
+
+inline void Cpu::indirect_far_branch(const Operand& source, unsigned bytes, bool call) {
+  require_memory(source);
+  const auto address = segment_linear(source.segment, operand_offset(source), bytes + 2, Access::Read);
+  auto target = read_linear(address, bytes);
+  const auto selector = std::uint16_t(read_linear(address + bytes, 2));
+  if (!(efer & 0x400)) {
+    if (call) {
+      push(segments[CS], bytes);
+      push(cursor_ & mask(bytes), bytes);
+    }
+    far_transfer(selector, target, bytes);
+    return;
+  }
+
+  const auto descriptor = descriptor_for_transfer(selector, false, true);
+  const auto& code = descriptor.segment;
+  const auto privilege = cpl();
+  const bool permitted = code.conforming ? code.dpl <= privilege :
+      code.dpl == privilege && (selector & 3U) <= privilege;
+  if (!code.code || !permitted)
+    fail("far branch target selector type or privilege mismatch",
+         FaultCode::ProtectionFault, selector & ~3U);
+  check_transfer_descriptor_present(descriptor);
+
+  // A same-level direct far call pushes onto the caller's stack before
+  // changing code mode. The pointer width also determines its frame slots.
+  if (call) {
+    const auto stack_width = stack_address_width();
+    const auto sp = get_reg(ESP, stack_width);
+    (void)segment_linear(SS, (sp - bytes) & mask(stack_width), bytes, Access::Write);
+    (void)segment_linear(SS, (sp - 2 * bytes) & mask(stack_width), bytes, Access::Write);
+    if (!code.long_code) target = std::uint32_t(target);
+  }
+  if (code.long_code ? !canonical(target) : target > code.limit)
+    fail("far branch offset outside target code segment", FaultCode::ProtectionFault);
+  if (call) {
+    push(segments[CS], bytes);
+    push(cursor_ & mask(bytes), bytes);
+  }
+  commit_transfer_descriptor(descriptor);
+  segments[CS] = std::uint16_t((selector & ~3U) | privilege);
+  cache_[CS] = code;
+  cache_[CS].selector = segments[CS];
+  jump(target, code.long_code ? 8 : 4);
 }
 
 inline void Cpu::write_cr0(std::uint64_t value) {
@@ -1786,8 +2654,6 @@ inline void Cpu::write_cr0(std::uint64_t value) {
     fail("CR0.NW requires CR0.CD", FaultCode::ProtectionFault);
   if ((value & 0x80000000U) && !(value & 1))
     fail("CR0.PG requires CR0.PE", FaultCode::ProtectionFault);
-  if ((cr0 & 1) && !(value & 1))
-    fail("return from protected mode to real/unreal mode is not implemented", FaultCode::UnsupportedState);
   const bool enabling_paging = !(cr0 & 0x80000000U) && (value & 0x80000000U);
   if (enabling_paging) {
     if (!(efer & 0x100)) fail("legacy non-IA-32e paging is not implemented", FaultCode::UnsupportedState);
@@ -1799,10 +2665,12 @@ inline void Cpu::write_cr0(std::uint64_t value) {
     fail("leave 64-bit code before disabling paging", FaultCode::ProtectionFault);
   if (!(cr0 & 1) && (value & 1)) {
     for (unsigned s = 0; s < 6; ++s) {
-      cache_[s] = SegmentCache{}; cache_[s].base = std::uint64_t(segments[s]) << 4;
-      cache_[s].code = s == CS; cache_[s].writable = s != CS;
+      cache_[s].base = real_segment_base(s);
+      cache_[s].selector = segments[s];
+      cache_[s].inherited_from_real_mode = true;
     }
   }
+  // Changing PE does not reload the visible selectors or descriptor caches.
   cr0 = std::uint32_t(value) | 0x10U;
   if (enabling_paging) efer |= 0x400U;
   else if (!(cr0 & 0x80000000U)) efer &= ~std::uint64_t{0x400};
@@ -1820,26 +2688,69 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE, PGE. With no TLB, PGE has no cached translations to retain.
-  constexpr std::uint32_t supported = 0x000006b0U; // OSFXSR and OSXMMEXCPT, no OSXSAVE
+  constexpr std::uint32_t supported = 0x000006b0U | kCr4Tsd; // OSFXSR and OSXMMEXCPT, no OSXSAVE
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   cr4 = std::uint32_t(value);
 }
 
 inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
+  if (number == kTscMsr) return timestamp_counter();
+  if (number == 0x1bU) return apic_base_;
   if (number == 0xc0000080U) return efer;
+  if (number == 0xc0000081U) return system_call_msrs_.star;
+  if (number == 0xc0000082U) return system_call_msrs_.lstar;
+  if (number == 0xc0000083U) return system_call_msrs_.cstar;
+  if (number == 0xc0000084U) return system_call_msrs_.fmask;
   if (number == 0xc0000100U) return fs_base;
   if (number == 0xc0000101U) return gs_base;
-  fail("RDMSR register is not implemented", FaultCode::UnsupportedState);
+  if (number == 0xc0000102U) return system_call_msrs_.kernel_gs_base;
+  std::ostringstream reason;
+  reason << "RDMSR register is not implemented (ECX=0x" << std::hex << number << ')';
+  fail(reason.str(), FaultCode::UnsupportedState);
 }
 
 inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
+  if (number == kTscMsr) {
+    tsc_offset_ = value - instructions * kTscTicksPerStep;
+    return;
+  }
+  if (number == 0x1bU) {
+    constexpr std::uint64_t address_mask = 0xfffff000ULL; // CPUID.MAXPHYADDR = 32.
+    if (value & ~(address_mask | kApicBsp | kApicEnable))
+      fail("IA32_APIC_BASE reserved bits or unsupported x2APIC mode", FaultCode::ProtectionFault);
+    // The virtual board reserves exactly this local APIC MMIO page.
+    if ((value & address_mask) != kLocalApicAddress)
+      fail("the virtual local APIC cannot be relocated", FaultCode::UnsupportedState);
+    apic_base_ = value;
+    return;
+  }
   if (number == 0xc0000080U) {
-    constexpr std::uint64_t supported = 0xd00U; // LME, read-only LMA, NXE; no SYSCALL.
+    constexpr std::uint64_t supported = 0xd01U; // SCE, LME, read-only LMA, NXE.
     if (value & ~supported) fail("EFER requests an unimplemented feature or reserved bit", FaultCode::UnsupportedState);
     if ((cr0 & 0x80000000U) && ((value ^ efer) & 0x100))
       fail("cannot change EFER.LME while paging is enabled", FaultCode::ProtectionFault);
     efer = (value & ~std::uint64_t{0x400}) | (efer & 0x400);
+    return;
+  }
+  if (number == 0xc0000081U) {
+    if (std::uint32_t(value)) fail("reserved IA32_STAR bits", FaultCode::ProtectionFault);
+    system_call_msrs_.star = value;
+    return;
+  }
+  if (number == 0xc0000082U) {
+    if (!canonical(value)) fail("noncanonical IA32_LSTAR", FaultCode::ProtectionFault);
+    system_call_msrs_.lstar = value;
+    return;
+  }
+  if (number == 0xc0000083U) {
+    // Intel provides CSTAR as an R/W MSR but never uses it as a target.
+    system_call_msrs_.cstar = value;
+    return;
+  }
+  if (number == 0xc0000084U) {
+    if (value >> 32) fail("reserved IA32_FMASK bits", FaultCode::ProtectionFault);
+    system_call_msrs_.fmask = std::uint32_t(value);
     return;
   }
   if (number == 0xc0000100U || number == 0xc0000101U) {
@@ -1848,7 +2759,60 @@ inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
     else { gs_base = value; cache_[GS].base = value; }
     return;
   }
-  fail("WRMSR register is not implemented", FaultCode::UnsupportedState);
+  if (number == 0xc0000102U) {
+    if (!canonical(value)) fail("noncanonical IA32_KERNEL_GS_BASE", FaultCode::ProtectionFault);
+    system_call_msrs_.kernel_gs_base = value;
+    return;
+  }
+  std::ostringstream reason;
+  reason << "WRMSR register is not implemented (ECX=0x" << std::hex << number << ')';
+  fail(reason.str(), FaultCode::UnsupportedState);
+}
+
+inline void Cpu::system_call_segments(std::uint16_t cs, std::uint16_t ss, bool code64) {
+  // Intel64 constructs these caches directly; it never reads the GDT/LDT.
+  SegmentCache code, stack;
+  code.selector = cs;
+  stack.selector = ss;
+  code.dpl = stack.dpl = std::uint8_t(cs & 3U);
+  code.limit = stack.limit = UINT32_MAX;
+  code.code = true;
+  code.writable = false;
+  code.big = !code64;
+  code.long_code = code64;
+  stack.big = true;
+  segments[CS] = cs;
+  segments[SS] = ss;
+  cache_[CS] = code;
+  cache_[SS] = stack;
+}
+
+inline void Cpu::system_call(bool returning) {
+  // Intel64 supports entry only from 64-bit code, and exit from 64-bit
+  // code either to 64-bit code or to a 32-bit compatibility segment.
+  if (!is_long_mode() || !(efer & 1U))
+    fail("SYSCALL/SYSRET requires 64-bit mode and EFER.SCE", FaultCode::InvalidInstruction);
+
+  if (!returning) {
+    const auto selector = std::uint16_t((system_call_msrs_.star >> 32) & 0xfffcU);
+    regs[ECX] = cursor_;
+    regs[R11] = eflags;
+    eflags &= ~system_call_msrs_.fmask;
+    system_call_segments(selector, std::uint16_t(selector + 8U), true);
+    jump(system_call_msrs_.lstar, 8);
+    return;
+  }
+
+  if (cpl() != 0) fail("SYSRET requires CPL0", FaultCode::ProtectionFault);
+  const bool code64 = (rex_ & 8U) != 0;
+  const auto target = code64 ? regs[ECX] : std::uint64_t(std::uint32_t(regs[ECX]));
+  if (!canonical(target)) fail("SYSRET RCX is noncanonical", FaultCode::ProtectionFault);
+  const auto selector = std::uint16_t(system_call_msrs_.star >> 48);
+  const auto cs = std::uint16_t((selector + (code64 ? 16U : 0U)) | 3U);
+  const auto ss = std::uint16_t((selector + 8U) | 3U);
+  eflags = (std::uint32_t(regs[R11]) & 0x003cf7d7U) | 2U;
+  system_call_segments(cs, ss, code64);
+  jump(target, code64 ? 8 : 4);
 }
 
 inline void Cpu::page_fault(std::uint64_t address, Access access,
@@ -1907,6 +2871,100 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
   }
   fail("invalid page walker state", FaultCode::HostError);
 }
+
+inline unsigned Cpu::try_rep_batch(unsigned budget) {
+  last_rep_batch_bytes_ = 0;
+  if (budget < 2 || !rep_batch_candidate() || fault || halted || transaction_ ||
+      interrupt_shadow_ || (eflags & (TF | 0x20000U)) || (cr0 & 0x80000000U) ||
+      (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook || lock_prefix_)
+    return 0;
+
+  // Only use decoded state from a matching scalar iteration. The guest can
+  // mutate its own instructions, even through an A20 alias.
+  const bool long_mode = is_long_mode();
+  const bool default32 = long_mode || cache_[CS].big;
+  const bool current_addr32 = long_mode ? address_override_ : cache_[CS].big != address_override_;
+  if (op32_ != (default32 != operand_override_) || addr32_ != current_addr32 || (rex_ && !long_mode))
+    return 0;
+
+  const auto remaining = index(ECX);
+  if (remaining < 2) return 0;
+  const bool backward = flag(DF);
+  const bool copying = (opcode_ & 0xfeU) == 0xa4;
+  const unsigned width_bytes = opcode_ & 1U ? width() : 1;
+  const auto src = index(ESI), dst = index(EDI);
+  const auto index_limit = mask(address_width());
+  const auto page_bytes = MemoryFabric::kPageSize;
+  auto elements = unsigned(std::min<std::uint64_t>(budget, remaining));
+
+  try {
+    const auto length = unsigned(decoded_.size());
+    const auto linear_code = segment_linear(CS, eip, length, Access::Execute);
+    if (!long_mode && length - 1 > UINT32_MAX - linear_code) return 0;
+    if (!bulk_ram_range(linear_code, length)) return 0;
+    const auto code = bus_address(linear_code);
+    std::array<std::uint8_t, 15> observed;
+    memory.read_block(code, observed.data(), length);
+    if (!std::equal(decoded_.begin(), decoded_.end(), observed.begin())) return 0;
+
+    const auto limit_from = [&](unsigned seg, std::uint64_t offset, Access access) {
+      const auto linear = segment_linear(seg, offset, width_bytes, access);
+      const auto within_page = bus_address(linear) % page_bytes;
+      if (width_bytes > page_bytes - within_page || width_bytes - 1 > index_limit - offset)
+        return std::uint64_t{0};
+      const auto by_page = backward ? 1 + within_page / width_bytes :
+                                     (page_bytes - within_page) / width_bytes;
+      const auto extra_by_index = backward ? offset / width_bytes :
+          (index_limit - offset - (width_bytes - 1)) / width_bytes;
+      return 1 + std::min<std::uint64_t>(by_page - 1, extra_by_index);
+    };
+    elements = unsigned(std::min<std::uint64_t>(elements, limit_from(ES, dst, Access::Write)));
+    if (copying)
+      elements = unsigned(std::min<std::uint64_t>(elements, limit_from(data_segment(), src, Access::Read)));
+    if (elements < 2) return 0;
+
+    const auto bytes = elements * width_bytes;
+    const auto back = backward ? bytes - width_bytes : 0;
+    const auto dst_linear = segment_linear(ES, dst - back, bytes, Access::Write);
+    if (!bulk_ram_range(dst_linear, bytes)) return 0;
+    const auto target = bus_address(dst_linear);
+    const auto overlaps = [](std::uint64_t first, unsigned first_bytes,
+                             std::uint64_t second, unsigned second_bytes) {
+      return first < second + second_bytes && second < first + first_bytes;
+    };
+    if (overlaps(target, bytes, code, length)) return 0;
+
+    const auto within_page = target % page_bytes;
+    const bool completes_page = backward ? within_page == 0 : within_page + bytes == page_bytes;
+    if (copying) {
+      const auto src_linear = segment_linear(data_segment(), src - back, bytes, Access::Read);
+      if (!bulk_ram_range(src_linear, bytes)) return 0;
+      const auto source = bus_address(src_linear);
+      // REP has sequential copy behavior when the ranges overlap, unlike a
+      // single memcpy/memmove snapshot of the source.
+      if (overlaps(target, bytes, source, bytes)) return 0;
+      mundo_x::ether_next::copy_ram_block(memory, source, target, bytes);
+      put_index(ESI, src + (backward ? -std::uint64_t(bytes) : bytes));
+    } else {
+      mundo_x::ether_next::repeat_ram_value(memory, target, get_reg(EAX, width_bytes), width_bytes, bytes);
+    }
+    if (completes_page) memory.compact_repeating_page(target);
+    put_index(EDI, dst + (backward ? -std::uint64_t(bytes) : bytes));
+    put_index(ECX, remaining - elements);
+    if (remaining == elements) eip = cursor_ & code_mask();
+    eflags |= 2;
+    instructions += elements;
+    last_rep_batch_bytes_ = bytes;
+    return elements;
+  } catch (const std::exception&) {
+    // Range checks, or the all-or-nothing preparation of one destination
+    // page, can fail before altering any bytes. Let the scalar path commit
+    // individually up to the precise failing element.
+    return 0;
+  }
+}
+
+#include "x86_shift_loop.inc"
 
 inline void Cpu::string_operation(std::uint8_t op) {
   if (repeat_ && index(ECX) == 0) return;
@@ -2054,20 +3112,55 @@ inline void Cpu::multiply_signed(unsigned destination, std::uint64_t a,
   set_flag(CF, overflow); set_flag(OF, overflow);
 }
 
+inline void Cpu::group3_wide(unsigned operation, std::uint64_t operand) {
+  const auto low = get_reg(EAX, 8), high = get_reg(EDX, 8);
+  const auto sign = sign_bit(8);
+  const bool is_signed = (operation & 1U) != 0;
+  if (operation < 6) {
+    auto product = wide_integer::multiply(low, operand);
+    if (is_signed) {
+      // Convert the unsigned high word to its two's-complement product.
+      if (low & sign) product.high -= operand;
+      if (operand & sign) product.high -= low;
+    }
+    const bool overflow = product.high != (is_signed && (product.low & sign) ? UINT64_MAX : 0);
+    put_reg(EAX, 8, product.low); put_reg(EDX, 8, product.high);
+    set_flag(CF, overflow); set_flag(OF, overflow);
+    return;
+  }
+  if (!operand) fail("integer divide by zero", FaultCode::DivideError);
+  const bool negative_dividend = is_signed && (high & sign);
+  const bool negative_divisor = is_signed && (operand & sign);
+  const bool negative_quotient = negative_dividend != negative_divisor;
+  const wide_integer::DoubleWord dividend{high, low};
+  const auto magnitude = negative_dividend ? wide_integer::negate(dividend) : dividend;
+  const auto divisor = negative_divisor ? std::uint64_t{0} - operand : operand;
+  if (magnitude.high >= divisor) fail("integer quotient overflow", FaultCode::DivideError);
+  const auto result = wide_integer::divide(magnitude, divisor);
+  if (is_signed && result.quotient > (negative_quotient ? sign : sign - 1))
+    fail("signed integer quotient overflow", FaultCode::DivideError);
+  put_reg(EAX, 8, negative_quotient ? std::uint64_t{0} - result.quotient : result.quotient);
+  put_reg(EDX, 8, negative_dividend ? std::uint64_t{0} - result.remainder : result.remainder);
+}
+
 inline void Cpu::group3(const ModRM& m, unsigned bytes) {
+  require_lock_destination(m.rm, m.group == 2 || m.group == 3);
+  if (m.group == 2 || m.group == 3) {
+    modify_operand(m.rm, bytes, [&](std::uint64_t old) {
+      return m.group == 2 ? ~old : alu(5, 0, old, bytes);
+    });
+    return;
+  }
   if (m.group == 0) {
     const auto value = arithmetic_immediate(bytes); // RIP base follows the complete instruction.
     (void)alu(4, get(m.rm, bytes), value, bytes); return;
   }
-  if (bytes == 8 && m.group >= 4)
-    fail("64-bit implicit MUL/IMUL/DIV/IDIV are not implemented", FaultCode::UnsupportedOpcode);
   const auto operand = get(m.rm, bytes);
+  if (bytes == 8 && m.group >= 4) { group3_wide(m.group, operand); return; }
   const auto bits = bytes * 8U;
   const auto maximum = mask(bytes);
   switch (m.group) {
     case 1: fail("reserved group-3 encoding", FaultCode::InvalidInstruction);
-    case 2: put(m.rm, bytes, ~operand); return;
-    case 3: put(m.rm, bytes, alu(5, 0, operand, bytes)); return;
     case 4: case 5: {
       std::uint64_t product;
       bool overflow;
@@ -2121,9 +3214,22 @@ inline void Cpu::group3(const ModRM& m, unsigned bytes) {
 inline void Cpu::extended() {
   const auto op = fetch8(); opcode_ = std::uint16_t(0x0f00U | op);
   const auto bytes = width();
-  if (lock_prefix_ && op != 0xc7)
-    fail("LOCK prefix is supported only on 0F C7 /1 CMPXCHG8B/16B",
-         FaultCode::UnsupportedState);
+  if (lock_prefix_) {
+    switch (op) {
+      case 0xab: case 0xb3: case 0xbb: case 0xba:
+      case 0xb0: case 0xb1: case 0xc0: case 0xc1: case 0xc7:
+        break;
+      default: fail("LOCK prefix is invalid for this opcode", FaultCode::InvalidInstruction);
+    }
+  }
+  if (try_mmx(op)) return;
+  if (op >= 0x40 && op <= 0x4f) {  // CMOVcc
+    const auto m = modrm();
+    const auto source = get(m.rm, bytes); // A false condition does not suppress source faults.
+    if (condition(op & 15)) put_reg(m.reg, bytes, source);
+    else if (bytes == 4 && (efer & 0x400U)) put_reg(m.reg, bytes, get_reg(m.reg, bytes));
+    return;
+  }
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
@@ -2142,28 +3248,40 @@ inline void Cpu::extended() {
   }
   if(op==0x58||op==0x59||op==0x5c||op==0x5e||
      op==0x51||op==0x5d||op==0x5f) {
-    sse2_float(op);return;
+    sse_float(op);return;
   }
   if(op==0x2a||op==0x2c||op==0x2d||op==0x2e||op==0x2f) {
     sse2_scalar_misc(op);return;
   }
-  if((op==0x10||op==0x11)&&repeat_==0xf2) { // MOVSD xmm/m64
-    if(operand_override_)fail("conflicting MOVSD prefixes",FaultCode::InvalidInstruction);
+  if((op==0x10||op==0x11)&&repeat_) { // MOVSS/MOVSD xmm/mem
+    if(operand_override_)fail("conflicting scalar MOV prefixes",FaultCode::InvalidInstruction);
     require_sse_state();
     const auto m=modrm();require_xmm(m.reg);
+    const unsigned n=repeat_==0xf3?4:8;
     if(op==0x10) {
-      const auto bits=sse64_source(m.rm);
-      if(!m.rm.is_register)xmm[m.reg].fill(0); // MOVSD memory load zeros high64
-      packed_set(xmm[m.reg],0,8,bits);
-    }else sse64_store(m.rm,packed_lane(xmm[m.reg],0,8));
+      if(m.rm.is_register) {
+        require_xmm(m.rm.index);
+        packed_set(xmm[m.reg],0,n,packed_lane(xmm[m.rm.index],0,n));
+      }else {
+        const auto bits=get(m.rm,n);
+        xmm[m.reg].fill(0);
+        packed_set(xmm[m.reg],0,n,bits);
+      }
+    }else {
+      const auto bits=packed_lane(xmm[m.reg],0,n);
+      if(m.rm.is_register){require_xmm(m.rm.index);packed_set(xmm[m.rm.index],0,n,bits);}
+      else put(m.rm,n,bits);
+    }
     return;
   }
   switch (op) {
+    case 0x5a: sse2_convert_precision();return;
+    case 0x5b: sse2_convert_dword();return;
+    case 0x52: case 0x53: sse_approximate(op);return;
     case 0xe6: // CVTDQ2PD, CVTPD2DQ, CVTTPD2DQ
       sse2_convert_packed();return;
-    case 0x54: case 0x55: case 0x56: case 0x57: { // ANDPD/ANDNPD/ORPD/XORPD
-      if(!operand_override_||repeat_)
-        fail("packed logical SSE2 double requires 66",FaultCode::UnsupportedOpcode);
+    case 0x54: case 0x55: case 0x56: case 0x57: { // AND/ANDN/OR/XOR PS and PD
+      if(repeat_)fail("invalid packed logical SSE prefix",FaultCode::InvalidInstruction);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
       const auto source=read_xmm_operand(m.rm,true);
@@ -2175,45 +3293,59 @@ inline void Cpu::extended() {
       }
       return;
     }
-    case 0x50: { // MOVMSKPD r32, xmm (XMM source register only)
-      if(!operand_override_||repeat_)
-        fail("MOVMSKPD requires 66",FaultCode::UnsupportedOpcode);
+    case 0x50: { // MOVMSKPS/MOVMSKPD r32, xmm
+      if(repeat_)fail("invalid MOVMSK prefix",FaultCode::InvalidInstruction);
       require_sse_state();
       const auto m=modrm();
-      if(!m.rm.is_register)fail("MOVMSKPD source must be XMM",FaultCode::InvalidInstruction);
+      if(!m.rm.is_register)fail("MOVMSK source must be XMM",FaultCode::InvalidInstruction);
       require_xmm(m.rm.index);
-      const auto bits=((packed_lane(xmm[m.rm.index],0,8)>>63)&1U)|
-                      (((packed_lane(xmm[m.rm.index],8,8)>>63)&1U)<<1);
+      const unsigned n=operand_override_?8:4;
+      unsigned bits=0;
+      for(unsigned i=0;i<16/n;++i)bits|=unsigned(xmm[m.rm.index][(i+1)*n-1]>>7)<<i;
       put_reg(m.reg,4,bits);
       return;
     }
-    case 0xc2: { // CMPPD / CMPSD imm8
-      sse2_cmp_vector(repeat_==0xf2);
+    case 0xc2: { // CMPPS/CMPSS/CMPPD/CMPSD imm8
+      sse_cmp_vector();
       return;
     }
-    case 0xc6: { // SHUFPD xmm, xmm/m128, imm8
-      if(!operand_override_||repeat_)
-        fail("SHUFPD requires 66",FaultCode::UnsupportedOpcode);
+    case 0xc6: { // SHUFPS/SHUFPD xmm, xmm/m128, imm8
+      if(repeat_)fail("invalid SHUFPS/SHUFPD prefix",FaultCode::InvalidInstruction);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
       const auto order=unsigned(immediate(1));
       const auto src=read_xmm_operand(m.rm,true);
       const auto dst=xmm[m.reg];
-      packed_set(xmm[m.reg],0,8,
-                 packed_lane(dst,(order&1U)?8:0,8));
-      packed_set(xmm[m.reg],8,8,
-                 packed_lane(src,(order&2U)?8:0,8));
+      const unsigned n=operand_override_?8:4, bits=operand_override_?1:2;
+      for(unsigned i=0;i<16/n;++i) {
+        const auto lane=(order>>(bits*i))&((1U<<bits)-1);
+        packed_set(xmm[m.reg],i*n,n,packed_lane(i*n<8?dst:src,lane*n,n));
+      }
       return;
     }
-    case 0x12: case 0x13: case 0x16: case 0x17: { // MOVLPD/MOVHPD m64
-      if(!operand_override_||repeat_)
-        fail("MOVLPD/MOVHPD require 66",FaultCode::UnsupportedOpcode);
+    case 0x14: case 0x15: { // UNPCKL/UNPCKH PS and PD
+      if(repeat_)fail("invalid UNPCK prefix",FaultCode::InvalidInstruction);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
-      if(m.rm.is_register)
-        fail("MOVLPD/MOVHPD require memory operand",FaultCode::InvalidInstruction);
+      const auto dst=xmm[m.reg],src=read_xmm_operand(m.rm,true);
+      const unsigned n=operand_override_?8:4,start=op==0x15?8:0;
+      for(unsigned offset=0;offset<8;offset+=n) {
+        packed_set(xmm[m.reg],2*offset,n,packed_lane(dst,start+offset,n));
+        packed_set(xmm[m.reg],2*offset+n,n,packed_lane(src,start+offset,n));
+      }
+      return;
+    }
+    case 0x12: case 0x13: case 0x16: case 0x17: { // MOVL/MOVH PS and PD
+      if(repeat_)fail("unsupported MOVL/MOVH prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
       const unsigned at=(op==0x16||op==0x17)?8U:0U;
-      if(op==0x12||op==0x16)
+      if(m.rm.is_register) {
+        if(operand_override_||op==0x13||op==0x17)
+          fail("MOVL/MOVH requires a memory operand",FaultCode::InvalidInstruction);
+        require_xmm(m.rm.index);
+        packed_set(xmm[m.reg],at,8,packed_lane(xmm[m.rm.index],8-at,8));
+      }else if(op==0x12||op==0x16)
         packed_set(xmm[m.reg],at,8,get(m.rm,8));
       else put(m.rm,8,packed_lane(xmm[m.reg],at,8));
       return;
@@ -2221,41 +3353,65 @@ inline void Cpu::extended() {
     case 0xdb: case 0xdf: case 0xeb: // PAND/PANDN/POR
     case 0x60: case 0x61: case 0x62: case 0x6c: // PUNPCKL
     case 0x68: case 0x69: case 0x6a: case 0x6d: // PUNPCKH
+    case 0x63: case 0x67: case 0x6b: // PACKSSWB, PACKUSWB, PACKSSDW
     case 0x74: case 0x75: case 0x76: // PCMPEQ
     case 0x64: case 0x65: case 0x66: // PCMPGT
     case 0xfc: case 0xfd: case 0xfe: case 0xd4: // PADD
     case 0xf8: case 0xf9: case 0xfa: case 0xfb: // PSUB
+    case 0xd8: case 0xd9: case 0xdc: case 0xdd: // Unsigned saturating PSUB/PADD
+    case 0xe8: case 0xe9: case 0xec: case 0xed: // Signed saturating PSUB/PADD
+    case 0xd5: case 0xe4: case 0xe5: case 0xf4: case 0xf5: // Packed multiplication
+    case 0xda: case 0xde: case 0xea: case 0xee: // PMIN/PMAX
+    case 0xe0: case 0xe3: case 0xf6: // PAVG/PSADBW
     case 0xd1: case 0xd2: case 0xd3: // PSRL
+    case 0xe1: case 0xe2: // PSRA
     case 0xf1: case 0xf2: case 0xf3: // PSLL
       sse_integer(op); return;
-    case 0x73: { // PSRLDQ /3, PSLLDQ /7
-      if(!operand_override_||repeat_)
-        fail("byte shift requires mandatory 66",FaultCode::UnsupportedOpcode);
-      require_sse_state();
-      const auto m=modrm();
-      if(!m.rm.is_register||(m.group!=3&&m.group!=7))
-        fail("unsupported 0F 73 group opcode",FaultCode::UnsupportedOpcode);
-      require_xmm(m.rm.index);
-      const auto count=unsigned(immediate(1));
-      const auto source=xmm[m.rm.index];
-      auto& dest=xmm[m.rm.index];
-      for(unsigned i=0;i<16;++i) {
-        const int src=m.group==3?int(i)+int(count):int(i)-int(count);
-        dest[i]=src>=0&&src<16?source[unsigned(src)]:0;
-      }
+    case 0x71: case 0x72: case 0x73:
+      sse_integer_shift_immediate(op);
       return;
-    }
-    case 0x70: { // PSHUFD xmm, xmm/m128, imm8
-      if(!operand_override_||repeat_)
-        fail("PSHUFD requires 66 prefix",FaultCode::UnsupportedOpcode);
+    case 0x70: { // PSHUFD, PSHUFLW, PSHUFHW xmm, xmm/m128, imm8.
+      if(operand_override_ == (repeat_ != 0))
+        fail("packed integer shuffle requires 66, F2 or F3",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
       // Consume the immediate BEFORE resolving RIP-relative memory operands.
       const auto order=unsigned(immediate(1));
       const auto source=read_xmm_operand(m.rm,true);
+      const unsigned bytes=operand_override_?4U:2U;
+      const unsigned start=repeat_==0xf3?8U:0U;
+      auto result=source;
       for(unsigned lane=0;lane<4;++lane)
-        packed_set(xmm[m.reg],lane*4,4,
-                   packed_lane(source,((order>>(lane*2))&3U)*4,4));
+        packed_set(result,start+lane*bytes,bytes,
+                   packed_lane(source,start+((order>>(lane*2))&3U)*bytes,bytes));
+      xmm[m.reg]=result;
+      return;
+    }
+    case 0xc4: case 0xc5: { // PINSRW / PEXTRW.
+      if (!operand_override_ || repeat_)
+        fail("PINSRW/PEXTRW XMM form requires 66", FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m = modrm();
+      const auto lane = unsigned(immediate(1)) & 7U;
+      if (op == 0xc4) {
+        require_xmm(m.reg);
+        packed_set(xmm[m.reg], lane * 2, 2, get(m.rm, 2));
+      } else {
+        if (!m.rm.is_register)
+          fail("PEXTRW source must be an XMM register", FaultCode::InvalidInstruction);
+        require_xmm(m.rm.index);
+        put_reg(m.reg, 4, packed_lane(xmm[m.rm.index], lane * 2, 2));
+      }
+      return;
+    }
+    case 0xe7: { // MOVNTDQ m128, xmm. Cached writes share the same RAM path.
+      if (!operand_override_ || repeat_)
+        fail("MOVNTDQ requires 66", FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m = modrm();
+      require_memory(m.rm);
+      require_xmm(m.reg);
+      write_xmm_operand(m.rm, xmm[m.reg], true);
       return;
     }
     case 0xd7: { // PMOVMSKB r32, xmm
@@ -2303,9 +3459,33 @@ inline void Cpu::extended() {
       }else put(m.rm,8,low);
       return;
     }
-    case 0x10: case 0x11: case 0x28: case 0x29: { // MOVUPD/MOVAPD
+    case 0x2b: { // MOVNTPS/MOVNTPD xmm to aligned memory
+      if(repeat_)fail("invalid MOVNT prefix",FaultCode::InvalidInstruction);
+      require_sse_state();
+      const auto m=modrm();require_memory(m.rm);require_xmm(m.reg);
+      write_xmm_operand(m.rm,xmm[m.reg],true);
+      return;
+    }
+    case 0xc3: { // MOVNTI uses GPRs, without requiring OSFXSR/cleared TS.
+      if(operand_override_||repeat_)
+        fail("invalid MOVNTI prefix",FaultCode::InvalidInstruction);
+      const auto m=modrm();require_memory(m.rm);
+      const unsigned amount=is_long_mode()&&(rex_&8U)?8U:4U;
+      put(m.rm,amount,get_reg(m.reg,amount));
+      return;
+    }
+    case 0xf7: { // MASKMOVDQU xmm data, xmm mask, implicit DS:(R)DI.
       if(!operand_override_||repeat_)
-        fail("MOVUPD/MOVAPD requires 66 prefix",FaultCode::UnsupportedOpcode);
+        fail("MASKMOVDQU requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();
+      if(!m.rm.is_register)fail("MASKMOVDQU mask must be XMM",FaultCode::InvalidInstruction);
+      require_xmm(m.reg);require_xmm(m.rm.index);
+      masked_store(xmm[m.reg],xmm[m.rm.index],16);
+      return;
+    }
+    case 0x10: case 0x11: case 0x28: case 0x29: { // MOVU/MOVA PS and PD
+      if(repeat_)fail("invalid packed MOV prefix",FaultCode::InvalidInstruction);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
       const bool aligned=op==0x28||op==0x29;
@@ -2320,6 +3500,9 @@ inline void Cpu::extended() {
         fail("conflicting SSE2 mandatory prefixes",FaultCode::InvalidInstruction);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+      if (try_ether_next(m)) return;
+#endif
       const bool aligned=operand_override_;
       if(op==0x6f)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
       else write_xmm_operand(m.rm,xmm[m.reg],aligned);
@@ -2330,12 +3513,26 @@ inline void Cpu::extended() {
         fail("PXOR xmm requires 66 prefix",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
+#if defined(MUNDO_X_PC_ETHER_NEXT)
+      if (try_ether_next(m)) return;
+#endif
       const auto rhs=read_xmm_operand(m.rm,true);
       for(unsigned i=0;i<16;++i)xmm[m.reg][i]^=rhs[i];
       return;
     }
-    case 0xae: { // FXSAVE/FXRSTOR m512byte and LDMXCSR/STMXCSR
-      const auto m=modrm();require_memory(m.rm);
+    case 0xae: { // FX state, MXCSR, fences and CLFLUSH
+      if(operand_override_||repeat_)
+        fail("unsupported 0F AE mandatory prefix",FaultCode::InvalidInstruction);
+      const auto m=modrm();
+      if(m.rm.is_register&&m.group>=5)
+        return; // The single-vCPU memory bus executes accesses in order.
+      if(!m.rm.is_register&&m.group==7) {
+        const auto linear_address=segment_linear(m.rm.segment,operand_offset(m.rm),1,Access::Read);
+        // CLFLUSH checks read permissions even though this CPU has no caches to flush.
+        (void)translate(linear_address,Access::Read);
+        return;
+      }
+      require_memory(m.rm);
       if(m.group==0||m.group==1){fxstate(m.rm,m.group==1);return;}
       if(m.group!=2&&m.group!=3)
         fail("0F AE operation not implemented",FaultCode::UnsupportedOpcode);
@@ -2350,6 +3547,11 @@ inline void Cpu::extended() {
       }else write_linear(address,4,mxcsr);
       return;
     }
+    case 0x18: { // PREFETCHNTA/T0/T1/T2, advisory memory hints.
+      const auto m=modrm();require_memory(m.rm);
+      if(m.group>3)fail("unsupported PREFETCH encoding",FaultCode::UnsupportedOpcode);
+      return;
+    }
     case 0x0d: { // AMD PREFETCH/PREFETCHW advisory hints.
       const auto m=modrm();
       require_memory(m.rm);
@@ -2358,6 +3560,82 @@ inline void Cpu::extended() {
       // PREFETCHW is a non-faulting hint. Decode the effective address but
       // do NOT read or materialize any RAM, page tables, QSSD or MMIO.
       (void)operand_offset(m.rm);
+      return;
+    }
+    case 0xa3: case 0xab: case 0xb3: case 0xbb: case 0xba: { // BT, BTS, BTR, BTC.
+      auto m = modrm();
+      const unsigned operation = op == 0xba ? m.group : 4U + ((op - 0xa3U) >> 3);
+      if (operation < 4) fail("reserved bit-test encoding", FaultCode::InvalidInstruction);
+      const auto index = op == 0xba ? immediate(1) : get_reg(m.reg, bytes);
+      const unsigned bits = 8U * bytes, bit = unsigned(index & (bits - 1));
+      require_lock_destination(m.rm, operation != 4);
+      if (op != 0xba && !m.rm.is_register) {
+        // Register indices name a signed bit position in a memory bit string.
+        const auto element = (signed_value(index, bytes) - bit) / bits;
+        m.rm.offset += std::uint64_t(element) * bytes;
+      }
+      const auto bit_mask = std::uint64_t{1} << bit;
+      if (operation == 4) set_flag(CF, (get(m.rm, bytes) & bit_mask) != 0);
+      else modify_operand(m.rm, bytes, [&](std::uint64_t old) {
+        set_flag(CF, (old & bit_mask) != 0);
+        if (operation == 5) return old | bit_mask;
+        if (operation == 6) return old & ~bit_mask;
+        return old ^ bit_mask;
+      });
+      return;
+    }
+    case 0xbc: case 0xbd: { // BSF, BSR.
+      // Without BMI1 or ABM, an F3 prefix also decodes as BSF or BSR.
+      const auto m = modrm();
+      auto source = get(m.rm, bytes);
+      set_flag(ZF, source == 0);
+      // The architecture leaves the zero-input destination undefined.
+      if (source == 0) return;
+      unsigned index = 0;
+      if (op == 0xbc) {
+        while ((source & 1) == 0) {
+          source >>= 1;
+          ++index;
+        }
+      } else {
+        while (source > 1) {
+          source >>= 1;
+          ++index;
+        }
+      }
+      put_reg(m.reg, bytes, index);
+      return;
+    }
+    case 0xb0: case 0xb1: { // CMPXCHG r/m, reg.
+      const auto m = modrm();
+      const unsigned amount = op == 0xb0 ? 1 : bytes;
+      require_lock_destination(m.rm);
+      const auto accumulator = get_reg(EAX, amount);
+      const auto source = get_reg(m.reg, amount);
+      if (m.rm.is_register) {
+        const auto old = get(m.rm, amount);
+        (void)alu(7, accumulator, old, amount);
+        if (flag(ZF)) put(m.rm, amount, source);
+        else put_reg(EAX, amount, old);
+      } else {
+        modify_operand(m.rm, amount, [&](std::uint64_t old) {
+          (void)alu(7, accumulator, old, amount);
+          if (flag(ZF)) return source;
+          put_reg(EAX, amount, old);
+          return old;
+        }, true); // A failed comparison still requires a write-capable operand.
+      }
+      return;
+    }
+    case 0xc0: case 0xc1: { // XADD r/m, reg.
+      const auto m = modrm();
+      const unsigned amount = op == 0xc0 ? 1 : bytes;
+      require_lock_destination(m.rm);
+      const auto source = get_reg(m.reg, amount);
+      modify_operand(m.rm, amount, [&](std::uint64_t old) {
+        put_reg(m.reg, amount, old);
+        return alu(0, old, source, amount);
+      });
       return;
     }
     case 0xc7: { // CMPXCHG8B / CMPXCHG16B, /1 memory only.
@@ -2371,31 +3649,19 @@ inline void Cpu::extended() {
       if(large && (address&15U))
         fail("CMPXCHG16B requires 16-byte aligned address",
              FaultCode::ProtectionFault);
-      // Resolve and preflight every byte before ANY write to preserve the
-      // observable all-or-nothing comparison on our single guest vCPU.
-      // Claimed MMIO cannot provide a 128-bit atomic transaction; reject it.
-      for(unsigned offset=0;offset<amount;++offset) {
-        // CMPXCHG8B may straddle a 4-KiB page. Translate each byte
-        // before accessing memory; never guess physical contiguity.
-        const auto p=translate(address+offset,Access::Write);
-        if(mmio_at(p))
-          fail("atomic memory operation on MMIO is unsupported",
-               FaultCode::UnsupportedState);
-        (void)physical_index(p);
-      }
-      const auto low=read_linear(address,large?8:4);
-      const auto high=read_linear(address+(large?8:4),large?8:4);
-      const auto rax=get_reg(EAX,large?8:4);
-      const auto rdx=get_reg(EDX,large?8:4);
+      const auto indices=atomic_ram(address,amount);
+      const unsigned half=amount/2;
+      const auto low=read_atomic_ram(indices,0,half);
+      const auto high=read_atomic_ram(indices,half,half);
+      const auto rax=get_reg(EAX,half);
+      const auto rdx=get_reg(EDX,half);
       const bool equal=low==rax && high==rdx;
       if(equal) {
-        // CPU::step() journals both writes; a failure in the second half
-        // rolls back the first half. No additional CPU or host atomic claim.
-        write_linear(address,large?8:4,get_reg(EBX,large?8:4));
-        write_linear(address+(large?8:4),large?8:4,get_reg(ECX,large?8:4));
+        write_atomic_ram(indices,0,half,get_reg(EBX,half));
+        write_atomic_ram(indices,half,half,get_reg(ECX,half));
       }else{
-        put_reg(EAX,large?8:4,low);
-        put_reg(EDX,large?8:4,high);
+        put_reg(EAX,half,low);
+        put_reg(EDX,half,high);
       }
       set_flag(ZF,equal);
       return;
@@ -2481,6 +3747,8 @@ inline void Cpu::extended() {
       if (m.group == 3 && type != 1u && type != 9u)
         fail("LTR requires an available TSS descriptor (type 1 or 9)",
              FaultCode::ProtectionFault);
+      if (m.group == 3 && (efer & 0x400U) && type == 1u)
+        fail("IA-32e LTR requires a 64-bit TSS descriptor", FaultCode::ProtectionFault);
 
       std::uint64_t base = ((raw >> 16) & 0xffffffu) |
                            ((raw >> 32) & 0xff000000u);
@@ -2506,7 +3774,7 @@ inline void Cpu::extended() {
       if (limit > UINT32_MAX)
         fail("system descriptor limit outside representable size",
              FaultCode::ProtectionFault);
-      const SystemRegister next{selector, base, std::uint32_t(limit), true};
+      const SystemRegister next{selector, base, std::uint32_t(limit), true, type == 1u};
       if (m.group == 2) {
         ldtr = next;
       } else {
@@ -2519,6 +3787,21 @@ inline void Cpu::extended() {
     }
     case 0x01: {
       const auto m = modrm();
+      if (m.group == 7) { // INVLPG m
+        if (m.rm.is_register && (m.rm.index & 7U) == EAX) { // SWAPGS
+          if (!is_long_mode()) fail("SWAPGS requires 64-bit mode", FaultCode::InvalidInstruction);
+          if (cpl() != 0) fail("SWAPGS requires CPL0", FaultCode::ProtectionFault);
+          std::swap(gs_base, system_call_msrs_.kernel_gs_base);
+          cache_[GS].base = gs_base;
+          return;
+        }
+        require_memory(m.rm);
+        if (cpl() != 0) fail("INVLPG requires CPL0", FaultCode::ProtectionFault);
+        // The operand supplies an address without accessing the segment or
+        // the target page. There is no cached translation to invalidate.
+        // A noncanonical address in 64-bit mode also has no effect.
+        return;
+      }
       if (m.group == 4) { put(m.rm, m.rm.is_register ? bytes : 2, cr0); return; }
       if (m.group == 6) {
         if (cpl() != 0) fail("LMSW requires CPL0", FaultCode::ProtectionFault);
@@ -2551,18 +3834,30 @@ inline void Cpu::extended() {
       if (cpl() != 0) fail("CLTS requires CPL0", FaultCode::ProtectionFault);
       cr0 &= ~8U; return;  // no floating-point execution is claimed.
     case 0x20: case 0x22: {
+      // The MOD bits do not encode a memory operand for MOV CR. REX.R
+      // selects the extended control register and REX.B selects a GPR.
+      const auto encoded = fetch8();
+      const auto control = unsigned((encoded >> 3) & 7U) + ((rex_ & 4) ? 8U : 0U);
+      const auto general = unsigned(encoded & 7U) + ((rex_ & 1) ? 8U : 0U);
+      if (control != 0 && control != 2 && control != 3 && control != 4 && control != 8)
+        fail("reserved control register encoding", FaultCode::InvalidInstruction);
       if (cpl() != 0) fail("MOV CR requires CPL0", FaultCode::ProtectionFault);
-      const auto m = modrm();
-      if (!m.rm.is_register) fail("MOV CR requires a register operand", FaultCode::InvalidInstruction);
-      if (m.reg != 0 && m.reg != 2 && m.reg != 3 && m.reg != 4)
-        fail("control register is not implemented", FaultCode::UnsupportedState);
+      if (control == 8) {
+        if (op == 0x20) put_reg(general, 8, apic_task_priority() >> 4);
+        else {
+          const auto value = get_reg(general, 8);
+          if (value & ~std::uint64_t{15}) fail("reserved CR8 bits", FaultCode::ProtectionFault);
+          set_apic_task_priority(std::uint8_t(value << 4));
+        }
+        return;
+      }
       const unsigned n = is_long_mode() ? 8 : 4;
-      if (op == 0x20) put_reg(m.rm.index, n, m.reg == 0 ? cr0 : m.reg == 2 ? cr2 : m.reg == 3 ? cr3 : cr4);
+      if (op == 0x20) put_reg(general, n, control == 0 ? cr0 : control == 2 ? cr2 : control == 3 ? cr3 : cr4);
       else {
-        const auto value = get_reg(m.rm.index, n);
-        if (m.reg == 0) write_cr0(value);
-        else if (m.reg == 2) cr2 = value;
-        else if (m.reg == 3) write_cr3(value);
+        const auto value = get_reg(general, n);
+        if (control == 0) write_cr0(value);
+        else if (control == 2) cr2 = value;
+        else if (control == 3) write_cr3(value);
         else write_cr4(value);
       }
       return;
@@ -2570,16 +3865,17 @@ inline void Cpu::extended() {
     case 0x30:
       if (cpl() != 0) fail("WRMSR requires CPL0", FaultCode::ProtectionFault);
       write_msr(std::uint32_t(regs[ECX]), (std::uint64_t(std::uint32_t(regs[EDX])) << 32) | std::uint32_t(regs[EAX])); return;
+    case 0x05: case 0x07: system_call(op == 0x07); return;
     case 0x32: {
       if (cpl() != 0) fail("RDMSR requires CPL0", FaultCode::ProtectionFault);
       const auto value = read_msr(std::uint32_t(regs[ECX]));
       put_reg(EAX, 4, value); put_reg(EDX, 4, value >> 32); return;
     }
-    case 0x31: {  // RDTSC: deterministic synthetic guest cycle counter.
-      // This counter reflects decoded work, not host CPU cycles or a clock.
-      const auto cycles = std::uint64_t(instructions) * 64u;
-      put_reg(EAX, 4, std::uint32_t(cycles));
-      put_reg(EDX, 4, std::uint32_t(cycles >> 32));
+    case 0x31: {
+      if ((cr4 & kCr4Tsd) && cpl() != 0)
+        fail("CR4.TSD restricts RDTSC to CPL0", FaultCode::ProtectionFault);
+      const auto ticks = timestamp_counter();
+      put_reg(EAX, 4, ticks); put_reg(EDX, 4, ticks >> 32);
       return;
     }
     case 0xa2: {  // CPUID: a truthful, deliberately conservative emulated CPU.
@@ -2599,9 +3895,9 @@ inline void Cpu::extended() {
         ebx=word(0);edx=word(4);ecx=word(8);
       }else if(leaf==1){
         eax=0x00000663U; // modeled family/model/stepping
-        // TSC, MSR, PAE, and tested atomic CMPXCHG16B only.
-        // Never claim SSE2/x87/APIC until guest instructions really work.
-        edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8); // CMPXCHG8B
+        // TSC, MSR, PAE, CX8, CMOV, MMX, FXSR, SSE and SSE2.
+        // The full x87 instruction set remains incomplete (FPU bit 0).
+        edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
         ecx=(1U<<13); // CMPXCHG16B guest primitive
 
       }else if(leaf==7 && subleaf==0){
@@ -2650,8 +3946,14 @@ inline void Cpu::extended() {
 }
 
 inline void Cpu::execute(std::uint8_t op) {
-  if(lock_prefix_ && op!=0x0f)
-    fail("LOCK prefix on unsupported instruction", FaultCode::UnsupportedState);
+  if (lock_prefix_ && !(op <= 0x31 && (op & 7U) <= 1)) {
+    switch (op) {
+      case 0x0f: case 0x80: case 0x81: case 0x83: case 0x86: case 0x87:
+      case 0xf6: case 0xf7: case 0xfe: case 0xff:
+        break;
+      default: fail("LOCK prefix is invalid for this opcode", FaultCode::InvalidInstruction);
+    }
+  }
   const unsigned bytes = width();
   const unsigned stack_bytes = stack_operand_width();
   const unsigned encoded_register = (op & 7U) + ((rex_ & 1) ? 8 : 0);
@@ -2660,8 +3962,6 @@ inline void Cpu::execute(std::uint8_t op) {
       case 0x06: case 0x07: case 0x0e: case 0x16: case 0x17: case 0x1e: case 0x1f:
       case 0x60: case 0x61: case 0x9a: case 0xc4: case 0xc5: case 0xce: case 0xea:
         fail("instruction encoding is invalid in 64-bit mode", FaultCode::InvalidInstruction);
-      case 0xca: case 0xcb:
-        fail("64-bit far return is not implemented", FaultCode::UnsupportedState);
       default: break;
     }
   }
@@ -2673,11 +3973,16 @@ inline void Cpu::execute(std::uint8_t op) {
       if (operation != 7) put_reg(EAX, w, result);
     } else {
       const auto m = modrm();
-      const auto a = (form & 2U) ? get_reg(m.reg, w) : get(m.rm, w);
-      const auto b = (form & 2U) ? get(m.rm, w) : get_reg(m.reg, w);
-      const auto result = alu(operation, a, b, w);
-      if (operation != 7) {
-        if (form & 2U) put_reg(m.reg, w, result); else put(m.rm, w, result);
+      require_lock_destination(m.rm);
+      if (form & 2U) {
+        const auto result = alu(operation, get_reg(m.reg, w), get(m.rm, w), w);
+        if (operation != 7) put_reg(m.reg, w, result);
+      } else if (operation == 7) {
+        (void)alu(operation, get(m.rm, w), get_reg(m.reg, w), w);
+      } else {
+        modify_operand(m.rm, w, [&](std::uint64_t old) {
+          return alu(operation, old, get_reg(m.reg, w), w);
+        });
       }
     }
     return;
@@ -2710,7 +4015,10 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x0e: push(segments[CS], bytes); return;
     case 0x0f: extended(); return;
     case 0x16: push(segments[SS], bytes); return;
-    case 0x17: load_segment(SS, std::uint16_t(pop(bytes))); return;
+    case 0x17:
+      load_segment(SS, std::uint16_t(pop(bytes)));
+      interrupt_shadow_=true;
+      return;
     case 0x1e: push(segments[DS], bytes); return;
     case 0x1f: load_segment(DS, std::uint16_t(pop(bytes))); return;
     case 0x60: {
@@ -2736,8 +4044,9 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x80: case 0x81: case 0x83: {
       const auto m = modrm(); const unsigned w = op == 0x80 ? 1 : bytes;
       const auto value = op == 0x83 ? std::uint64_t(signed_value(immediate(1), 1)) : arithmetic_immediate(w);
-      const auto result = alu(m.group, get(m.rm, w), value, w);
-      if (m.group != 7) put(m.rm, w, result);
+      require_lock_destination(m.rm, m.group != 7);
+      if (m.group == 7) (void)alu(m.group, get(m.rm, w), value, w);
+      else modify_operand(m.rm, w, [&](std::uint64_t old) { return alu(m.group, old, value, w); });
       return;
     }
     case 0x84: case 0x85: {
@@ -2746,7 +4055,12 @@ inline void Cpu::execute(std::uint8_t op) {
     }
     case 0x86: case 0x87: {
       const auto m = modrm(); const unsigned w = op == 0x86 ? 1 : bytes;
-      const auto old = get(m.rm, w); put(m.rm, w, get_reg(m.reg, w)); put_reg(m.reg, w, old); return;
+      require_lock_destination(m.rm);
+      const auto source = get_reg(m.reg, w);
+      std::uint64_t old = 0;
+      modify_operand(m.rm, w, [&](std::uint64_t value) { old = value; return source; }, true);
+      put_reg(m.reg, w, old);
+      return;
     }
     case 0x88: case 0x89: case 0x8a: case 0x8b: {
       const auto m = modrm(); const unsigned w = (op & 1U) ? bytes : 1;
@@ -2758,7 +4072,10 @@ inline void Cpu::execute(std::uint8_t op) {
       if (m.group > GS || (op == 0x8e && m.group == CS))
         fail("invalid segment register encoding", FaultCode::InvalidInstruction);
       if (op == 0x8c) put(m.rm, m.rm.is_register ? bytes : 2, segments[m.group]);
-      else load_segment(m.group, std::uint16_t(get(m.rm, 2)));
+      else {
+        load_segment(m.group, std::uint16_t(get(m.rm, 2)));
+        if(m.group==SS)interrupt_shadow_=true;
+      }
       return;
     }
     case 0x8d: { const auto m = modrm(); require_memory(m.rm); put_reg(m.reg, bytes, operand_offset(m.rm)); return; }
@@ -2776,10 +4093,7 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x9b: { // FWAIT: x87 deferred unmasked exceptions.
       if((cr0&0x8U)&&(cr0&0x2U))
         fail("FWAIT with TS and MP",FaultCode::DeviceNotAvailable);
-      if(fpu_status&0x0080U) {
-        if(cr0&0x20U)fail("pending unmasked x87 exception (#MF)",FaultCode::X87FloatingPoint);
-        fail("legacy x87 FERR#/IRQ13 delivery not modeled",FaultCode::UnsupportedState);
-      }
+      require_no_pending_x87();
       return;
     }
     case 0x9a: {
@@ -2833,10 +4147,8 @@ inline void Cpu::execute(std::uint8_t op) {
       put_reg(ESP, stack_address_width(), get_reg(EBP, stack_address_width()));
       put_reg(EBP, stack_bytes, pop(stack_bytes)); return;
     case 0xca: case 0xcb: {
-      const auto adjustment = op == 0xca ? immediate(2) : 0;
-      const auto target = pop(bytes); const auto cs = std::uint16_t(pop(bytes));
-      far_transfer(cs, target, bytes);
-      put_reg(ESP, stack_address_width(), get_reg(ESP, stack_address_width()) + adjustment); return;
+      const auto adjustment = op == 0xca ? std::uint16_t(immediate(2)) : std::uint16_t{0};
+      far_return(bytes, adjustment); return;
     }
     case 0xcc: interrupt(3); return;
     case 0xcd: { const auto vector = fetch8(); interrupt(vector); return; }
@@ -2848,201 +4160,70 @@ inline void Cpu::execute(std::uint8_t op) {
         far_transfer(cs, target, bytes); restore_flags(std::uint32_t(flags), bytes); return;
       }
       const bool long_return = is_long_mode();
-      if (!long_return && (!cache_[CS].big || (efer & 0x400)))
-        fail("protected16/compatibility IRET not implemented", FaultCode::UnsupportedState);
-      if (long_return && operand_override_)
-        fail("16-bit IRET in long mode is not implemented", FaultCode::UnsupportedState);
-      const unsigned n = long_return ? 8U : 4U;
+      const auto n = bytes;
+      if (eflags & 0x4000U) {
+        if (efer & 0x400U) fail("IRET with NT set in IA-32e mode", FaultCode::ProtectionFault);
+        fail("nested-task IRET is not implemented", FaultCode::UnsupportedState);
+      }
       const auto original_cpl = cpl();
-      const auto target = pop(n), raw_cs = pop(n), flags = pop(n);
-      if (raw_cs > 0xffffU || (flags & 0x20000U))
-        fail("IRET invalid selector/virtual-8086 transition", FaultCode::ProtectionFault);
-      const auto target_cpl = unsigned(raw_cs & 3U);
+      const auto target = pop(n);
+      const auto selector = std::uint16_t(pop(n));
+      const auto flags = pop(n);
+      if ((flags & 0x20000U) && !(efer & 0x400U) && original_cpl == 0)
+        fail("IRET virtual-8086 transition is not implemented", FaultCode::UnsupportedState);
+      const auto target_cpl = unsigned(selector & 3U);
+      const auto selector_error = selector & 0xfffcU;
       if (target_cpl < original_cpl || (target_cpl != 0 && target_cpl != 3))
-        fail("IRET cannot elevate privilege", FaultCode::ProtectionFault);
-      const auto code = descriptor(std::uint16_t(raw_cs));
-      if (!code.code || (code.conforming ? code.dpl > target_cpl : code.dpl != target_cpl) ||
-          (long_return ? !code.long_code : !code.big))
-        fail("IRET code selector DPL/RPL/type mismatch", FaultCode::ProtectionFault);
+        fail("IRET cannot elevate privilege or return to an unmodeled ring",
+             FaultCode::ProtectionFault, selector_error);
+      const auto code_desc = descriptor_for_transfer(selector);
+      const auto& code = code_desc.segment;
+      if (!code.code || (code.conforming ? code.dpl > target_cpl : code.dpl != target_cpl))
+        fail("IRET code selector DPL/RPL/type mismatch", FaultCode::ProtectionFault, selector_error);
+      check_transfer_descriptor_present(code_desc);
       const bool outer = target_cpl > original_cpl;
-      std::uint64_t saved_rsp = 0, saved_ss = 0;
+      std::uint64_t saved_rsp = 0;
+      std::uint16_t saved_ss = 0;
       SegmentCache saved_stack{};
       if (long_return || outer) {
         saved_rsp = pop(n);
-        saved_ss = pop(n);
-        if (saved_ss > 0xffffU || (long_return && !canonical(saved_rsp)))
-          fail("IRET invalid SS/RSP", FaultCode::ProtectionFault);
-        if (saved_ss == 0 && long_return && target_cpl == 0) {
-          saved_stack = SegmentCache{}; // null SS is valid for IA-32e ring0
+        saved_ss = std::uint16_t(pop(n));
+        if (saved_ss == 0 && long_return && target_cpl == 0 && code.long_code) {
+          saved_stack = null_stack_cache(saved_ss);
         } else {
           if ((saved_ss & 3U) != target_cpl)
-            fail("IRET SS selector RPL differs from return CPL", FaultCode::ProtectionFault);
-          saved_stack = descriptor(std::uint16_t(saved_ss));
+            fail("IRET SS selector RPL differs from return CPL", FaultCode::ProtectionFault, saved_ss & 0xfffcU);
+          const auto stack_desc = descriptor_for_transfer(saved_ss, true);
+          saved_stack = stack_desc.segment;
           if (saved_stack.code || !saved_stack.writable || saved_stack.dpl != target_cpl)
-            fail("IRET stack selector DPL/type mismatch", FaultCode::ProtectionFault);
+            fail("IRET stack selector DPL/type mismatch", FaultCode::ProtectionFault, saved_ss & 0xfffcU);
+          check_transfer_descriptor_present(stack_desc);
+          commit_transfer_descriptor(stack_desc);
         }
       }
       // The IRET instruction is still executing at its originating CPL.
       // Restore privileged IF/IOPL before switching the CS CPL to ring3.
-      restore_flags(std::uint32_t(flags), 4);
-      segments[CS] = std::uint16_t(raw_cs);
+      restore_flags(std::uint32_t(flags), n);
+      if (n >= 4) {
+        const auto extra_flags = original_cpl == 0 ? 0x190000U : 0x10000U;
+        eflags = (eflags & ~extra_flags) | (std::uint32_t(flags) & extra_flags);
+      }
+      commit_transfer_descriptor(code_desc);
+      segments[CS] = selector;
       cache_[CS] = code;
       if (long_return || outer) {
-        segments[SS] = std::uint16_t(saved_ss);
+        segments[SS] = saved_ss;
         cache_[SS] = saved_stack;
-        put_reg(ESP, long_return ? 8U : 4U, saved_rsp);
+        put_reg(ESP, n == 8 ? 8U : 4U, saved_rsp);
       }
-      if (outer) {
-        // IRET to a less-privileged ring invalidates inaccessible DS/ES/FS/GS.
-        // FS/GS MSR bases persist across selector invalidation.
-        for (unsigned seg : {unsigned(DS),unsigned(ES),unsigned(FS),unsigned(GS)}) {
-          const auto& descriptor_cache = cache_[seg];
-          if (!descriptor_cache.valid) continue;
-          const auto rpl = unsigned(segments[seg] & 3U);
-          if (!descriptor_cache.conforming &&
-              std::max(target_cpl,rpl) > descriptor_cache.dpl) {
-            segments[seg] = 0;
-            cache_[seg].valid = false;
-          }
-        }
-      }
+      if (outer) invalidate_outer_data_segments(target_cpl);
       jump(target, n);
       return;
     }
-    case 0xd8: case 0xd9: case 0xdb: case 0xdc:
-    case 0xdd: case 0xde: case 0xdf: { // Foundational x87 FPU opcodes
-      require_fpu();
-      const auto encoding=fetch8();
-      const auto group=(encoding>>3)&7U;
-      if(encoding>=0xc0) {
-        const auto reg=unsigned(encoding&7U);
-        if(op==0xdb && encoding==0xe3){ // FNINIT
-          fpu_init();return;
-        }
-        if(op==0xdb && encoding==0xe2){ // FNCLEX
-          fpu_status=std::uint16_t(fpu_status&~0x80ffU);return;
-        }
-        if(op==0xd9 && encoding==0xd0)return; // FNOP
-        if(op==0xd9 && (encoding==0xe8||encoding==0xee)) {
-          // FLD1 / FLDZ (exact 80-bit architectural constants).
-          Extended80 value{};
-          if(encoding==0xe8) {
-            value[7]=0x80;value[8]=0xff;value[9]=0x3f;
-          }
-          fpu_push(value);fpu_ip=start_ip_;fpu_cs=start_cs_;return;
-        }
-        if(op==0xd9 && (encoding&0xf8U)==0xc0) {
-          fpu_push(fpu_peek(reg));fpu_ip=start_ip_;return; // FLD ST(i)
-        }
-        if(op==0xd9 && (encoding&0xf8U)==0xc8) { // FXCH ST(i)
-          const auto first=fpu_slot(0),other=fpu_slot(reg);
-          if(fpu_tag(first)==3U||fpu_tag(other)==3U)
-            fail("FXCH empty register handling pending",FaultCode::UnsupportedState);
-          std::swap(x87[first],x87[other]);
-          const auto first_tag=fpu_tag(first),other_tag=fpu_tag(other);
-          fpu_tag_set(first,other_tag);fpu_tag_set(other,first_tag);
-          return;
-        }
-        if(op==0xdd && (encoding&0xf8U)==0xd8) { // FSTP ST(i)
-          if(reg==0){fpu_pop();return;} // handles empty TOP stack fault
-          const auto value=fpu_peek();
-          const auto slot=fpu_slot(reg);
-          x87[slot]=value;fpu_tag_set(slot,classify_ext(value));fpu_pop();
-          return;
-        }
-        if(op==0xdf && encoding==0xe0) { // FNSTSW AX
-          set_reg16(EAX,fpu_status);return;
-        }
-        if(op==0xd8 && ((encoding&0xf8U)==0xc0 ||
-                       (encoding&0xf8U)==0xc8 ||
-                       (encoding&0xf8U)==0xe0 ||
-                       (encoding&0xf8U)==0xf0)) { // FADD/FMUL/FSUB/FDIV ST0,STi
-          if(fpu_status&0x0080U)
-            fail("x87 pending exception must be serviced before arithmetic",
-                 (cr0&0x20U)?FaultCode::X87FloatingPoint:FaultCode::UnsupportedState);
-          if(((fpu_control>>8)&3U)==1U)
-            fail("reserved x87 precision mode PC=01",FaultCode::UnsupportedState);
-          // x87 PC=24/53/64 and RC=nearest/down/up/zero. The 80-bit
-          // significand is narrowed below, independent of GPU or QSSD.
-          // Arithmetic still relies on host long double until a complete
-          // software extended80 oracle is integrated on ARM64.
-          const auto lhs=extended_to_long_double(fpu_peek());
-          const auto rhs=extended_to_long_double(fpu_peek(reg));
-          long double answer=0;
-          std::uint32_t flags=0;
-          {
-            HostRound rounding(0x1f80U|(((fpu_control>>10)&3U)<<13));
-            volatile long double a=lhs,b=rhs;
-            if((encoding&0xf8U)==0xc0) {
-              volatile long double result=a+b;answer=result;
-            }else if((encoding&0xf8U)==0xc8) {
-              volatile long double result=a*b;answer=result;
-            }else if((encoding&0xf8U)==0xe0) {
-              volatile long double result=a-b;answer=result;
-            }else{
-              volatile long double result=a/b;answer=result;
-            }
-            flags|=rounding.status();
-          }
-          auto converted=extended_from_long_double(answer);
-          round_x87_precision(converted,flags);
-          // Intel keeps ST0 unchanged when a detected exception is unmasked.
-          // #MF is deferred to FWAIT; the sticky flags remain observable.
-          fpu_status|=std::uint16_t(flags);
-          if(flags&~std::uint32_t(fpu_control)&0x3fU){
-            fpu_status|=0x8080U; // ES+B; FNSTSW exposes sticky condition.
-            return;
-          }
-          const auto slot=fpu_slot(0);
-          x87[slot]=converted;fpu_tag_set(slot,classify_ext(converted));
-          fpu_ip=start_ip_;return;
-        }
-        fail("x87 register opcode pending for full FPU",FaultCode::UnsupportedOpcode);
-      }
-      // Decoding a legacy memory ModRM after consuming its byte: rewind so
-      // the canonical ModRM parser handles displacement/SIB and segment.
-      --cursor_;decoded_.pop_back();
-      const auto m=modrm();
-      require_memory(m.rm);
-      const auto data_width=(op==0xd9||op==0xd8)?4U:
-                            (op==0xdd||op==0xdc)?8U:2U;
-      if((op==0xd9||op==0xdd)&&group==0) { // FLD m32real/m64real
-        const auto raw=get(m.rm,data_width);
-        fpu_push(extended_from_ieee(raw,data_width));
-        fpu_ip=start_ip_;fpu_cs=start_cs_;
-        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
-        return;
-      }
-      if((op==0xd9||op==0xdd)&&group==3) { // FSTP m32real/m64real
-        if((fpu_control&0x0c00U)!=0)
-          fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
-        const auto number=extended_to_long_double(fpu_peek());
-        if(data_width==4){
-          const auto converted=static_cast<float>(number);
-          std::uint32_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
-          put(m.rm,4,bits);
-        }else{
-          const auto converted=static_cast<double>(number);
-          std::uint64_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
-          put(m.rm,8,bits);
-        }
-        fpu_pop();
-        fpu_ip=start_ip_;fpu_cs=start_cs_;
-        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
-        return;
-      }
-      if(op==0xd9&&group==5) { // FLDCW m16
-        fpu_control=std::uint16_t(get(m.rm,2));
-        return;
-      }
-      if(op==0xd9&&group==7) { // FNSTCW m16
-        put(m.rm,2,fpu_control);return;
-      }
-      if(op==0xdd&&group==7) { // FNSTSW m16
-        put(m.rm,2,fpu_status);return;
-      }
-      fail("x87 memory opcode pending for full FPU",FaultCode::UnsupportedOpcode);
-    }
+    case 0xd8: case 0xd9: case 0xda: case 0xdb:
+    case 0xdc: case 0xdd: case 0xde: case 0xdf:
+      execute_x87(op);
+      return;
     case 0xd7: {
       const auto address = (index(EBX) + reg8(EAX)) & mask(address_width());
       set_reg8(EAX, std::uint8_t(read_segment(data_segment(), address, 1))); return;
@@ -3091,14 +4272,18 @@ inline void Cpu::execute(std::uint8_t op) {
       set_flag(IF, false); return;
     case 0xfb:
       if (cpl() > ((eflags >> 12) & 3U)) fail("STI requires IOPL", FaultCode::ProtectionFault);
+      interrupt_shadow_=!flag(IF);
       set_flag(IF, true); return;
     case 0xfc: set_flag(DF, false); return;
     case 0xfd: set_flag(DF, true); return;
     case 0xfe: case 0xff: {
       const auto m = modrm(); const unsigned w = op == 0xfe ? 1 : bytes;
+      require_lock_destination(m.rm, m.group < 2);
       if (m.group < 2) {
-        const bool old_cf = flag(CF); const auto value = alu(m.group == 0 ? 0 : 5, get(m.rm, w), 1, w);
-        put(m.rm, w, value); set_flag(CF, old_cf); return;
+        const bool old_cf = flag(CF);
+        modify_operand(m.rm, w, [&](std::uint64_t old) { return alu(m.group == 0 ? 0 : 5, old, 1, w); });
+        set_flag(CF, old_cf);
+        return;
       }
       if (op == 0xfe || m.group == 7) fail("reserved group-4/group-5 encoding", FaultCode::InvalidInstruction);
       if (m.group == 6) { const auto value = get(m.rm, stack_bytes); push(value, stack_bytes); return; }
@@ -3110,12 +4295,8 @@ inline void Cpu::execute(std::uint8_t op) {
         if (m.group == 2) push(cursor_ & mask(n), n);
         return;
       }
-      if (is_long_mode()) fail("64-bit indirect far branch is not implemented", FaultCode::UnsupportedState);
-      require_memory(m.rm);
-      const auto address = segment_linear(m.rm.segment, operand_offset(m.rm), bytes + 2, Access::Read);
-      const auto target = read_linear(address, bytes); const auto cs = std::uint16_t(read_linear(address + bytes, 2));
-      if (m.group == 3) { push(segments[CS], bytes); push(cursor_ & mask(bytes), bytes); }
-      far_transfer(cs, target, bytes); return;
+      indirect_far_branch(m.rm, bytes, m.group == 3);
+      return;
     }
     default: fail("opcode is not implemented", FaultCode::UnsupportedOpcode);
   }

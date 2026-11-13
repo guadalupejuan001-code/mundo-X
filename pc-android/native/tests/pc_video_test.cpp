@@ -60,6 +60,57 @@ void run_demo(PcMachine& pc, unsigned width, unsigned height) {
   need(pc.cpu.read32(cosmic_pc::kGraphicsDemoResultAddress) == cosmic_pc::kGraphicsDemoResult,
        "Guest did not verify its own framebuffer pixels");
 }
+void write_string(PcMachine& pc) {
+  call(pc,0x0003);
+  const auto cell=[&](unsigned row,unsigned column){return pc.cpu.read16(0xb8000+(row*80+column)*2);};
+  const auto run=[&](std::uint8_t mode,std::uint16_t position,std::uint16_t source,
+                     std::uint16_t count,std::uint16_t segment=0x0200,bool a20=false){
+    pc.cpu.reset(0,0x7c00);
+    pc.cpu.a20_enabled=a20;
+    pc.cpu.eflags=0x247;
+    const std::array<std::uint8_t,22> guest{{
+        0x68,std::uint8_t(segment),std::uint8_t(segment>>8),0x07, // PUSH segment; POP ES.
+        0xbd,std::uint8_t(source),std::uint8_t(source>>8), // MOV BP, source offset.
+        0xbb,0x0a,0x00,      // MOV BX,000Ah (page 0, light green).
+        0xb9,std::uint8_t(count),std::uint8_t(count>>8),
+        0xba,std::uint8_t(position),std::uint8_t(position>>8),
+        0xb8,mode,0x13,
+        0xcd,0x10,0xf4}};
+    pc.cpu.memory.write_block(0x7c00,guest.data(),guest.size());
+    pc.cpu.set_reg16(Cpu::ESP,0x7b00);
+    pc.run(40);
+  };
+  const std::array<std::uint8_t,8> line{{'A','B','\r','\n','C',8,'D',7}};
+  pc.cpu.memory.write_block(0x2200,line.data(),line.size());
+  run(1,0x014f,0x0200,line.size());
+  need(pc.cpu.halted&&!pc.cpu.fault&&pc.cpu.reg16(Cpu::EAX)==0x1301&&
+       pc.cpu.reg16(Cpu::EDX)==0x014f&&pc.cpu.reg16(Cpu::EBP)==0x0200&&
+       pc.cpu.reg16(Cpu::ECX)==line.size()&&pc.cpu.reg16(Cpu::EBX)==0x000a&&
+       pc.cpu.eflags==0x247,"VGA string BIOS call did not preserve registers and FLAGS");
+  need(cell(1,79)==0x0a41&&cell(2,0)==0x0a42&&cell(3,0)==0x0a44&&cell(3,1)==0x0720&&
+       pc.cpu.read16(0x450)==0x0301,"VGA text write must wrap and honor CR, LF, BS and BEL");
+
+  const std::array<std::uint8_t,4> attributed{{'X',0x1e,'Y',0x2c}};
+  pc.cpu.memory.write_block(0x2200,attributed.data(),attributed.size());
+  run(2,0x1800,0x0200,2);
+  need(pc.cpu.halted&&!pc.cpu.fault&&cell(24,0)==0x1e58&&cell(24,1)==0x2c59&&
+       pc.cpu.read16(0x450)==0x0301,"VGA inline attributes or cursor preservation lost");
+  run(3,0x184f,0x0200,2);
+  need(pc.cpu.halted&&!pc.cpu.fault&&cell(23,79)==0x1e58&&cell(24,0)==0x2c59&&
+       cell(24,1)==0x0720&&pc.cpu.read16(0x450)==0x1801,
+       "VGA string scroll must preserve written attributes and reposition the cursor");
+
+  run(3,0,0xffff,1);
+  need(pc.cpu.fault&&!pc.cpu.halted&&cell(0,0)==0x0720&&cell(24,0)==0x2c59&&
+       pc.cpu.read16(0x450)==0x1801,"VGA string crossing ES:FFFF must leave the display unchanged");
+  pc.cpu.memory[0x000010]='L';
+  pc.cpu.memory[0x100010]='H';
+  run(0,0,0x0020,1,0xffff,false);
+  need(pc.cpu.halted&&!pc.cpu.fault&&cell(0,0)==0x0a4c,"VGA string must read wrapped A20 source bytes");
+  run(0,1,0x0020,1,0xffff,true);
+  need(pc.cpu.halted&&!pc.cpu.fault&&cell(0,1)==0x0a48,"VGA string must read high RAM with A20 enabled");
+  std::cout<<"C03_BIOS_VGA_STRING_PASS page=0 inline_attributes=1 cursor=1 scroll=1 bounds=1 a20=1\n";
+}
 }
 
 int main() {
@@ -208,6 +259,7 @@ int main() {
     need(pc.video_info().mode == 2 && pc.cpu.read16(0xb8000) == 0x1e41, "VGA preserve bit must retain text");
     call(pc, 0x0003);
     need(pc.cpu.read16(0xb8000) == 0x0720 && !pc.video_info().graphics, "VGA clear must retain old 80x25 behavior");
+    write_string(pc);
 
     PcMachine small(16 * MiB);
     small.boot_demo();

@@ -94,7 +94,7 @@ void long_pf_resume() {
   // Guest handler: MOV RAX, PTE value; MOV [PTE],RAX; ADD RSP,8; IRETQ.
   write_code(cpu,handler,{0x48,0xb8,0x03,0xb0,0,0,0,0,0,0,
                           0x48,0xa3,0x58,0x40,0,0,0,0,0,0,
-                          0x48,0x83,0xc4,0x08,0xcf});
+                          0x48,0x83,0xc4,0x08,0x48,0xcf});
   cpu.eflags=2|Cpu::IF;
   expect_next(cpu,handler,14);
   need(cpu.cr2==target,"#PF did not set CR2 to faulting linear address");
@@ -118,7 +118,7 @@ void long_ud_skip() {
   gate(cpu,6,0x12200,true);
   write_code(cpu,0xa000,{0x0f,0x0b,0xb8,0x34,0x12,0,0,0xf4});
   // ADD QWORD PTR [RSP],2; IRETQ: #UD carries no error code.
-  write_code(cpu,0x12200,{0x48,0x83,0x04,0x24,0x02,0xcf});
+  write_code(cpu,0x12200,{0x48,0x83,0x04,0x24,0x02,0x48,0xcf});
   expect_next(cpu,0x12200,6);
   need(cpu.regs[Cpu::ESP]==0x190000-40,"#UD must not push an error code");
   run(cpu);
@@ -133,7 +133,7 @@ void long_de_retry() {
   write_code(cpu,0xa000,{0xb8,0x10,0,0,0,0x31,0xd2,0xb9,0,0,0,0,
                           0xf7,0xf1,0xf4});
   // Guest handler repairs the divisor and returns to the original DIV.
-  write_code(cpu,0x12400,{0xb9,0x01,0,0,0,0xcf});
+  write_code(cpu,0x12400,{0xb9,0x01,0,0,0,0x48,0xcf});
   run(cpu,25);
   need(cpu.regs[Cpu::EAX]==16 && cpu.regs[Cpu::ECX]==1 &&
        cpu.regs[Cpu::ESP]==0x190000,"#DE IRETQ did not retry DIV correctly");
@@ -146,7 +146,7 @@ void long_gp_skip() {
   write_code(cpu,0xa000,{0x48,0xb8,0,0,0,0,1,0,0,0,
                           0x0f,0x22,0xc0,0xb8,0x78,0x56,0,0,0xf4});
   write_code(cpu,0x12600,{0x48,0x83,0x44,0x24,0x08,0x03,
-                           0x48,0x83,0xc4,0x08,0xcf});
+                           0x48,0x83,0xc4,0x08,0x48,0xcf});
   need(cpu.step()==StepResult::Executed,"MOV RAX fixture");
   expect_next(cpu,0x12600,13);
   need(cpu.read64(cpu.regs[Cpu::ESP])==0,"#GP must supply zero selector error code");

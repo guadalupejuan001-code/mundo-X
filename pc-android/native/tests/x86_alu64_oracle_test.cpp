@@ -214,6 +214,50 @@ void compare_double_shift(Cpu& cpu, bool left, unsigned bytes,
     }
 }
 
+void compare_implicit(Cpu& cpu, unsigned group, std::uint64_t high, std::uint64_t low,
+                      std::uint64_t operand) {
+    constexpr std::uint32_t multiply_flags = Cpu::OF | Cpu::CF;
+    auto expected_high = high, expected_low = low;
+    unsigned char overflow = 0;
+    switch (group) {
+        case 4:
+            __asm__ __volatile__("mulq %[source]; seto %[overflow]"
+                : "+&a" (expected_low), "+&d" (expected_high), [overflow] "=qm" (overflow)
+                : [source] "r" (operand) : "cc");
+            break;
+        case 5:
+            __asm__ __volatile__("imulq %[source]; seto %[overflow]"
+                : "+&a" (expected_low), "+&d" (expected_high), [overflow] "=qm" (overflow)
+                : [source] "r" (operand) : "cc");
+            break;
+        case 6:
+            __asm__ __volatile__("divq %2" : "+&a" (expected_low), "+&d" (expected_high)
+                : "r" (operand) : "cc");
+            break;
+        case 7:
+            __asm__ __volatile__("idivq %2" : "+&a" (expected_low), "+&d" (expected_high)
+                : "r" (operand) : "cc");
+            break;
+    }
+    const std::uint8_t code[]{0x48, 0xf7, std::uint8_t(0xc3U | (group << 3))};
+    cpu.memory.write_block(kCodeAddress, code, sizeof(code));
+    cpu.eip = kCodeAddress; cpu.halted = false;
+    cpu.regs[Cpu::EAX] = low; cpu.regs[Cpu::EDX] = high; cpu.regs[Cpu::EBX] = operand;
+    cpu.eflags = Cpu::IF | Cpu::DF;
+    if (cpu.step() != cosmic_pc::StepResult::Executed || cpu.fault)
+        throw std::runtime_error(cpu.fault ? cpu.fault->describe() : "Group3 arithmetic did not execute");
+    if (cpu.regs[Cpu::EAX] != expected_low || cpu.regs[Cpu::EDX] != expected_high ||
+        cpu.regs[Cpu::EBX] != operand || cpu.eip != kCodeAddress + sizeof(code) ||
+        (group < 6 && (cpu.eflags & multiply_flags) != (overflow ? multiply_flags : 0)) ||
+        !cpu.flag(Cpu::IF) || !cpu.flag(Cpu::DF)) {
+        std::ostringstream message;
+        message << "Group3 r64 /" << group << std::hex << " input=" << high << ':' << low
+                << " operand=" << operand << " guest=" << cpu.regs[Cpu::EDX] << ':' << cpu.regs[Cpu::EAX]
+                << " native=" << expected_high << ':' << expected_low;
+        throw std::runtime_error(message.str());
+    }
+}
+
 } // namespace
 
 int main() {
@@ -277,6 +321,27 @@ int main() {
         }
         std::cout << "SHLD/SHRD native oracle: " << shift_vectors
                   << " instruction vectors passed (16/32/64-bit, imm8/CL, defined flags only).\n";
+        unsigned implicit_vectors = 0;
+        for (const auto lhs : boundaries) for (const auto rhs : boundaries) {
+            compare_implicit(cpu, 4, 0, lhs, rhs);
+            compare_implicit(cpu, 5, 0, lhs, rhs);
+            implicit_vectors += 2;
+        }
+        for (unsigned i = 0; i < 2048; ++i) {
+            const auto low = next(), high = next(), divisor = next() | 1;
+            compare_implicit(cpu, 6, high % divisor, low, divisor);
+            // |high:low| < |divisor| * 2^63 guarantees a signed quotient.
+            // Sign and divisor directions vary independently with the generator.
+            const auto abs_divisor = (divisor >> 63) ? std::uint64_t{0} - divisor : divisor;
+            const auto magnitude = high % abs_divisor;
+            const auto signed_high = magnitude >> 1;
+            const auto signed_low = (magnitude << 63) | (low >> 1);
+            const bool negative = (i & 1U) != 0;
+            const auto top = negative ? ~signed_high + (signed_low == 0) : signed_high;
+            compare_implicit(cpu, 7, top, negative ? std::uint64_t{0} - signed_low : signed_low, divisor);
+            implicit_vectors += 2;
+        }
+        std::cout << "MUL/IMUL/DIV/IDIV64 native oracle: " << implicit_vectors << " instruction vectors passed.\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << '\n';

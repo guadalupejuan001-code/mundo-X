@@ -92,7 +92,7 @@ void test(){
   code(cpu,0xa100,{0xb8,0x2b,0,0,0,0x50,
                    0xb8,0,0,0x1a,0,0x50,0x9c,
                    0xb8,0x23,0,0,0,0x50,
-                   0xb8,0,0x10,0x01,0,0x50,0xcf});
+                   0xb8,0,0x10,0x01,0,0x50,0x48,0xcf});
   // User real SSE2: 1.5 + 2 = 3.5; INT80 into ring0 save+clobber+restore;
   // 3.5 * 2 = 7; INT81 exits to a genuine kernel HLT.
   code(cpu,0x11000,{0xf2,0x0f,0x58,0xc1,
@@ -104,7 +104,7 @@ void test(){
       0x66,0x0f,0xef,0xc0,                     // PXOR xmm0,xmm0
       0xdb,0xe3,                              // FNINIT
       0x48,0x0f,0xae,0x0c,0x25,0,0xe0,0x01,0, // FXRSTOR64 [0x1e000]
-      0xcf});                                 // IRETQ
+      0x48,0xcf});                            // IRETQ
   code(cpu,0x13400,{0xf4});
   cpu.regs[Cpu::ESP]=0x1c0000;
   cpu.eflags=2|Cpu::IF;cpu.eip=0xa100;cpu.halted=false;
@@ -155,7 +155,7 @@ int main(){
   try{
     test();
     std::cout<<"REVERSE_WINDOWS_C09R1_RING3_FPU_PASS checks="<<checks
-             <<" windows_iso_used=false cpuid_sse2=false\n";
+             <<" windows_iso_used=false\n";
     return 0;
   }catch(const std::exception& e){
     std::cerr<<"REVERSE_WINDOWS_C09R1_RING3_FPU_FAIL "<<e.what()<<"\n";
