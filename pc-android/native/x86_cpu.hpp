@@ -911,6 +911,83 @@ class Cpu {
     }
     for(unsigned i=0;i<16;++i)write_linear(address+i,1,value[i]);
   }
+  static std::uint64_t packed_lane(const std::array<std::uint8_t,16>& value,
+                                   unsigned offset,unsigned size) {
+    std::uint64_t result=0;
+    for(unsigned i=0;i<size;++i)result|=std::uint64_t(value[offset+i])<<(8*i);
+    return result;
+  }
+  static void packed_set(std::array<std::uint8_t,16>& value,
+                         unsigned offset,unsigned size,std::uint64_t bits) {
+    for(unsigned i=0;i<size;++i)value[offset+i]=std::uint8_t(bits>>(8*i));
+  }
+  void sse_integer(unsigned opcode) {
+    if(!operand_override_||repeat_)
+      fail("packed integer SSE2 requires 66 prefix",FaultCode::UnsupportedOpcode);
+    require_sse_state();
+    const auto m=modrm();require_xmm(m.reg);
+    const auto lhs=xmm[m.reg],rhs=read_xmm_operand(m.rm,false);
+    auto result=lhs;
+    switch(opcode){
+      case 0xdb: case 0xdf: case 0xeb: { // PAND, PANDN, POR
+        for(unsigned i=0;i<16;++i)
+          result[i]=opcode==0xdb?std::uint8_t(lhs[i]&rhs[i]):
+                    opcode==0xdf?std::uint8_t(~lhs[i]&rhs[i]):
+                                     std::uint8_t(lhs[i]|rhs[i]);
+        break;
+      }
+      case 0x60: case 0x61: case 0x62: case 0x6c:
+      case 0x68: case 0x69: case 0x6a: case 0x6d: { // PUNPCK low/high
+        const bool high=(opcode==0x68||opcode==0x69||opcode==0x6a||opcode==0x6d);
+        const unsigned size=(opcode==0x60||opcode==0x68)?1U:
+                            (opcode==0x61||opcode==0x69)?2U:
+                            (opcode==0x62||opcode==0x6a)?4U:8U;
+        const unsigned first=high?8U:0U;
+        for(unsigned i=0;i<8U/size;++i){
+          for(unsigned j=0;j<size;++j) {
+            result[(2*i)*size+j]=lhs[first+i*size+j];
+            result[(2*i+1)*size+j]=rhs[first+i*size+j];
+          }
+        }
+        break;
+      }
+      default: { // Packed integer arithmetic, comparisons, logical shifts
+        const bool is_compare=(opcode>=0x74&&opcode<=0x76)||
+                               (opcode>=0x64&&opcode<=0x66);
+        const bool is_add=(opcode>=0xfc&&opcode<=0xfe)||opcode==0xd4;
+        const bool is_sub=(opcode>=0xf8&&opcode<=0xfa)||opcode==0xfb;
+        const bool is_shift=(opcode>=0xd1&&opcode<=0xd3)||
+                             (opcode>=0xf1&&opcode<=0xf3);
+        if(!is_compare&&!is_add&&!is_sub&&!is_shift)
+          fail("packed SSE2 arithmetic opcode not implemented",FaultCode::UnsupportedOpcode);
+        const unsigned size=
+          (opcode==0x74||opcode==0x64||opcode==0xfc||opcode==0xf8)?1U:
+          (opcode==0x75||opcode==0x65||opcode==0xfd||opcode==0xf9||
+           opcode==0xd1||opcode==0xf1)?2U:
+          (opcode==0x76||opcode==0x66||opcode==0xfe||opcode==0xfa||
+           opcode==0xd2||opcode==0xf2)?4U:8U;
+        const auto lane_mask=size==8?UINT64_MAX:((1ULL<<(8*size))-1);
+        const auto count=is_shift?packed_lane(rhs,0,8):0ULL;
+        for(unsigned offset=0;offset<16;offset+=size){
+          const auto l=packed_lane(lhs,offset,size);
+          const auto r=packed_lane(rhs,offset,size);
+          std::uint64_t next=0;
+          if(is_compare) {
+            const bool matches=opcode>=0x74?
+                l==r:signed_value(l,size)>signed_value(r,size);
+            next=matches?lane_mask:0;
+          }else if(is_add)next=(l+r)&lane_mask;
+          else if(is_sub)next=(l-r)&lane_mask;
+          else if(count>=size*8)next=0;
+          else if(opcode>=0xf1&&opcode<=0xf3)next=(l<<count)&lane_mask;
+          else next=l>>count;
+          packed_set(result,offset,size,next);
+        }
+        break;
+      }
+    }
+    xmm[m.reg]=result; // packed integer SSE2 leaves EFLAGS unchanged
+  }
   void require_memory(const Operand& operand) const {
     if (operand.is_register) fail("instruction requires a memory operand", FaultCode::InvalidInstruction);
   }
@@ -1609,6 +1686,98 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0xdb: case 0xdf: case 0xeb: // PAND/PANDN/POR
+    case 0x60: case 0x61: case 0x62: case 0x6c: // PUNPCKL
+    case 0x68: case 0x69: case 0x6a: case 0x6d: // PUNPCKH
+    case 0x74: case 0x75: case 0x76: // PCMPEQ
+    case 0x64: case 0x65: case 0x66: // PCMPGT
+    case 0xfc: case 0xfd: case 0xfe: case 0xd4: // PADD
+    case 0xf8: case 0xf9: case 0xfa: case 0xfb: // PSUB
+    case 0xd1: case 0xd2: case 0xd3: // PSRL
+    case 0xf1: case 0xf2: case 0xf3: // PSLL
+      sse_integer(op); return;
+    case 0x73: { // PSRLDQ /3, PSLLDQ /7
+      if(!operand_override_||repeat_)
+        fail("byte shift requires mandatory 66",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();
+      if(!m.rm.is_register||(m.group!=3&&m.group!=7))
+        fail("unsupported 0F 73 group opcode",FaultCode::UnsupportedOpcode);
+      require_xmm(m.rm.index);
+      const auto count=unsigned(immediate(1));
+      const auto source=xmm[m.rm.index];
+      auto& dest=xmm[m.rm.index];
+      for(unsigned i=0;i<16;++i) {
+        const auto src=m.group==3?i+count:int(i)-int(count);
+        dest[i]=src<16&&src>=0?source[src]:0;
+      }
+      return;
+    }
+    case 0x70: { // PSHUFD xmm, xmm/m128, imm8
+      if(!operand_override_||repeat_)
+        fail("PSHUFD requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const auto source=read_xmm_operand(m.rm,false);
+      const auto order=unsigned(immediate(1));
+      for(unsigned lane=0;lane<4;++lane)
+        packed_set(xmm[m.reg],lane*4,4,
+                   packed_lane(source,((order>>(lane*2))&3U)*4,4));
+      return;
+    }
+    case 0xd7: { // PMOVMSKB r32, xmm
+      if(!operand_override_||repeat_)
+        fail("PMOVMSKB requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();
+      if(!m.rm.is_register)
+        fail("PMOVMSKB source must be XMM register",FaultCode::InvalidInstruction);
+      require_xmm(m.rm.index);
+      std::uint32_t mask=0;
+      for(unsigned i=0;i<16;++i)mask|=std::uint32_t(xmm[m.rm.index][i]>>7)<<i;
+      put_reg(m.reg,4,mask);
+      return;
+    }
+    case 0x6e: case 0x7e: { // 66 MOVD/MOVQ, F3 MOVQ xmm load
+      if(!operand_override_&&!(op==0x7e&&repeat_==0xf3))
+        fail("MOVD/MOVQ mandatory prefix missing",FaultCode::UnsupportedOpcode);
+      if(operand_override_&&repeat_)
+        fail("conflicting MOVD/MOVQ prefixes",FaultCode::InvalidInstruction);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const unsigned n=(is_long_mode()&&(rex_&8))||repeat_==0xf3?8U:4U;
+      if(op==0x6e||(op==0x7e&&repeat_==0xf3)) {
+        const auto value=get(m.rm,n);
+        xmm[m.reg].fill(0);
+        packed_set(xmm[m.reg],0,n,value);
+      }else{
+        put(m.rm,n,packed_lane(xmm[m.reg],0,n));
+      }
+      return;
+    }
+    case 0xd6: { // 66 MOVQ xmm/m64, xmm low64
+      if(!operand_override_||repeat_)
+        fail("MOVQ xmm store requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const auto low=packed_lane(xmm[m.reg],0,8);
+      if(m.rm.is_register) {
+        require_xmm(m.rm.index);
+        xmm[m.rm.index].fill(0);
+        packed_set(xmm[m.rm.index],0,8,low);
+      }else put(m.rm,8,low);
+      return;
+    }
+    case 0x10: case 0x11: case 0x28: case 0x29: { // MOVUPD/MOVAPD
+      if(!operand_override_||repeat_)
+        fail("MOVUPD/MOVAPD requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const bool aligned=op==0x28||op==0x29;
+      if(op==0x10||op==0x28)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
+      else write_xmm_operand(m.rm,xmm[m.reg],aligned);
+      return;
+    }
     case 0x6f: case 0x7f: { // 66 MOVDQA / F3 MOVDQU
       if(!operand_override_&&repeat_!=0xf3)
         fail("SSE2 MOVDQA/MOVDQU requires 66/F3 prefix",FaultCode::UnsupportedOpcode);
