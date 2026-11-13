@@ -7,6 +7,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
 
+# Opt-in finite Ether transformation executor. This does not replace or attach
+# to PcMachine; callers must supply an explicit pure-block execution guard.
+option(MUNDO_X_ETHER_NEXT "Build experimental Ether AArch64/NEON executor" OFF)
+if (MUNDO_X_ETHER_NEXT)
+  add_library(mundo_x_ether_next STATIC
+    native/src/ether_transform.cpp native/src/ether_neon.cpp)
+  target_include_directories(mundo_x_ether_next PUBLIC native/include)
+  target_compile_features(mundo_x_ether_next PUBLIC cxx_std_17)
+endif()
+
 # The repository-owned C bridge and EngineSession can be linked by hosts and
 # shared libraries without keeping another copy of the quantum core source.
 add_library(mundo_x_graphics_core STATIC
@@ -58,6 +68,14 @@ endif()
 include(CTest)
 add_subdirectory(pc-android)
 if (BUILD_TESTING)
+  if (MUNDO_X_ETHER_NEXT)
+    add_executable(test_ether_next native/tests/ether_next.cpp)
+    target_link_libraries(test_ether_next PRIVATE mundo_x_ether_next)
+    add_test(NAME ether_next COMMAND test_ether_next)
+    add_executable(test_ether_next_quantum native/tests/ether_next_quantum.cpp)
+    target_include_directories(test_ether_next_quantum PRIVATE native/include)
+    add_test(NAME ether_next_quantum COMMAND test_ether_next_quantum)
+  endif()
   add_test(NAME basis_vm_cli_selftest COMMAND mundo_x_vm --self-test)
   set_tests_properties(basis_vm_cli_selftest PROPERTIES TIMEOUT 120)
   add_executable(test_phase_core tests/test_phase_core.cpp)

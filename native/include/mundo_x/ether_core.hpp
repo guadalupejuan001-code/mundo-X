@@ -1,5 +1,7 @@
 #pragma once
 
+#include "mundo_x/experimental/ether_transform.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -28,6 +30,10 @@ namespace mundo_x {
 // nearest-neighbour CZ layers. Both layers are self-inverse.
 class EtherCore {
  public:
+  // Additive experimental finite value domain. Global quantum rules and
+  // pullbacks below keep their original exact representation and ownership.
+  using Transform = ether_next::Transform;
+  using TransformMemory = ether_next::Cache;
   struct Term { std::string address; char axis; };
   enum class Rule : std::uint8_t { HAll, CZNeighbors };
 

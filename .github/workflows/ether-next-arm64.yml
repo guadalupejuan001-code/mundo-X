@@ -1,0 +1,41 @@
+name: Ether Next bounded native ARM64 experiment
+on:
+  push:
+    branches: [experiment/ether-next-arm64-neon]
+    paths:
+      - 'native/include/mundo_x/experimental/ether_transform.hpp'
+      - 'native/include/mundo_x/ether_core.hpp'
+      - 'native/include/mundo_x/infinite_core.hpp'
+      - 'native/include/mundo_x/inverse_memory.hpp'
+      - 'native/tests/ether_next*.cpp'
+      - 'native/src/ether_transform.cpp'
+      - 'native/src/ether_neon.cpp'
+      - 'tools/run_ether_next.sh'
+      - '.github/workflows/ether-next-arm64.yml'
+permissions: {contents: read}
+jobs:
+  native-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and execute one bounded NEON experiment
+        env:
+          ETHER_REQUIRE_ARM64: '1'
+        run: tools/run_ether_next.sh /tmp/ether-next-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ether-next-native-arm64-${{ github.sha }}
+          path: |
+            /tmp/ether-next-evidence/source-sha.txt
+            /tmp/ether-next-evidence/environment.txt
+            /tmp/ether-next-evidence/result.json
+            /tmp/ether-next-evidence/quantum.txt
+            /tmp/ether-next-evidence/neon.bin
+            /tmp/ether-next-evidence/neon-disassembly.txt
+            /tmp/ether-next-evidence/raw-neon.bin
+            /tmp/ether-next-evidence/raw-neon-disassembly.txt
+          retention-days: 14
