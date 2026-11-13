@@ -25,6 +25,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+#if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+#include <xmmintrin.h>
+#endif
 #include "memory_fabric.hpp"
 
 namespace cosmic_pc {
@@ -828,6 +831,8 @@ class Cpu {
     if(!(fpu_control&1U))fpu_status|=0x8080U; // ES+B
   }
   void round_x87_precision(Extended80& bits,std::uint32_t& flags) {
+    // C1 describes this operation's rounding, while PE is sticky.
+    fpu_status=std::uint16_t(fpu_status&~0x0200U);
     const unsigned pc=(fpu_control>>8)&3U;
     if(pc==1)fail("reserved x87 PC=01",FaultCode::UnsupportedState);
     const unsigned precision=pc==0?24U:pc==2?53U:64U;
@@ -849,8 +854,7 @@ class Cpu {
                          rc==1?negative:rc==2?!negative:false;
     flags|=32U; // x87 PE: result changed by precision narrowing
     // Intel C1 indicates the last rounded result was rounded upwards.
-    fpu_status=std::uint16_t((fpu_status&~0x0200U)|
-                             (increment?0x0200U:0U));
+    if(increment)fpu_status|=0x0200U;
     if(increment){
       ++keep;
       if(keep==(std::uint64_t{1}<<precision)){
@@ -1043,18 +1047,27 @@ class Cpu {
   // at -O2; oracle tests compare status/results to real x86 hardware.
   struct HostRound {
     std::fenv_t saved{};
-    bool valid=false;
     explicit HostRound(std::uint32_t csr) {
-      valid=std::fegetenv(&saved)==0;
-      if(!valid)throw std::runtime_error("host IEEE floating environment unavailable");
+      if(std::feholdexcept(&saved)!=0)
+        throw std::runtime_error("host non-trapping floating environment unavailable");
       const int mode=((csr>>13)&3U)==0?FE_TONEAREST:
                      ((csr>>13)&3U)==1?FE_DOWNWARD:
                      ((csr>>13)&3U)==2?FE_UPWARD:FE_TOWARDZERO;
-      if(std::fesetround(mode)!=0)
+      if(std::fesetround(mode)!=0) {
+        (void)std::fesetenv(&saved);
         throw std::runtime_error("host IEEE rounding mode unsupported");
-      (void)std::feclearexcept(FE_ALL_EXCEPT);
+      }
+      // Compute with gradual underflow. Guest DAZ/FTZ are applied explicitly.
+#if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+      _mm_setcsr(_mm_getcsr()&~0x8040U); // MXCSR FTZ and DAZ.
+#elif defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__))
+      std::uint64_t control=0;
+      asm volatile("mrs %0, fpcr":"=r"(control)::"memory");
+      control&=~((1ULL<<24)|3ULL); // FPCR FZ, AH and FIZ.
+      asm volatile("msr fpcr, %0"::"r"(control):"memory");
+#endif
     }
-    ~HostRound() noexcept {if(valid)(void)std::fesetenv(&saved);}
+    ~HostRound() noexcept {(void)std::fesetenv(&saved);}
     std::uint32_t status() const {
       const int f=std::fetestexcept(FE_ALL_EXCEPT);
       return ((f&FE_INVALID)?1U:0U)|((f&FE_DIVBYZERO)?4U:0U)|
@@ -1078,6 +1091,13 @@ class Cpu {
   }
   static bool fp64_snan(std::uint64_t raw) {
     return fp64_nan(raw) && !(raw&(1ULL<<51));
+  }
+  static std::uint64_t fp64_order_key(std::uint64_t raw) {
+    // For ordered operands the sign-adjusted bit pattern sorts numerically.
+    // The two signed zeros compare equal.
+    constexpr auto sign=0x8000000000000000ULL;
+    if((raw&~sign)==0)raw=0;
+    return (raw&sign)?~raw:(raw^sign);
   }
   std::uint64_t fp64_apply_daz(std::uint64_t raw) const {
     if((mxcsr&0x40U)&&fp64_subnormal(raw))
@@ -1134,7 +1154,7 @@ class Cpu {
     }
     status|=fp64_denormal_status(left_raw,right_raw);
     if(minmax) {
-      const double l=fp64_from_bits(left_raw),r=fp64_from_bits(right_raw);
+      const auto l=fp64_order_key(left_raw),r=fp64_order_key(right_raw);
       if(l==r)return right_raw;
       return opcode==0x5d?(l<r?left_raw:right_raw):
                              (l>r?left_raw:right_raw);
@@ -1191,7 +1211,7 @@ class Cpu {
       packed_set(result,0,8,simd_double_op(std::uint8_t(opcode),
                                            dest,src,aggregated_status));
     }else{
-      const auto rhs=read_xmm_operand(m.rm,false);
+      const auto rhs=read_xmm_operand(m.rm,true);
       // Stage both lanes before commit. An unmasked exception must not
       // modify the destination even if lane0 completed successfully.
       for(unsigned lane=0;lane<2;++lane) {
@@ -1239,7 +1259,7 @@ class Cpu {
                        fp64_snan(left_raw)||fp64_snan(right_raw)))
         status|=1U;
       simd_status(status);
-      const auto lhs=fp64_from_bits(left_raw),rhs=fp64_from_bits(right_raw);
+      const auto lhs=fp64_order_key(left_raw),rhs=fp64_order_key(right_raw);
       const bool z=unordered||lhs==rhs;
       const bool p=unordered;
       const bool c=unordered||lhs<rhs;
@@ -1301,7 +1321,7 @@ class Cpu {
         packed_set(result,i*8,8,fp64_bits(static_cast<double>(signed_int)));
       }
     }else{
-      const auto source=read_xmm_operand(m.rm,false);
+      const auto source=read_xmm_operand(m.rm,true);
       std::uint32_t flags=0;
       for(unsigned i=0;i<2;++i) {
         const auto converted=sse2_fp64_to_integer(packed_lane(source,i*8,8),4,
@@ -1325,7 +1345,7 @@ class Cpu {
     auto result=before;
     std::array<std::uint8_t,16> source{};
     if(scalar)packed_set(source,0,8,sse64_source(m.rm));
-    else source=read_xmm_operand(m.rm,false);
+    else source=read_xmm_operand(m.rm,true);
     std::uint32_t status=0;
     const bool signaling=(predicate==1U||predicate==2U||
                           predicate==5U||predicate==6U);
@@ -1337,7 +1357,7 @@ class Cpu {
       if(!unordered)status|=fp64_denormal_status(left,right);
       if((unordered&&signaling)||fp64_snan(left)||fp64_snan(right))
         status|=1U;
-      const auto a=fp64_from_bits(left),b=fp64_from_bits(right);
+      const auto a=fp64_order_key(left),b=fp64_order_key(right);
       bool matching=false;
       switch(predicate){
         case 0:matching=!unordered&&a==b;break;          // EQ
@@ -1359,7 +1379,7 @@ class Cpu {
       fail("packed integer SSE2 requires 66 prefix",FaultCode::UnsupportedOpcode);
     require_sse_state();
     const auto m=modrm();require_xmm(m.reg);
-    const auto lhs=xmm[m.reg],rhs=read_xmm_operand(m.rm,false);
+    const auto lhs=xmm[m.reg],rhs=read_xmm_operand(m.rm,true);
     auto result=lhs;
     switch(opcode){
       case 0xdb: case 0xdf: case 0xeb: { // PAND, PANDN, POR
@@ -2146,7 +2166,7 @@ inline void Cpu::extended() {
         fail("packed logical SSE2 double requires 66",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
-      const auto source=read_xmm_operand(m.rm,false);
+      const auto source=read_xmm_operand(m.rm,true);
       for(unsigned i=0;i<16;++i){
         const auto lhs=xmm[m.reg][i],rhs=source[i];
         xmm[m.reg][i]=op==0x54?(lhs&rhs):
@@ -2177,7 +2197,7 @@ inline void Cpu::extended() {
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
       const auto order=unsigned(immediate(1));
-      const auto src=read_xmm_operand(m.rm,false);
+      const auto src=read_xmm_operand(m.rm,true);
       const auto dst=xmm[m.reg];
       packed_set(xmm[m.reg],0,8,
                  packed_lane(dst,(order&1U)?8:0,8));
@@ -2232,7 +2252,7 @@ inline void Cpu::extended() {
       const auto m=modrm();require_xmm(m.reg);
       // Consume the immediate BEFORE resolving RIP-relative memory operands.
       const auto order=unsigned(immediate(1));
-      const auto source=read_xmm_operand(m.rm,false);
+      const auto source=read_xmm_operand(m.rm,true);
       for(unsigned lane=0;lane<4;++lane)
         packed_set(xmm[m.reg],lane*4,4,
                    packed_lane(source,((order>>(lane*2))&3U)*4,4));
@@ -2310,7 +2330,7 @@ inline void Cpu::extended() {
         fail("PXOR xmm requires 66 prefix",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto m=modrm();require_xmm(m.reg);
-      const auto rhs=read_xmm_operand(m.rm,false);
+      const auto rhs=read_xmm_operand(m.rm,true);
       for(unsigned i=0;i<16;++i)xmm[m.reg][i]^=rhs[i];
       return;
     }

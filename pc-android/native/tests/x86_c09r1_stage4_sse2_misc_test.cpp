@@ -120,10 +120,45 @@ void moves_and_logic(){
       "MOVHPD memory store wrong");
  std::cout<<"C09R1_STAGE4_SHUFPD_MOVMSKPD_ANDPD_MOVHPD_PASS\n";
 }
+void memory_alignment(){
+ Cpu cpu(2*1024*1024);cpu.reset(0,0x1000);cpu.cr4=0x600;cpu.a20_enabled=true;
+ // Reference outcomes from the same legacy instructions on x86 with [5001].
+ const std::vector<std::vector<std::uint8_t>> packed{
+   {0x66,0x0f,0x58,0x06,0x01,0x50},     // ADDPD
+   {0x66,0x0f,0xc2,0x06,0x01,0x50,0},   // CMPPD
+   {0x66,0x0f,0xc6,0x06,0x01,0x50,0},   // SHUFPD
+   {0x66,0x0f,0x54,0x06,0x01,0x50},     // ANDPD
+   {0xf2,0x0f,0xe6,0x06,0x01,0x50},     // CVTPD2DQ
+   {0x66,0x0f,0xe6,0x06,0x01,0x50},     // CVTTPD2DQ
+   {0x66,0x0f,0xfe,0x06,0x01,0x50},     // PADDD
+   {0x66,0x0f,0x70,0x06,0x01,0x50,0},   // PSHUFD
+   {0x66,0x0f,0xef,0x06,0x01,0x50},     // PXOR
+ };
+ for(auto code:packed) {
+   cpu.memory.write_block(0x1000,code.data(),code.size());
+   cpu.eip=0x1000;cpu.halted=false;cpu.fault.reset();
+   const auto xmm_before=cpu.xmm[0];
+   const auto mxcsr_before=cpu.mxcsr;
+   need(cpu.step()==StepResult::Faulted && cpu.fault &&
+        cpu.fault->code==cosmic_pc::FaultCode::ProtectionFault &&
+        cpu.xmm[0]==xmm_before && cpu.mxcsr==mxcsr_before,
+        "unaligned legacy m128 operand must fault before changing XMM or MXCSR");
+   code[4]=0;
+   cpu.memory.write_block(0x1000,code.data(),code.size());
+   cpu.eip=0x1000;cpu.halted=false;cpu.fault.reset();
+   need(cpu.step()==StepResult::Executed,"aligned legacy m128 operand must execute");
+ }
+ instruction(cpu,{0xf2,0x0f,0x58,0x06,0x01,0x50});   // ADDSD m64
+ instruction(cpu,{0xf2,0x0f,0xc2,0x06,0x01,0x50,0}); // CMPSD m64
+ instruction(cpu,{0xf3,0x0f,0xe6,0x06,0x01,0x50});   // CVTDQ2PD m64
+ instruction(cpu,{0x66,0x0f,0x12,0x06,0x01,0x50});   // MOVLPD m64
+ instruction(cpu,{0x66,0x0f,0x10,0x06,0x01,0x50});   // MOVUPD m128
+ instruction(cpu,{0xf3,0x0f,0x6f,0x06,0x01,0x50});   // MOVDQU m128
+}
 }
 int main(){
  try{
-   compares();moves_and_logic();
+   compares();moves_and_logic();memory_alignment();
    std::cout<<"REVERSE_WINDOWS_C09R1_STAGE4_SSE2_MISC_PASS checks="<<checks
             <<" cpuid_sse2=false windows_iso_used=false\n";
    return 0;

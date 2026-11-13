@@ -198,10 +198,50 @@ void nan_compare(){
        "UCOMISD QNaN must report unordered without IE or DE");
   std::cout<<"C09R1_STAGE4_SNAN_PAYLOAD_PASS payload_exact=true\n";
 }
+void host_controls_do_not_change_guest(){
+  Cpu cpu(2*1024*1024);
+  cpu.reset(0,0x1000);cpu.a20_enabled=true;cpu.cr4=0x600;
+  std::fenv_t saved{};
+  need(std::fegetenv(&saved)==0,"could not save the host FP environment");
+#if defined(__x86_64__) || defined(__i386__)
+  const auto host_control=(_mm_getcsr()|0x9fc0U)&~(1U<<9);
+  _mm_setcsr(host_control); // DAZ/FTZ on, divide-by-zero trap unmasked.
+#elif defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__))
+  std::uint64_t host_control=0;
+  asm volatile("mrs %0, fpcr":"=r"(host_control)::"memory");
+  host_control|=1ULL<<24;
+  asm volatile("msr fpcr, %0"::"r"(host_control):"memory");
+#endif
+  lane(cpu,0,0,0);lane(cpu,1,0,1);
+  opcode(cpu,{0xf2,0x0f,0x58,0xc1});
+  const bool add=cpu.step()==StepResult::Executed && lane(cpu,0)==1 &&
+                 (cpu.mxcsr&0x3fU)==2U;
+  lane(cpu,0,0,1);lane(cpu,1,0,0);
+  opcode(cpu,{0x66,0x0f,0x2e,0xc1});
+  const bool compare=cpu.step()==StepResult::Executed &&
+      (cpu.eflags&(Cpu::ZF|Cpu::PF|Cpu::CF))==0;
+  lane(cpu,0,0,0x3ff0000000000000ULL);
+  opcode(cpu,{0xf2,0x0f,0x5e,0xc1});
+  const bool divide=cpu.step()==StepResult::Executed &&
+                    lane(cpu,0)==0x7ff0000000000000ULL && (cpu.mxcsr&4U);
+  bool restored=true;
+#if defined(__x86_64__) || defined(__i386__)
+  restored=_mm_getcsr()==host_control;
+#elif defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__))
+  std::uint64_t current=0;
+  asm volatile("mrs %0, fpcr":"=r"(current)::"memory");
+  restored=current==host_control;
+#endif
+  (void)std::fesetenv(&saved);
+  need(add && compare,"host flush controls must not change a guest subnormal");
+  need(divide,"host unmasked divide-by-zero must remain isolated from the guest");
+  need(restored,"guest FP execution must restore host FP controls");
+}
 }
 int main(){
   try{
     daz_oracle();ftz_oracle();packed_exception_union();nan_compare();
+    host_controls_do_not_change_guest();
     std::cout<<"REVERSE_WINDOWS_C09R1_STAGE4_MXCSR_PASS checks="<<checks
              <<" iso_used=false cpuid_sse2=false\n";
     return 0;

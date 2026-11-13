@@ -125,10 +125,38 @@ void modes(){
        "reserved precision control must fail visibly, not invent result");
   std::cout<<"C09R1_STAGE4_X87_PC_RC_HW_ORACLE_PASS precision_modes=6\n";
 }
+void rounding_status_is_per_instruction(){
+  Cpu cpu(2*1024*1024);cpu.reset(0,0x1000);cpu.a20_enabled=true;
+  const std::uint16_t control=0x087f; // PC24, RC toward +infinity.
+  const std::uint32_t small_bits=0x33000000U; // 2^-25.
+  cpu.write16(0x6000,control);
+  cpu.write32(0x5000,small_bits);
+  execute(cpu,{0xd9,0x2e,0x00,0x60}); // FLDCW [6000]
+  execute(cpu,{0xd9,0xe8});           // FLD1
+  execute(cpu,{0xd9,0x06,0x00,0x50}); // FLD m32real
+  execute(cpu,{0xd8,0xc1});           // FADD ST0, ST1 (inexact, rounded up)
+  const auto first=cpu.fpu_status;
+  execute(cpu,{0xd8,0xc0});           // FADD ST0, ST0 (exact)
+  need(first==0x3220 && cpu.fpu_status==0x3020,
+       "exact FADD must clear C1 while leaving PE and TOP intact");
+#if defined(__x86_64__) || defined(__i386__)
+  alignas(16)std::array<std::uint8_t,512> saved{};
+  std::uint16_t native_first=0,native_second=0;
+  float small{};
+  std::memcpy(&small,&small_bits,sizeof(small));
+  asm volatile("fxsave %0":"=m"(saved)::"memory");
+  asm volatile("fninit; fldcw %2; fld1; flds %3; fadd %%st(1),%%st(0); fnstsw %0; "
+               "fadd %%st(0),%%st(0); fnstsw %1"
+               :"=m"(native_first),"=m"(native_second):"m"(control),"m"(small):"memory");
+  asm volatile("fxrstor %0"::"m"(saved):"memory");
+  need(first==native_first && cpu.fpu_status==native_second,
+       "successive x87 FADD status differs from physical x86");
+#endif
+}
 }
 int main(){
   try{
-    stack_faults();modes();
+    stack_faults();modes();rounding_status_is_per_instruction();
     std::cout<<"REVERSE_WINDOWS_C09R1_STAGE4_X87_PASS checks="<<checks
              <<" windows_iso_used=false full_x87_cpuid=false\n";
     return 0;
