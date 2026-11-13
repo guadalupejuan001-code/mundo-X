@@ -827,6 +827,44 @@ class Cpu {
                               (overflow?0x0200U:0U));
     if(!(fpu_control&1U))fpu_status|=0x8080U; // ES+B
   }
+  void round_x87_precision(Extended80& bits,std::uint32_t& flags) {
+    const unsigned pc=(fpu_control>>8)&3U;
+    if(pc==1)fail("reserved x87 PC=01",FaultCode::UnsupportedState);
+    const unsigned precision=pc==0?24U:pc==2?53U:64U;
+    if(precision==64)return;
+    auto exponent=ext_biased_exp(bits);
+    auto significand=ext_significand(bits);
+    if(exponent==0x7fff||!significand)return; // NaN, infinity or zero
+    if(!exponent)fail("extended subnormal x87 arithmetic rounding pending",
+                      FaultCode::UnsupportedState);
+    const unsigned drop=64-precision;
+    const auto lowmask=(std::uint64_t{1}<<drop)-1;
+    const auto lost=significand&lowmask;
+    if(!lost)return;
+    const auto half=std::uint64_t{1}<<(drop-1);
+    auto keep=significand>>drop;
+    const unsigned rc=(fpu_control>>10)&3U;
+    const bool negative=(bits[9]&0x80U)!=0;
+    const bool increment=rc==0?(lost>half||(lost==half&&(keep&1))):
+                         rc==1?negative:rc==2?!negative:false;
+    flags|=32U; // x87 PE: result changed by precision narrowing
+    // Intel C1 indicates the last rounded result was rounded upwards.
+    fpu_status=std::uint16_t((fpu_status&~0x0200U)|
+                             (increment?0x0200U:0U));
+    if(increment){
+      ++keep;
+      if(keep==(std::uint64_t{1}<<precision)){
+        keep>>=1;++exponent;
+        if(exponent>=0x7fff)
+          fail("narrow precision x87 overflow pending",FaultCode::UnsupportedState);
+      }
+    }
+    significand=keep<<drop;
+    for(unsigned byte=0;byte<8;++byte)
+      bits[byte]=std::uint8_t(significand>>(byte*8));
+    bits[8]=std::uint8_t(exponent);
+    bits[9]=std::uint8_t((exponent>>8)|(negative?0x80U:0));
+  }
   void fpu_push(Extended80 value) {
     const auto top=(fpu_top()+7U)&7U;
     if(fpu_tag(top)!=3U) {
@@ -2756,18 +2794,18 @@ inline void Cpu::execute(std::uint8_t op) {
           if(fpu_status&0x0080U)
             fail("x87 pending exception must be serviced before arithmetic",
                  (cr0&0x20U)?FaultCode::X87FloatingPoint:FaultCode::UnsupportedState);
-          // Only full extended precision and round-to-nearest are modeled.
-          // A different precision/RC is rejected rather than silently using
-          // the host's 64/113-bit long double rounding.
-          if((fpu_control&0x0f00U)!=0x0300U)
-            fail("x87 non-extended-precision or non-nearest rounding pending",
-                 FaultCode::UnsupportedState);
+          if(((fpu_control>>8)&3U)==1U)
+            fail("reserved x87 precision mode PC=01",FaultCode::UnsupportedState);
+          // x87 PC=24/53/64 and RC=nearest/down/up/zero. The 80-bit
+          // significand is narrowed below, independent of GPU or QSSD.
+          // Arithmetic still relies on host long double until a complete
+          // software extended80 oracle is integrated on ARM64.
           const auto lhs=extended_to_long_double(fpu_peek());
           const auto rhs=extended_to_long_double(fpu_peek(reg));
           long double answer=0;
           std::uint32_t flags=0;
           {
-            HostRound rounding(0x1f80);
+            HostRound rounding(0x1f80U|(((fpu_control>>10)&3U)<<13));
             volatile long double a=lhs,b=rhs;
             if((encoding&0xf8U)==0xc0) {
               volatile long double result=a+b;answer=result;
@@ -2780,14 +2818,15 @@ inline void Cpu::execute(std::uint8_t op) {
             }
             flags|=rounding.status();
           }
-          // Intel keeps the top-of-stack unmodified when an exception is
-          // unmasked. The #MF is deferred until FWAIT or a waiting x87 op.
+          auto converted=extended_from_long_double(answer);
+          round_x87_precision(converted,flags);
+          // Intel keeps ST0 unchanged when a detected exception is unmasked.
+          // #MF is deferred to FWAIT; the sticky flags remain observable.
           fpu_status|=std::uint16_t(flags);
           if(flags&~std::uint32_t(fpu_control)&0x3fU){
             fpu_status|=0x8080U; // ES+B; FNSTSW exposes sticky condition.
             return;
           }
-          const auto converted=extended_from_long_double(answer);
           const auto slot=fpu_slot(0);
           x87[slot]=converted;fpu_tag_set(slot,classify_ext(converted));
           fpu_ip=start_ip_;return;
