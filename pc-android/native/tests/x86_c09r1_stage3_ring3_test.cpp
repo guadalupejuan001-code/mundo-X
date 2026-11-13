@@ -125,7 +125,7 @@ void test(){
       need(lane(cpu,0)==0x400c000000000000ULL,
            "guest ADD SD did not compute user 3.5 before INT");
     }
-    if(cpu.cpl()==0&&cpu.eip==0x13000+13){
+    if(cpu.cpl()==0&&cpu.eip==0x13000+15){
       clobbered=lane(cpu,0)==0;
       need(cpu.fpu_tags==0xffff,
            "kernel FNINIT should clear x87 state before FXRSTOR");
@@ -140,7 +140,7 @@ void test(){
   }
   need(cpu.halted&&cpu.cpl()==0&&cpu.eip==0x13401,
        "guest did not exit via kernel INT81 and HLT");
-  need(user_entered&&enters==1&&clobbered&&restored,
+  need(user_entered&&enters==1&&returns==1&&clobbered&&restored,
        "real Ring3↔Ring0 FXSAVE context transitions incomplete");
   need(lane(cpu,0)==0x401c000000000000ULL&&
        lane(cpu,0,8)==0x402a800000000000ULL,
