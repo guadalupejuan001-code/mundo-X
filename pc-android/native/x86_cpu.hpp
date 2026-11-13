@@ -201,6 +201,7 @@ class Cpu {
     gdtr = {0, 0}; idtr = {0x3ff, 0};
     ldtr = {}; tr = {};
     x87_ignne_ = false;
+    interrupt_shadow_ = false;
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
     transaction_ = false; journal_.clear(); decoded_.clear();
   }
@@ -295,6 +296,8 @@ class Cpu {
                           cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
                           fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_};
+    const bool was_shadowed=interrupt_shadow_;
+    interrupt_shadow_=false;
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -366,6 +369,10 @@ class Cpu {
           : (cache_[CS].big != address_override_);
       execute(op);
       if (fault) fail(fault->reason, fault->code);
+      // Only the first instruction in a consecutive blocking sequence
+      // inhibits IRQ delivery. A bounded REP step consumes the shadow at
+      // the first interruptible element boundary.
+      if(was_shadowed)interrupt_shadow_=false;
       if (!ip_written_) eip = cursor_ & code_mask();
       eflags |= 2;
       ++instructions;
@@ -447,9 +454,10 @@ class Cpu {
   }
 
   // External hardware IRQ is not a software INT: it ignores gate DPL,
-  // uses the next instruction's IP and obeys IF. Pending IRQs remain with PIC.
+  // uses the next instruction's IP and obeys IF and the interrupt shadow.
+  // Pending IRQs remain with the originating device/controller.
   bool raise_external_irq(std::uint8_t vector) {
-    if (!flag(IF) || fault) return false;
+    if (!flag(IF) || interrupt_shadow_ || fault) return false;
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
                           cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
@@ -484,6 +492,7 @@ class Cpu {
  private:
   struct WaitingForX87 {};
   bool x87_ignne_ = false;
+  bool interrupt_shadow_ = false;
 
   struct Trap : std::runtime_error {
     FaultCode code;
@@ -3470,7 +3479,10 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x0e: push(segments[CS], bytes); return;
     case 0x0f: extended(); return;
     case 0x16: push(segments[SS], bytes); return;
-    case 0x17: load_segment(SS, std::uint16_t(pop(bytes))); return;
+    case 0x17:
+      load_segment(SS, std::uint16_t(pop(bytes)));
+      interrupt_shadow_=true;
+      return;
     case 0x1e: push(segments[DS], bytes); return;
     case 0x1f: load_segment(DS, std::uint16_t(pop(bytes))); return;
     case 0x60: {
@@ -3524,7 +3536,10 @@ inline void Cpu::execute(std::uint8_t op) {
       if (m.group > GS || (op == 0x8e && m.group == CS))
         fail("invalid segment register encoding", FaultCode::InvalidInstruction);
       if (op == 0x8c) put(m.rm, m.rm.is_register ? bytes : 2, segments[m.group]);
-      else load_segment(m.group, std::uint16_t(get(m.rm, 2)));
+      else {
+        load_segment(m.group, std::uint16_t(get(m.rm, 2)));
+        if(m.group==SS)interrupt_shadow_=true;
+      }
       return;
     }
     case 0x8d: { const auto m = modrm(); require_memory(m.rm); put_reg(m.reg, bytes, operand_offset(m.rm)); return; }
@@ -3726,6 +3741,7 @@ inline void Cpu::execute(std::uint8_t op) {
       set_flag(IF, false); return;
     case 0xfb:
       if (cpl() > ((eflags >> 12) & 3U)) fail("STI requires IOPL", FaultCode::ProtectionFault);
+      interrupt_shadow_=!flag(IF);
       set_flag(IF, true); return;
     case 0xfc: set_flag(DF, false); return;
     case 0xfd: set_flag(DF, true); return;

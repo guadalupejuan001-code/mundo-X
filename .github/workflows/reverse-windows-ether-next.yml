@@ -14,7 +14,11 @@ on:
       - "pc-android/native/x86_x87_state.inc"
       - "pc-android/native/pc_8042.hpp"
       - "pc-android/native/pc_machine.hpp"
+      - "pc-android/native/boot_media.hpp"
       - "pc-android/native/tests/pc_8042_test.cpp"
+      - "pc-android/native/tests/pc_iso_test.cpp"
+      - "pc-android/native/tests/pc_video_test.cpp"
+      - "pc-android/native/tests/x86_bus_c06_test.cpp"
       - "pc-android/native/tests/x86_cpu_profile_test.cpp"
       - "pc-android/native/tests/x86_sse2_packed_oracle_test.cpp"
       - "pc-android/native/tests/x86_c09r1_stage5_cvt_fxsr_test.cpp"
@@ -108,4 +112,16 @@ jobs:
         with:
           name: c02-cpu-conformance-${{ matrix.architecture }}
           path: build/ether-next/c02-cpu-conformance.log
+          if-no-files-found: error
+      - name: Verify C03 El Torito firmware, IRQ delivery and guest VGA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/ether-next --parallel 2 --target pc_iso_test pc_video_test x86_bus_c06_test
+          ctest --test-dir build/ether-next --output-on-failure -V -R '^(pc_iso|pc_video|x86_bus_c06)$' \
+            | tee build/ether-next/c03-firmware-vga.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c03-firmware-vga-${{ matrix.architecture }}
+          path: build/ether-next/c03-firmware-vga.log
           if-no-files-found: error

@@ -304,8 +304,8 @@ int main() {
                   "CD boot BDA equipment must match the available hardware");
              need(pc.cpu.read8(0x475) == 0,
                   "A mounted CD must not advertise a fixed disk in the BDA");
-             need(pc.cpu.read16(kParameters + 2) == 0,
-                  "CD extended parameters must not advertise valid CHS geometry");
+             need(pc.cpu.read16(kParameters + 2) == 4,
+                  "CD extended parameters must report removable media without CHS geometry");
              need(pc.cpu.read32(kParameters + 4) == 0 &&
                       pc.cpu.read32(kParameters + 8) == 0 &&
                       pc.cpu.read32(kParameters + 12) == 0,
@@ -390,6 +390,31 @@ int main() {
                   "El Torito status boot image coordinates are wrong");
              need(fixture.reads->empty() && pc.disk_reads == 0,
                   "Status query should not read disk payload");
+         }},
+        {"optical discovery rejects unsupported legacy services with carry", [] {
+             PcMachine pc(2 * 1024 * 1024);
+             const auto fixture = mount(pc, isoFixture(Bytes{
+                 0xb4, 0x08, 0xcd, 0x13, 0xa3, 0x00, 0x90, 0x9c, 0x58, 0xa3, 0x02, 0x90,
+                 0xb4, 0x01, 0xcd, 0x13, 0xa3, 0x04, 0x90, 0x9c, 0x58, 0xa3, 0x06, 0x90,
+                 0xb4, 0x15, 0xcd, 0x13, 0xa3, 0x08, 0x90, 0x9c, 0x58, 0xa3, 0x0a, 0x90,
+                 0xb4, 0x01, 0xcd, 0x13, 0xa3, 0x0c, 0x90, 0x9c, 0x58, 0xa3, 0x0e, 0x90,
+                 0xb4, 0x45, 0xcd, 0x13, 0xa3, 0x10, 0x90, 0x9c, 0x58, 0xa3, 0x12, 0x90,
+                 0xb2, 0x7f, 0xbe, 0x40, 0x7d, 0xb8, 0x01, 0x4b, 0xcd, 0x13, 0xf4}));
+             run(pc);
+             need(!pc.cpu.fault && pc.cpu.halted && !pc.cpu.flag(Cpu::CF),
+                  "Optical BIOS probes must return to guest and support El Torito DL=7Fh");
+             const auto status = [&](unsigned i, unsigned result, bool carry) {
+                 const auto at = 0x9000 + i * 4;
+                 return (pc.cpu.read16(at) >> 8) == result &&
+                        bool(pc.cpu.read16(at + 2) & 1) == carry;
+             };
+             need(status(0, 1, true) && status(1, 1, true),
+                  "Optical BIOS must reject CHS and report its last error");
+             need(status(2, 1, false) && status(3, 0, false),
+                  "Optical type is not fixed and successful query clears old status");
+             need(status(4, 1, true), "Unadvertised media locks must return AH=01h and CF");
+             need(pc.cpu.read8(kStatusPacket + 2) == 0xe0 && fixture.reads->empty(),
+                  "All-drive status must identify the boot CD without media I/O");
          }},
         {"extended read rejects an unmounted drive", [] {
              PcMachine pc(2 * 1024 * 1024);

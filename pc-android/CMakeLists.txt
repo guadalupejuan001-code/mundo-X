@@ -25,7 +25,7 @@ if (BUILD_TESTING)
     foreach(name sparse_ram x86_cpu x86_cpu_profile x86_protected_real_transition x86_lock_rmw
             x86_sse2_packed_oracle x86_c09r1_stage5_cvt_fxsr x86_sse_fp32 x86_sse_legacy_forms
             x86_mmx x86_x87_state x86_x87_arithmetic_oracle x86_c09r1_fxstate x86_c09r1_stage3_x87_mf x86_cpl_c05
-            x86_long_mode x86_alu64_oracle
+            x86_long_mode x86_bus_c06 x86_alu64_oracle
             x86_enter_oracle boot_media pc_machine pc_8042 pc_iso pc_memory pc_memory_fabric
             pc_video pc_quantum pc_autonomous)
         add_executable(${name}_test native/tests/${name}_test.cpp)

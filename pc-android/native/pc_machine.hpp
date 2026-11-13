@@ -36,6 +36,11 @@ class PcMachine {
   void enable_guest_restart() noexcept { guest_restart_enabled_=true; }
   GuestRestart guest_restart() const noexcept { return guest_restart_; }
   const BootModeProgress& boot_mode_progress() const noexcept { return boot_mode_progress_; }
+  // A BIOS bridge may provide DL=80h while the current boot source is DL=E0h.
+  void set_bios_hard_disk_attached(bool attached) {
+    bios_hard_disk_attached_=attached;
+    if(reader_)sync_bios_hard_disk_count();
+  }
   // One page at the unused tail of the reserved 128-MiB VBE aperture stays
   // outside normal guest RAM. Its first 256 bytes are backed by Ether Memory.
   // The maximum 8K framebuffer ends 1,507,328 bytes before this page.
@@ -141,7 +146,7 @@ class PcMachine {
     cpu.memory.write_block(std::size_t(plan_.load_segment)*16,plan_.image.data(),plan_.image.size());
     // BIOS data area: video mode 3, 80 columns, page0, conventional RAM.
     cpu.write16(0x410,0x0020);cpu.write16(0x413,640);cpu.write8(0x449,3);cpu.write16(0x44a,80);cpu.write16(0x44c,4000);
-    cpu.write8(0x484,24);cpu.write8(0x475,plan_.drive==0x80?1:0);clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
+    cpu.write8(0x484,24);sync_bios_hard_disk_count();clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
   }
   void run(unsigned budget) {
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault||guest_restart_!=GuestRestart::None)return;
@@ -399,6 +404,7 @@ class PcMachine {
   PcVideo video_;
   Pc8042 kbc_;  // Owned subset of physical PC/AT 8042; no simulated IRQs.
   bool guest_restart_enabled_=false;
+  bool bios_hard_disk_attached_=false;
   GuestRestart guest_restart_=GuestRestart::None;
   BootModeProgress boot_mode_progress_;
   Reader reader_;
@@ -418,15 +424,63 @@ class PcMachine {
   std::uint32_t physical(unsigned segment,std::uint16_t off)const{return cpu.real_mode_segment_address(segment,off);}
   void clear_screen(){row_=col_=0;for(unsigned i=0;i<2000;++i){cpu.memory[0xb8000+i*2]=' ';cpu.memory[0xb8001+i*2]=7;}sync_cursor();}
   void sync_cursor(){cpu.memory[0x450]=col_;cpu.memory[0x451]=row_;}
-  void emit(std::uint8_t c){
-    if(c=='\r')col_=0;
-    else if(c=='\n')++row_;
-    else if(c==8){if(col_)--col_;}
-    else if(c!=7){const auto at=0xb8000+(row_*80+col_)*2;cpu.write8(at,c);cpu.write8(at+1,7);if(++col_==80){col_=0;++row_;}}
-    if(row_>=25){for(unsigned i=0;i<24*160;++i)cpu.write8(0xb8000+i,cpu.read8(0xb8000+160+i));for(unsigned i=24*80;i<25*80;++i){cpu.write8(0xb8000+i*2,' ');cpu.write8(0xb8001+i*2,7);}row_=24;}
+  template <class Write, class Scroll>
+  static void emit_text(std::uint8_t character,std::uint8_t attribute,
+                        unsigned& row,unsigned& column,Write write,Scroll scroll){
+    switch(character){
+      case '\r':column=0;break;
+      case '\n':++row;break;
+      case 8:if(column)--column;break;
+      case 7:break;
+      default:
+        write(row*80+column,std::uint16_t(attribute<<8)|character);
+        if(++column==80){column=0;++row;}
+    }
+    if(row==25){scroll();row=24;}
+  }
+  void emit(std::uint8_t character){
+    auto row=row_,column=col_;
+    emit_text(character,7,row,column,
+      [&](unsigned cell,std::uint16_t value){cpu.write16(0xb8000+cell*2,value);},
+      [&]{
+        for(unsigned i=0;i<24*80;++i)cpu.write16(0xb8000+i*2,cpu.read16(0xb8000+(i+80)*2));
+        for(unsigned i=24*80;i<25*80;++i)cpu.write16(0xb8000+i*2,0x0720);
+      });
+    row_=row;col_=column;
     sync_cursor();
   }
+  void video_write_string(){ // INT 10h AH=13h, the supported VGA text page.
+    const unsigned mode=lo(Cpu::EAX),count=cpu.reg16(Cpu::ECX);
+    auto row=unsigned(hi(Cpu::EDX)),column=unsigned(lo(Cpu::EDX));
+    if(video_.info().graphics||hi(Cpu::EBX)||mode>3||row>=25||column>=80)
+      missing("BIOS de vídeo: modo, cursor o página inválidos para escribir una cadena");
+    const unsigned byte_width=(mode&2)?2:1;
+    const unsigned offset=cpu.reg16(Cpu::EBP);
+    if(count*byte_width>0x10000U-offset)
+      missing("BIOS de vídeo: la cadena rebasa ES:BP");
+
+    // Compose the text update locally so repeated scrolling commits at most
+    // one VGA page. Validate source bytes through the guest bus, including A20.
+    std::array<std::uint16_t,80*25> cells{};
+    for(unsigned i=0;i<cells.size();++i)cells[i]=cpu.read16(0xb8000+i*2);
+    const auto original=cells;
+    for(unsigned i=0;i<count;++i){
+      const auto source=physical(Cpu::ES,std::uint16_t(offset+i*byte_width));
+      const auto character=cpu.read8(source);
+      const auto attribute=(mode&2)?cpu.read8(source+1):lo(Cpu::EBX);
+      emit_text(character,attribute,row,column,
+        [&](unsigned cell,std::uint16_t value){cells[cell]=value;},
+        [&]{
+          std::copy(cells.begin()+80,cells.end(),cells.begin());
+          std::fill(cells.end()-80,cells.end(),0x0720);
+        });
+    }
+    for(unsigned i=0;i<cells.size();++i)
+      if(cells[i]!=original[i])cpu.write16(0xb8000+i*2,cells[i]);
+    if(mode&1){row_=row;col_=column;sync_cursor();}
+  }
   [[noreturn]] void missing(const std::string& s){pending=s;cpu.fail(s);}
+  void sync_bios_hard_disk_count(){cpu.write8(0x475,bios_hard_disk_attached_||plan_.drive==0x80?1:0);}
   void disk_result(std::uint8_t err){last_disk_status_=err;high(0,err);carry(err!=0);}
   bool read_disk(std::uint64_t lba,unsigned count,std::uint32_t dest){
     if(!reader_||count==0||count>127)return false;
@@ -438,8 +492,10 @@ class PcMachine {
     ++disk_reads;return true;
   }
   void disk_bios(){
-    if(lo(2)!=plan_.drive){disk_result(1);return;}
     const auto fn=hi(0);
+    const bool optical=plan_.logical_sector_size==BootMedia::kCdSectorSize;
+    const bool el_torito_all=optical&&fn==0x4b&&lo(2)==0x7f;
+    if(lo(2)!=plan_.drive&&!el_torito_all){disk_result(1);return;}
     if(fn==0){disk_result(0);return;}
     if(fn==1){high(0,last_disk_status_);carry(last_disk_status_!=0);return;}
     if(fn==2){
@@ -451,11 +507,17 @@ class PcMachine {
     }
     if(fn==3||fn==0x43){disk_result(3);return;} // Read-only media in this phase.
     if(fn==8){
+      if(optical){disk_result(1);return;}
       const auto total=media_bytes_/512, cylinders=std::max<std::uint64_t>(1,std::min<std::uint64_t>(1024,(total+1007)/1008));
       const auto maxc=unsigned(cylinders-1);high(1,maxc&255);low(1,63|((maxc>>2)&0xc0));high(2,15);low(2,1);low(3,0);disk_result(0);return;
     }
-    if(fn==0x15){high(0,3);const auto sectors=media_bytes_/plan_.logical_sector_size;cpu.set_reg16(1,(sectors>>16)&0xffff);cpu.set_reg16(2,sectors&0xffff);carry(false);return;}
-    if(fn==0x41){if(cpu.reg16(3)!=0x55aa){disk_result(1);return;}cpu.set_reg16(3,0xaa55);cpu.set_reg16(1,5);high(0,0x30);carry(false);return;}
+    if(fn==0x15){
+      disk_result(0);
+      high(0,optical?1:3);
+      if(!optical){const auto sectors=std::min<std::uint64_t>(media_bytes_/512,0xffffffffULL);cpu.set_reg16(1,sectors>>16);cpu.set_reg16(2,sectors&0xffff);}
+      return;
+    }
+    if(fn==0x41){if(cpu.reg16(3)!=0x55aa){disk_result(1);return;}disk_result(0);cpu.set_reg16(3,0xaa55);cpu.set_reg16(1,1);high(0,0x30);return;}
     if(fn==0x42){
       const auto dap=physical(3,cpu.reg16(6));
       if(cpu.read8(dap)<16||cpu.read8(dap+1)!=0){disk_result(1);return;}
@@ -466,17 +528,17 @@ class PcMachine {
     }
     if(fn==0x48){
       const auto p=physical(3,cpu.reg16(6));if(cpu.read16(p)<26){disk_result(1);return;}
-      const bool chs=plan_.logical_sector_size==512;
+      const bool chs=!optical;
       const auto cylinders=std::max<std::uint64_t>(1,std::min<std::uint64_t>(1024,(media_bytes_/512+1007)/1008));
-      cpu.write16(p,26);cpu.write16(p+2,chs?2:0);cpu.write32(p+4,chs?cylinders:0);cpu.write32(p+8,chs?16:0);cpu.write32(p+12,chs?63:0);
+      cpu.write16(p,26);cpu.write16(p+2,chs?2:4);cpu.write32(p+4,chs?cylinders:0);cpu.write32(p+8,chs?16:0);cpu.write32(p+12,chs?63:0);
       const auto n=media_bytes_/plan_.logical_sector_size;cpu.write32(p+16,n&0xffffffff);cpu.write32(p+20,n>>32);cpu.write16(p+24,plan_.logical_sector_size);disk_result(0);return;
     }
-    if(fn==0x4b&&plan_.logical_sector_size==2048){
+    if(fn==0x4b&&optical){
       // El Torito status/terminate uses AL=1 to query; no emulation to terminate.
       if(lo(0)>1){disk_result(1);return;}
       const auto p=physical(3,cpu.reg16(6));for(unsigned i=0;i<19;++i)cpu.write8(p+i,0);cpu.write8(p,0x13);cpu.write8(p+2,plan_.drive);cpu.write32(p+4,plan_.source_offset/2048);cpu.write16(p+12,plan_.load_segment);cpu.write16(p+14,plan_.image.size()/512);disk_result(0);return;
     }
-    std::ostringstream s;s<<"BIOS INT 13h función 0x"<<std::hex<<unsigned(fn)<<" pendiente";missing(s.str());
+    disk_result(1); // The guest may probe optional BIOS disk services.
   }
   void video_bios(){
     const auto fn=hi(0);
@@ -494,6 +556,7 @@ class PcMachine {
       return;
     }
     if(fn==0x0e){emit(lo(0));return;}
+    if(fn==0x13){video_write_string();return;}
     if(fn==1)return; // Cursor shape has no semantic effect on the text framebuffer.
     if(fn==2){if(hi(3)!=0||hi(2)>=25||lo(2)>=80)missing("BIOS de vídeo: cursor o página inválidos");row_=hi(2);col_=lo(2);sync_cursor();return;}
     if(fn==3){if(hi(3)!=0)missing("BIOS de vídeo: página distinta de cero");cpu.set_reg16(1,0x0607);cpu.set_reg16(2,(row_<<8)|col_);return;}
