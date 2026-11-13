@@ -89,7 +89,7 @@ class Cpu {
   // Architectural XMM/MXCSR owned by the original guest CPU.
   std::array<std::array<std::uint8_t,16>,16> xmm{};
   std::uint32_t mxcsr=0x1f80;
-  static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
+  static constexpr std::uint32_t kMxcsrMask=0x0000ffffU; // DAZ supported in software; FTZ supported
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -1057,8 +1057,16 @@ class Cpu {
   std::uint64_t simd_double_op(std::uint8_t opcode,
                                std::uint64_t left_raw,std::uint64_t right_raw) {
     std::uint32_t status=0;
-    if((opcode!=0x51&&fp64_subnormal(left_raw)) ||
-       fp64_subnormal(right_raw))status|=2U;
+    // MXCSR.DAZ: treat subnormal input as signed zero without DE.
+    // Without DAZ, preserve the exact input and raise sticky DE.
+    if(opcode!=0x51&&fp64_subnormal(left_raw)){
+      if(mxcsr&0x40U)left_raw&=0x8000000000000000ULL;
+      else status|=2U;
+    }
+    if(fp64_subnormal(right_raw)){
+      if(mxcsr&0x40U)right_raw&=0x8000000000000000ULL;
+      else status|=2U;
+    }
     if((opcode==0x5d||opcode==0x5f) &&
        (fp64_nan(left_raw)||fp64_nan(right_raw))) {
       if(fp64_snan(left_raw)||fp64_snan(right_raw))status|=1U;
@@ -1138,7 +1146,14 @@ class Cpu {
       const auto left_raw=packed_lane(xmm[m.reg],0,8);
       const auto right_raw=sse64_source(m.rm);
       std::uint32_t status=0;
-      if(fp64_subnormal(left_raw)||fp64_subnormal(right_raw))status|=2U;
+      if(fp64_subnormal(left_raw)){
+        if(mxcsr&0x40U)left_raw&=0x8000000000000000ULL;
+        else status|=2U;
+      }
+      if(fp64_subnormal(right_raw)){
+        if(mxcsr&0x40U)right_raw&=0x8000000000000000ULL;
+        else status|=2U;
+      }
       const bool unordered=fp64_nan(left_raw)||fp64_nan(right_raw);
       if(unordered && (opcode==0x2f||
                        fp64_snan(left_raw)||fp64_snan(right_raw)))
@@ -1175,11 +1190,15 @@ class Cpu {
       const unsigned bytes=is_long_mode()&&(rex_&8U)?8U:4U;
       const auto raw=sse64_source(m.rm);
       const auto value=fp64_from_bits(raw);
-      std::uint32_t status=fp64_subnormal(raw)?2U:0U;
+      std::uint32_t status=0;
+      const auto adjusted=(fp64_subnormal(raw)&& (mxcsr&0x40U))
+           ?(raw&0x8000000000000000ULL):raw;
+      if(fp64_subnormal(raw)&&!(mxcsr&0x40U))status|=2U;
+      const auto converted=fp64_from_bits(adjusted);
       long double rounded=0;
       {
         HostRound mode(mxcsr);
-        volatile double input=value;
+        volatile double input=converted;
         // CVTT always truncates, CVT uses MXCSR.RC (nearest even etc).
         volatile double result=opcode==0x2c?std::trunc(input):std::rint(input);
         rounded=static_cast<long double>(result);
@@ -1187,9 +1206,9 @@ class Cpu {
       }
       const auto lower=bytes==8?-0x1p63L:-0x1p31L;
       const auto upper=bytes==8?0x1p63L:0x1p31L;
-      const bool invalid=!std::isfinite(value)||rounded<lower||rounded>=upper;
+      const bool invalid=!std::isfinite(converted)||rounded<lower||rounded>=upper;
       if(invalid){status|=1U;status&=~32U;}
-      else if(static_cast<long double>(value)!=rounded)status|=32U;
+      else if(static_cast<long double>(converted)!=rounded)status|=32U;
       simd_status(status);
       const auto indefinite=bytes==8?(1ULL<<63):(1ULL<<31);
       if(invalid)put_reg(m.reg,bytes,indefinite);
