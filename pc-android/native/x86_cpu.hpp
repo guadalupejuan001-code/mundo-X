@@ -2,9 +2,9 @@
 
 // COSMIC PC: an original, bounded x86 interpreter.
 // Instruction encodings and architectural semantics follow the Intel SDM.
-// This is not a complete x86 processor: unsupported instructions/states stop
-// with an explicit fault. Ring-0 protected/long-mode execution is a limited
-// subset, not a Windows-compatible CPU. No x87, APIC, privilege switching or JIT.
+// Unsupported instructions and states stop with an explicit fault. The CPU
+// models a subset of x86 real, protected and long modes, including CPL0/CPL3
+// privilege transitions and guest x87, MMX and XMM state.
 // Each step executes one instruction, or ONE element of a REP string operation,
 // so an untrusted guest cannot monopolize a host thread inside a single step.
 // instructions counts these bounded execution steps, not hardware retired ops.
@@ -63,7 +63,7 @@ struct Fault {
   }
 };
 
-enum class StepResult { Executed, Halted, Faulted };
+enum class StepResult { Executed, Halted, Faulted, WaitingForX87 };
 
 class Cpu {
  public:
@@ -80,6 +80,7 @@ class Cpu {
     std::uint64_t base = 0;
     std::uint32_t limit = 0;
     bool valid = false;
+    bool tss16 = false;
   };
   struct SegmentCache {
     std::uint64_t base = 0;
@@ -199,9 +200,17 @@ class Cpu {
     cache_[CS].selector = cs; cache_[CS].base = std::uint64_t(cs) << 4;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
     ldtr = {}; tr = {};
+    x87_ignne_ = false;
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
     transaction_ = false; journal_.clear(); decoded_.clear();
   }
+  // This CPU asserts FERR# as soon as the unmasked condition is pending.
+  // An asserted IGNNE# allows a waiting instruction to execute while the
+  // existing error remains visible to the external circuit.
+  bool x87_ferr_asserted() const noexcept {
+    return !(cr0 & 0x20U) && (fpu_status & 0x0080U);
+  }
+  void set_x87_ignne(bool active) noexcept { x87_ignne_ = active; }
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -291,6 +300,7 @@ class Cpu {
     int delivered_vector=-1;
     std::uint32_t delivered_error=0;
     std::uint64_t delivered_linear=0;
+    bool waiting_for_x87=false;
     auto publish_trace=[&]() noexcept {
       if(!step_trace_hook)return;
       try {
@@ -304,7 +314,7 @@ class Cpu {
         record.page_walks_delta=page_walks-trace_walks_before;
         record.mode_before=trace_mode_before;record.mode_after=mode_name();
         record.outcome=fault?"fault":delivered_vector>=0?"exception-delivered":
-                       halted?"halted":"executed";
+                       waiting_for_x87?"waiting-for-x87":halted?"halted":"executed";
         record.decoded_bytes=decoded_;
         record.delivered_vector=delivered_vector;
         record.delivered_error=delivered_error;
@@ -361,6 +371,10 @@ class Cpu {
       ++instructions;
       transaction_ = false; journal_.clear();
       return halted ? StepResult::Halted : StepResult::Executed;
+    } catch (const WaitingForX87&) {
+      rollback(before);
+      waiting_for_x87=true;
+      return StepResult::WaitingForX87;
     } catch (const Trap& t) {
       rollback(before);
       // Intel preserves MXCSR sticky status across #XM/#UD on an unmasked
@@ -370,10 +384,32 @@ class Cpu {
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
       const int vector = exception_vector(t.code);
+      const bool real_fp_exception = t.code == FaultCode::X87FloatingPoint ||
+          t.code == FaultCode::SimdFloatingPoint || t.code == FaultCode::DeviceNotAvailable ||
+          t.code == FaultCode::InvalidInstruction;
+      if (is_real_mode() && real_fp_exception) {
+        // Deliver FP/SIMD exception vectors regardless of IF or BIOS hooks.
+        // An empty or inaccessible vector preserves the terminal diagnostic.
+        try {
+          transaction_ = true;
+          const auto target = real_ivt_target(std::uint8_t(vector));
+          if (target.cs || target.ip) {
+            dispatch_real_interrupt(target, start_ip_);
+            transaction_ = false; journal_.clear();
+            ++instructions;
+            delivered_vector = vector;
+            fault.reset();
+            return StepResult::Executed;
+          }
+          transaction_ = false;
+        } catch (const std::exception&) {
+          rollback(before);
+          if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
+        }
+      }
       // Synchronous architectural exception: restart faulting instruction
       // after the guest handler completes. Unsupported/host failures stop.
-      if (vector >= 0 && !is_real_mode() &&
-          (is_long_mode() || (!(efer & 0x400) && cache_[CS].big))) {
+      if (vector >= 0 && !is_real_mode()) {
         auto deliver = [&](unsigned number, bool with_error, std::uint32_t code) -> bool {
           try {
             transaction_ = true;
@@ -421,14 +457,7 @@ class Cpu {
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
-        const auto entry=std::uint32_t(vector)*4;
-        if(entry+3>idtr.limit)
-          fail("hardware IRQ vector is outside real-mode IVT",FaultCode::SegmentLimit);
-        const auto target=read16(idtr.base+entry);
-        const auto segment=read16(idtr.base+entry+2);
-        push(eflags,2);push(segments[CS],2);push(eip,2);
-        eflags &= ~(IF|TF);
-        far_transfer(segment,target,2);
+        dispatch_real_interrupt(real_ivt_target(vector), eip);
       } else {
         dispatch_idt(vector,eip,false,false,0);
       }
@@ -453,6 +482,9 @@ class Cpu {
   }
 
  private:
+  struct WaitingForX87 {};
+  bool x87_ignne_ = false;
+
   struct Trap : std::runtime_error {
     FaultCode code;
     std::string reason;
@@ -1404,14 +1436,26 @@ class Cpu {
     const auto magnitude=bits&~sign;
     bool tiny=magnitude<min_normal&&(magnitude||(result_status&16U));
     std::uint32_t normal_precision=result_status&32U;
-    if((opcode==0x59||opcode==0x5e)&&magnitude<=min_normal&&
-       (magnitude||(result_status&16U))&&(result_status&32U)) {
+    const bool near_tiny=magnitude<=min_normal&&(magnitude||(result_status&16U));
+    const bool overflow_traps=(result_status&8U)&&!(mxcsr&(1U<<10));
+    if((near_tiny||overflow_traps)&&(result_status&32U)&&
+       (opcode==0x59||opcode==0x5e||overflow_traps)) {
       // Intel detects tininess from the arithmetic rounded at its precision
       // with an unbounded exponent. Rescale the original significands to a
       // portable normal operation, avoiding host underflow/tininess policy.
       constexpr int bias=single?127:1023;
       constexpr unsigned shift=single?23:52;
-      const auto l=simd_normalized(left_magnitude),r=simd_normalized(right_magnitude);
+      auto l=simd_normalized(left_magnitude),r=simd_normalized(right_magnitude);
+      if(opcode==0x58||opcode==0x5c) {
+        // Overflowing finite sums cannot be produced by a zero plus a
+        // representable operand. Uniform rescaling preserves their sum.
+        const auto maximum=std::max(l.second,r.second);
+        const auto scale=[&](auto& value) {
+          const auto exponent=std::max(1,bias+value.second-maximum);
+          value.first=(value.first&(min_normal-1))|(Bits(exponent)<<shift);
+        };
+        scale(l);scale(r);
+      }
       const auto lbits=l.first|(left_raw&sign),rbits=r.first|(right_raw&sign);
       Float a{},b{};
       std::memcpy(&a,&lbits,sizeof(a));std::memcpy(&b,&rbits,sizeof(b));
@@ -1419,11 +1463,14 @@ class Cpu {
       volatile Float normal=compute_simd_float(opcode,a,b);
       const Float normal_value=normal;
       Bits normalized{};std::memcpy(&normalized,&normal_value,sizeof(normalized));
-      const auto exponent=int((normalized&~sign)>>shift)-bias+l.second+
-                          (opcode==0x59?r.second:-r.second);
-      tiny=exponent<1-bias;
+      if(near_tiny) {
+        const auto exponent=int((normalized&~sign)>>shift)-bias+l.second+
+                            (opcode==0x59?r.second:-r.second);
+        tiny=exponent<1-bias;
+      }
       normal_precision=rounding.status()&32U;
     }
+    if(overflow_traps)result_status=(result_status&~32U)|normal_precision;
     result_status&=~16U;
     if(tiny&&!(mxcsr&(1U<<11))) {
       result_status=(result_status&~32U)|16U|normal_precision;
@@ -1591,6 +1638,11 @@ class Cpu {
       volatile float rounded=static_cast<float>(source);
       result=fp32_bits(rounded);
       flags=mode.status();
+    }
+    if((flags&8U)&&!(mxcsr&(1U<<10))) {
+      // The unmasked result keeps binary32 precision with an unbounded
+      // exponent. Losing only exponent range does not signal precision.
+      flags=(flags&~32U)|((raw&0x1fffffffU)?32U:0U);
     }
     constexpr auto single_min_normal=0x3810000000000000ULL;
     const auto magnitude=raw&0x7fffffffffffffffULL;
@@ -2084,6 +2136,20 @@ class Cpu {
     const auto bits = writable & mask(bytes);
     eflags = (eflags & ~bits) | (value & bits) | 2;
   }
+  struct RealInterruptTarget { std::uint16_t cs, ip; };
+  RealInterruptTarget real_ivt_target(std::uint8_t vector) {
+    const auto offset = std::uint32_t(vector) * 4;
+    if (offset + 3 > idtr.limit || idtr.base > UINT64_MAX - offset - 3)
+      fail("interrupt vector exceeds real-mode IVT limit", FaultCode::SegmentLimit);
+    const auto ip = read16(idtr.base + offset);
+    return {read16(idtr.base + offset + 2), ip};
+  }
+  void dispatch_real_interrupt(RealInterruptTarget target, std::uint64_t resume_ip) {
+    // Real-mode IVT delivery saves FLAGS, CS and IP as three words.
+    push(eflags, 2); push(segments[CS], 2); push(resume_ip, 2);
+    eflags &= ~(IF | TF);
+    far_transfer(target.cs, target.ip, 2);
+  }
   void interrupt(std::uint8_t vector) {
     if (!is_real_mode()) {
       dispatch_idt(vector, cursor_, true, false, 0);
@@ -2091,15 +2157,7 @@ class Cpu {
     }
     eip = cursor_ & code_mask(); ip_written_ = true;
     if (interrupt_hook && interrupt_hook(*this, vector)) return;
-    const auto table_offset = std::uint32_t(vector) * 4;
-    if (table_offset + 3 > idtr.limit) fail("interrupt vector exceeds IDTR limit", FaultCode::SegmentLimit);
-    const auto new_ip = read16(idtr.base + table_offset);
-    const auto new_cs = read16(idtr.base + table_offset + 2);
-    // Real-mode IVT delivery always saves FLAGS, CS and IP as three words;
-    // unlike CALL, an operand-size prefix does not widen this frame.
-    push(eflags, 2); push(segments[CS], 2); push(eip, 2);
-    eflags &= ~(IF | TF);
-    far_transfer(new_cs, new_ip, 2);
+    dispatch_real_interrupt(real_ivt_target(vector), eip);
   }
 
   static int exception_vector(FaultCode code) {
@@ -2117,13 +2175,9 @@ class Cpu {
   }
   void dispatch_idt(std::uint8_t vector, std::uint64_t resume_ip,
                     bool software, bool has_error, std::uint32_t error) {
-    // CPU, not the guest, reads the IDT/GDT/TSS with supervisor privileges.
-    // Guest code still obeys its actual CPL and page U/S permissions.
-    const bool long_gate = is_long_mode();
-    if (!long_gate && (!cache_[CS].big || (efer & 0x400)))
-      fail("protected16/compatibility IDT gates not implemented", FaultCode::UnsupportedState);
+    // EFER.LMA selects the IDT format, including for compatibility code.
+    const bool long_gate = (efer & 0x400U) != 0;
     const auto old_cpl = cpl();
-    SupervisorAccess system(*this);
     const unsigned length = long_gate ? 16U : 8U;
     const auto slot = std::uint64_t(vector) * length;
     if (slot + length - 1 > idtr.limit || idtr.base > UINT64_MAX - slot - length)
@@ -2131,27 +2185,31 @@ class Cpu {
     const auto address = idtr.base + slot;
     if (long_gate && (!canonical(address) || !canonical(address + length - 1)))
       fail("noncanonical IDT entry", FaultCode::ProtectionFault);
-    const auto low = read_linear(address, 8);
-    const auto high = long_gate ? read_linear(address + 8, 8) : 0;
+    std::uint64_t low = 0, high = 0;
+    {
+      SupervisorAccess system(*this);
+      low = read_linear(address, 8);
+      if (long_gate) high = read_linear(address + 8, 8);
+    }
     const auto selector = std::uint16_t((low >> 16) & 0xffffU);
     const auto ist = unsigned((low >> 32) & 7U);
     const auto reserved = unsigned((low >> 35) & 31U);
     const auto attr = unsigned((low >> 40) & 255U);
     const auto type = attr & 31U;
-    if ((type != 0xe && type != 0xf) || !(selector & 0xfffcU))
-      fail("IDT gate is not a 32/64 interrupt or trap gate", FaultCode::ProtectionFault);
+    const bool gate16 = !long_gate && (type == 6 || type == 7);
+    if ((!gate16 && type != 0xe && type != 0xf) || !(selector & 0xfffcU))
+      fail("IDT gate is not an interrupt or trap gate for this mode", FaultCode::ProtectionFault);
     if (!(attr & 0x80)) fail("IDT gate not present", FaultCode::ProtectionFault);
     if (software && old_cpl > ((attr >> 5) & 3U))
       fail("INT gate DPL check failed", FaultCode::ProtectionFault);
     if (reserved || (!long_gate && ist) || (long_gate && (high >> 32)))
       fail("IDT gate reserved fields are set", FaultCode::ProtectionFault);
-    const auto target_ip = (low & 0xffffU) | (((low >> 48) & 0xffffU) << 16) |
+    const auto target_ip = (low & 0xffffU) | (gate16 ? 0 : ((low >> 48) & 0xffffU) << 16) |
                            ((high & 0xffffffffULL) << 32);
     if (long_gate && !canonical(target_ip))
       fail("noncanonical IDT handler RIP", FaultCode::ProtectionFault);
     const auto target_cache = descriptor(selector);
-    if (!target_cache.code || (long_gate && !target_cache.long_code) ||
-        (!long_gate && !target_cache.big))
+    if (!target_cache.code || (long_gate && (!target_cache.long_code || target_cache.big)))
       fail("IDT destination is not a compatible code segment", FaultCode::ProtectionFault);
     const auto target_cpl = target_cache.conforming ? old_cpl : unsigned(target_cache.dpl);
     if (target_cache.dpl > old_cpl ||
@@ -2161,49 +2219,56 @@ class Cpu {
     const auto original_cs = segments[CS], original_ss = segments[SS];
     const auto original_rsp = regs[ESP];
     const auto original_flags = eflags;
-    const unsigned width = long_gate ? 8U : 4U;
+    const unsigned width = long_gate ? 8U : gate16 ? 2U : 4U;
     if (switch_cpl || (long_gate && ist)) {
       if (!tr.valid) fail("interrupt stack switch needs a loaded TSS", FaultCode::ProtectionFault);
-      std::uint64_t new_rsp = 0;
+      SupervisorAccess system(*this);
       if (long_gate) {
         const auto tss_offset = ist ? 36U + (ist-1U)*8U : 4U;
         if (tr.limit < tss_offset+7U)
           fail("TSS does not contain the requested 64-bit stack", FaultCode::ProtectionFault);
-        new_rsp = read_linear(tr.base+tss_offset,8);
+        const auto new_rsp = read_linear(tr.base+tss_offset,8);
         if (!canonical(new_rsp) || !new_rsp)
           fail("TSS provided a noncanonical or null RSP", FaultCode::ProtectionFault);
-        // Null ring0 SS is allowed during the IA-32e interrupt stack switch.
-        segments[SS] = 0;
+        // IA-32e selects a null SS with the handler's RPL on a stack switch.
+        segments[SS] = std::uint16_t(target_cpl);
         cache_[SS] = SegmentCache{};
         regs[ESP] = new_rsp;
       } else {
-        if (!switch_cpl || target_cpl != 0 || tr.limit < 9)
-          fail("protected32 stack switch requires TSS SS0:ESP0", FaultCode::UnsupportedState);
-        new_rsp = read_linear(tr.base+4,4);
-        const auto ss0 = std::uint16_t(read_linear(tr.base+8,2));
+        const unsigned sp_offset = tr.tss16 ? 2U : 4U;
+        const unsigned sp_width = tr.tss16 ? 2U : 4U;
+        const auto ss_offset = sp_offset + sp_width;
+        if (tr.limit < ss_offset+1)
+          fail("TSS does not contain the requested protected-mode stack", FaultCode::ProtectionFault);
+        const auto new_sp = read_linear(tr.base+sp_offset,sp_width);
+        const auto ss0 = std::uint16_t(read_linear(tr.base+ss_offset,2));
         const auto ss_cache = descriptor(ss0);
         if (!ss_cache.valid || ss_cache.code || !ss_cache.writable ||
-            ss_cache.dpl != 0 || (ss0 & 3U))
-          fail("protected32 TSS SS0 must be writable ring0 data", FaultCode::ProtectionFault);
+            ss_cache.dpl != target_cpl || (ss0 & 3U) != target_cpl)
+          fail("TSS stack selector must be writable data for the handler CPL", FaultCode::ProtectionFault);
         segments[SS] = ss0;
         cache_[SS] = ss_cache;
-        put_reg(ESP,4,new_rsp);
+        put_reg(ESP,4,new_sp);
       }
     }
-    if (long_gate) {
-      // 64-bit gate pushes SS:RSP even for a same-CPL interrupt.
-      push(original_ss,8); push(original_rsp,8);
-    } else if (switch_cpl) {
-      push(original_ss,4); push(original_rsp,4);
-    }
-    push(original_flags,width);push(original_cs,width);push(resume_ip,width);
-    if (has_error) push(error,width);
+    // The destination stack uses the handler's address size and privilege.
+    // For a compatibility-mode source, switch CS before pushing on the
+    // 64-bit stack so the pushes do not use that source's 16/32-bit SS cache.
     segments[CS] = std::uint16_t((selector & ~3U) | target_cpl);
     cache_[CS] = target_cache;
     cache_[CS].selector = segments[CS];
+    if (long_gate) {
+      regs[ESP] &= ~std::uint64_t{15};
+      // 64-bit gate pushes SS:RSP even for a same-CPL interrupt.
+      push(original_ss,8); push(original_rsp,8);
+    } else if (switch_cpl) {
+      push(original_ss,width); push(original_rsp,width);
+    }
+    push(original_flags,width);push(original_cs,width);push(resume_ip,width);
+    if (has_error) push(error,width);
     jump(target_ip,width);
-    if (type == 0xe) eflags &= ~IF;
-    eflags &= ~TF;
+    if (type == 6 || type == 0xe) eflags &= ~IF;
+    eflags &= ~(TF | 0x34000U); // Clear NT/RF/VM after saving their image.
   }
 
   void string_operation(std::uint8_t op);
@@ -3163,6 +3228,8 @@ inline void Cpu::extended() {
       if (m.group == 3 && type != 1u && type != 9u)
         fail("LTR requires an available TSS descriptor (type 1 or 9)",
              FaultCode::ProtectionFault);
+      if (m.group == 3 && (efer & 0x400U) && type == 1u)
+        fail("IA-32e LTR requires a 64-bit TSS descriptor", FaultCode::ProtectionFault);
 
       std::uint64_t base = ((raw >> 16) & 0xffffffu) |
                            ((raw >> 32) & 0xff000000u);
@@ -3188,7 +3255,7 @@ inline void Cpu::extended() {
       if (limit > UINT32_MAX)
         fail("system descriptor limit outside representable size",
              FaultCode::ProtectionFault);
-      const SystemRegister next{selector, base, std::uint32_t(limit), true};
+      const SystemRegister next{selector, base, std::uint32_t(limit), true, type == 1u};
       if (m.group == 2) {
         ldtr = next;
       } else {
@@ -3544,11 +3611,9 @@ inline void Cpu::execute(std::uint8_t op) {
         far_transfer(cs, target, bytes); restore_flags(std::uint32_t(flags), bytes); return;
       }
       const bool long_return = is_long_mode();
-      if (!long_return && (!cache_[CS].big || (efer & 0x400)))
-        fail("protected16/compatibility IRET not implemented", FaultCode::UnsupportedState);
       if (long_return && operand_override_)
         fail("16-bit IRET in long mode is not implemented", FaultCode::UnsupportedState);
-      const unsigned n = long_return ? 8U : 4U;
+      const unsigned n = long_return ? 8U : bytes;
       const auto original_cpl = cpl();
       const auto target = pop(n), raw_cs = pop(n), flags = pop(n);
       if (raw_cs > 0xffffU || (flags & 0x20000U))
@@ -3556,9 +3621,11 @@ inline void Cpu::execute(std::uint8_t op) {
       const auto target_cpl = unsigned(raw_cs & 3U);
       if (target_cpl < original_cpl || (target_cpl != 0 && target_cpl != 3))
         fail("IRET cannot elevate privilege", FaultCode::ProtectionFault);
+      if ((eflags & 0x4000U) != 0)
+        fail("nested-task IRET is not implemented", FaultCode::UnsupportedState);
       const auto code = descriptor(std::uint16_t(raw_cs));
       if (!code.code || (code.conforming ? code.dpl > target_cpl : code.dpl != target_cpl) ||
-          (long_return ? !code.long_code : !code.big))
+          (code.long_code && (!(efer & 0x400U) || code.big)))
         fail("IRET code selector DPL/RPL/type mismatch", FaultCode::ProtectionFault);
       const bool outer = target_cpl > original_cpl;
       std::uint64_t saved_rsp = 0, saved_ss = 0;
@@ -3568,7 +3635,7 @@ inline void Cpu::execute(std::uint8_t op) {
         saved_ss = pop(n);
         if (saved_ss > 0xffffU || (long_return && !canonical(saved_rsp)))
           fail("IRET invalid SS/RSP", FaultCode::ProtectionFault);
-        if (saved_ss == 0 && long_return && target_cpl == 0) {
+        if (saved_ss == 0 && long_return && target_cpl == 0 && code.long_code) {
           saved_stack = SegmentCache{}; // null SS is valid for IA-32e ring0
         } else {
           if ((saved_ss & 3U) != target_cpl)
@@ -3580,13 +3647,14 @@ inline void Cpu::execute(std::uint8_t op) {
       }
       // The IRET instruction is still executing at its originating CPL.
       // Restore privileged IF/IOPL before switching the CS CPL to ring3.
-      restore_flags(std::uint32_t(flags), 4);
+      restore_flags(std::uint32_t(flags), n);
+      if (n >= 4) eflags = (eflags & ~0x10000U) | (std::uint32_t(flags) & 0x10000U);
       segments[CS] = std::uint16_t(raw_cs);
       cache_[CS] = code;
       if (long_return || outer) {
         segments[SS] = std::uint16_t(saved_ss);
         cache_[SS] = saved_stack;
-        put_reg(ESP, long_return ? 8U : 4U, saved_rsp);
+        put_reg(ESP, long_return ? 8U : n, saved_rsp);
       }
       if (outer) {
         // IRET to a less-privileged ring invalidates inaccessible DS/ES/FS/GS.

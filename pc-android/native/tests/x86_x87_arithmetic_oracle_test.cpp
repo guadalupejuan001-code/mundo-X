@@ -3,9 +3,14 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <stdexcept>
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+#include <cpuid.h>
+#endif
 
 namespace {
 using cosmic_pc::Cpu;
@@ -57,6 +62,14 @@ State guest(Cpu& cpu, const Sample& input) {
 }
 
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+std::string vendor() {
+  unsigned eax=0,ebx=0,ecx=0,edx=0;
+  if (!__get_cpuid(0,&eax,&ebx,&ecx,&edx)) return "unknown";
+  char name[13]{};
+  std::memcpy(name,&ebx,4);std::memcpy(name+4,&edx,4);std::memcpy(name+8,&ecx,4);
+  return name;
+}
+
 State physical(const Sample& input) {
   alignas(16) std::array<std::uint8_t, 512> saved{}, observed{};
   const auto cw = std::uint16_t(input.control);
@@ -87,8 +100,46 @@ State physical(const Sample& input) {
   return state;
 }
 
+bool intel_remainder_passthrough(const Sample& input, const State& modeled,
+                                 const State& native, const std::string& cpu_vendor) {
+  // Intel specifies a direct ST0 result for infinite modulus in the absence
+  // of underflow. AMD applies the unmasked underflow response even when the
+  // exact result equals a subnormal dividend. Require both precise outcomes.
+  if (cpu_vendor != "GenuineIntel" || input.op < 10 || (input.control & 0x12U) != 2 ||
+      !(native == State{input.lhs, 0x0002})) return false;
+
+  const unsigned sign = unsigned(input.lhs[9] & 0x80U) << 8;
+  if (input.lhs[8] != 0 || (input.lhs[9] & 0x7fU) || (input.lhs[7] & 0x80U) ||
+      input.lhs == bits(0, sign)) return false;
+  if (input.rhs != bits(int_bit, 0x7fff) && input.rhs != bits(int_bit, 0xffff)) return false;
+
+  std::uint64_t significand = 0;
+  for (unsigned i = 0; i < 8; ++i) significand |= std::uint64_t(input.lhs[i]) << (8 * i);
+  unsigned biased_exponent = 0x6001;
+  while (!(significand & int_bit)) {
+    significand <<= 1;
+    --biased_exponent;
+  }
+  return modeled == State{bits(significand, sign | biased_exponent), 0x8092};
+}
+
+std::string describe(const Sample& input,const State& actual,const State& expected) {
+  std::ostringstream out;
+  const auto hex80 = [&](const Value& value) {
+    for (auto it=value.rbegin();it!=value.rend();++it) out<<std::setw(2)<<unsigned(*it);
+  };
+  out << " op=" << input.op << " cw=" << std::hex << std::setfill('0') << std::setw(4) << input.control
+      << " lhs=";
+  hex80(input.lhs);out<<" rhs=";hex80(input.rhs);
+  out<<" virtual=";hex80(actual.number);out<<':'<<std::setw(4)<<actual.status;
+  out<<" native=";hex80(expected.number);out<<':'<<std::setw(4)<<expected.status;
+  return out.str();
+}
+
 void hardware_matrix(Cpu& cpu) {
   constexpr unsigned count = 21'000;
+  const auto cpu_vendor=vendor();
+  unsigned vendor_alternatives=0;
   std::mt19937_64 rng(3620);
   for (unsigned i = 0; i < count; ++i) {
     const auto exp = [](int value) { return unsigned(value<1 ? 1 : value>0x7ffe ? 0x7ffe : value); };
@@ -113,10 +164,17 @@ void hardware_matrix(Cpu& cpu) {
     const Sample sample{operation, control,
                         bits(sig_a, exp_a | ((rng() & 1) ? integer : 0)),
                         bits(sig_b, exp_b | ((rng() & 1) ? integer : 0))};
-    if (!(guest(cpu, sample) == physical(sample)))
-      throw std::runtime_error("x86 hardware differs at arithmetic matrix case " + std::to_string(i));
+    const auto modeled=guest(cpu,sample), native=physical(sample);
+    if (modeled==native) continue;
+    if (intel_remainder_passthrough(sample, modeled, native, cpu_vendor)) {
+      ++vendor_alternatives;
+      continue;
+    }
+    throw std::runtime_error("x86 hardware differs at arithmetic matrix case "+std::to_string(i)+
+                             " vendor="+cpu_vendor+describe(sample,modeled,native));
   }
-  std::cout << "X87_ARITHMETIC_NATIVE_X86_PASS samples=" << count << '\n';
+  std::cout << "X87_ARITHMETIC_NATIVE_X86_PASS samples=" << count << " vendor=" << cpu_vendor
+            << " intel_remainder_passthrough=" << vendor_alternatives << '\n';
 }
 #endif
 
@@ -171,14 +229,18 @@ void golden_matrix(Cpu& cpu) {
     {{11,0x037f,seven,two},{minus_one,0x0100}},
     {{10,0x037f,max_normal,two},{bits(int_bit,0x7fbf),0x0400}},
     {{11,0x036f,bits(3,0),bits(2,0)},{bits(int_bit,0xdfc2),0xc092}},
+    {{11,0x0e6f,bits(0x607f2b3e8f75f1a0ULL,0),infinity},{bits(0xc0fe567d1eebe340ULL,0x6000),0x8092}},
     {{10,0x037f,one,zero},{indefinite,0x0001}},
   };
   for (unsigned i = 0; i < std::size(cases); ++i) {
     if (!(guest(cpu, cases[i].input) == cases[i].output))
       throw std::runtime_error("incorrect 80-bit result/FSW in golden case " + std::to_string(i));
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
-    if (!(physical(cases[i].input) == cases[i].output))
-      throw std::runtime_error("incorrect physical x86 reference in golden case " + std::to_string(i));
+    const auto native=physical(cases[i].input);
+    if (!(native == cases[i].output) &&
+        !intel_remainder_passthrough(cases[i].input, cases[i].output, native, vendor()))
+      throw std::runtime_error("incorrect physical x86 reference in golden case " + std::to_string(i) +
+                               " vendor="+vendor()+describe(cases[i].input,cases[i].output,native));
 #endif
   }
   std::cout << "X87_ARITHMETIC_GOLDEN_PASS samples=" << std::size(cases) << '\n';

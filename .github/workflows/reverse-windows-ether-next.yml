@@ -24,6 +24,8 @@ on:
       - "pc-android/native/tests/x86_x87_arithmetic_oracle_test.cpp"
       - "pc-android/native/tests/x86_x87_state_test.cpp"
       - "pc-android/native/tests/x86_c09r1_fxstate_test.cpp"
+      - "pc-android/native/tests/x86_c09r1_stage3_x87_mf_test.cpp"
+      - "pc-android/native/tests/x86_cpl_c05_test.cpp"
       - "pc-android/native/tests/x86_lock_rmw_test.cpp"
       - "pc-android/native/tests/x86_protected_real_transition_test.cpp"
   workflow_dispatch:
@@ -54,6 +56,7 @@ jobs:
           set -euo pipefail
           uname -m
           test "$(uname -m)" = "${{ matrix.architecture }}"
+          lscpu | sed -n '/^Vendor ID:/p; /^Model name:/p'
           git rev-parse HEAD
           cmake -S . -B build/ether-next -DCMAKE_BUILD_TYPE=Release -DMUNDO_X_ETHER_NEXT=ON
           cmake --build build/ether-next --parallel 2 \
@@ -97,9 +100,9 @@ jobs:
           set -euo pipefail
           cmake --build build/ether-next --parallel 2 --target \
             x86_sse_legacy_forms_test x86_mmx_test x86_x87_arithmetic_oracle_test \
-            x86_x87_state_test x86_c09r1_fxstate_test
+            x86_x87_state_test x86_c09r1_fxstate_test x86_c09r1_stage3_x87_mf_test x86_cpl_c05_test
           ctest --test-dir build/ether-next --output-on-failure -V \
-            -R '^(x86_sse_legacy_forms|x86_mmx|x86_x87_arithmetic_oracle|x86_x87_state|x86_c09r1_fxstate)$' \
+            -R '^(x86_sse_legacy_forms|x86_mmx|x86_x87_arithmetic_oracle|x86_x87_state|x86_c09r1_fxstate|x86_c09r1_stage3_x87_mf|x86_cpl_c05)$' \
             | tee build/ether-next/c02-cpu-conformance.log
       - uses: actions/upload-artifact@v4
         with:

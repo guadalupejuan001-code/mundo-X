@@ -256,6 +256,8 @@ void exceptions_and_ftz_boundaries() {
   constexpr Bits half=one-min_normal;
   constexpr Bits infinite=Bits(single?0x7f800000:0x7ff0000000000000ULL);
   constexpr Bits indefinite=Bits(single?0xffc00000:0xfff8000000000000ULL);
+  constexpr Bits half_overflow=Bits(single?0x7f000000:0x7fe0000000000000ULL);
+  constexpr Bits two=one+min_normal;
   struct Case {std::uint8_t opcode;Bits left,right,out;std::uint32_t csr,flags;bool faults;};
   const Case cases[]{
     {0x59,min_normal,one-1,min_normal,0x1f80,0x30,false},
@@ -265,6 +267,10 @@ void exceptions_and_ftz_boundaries() {
     {0x59,min_normal,half,min_normal/2,0x1f80,0,false},
     {0x59,min_normal,half,0,0x9f80,0x30,false},
     {0x59,min_normal,one-1,0,0x1780,0x10,true},
+    {0x59,half_overflow,two,0,0x1b80,0x08,true},
+    {0x58,half_overflow,half_overflow,0,0x1b80,0x08,true},
+    {0x5c,half_overflow,half_overflow|sign,0,0x1b80,0x08,true},
+    {0x5e,half_overflow,half-1,0,0x1b80,0x28,true},
     {0x5e,min_normal,one+1,0,0x1780,0x30,true},
     {0x5e,1,sign,infinite|sign,0x1e80,0x04,false},
     {0x5e,1,sign,0,0x1d80,0x04,true},
@@ -297,7 +303,11 @@ void exceptions_and_ftz_boundaries() {
 #define ARITHMETIC_PROBE(mnemonic) asm volatile( \
     "movups %1,%%xmm0;movups %2,%%xmm1;" mnemonic " %%xmm1,%%xmm0;movups %%xmm0,%0" \
     :"=m"(native):"m"(left),"m"(right):"xmm0","xmm1")
-      if(entry.opcode==0x59) {
+      if(entry.opcode==0x58) {
+        if constexpr(single) ARITHMETIC_PROBE("addss"); else ARITHMETIC_PROBE("addsd");
+      }else if(entry.opcode==0x5c) {
+        if constexpr(single) ARITHMETIC_PROBE("subss"); else ARITHMETIC_PROBE("subsd");
+      }else if(entry.opcode==0x59) {
         if constexpr(single) ARITHMETIC_PROBE("mulss"); else ARITHMETIC_PROBE("mulsd");
       }else if(entry.opcode==0x5e) {
         if constexpr(single) ARITHMETIC_PROBE("divss"); else ARITHMETIC_PROBE("divsd");

@@ -8,10 +8,10 @@ add_executable(cosmic_pc_cli native/pc_cli.cpp)
 target_include_directories(cosmic_pc_cli PRIVATE ../native/include)
 target_link_libraries(cosmic_pc_cli PRIVATE Threads::Threads)
 if (MSVC)
-    target_compile_options(cosmic_pc_cli PRIVATE /W4)
+    target_compile_options(cosmic_pc_cli PRIVATE /W4 /fp:strict)
     set_property(TARGET cosmic_pc_cli PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(cosmic_pc_cli PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(cosmic_pc_cli PRIVATE -Wall -Wextra -Wpedantic -frounding-math)
 endif()
 
 include(CTest)
@@ -24,16 +24,16 @@ if (BUILD_TESTING)
     endif()
     foreach(name sparse_ram x86_cpu x86_cpu_profile x86_protected_real_transition x86_lock_rmw
             x86_sse2_packed_oracle x86_c09r1_stage5_cvt_fxsr x86_sse_fp32 x86_sse_legacy_forms
-            x86_mmx x86_x87_state x86_x87_arithmetic_oracle x86_c09r1_fxstate
+            x86_mmx x86_x87_state x86_x87_arithmetic_oracle x86_c09r1_fxstate x86_c09r1_stage3_x87_mf x86_cpl_c05
             x86_long_mode x86_alu64_oracle
             x86_enter_oracle boot_media pc_machine pc_8042 pc_iso pc_memory pc_memory_fabric
             pc_video pc_quantum pc_autonomous)
         add_executable(${name}_test native/tests/${name}_test.cpp)
         target_include_directories(${name}_test PRIVATE ../native/include)
         if (MSVC)
-            target_compile_options(${name}_test PRIVATE /W4)
+            target_compile_options(${name}_test PRIVATE /W4 /fp:strict)
         elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-            target_compile_options(${name}_test PRIVATE -Wall -Wextra -Wpedantic)
+            target_compile_options(${name}_test PRIVATE -Wall -Wextra -Wpedantic -frounding-math)
         endif()
         if(name STREQUAL "pc_autonomous")
             target_link_libraries(${name}_test PRIVATE Threads::Threads)

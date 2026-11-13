@@ -137,6 +137,15 @@ void conversion_results(Cpu& cpu) {
         check(read_register(cpu,0)==initial&&(cpu.mxcsr&0x3fU)==(fraction?0x30U:0x10U),
               "unmasked narrowing precision only reflects rounding with an unbounded exponent");
     }
+    for(const auto fraction:{0U,1U}) {
+        set_register(cpu,0,initial);
+        set_register(cpu,1,{fraction,0x47f00000U,0,0}); // 2^128 and its next binary64 value.
+        cpu.mxcsr=default_csr&~(1U<<10);
+        check(convert(cpu,Conversion::sd_to_ss)==StepResult::Faulted&&cpu.fault&&
+              cpu.fault->code==FaultCode::SimdFloatingPoint,"unmasked narrowing overflow must deliver #XM");
+        check(read_register(cpu,0)==initial&&(cpu.mxcsr&0x3fU)==(fraction?0x28U:0x08U),
+              "unmasked narrowing overflow must leave PE clear when unbounded rounding is exact");
+    }
 }
 
 void state_faults(Cpu& cpu) {

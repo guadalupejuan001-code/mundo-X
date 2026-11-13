@@ -3,7 +3,7 @@
   void require_no_pending_x87() const {
     if (!(fpu_status & 0x0080U)) return;
     if (cr0 & 0x20U) fail("pending unmasked x87 exception (#MF)", FaultCode::X87FloatingPoint);
-    fail("legacy x87 FERR#/IRQ13 delivery not modeled", FaultCode::UnsupportedState);
+    if (!x87_ignne_) throw WaitingForX87{};
   }
 
   bool x87_raise(unsigned flags) {

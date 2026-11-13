@@ -249,6 +249,26 @@ void env_and_compare() {
     check(g.top()==7,"FINCSTP did not adjust logical TOP");
 }
 
+void pending_legacy_environment() {
+    Guest g;
+    g.cpu.cr0&=~0x20U;
+    g.cpu.fpu_control=0x037b;
+    g.run({0xd9,0xe8}); // FLD1
+    g.run({0xd9,0xee}); // FLDZ
+    g.run({0xde,0xf9}); // FDIVP, sets deferred divide-by-zero
+    check(g.cpu.x87_ferr_asserted(),"Legacy unmasked divide-by-zero did not assert FERR#");
+    const auto live=g.cpu.fpu_status;
+    g.cpu.write8(0x1000,0x9b);
+    g.cpu.eip=0x1000;
+    const auto count=g.cpu.instructions;
+    check(g.cpu.step()==StepResult::WaitingForX87 && g.cpu.eip==0x1000 &&
+          g.cpu.instructions==count && g.cpu.fpu_status==live && !g.cpu.fault,
+          "Legacy FWAIT must hold before retirement while FERR# is pending");
+    g.run({0x66,0xdd,0x36,0,0x22}); // Raw no-wait FNSAVE m108.
+    check(g.cpu.read16(0x2204)==live && g.cpu.fpu_status==0 && !g.cpu.x87_ferr_asserted(),
+          "Raw FNSAVE must save a pending status before clearing FERR#");
+}
+
 void bcd_and_extract() {
     Guest g;
     const Ext bcd{0x21,0x43,0x65,0x87,0x09,0x21,0x43,0x65,0x87,0x80};
@@ -367,6 +387,7 @@ int main() {
         wait_and_pointers();
         load_store();
         env_and_compare();
+        pending_legacy_environment();
         bcd_and_extract();
         round_integer_pseudo_denormal();
         comparison_exceptions();

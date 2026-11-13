@@ -48,6 +48,105 @@ void masked(){
 #endif
   std::cout<<"C09R1_X87_MASKED_DIVZERO_ORACLE_PASS sticky_ze=true\n";
 }
+void deferred_mf_real_mode(){
+  using cosmic_pc::FaultCode;
+  constexpr std::uint16_t cs=0x0100, handler_cs=0x0300;
+  constexpr std::uint16_t start=0x1000, wait_ip=start+11, handler_ip=0x0040;
+  constexpr std::uint32_t ivt=0x400, slot=ivt+16*4, stack=0x8000;
+  Cpu cpu(2*1024*1024);
+  for(const bool interrupts_enabled:{false,true}) {
+    cpu.reset(cs,start);cpu.a20_enabled=true;cpu.regs[Cpu::ESP]=stack;
+    cpu.eflags=2|Cpu::CF|(interrupts_enabled?Cpu::IF:0U);
+    const auto original_flags=cpu.eflags;
+    cpu.cr0|=0x20U;cpu.fpu_control&=std::uint16_t(~4U);
+    bool bios_called=false;
+    cpu.interrupt_hook=[&](Cpu&,std::uint8_t){bios_called=true;return true;};
+    cpu.write16(0x900,0x3ff);cpu.write32(0x902,ivt);
+    cpu.write16(slot,handler_ip);cpu.write16(slot+2,handler_cs);
+    put(cpu,(std::uint32_t(cs)<<4)+start,{0x0f,0x01,0x1e,0x00,0x09, // LIDT [0900h]
+        0xd9,0xee,0xd9,0xe8,0xd8,0xf1,0x9b,0xf4}); // FLDZ, FLD1, FDIV, FWAIT, HLT
+    put(cpu,(std::uint32_t(handler_cs)<<4)+handler_ip,{0xdb,0xe2,0xcf}); // FNCLEX, IRET
+    for(unsigned i=0;i<4;++i)one(cpu);
+    need(cpu.eip==wait_ip&&(cpu.fpu_status&0x8084U)==0x8084U,
+         "real16 FDIV must defer the unmasked exception to FWAIT");
+    need(cpu.step()==StepResult::Executed&&!cpu.fault&&cpu.eip==handler_ip&&
+         cpu.segments[Cpu::CS]==handler_cs&&!bios_called&&!(cpu.eflags&Cpu::IF),
+         "real16 #MF must enter the relocated IVT handler regardless of IF");
+    need(cpu.reg16(Cpu::ESP)==stack-6&&cpu.read16(stack-6)==wait_ip&&
+         cpu.read16(stack-4)==cs&&cpu.read16(stack-2)==original_flags,
+         "real16 #MF must stack the faulting IP, CS and FLAGS as words");
+    one(cpu);one(cpu);
+    need(cpu.eip==wait_ip&&cpu.segments[Cpu::CS]==cs&&cpu.reg16(Cpu::ESP)==stack&&
+         cpu.eflags==original_flags&&!(cpu.fpu_status&0x80U),
+         "FNCLEX and IRET must return to the faulting FWAIT with FLAGS restored");
+    need(cpu.step()==StepResult::Executed&&cpu.step()==StepResult::Halted,
+         "real16 FWAIT must retire after the exception is cleared");
+    cpu.interrupt_hook={};
+  }
+  for(const bool empty_vector:{false,true}) {
+    cpu.reset(cs,wait_ip);cpu.a20_enabled=true;cpu.idtr={0x3ff,ivt};
+    cpu.cr0|=0x20U;cpu.fpu_status=0x8084U;cpu.fpu_control&=std::uint16_t(~4U);
+    cpu.regs[Cpu::ESP]=empty_vector?stack:3;
+    cpu.write16(slot,empty_vector?0:handler_ip);
+    cpu.write16(slot+2,empty_vector?0:handler_cs);
+    cpu.write8(1,0xa5);cpu.write8(2,0x5a);
+    const auto old_sp=cpu.reg16(Cpu::ESP);
+    need(cpu.step()==StepResult::Faulted&&cpu.fault&&cpu.fault->code==FaultCode::X87FloatingPoint&&
+         cpu.eip==wait_ip&&cpu.reg16(Cpu::ESP)==old_sp&&cpu.fpu_status==0x8084U&&
+         cpu.read8(1)==0xa5&&cpu.read8(2)==0x5a,
+         "empty IVT or failed exception frame must preserve the original #MF and guest state");
+  }
+  std::cout<<"C02_X87_REAL16_MF_IVT_PASS relocated_ivt=1 flags=1 restart=1 rollback=1\n";
+}
+void real_mode_simd_exceptions(){
+  using cosmic_pc::FaultCode;
+  constexpr auto start=0x1000U, handler=0x2000U, ivt=0x400U, stack=0x8000U;
+  Cpu cpu(2*1024*1024);
+  for(const unsigned vector:{6U,7U,19U}) {
+    cpu.reset(0,start);cpu.a20_enabled=true;cpu.idtr={0x3ff,ivt};
+    cpu.regs[Cpu::ESP]=stack;
+    cpu.cr4=vector==6?0x200U:0x600U;
+    cpu.mxcsr=0x1d80;cpu.xmm[0][6]=0xf0;cpu.xmm[0][7]=0x3f; // DIVSD 1/0, ZE unmasked.
+    cpu.write16(ivt+4*vector,handler);
+    int traced_vector=-1;
+    cpu.step_trace_hook=[&](const Cpu::StepTrace& trace) {
+      traced_vector=trace.outcome=="exception-delivered"?trace.delivered_vector:-1;
+    };
+    const auto xmm_before=cpu.xmm;
+    if(vector==7) {
+      cpu.cr0|=8;
+      put(cpu,start,{0x0f,0xae,0x06,0x00,0x30,0xf4}); // FXSAVE [3000h], HLT
+      put(cpu,handler,{0x0f,0x06,0xcf}); // CLTS, IRET
+    } else {
+      put(cpu,start,{0xf2,0x0f,0x5e,0xc1}); // DIVSD xmm0,xmm1
+      put(cpu,handler,{0xcf}); // The host test masks ZE before returning.
+    }
+    need(cpu.step()==StepResult::Executed&&!cpu.fault&&cpu.eip==handler&&
+         cpu.reg16(Cpu::ESP)==stack-6&&cpu.read16(stack-6)==start&&cpu.xmm==xmm_before&&
+         traced_vector==int(vector),
+         "real16 FP/SIMD fault must enter its IVT handler with unchanged XMM");
+    if(vector==7)one(cpu);
+    else {
+      need((cpu.mxcsr&0x3fU)==4U,"real16 SIMD fault lost its sticky ZE flag");
+      cpu.mxcsr|=1U<<9;
+    }
+    one(cpu);
+    need(cpu.eip==start&&cpu.reg16(Cpu::ESP)==stack&&cpu.step()==StepResult::Executed,
+         "real16 IRET must retry the faulting instruction");
+    if(vector==7)need(cpu.read16(0x3000)==0x037f,"retried real16 FXSAVE did not write its image");
+    cpu.step_trace_hook={};
+  }
+
+  cpu.reset(0,start);cpu.a20_enabled=true;cpu.idtr={0x3ff,ivt};
+  cpu.regs[Cpu::ESP]=3;cpu.cr4=0x600;cpu.mxcsr=0x1d80;
+  cpu.xmm[0][6]=0xf0;cpu.xmm[0][7]=0x3f;
+  cpu.write8(1,0xa5);cpu.write8(2,0x5a);
+  need(cpu.step()==StepResult::Faulted&&cpu.fault&&cpu.fault->code==FaultCode::SimdFloatingPoint&&
+       (cpu.mxcsr&0x3fU)==4U&&cpu.eip==start&&cpu.reg16(Cpu::ESP)==3&&
+       cpu.read8(1)==0xa5&&cpu.read8(2)==0x5a,
+       "failed real16 #XM frame must preserve the original fault and sticky flag");
+  std::cout<<"C02_REAL16_SIMD_IVT_PASS ud=6 nm=7 xm=19 sticky_rollback=1\n";
+}
 void deferred_mf(){
   Cpu cpu(64ULL*1024*1024,16ULL*1024*1024);
   const auto img=cosmic_pc::long_mode_boot_disk();
@@ -97,7 +196,7 @@ void deferred_mf(){
 }
 }
 int main(){
- try{masked();deferred_mf();
+ try{masked();deferred_mf_real_mode();real_mode_simd_exceptions();deferred_mf();
    std::cout<<"REVERSE_WINDOWS_C09R1_X87_MF_PASS checks="<<checks
             <<" windows_iso=false full_x87_cpuid=false\n";return 0;
  }catch(const std::exception& e){

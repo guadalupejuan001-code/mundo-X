@@ -171,7 +171,7 @@ class PcMachine {
       observe_mode();
       if(r==StepResult::Faulted){guest_restart_=GuestRestart::None;pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
       if(guest_restart_!=GuestRestart::None)break;
-      if(r==StepResult::Halted&&!device_step_hook)break;
+      if((r==StepResult::Halted||r==StepResult::WaitingForX87)&&!device_step_hook)break;
     }
   }
   void key(std::uint8_t ascii,std::uint8_t scan) {
