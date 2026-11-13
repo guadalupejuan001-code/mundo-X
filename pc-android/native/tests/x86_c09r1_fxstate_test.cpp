@@ -34,9 +34,26 @@ void real16_fxstate() {
   check(cpu.read32(0x4000+24)==0x1f80&&
         cpu.read32(0x4000+28)==Cpu::kMxcsrMask,
         "FXSAVE MXCSR and mask fields invalid");
-  check(cpu.read64(0x4000+144)==0x8000000000000000ULL&&
-        cpu.read16(0x4000+144+8)==0x3fff,
-        "FXSAVE physical R7 must be 80-bit +1");
+  check(cpu.read64(0x4000+32)==0&&
+        cpu.read64(0x4000+48)==0x8000000000000000ULL&&
+        cpu.read16(0x4000+48+8)==0x3fff,
+        "FXSAVE must store logical ST0=0, ST1=+1 despite physical FTW c0");
+#if defined(__x86_64__) || defined(__i386__)
+  // Independent x86 hardware oracle. The host state is saved and restored;
+  // no Windows executable, ISO or other CPU model is used.
+  alignas(16)std::array<std::uint8_t,512> host_saved{},host_fx{};
+  asm volatile("fxsave %0" : "=m"(host_saved) :: "memory");
+  asm volatile("fninit; fld1; fldz; fxsave %0" : "=m"(host_fx) :: "memory");
+  asm volatile("fxrstor %0" :: "m"(host_saved) : "memory");
+  for(unsigned i=0;i<5;++i)
+    check(host_fx[i]==cpu.memory[0x4000+i],
+          "x87 FXSAVE control/status/abridged tag differs from real CPU");
+  for(unsigned st=0;st<2;++st)
+    for(unsigned byte=0;byte<10;++byte)
+      check(host_fx[32+st*16+byte]==cpu.memory[0x4000+32+st*16+byte],
+            "x87 FXSAVE logical ST data slot differs from real CPU");
+  std::cout<<"C09R1_X87_FXSAVE_REAL_HARDWARE_ORACLE_PASS logical_ST=1 physical_FTW=1\n";
+#endif
   for(unsigned i=0;i<16;++i)
     check(cpu.memory[0x4000+160+i]==std::uint8_t(0xa0+i),
           "FXSAVE XMM0 slot bytes wrong");
