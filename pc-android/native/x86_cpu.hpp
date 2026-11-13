@@ -2205,6 +2205,16 @@ class Cpu {
     dispatch_real_interrupt(real_ivt_target(vector), eip);
   }
 
+  static SegmentCache null_stack_cache(std::uint16_t selector) noexcept {
+    // 64-bit stack addressing ignores SS. Legacy and compatibility
+    // code still check the cache, so the null descriptor is unusable.
+    SegmentCache stack;
+    stack.selector = selector;
+    stack.dpl = std::uint8_t(selector & 3U);
+    stack.valid = false;
+    return stack;
+  }
+
   static int exception_vector(FaultCode code) {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
@@ -2277,7 +2287,7 @@ class Cpu {
           fail("TSS provided a noncanonical or null RSP", FaultCode::ProtectionFault);
         // IA-32e selects a null SS with the handler's RPL on a stack switch.
         segments[SS] = std::uint16_t(target_cpl);
-        cache_[SS] = SegmentCache{};
+        cache_[SS] = null_stack_cache(segments[SS]);
         regs[ESP] = new_rsp;
       } else {
         const unsigned sp_offset = tr.tss16 ? 2U : 4U;
@@ -2378,7 +2388,14 @@ inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
     return;
   }
   if ((selector & 0xfffcU) == 0) {
-    if (segment == SS) fail("null SS is not implemented for this privilege profile", FaultCode::ProtectionFault);
+    if (segment == SS) {
+      const auto privilege = cpl();
+      if (!is_long_mode() || privilege == 3 || (selector & 3U) != privilege)
+        fail("null SS requires 64-bit mode, CPL below 3, and matching RPL", FaultCode::ProtectionFault);
+      segments[SS] = selector;
+      cache_[SS] = null_stack_cache(selector);
+      return;
+    }
     segments[segment] = selector; cache_[segment].selector = selector; cache_[segment].valid = false;
     // AMD64 preserves the FS/GS hidden base when loading a null selector.
     return;
@@ -3851,7 +3868,7 @@ inline void Cpu::execute(std::uint8_t op) {
         if (saved_ss > 0xffffU || (long_return && !canonical(saved_rsp)))
           fail("IRET invalid SS/RSP", FaultCode::ProtectionFault);
         if (saved_ss == 0 && long_return && target_cpl == 0 && code.long_code) {
-          saved_stack = SegmentCache{}; // null SS is valid for IA-32e ring0
+          saved_stack = null_stack_cache(std::uint16_t(saved_ss));
         } else {
           if ((saved_ss & 3U) != target_cpl)
             fail("IRET SS selector RPL differs from return CPL", FaultCode::ProtectionFault);
