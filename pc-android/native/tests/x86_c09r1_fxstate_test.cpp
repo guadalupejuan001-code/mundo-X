@@ -23,7 +23,7 @@ void real16_fxstate() {
   for(unsigned i=0;i<512;++i)cpu.memory[0x4000+i]=0x77;
   check(execute(cpu,{0xd9,0xe8})==StepResult::Executed,"FLD1 failed");
   check(execute(cpu,{0xd9,0xee})==StepResult::Executed,"FLDZ failed");
-  check(cpu.fpu_top()==6&&cpu.fpu_tag(6)==1&&cpu.fpu_tag(7)==0,
+  check(((cpu.fpu_status>>11)&7U)==6&&((cpu.fpu_tags>>12)&3U)==1&&((cpu.fpu_tags>>14)&3U)==0,
         "x87 physical stack and zero/valid tags are wrong");
   check(execute(cpu,{0x0f,0xae,0x06,0x00,0x40})==StepResult::Executed,
         "FXSAVE m512 legacy not executed");
@@ -51,7 +51,7 @@ void real16_fxstate() {
   cpu.xmm[0].fill(0);
   check(execute(cpu,{0x0f,0xae,0x0e,0x00,0x40})==StepResult::Executed,
         "FXRSTOR legacy not executed");
-  check(cpu.fpu_control==0x037f&&cpu.fpu_top()==6&&cpu.fpu_tags!=0xffff&&
+  check(cpu.fpu_control==0x037f&&((cpu.fpu_status>>11)&7U)==6&&cpu.fpu_tags!=0xffff&&
         cpu.mxcsr==0x1f80,
         "FXRSTOR did not restore FPU TOP, tags, FCW and MXCSR");
   for(unsigned i=0;i<16;++i)
@@ -62,12 +62,12 @@ void real16_fxstate() {
         "FNSTSW AX did not expose restored TOP");
   check(execute(cpu,{0xdd,0x1e,0x00,0x50})==StepResult::Executed,
         "FSTP m64 real of ST0 zero failed");
-  check(cpu.read64(0x5000)==0 && cpu.fpu_top()==7,
+  check(cpu.read64(0x5000)==0 && ((cpu.fpu_status>>11)&7U)==7,
         "FSTP did not pop zero or encode IEEE64 +0");
   check(execute(cpu,{0xdd,0x1e,0x08,0x50})==StepResult::Executed,
         "FSTP m64 real of ST0 one failed");
   check(cpu.read64(0x5008)==0x3ff0000000000000ULL&&
-        cpu.fpu_tags==0xffff&&cpu.fpu_top()==0,
+        cpu.fpu_tags==0xffff&&((cpu.fpu_status>>11)&7U)==0,
         "x87 FLD1/FSTP did not roundtrip exact IEEE +1");
   std::cout<<"C09R1_FXSTATE_REAL16_ROUNDTRIP_PASS software_tail_untouched=1\n";
 }
@@ -79,11 +79,11 @@ void fxstate_failures() {
   check(execute(cpu,{0x0f,0xae,0x06,0x01,0x40})==StepResult::Faulted&&
         cpu.fault->code==cosmic_pc::FaultCode::ProtectionFault,
         "misaligned FXSAVE must be #GP");
-  check(cpu.fpu_top()==7&&cpu.fpu_tag(7)==0,
+  check(((cpu.fpu_status>>11)&7U)==7&&((cpu.fpu_tags>>14)&3U)==0,
         "misaligned FXSAVE modified live x87 state");
   check(execute(cpu,{0x0f,0xae,0x06,0x00,0xff})==StepResult::Faulted,
         "512 byte FXSAVE crossing segment boundary must fault");
-  check(cpu.fpu_top()==7,"failed save corrupted the x87 stack");
+  check(((cpu.fpu_status>>11)&7U)==7,"failed save corrupted the x87 stack");
   check(execute(cpu,{0x0f,0xae,0x06,0x00,0x40})==StepResult::Executed,
         "FXSAVE fixture failed");
   cpu.memory[0x4000+27]=0x80; // MXCSR reserved high bit
@@ -91,7 +91,7 @@ void fxstate_failures() {
   check(execute(cpu,{0x0f,0xae,0x0e,0x00,0x40})==StepResult::Faulted&&
         cpu.fault->code==cosmic_pc::FaultCode::ProtectionFault,
         "FXRSTOR must reject reserved MXCSR bits with #GP");
-  check(cpu.mxcsr==0x1f80&&cpu.xmm[0][0]==0x5a&&cpu.fpu_top()==7,
+  check(cpu.mxcsr==0x1f80&&cpu.xmm[0][0]==0x5a&&((cpu.fpu_status>>11)&7U)==7,
         "FXRSTOR invalid image changed registers despite rollback");
   cpu.cr0|=8; // TS
   check(execute(cpu,{0x0f,0xae,0x06,0x00,0x40})==StepResult::Faulted&&
