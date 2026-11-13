@@ -1,6 +1,7 @@
 #pragma once
 #include "x86_cpu.hpp"
 #include "boot_media.hpp"
+#include "boot_hotspots.hpp"
 #include "demo_boot.hpp"
 #include "long_mode_guest.hpp"
 #include "quantum_device.hpp"
@@ -11,11 +12,14 @@
 #include "graphics_demo.hpp"
 #include "pc_8042.hpp"
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <deque>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string_view>
 #include <utility>
@@ -48,6 +52,12 @@ class PcMachine {
       PcVideo::kFramebufferAddress + PcVideo::kApertureBytes - 4096;
   static constexpr std::size_t kEtherMemoryBytes = 256;
   static constexpr std::uint64_t kEtherMemoryLogicalByteBase = 1000000000000ULL;
+  static constexpr std::uint64_t kMaxPhysicalBytes = 1ULL << 32;
+  static constexpr std::uint64_t kIoApicAddress = 0xfec00000ULL;
+  static constexpr std::uint64_t kLocalApicAddress = 0xfee00000ULL;
+  static constexpr std::uint64_t max_ram_mib() noexcept {
+    return std::min<std::uint64_t>(kMaxPhysicalBytes, std::numeric_limits<std::size_t>::max()) >> 20;
+  }
   Cpu cpu;
   const std::shared_ptr<mundo_x::InfiniteSession> quantum_session;
   PcQuantumDevice quantum_device;
@@ -55,9 +65,24 @@ class PcMachine {
   bool waiting_key=false;
   std::string host_error, boot_kind="none", pending;
   std::uint64_t disk_reads=0;
+  struct BootAcceleration {
+    std::uint64_t batches=0, rep_elements=0, bytes=0;
+  };
+  void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
+  bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
+  const BootAcceleration& boot_acceleration() const noexcept { return boot_acceleration_; }
+  void enable_boot_hotspots(bool enabled=true) {
+    if(enabled) boot_hotspots_.emplace();
+    else boot_hotspots_.reset();
+  }
+  const std::optional<BootHotspots>& boot_hotspots() const noexcept { return boot_hotspots_; }
   // Optional external motherboard clock/IRQ polling hook. C06 owners must
   // operate on the SAME Cpu instance; reset() deliberately preserves hooks.
   std::function<void()> device_step_hook;
+  // After the usual poll, a device can grant a batch with no observable
+  // transition. The advance callback receives only the additional steps.
+  std::function<unsigned(unsigned)> device_batch_limit_hook;
+  std::function<void(unsigned)> device_batch_advance_hook;
   // Invoked only after reset finished reloading RAM, boot sector and BIOS BDA.
   // A motherboard can then restore ACPI tables and power-on device registers.
   std::function<void()> device_reset_hook;
@@ -67,7 +92,14 @@ class PcMachine {
   PcMachine(PcMachine&&)=delete;
   PcMachine& operator=(PcMachine&&)=delete;
   static std::size_t checked_ram(std::size_t bytes) {
-    if(bytes<2*1024*1024||bytes>std::size_t(2048)*1024*1024)throw std::invalid_argument("RAM virtual fuera de 2..2048 MiB");
+    if (bytes < 2 * 1024 * 1024 || std::uint64_t(bytes) > kMaxPhysicalBytes)
+      throw std::invalid_argument("El espacio físico de la RAM virtual debe estar entre 2 MiB y 4 GiB.");
+    return bytes;
+  }
+  std::uint64_t usable_ram_bytes() const noexcept {
+    std::uint64_t bytes = 0;
+    for (const auto& region : bios_memory_map().regions)
+      if (region.type == 1) bytes += region.length;
     return bytes;
   }
   static mundo_x::InfiniteCore::Limits quantum_limits() {
@@ -135,6 +167,9 @@ class PcMachine {
     host_error.clear();pending.clear();waiting_key=false;keys_.clear();disk_reads=0;last_disk_status_=0;
     guest_restart_=GuestRestart::None;
     boot_mode_progress_={};
+    boot_acceleration_={};
+    if(boot_hotspots_)boot_hotspots_->reset();
+    next_ram_compaction_=kRamCompactionInterval;
     video_mode_=3;video_.text_mode(3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
     kbc_.reset();  // Controller, command/data latches and A20 protocol reset together.
     if(!reader_)return;
@@ -152,6 +187,7 @@ class PcMachine {
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault||guest_restart_!=GuestRestart::None)return;
     if(cpu.halted&&!device_step_hook)return;
     budget=std::min(budget,50000u);
+    const auto start=boot_hotspots_?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
     const char* last_mode=cpu.mode_name();
     const auto observe_mode=[&]() {
       const char* mode=cpu.mode_name();
@@ -161,7 +197,7 @@ class PcMachine {
         last_mode=mode;
       }
     };
-    for(unsigned i=0;i<budget&&!waiting_key;++i){
+    for(unsigned i=0;i<budget&&!waiting_key;){
       // Devices can tick and deliver an enabled IRQ between guest instructions;
       // a pending timer IRQ may wake a halted CPU without a synthetic opcode.
       if(device_step_hook) {
@@ -172,12 +208,41 @@ class PcMachine {
         pending="La placa base virtual no pudo entregar la interrupción.";
         break;
       }
+      const auto cs=cpu.segments[Cpu::CS];
+      const auto ip=cpu.eip;
+      const auto* mode=last_mode;
+      const auto before=cpu.instructions;
+      if(boot_acceleration_enabled_&&budget-i>1&&cpu.rep_batch_candidate()) {
+        unsigned limit=budget-i;
+        if(device_step_hook) {
+          limit=device_batch_limit_hook&&device_batch_advance_hook
+              ?std::min(limit,device_batch_limit_hook(limit)):1U;
+        }
+        if(limit>1) {
+          if(const auto completed=cpu.try_rep_batch(limit)) {
+            if(device_step_hook) device_batch_advance_hook(completed-1);
+            ++boot_acceleration_.batches;
+            boot_acceleration_.rep_elements+=completed;
+            boot_acceleration_.bytes+=cpu.last_rep_batch_bytes();
+            sample_boot(mode,cs,ip,completed);
+            i+=completed;
+            continue;
+          }
+        }
+      }
       const auto r=cpu.step();
+      sample_boot(mode,cs,ip,cpu.instructions-before);
+      ++i;
       observe_mode();
       if(r==StepResult::Faulted){guest_restart_=GuestRestart::None;pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
       if(guest_restart_!=GuestRestart::None)break;
       if((r==StepResult::Halted||r==StepResult::WaitingForX87)&&!device_step_hook)break;
     }
+    if(boot_acceleration_enabled_&&cpu.instructions>=next_ram_compaction_) {
+      cpu.memory.compact_repeating_pages(256);
+      next_ram_compaction_=cpu.instructions+kRamCompactionInterval;
+    }
+    if(boot_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
   }
   void key(std::uint8_t ascii,std::uint8_t scan) {
     if(waiting_key){cpu.set_reg16(0,std::uint16_t(scan)<<8|ascii);waiting_key=false;}
@@ -356,8 +421,10 @@ class PcMachine {
     o<<"],\"rip_hex\":"<<quote(hex64(cpu.eip))<<",\"cpu_mode\":"<<quote(cpu.mode_name())
      <<",\"message\":"<<quote(message)<<",\"boot_kind\":"<<quote(boot_kind)<<",\"pending\":"<<quote(pending)
      <<",\"disk_reads\":"<<disk_reads<<",\"ram_bytes\":"<<cpu.memory.size()
+     <<",\"ram_usable_bytes\":"<<usable_ram_bytes()
      <<",\"ram_allocated_bytes\":"<<cpu.memory.allocated_bytes()<<",\"ram_budget_bytes\":"<<cpu.memory.budget_bytes()
      <<",\"ram_metadata_bytes\":"<<cpu.memory.metadata_bytes()<<",\"ram_allocated_pages\":"<<cpu.memory.allocated_pages()
+     <<",\"ram_pattern_pages\":"<<cpu.memory.pattern_pages()
      <<",\"ether_memory_physical_base\":"<<(cpu.memory.has_window()?kEtherMemoryPhysicalBase:0)
      <<",\"ether_memory_bytes\":"<<cpu.memory.window_bytes()
      <<",\"ether_memory_logical_byte_base\":"<<(cpu.memory.has_window()?kEtherMemoryLogicalByteBase:0)
@@ -366,7 +433,9 @@ class PcMachine {
      <<",\"video_bytes\":"<<video.byte_size<<",\"video_address\":"<<video.physical_address
      <<",\"video_format\":"<<quote(video.graphics?"BGRX8888":"VGA-char-attribute")
      <<",\"video_aperture_bytes\":"<<(PcVideo::available(cpu.memory)?PcVideo::kApertureBytes:0)
-     <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\",\"engine\":\"cosmic-pc-own-x86\""
+     <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\""
+     <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
+     <<",\"engine\":\"cosmic-pc-own-x86\""
      <<",\"system_registers\":{\"ldtr_selector\":"<<cpu.ldtr.selector
      <<",\"ldtr_valid\":"<<(cpu.ldtr.valid?"true":"false")
      <<",\"ldtr_base\":"<<cpu.ldtr.base
@@ -407,6 +476,16 @@ class PcMachine {
   bool bios_hard_disk_attached_=false;
   GuestRestart guest_restart_=GuestRestart::None;
   BootModeProgress boot_mode_progress_;
+  BootAcceleration boot_acceleration_;
+  bool boot_acceleration_enabled_=false;
+  std::optional<BootHotspots> boot_hotspots_;
+  static constexpr std::uint64_t kRamCompactionInterval=32768;
+  std::uint64_t next_ram_compaction_=kRamCompactionInterval;
+  void sample_boot(const char* mode,std::uint16_t cs,std::uint64_t ip,std::uint64_t steps) noexcept {
+    if(!boot_hotspots_||!steps)return;
+    if(const auto samples=boot_hotspots_->advance(steps))
+      boot_hotspots_->record(mode,cs,ip,cpu.last_decoded_bytes(),samples);
+  }
   Reader reader_;
   std::uint64_t media_bytes_=0;
   BootPlan plan_{};
@@ -575,23 +654,67 @@ class PcMachine {
     if(fn==0x1a){low(0,0x1a);cpu.set_reg16(3,8);return;}
     std::ostringstream s;s<<"BIOS INT 10h función 0x"<<std::hex<<unsigned(fn)<<" pendiente";missing(s.str());
   }
+  struct BiosMemoryRegion { std::uint64_t base, length; std::uint32_t type; };
+  struct BiosMemoryMap {
+    std::array<BiosMemoryRegion, 6> regions{};
+    std::size_t count = 0;
+    void append(std::uint64_t base, std::uint64_t end, std::uint32_t type) noexcept {
+      if (end > base) regions[count++] = {base, end - base, type};
+    }
+  };
+  BiosMemoryMap bios_memory_map() const noexcept {
+    const auto top = cpu.memory.size();
+    const auto below_mmio = std::min(top, kIoApicAddress);
+    BiosMemoryMap map;
+    map.append(0, 0xa0000, 1);
+    map.append(0xa0000, 0x100000, 2);
+    if (PcVideo::available(cpu.memory)) {
+      const auto video_end = PcVideo::kFramebufferAddress + PcVideo::kApertureBytes;
+      map.append(0x100000, PcVideo::kFramebufferAddress, 1);
+      map.append(PcVideo::kFramebufferAddress, video_end, 2);
+      map.append(video_end, below_mmio, 1);
+    } else {
+      map.append(0x100000, below_mmio, 1);
+    }
+    // The IOAPIC and LAPIC live in the reserved high MMIO area.
+    map.append(below_mmio, top, 2);
+    return map;
+  }
   void memory_bios(){
     if(cpu.regs[0]==0xe820){
       if(cpu.regs[2]!=0x534d4150||cpu.regs[1]<20){carry(true);return;}
-      // Physical address space includes the reserved framebuffer aperture.
-      // Never offer those pages to a guest OS as general-purpose RAM.
-      const bool aperture=PcVideo::available(cpu.memory);
-      const std::uint64_t after_video=PcVideo::kFramebufferAddress+PcVideo::kApertureBytes;
-      const std::uint64_t starts[]={0,0xa0000,0x100000,PcVideo::kFramebufferAddress,after_video};
-      const std::uint64_t lengths[]={0xa0000,0x60000,(aperture?PcVideo::kFramebufferAddress:cpu.memory.size())-0x100000,PcVideo::kApertureBytes,aperture?cpu.memory.size()-after_video:0};
-      const std::uint64_t entries=aperture?(lengths[4]?5:4):3;
-      const auto index=cpu.regs[3];if(index>=entries){carry(true);return;}
-      const auto p=physical(0,cpu.reg16(7));const auto n=cpu.regs[1]>=24?24:20;
-      cpu.write32(p,starts[index]&0xffffffff);cpu.write32(p+4,starts[index]>>32);cpu.write32(p+8,lengths[index]&0xffffffff);cpu.write32(p+12,lengths[index]>>32);cpu.write32(p+16,index==1||index==3?2:1);if(n==24)cpu.write32(p+20,1);
-      cpu.regs[0]=0x534d4150;cpu.regs[1]=n;cpu.regs[3]=index+1<entries?index+1:0;carry(false);return;
+      const auto map = bios_memory_map();
+      const auto index = cpu.regs[3];
+      if (index >= map.count) { carry(true); return; }
+      const auto& region = map.regions[index];
+      const auto p = physical(0, cpu.reg16(7));
+      const auto n = cpu.regs[1] >= 24 ? 24 : 20;
+      cpu.write64(p, region.base);
+      cpu.write64(p + 8, region.length);
+      cpu.write32(p + 16, region.type);
+      if (n == 24) cpu.write32(p + 20, 1);
+      cpu.regs[0] = 0x534d4150;
+      cpu.regs[1] = n;
+      cpu.regs[3] = index + 1 < map.count ? index + 1 : 0;
+      carry(false);
+      return;
     }
-    if(cpu.reg16(0)==0xe801){const auto top=PcVideo::available(cpu.memory)?PcVideo::kFramebufferAddress:cpu.memory.size();const auto k=(top-0x100000)/1024;cpu.set_reg16(0,std::min<std::size_t>(15360,k));cpu.set_reg16(3,k>15360?(k-15360)/64:0);cpu.set_reg16(1,cpu.reg16(0));cpu.set_reg16(2,cpu.reg16(3));carry(false);return;}
-    if(hi(0)==0x88){cpu.set_reg16(0,std::min<std::size_t>(0xfc00,(cpu.memory.size()-0x100000)/1024));carry(false);return;}
+    if (cpu.reg16(0) == 0xe801) {
+      const auto extended_kib = bios_memory_map().regions[2].length / 1024;
+      cpu.set_reg16(0, std::min<std::uint64_t>(15360, extended_kib));
+      const auto above_16m = extended_kib > 15360 ? (extended_kib - 15360) / 64 : 0;
+      cpu.set_reg16(3, std::min<std::uint64_t>(0xffff, above_16m));
+      cpu.set_reg16(1, cpu.reg16(0));
+      cpu.set_reg16(2, cpu.reg16(3));
+      carry(false);
+      return;
+    }
+    if (hi(0) == 0x88) {
+      const auto extended_kib = bios_memory_map().regions[2].length / 1024;
+      cpu.set_reg16(0, std::min<std::uint64_t>(0xfc00, extended_kib));
+      carry(false);
+      return;
+    }
     if(hi(0)==0x24){switch(lo(0)){case 0:cpu.a20_enabled=false;high(0,0);carry(false);return;case 1:cpu.a20_enabled=true;high(0,0);carry(false);return;case 2:low(0,cpu.a20_enabled?1:0);high(0,0);carry(false);return;case 3:cpu.set_reg16(3,2);high(0,0);carry(false);return;default:break;}}
     // Unsupported BIOS extensions advertise failure as required by this API.
     high(0,0x86);carry(true);

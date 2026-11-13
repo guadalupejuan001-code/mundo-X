@@ -9,6 +9,9 @@ on:
       - "native/include/mundo_x/experimental/ether_transform.hpp"
       - "native/src/ether_*.cpp"
       - "pc-android/native/x86_cpu.hpp"
+      - "pc-android/native/sparse_ram.hpp"
+      - "pc-android/native/boot_hotspots.hpp"
+      - "native/include/mundo_x/experimental/ether_memory_block.hpp"
       - "pc-android/native/x86_ext80.hpp"
       - "pc-android/native/x86_mmx.inc"
       - "pc-android/native/x86_x87_state.inc"
@@ -124,4 +127,19 @@ jobs:
         with:
           name: c03-firmware-vga-${{ matrix.architecture }}
           path: build/ether-next/c03-firmware-vga.log
+          if-no-files-found: error
+      - name: Compare batched guest work, RAM representations and CPU compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/ether-next --parallel 2 --target \
+            x86_ether_rep_batch_test sparse_ram_test boot_hotspots_test x86_long_mode_test \
+            x86_alu64_oracle_test pc_memory_test pc_memory_fabric_test
+          ctest --test-dir build/ether-next --output-on-failure -V \
+            -R '^(x86_ether_rep_batch|sparse_ram|boot_hotspots|x86_long_mode|x86_alu64_oracle|pc_memory|pc_memory_fabric)$' \
+            | tee build/ether-next/ether-boot-cycles.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ether-boot-cycles-${{ matrix.architecture }}
+          path: build/ether-next/ether-boot-cycles.log
           if-no-files-found: error

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "x86_wide_integer.hpp"
+
 #include <array>
 #include <cstdint>
 #include <utility>
@@ -65,13 +67,8 @@ struct Wide {
 inline Wide significand(std::uint64_t bits) { return {bits >> 1, bits << 63}; }
 
 inline Wide multiply(std::uint64_t lhs, std::uint64_t rhs) {
-  constexpr std::uint64_t half = 0xffffffffULL;
-  const auto a = lhs & half, b = lhs >> 32;
-  const auto c = rhs & half, d = rhs >> 32;
-  const auto low = a * c;
-  const auto cross = b * c + (low >> 32);
-  const auto middle = a * d + (cross & half);
-  return {b * d + (cross >> 32) + (middle >> 32), (middle << 32) | (low & half)};
+  const auto product = wide_integer::multiply(lhs, rhs);
+  return {product.high, product.low};
 }
 
 enum class Kind { Zero, Finite, Infinity, QuietNaN, SignalingNaN, Unsupported };

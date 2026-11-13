@@ -85,6 +85,7 @@ class MemoryFabric {
   std::uint64_t size() const noexcept { return ram_.size(); }
   bool empty() const noexcept { return ram_.empty(); }
   std::size_t allocated_pages() const noexcept { return ram_.allocated_pages(); }
+  std::size_t pattern_pages() const noexcept { return ram_.pattern_pages(); }
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
   std::uint64_t metadata_bytes() const noexcept {
@@ -236,6 +237,12 @@ class MemoryFabric {
   void reset_zero() noexcept { ram_.reset_zero(); }
   void clear() noexcept { ram_.clear(); }
   std::size_t trim_zero_pages() noexcept { return ram_.trim_zero_pages(); }
+  std::size_t compact_repeating_pages(std::size_t max_pages) noexcept {
+    return ram_.compact_repeating_pages(max_pages);
+  }
+  bool compact_repeating_page(std::uint64_t offset) noexcept {
+    return ram_.compact_repeating_page(offset);
+  }
 
  private:
   SparseRam ram_;

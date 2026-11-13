@@ -1,4 +1,5 @@
 #include "../sparse_ram.hpp"
+#include "../memory_fabric.hpp"
 
 #include <algorithm>
 #include <array>
@@ -255,6 +256,121 @@ int main() {
              }
              need(read(ram, 0, length) == oracle, "Sparse and dense byte semantics differ");
              need(ram.allocated_bytes() <= ram.budget_bytes(), "Mixed operations exceeded the cap");
+         }},
+        {"repeating nonzero pages retain exact bytes with less backing", [] {
+             constexpr std::size_t pages = 64;
+             constexpr std::size_t bytes = pages * kPage;
+             SparseRam ram(bytes, bytes);
+             const std::array<std::uint8_t, SparseRam::kPatternSize> pattern{1, 2, 3, 4, 5, 6, 7, 8};
+             std::vector<std::uint8_t> payload(bytes);
+             for (std::size_t i = 0; i < payload.size(); ++i) payload[i] = pattern[i % pattern.size()];
+             ram.write_block(0, payload.data(), payload.size());
+             const auto before = ram.allocated_bytes() + ram.metadata_bytes();
+             need(ram.compact_repeating_pages(0) == 0 && ram.allocated_pages() == pages,
+                  "Zero compaction budget changed RAM");
+             need(ram.compact_repeating_pages(7) == 7 && ram.pattern_pages() == 7,
+                  "Bounded compaction ignored the requested page count");
+             need(ram.compact_repeating_pages(pages) == pages - 7 && ram.allocated_pages() == 0,
+                  "Compaction did not resume at the previous page");
+             const auto after = ram.allocated_bytes() + ram.metadata_bytes();
+             need(ram.pattern_pages() == pages && ram.allocated_bytes() == pages * pattern.size() &&
+                      before - after == bytes,
+                  "Repeating page payload or complete storage accounting is wrong");
+             need(read(ram, 0, payload.size()) == payload, "Compaction changed guest bytes");
+             for (std::size_t offset = 1; offset <= pattern.size(); ++offset) {
+                 const auto start = kPage - offset;
+                 const auto data = read(ram, start, pattern.size() + offset);
+                 need(std::equal(data.begin(), data.end(), payload.begin() + start),
+                      "Rotated pattern blocks or cross-page read differ");
+             }
+             ram[5] = pattern[5];
+             need(ram.pattern_pages() == pages, "Unchanged byte eagerly expanded a compact page");
+             ram[kPage + 5] = 0x91;
+             need(ram[kPage + 5] == 0x91 && ram[5] == pattern[5] && ram[2 * kPage + 5] == pattern[5] &&
+                      ram.allocated_pages() == 1 && ram.pattern_pages() == pages - 1,
+                  "Divergent write changed another compact guest page");
+             need(ram.restore_byte(kPage + 5, pattern[5]) && read(ram, 0, payload.size()) == payload,
+                  "Rollback failed to restore expanded repeating bytes");
+             need(ram.compact_repeating_pages(pages) == 1, "Restored pattern could not be compacted again");
+             const auto before_move = ram.metrics();
+             SparseRam moved(std::move(ram));
+             need(moved.metrics().pattern_pages == before_move.pattern_pages &&
+                      read(moved, 0, payload.size()) == payload && ram.pattern_pages() == 0,
+                  "Moving RAM lost compact pages");
+             moved.reset_zero();
+             need(moved.pattern_pages() == 0 && moved.allocated_bytes() == 0 && moved[2] == 0,
+                  "Reset retained compact RAM");
+             std::cout << "ETHER_REPEATING_RAM_PASS pages=" << pages
+                       << " dense_payload=" << bytes << " pattern_payload=" << pages * pattern.size()
+                       << " owned_before=" << before << " owned_after=" << after << '\n';
+         }},
+        {"expansion past the cap preserves compact bytes and metrics", [] {
+             SparseRam ram(4 * kPage, 2 * kPage);
+             ram.fill(0, 0x35, kPage);
+             need(ram.compact_repeating_pages(4) == 1, "Nonzero uniform page did not compact");
+             ram[kPage + 1] = 0x89;
+             const auto before = read(ram, 0, static_cast<std::size_t>(ram.size()));
+             const auto metadata = ram.metadata_bytes();
+             const auto used = ram.allocated_bytes();
+             const std::vector<std::uint8_t> replacement(2 * kPage + 1, 0x4b);
+             expect<SparseRam::BudgetExceeded>([&] {
+                 ram.write_block(0, replacement.data(), replacement.size());
+             }, "budget exceeded");
+             expect<SparseRam::BudgetExceeded>([&] { ram[kPage * 2] = 0x42; }, "budget exceeded");
+             need(read(ram, 0, before.size()) == before && ram.allocated_bytes() == used &&
+                      ram.metadata_bytes() == metadata && ram.pattern_pages() == 1,
+                  "Failed operation changed the compact prefix or backing counts");
+             ram.fill(kPage - 1, 0, 3);
+             need(ram[kPage - 2] == 0x35 && ram[kPage - 1] == 0 && ram[kPage + 1] == 0 &&
+                      ram.pattern_pages() == 0 && ram.allocated_bytes() == 2 * kPage,
+                  "Zero fill did not apply across compact and dense backing");
+             need(ram.compact_repeating_pages(4) == 1 && ram.allocated_pages() == 1 && ram.pattern_pages() == 0,
+                  "Compaction did not release the wholly zero dense page");
+         }},
+        {"completed-page compaction permits a long fill under a small cap", [] {
+             constexpr std::size_t pages = 16;
+             SparseRam ram(pages * kPage, kPage + pages * SparseRam::kPatternSize);
+             for (std::size_t page = 0; page < pages; ++page) {
+                 ram.fill(page * kPage, 0x63, kPage);
+                 need(ram.compact_repeating_page((page + 1) * kPage - 1),
+                      "Direct page completion failed to compact at its address");
+             }
+             need(ram.allocated_pages() == 0 && ram.pattern_pages() == pages &&
+                      ram.allocated_bytes() == pages * SparseRam::kPatternSize,
+                  "Long fill still retained dense backing for completed repeating pages");
+             const auto populated = read(ram, 0, static_cast<std::size_t>(ram.size()));
+             need(std::all_of(populated.begin(), populated.end(), [](std::uint8_t c) { return c == 0x63; }),
+                  "Bytes changed across directly compacted pages");
+             ram.fill(kPage, 0, (pages - 2) * kPage);
+             need(ram.pattern_pages() == 2 && ram.allocated_pages() == 0 &&
+                      ram[0] == 0x63 && ram[kPage] == 0 && ram[ram.size() - 1] == 0x63,
+                  "Clearing complete compact pages should not expand them or change neighbors");
+             expect<SparseRam::BudgetExceeded>([&] { ram.fill(1, 0, ram.size() - 2); }, "budget exceeded");
+             need(ram.pattern_pages() == 2 && ram[1] == 0x63 && ram[ram.size() - 2] == 0x63,
+                  "Failed partial edge expansion changed the remaining compact pages");
+             ram.fill(0, 0, static_cast<std::size_t>(ram.size()));
+             need(ram.pattern_pages() == 0 && ram.allocated_bytes() == 0,
+                  "Zeroing the volume left repeating payload behind");
+         }},
+        {"compaction keeps Ether-owned byte windows independent", [] {
+             cosmic_pc::MemoryFabric memory(2 * kPage, 2 * kPage);
+             std::uint8_t ether_byte = 0xba;
+             unsigned ether_reads = 0, ether_writes = 0;
+             memory.fill(0, 0x27, kPage);
+             memory.attach_window(kPage - 1, 1,
+                 [&](std::uint64_t) { ++ether_reads; return ether_byte; },
+                 [&](std::uint64_t, std::uint8_t value) { ++ether_writes; ether_byte = value; });
+             need(memory.compact_repeating_pages(2) == 1 && memory.pattern_pages() == 1 &&
+                      ether_reads == 0 && ether_writes == 0,
+                  "RAM compaction accessed the independent Ether window");
+             std::array<std::uint8_t, 3> bytes{};
+             memory.read_block(kPage - 2, bytes.data(), bytes.size());
+             need(bytes == std::array<std::uint8_t, 3>{0x27, 0xba, 0} && ether_reads == 1,
+                  "Mixed read ignored the compact backing or Ether byte");
+             memory.write_block(kPage - 2, bytes.data(), bytes.size());
+             need(ether_writes == 1 && ether_byte == 0xba && memory.pattern_pages() == 0 &&
+                      memory.allocated_bytes() == 2 * kPage,
+                  "Mixed write failed transactional preflight or changed the Ether byte");
          }},
     };
 

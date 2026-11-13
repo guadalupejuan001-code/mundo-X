@@ -30,6 +30,8 @@
 #endif
 #include "memory_fabric.hpp"
 #include "x86_ext80.hpp"
+#include "x86_wide_integer.hpp"
+#include "../../native/include/mundo_x/experimental/ether_memory_block.hpp"
 #if defined(MUNDO_X_PC_ETHER_NEXT)
 #include "mundo_x/experimental/ether_transform.hpp"
 #endif
@@ -176,6 +178,8 @@ class Cpu {
   // A device claims individual physical bus bytes, including MMIO above RAM.
   // A claimed but unreadable/unwritable address faults rather than becoming RAM.
   std::function<bool(std::uint64_t)> mmio_claim_hook;
+  // False certifies that no byte in this already A20-normalized span is MMIO.
+  std::function<bool(std::uint64_t, std::size_t)> mmio_range_claim_hook;
   std::function<std::optional<std::uint8_t>(std::uint64_t)> mmio_read_hook;
   std::function<bool(std::uint64_t, std::uint8_t)> mmio_write_hook;
 
@@ -202,6 +206,7 @@ class Cpu {
     ldtr = {}; tr = {};
     x87_ignne_ = false;
     interrupt_shadow_ = false;
+    last_rep_batch_bytes_ = 0;
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
     transaction_ = false; journal_.clear(); decoded_.clear();
   }
@@ -212,6 +217,16 @@ class Cpu {
     return !(cr0 & 0x20U) && (fpu_status & 0x0080U);
   }
   void set_x87_ignne(bool active) noexcept { x87_ignne_ = active; }
+  const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
+  unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
+  bool rep_batch_candidate() const noexcept {
+    return repeat_ && start_ip_ == eip && start_cs_ == segments[CS] &&
+           (opcode_ == 0xa4 || opcode_ == 0xa5 || opcode_ == 0xaa || opcode_ == 0xab) &&
+           decoded_.size() >= 2;
+  }
+  // The machine must bound this budget by the next device observation. Zero
+  // means call step() for the original fault/IO behavior and diagnostics.
+  unsigned try_rep_batch(unsigned budget);
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -493,6 +508,7 @@ class Cpu {
   struct WaitingForX87 {};
   bool x87_ignne_ = false;
   bool interrupt_shadow_ = false;
+  unsigned last_rep_batch_bytes_ = 0;
 
   struct Trap : std::runtime_error {
     FaultCode code;
@@ -589,6 +605,15 @@ class Cpu {
   }
   bool mmio_at(std::uint64_t address) const {
     return mmio_claim_hook && mmio_claim_hook(bus_address(address));
+  }
+  bool bulk_ram_range(std::uint64_t address, unsigned bytes) const {
+    if (!bytes || address > UINT64_MAX - (bytes - 1)) return false;
+    const auto bus = bus_address(address);
+    if (bus >= memory.size() || bytes > memory.size() - bus ||
+        bus_address(address + bytes - 1) != bus + bytes - 1) return false;
+    if (mmio_claim_hook && (!mmio_range_claim_hook || mmio_range_claim_hook(bus, bytes))) return false;
+    return !(memory.has_window() && bus < memory.window_base() + memory.window_bytes() &&
+             memory.window_base() < bus + bytes);
   }
   std::size_t physical_index(std::uint64_t address) const {
     const std::uint64_t bus = bus_address(address);
@@ -2284,6 +2309,7 @@ class Cpu {
   void shift(const ModRM& m, unsigned bytes, unsigned count);
   void double_shift(const ModRM& m, unsigned bytes, unsigned count, bool left);
   void group3(const ModRM& m, unsigned bytes);
+  void group3_wide(unsigned operation, std::uint64_t operand);
   void multiply_signed(unsigned destination, std::uint64_t a, std::uint64_t b, unsigned bytes);
   SegmentCache descriptor(std::uint16_t selector);
   void load_segment(unsigned segment, std::uint16_t selector);
@@ -2515,6 +2541,98 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
   fail("invalid page walker state", FaultCode::HostError);
 }
 
+inline unsigned Cpu::try_rep_batch(unsigned budget) {
+  last_rep_batch_bytes_ = 0;
+  if (budget < 2 || !rep_batch_candidate() || fault || halted || transaction_ ||
+      interrupt_shadow_ || (eflags & (TF | 0x20000U)) || (cr0 & 0x80000000U) ||
+      (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook || lock_prefix_)
+    return 0;
+
+  // Only use decoded state from a matching scalar iteration. The guest can
+  // mutate its own instructions, even through an A20 alias.
+  const bool long_mode = is_long_mode();
+  const bool default32 = long_mode || cache_[CS].big;
+  const bool current_addr32 = long_mode ? address_override_ : cache_[CS].big != address_override_;
+  if (op32_ != (default32 != operand_override_) || addr32_ != current_addr32 || (rex_ && !long_mode))
+    return 0;
+
+  const auto remaining = index(ECX);
+  if (remaining < 2) return 0;
+  const bool backward = flag(DF);
+  const bool copying = (opcode_ & 0xfeU) == 0xa4;
+  const unsigned width_bytes = opcode_ & 1U ? width() : 1;
+  const auto src = index(ESI), dst = index(EDI);
+  const auto index_limit = mask(address_width());
+  const auto page_bytes = MemoryFabric::kPageSize;
+  auto elements = unsigned(std::min<std::uint64_t>(budget, remaining));
+
+  try {
+    const auto length = unsigned(decoded_.size());
+    const auto linear_code = segment_linear(CS, eip, length, Access::Execute);
+    if (!long_mode && length - 1 > UINT32_MAX - linear_code) return 0;
+    if (!bulk_ram_range(linear_code, length)) return 0;
+    const auto code = bus_address(linear_code);
+    std::array<std::uint8_t, 15> observed;
+    memory.read_block(code, observed.data(), length);
+    if (!std::equal(decoded_.begin(), decoded_.end(), observed.begin())) return 0;
+
+    const auto limit_from = [&](unsigned seg, std::uint64_t offset, Access access) {
+      const auto linear = segment_linear(seg, offset, width_bytes, access);
+      const auto within_page = bus_address(linear) % page_bytes;
+      if (width_bytes > page_bytes - within_page || width_bytes - 1 > index_limit - offset)
+        return std::uint64_t{0};
+      const auto by_page = backward ? 1 + within_page / width_bytes :
+                                     (page_bytes - within_page) / width_bytes;
+      const auto extra_by_index = backward ? offset / width_bytes :
+          (index_limit - offset - (width_bytes - 1)) / width_bytes;
+      return 1 + std::min<std::uint64_t>(by_page - 1, extra_by_index);
+    };
+    elements = unsigned(std::min<std::uint64_t>(elements, limit_from(ES, dst, Access::Write)));
+    if (copying)
+      elements = unsigned(std::min<std::uint64_t>(elements, limit_from(data_segment(), src, Access::Read)));
+    if (elements < 2) return 0;
+
+    const auto bytes = elements * width_bytes;
+    const auto back = backward ? bytes - width_bytes : 0;
+    const auto dst_linear = segment_linear(ES, dst - back, bytes, Access::Write);
+    if (!bulk_ram_range(dst_linear, bytes)) return 0;
+    const auto target = bus_address(dst_linear);
+    const auto overlaps = [](std::uint64_t first, unsigned first_bytes,
+                             std::uint64_t second, unsigned second_bytes) {
+      return first < second + second_bytes && second < first + first_bytes;
+    };
+    if (overlaps(target, bytes, code, length)) return 0;
+
+    if (copying) {
+      const auto src_linear = segment_linear(data_segment(), src - back, bytes, Access::Read);
+      if (!bulk_ram_range(src_linear, bytes)) return 0;
+      const auto source = bus_address(src_linear);
+      // REP has sequential copy behavior when the ranges overlap, unlike a
+      // single memcpy/memmove snapshot of the source.
+      if (overlaps(target, bytes, source, bytes)) return 0;
+      mundo_x::ether_next::copy_ram_block(memory, source, target, bytes);
+      put_index(ESI, src + (backward ? -std::uint64_t(bytes) : bytes));
+    } else {
+      mundo_x::ether_next::repeat_ram_value(memory, target, get_reg(EAX, width_bytes), width_bytes, bytes);
+      const auto within_page = target % page_bytes;
+      if (backward ? within_page == 0 : within_page + bytes == page_bytes)
+        memory.compact_repeating_page(target);
+    }
+    put_index(EDI, dst + (backward ? -std::uint64_t(bytes) : bytes));
+    put_index(ECX, remaining - elements);
+    if (remaining == elements) eip = cursor_ & code_mask();
+    eflags |= 2;
+    instructions += elements;
+    last_rep_batch_bytes_ = bytes;
+    return elements;
+  } catch (const std::exception&) {
+    // Range checks, or the all-or-nothing preparation of one destination
+    // page, can fail before altering any bytes. Let the scalar path commit
+    // individually up to the precise failing element.
+    return 0;
+  }
+}
+
 inline void Cpu::string_operation(std::uint8_t op) {
   if (repeat_ && index(ECX) == 0) return;
   const unsigned bytes = (op & 1U) ? (op < 0x70 ? (op32_ ? 4 : 2) : width()) : 1;
@@ -2661,6 +2779,37 @@ inline void Cpu::multiply_signed(unsigned destination, std::uint64_t a,
   set_flag(CF, overflow); set_flag(OF, overflow);
 }
 
+inline void Cpu::group3_wide(unsigned operation, std::uint64_t operand) {
+  const auto low = get_reg(EAX, 8), high = get_reg(EDX, 8);
+  const auto sign = sign_bit(8);
+  const bool is_signed = (operation & 1U) != 0;
+  if (operation < 6) {
+    auto product = wide_integer::multiply(low, operand);
+    if (is_signed) {
+      // Convert the unsigned high word to its two's-complement product.
+      if (low & sign) product.high -= operand;
+      if (operand & sign) product.high -= low;
+    }
+    const bool overflow = product.high != (is_signed && (product.low & sign) ? UINT64_MAX : 0);
+    put_reg(EAX, 8, product.low); put_reg(EDX, 8, product.high);
+    set_flag(CF, overflow); set_flag(OF, overflow);
+    return;
+  }
+  if (!operand) fail("integer divide by zero", FaultCode::DivideError);
+  const bool negative_dividend = is_signed && (high & sign);
+  const bool negative_divisor = is_signed && (operand & sign);
+  const bool negative_quotient = negative_dividend != negative_divisor;
+  const wide_integer::DoubleWord dividend{high, low};
+  const auto magnitude = negative_dividend ? wide_integer::negate(dividend) : dividend;
+  const auto divisor = negative_divisor ? std::uint64_t{0} - operand : operand;
+  if (magnitude.high >= divisor) fail("integer quotient overflow", FaultCode::DivideError);
+  const auto result = wide_integer::divide(magnitude, divisor);
+  if (is_signed && result.quotient > (negative_quotient ? sign : sign - 1))
+    fail("signed integer quotient overflow", FaultCode::DivideError);
+  put_reg(EAX, 8, negative_quotient ? std::uint64_t{0} - result.quotient : result.quotient);
+  put_reg(EDX, 8, negative_dividend ? std::uint64_t{0} - result.remainder : result.remainder);
+}
+
 inline void Cpu::group3(const ModRM& m, unsigned bytes) {
   require_lock_destination(m.rm, m.group == 2 || m.group == 3);
   if (m.group == 2 || m.group == 3) {
@@ -2673,9 +2822,8 @@ inline void Cpu::group3(const ModRM& m, unsigned bytes) {
     const auto value = arithmetic_immediate(bytes); // RIP base follows the complete instruction.
     (void)alu(4, get(m.rm, bytes), value, bytes); return;
   }
-  if (bytes == 8 && m.group >= 4)
-    fail("64-bit implicit MUL/IMUL/DIV/IDIV are not implemented", FaultCode::UnsupportedOpcode);
   const auto operand = get(m.rm, bytes);
+  if (bytes == 8 && m.group >= 4) { group3_wide(m.group, operand); return; }
   const auto bits = bytes * 8U;
   const auto maximum = mask(bytes);
   switch (m.group) {
@@ -2742,6 +2890,13 @@ inline void Cpu::extended() {
     }
   }
   if (try_mmx(op)) return;
+  if (op >= 0x40 && op <= 0x4f) {  // CMOVcc
+    const auto m = modrm();
+    const auto source = get(m.rm, bytes); // A false condition does not suppress source faults.
+    if (condition(op & 15)) put_reg(m.reg, bytes, source);
+    else if (bytes == 4 && (efer & 0x400U)) put_reg(m.reg, bytes, get_reg(m.reg, bytes));
+    return;
+  }
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
@@ -3357,9 +3512,9 @@ inline void Cpu::extended() {
         ebx=word(0);edx=word(4);ecx=word(8);
       }else if(leaf==1){
         eax=0x00000663U; // modeled family/model/stepping
-        // TSC, MSR, PAE, CX8, MMX, FXSR, SSE and SSE2.
+        // TSC, MSR, PAE, CX8, CMOV, MMX, FXSR, SSE and SSE2.
         // The full x87 instruction set remains incomplete (FPU bit 0).
-        edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
+        edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
         ecx=(1U<<13); // CMPXCHG16B guest primitive
 
       }else if(leaf==7 && subleaf==0){

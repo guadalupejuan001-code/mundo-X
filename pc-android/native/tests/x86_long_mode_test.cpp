@@ -439,10 +439,10 @@ void paging_and_fault_tests() {
         "modeled CPUID executes correctly in long mode");
   program(cpu, {0x0f,0xa2});
   cpu.regs[Cpu::EAX]=1;
-  constexpr std::uint32_t simd=(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
-  check(cpu.step()==StepResult::Executed && (cpu.regs[Cpu::EDX]&(simd|1U))==simd,
-        "long-mode CPUID must expose the verified SIMD features and keep FPU clear");
-  program(cpu, {0x48,0xf7,0xe3}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "unimplemented MUL64 stops explicitly");
+  constexpr std::uint32_t features=(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
+  check(cpu.step()==StepResult::Executed && (cpu.regs[Cpu::EDX]&(features|1U))==features,
+        "long-mode CPUID must expose CMOV and the verified SIMD features and keep FPU clear");
+  program(cpu, {0x0f,0x05}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "unimplemented SYSCALL stops explicitly");
   program(cpu, {0x0f,0x22,0xe0}); cpu.regs[Cpu::EAX] = 0;
   expect_fault(cpu, FaultCode::ProtectionFault, "PAE cannot be cleared while LMA");
   check(cpu.cr4 == 0x20, "failed control-register write preserves CR4");
@@ -453,13 +453,134 @@ void paging_and_fault_tests() {
   expect_fault(cpu, FaultCode::ProtectionFault, "LME cannot change while paging");
   check(cpu.efer == 0xd00, "failed WRMSR preserves EFER");
 }
+
+void conditional_moves() {
+  Cpu cpu; boot(cpu);
+  constexpr std::uint64_t original = 0x8877665544332211ULL;
+  constexpr std::uint64_t source = 0xffeeddccbbaa9988ULL;
+  for (unsigned flags = 0; flags < 32; ++flags) {
+    const bool o = flags & 1, c = flags & 2, z = flags & 4, s = flags & 8, p = flags & 16;
+    const std::uint32_t eflags = 2 | Cpu::AF | Cpu::DF |
+        (o ? Cpu::OF : 0U) | (c ? Cpu::CF : 0U) | (z ? Cpu::ZF : 0U) |
+        (s ? Cpu::SF : 0U) | (p ? Cpu::PF : 0U);
+    const bool matches[]{o, !o, c, !c, z, !z, c || z, !(c || z),
+                         s, !s, p, !p, s != o, s == o, z || s != o, !z && s == o};
+    for (unsigned condition = 0; condition < 16; ++condition) {
+      for (unsigned width : {2U, 4U, 8U}) {
+        const auto op = std::uint8_t(0x40 + condition);
+        if (width == 2) program(cpu, {0x66, 0x45, 0x0f, op, 0xc1});
+        else program(cpu, {std::uint8_t(width == 8 ? 0x4d : 0x45), 0x0f, op, 0xc1});
+        cpu.regs[Cpu::R8] = original;
+        cpu.regs[Cpu::R9] = source;
+        cpu.eflags = eflags;
+        one(cpu);
+        const auto value = matches[condition] ? source : original;
+        const auto expected = width == 2 ? (original & ~0xffffULL) | (value & 0xffffU)
+                            : width == 4 ? std::uint32_t(value) : value;
+        check(cpu.regs[Cpu::R8] == expected && cpu.regs[Cpu::R9] == source && cpu.eflags == eflags,
+              "CMOVcc truth table, operand width, REX or flag preservation");
+      }
+    }
+  }
+  // The conditional write follows the read. Both conditions reach source #PF.
+  cpu.regs[Cpu::EAX] = original; cpu.regs[Cpu::EBX] = 0x200000;
+  for (const auto flags : {2U, 2U | Cpu::ZF}) {
+    program(cpu, {0x0f, 0x44, 0x03}); // CMOVZ EAX,[RBX]
+    cpu.eflags = flags;
+    expect_fault(cpu, FaultCode::PageFault, "CMOV must read memory even when false");
+    check(cpu.regs[Cpu::EAX] == original && cpu.eflags == flags && cpu.cr2 == 0x200000,
+          "CMOV fault preserves destination and flags");
+  }
+  program(cpu, {0xf0, 0x0f, 0x44, 0x03});
+  expect_fault(cpu, FaultCode::InvalidInstruction, "LOCK CMOV rejected before reading the source");
+  cpu.reset(0, 0xa000);
+  program(cpu, {0x0f, 0x44, 0xc3, 0x66, 0x0f, 0x44, 0xc3});
+  cpu.regs[Cpu::EAX] = original; cpu.regs[Cpu::EBX] = source; cpu.eflags |= Cpu::ZF;
+  one(cpu); check(cpu.regs[Cpu::EAX] == 0x8877665544339988ULL, "real-mode CMOV default is 16 bits");
+  one(cpu); check(cpu.regs[Cpu::EAX] == 0xbbaa9988ULL, "real-mode CMOV with 66 is 32 bits");
+}
+
+void implicit_arithmetic64() {
+  Cpu cpu; boot(cpu);
+  constexpr auto maximum = UINT64_MAX;
+  constexpr std::uint64_t sign = 0x8000000000000000ULL;
+  constexpr std::uint32_t flags = 2 | Cpu::IF | Cpu::DF;
+  struct Product { std::uint64_t a, b, high, low; bool signed_op, overflow; };
+  const Product products[]{
+    {maximum, maximum, maximum - 1, 1, false, true},
+    {maximum, maximum, 0, 1, true, false},
+    {sign, sign, sign >> 1, 0, true, true},
+    {sign, 2, maximum, 0, true, true},
+    {maximum, 2, maximum, maximum - 1, true, false},
+    {sign + 1, maximum, 0, sign - 1, true, false},
+    {0x123456789abcdef0ULL, 0xfedcba9876543211ULL, 0x121fa00ad77d7422ULL,
+        0x35a1df76f0d5adf0ULL, false, true},
+    {0x123456789abcdef0ULL, 0xfedcba9876543211ULL, 0xffeb49923cc09532ULL,
+        0x35a1df76f0d5adf0ULL, true, true},
+  };
+  for (const auto& value : products) {
+    program(cpu, {0x49, 0xf7, std::uint8_t(value.signed_op ? 0xe9 : 0xe1)});
+    cpu.regs[Cpu::EAX] = value.a; cpu.regs[Cpu::EDX] = maximum; cpu.regs[Cpu::R9] = value.b;
+    cpu.eflags = flags | (value.overflow ? 0 : Cpu::CF | Cpu::OF);
+    one(cpu);
+    check(cpu.regs[Cpu::EAX] == value.low && cpu.regs[Cpu::EDX] == value.high &&
+          cpu.regs[Cpu::R9] == value.b && cpu.eflags == (flags | (value.overflow ? Cpu::CF | Cpu::OF : 0)),
+          "MUL64/IMUL64 writes the full doubleword and defined flags");
+  }
+  struct Quotient { std::uint64_t high, low, divisor, quotient, remainder; bool signed_op; };
+  const Quotient quotients[]{
+    {1, 0, 3, 0x5555555555555555ULL, 1, false},
+    {maximum - 1, maximum, maximum, maximum, maximum - 1, false},
+    {sign, 0, maximum, sign, sign, false},
+    {0, 17, 5, 3, 2, true},
+    {maximum, maximum - 16, 5, maximum - 2, maximum - 1, true},
+    {0, 17, maximum - 4, maximum - 2, 2, true},
+    {maximum, maximum - 16, maximum - 4, 3, maximum - 1, true},
+    {maximum, sign, 1, sign, 0, true},
+    {0, sign, maximum, sign, 0, true},
+    {maximum - 1, maximum - 1, maximum - 3, sign >> 1, maximum - 1, true},
+    {maximum - 1, maximum, 3, 0xaaaaaaaaaaaaaaabULL, maximum - 1, true},
+  };
+  for (const auto& value : quotients) {
+    program(cpu, {0x48, 0xf7, std::uint8_t(value.signed_op ? 0x3b : 0x33)}); // [RBX]
+    cpu.regs[Cpu::EAX] = value.low; cpu.regs[Cpu::EDX] = value.high;
+    cpu.regs[Cpu::EBX] = 0xa100; cpu.write64(0xa100, value.divisor);
+    cpu.eflags = flags | Cpu::OF | Cpu::CF;
+    one(cpu);
+    check(cpu.regs[Cpu::EAX] == value.quotient && cpu.regs[Cpu::EDX] == value.remainder &&
+          cpu.read64(0xa100) == value.divisor && (cpu.eflags & flags) == flags,
+          "DIV64/IDIV64 produces exact quotient and signed remainder");
+  }
+  const Quotient invalid[]{
+    {9, 0, 0, 0, 0, false}, {5, 0, 5, 0, 0, false}, {0, 1, 0, 0, 0, true},
+    {sign, 0, maximum, 0, 0, true}, {maximum, sign, maximum, 0, 0, true},
+    {0, sign, 1, 0, 0, true},
+  };
+  cpu.idtr = {0, 0};
+  for (const auto& value : invalid) {
+    program(cpu, {0x48, 0xf7, std::uint8_t(value.signed_op ? 0xfb : 0xf3)});
+    cpu.regs[Cpu::EAX] = value.low; cpu.regs[Cpu::EDX] = value.high; cpu.regs[Cpu::EBX] = value.divisor;
+    cpu.eflags = flags | Cpu::OF | Cpu::CF;
+    const auto state = cpu.regs; const auto flag_state = cpu.eflags;
+    const auto instructions = cpu.instructions;
+    expect_fault(cpu, FaultCode::DivideError, "DIV64/IDIV64 zero and overflow raise #DE");
+    check(cpu.regs == state && cpu.eflags == flag_state && cpu.instructions == instructions,
+          "faulting division leaves registers, flags and step count unchanged");
+  }
+  program(cpu, {0x48, 0xf7, 0x33}); cpu.regs[Cpu::EBX] = 0x200000;
+  expect_fault(cpu, FaultCode::PageFault, "memory-source DIV64 reads operand before #DE");
+  program(cpu, {0x48, 0xf7, 0xe2}); // MUL RDX: source aliases high output.
+  cpu.regs[Cpu::EAX] = maximum; cpu.regs[Cpu::EDX] = 2; one(cpu);
+  check(cpu.regs[Cpu::EAX] == maximum - 1 && cpu.regs[Cpu::EDX] == 1,
+        "MUL64 source alias is read before high output is written");
+}
 }
 
 int main() {
   try {
     boot_and_register_tests(); addressing_stack_and_alu_tests(); enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
-    signed_multiply_boundaries(); paging_and_fault_tests();
+    signed_multiply_boundaries(); paging_and_fault_tests(); conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;
   } catch (const std::exception& e) {
