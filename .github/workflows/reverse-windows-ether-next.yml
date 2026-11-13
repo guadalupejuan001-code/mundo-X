@@ -9,6 +9,7 @@ on:
       - "native/include/mundo_x/experimental/ether_transform.hpp"
       - "native/src/ether_*.cpp"
       - "pc-android/native/x86_cpu.hpp"
+      - "pc-android/native/tests/x86_cpu_profile_test.cpp"
       - "pc-android/native/tests/x86_protected_real_transition_test.cpp"
   workflow_dispatch:
 
@@ -49,3 +50,9 @@ jobs:
           set -euo pipefail
           cmake --build build/ether-next --parallel 2 --target x86_protected_real_transition_test
           ctest --test-dir build/ether-next --output-on-failure -V -R '^x86_protected_real_transition$'
+      - name: Replay protected32 IA32_TSC reads and verify clock and privileges
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/ether-next --parallel 2 --target x86_cpu_profile_test
+          ctest --test-dir build/ether-next --output-on-failure -V -R '^x86_cpu_profile$'

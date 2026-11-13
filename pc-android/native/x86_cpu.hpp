@@ -193,6 +193,7 @@ class Cpu {
     fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
     segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
+    tsc_offset_ = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     cache_[CS].selector = cs; cache_[CS].base = std::uint64_t(cs) << 4;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
@@ -283,7 +284,7 @@ class Cpu {
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
                           cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_};
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -415,7 +416,7 @@ class Cpu {
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
                           cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp};
+                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_};
     start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -474,6 +475,7 @@ class Cpu {
     std::array<Extended80,8> x87;
     std::uint16_t fpu_control,fpu_status,fpu_tags,fpu_opcode,fpu_cs,fpu_ds;
     std::uint64_t fpu_ip,fpu_dp;
+    std::uint64_t tsc_offset;
   };
   struct Operand {
     bool is_register = false;
@@ -493,6 +495,11 @@ class Cpu {
   std::uint8_t repeat_ = 0;
   std::uint16_t start_cs_ = 0, opcode_ = 0;
   std::uint64_t start_ip_ = 0, cursor_ = 0;
+  static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
+  static constexpr std::uint64_t kTscTicksPerStep = 64;
+  std::uint64_t tsc_offset_ = 0;
+  // A deterministic guest clock advances by 64 ticks per interpreter step.
+  std::uint64_t timestamp_counter() const noexcept { return tsc_offset_ + instructions * kTscTicksPerStep; }
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
   // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
@@ -527,6 +534,7 @@ class Cpu {
     fpu_control=s.fpu_control;fpu_status=s.fpu_status;fpu_tags=s.fpu_tags;
     fpu_opcode=s.fpu_opcode;fpu_cs=s.fpu_cs;fpu_ds=s.fpu_ds;
     fpu_ip=s.fpu_ip;fpu_dp=s.fpu_dp;
+    tsc_offset_ = s.tsc_offset;
     a20_enabled = s.a20; halted = s.halted;
   }
   static void check_register(unsigned r) {
@@ -1921,20 +1929,27 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE, PGE. With no TLB, PGE has no cached translations to retain.
-  constexpr std::uint32_t supported = 0x000006b0U; // OSFXSR and OSXMMEXCPT, no OSXSAVE
+  constexpr std::uint32_t supported = 0x000006b0U | kCr4Tsd; // OSFXSR and OSXMMEXCPT, no OSXSAVE
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   cr4 = std::uint32_t(value);
 }
 
 inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
+  if (number == kTscMsr) return timestamp_counter();
   if (number == 0xc0000080U) return efer;
   if (number == 0xc0000100U) return fs_base;
   if (number == 0xc0000101U) return gs_base;
-  fail("RDMSR register is not implemented", FaultCode::UnsupportedState);
+  std::ostringstream reason;
+  reason << "RDMSR register is not implemented (ECX=0x" << std::hex << number << ')';
+  fail(reason.str(), FaultCode::UnsupportedState);
 }
 
 inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
+  if (number == kTscMsr) {
+    tsc_offset_ = value - instructions * kTscTicksPerStep;
+    return;
+  }
   if (number == 0xc0000080U) {
     constexpr std::uint64_t supported = 0xd00U; // LME, read-only LMA, NXE; no SYSCALL.
     if (value & ~supported) fail("EFER requests an unimplemented feature or reserved bit", FaultCode::UnsupportedState);
@@ -1949,7 +1964,9 @@ inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
     else { gs_base = value; cache_[GS].base = value; }
     return;
   }
-  fail("WRMSR register is not implemented", FaultCode::UnsupportedState);
+  std::ostringstream reason;
+  reason << "WRMSR register is not implemented (ECX=0x" << std::hex << number << ')';
+  fail(reason.str(), FaultCode::UnsupportedState);
 }
 
 inline void Cpu::page_fault(std::uint64_t address, Access access,
@@ -2682,11 +2699,11 @@ inline void Cpu::extended() {
       const auto value = read_msr(std::uint32_t(regs[ECX]));
       put_reg(EAX, 4, value); put_reg(EDX, 4, value >> 32); return;
     }
-    case 0x31: {  // RDTSC: deterministic synthetic guest cycle counter.
-      // This counter reflects decoded work, not host CPU cycles or a clock.
-      const auto cycles = std::uint64_t(instructions) * 64u;
-      put_reg(EAX, 4, std::uint32_t(cycles));
-      put_reg(EDX, 4, std::uint32_t(cycles >> 32));
+    case 0x31: {
+      if ((cr4 & kCr4Tsd) && cpl() != 0)
+        fail("CR4.TSD restricts RDTSC to CPL0", FaultCode::ProtectionFault);
+      const auto ticks = timestamp_counter();
+      put_reg(EAX, 4, ticks); put_reg(EDX, 4, ticks >> 32);
       return;
     }
     case 0xa2: {  // CPUID: a truthful, deliberately conservative emulated CPU.
