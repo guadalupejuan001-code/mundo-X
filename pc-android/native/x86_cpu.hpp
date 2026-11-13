@@ -30,7 +30,7 @@ namespace cosmic_pc {
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget
+  PageFault, MemoryBudget, DeviceNotAvailable
 };
 
 struct Fault {
@@ -1021,6 +1021,7 @@ class Cpu {
   static int exception_vector(FaultCode code) {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
+      case FaultCode::DeviceNotAvailable: return 7; // #NM
       case FaultCode::InvalidInstruction: return 6; // #UD, not missing opcodes
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
@@ -1559,6 +1560,7 @@ inline void Cpu::extended() {
   if (lock_prefix_ && op != 0xc7)
     fail("LOCK prefix is supported only on 0F C7 /1 CMPXCHG8B/16B",
          FaultCode::UnsupportedState);
+  if(op==0xae && execute_fxstate(op))return;
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
@@ -1880,6 +1882,15 @@ inline void Cpu::execute(std::uint8_t op) {
     fail("LOCK prefix on unsupported instruction", FaultCode::UnsupportedState);
   const unsigned bytes = width();
   const unsigned stack_bytes = stack_operand_width();
+  if(op>=0xd8 && op<=0xdf) {
+    (void)execute_x87(op);
+    return;
+  }
+  if(op==0x9b) {
+    if((cr0&0x8U)&&(cr0&0x2U))
+      fail("FWAIT CR0.TS+MP requires #NM",FaultCode::DeviceNotAvailable);
+    return;
+  }
   const unsigned encoded_register = (op & 7U) + ((rex_ & 1) ? 8 : 0);
   if (is_long_mode()) {
     switch (op) {
