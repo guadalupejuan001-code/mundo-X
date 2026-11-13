@@ -1143,8 +1143,8 @@ class Cpu {
       if(!operand_override_||repeat_)
         fail("UCOMISD/COMISD require 66",FaultCode::UnsupportedOpcode);
       require_xmm(m.reg);
-      const auto left_raw=packed_lane(xmm[m.reg],0,8);
-      const auto right_raw=sse64_source(m.rm);
+      auto left_raw=packed_lane(xmm[m.reg],0,8);
+      auto right_raw=sse64_source(m.rm);
       std::uint32_t status=0;
       if(fp64_subnormal(left_raw)){
         if(mxcsr&0x40U)left_raw&=0x8000000000000000ULL;
