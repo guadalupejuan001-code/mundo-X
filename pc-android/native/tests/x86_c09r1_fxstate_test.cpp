@@ -195,7 +195,7 @@ void two_contexts_fxstate(){
   cpu.mxcsr=0x3f80; // distinct legal MXCSR rounding control
   check(execute(cpu,{0xd9,0xee})==StepResult::Executed,
         "context B FLDZ failed");
-  check(execute(cpu,{0x0f,0xae,0x06,0x00,0x62})==StepResult::Faulted,
+  check(execute(cpu,{0x0f,0xae,0x06,0x01,0x62})==StepResult::Faulted,
         "misaligned context B save should fault");
   check(execute(cpu,{0x0f,0xae,0x06,0x00,0x70})==StepResult::Executed,
         "context B FXSAVE failed");
