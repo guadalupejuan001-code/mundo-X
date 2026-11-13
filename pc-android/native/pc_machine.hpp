@@ -385,7 +385,7 @@ class PcMachine {
   void high(unsigned r,std::uint8_t v){cpu.regs[r]=(cpu.regs[r]&~std::uint64_t(0xff00))|(std::uint64_t(v)<<8);}
   void carry(bool v){cpu.eflags=(cpu.eflags&~CF)|(v?CF:0);}
   void zero(bool v){cpu.eflags=(cpu.eflags&~ZF)|(v?ZF:0);}
-  std::uint32_t physical(unsigned segment,std::uint16_t off)const{return std::uint32_t(cpu.segments[segment])*16+off;}
+  std::uint32_t physical(unsigned segment,std::uint16_t off)const{return cpu.real_mode_segment_address(segment,off);}
   void clear_screen(){row_=col_=0;for(unsigned i=0;i<2000;++i){cpu.memory[0xb8000+i*2]=' ';cpu.memory[0xb8001+i*2]=7;}sync_cursor();}
   void sync_cursor(){cpu.memory[0x450]=col_;cpu.memory[0x451]=row_;}
   void emit(std::uint8_t c){

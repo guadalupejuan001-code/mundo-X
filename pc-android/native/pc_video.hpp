@@ -207,7 +207,7 @@ class PcVideo {
   static bool buffer_address(const Cpu& cpu, std::size_t bytes, std::uint64_t& address) {
     const auto offset = cpu.reg16(Cpu::EDI);
     if (bytes > 0x10000U - unsigned(offset)) return false;
-    const auto raw = std::uint64_t(cpu.segments[Cpu::ES]) * 16 + offset;
+    const auto raw = std::uint64_t(cpu.real_mode_segment_address(Cpu::ES, offset));
     const auto mask = cpu.a20_enabled ? ~std::uint64_t{0} : ~std::uint64_t{0x100000};
     address = raw & mask;
     // Refuse a wrapped buffer as one transaction rather than corrupting IVT.

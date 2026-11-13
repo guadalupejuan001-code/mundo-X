@@ -83,6 +83,7 @@ class Cpu {
   struct SegmentCache {
     std::uint64_t base = 0;
     std::uint32_t limit = 0xffff;
+    std::uint16_t selector = 0;
     bool valid = true, code = false, writable = true, readable = true,
          big = false, long_code = false, conforming = false;
     std::uint8_t dpl = 0;
@@ -193,6 +194,7 @@ class Cpu {
     segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
+    cache_[CS].selector = cs; cache_[CS].base = std::uint64_t(cs) << 4;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
     ldtr = {}; tr = {};
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
@@ -214,12 +216,15 @@ class Cpu {
   }
   bool is_long_mode() const { return (efer & 0x400) && cache_[CS].long_code; }
   bool is_real_mode() const { return !(cr0 & 1); }
+  std::uint32_t real_mode_segment_address(unsigned segment, std::uint16_t offset) const {
+    return std::uint32_t(segment_linear(segment, offset, 1, Access::Read));
+  }
   unsigned cpl() const {
     return is_real_mode() || cache_[CS].inherited_from_real_mode
         ? 0U : unsigned(segments[CS] & 3U);
   }
   const char* mode_name() const {
-    if (is_real_mode()) return "real16";
+    if (is_real_mode()) return cache_[CS].big ? "real32" : "real16";
     if (is_long_mode()) return "long64";
     if (efer & 0x400) return cache_[CS].big ? "compat32" : "compat16";
     return cache_[CS].big ? "protected32" : "protected16";
@@ -315,7 +320,7 @@ class Cpu {
     start_ip_ = eip; start_cs_ = segments[CS]; cursor_ = eip;
     decoded_.clear(); journal_.clear(); opcode_ = 0;
     operand_override_ = address_override_ = lock_prefix_ = false; rex_ = 0;
-    op32_ = is_long_mode() || (!is_real_mode() && cache_[CS].big);
+    op32_ = is_long_mode() || cache_[CS].big;
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
     pending_simd_flags_=0;
@@ -344,9 +349,9 @@ class Cpu {
         }
         break;
       }
-      op32_ = (is_long_mode() || (!is_real_mode() && cache_[CS].big)) != operand_override_;
+      op32_ = (is_long_mode() || cache_[CS].big) != operand_override_;
       addr32_ = is_long_mode() ? address_override_
-          : ((!is_real_mode() && cache_[CS].big) != address_override_);
+          : (cache_[CS].big != address_override_);
       execute(op);
       if (fault) fail(fault->reason, fault->code);
       if (!ip_written_) eip = cursor_ & code_mask();
@@ -421,8 +426,7 @@ class Cpu {
         const auto segment=read16(idtr.base+entry+2);
         push(eflags,2);push(segments[CS],2);push(eip,2);
         eflags &= ~(IF|TF);
-        segments[CS]=segment;
-        jump(target,2);
+        far_transfer(segment,target,2);
       } else {
         dispatch_idt(vector,eip,false,false,0);
       }
@@ -565,13 +569,37 @@ class Cpu {
   static bool canonical(std::uint64_t value) {
     return (value >> 48) == ((value & (std::uint64_t{1} << 47)) ? 0xffffU : 0U);
   }
+  std::uint64_t real_segment_base(unsigned segment) const noexcept {
+    // Host setup can assign a public visible selector before running guest
+    // code. A guest segment load always updates both representations.
+    const auto& cache = cache_[segment];
+    return cache.selector == segments[segment]
+        ? cache.base : std::uint64_t(segments[segment]) << 4;
+  }
+  void reload_real_segment(unsigned segment, std::uint16_t selector) {
+    auto& cache = cache_[segment];
+    segments[segment] = selector;
+    cache.selector = selector;
+    cache.base = std::uint64_t(selector) << 4;
+    cache.valid = true;
+    // A real-mode load changes the base without reloading limit or D/B.
+    cache.inherited_from_real_mode = true;
+  }
   std::uint64_t segment_linear(unsigned segment, std::uint64_t offset,
                                unsigned bytes, Access access) const {
     if (segment >= 6) fail("segment index", FaultCode::InvalidInstruction);
     if (is_real_mode()) {
-      if (offset > 0xffffU || bytes == 0 || offset + bytes > 0x10000ULL)
-        fail("real-mode segment limit (64 KiB) exceeded", FaultCode::SegmentLimit);
-      return (std::uint64_t(segments[segment]) << 4) + offset;
+      const auto& cache = cache_[segment];
+      if (!cache.valid) fail("null/unusable real-mode segment", FaultCode::ProtectionFault);
+      // Keep legacy CS overrides usable in real mode. Other registers retain
+      // the memory permissions of the descriptors loaded in protected mode.
+      if (segment != CS && ((access == Access::Write && !cache.writable) ||
+                           (access == Access::Read && !cache.readable)))
+        fail("real-mode segment access denied", FaultCode::ProtectionFault);
+      const auto limit = cache.limit;
+      if (bytes == 0 || offset > limit || bytes - 1 > limit - offset)
+        fail("real-mode segment limit exceeded", FaultCode::SegmentLimit);
+      return std::uint32_t(real_segment_base(segment) + offset);
     }
     if (is_long_mode()) {
       const auto base = segment == FS ? fs_base : segment == GS ? gs_base : 0;
@@ -661,8 +689,8 @@ class Cpu {
   unsigned width() const { return is_long_mode() && (rex_ & 8) ? 8 : op32_ ? 4 : 2; }
   unsigned address_width() const { return is_long_mode() ? (addr32_ ? 4 : 8) : addr32_ ? 4 : 2; }
   unsigned stack_operand_width() const { return is_long_mode() ? (operand_override_ && !(rex_ & 8) ? 2 : 8) : width(); }
-  unsigned stack_address_width() const { return is_long_mode() ? 8 : !is_real_mode() && cache_[SS].big ? 4 : 2; }
-  std::uint64_t code_mask() const { return is_long_mode() ? UINT64_MAX : !is_real_mode() && cache_[CS].big ? 0xffffffffULL : 0xffffULL; }
+  unsigned stack_address_width() const { return is_long_mode() ? 8 : cache_[SS].big ? 4 : 2; }
+  std::uint64_t code_mask() const { return is_long_mode() ? UINT64_MAX : cache_[CS].big ? 0xffffffffULL : 0xffffULL; }
   static std::uint64_t mask(unsigned bytes) { return bytes == 8 ? UINT64_MAX : ((std::uint64_t{1} << (8U * bytes)) - 1); }
   static std::uint64_t sign_bit(unsigned bytes) { return std::uint64_t{1} << (8U * bytes - 1); }
   static std::int64_t signed_value(std::uint64_t value, unsigned bytes) {
@@ -1638,7 +1666,7 @@ class Cpu {
       dispatch_idt(vector, cursor_, true, false, 0);
       return;
     }
-    eip = cursor_ & 0xffffU; ip_written_ = true;
+    eip = cursor_ & code_mask(); ip_written_ = true;
     if (interrupt_hook && interrupt_hook(*this, vector)) return;
     const auto table_offset = std::uint32_t(vector) * 4;
     if (table_offset + 3 > idtr.limit) fail("interrupt vector exceeds IDTR limit", FaultCode::SegmentLimit);
@@ -1648,7 +1676,7 @@ class Cpu {
     // unlike CALL, an operand-size prefix does not widen this frame.
     push(eflags, 2); push(segments[CS], 2); push(eip, 2);
     eflags &= ~(IF | TF);
-    segments[CS] = new_cs; jump(new_ip, 2);
+    far_transfer(new_cs, new_ip, 2);
   }
 
   static int exception_vector(FaultCode code) {
@@ -1749,6 +1777,7 @@ class Cpu {
     if (has_error) push(error,width);
     segments[CS] = std::uint16_t((selector & ~3U) | target_cpl);
     cache_[CS] = target_cache;
+    cache_[CS].selector = segments[CS];
     jump(target_ip,width);
     if (type == 0xe) eflags &= ~IF;
     eflags &= ~TF;
@@ -1788,6 +1817,7 @@ inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
   // DPL0..3 are valid; caller enforces CPL/RPL privilege rules.
   if (access & 4) fail("conforming code / expand-down segments are not implemented", FaultCode::UnsupportedState);
   SegmentCache result;
+  result.selector = selector;
   result.base = ((raw >> 16) & 0xffffffU) | ((raw >> 32) & 0xff000000U);
   result.limit = (raw & 0xffffU) | ((raw >> 32) & 0xf0000U);
   if (attributes & 8) result.limit = (result.limit << 12) | 0xfffU;
@@ -1810,13 +1840,12 @@ inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
 inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
   if (segment >= 6 || segment == CS) fail("invalid segment load", FaultCode::InvalidInstruction);
   if (is_real_mode()) {
-    segments[segment] = selector;
-    cache_[segment] = SegmentCache{}; cache_[segment].base = std::uint64_t(selector) << 4;
+    reload_real_segment(segment, selector);
     return;
   }
   if ((selector & 0xfffcU) == 0) {
     if (segment == SS) fail("null SS is not implemented for this privilege profile", FaultCode::ProtectionFault);
-    segments[segment] = selector; cache_[segment].valid = false;
+    segments[segment] = selector; cache_[segment].selector = selector; cache_[segment].valid = false;
     // AMD64 preserves the FS/GS hidden base when loading a null selector.
     return;
   }
@@ -1837,7 +1866,9 @@ inline void Cpu::load_segment(unsigned segment, std::uint16_t selector) {
 
 inline void Cpu::far_transfer(std::uint16_t selector, std::uint64_t target, unsigned bytes) {
   if (is_real_mode()) {
-    segments[CS] = selector; jump(target, bytes); return;
+    jump(target, bytes);
+    reload_real_segment(CS, selector);
+    return;
   }
   const auto value = descriptor(selector);
   if (!value.code) fail("far transfer target is not a code segment", FaultCode::ProtectionFault);
@@ -1845,6 +1876,7 @@ inline void Cpu::far_transfer(std::uint16_t selector, std::uint64_t target, unsi
       (value.conforming ? value.dpl > cpl() : value.dpl != cpl()))
     fail("far control transfer privilege check failed", FaultCode::ProtectionFault);
   segments[CS] = std::uint16_t((selector & ~3U) | cpl()); cache_[CS] = value;
+  cache_[CS].selector = segments[CS];
   jump(target, value.long_code ? 8 : bytes);
 }
 
@@ -1855,8 +1887,6 @@ inline void Cpu::write_cr0(std::uint64_t value) {
     fail("CR0.NW requires CR0.CD", FaultCode::ProtectionFault);
   if ((value & 0x80000000U) && !(value & 1))
     fail("CR0.PG requires CR0.PE", FaultCode::ProtectionFault);
-  if ((cr0 & 1) && !(value & 1))
-    fail("return from protected mode to real/unreal mode is not implemented", FaultCode::UnsupportedState);
   const bool enabling_paging = !(cr0 & 0x80000000U) && (value & 0x80000000U);
   if (enabling_paging) {
     if (!(efer & 0x100)) fail("legacy non-IA-32e paging is not implemented", FaultCode::UnsupportedState);
@@ -1868,11 +1898,12 @@ inline void Cpu::write_cr0(std::uint64_t value) {
     fail("leave 64-bit code before disabling paging", FaultCode::ProtectionFault);
   if (!(cr0 & 1) && (value & 1)) {
     for (unsigned s = 0; s < 6; ++s) {
-      cache_[s] = SegmentCache{}; cache_[s].base = std::uint64_t(segments[s]) << 4;
-      cache_[s].code = s == CS; cache_[s].writable = s != CS;
+      cache_[s].base = real_segment_base(s);
+      cache_[s].selector = segments[s];
       cache_[s].inherited_from_real_mode = true;
     }
   }
+  // Changing PE does not reload the visible selectors or descriptor caches.
   cr0 = std::uint32_t(value) | 0x10U;
   if (enabling_paging) efer |= 0x400U;
   else if (!(cr0 & 0x80000000U)) efer &= ~std::uint64_t{0x400};
@@ -2978,6 +3009,7 @@ inline void Cpu::execute(std::uint8_t op) {
           if (!descriptor_cache.conforming &&
               std::max(target_cpl,rpl) > descriptor_cache.dpl) {
             segments[seg] = 0;
+            cache_[seg].selector = 0;
             cache_[seg].valid = false;
           }
         }

@@ -9,6 +9,7 @@ on:
       - "native/include/mundo_x/experimental/ether_transform.hpp"
       - "native/src/ether_*.cpp"
       - "pc-android/native/x86_cpu.hpp"
+      - "pc-android/native/tests/x86_protected_real_transition_test.cpp"
   workflow_dispatch:
 
 permissions:
@@ -42,3 +43,9 @@ jobs:
             pc-android/native/tests/x86_group6_0f00_test.cpp -o build/ether-next/protected-entry
           build/ether-next/protected-entry | tee build/ether-next/protected-entry.log
           grep -Fq 'protected_entry_stack=1' build/ether-next/protected-entry.log
+      - name: Replay protected16-to-real16 CR0 transition and verify descriptor caches
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/ether-next --parallel 2 --target x86_protected_real_transition_test
+          ctest --test-dir build/ether-next --output-on-failure -V -R '^x86_protected_real_transition$'
