@@ -102,6 +102,27 @@ void handled_ud_trace(){
        "guest IDT handler did not return into original x64 instruction stream");
   std::cout<<"C09_LONG64_DELIVERED_EXCEPTION_TRACE_PASS vector=6 bytes=0f0b\n";
 }
+void external_irq_trace(){
+  Cpu cpu(2*1024*1024);
+  cpu.reset(0,0x1000);cpu.a20_enabled=true;
+  cpu.regs[Cpu::ESP]=0x9000;cpu.eflags=2|Cpu::IF;
+  cpu.write16(0x20*4,0x1200);cpu.write16(0x20*4+2,0);
+  cpu.memory[0x1200]=0xcf; // IRET inside actual IVT ISR
+  cpu.memory[0x1000]=0xf4;
+  std::vector<Cpu::IrqTrace> irqs;
+  cpu.irq_trace_hook=[&](const Cpu::IrqTrace& irq){irqs.push_back(irq);};
+  need(cpu.raise_external_irq(0x20)&&cpu.eip==0x1200,
+       "IRQ20 did not enter guest real-mode IVT handler");
+  need(irqs.size()==1&&irqs[0].delivered&&
+       irqs[0].vector==0x20&&irqs[0].cs_before==0 &&
+       irqs[0].rip_before==0x1000&&irqs[0].rip_after==0x1200,
+       "C09 trace invented or lost actual hardware IRQ vector");
+  need(cpu.step()==StepResult::Executed&&cpu.eip==0x1000,
+       "IRQ handler did not return to interrupted IP");
+  cpu.irq_trace_hook=[](const Cpu::IrqTrace&){throw std::runtime_error("sink failed");};
+  need(cpu.raise_external_irq(0x20),"hardware IRQ callback exception affected delivery");
+  std::cout<<"C09_EXTERNAL_IRQ_VECTOR_TRACE_PASS vector=32\n";
+}
 void callback_is_observation_only(){
   Cpu cpu(2*1024*1024);
   cpu.reset(0,0x1000);cpu.memory[0x1000]=0xf4;
@@ -113,7 +134,7 @@ void callback_is_observation_only(){
 }
 int main(){
   try{
-    real_mode_trace();fault_trace();handled_ud_trace();callback_is_observation_only();
+    real_mode_trace();fault_trace();handled_ud_trace();external_irq_trace();callback_is_observation_only();
     std::cout<<"REVERSE_WINDOWS_C09_CPU_TRACE_PASS checks="<<checks
              <<" windows_booted=false\n";return 0;
   }catch(const std::exception& e){
