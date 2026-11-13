@@ -1708,8 +1708,8 @@ inline void Cpu::extended() {
       const auto source=xmm[m.rm.index];
       auto& dest=xmm[m.rm.index];
       for(unsigned i=0;i<16;++i) {
-        const auto src=m.group==3?i+count:int(i)-int(count);
-        dest[i]=src<16&&src>=0?source[src]:0;
+        const int src=m.group==3?int(i)+int(count):int(i)-int(count);
+        dest[i]=src>=0&&src<16?source[unsigned(src)]:0;
       }
       return;
     }
@@ -1747,7 +1747,9 @@ inline void Cpu::extended() {
       const auto m=modrm();require_xmm(m.reg);
       const unsigned n=(is_long_mode()&&(rex_&8))||repeat_==0xf3?8U:4U;
       if(op==0x6e||(op==0x7e&&repeat_==0xf3)) {
-        const auto value=get(m.rm,n);
+        const auto value=(op==0x7e&&repeat_==0xf3&&m.rm.is_register)
+          ?(require_xmm(m.rm.index),packed_lane(xmm[m.rm.index],0,8))
+          :get(m.rm,n);
         xmm[m.reg].fill(0);
         packed_set(xmm[m.reg],0,n,value);
       }else{
