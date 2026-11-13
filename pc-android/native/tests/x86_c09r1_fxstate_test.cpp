@@ -180,10 +180,89 @@ void long64_fxstate(){
           "FXRSTOR64 failed XMM0/XMM15 state restore");
   std::cout<<"C09R1_FXSAVE64_XMM15_CONTEXT_PASS xmm16=1\n";
 }
+void two_contexts_fxstate(){
+  Cpu cpu(2*1024*1024);
+  cpu.reset(0,0x1000);cpu.a20_enabled=true;cpu.cr4=0x200;
+  cpu.mxcsr=0x1f80;
+  cpu.xmm[0].fill(0x11);
+  check(execute(cpu,{0xd9,0xe8})==StepResult::Executed,
+        "context A FLD1 failed");
+  check(execute(cpu,{0x0f,0xae,0x06,0x00,0x60})==StepResult::Executed,
+        "context A FXSAVE failed");
+  check(execute(cpu,{0xdb,0xe3})==StepResult::Executed,
+        "context B FNINIT failed");
+  cpu.xmm[0].fill(0x22);
+  cpu.mxcsr=0x1fc0; // DAZ allowed by kMxcsrMask
+  check(execute(cpu,{0xd9,0xee})==StepResult::Executed,
+        "context B FLDZ failed");
+  check(execute(cpu,{0x0f,0xae,0x06,0x00,0x62})==StepResult::Faulted,
+        "misaligned context B save should fault");
+  check(execute(cpu,{0x0f,0xae,0x06,0x00,0x70})==StepResult::Executed,
+        "context B FXSAVE failed");
+  cpu.xmm[0].fill(0xff);cpu.mxcsr=0;
+  check(execute(cpu,{0x0f,0xae,0x0e,0x00,0x60})==StepResult::Executed,
+        "context A FXRSTOR failed");
+  check(cpu.xmm[0][0]==0x11&&cpu.mxcsr==0x1f80 &&
+        ((cpu.fpu_tags>>14)&3)==0,
+        "restored A got another context XMM/MXCSR/x87");
+  check(execute(cpu,{0x0f,0xae,0x0e,0x00,0x70})==StepResult::Executed,
+        "context B FXRSTOR failed");
+  check(cpu.xmm[0][0]==0x22&&cpu.mxcsr==0x1fc0 &&
+        ((cpu.fpu_tags>>14)&3)==1,
+        "restored B got another context XMM/MXCSR/x87");
+  std::cout<<"C09R1_FXSAVE_CONTEXT_A_B_ISOLATED_PASS two_contexts=1\n";
+}
+void nm_guest_handler_recovery(){
+  Cpu cpu(64ULL*1024*1024,16ULL*1024*1024);
+  const auto guest=cosmic_pc::long_mode_boot_disk();
+  cpu.reset();cpu.memory.write_block(0x7c00,guest.data(),guest.size());
+  cpu.interrupt_hook=[](Cpu& c,std::uint8_t n){
+    if(n!=0x15||c.reg16(Cpu::EAX)!=0x2401)c.fail("unexpected A20 service");
+    c.a20_enabled=true;c.set_reg8(4,0);c.set_flag(Cpu::CF,false);return true;
+  };
+  for(unsigned n=0;n<12000;++n){
+    auto r=cpu.step();
+    if(r==StepResult::Faulted)throw std::runtime_error(cpu.fault->describe());
+    if(r==StepResult::Halted&&cpu.is_long_mode())break;
+  }
+  check(cpu.is_long_mode(),"NM guest not in long64 mode");
+  cpu.cr4|=0x200;cpu.cr0|=0x8;
+  cpu.regs[Cpu::ESP]=0x190000;
+  cpu.idtr={0x1000,0x15000};
+  constexpr std::uint64_t target=0x13000;
+  const auto low=(target&0xffffULL)|(std::uint64_t(0x18)<<16)|
+                 (std::uint64_t(0x8e)<<40)|((target>>16)<<48);
+  cpu.write64(cpu.idtr.base+7*16,low);
+  cpu.write64(cpu.idtr.base+7*16+8,0);
+  // Guest #NM handler executes CLTS; IRETQ retries the exact FXSAVE64.
+  const std::array<std::uint8_t,3> handler{{0x0f,0x06,0xcf}};
+  cpu.memory.write_block(target,handler.data(),handler.size());
+  const std::array<std::uint8_t,10> main{{
+     0x48,0x0f,0xae,0x04,0x25,0x00,0x40,0,0,0xf4
+  }};
+  cpu.memory.write_block(0xa000,main.data(),main.size());
+  cpu.eip=0xa000;cpu.halted=false;cpu.fault.reset();
+  check(cpu.step()==StepResult::Executed&&!cpu.fault&&cpu.eip==target,
+        "FXSAVE CR0.TS did not deliver guest #NM vector7");
+  check(cpu.regs[Cpu::ESP]==0x190000-40,
+        "guest #NM must stack 64-bit no-error-code frame");
+  check(cpu.step()==StepResult::Executed && !(cpu.cr0&8),
+        "real guest CLTS failed to clear task-switched flag");
+  check(cpu.step()==StepResult::Executed&&cpu.eip==0xa000,
+        "IRETQ failed to restart exact FXSAVE64 after #NM");
+  check(cpu.step()==StepResult::Executed&&!cpu.fault&&cpu.eip==0xa009,
+        "guest FXSAVE64 failed after #NM handler");
+  check(cpu.read16(0x4000)==0x037f && cpu.regs[Cpu::ESP]==0x190000,
+        "retried FXSAVE failed state or lost guest stack");
+  check(cpu.step()==StepResult::Halted,
+        "real guest did not halt after completed FXSAVE64");
+  std::cout<<"C09R1_GUEST_NM_CLTS_IRETQ_RETRY_PASS vector=7\n";
+}
 }
 int main(){
   try{
     real16_fxstate();fxstate_failures();fpu_memory_and_stack();long64_fxstate();
+    two_contexts_fxstate();nm_guest_handler_recovery();
     std::cout<<"REVERSE_WINDOWS_C09R1_FPU_FXSTATE_PASS checks="<<checks
              <<" windows_executed=false sse2_cpuid=false x87_cpuid=false\n";
     return 0;
