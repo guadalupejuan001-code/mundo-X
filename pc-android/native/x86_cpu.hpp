@@ -32,7 +32,7 @@ namespace cosmic_pc {
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget, DeviceNotAvailable, SimdFloatingPoint
+  PageFault, MemoryBudget, DeviceNotAvailable, SimdFloatingPoint, X87FloatingPoint
 };
 
 struct Fault {
@@ -1413,6 +1413,7 @@ class Cpu {
       case FaultCode::InvalidInstruction: return 6;
       case FaultCode::DeviceNotAvailable: return 7; // #NM
       case FaultCode::SimdFloatingPoint: return 19; // #XM/#XF
+      case FaultCode::X87FloatingPoint: return 16; // #MF deferred x87 error
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
       case FaultCode::PageFault: return 14;        // #PF
@@ -2538,11 +2539,13 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x98:
       put_reg(EAX, bytes, std::uint64_t(signed_value(get_reg(EAX, bytes / 2), bytes / 2))); return;
     case 0x99: put_reg(EDX, bytes, (get_reg(EAX, bytes) & sign_bit(bytes)) ? mask(bytes) : 0); return;
-    case 0x9b: { // FWAIT: deliver pending exceptions where modeled.
+    case 0x9b: { // FWAIT: x87 deferred unmasked exceptions.
       if((cr0&0x8U)&&(cr0&0x2U))
         fail("FWAIT with TS and MP",FaultCode::DeviceNotAvailable);
-      if(fpu_status&0x0080U)
-        fail("pending x87 exception delivery not implemented",FaultCode::UnsupportedState);
+      if(fpu_status&0x0080U) {
+        if(cr0&0x20U)fail("pending unmasked x87 exception (#MF)",FaultCode::X87FloatingPoint);
+        fail("legacy x87 FERR#/IRQ13 delivery not modeled",FaultCode::UnsupportedState);
+      }
       return;
     }
     case 0x9a: {
@@ -2716,14 +2719,47 @@ inline void Cpu::execute(std::uint8_t op) {
         if(op==0xdf && encoding==0xe0) { // FNSTSW AX
           set_reg16(EAX,fpu_status);return;
         }
-        if(op==0xd8 && (encoding&0xf8U)==0xc0) { // FADD ST0,ST(i)
-          if((fpu_control&0x0c00U)!=0)
-            fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
-          const auto a=extended_to_long_double(fpu_peek());
-          const auto b=extended_to_long_double(fpu_peek(reg));
-          const auto result=extended_from_long_double(a+b);
+        if(op==0xd8 && ((encoding&0xf8U)==0xc0 ||
+                       (encoding&0xf8U)==0xc8 ||
+                       (encoding&0xf8U)==0xe0 ||
+                       (encoding&0xf8U)==0xf0)) { // FADD/FMUL/FSUB/FDIV ST0,STi
+          if(fpu_status&0x0080U)
+            fail("x87 pending exception must be serviced before arithmetic",
+                 (cr0&0x20U)?FaultCode::X87FloatingPoint:FaultCode::UnsupportedState);
+          // Only full extended precision and round-to-nearest are modeled.
+          // A different precision/RC is rejected rather than silently using
+          // the host's 64/113-bit long double rounding.
+          if((fpu_control&0x0f00U)!=0x0300U)
+            fail("x87 non-extended-precision or non-nearest rounding pending",
+                 FaultCode::UnsupportedState);
+          const auto lhs=extended_to_long_double(fpu_peek());
+          const auto rhs=extended_to_long_double(fpu_peek(reg));
+          long double answer=0;
+          std::uint32_t flags=0;
+          {
+            HostRound rounding(0x1f80);
+            volatile long double a=lhs,b=rhs;
+            if((encoding&0xf8U)==0xc0) {
+              volatile long double result=a+b;answer=result;
+            }else if((encoding&0xf8U)==0xc8) {
+              volatile long double result=a*b;answer=result;
+            }else if((encoding&0xf8U)==0xe0) {
+              volatile long double result=a-b;answer=result;
+            }else{
+              volatile long double result=a/b;answer=result;
+            }
+            flags|=rounding.status();
+          }
+          // Intel keeps the top-of-stack unmodified when an exception is
+          // unmasked. The #MF is deferred until FWAIT or a waiting x87 op.
+          fpu_status|=std::uint16_t(flags);
+          if(flags&~std::uint32_t(fpu_control)&0x3fU){
+            fpu_status|=0x8080U; // ES+B; FNSTSW exposes sticky condition.
+            return;
+          }
+          const auto converted=extended_from_long_double(answer);
           const auto slot=fpu_slot(0);
-          x87[slot]=result;fpu_tag_set(slot,classify_ext(result));
+          x87[slot]=converted;fpu_tag_set(slot,classify_ext(converted));
           fpu_ip=start_ip_;return;
         }
         fail("x87 register opcode pending for full FPU",FaultCode::UnsupportedOpcode);
