@@ -10,6 +10,9 @@ on:
       - "native/src/ether_*.cpp"
       - "pc-android/native/x86_cpu.hpp"
       - "pc-android/native/sparse_ram.hpp"
+      - "pc-android/native/memory_fabric.hpp"
+      - "pc-android/native/tests/sparse_ram_test.cpp"
+      - "pc-android/native/tests/x86_ram_backing_test.cpp"
       - "pc-android/native/boot_hotspots.hpp"
       - "pc-android/native/x86_shift_loop.inc"
       - "native/include/mundo_x/experimental/ether_shift_loop.hpp"
@@ -140,11 +143,11 @@ jobs:
         run: |
           set -euo pipefail
           cmake --build build/ether-next --parallel 2 --target \
-            x86_ether_rep_batch_test x86_ether_shift_loop_test sparse_ram_test boot_hotspots_test \
+            x86_ether_rep_batch_test x86_ether_shift_loop_test sparse_ram_test boot_hotspots_test x86_ram_backing_test \
             x86_bit_scan_test x86_invlpg_test x86_long_mode_test x86_alu64_oracle_test \
             pc_memory_test pc_memory_fabric_test
           ctest --test-dir build/ether-next --output-on-failure -V \
-            -R '^(x86_ether_rep_batch|x86_ether_shift_loop|sparse_ram|boot_hotspots|x86_bit_scan|x86_invlpg|x86_long_mode|x86_alu64_oracle|pc_memory|pc_memory_fabric)$' \
+            -R '^(x86_ether_rep_batch|x86_ether_shift_loop|sparse_ram|boot_hotspots|x86_ram_backing|x86_bit_scan|x86_invlpg|x86_long_mode|x86_alu64_oracle|pc_memory|pc_memory_fabric)$' \
             | tee build/ether-next/ether-boot-cycles.log
       - uses: actions/upload-artifact@v4
         with:

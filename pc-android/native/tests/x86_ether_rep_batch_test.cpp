@@ -175,6 +175,62 @@ void protected_fixture(Cpu& cpu) {
   cpu.eip = 0x8000;
 }
 
+void copy_under_pressure() {
+  constexpr auto page = MemoryFabric::kPageSize;
+  constexpr std::uint32_t from = 0x32000, to = 0x11c1c000;
+  constexpr std::uint32_t count = 3 * page / sizeof(std::uint32_t);
+  constexpr std::array<std::uint8_t, 8> pattern{0x11, 0x22, 0x44, 0x66, 0x31, 0x86, 0x37, 0xeb};
+
+  Cpu cpu(300 * 1024 * 1024, 4 * page + 3 * pattern.size());
+  protected_fixture(cpu);
+  cpu.eip = 0x8002;
+  require(cpu.memory.allocated_pages() == 2, "fixture code must occupy two dense pages");
+  std::array<std::uint8_t, page> source;
+  for (std::size_t i = 0; i < source.size(); ++i) source[i] = pattern[i % pattern.size()];
+  // The first page is backed densely, the second is an exact pattern, and
+  // the third stays implicit zero. Give the scalar seed one dense page.
+  cpu.memory.write_block(from, source.data(), source.size());
+  cpu.memory.write_block(from + page, source.data(), source.size());
+  require(cpu.memory.compact_repeating_page(from + page), "fixture compact source page");
+  cpu.regs[Cpu::ESI] = from;
+  cpu.regs[Cpu::EDI] = to;
+  cpu.regs[Cpu::ECX] = count;
+  expect_step(cpu);
+  require(cpu.memory.budget_bytes() - cpu.memory.allocated_bytes() == 2 * pattern.size(),
+          "fixture must leave less than one dense page for REP");
+  require(cpu.try_rep_batch(count) == page / 4 - 1 && cpu.memory.pattern_pages() == 2,
+          "finishing the first copied page must compact its exact bytes");
+  // Consume the dense headroom before copying the compact and zero pages.
+  cpu.memory.write_byte(0x15000, 1);
+  require(cpu.memory.budget_bytes() - cpu.memory.allocated_bytes() == pattern.size(),
+          "the next page must fit in its exact pattern backing");
+  const auto resident = cpu.memory.allocated_pages();
+  require(cpu.try_rep_batch(count) == page / 4 && cpu.memory.pattern_pages() == 3 &&
+              cpu.memory.allocated_pages() == resident &&
+              cpu.memory.allocated_bytes() == cpu.memory.budget_bytes(),
+          "copy of a repeated page must use only its stored pattern");
+
+  require(cpu.try_rep_batch(count) == page / 4 && cpu.regs[Cpu::ECX] == 0 &&
+              cpu.eip == 0x8004 && cpu.instructions > count,
+          "copy of implicit zero must complete without dense backing");
+  std::array<std::uint8_t, page> bytes;
+  for (const auto offset : std::array<std::uint64_t, 2>{to, to + page}) {
+    cpu.memory.read_block(offset, bytes.data(), bytes.size());
+    require(bytes == source, "copied pattern bytes differ");
+  }
+  cpu.memory.read_block(to + 2 * page, bytes.data(), bytes.size());
+  require(bytes == decltype(bytes){}, "copy of implicit zero produced nonzero bytes");
+
+  // Replacing a populated page frees its old backing. Mutating the compact
+  // destination afterwards must leave the original bytes independent.
+  require(cpu.memory.try_copy_repeating_page(from + 2 * page, 0x15000) &&
+          cpu.memory.read_byte(0x15000) == 0 && cpu.memory.allocated_pages() == resident - 1,
+          "full zero page must replace stale backing");
+  cpu.memory.write_byte(to + page + 7, 0x4a);
+  require(cpu.read8(from + page + 7) == pattern[7] && cpu.read8(to + page + 7) == 0x4a,
+          "copied page writes must not alias the source");
+}
+
 struct BenchResult {
   std::uint64_t steps = 0;
   std::int64_t host_us = 0;
@@ -222,10 +278,12 @@ int main() {
     restart_and_fallback();
     a20_alias();
     irq_checkpoint();
+    copy_under_pressure();
     const auto scalar = measure(false), batched = measure(true);
     require(scalar.steps == batched.steps && batched.batches > 0 && batched.patterns == 256 &&
             !scalar.patterns, "REP changed step count or failed to compact full STOS pages");
     std::cout << "ETHER_REP_BATCH_PASS real16=1 protected32=1 restart=1 exact_clock=1 a20=1 irq=1"
+              << " patterned_movsd=1 sparse_zero_movsd=1"
               << " scalar_us=" << scalar.host_us << " batched_us=" << batched.host_us
               << " logical_steps=" << batched.steps << " batches=" << batched.batches
               << " pattern_pages=" << batched.patterns << '\n';

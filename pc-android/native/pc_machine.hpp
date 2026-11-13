@@ -635,15 +635,18 @@ class PcMachine {
   }
   void video_bios(){
     const auto fn=hi(0);
-    if(fn==0){const auto mode=lo(0)&127;if(mode!=2&&mode!=3)missing("Modo VGA pendiente; gráficos disponibles por VBE INT 10h 4F02");video_mode_=mode;video_.text_mode(mode,lo(0)&0x80);cpu.write8(0x449,mode);if(!(lo(0)&0x80))clear_screen();return;}
+    if(fn==0){const auto mode=lo(0)&127;if(mode!=2&&mode!=3)missing("Modo VGA pendiente; gráficos disponibles por VBE INT 10h 4F02");set_bios_text_mode(mode,lo(0)&0x80);return;}
     if(fn==0x4f){
       const auto request=cpu.reg16(3);
       const auto mode=request&0x7fff;
       if(PcVideo::available(cpu.memory)&&cpu.reg16(0)==0x4f02&&(mode==2||mode==3)){
-        video_mode_=mode;video_.text_mode(mode,request&0x8000);cpu.write8(0x449,mode);
-        if(!(request&0x8000))clear_screen();
+        set_bios_text_mode(mode,request&0x8000);
         cpu.set_reg16(0,0x004f);return;
       }
+      // Any successful VBE call in graphics mode updates the BIOS data
+      // area. Make that page resident before publishing frame state.
+      if(cpu.memory.has_page_backing()&&PcVideo::available(cpu.memory)&&
+         (video_.info().graphics||cpu.reg16(0)==0x4f02))cpu.memory.prepare_write(0x449,1);
       video_.bios(cpu);
       if(cpu.reg16(0)==0x004f&&video_.info().graphics){video_mode_=0xff;cpu.write8(0x449,0xff);}
       return;
@@ -667,6 +670,13 @@ class PcMachine {
     if(fn==0x12){high(3,0);low(3,3);cpu.set_reg16(1,0);return;}
     if(fn==0x1a){low(0,0x1a);cpu.set_reg16(3,8);return;}
     std::ostringstream s;s<<"BIOS INT 10h función 0x"<<std::hex<<unsigned(fn)<<" pendiente";missing(s.str());
+  }
+  void set_bios_text_mode(std::uint8_t mode,bool preserve){
+    if(!preserve&&cpu.memory.has_page_backing())cpu.memory.prepare_write(0xb8000,4000);
+    cpu.write8(0x449,mode);
+    video_mode_=mode;
+    video_.text_mode(mode,preserve);
+    if(!preserve)clear_screen();
   }
   struct BiosMemoryRegion { std::uint64_t base, length; std::uint32_t type; };
   struct BiosMemoryMap {

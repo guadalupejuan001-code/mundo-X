@@ -7,8 +7,10 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -42,10 +44,133 @@ std::vector<std::uint8_t> read(const SparseRam& ram, std::uint64_t offset, std::
     ram.read_block(offset, result.data(), result.size());
     return result;
 }
+
+struct TestBacking : SparseRam::PageBacking {
+    using Page = std::array<std::uint8_t, kPage>;
+    std::unordered_map<std::uint64_t, Page> pages;
+    bool fail_read = false, fail_write = false;
+    unsigned resets = 0;
+
+    void read(std::uint64_t page, std::uint8_t* bytes) override {
+        if (fail_read) throw std::runtime_error("test backing read I/O error");
+        const auto& stored = pages.at(page);
+        std::copy(stored.begin(), stored.end(), bytes);
+    }
+    void write(std::uint64_t page, const std::uint8_t* bytes) override {
+        if (fail_write) throw std::runtime_error("test backing write I/O error");
+        std::copy_n(bytes, kPage, pages[page].begin());
+    }
+    // Deliberately retain old bytes. RAM reset must discard the old mapping.
+    void reset() noexcept override { ++resets; }
+};
 } // namespace
 
 int main() {
     const std::vector<std::pair<std::string, std::function<void()>>> cases{
+        {"bounded backing preserves dense pages and cache state", [] {
+             SparseRam ram(17 * kPage, 2 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             const auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             for (std::size_t page = 0; page < 12; ++page) {
+                 ram[page * kPage] = static_cast<std::uint8_t>(page + 1);
+                 ram[page * kPage + kPage - 1] = static_cast<std::uint8_t>(page + 15);
+             }
+             const auto metrics = ram.metrics();
+             need(metrics.allocated_pages == 2 && metrics.allocated_bytes == 2 * kPage &&
+                      metrics.spilled_pages == 10 && metrics.backing_bytes == 10 * kPage &&
+                      metrics.backing_writes == 10 && metrics.backing_reads == 0,
+                  "Backing did not preserve a bounded resident working set");
+             for (std::size_t page = 0; page < 12; ++page)
+                 need(ram[page * kPage] == page + 1 && ram[page * kPage + kPage - 1] == page + 15,
+                      "Read-through cache changed persisted guest bytes");
+             need(ram.metrics().backing_reads == 10 && ram.allocated_bytes() == 2 * kPage,
+                  "Multiple reads of a page should use its bounded cache");
+             ram[0] = 0xa2;
+             ram[12 * kPage] = 0x99;
+             need(ram[0] == 0xa2 && ram[kPage - 1] == 15 && ram[12 * kPage] == 0x99,
+                  "Dirty page promotion corrupted untouched or modified bytes");
+             ram.fill(kPage + 1, 0, 2 * kPage);
+             need(ram[kPage] == 2 && ram[2 * kPage - 1] == 0 &&
+                      ram[2 * kPage] == 0 && ram[3 * kPage - 1] == 0 &&
+                      ram[3 * kPage] == 0 && ram[4 * kPage - 1] == 18,
+                  "Partial or full zero fill corrupted backed pages");
+             const auto moved_metrics = ram.metrics();
+             SparseRam moved(std::move(ram));
+             need(!ram.has_page_backing() && moved.has_page_backing() &&
+                      moved.metrics().spilled_pages == moved_metrics.spilled_pages &&
+                      moved[0] == 0xa2, "Moving RAM lost its live backing");
+             moved.reset_zero();
+             need(store->resets == 1 && moved[0] == 0 && moved[kPage] == 0 &&
+                      moved.metrics().backing_writes == 0 && moved.metrics().spilled_pages == 0,
+                  "RAM reset exposed a page from an old boot");
+         }},
+        {"backing I/O failures preserve resident and spilled bytes", [] {
+             SparseRam ram(5 * kPage, 2 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             ram[0] = 1;
+             ram[kPage] = 2;
+             store->fail_write = true;
+             const std::array<std::uint8_t, 2> patch{0xe1, 0xe2};
+             expect<std::runtime_error>([&] { ram.write_block(2 * kPage - 1, patch.data(), patch.size()); },
+                                        "backing write I/O error");
+             need(ram[0] == 1 && ram[kPage] == 2 && ram[2 * kPage - 1] == 0 &&
+                      ram[2 * kPage] == 0 && ram.spilled_pages() == 0,
+                  "Failed eviction committed part of the intended block write");
+             store->fail_write = false;
+             ram[2 * kPage] = 3;
+             const auto spilled = store->pages.begin()->first;
+             need(ram.spilled_pages() == 1, "Fixture failed to exercise spill");
+             store->fail_read = true;
+             expect<std::runtime_error>([&] { ram[spilled * kPage + 1] = 0xc4; },
+                                        "backing read I/O error");
+             store->fail_read = false;
+             need(ram[spilled * kPage] == spilled + 1 && ram[spilled * kPage + 1] == 0 &&
+                      ram[2 * kPage] == 3 && ram.allocated_bytes() <= ram.budget_bytes(),
+                  "A failed reload changed a guest byte or exceeded its resident budget");
+         }},
+        {"transaction pins preserve cross-page rollback at capacity", [] {
+             SparseRam ram(6 * kPage, 2 * kPage);
+             ram.attach_page_backing(std::make_unique<TestBacking>());
+             ram[0] = 7;
+             ram[kPage - 1] = 8;
+             ram[kPage] = 9;
+             {
+                 const auto pins = ram.pin_writes();
+                 ram.prepare_write(kPage - 1, 2);
+                 ram[kPage - 1] = 10;
+                 ram[kPage] = 11;
+                 {
+                     const auto nested = ram.pin_writes();
+                     expect<SparseRam::BudgetExceeded>([&] { ram[2 * kPage] = 12; }, "budget exceeded");
+                 }
+                 need(ram.restore_byte(kPage, 9) && ram.restore_byte(kPage - 1, 8) &&
+                          ram[0] == 7 && ram[2 * kPage] == 0 && ram.spilled_pages() == 0,
+                      "Failed write displaced a live transaction's rollback bytes");
+             }
+             ram[2 * kPage] = 12;
+             need(ram.spilled_pages() == 1 && ram[kPage - 1] == 8 && ram[kPage] == 9 &&
+                      ram[2 * kPage] == 12, "Pin lifetime outlasted the transaction");
+         }},
+        {"mixed Ether writes preflight both classical sides with spill", [] {
+             cosmic_pc::MemoryFabric fabric(5 * kPage, kPage);
+             fabric.attach_page_backing(std::make_unique<TestBacking>());
+             std::uint8_t ether = 0x81;
+             fabric.attach_window(kPage - 1, 1, [&](auto) { return ether; },
+                                  [&](auto, auto value) { ether = value; });
+             fabric[kPage - 2] = 0x45;
+             const std::array<std::uint8_t, 3> patch{4, 5, 6};
+             expect<SparseRam::BudgetExceeded>([&] {
+                 fabric.write_block(kPage - 2, patch.data(), patch.size());
+             }, "budget exceeded");
+             expect<SparseRam::BudgetExceeded>([&] {
+                 fabric.fill(kPage - 2, 0x99, patch.size());
+             }, "budget exceeded");
+             need(fabric[kPage - 2] == 0x45 && ether == 0x81 && fabric[kPage] == 0,
+                  "Mixed Ether write updated a prefix before all RAM pages were prepared");
+         }},
         {"2 GiB logical zero reads allocate no pages", [] {
              SparseRam ram(kTwoGiB);
              const auto metadata = ram.metadata_bytes();

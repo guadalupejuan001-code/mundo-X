@@ -316,6 +316,7 @@ class Cpu {
   StepResult step() {
     if (fault) return StepResult::Faulted;
     if (halted) return StepResult::Halted;
+    const auto memory_writes = memory.pin_writes();
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
                           cr2, cr3, efer, fs_base, gs_base, gdtr, idtr, ldtr, tr, a20_enabled, halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
@@ -482,6 +483,7 @@ class Cpu {
   // Pending IRQs remain with the originating device/controller.
   bool raise_external_irq(std::uint8_t vector) {
     if (!flag(IF) || interrupt_shadow_ || fault) return false;
+    const auto memory_writes = memory.pin_writes();
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
                           cr2,cr3,efer,fs_base,gs_base,gdtr,idtr,ldtr,tr,a20_enabled,halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
@@ -2612,6 +2614,8 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
     };
     if (overlaps(target, bytes, code, length)) return 0;
 
+    const auto within_page = target % page_bytes;
+    const bool completes_page = backward ? within_page == 0 : within_page + bytes == page_bytes;
     if (copying) {
       const auto src_linear = segment_linear(data_segment(), src - back, bytes, Access::Read);
       if (!bulk_ram_range(src_linear, bytes)) return 0;
@@ -2623,10 +2627,8 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
       put_index(ESI, src + (backward ? -std::uint64_t(bytes) : bytes));
     } else {
       mundo_x::ether_next::repeat_ram_value(memory, target, get_reg(EAX, width_bytes), width_bytes, bytes);
-      const auto within_page = target % page_bytes;
-      if (backward ? within_page == 0 : within_page + bytes == page_bytes)
-        memory.compact_repeating_page(target);
     }
+    if (completes_page) memory.compact_repeating_page(target);
     put_index(EDI, dst + (backward ? -std::uint64_t(bytes) : bytes));
     put_index(ECX, remaining - elements);
     if (remaining == elements) eip = cursor_ & code_mask();

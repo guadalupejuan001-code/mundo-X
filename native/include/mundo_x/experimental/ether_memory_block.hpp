@@ -12,6 +12,7 @@ namespace mundo_x::ether_next {
 template <class Memory>
 void copy_ram_block(Memory& memory, std::uint64_t from, std::uint64_t to,
                     std::size_t bytes) {
+  if (bytes == Memory::kPageSize && memory.try_copy_repeating_page(from, to)) return;
   std::array<std::uint8_t, Memory::kPageSize> block;
   memory.read_block(from, block.data(), bytes);
   memory.write_block(to, block.data(), bytes);

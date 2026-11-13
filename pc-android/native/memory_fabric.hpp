@@ -86,6 +86,12 @@ class MemoryFabric {
   bool empty() const noexcept { return ram_.empty(); }
   std::size_t allocated_pages() const noexcept { return ram_.allocated_pages(); }
   std::size_t pattern_pages() const noexcept { return ram_.pattern_pages(); }
+  bool has_page_backing() const noexcept { return ram_.has_page_backing(); }
+  bool has_pinned_writes() const noexcept { return ram_.has_pinned_writes(); }
+  void attach_page_backing(std::unique_ptr<SparseRam::PageBacking> backing) {
+    ram_.attach_page_backing(std::move(backing));
+  }
+  [[nodiscard]] SparseRam::WritePins pin_writes() noexcept { return ram_.pin_writes(); }
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
   std::uint64_t metadata_bytes() const noexcept {
@@ -145,6 +151,7 @@ class MemoryFabric {
       ram_.write_block(offset, source, count);
       return;
     }
+    const auto pins = pin_writes();
     prepare_write(offset, count);
     std::vector<std::pair<std::uint64_t, std::uint8_t>> old;
     old.reserve(std::min<std::size_t>(count, bytes_));
@@ -179,6 +186,7 @@ class MemoryFabric {
       ram_.fill(offset, value, count);
       return;
     }
+    const auto pins = pin_writes();
     prepare_write(offset, count);
     std::vector<std::pair<std::uint64_t, std::uint8_t>> old;
     old.reserve(std::min<std::size_t>(count, bytes_));
@@ -200,6 +208,11 @@ class MemoryFabric {
       }
       throw;
     }
+  }
+
+  bool try_copy_repeating_page(std::uint64_t source, std::uint64_t target) {
+    if (overlaps_window(source, kPageSize) || overlaps_window(target, kPageSize)) return false;
+    return ram_.try_copy_repeating_page(source, target);
   }
 
   // The Ether window does not reserve classical pages. Provider-side qstore8
