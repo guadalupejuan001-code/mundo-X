@@ -1267,6 +1267,47 @@ class Cpu {
     }
     fail("unsupported SSE2 scalar conversion",FaultCode::UnsupportedOpcode);
   }
+  void sse2_cmp_vector(bool scalar) {
+    if((scalar&&(repeat_!=0xf2||operand_override_))||
+       (!scalar&&(!operand_override_||repeat_)))
+      fail("CMPPD/CMPSD require F2 or 66 prefix",FaultCode::UnsupportedOpcode);
+    require_sse_state();
+    const auto m=modrm();
+    require_xmm(m.reg);
+    // Decode imm8 first: RIP-relative address is based on the next IP.
+    const auto predicate=unsigned(immediate(1))&7U;
+    const auto before=xmm[m.reg];
+    auto result=before;
+    std::array<std::uint8_t,16> source{};
+    if(scalar)packed_set(source,0,8,sse64_source(m.rm));
+    else source=read_xmm_operand(m.rm,false);
+    std::uint32_t status=0;
+    const bool signaling=(predicate==1U||predicate==2U||
+                          predicate==5U||predicate==6U);
+    for(unsigned lane=0;lane<(scalar?1U:2U);++lane){
+      const unsigned off=lane*8U;
+      const auto left=fp64_input(packed_lane(before,off,8),status);
+      const auto right=fp64_input(packed_lane(source,off,8),status);
+      const bool unordered=fp64_nan(left)||fp64_nan(right);
+      if((unordered&&signaling)||fp64_snan(left)||fp64_snan(right))
+        status|=1U;
+      const auto a=fp64_from_bits(left),b=fp64_from_bits(right);
+      bool matching=false;
+      switch(predicate){
+        case 0:matching=!unordered&&a==b;break;          // EQ
+        case 1:matching=!unordered&&a<b;break;           // LT
+        case 2:matching=!unordered&&a<=b;break;          // LE
+        case 3:matching=unordered;break;                 // UNORD
+        case 4:matching=unordered||a!=b;break;           // NEQ
+        case 5:matching=unordered||!(a<b);break;          // NLT
+        case 6:matching=unordered||!(a<=b);break;         // NLE
+        case 7:matching=!unordered;break;                // ORD
+      }
+      packed_set(result,off,8,matching?UINT64_MAX:0);
+    }
+    simd_status(status); // all lanes first, then exception before commit
+    xmm[m.reg]=result;
+  }
   void sse_integer(unsigned opcode) {
     if(!operand_override_||repeat_)
       fail("packed integer SSE2 requires 66 prefix",FaultCode::UnsupportedOpcode);
@@ -2052,6 +2093,63 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0x54: case 0x55: case 0x56: case 0x57: { // ANDPD/ANDNPD/ORPD/XORPD
+      if(!operand_override_||repeat_)
+        fail("packed logical SSE2 double requires 66",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const auto source=read_xmm_operand(m.rm,false);
+      for(unsigned i=0;i<16;++i){
+        const auto lhs=xmm[m.reg][i],rhs=source[i];
+        xmm[m.reg][i]=op==0x54?(lhs&rhs):
+                       op==0x55?(std::uint8_t(~lhs)&rhs):
+                       op==0x56?(lhs|rhs):std::uint8_t(lhs^rhs);
+      }
+      return;
+    }
+    case 0x50: { // MOVMSKPD r32, xmm (XMM source register only)
+      if(!operand_override_||repeat_)
+        fail("MOVMSKPD requires 66",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();
+      if(!m.rm.is_register)fail("MOVMSKPD source must be XMM",FaultCode::InvalidInstruction);
+      require_xmm(m.rm.index);
+      const auto bits=((packed_lane(xmm[m.rm.index],0,8)>>63)&1U)|
+                      (((packed_lane(xmm[m.rm.index],8,8)>>63)&1U)<<1);
+      put_reg(m.reg,4,bits);
+      return;
+    }
+    case 0xc2: { // CMPPD / CMPSD imm8
+      sse2_cmp_vector(repeat_==0xf2);
+      return;
+    }
+    case 0xc6: { // SHUFPD xmm, xmm/m128, imm8
+      if(!operand_override_||repeat_)
+        fail("SHUFPD requires 66",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      const auto order=unsigned(immediate(1));
+      const auto src=read_xmm_operand(m.rm,false);
+      const auto dst=xmm[m.reg];
+      packed_set(xmm[m.reg],0,8,
+                 packed_lane(dst,(order&1U)?8:0,8));
+      packed_set(xmm[m.reg],8,8,
+                 packed_lane(src,(order&2U)?8:0,8));
+      return;
+    }
+    case 0x12: case 0x13: case 0x16: case 0x17: { // MOVLPD/MOVHPD m64
+      if(!operand_override_||repeat_)
+        fail("MOVLPD/MOVHPD require 66",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();require_xmm(m.reg);
+      if(m.rm.is_register)
+        fail("MOVLPD/MOVHPD require memory operand",FaultCode::InvalidInstruction);
+      const unsigned at=(op==0x16||op==0x17)?8U:0U;
+      if(op==0x12||op==0x16)
+        packed_set(xmm[m.reg],at,8,get(m.rm,8));
+      else put(m.rm,8,packed_lane(xmm[m.reg],at,8));
+      return;
+    }
     case 0xdb: case 0xdf: case 0xeb: // PAND/PANDN/POR
     case 0x60: case 0x61: case 0x62: case 0x6c: // PUNPCKL
     case 0x68: case 0x69: case 0x6a: case 0x6d: // PUNPCKH
