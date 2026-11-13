@@ -91,7 +91,7 @@ void guest32(){
   std::array<std::uint8_t,512> source{},target{};
   for(std::size_t i=0;i<source.size();++i)source[i]=std::uint8_t(i*53+7);
   cpu.memory.write_block(0x18000,source.data(),source.size());
-  constexpr std::array<std::uint8_t,31> program{
+  constexpr std::array<std::uint8_t,32> program{
     0xbe,0x00,0x80,0x01,0x00, // MOV ESI,18000
     0xb9,0x00,0x01,0x00,0x00, // MOV ECX,256
     0x66,0xba,0xf0,0x01,      // MOV DX,1F0
