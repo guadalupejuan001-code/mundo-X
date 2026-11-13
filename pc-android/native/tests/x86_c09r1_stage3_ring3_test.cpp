@@ -84,7 +84,8 @@ void test(){
   code(cpu,0xa040,{0xd9,0xe8}); // FLD1 via actual guest x87 opcode
   cpu.eip=0xa040;cpu.halted=false;
   need(cpu.step()==StepResult::Executed,"guest FLD1 initial context failed");
-  const auto saved_x87=cpu.x87[7],saved_tags=cpu.fpu_tags;
+  const auto saved_x87=cpu.x87[7];
+  const auto saved_tags=cpu.fpu_tags;
   gate(cpu,0x80,0x13000);
   gate(cpu,0x81,0x13400);
   // Ring0 uses actual instruction sequence to build an outer-IRETQ frame.
