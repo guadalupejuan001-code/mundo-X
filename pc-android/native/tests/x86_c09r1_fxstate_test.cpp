@@ -192,7 +192,7 @@ void two_contexts_fxstate(){
   check(execute(cpu,{0xdb,0xe3})==StepResult::Executed,
         "context B FNINIT failed");
   cpu.xmm[0].fill(0x22);
-  cpu.mxcsr=0x1fc0; // DAZ allowed by kMxcsrMask
+  cpu.mxcsr=0x3f80; // distinct legal MXCSR rounding control
   check(execute(cpu,{0xd9,0xee})==StepResult::Executed,
         "context B FLDZ failed");
   check(execute(cpu,{0x0f,0xae,0x06,0x00,0x62})==StepResult::Faulted,
@@ -207,7 +207,7 @@ void two_contexts_fxstate(){
         "restored A got another context XMM/MXCSR/x87");
   check(execute(cpu,{0x0f,0xae,0x0e,0x00,0x70})==StepResult::Executed,
         "context B FXRSTOR failed");
-  check(cpu.xmm[0][0]==0x22&&cpu.mxcsr==0x1fc0 &&
+  check(cpu.xmm[0][0]==0x22&&cpu.mxcsr==0x3f80 &&
         ((cpu.fpu_tags>>14)&3)==1,
         "restored B got another context XMM/MXCSR/x87");
   std::cout<<"C09R1_FXSAVE_CONTEXT_A_B_ISOLATED_PASS two_contexts=1\n";
