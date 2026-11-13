@@ -739,6 +739,45 @@ class Cpu {
     if(exp==0x7fff||!exp||!(sig&(1ULL<<63)))return 2U; // special
     return 0U; // valid finite normal
   }
+  // IEEE binary32 / binary64 -> 80-bit extended is always exact. Decode
+  // exponent and fraction directly, independent of whether Android's
+  // long double is IEEE binary128 or the x86 host's extended80 format.
+  static Extended80 extended_from_ieee(std::uint64_t raw,unsigned width) {
+    if(width!=4&&width!=8)
+      throw std::runtime_error("x87 FLD IEEE source width invalid");
+    const unsigned frac_bits=width==4?23U:52U;
+    const unsigned exp_bits=width==4?8U:11U;
+    const int bias=width==4?127:1023;
+    const auto frac_mask=(std::uint64_t{1}<<frac_bits)-1U;
+    const auto exp_mask=(1U<<exp_bits)-1U;
+    const auto fraction=raw&frac_mask;
+    const auto exponent=unsigned((raw>>frac_bits)&exp_mask);
+    const auto sign=((raw>>(frac_bits+exp_bits))&1U)!=0;
+    std::uint64_t significand=0;
+    unsigned extended_exp=0;
+    if(exponent==exp_mask) {
+      extended_exp=0x7fff;
+      significand=(1ULL<<63)|(fraction<<(63-frac_bits));
+      // Do not pretend to model the pending unmasked sNaN x87 flags yet.
+      if(fraction && !(fraction&(1ULL<<(frac_bits-1))))
+        throw std::runtime_error("signaling NaN in x87 FLD requires exception model");
+    }else if(exponent||fraction) {
+      int e=exponent?int(exponent)-bias:1-bias;
+      significand=(exponent?(1ULL<<frac_bits):0ULL)|fraction;
+      if(!exponent)
+        while(!(significand&(1ULL<<frac_bits))) {
+          significand<<=1;--e;
+        }
+      extended_exp=unsigned(e+16383);
+      significand<<=(63-frac_bits);
+    }
+    Extended80 out{};
+    for(unsigned byte=0;byte<8;++byte)
+      out[byte]=std::uint8_t(significand>>(byte*8));
+    out[8]=std::uint8_t(extended_exp);
+    out[9]=std::uint8_t((extended_exp>>8)|(sign?0x80U:0U));
+    return out;
+  }
   static Extended80 extended_from_long_double(long double value) {
     Extended80 bytes{};
     const bool negative=std::signbit(value);
@@ -2698,17 +2737,7 @@ inline void Cpu::execute(std::uint8_t op) {
                             (op==0xdd||op==0xdc)?8U:2U;
       if((op==0xd9||op==0xdd)&&group==0) { // FLD m32real/m64real
         const auto raw=get(m.rm,data_width);
-        long double number=0;
-        if(data_width==4){
-          const auto bits=std::uint32_t(raw);
-          float value=0;std::memcpy(&value,&bits,sizeof(value));
-          number=static_cast<long double>(value);
-        }else{
-          const auto bits=raw;
-          double value=0;std::memcpy(&value,&bits,sizeof(value));
-          number=static_cast<long double>(value);
-        }
-        fpu_push(extended_from_long_double(number));
+        fpu_push(extended_from_ieee(raw,data_width));
         fpu_ip=start_ip_;fpu_cs=start_cs_;
         fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
         return;
