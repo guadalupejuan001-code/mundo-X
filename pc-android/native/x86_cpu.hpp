@@ -89,7 +89,7 @@ class Cpu {
   // Architectural XMM/MXCSR owned by the original guest CPU.
   std::array<std::array<std::uint8_t,16>,16> xmm{};
   std::uint32_t mxcsr=0x1f80;
-  static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
+  static constexpr std::uint32_t kMxcsrMask=0x0000ffffU; // DAZ bit6, FTZ bit15, all status/masks
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -1022,6 +1022,14 @@ class Cpu {
   static bool fp64_snan(std::uint64_t raw) {
     return fp64_nan(raw) && !(raw&(1ULL<<51));
   }
+  std::uint64_t fp64_input(std::uint64_t raw,std::uint32_t& status) const {
+    if(fp64_subnormal(raw)){
+      if(mxcsr&0x40U) // DAZ: signed zero, without setting DE
+        return raw&0x8000000000000000ULL;
+      status|=2U; // denormal source, DE sticky / mask checked later
+    }
+    return raw;
+  }
   void simd_status(std::uint32_t flags) {
     flags&=0x3fU;
     if(!flags)return;
@@ -1055,21 +1063,21 @@ class Cpu {
   // Returns a single rounded IEEE-754 binary64 result and ORs its sticky
   // status into MXCSR. No destination is modified before the status checks.
   std::uint64_t simd_double_op(std::uint8_t opcode,
-                               std::uint64_t left_raw,std::uint64_t right_raw) {
-    std::uint32_t status=0;
-    if((opcode!=0x51&&fp64_subnormal(left_raw)) ||
-       fp64_subnormal(right_raw))status|=2U;
+                               std::uint64_t left_raw,std::uint64_t right_raw,
+                               std::uint32_t& status) {
+    // Aggregate status across BOTH packed lanes before deciding whether #XM
+    // is raised; an unmasked exception must not commit a partial vector.
+    if(opcode!=0x51)left_raw=fp64_input(left_raw,status);
+    right_raw=fp64_input(right_raw,status);
     if((opcode==0x5d||opcode==0x5f) &&
        (fp64_nan(left_raw)||fp64_nan(right_raw))) {
       if(fp64_snan(left_raw)||fp64_snan(right_raw))status|=1U;
-      simd_status(status);
       // MIN/MAX return the second source for unordered or equal values,
       // preserving its NaN payload and negative zero bits unchanged.
       return right_raw;
     }
     if(opcode==0x5d||opcode==0x5f) {
       const double l=fp64_from_bits(left_raw),r=fp64_from_bits(right_raw);
-      simd_status(status);
       if(l==r)return right_raw;
       return opcode==0x5d?(l<r?left_raw:right_raw):
                              (l>r?left_raw:right_raw);
@@ -1091,17 +1099,17 @@ class Cpu {
       status|=rounding.status();
     }
     auto bits=fp64_bits(rounded);
-    // MXCSR.FTZ flushes subnormal results and sets UE and PE; DE on input
-    // remains a separate flag. DAZ is not advertised by kMxcsrMask.
-    if((mxcsr&0x8000U) && fp64_subnormal(bits)) {
+    // FTZ acts on the masked-underflow response. When unmasked, allow the
+    // original tiny result to reach exception delivery rather than claiming
+    // an ordinary zero. DAZ is separate and already applied to inputs.
+    if((mxcsr&0x8000U)&&(mxcsr&(1U<<11))&&fp64_subnormal(bits)) {
       bits&=0x8000000000000000ULL;
       status|=16U|32U;
     }
-    simd_status(status);
     return bits;
   }
   void sse2_float(unsigned opcode) {
-    const bool scalar=repeat_==0xf2;
+    const bool scalar=repeat_==0xf2 && !operand_override_;
     const bool packed=operand_override_ && repeat_==0;
     if(!scalar&&!packed)
       fail("SSE2 binary64 requires F2 scalar or 66 packed prefix",
@@ -1111,10 +1119,12 @@ class Cpu {
     require_xmm(m.reg);
     const auto before=xmm[m.reg];
     auto result=before;
+    std::uint32_t aggregated_status=0;
     if(scalar) {
       const auto src=sse64_source(m.rm);
       const auto dest=packed_lane(before,0,8);
-      packed_set(result,0,8,simd_double_op(std::uint8_t(opcode),dest,src));
+      packed_set(result,0,8,simd_double_op(std::uint8_t(opcode),
+                                           dest,src,aggregated_status));
     }else{
       const auto rhs=read_xmm_operand(m.rm,false);
       // Stage both lanes before commit. An unmasked exception must not
@@ -1122,9 +1132,11 @@ class Cpu {
       for(unsigned lane=0;lane<2;++lane) {
         const auto at=lane*8U;
         packed_set(result,at,8,simd_double_op(std::uint8_t(opcode),
-                    packed_lane(before,at,8),packed_lane(rhs,at,8)));
+                    packed_lane(before,at,8),packed_lane(rhs,at,8),
+                    aggregated_status));
       }
     }
+    simd_status(aggregated_status);
     xmm[m.reg]=result;
   }
   void sse2_scalar_misc(unsigned opcode) {
@@ -1135,10 +1147,9 @@ class Cpu {
       if(!operand_override_||repeat_)
         fail("UCOMISD/COMISD require 66",FaultCode::UnsupportedOpcode);
       require_xmm(m.reg);
-      const auto left_raw=packed_lane(xmm[m.reg],0,8);
-      const auto right_raw=sse64_source(m.rm);
       std::uint32_t status=0;
-      if(fp64_subnormal(left_raw)||fp64_subnormal(right_raw))status|=2U;
+      const auto left_raw=fp64_input(packed_lane(xmm[m.reg],0,8),status);
+      const auto right_raw=fp64_input(sse64_source(m.rm),status);
       const bool unordered=fp64_nan(left_raw)||fp64_nan(right_raw);
       if(unordered && (opcode==0x2f||
                        fp64_snan(left_raw)||fp64_snan(right_raw)))
@@ -1173,9 +1184,9 @@ class Cpu {
     }
     if(opcode==0x2c||opcode==0x2d) { // CVTTSD2SI / CVTSD2SI
       const unsigned bytes=is_long_mode()&&(rex_&8U)?8U:4U;
-      const auto raw=sse64_source(m.rm);
+      std::uint32_t status=0;
+      const auto raw=fp64_input(sse64_source(m.rm),status);
       const auto value=fp64_from_bits(raw);
-      std::uint32_t status=fp64_subnormal(raw)?2U:0U;
       long double rounded=0;
       {
         HostRound mode(mxcsr);
