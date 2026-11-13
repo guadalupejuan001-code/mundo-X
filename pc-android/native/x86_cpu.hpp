@@ -30,7 +30,7 @@ namespace cosmic_pc {
 enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
-  PageFault, MemoryBudget
+  PageFault, MemoryBudget, DeviceNotAvailable
 };
 
 struct Fault {
@@ -887,9 +887,9 @@ class Cpu {
     if(!(cr4&0x200U))
       fail("SSE2 requires CR4.OSFXSR",FaultCode::InvalidInstruction);
     if(cr0&0x4U)
-      fail("SSE2 disabled by CR0.EM",FaultCode::InvalidInstruction);
+      fail("SSE2 disabled by CR0.EM",FaultCode::DeviceNotAvailable);
     if(cr0&0x8U)
-      fail("SSE2 task-switched CR0.TS",FaultCode::InvalidInstruction);
+      fail("SSE2 task-switched CR0.TS",FaultCode::DeviceNotAvailable);
   }
   std::array<std::uint8_t,16> read_xmm_operand(const Operand& m,bool aligned) {
     if(m.is_register){require_xmm(m.index);return xmm[m.index];}
@@ -1055,7 +1055,8 @@ class Cpu {
   static int exception_vector(FaultCode code) {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
-      case FaultCode::InvalidInstruction: return 6; // #UD, not missing opcodes
+      case FaultCode::InvalidInstruction: return 6;
+      case FaultCode::DeviceNotAvailable: return 7; // #NM // #UD, not missing opcodes
       case FaultCode::ProtectionFault:
       case FaultCode::SegmentLimit: return 13;    // #GP
       case FaultCode::PageFault: return 14;        // #PF
@@ -1629,10 +1630,11 @@ inline void Cpu::extended() {
       for(unsigned i=0;i<16;++i)xmm[m.reg][i]^=rhs[i];
       return;
     }
-    case 0xae: { // FXSAVE/FXRSTOR not yet implemented; MXCSR loads/stores
+    case 0xae: { // FXSAVE/FXRSTOR m512byte and LDMXCSR/STMXCSR
       const auto m=modrm();require_memory(m.rm);
+      if(m.group==0||m.group==1){fxstate(m.rm,m.group==1);return;}
       if(m.group!=2&&m.group!=3)
-        fail("FXSAVE/FXRSTOR and other 0F AE states pending",FaultCode::UnsupportedOpcode);
+        fail("0F AE operation not implemented",FaultCode::UnsupportedOpcode);
       require_sse_state();
       const auto address=segment_linear(m.rm.segment,operand_offset(m.rm),4,
                                        m.group==2?Access::Read:Access::Write);
