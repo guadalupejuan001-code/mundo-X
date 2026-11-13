@@ -86,6 +86,8 @@ void ftz_oracle(){
   need(cpu.step()==StepResult::Executed&&!cpu.fault,
        "gradual-underflow MULSD failed");
   const auto gradual=lane(cpu,0);
+  need(gradual==0x0008000000000000ULL && (cpu.mxcsr&0x3fU)==0,
+       "x86 golden: gradual exact tiny result, no exception flags");
 #if defined(__x86_64__) || defined(__i386__)
   const auto prior=_mm_getcsr();
   {
@@ -103,6 +105,8 @@ void ftz_oracle(){
   opcode(cpu,{0xf2,0x0f,0x59,0xc1});
   need(cpu.step()==StepResult::Executed&&!cpu.fault,
        "FTZ masked MULSD failed");
+  need(lane(cpu,0)==0 && (cpu.mxcsr&0x3fU)==0x30,
+       "x86 golden: masked FTZ flushes exact tiny result with UE+PE");
 #if defined(__x86_64__) || defined(__i386__)
   {
     _mm_setcsr(0x9f80);
