@@ -428,6 +428,193 @@ class Cpu {
   };
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
 
+  // Internal architectural state helpers. No host SSE, no Qiskit, no second
+  // CPU/FPU. 80-bit values are preserved as EXACT 10-byte guest encodings.
+  static constexpr std::uint32_t kMxcsrMask=0x0000ffbfU;
+  void require_x87() const {
+    if(cr0 & 0x4U) fail("CR0.EM requests x87 emulation",FaultCode::DeviceNotAvailable);
+    if(cr0 & 0x8U) fail("CR0.TS blocks x87 instructions",FaultCode::DeviceNotAvailable);
+  }
+  void require_xmm() const {
+    if(!(cr4 & 0x200U) || (cr0 & 0x4U))
+      fail("SSE register operations require CR4.OSFXSR and CR0.EM=0",
+           FaultCode::InvalidInstruction);
+    if(cr0 & 0x8U)
+      fail("CR0.TS prevents SIMD state use",FaultCode::DeviceNotAvailable);
+  }
+  unsigned fp_top() const {return (fx.fsw>>11)&7U;}
+  void fp_top_set(unsigned top) {
+    fx.fsw=std::uint16_t((fx.fsw&~0x3800U)|((top&7U)<<11));
+  }
+  void fp_push(std::array<std::uint8_t,10> value) {
+    const auto next=(fp_top()+7U)&7U;
+    if(fx.ftw & (1U<<next))
+      fail("x87 stack overflow requires unmodeled exception status",
+           FaultCode::UnsupportedState);
+    fx.st[next]=value;
+    fx.ftw|=std::uint8_t(1U<<next);
+    fp_top_set(next);
+  }
+  std::array<std::uint8_t,10> fp_pop() {
+    const auto top=fp_top();
+    if(!(fx.ftw&(1U<<top)))
+      fail("x87 stack underflow requires unmodeled exception status",
+           FaultCode::UnsupportedState);
+    const auto data=fx.st[top];
+    fx.ftw&=std::uint8_t(~(1U<<top));
+    fp_top_set((top+1U)&7U);
+    return data;
+  }
+  static std::array<std::uint8_t,10> fp_one() {
+    std::array<std::uint8_t,10> b{};
+    b[7]=0x80;b[8]=0xff;b[9]=0x3f;
+    return b;
+  }
+  bool execute_x87(std::uint8_t opcode) {
+    if(opcode<0xd8||opcode>0xdf)return false;
+    require_x87();
+    const auto modrm_byte=fetch8();
+    if(opcode==0xdb && modrm_byte==0xe3) { // FNINIT, no WAIT prefix
+      fx.fcw=0x037f;fx.fsw=0;fx.ftw=0;fx.fop=0;
+      fx.st={};return true;
+    }
+    if(opcode==0xdb && modrm_byte==0xe2) { // FNCLEX
+      fx.fsw&=std::uint16_t(~0x80ffU);return true;
+    }
+    if(opcode==0xdf && modrm_byte==0xe0) { // FNSTSW AX
+      set_reg16(EAX,fx.fsw);return true;
+    }
+    if(opcode==0xd9 && modrm_byte==0xe8) {fp_push(fp_one());return true;}
+    if(opcode==0xd9 && modrm_byte==0xee) {fp_push({});return true;}
+    if(opcode==0xd9 && modrm_byte==0xe0) { // FCHS ST(0)
+      const auto top=fp_top();
+      if(!(fx.ftw&(1U<<top)))fail("FCHS empty ST0",FaultCode::UnsupportedState);
+      fx.st[top][9]^=0x80;return true;
+    }
+    if(opcode==0xd9 && modrm_byte==0xe1) { // FABS ST(0)
+      const auto top=fp_top();
+      if(!(fx.ftw&(1U<<top)))fail("FABS empty ST0",FaultCode::UnsupportedState);
+      fx.st[top][9]&=0x7f;return true;
+    }
+    // Raw FLD ST(i) / FXCH ST(i) preserve ALL 80 bits.
+    if(opcode==0xd9 && (modrm_byte&0xf8)==0xc0) {
+      const auto at=(fp_top()+(modrm_byte&7U))&7U;
+      if(!(fx.ftw&(1U<<at)))fail("FLD empty ST(i)",FaultCode::UnsupportedState);
+      fp_push(fx.st[at]);return true;
+    }
+    if(opcode==0xd9 && (modrm_byte&0xf8)==0xc8) {
+      const auto at=(fp_top()+(modrm_byte&7U))&7U;
+      if(!(fx.ftw&(1U<<at))||!(fx.ftw&(1U<<fp_top())))
+        fail("FXCH empty FPU slot",FaultCode::UnsupportedState);
+      std::swap(fx.st[at],fx.st[fp_top()]);return true;
+    }
+    // Only forms with explicit, implemented architectural semantics are
+    // decoded; arithmetic is not approximated by host double/long double.
+    const auto group=(modrm_byte>>3)&7U;
+    const auto mode=modrm_byte>>6;
+    if(mode==3)fail("x87 opcode form not implemented",FaultCode::UnsupportedOpcode);
+    // We have already fetched the ModRM byte: decode displacement now, using
+    // the same canonical ModRM decoder by re-reading the byte from guest code.
+    --cursor_;decoded_.pop_back();
+    const auto m=modrm();
+    if(opcode==0xd9 && (group==5||group==7)) { // FLDCW / FNSTCW
+      const auto addr=segment_linear(m.rm.segment,operand_offset(m.rm),2,
+                                  group==5?Access::Read:Access::Write);
+      if(group==5) fx.fcw=std::uint16_t(read_linear(addr,2));
+      else write_linear(addr,2,fx.fcw);
+      return true;
+    }
+    if(opcode==0xdb && (group==5||group==7)) { // FLD/FSTP m80
+      const auto addr=segment_linear(m.rm.segment,operand_offset(m.rm),10,
+                                  group==5?Access::Read:Access::Write);
+      if(group==5) {
+        std::array<std::uint8_t,10> image{};
+        for(unsigned i=0;i<10;++i)image[i]=std::uint8_t(read_linear(addr+i,1));
+        fp_push(image);
+      } else {
+        if(!(fx.ftw&(1U<<fp_top())))
+          fail("FSTP empty ST0",FaultCode::UnsupportedState);
+        const auto value=fx.st[fp_top()];
+        for(unsigned i=0;i<10;++i)write_linear(addr+i,1,value[i]);
+        (void)fp_pop();
+      }
+      return true;
+    }
+    fail("x87 arithmetic or opcode is not yet implemented",FaultCode::UnsupportedOpcode);
+  }
+  bool execute_fxstate(std::uint8_t opcode) {
+    if(opcode!=0xae)return false;
+    const auto m=modrm();
+    require_memory(m.rm);
+    if(m.group>3)fail("0F AE group opcode not implemented",FaultCode::UnsupportedOpcode);
+    require_x87(); // FXSAVE/FXRSTOR are blocked by TS and EM.
+    const auto n=m.group<=1?512U:4U;
+    const auto addr=segment_linear(m.rm.segment,operand_offset(m.rm),
+                  n,m.group==0||m.group==3?Access::Write:Access::Read);
+    if(m.group<=1 && (addr&15U))
+      fail("FXSAVE/FXRSTOR require 16-byte alignment",FaultCode::ProtectionFault);
+    if(m.group>=2 && !(cr4&0x200U))
+      fail("LDMXCSR/STMXCSR require CR4.OSFXSR",FaultCode::InvalidInstruction);
+    // Reject device MMIO for extended state operations. The CPU journal
+    // reverses RAM writes, but cannot reverse device side effects.
+    for(unsigned i=0;i<n;++i){
+      const auto physical=translate(addr+i,m.group==0||m.group==3?Access::Write:Access::Read);
+      if(mmio_at(physical))fail("FXSTATE on MMIO unsupported",FaultCode::UnsupportedState);
+      (void)physical_index(physical);
+    }
+    if(m.group==2) { // LDMXCSR m32: GP on reserved bits, no mutation
+      const auto incoming=std::uint32_t(read_linear(addr,4));
+      if(incoming & ~kMxcsrMask)
+        fail("LDMXCSR reserved bits",FaultCode::ProtectionFault);
+      fx.mxcsr=incoming;return true;
+    }
+    if(m.group==3) {write_linear(addr,4,fx.mxcsr);return true;}
+    if(m.group==0) {
+      // FXSAVE m512: preserve architecturally reserved/software bytes,
+      // only update defined fields. Does not store MMX (not advertised).
+      std::array<std::uint8_t,512> data{};
+      for(unsigned i=0;i<512;++i)data[i]=std::uint8_t(read_linear(addr+i,1));
+      const auto store16=[&](unsigned off,std::uint16_t v) {
+        data[off]=std::uint8_t(v);data[off+1]=std::uint8_t(v>>8);
+      };
+      const auto store32=[&](unsigned off,std::uint32_t v) {
+        for(unsigned i=0;i<4;++i)data[off+i]=std::uint8_t(v>>(i*8));
+      };
+      store16(0,fx.fcw);store16(2,fx.fsw);
+      data[4]=fx.ftw;
+      store16(6,fx.fop);
+      for(unsigned i=0;i<8;++i)
+        std::copy(fx.st[i].begin(),fx.st[i].end(),data.begin()+32+i*16);
+      if(cr4&0x200U) {
+        store32(24,fx.mxcsr);store32(28,kMxcsrMask);
+        for(unsigned i=0;i<(is_long_mode()?16U:8U);++i)
+          std::copy(fx.xmm[i].begin(),fx.xmm[i].end(),data.begin()+160+i*16);
+      }
+      for(unsigned i=0;i<512;++i)write_linear(addr+i,1,data[i]);
+      return true;
+    }
+    // FXRSTOR: read & validate a complete 512-byte state before commit.
+    std::array<std::uint8_t,512> bytes{};
+    for(unsigned i=0;i<512;++i)bytes[i]=std::uint8_t(read_linear(addr+i,1));
+    ExtendedState restored=fx;
+    restored.fcw=std::uint16_t(bytes[0]|(unsigned(bytes[1])<<8));
+    restored.fsw=std::uint16_t(bytes[2]|(unsigned(bytes[3])<<8));
+    restored.ftw=bytes[4];restored.fop=std::uint16_t(bytes[6]|(unsigned(bytes[7])<<8));
+    for(unsigned i=0;i<8;++i)
+      std::copy_n(bytes.data()+32+i*16,10,restored.st[i].data());
+    if(cr4&0x200U) {
+      const auto mxcsr=std::uint32_t(bytes[24])|(std::uint32_t(bytes[25])<<8)|
+                       (std::uint32_t(bytes[26])<<16)|(std::uint32_t(bytes[27])<<24);
+      if(mxcsr & ~kMxcsrMask)
+        fail("FXRSTOR MXCSR reserved bits",FaultCode::ProtectionFault);
+      restored.mxcsr=mxcsr;
+      for(unsigned i=0;i<(is_long_mode()?16U:8U);++i)
+        std::copy_n(bytes.data()+160+i*16,16,restored.xmm[i].data());
+    }
+    fx=std::move(restored);
+    return true;
+  }
+
   bool op32_ = false, addr32_ = false, ip_written_ = false, transaction_ = false;
   bool operand_override_ = false, address_override_ = false, lock_prefix_ = false;
   std::uint8_t rex_ = 0;
