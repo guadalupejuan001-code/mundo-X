@@ -256,11 +256,23 @@ void apic_msr() {
   cpu.regs[Cpu::ECX] = kApicBase;
   fault(cpu, FaultCode::ProtectionFault, "APIC_BASE WRMSR requires CPL0");
 
+  const auto apic_cpuid = [&] {
+    program(cpu, {0x0f, 0xa2});
+    cpu.regs[Cpu::EAX] = 1;
+    step(cpu);
+    check(!(cpu.regs[Cpu::ECX] & (1U << 21)), "x2APIC must remain unadvertised");
+    return (cpu.regs[Cpu::EDX] & (1U << 9)) != 0;
+  };
   boot(cpu);
-  program(cpu, {0x0f, 0xa2});
-  cpu.regs[Cpu::EAX] = 1;
-  step(cpu);
-  check(!(cpu.regs[Cpu::EDX] & (1U << 9)), "CPUID must leave full APIC capability unadvertised");
+  check(!apic_cpuid(), "CPU without a board must leave APIC unadvertised");
+  cpu.set_local_apic_present(true);
+  check(apic_cpuid(), "CPU must announce the attached and enabled xAPIC");
+  write_msr(cpu, kApicBase, base | bsp);
+  check(!apic_cpuid(), "globally disabled xAPIC must disappear from CPUID");
+  boot(cpu);
+  check(apic_cpuid(), "reset must preserve the board and restore global enable");
+  cpu.set_local_apic_present(false);
+  check(!apic_cpuid(), "CPUID must stop announcing the detached xAPIC");
 }
 } // namespace
 

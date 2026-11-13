@@ -228,6 +228,8 @@ class Cpu {
   std::uint8_t apic_task_priority() const noexcept { return apic_task_priority_; }
   void set_apic_task_priority(std::uint8_t value) noexcept { apic_task_priority_ = value; }
   bool apic_global_enabled() const noexcept { return (apic_base_ & kApicEnable) != 0; }
+  bool local_apic_present() const noexcept { return local_apic_present_; }
+  void set_local_apic_present(bool present) noexcept { local_apic_present_ = present; }
   const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
   unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
   bool rep_batch_candidate() const noexcept {
@@ -581,6 +583,7 @@ class Cpu {
   std::uint8_t apic_task_priority_ = 0;
   static constexpr std::uint64_t kApicBsp = 1U << 8, kApicEnable = 1U << 11;
   std::uint64_t apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
+  bool local_apic_present_ = false;
   std::array<SegmentCache, 6> cache_{};
   SystemCallMsrs system_call_msrs_;
   int override_ = -1;
@@ -3898,6 +3901,7 @@ inline void Cpu::extended() {
         // TSC, MSR, PAE, CX8, CMOV, MMX, FXSR, SSE and SSE2.
         // The full x87 instruction set remains incomplete (FPU bit 0).
         edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
+        if (local_apic_present() && apic_global_enabled()) edx |= 1U << 9;
         ecx=(1U<<13); // CMPXCHG16B guest primitive
 
       }else if(leaf==7 && subleaf==0){
