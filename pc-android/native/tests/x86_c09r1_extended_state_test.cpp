@@ -115,7 +115,11 @@ void fxsave_fxrstor(){
   cpu.fx.ftw=0x80;
   cpu.fx.fsw=0x3800;
   cpu.fx.st[7][7]=0x80;cpu.fx.st[7][8]=0xff;cpu.fx.st[7][9]=0x3f;
+  const auto page_walks_before=cpu.page_walks;
   instruction(cpu,{0x0f,0xae,0x04,0x25,0x00,0xc0,0,0}); // FXSAVE m512
+  const auto fxsave_page_walks=cpu.page_walks-page_walks_before;
+  need(fxsave_page_walks<180,
+       "FXSAVE should walk per RAM page and 8-byte transfer, not 512 individual bytes");
   need(cpu.read16(0xc000)==0x027f&&cpu.read32(0xc018)==0x1f80,
        "FXSAVE did not serialize FCW or MXCSR");
   need(cpu.read32(0xc01c)==0xffbf,"FXSAVE MXCSR_MASK missing");
@@ -133,6 +137,13 @@ void fxsave_fxrstor(){
     for(unsigned j=0;j<16;++j)
       need(cpu.fx.xmm[i][j]==std::uint8_t(i*17+j),
            "FXRSTOR did not restore XMM0..15");
+  // STMXCSR stores MXCSR; LDMXCSR changes it when reserved bits are clear.
+  instruction(cpu,{0x0f,0xae,0x1c,0x25,0x00,0xc4,0,0});
+  need(cpu.read32(0xc400)==0x1f80,"STMXCSR m32 did not save register");
+  cpu.write32(0xc400,0x3f80);
+  instruction(cpu,{0x0f,0xae,0x14,0x25,0x00,0xc4,0,0});
+  need(cpu.fx.mxcsr==0x3f80,"LDMXCSR m32 did not update control register");
+  cpu.fx.mxcsr=0x1f80;
   // MXCSR reserved bit must fault and roll back ALL architectural state.
   cpu.write32(0xc018,0x80000000U);
   const auto previous=cpu.fx;
@@ -144,6 +155,25 @@ void fxsave_fxrstor(){
   need(cpu.fx.mxcsr==previous.mxcsr&&cpu.fx.xmm==previous.xmm,
        "FXRSTOR failure corrupted FPU/XMM state");
   std::cout<<"C09R1_FXSAVE_FXRSTOR_512B_LONG64_PASS registers=16\n";
+}
+void legacy_fxsave_preserves_upper_xmm(){
+  Cpu cpu(2*1024*1024);
+  cpu.reset(0,0x1000);cpu.a20_enabled=true;
+  cpu.cr4=0x200; // CPU fixture: long-mode MOV CR4 tested separately.
+  cpu.fx.xmm[0].fill(0x42);
+  cpu.fx.xmm[8].fill(0xab);
+  cpu.memory.fill(0xc000,0xa5,512);
+  instruction(cpu,{0x67,0x0f,0xae,0x04,0x25,0x00,0xc0,0,0},0x1000);
+  need(cpu.read8(0xc000+160)==0x42,
+       "legacy FXSAVE did not save XMM0 in 128-bit slot");
+  need(cpu.read8(0xc000+288)==0xa5,
+       "legacy FXSAVE must not overwrite reserved XMM8..15 image");
+  cpu.fx.xmm[0].fill(0);
+  cpu.fx.xmm[8].fill(0x33);
+  instruction(cpu,{0x67,0x0f,0xae,0x0c,0x25,0x00,0xc0,0,0},0x1000);
+  need(cpu.fx.xmm[0][0]==0x42&&cpu.fx.xmm[8][0]==0x33,
+       "legacy FXRSTOR must restore only XMM0-7");
+  std::cout<<"C09R1_FXSTATE_LEGACY_32BIT_VIEW_PASS xmm8_untouched=1\n";
 }
 void negative(){
   Cpu cpu(2*1024*1024);
@@ -170,7 +200,7 @@ void negative(){
 }
 int main(){
   try{
-    x87_raw();xmm_operations();fxsave_fxrstor();negative();
+    x87_raw();xmm_operations();fxsave_fxrstor();legacy_fxsave_preserves_upper_xmm();negative();
     std::cout<<"REVERSE_WINDOWS_C09R1_EXTENDED_STATE_PASS checks="<<checks
              <<" sse2_complete=false x87_complete=false windows_executed=false\n";
     return 0;
