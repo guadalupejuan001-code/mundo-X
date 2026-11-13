@@ -1267,6 +1267,59 @@ class Cpu {
     }
     fail("unsupported SSE2 scalar conversion",FaultCode::UnsupportedOpcode);
   }
+  void sse2_convert_packed() { // F3 CVTDQ2PD, F2 CVTPD2DQ, 66 CVTTPD2DQ
+    const bool dq_to_pd=repeat_==0xf3 && !operand_override_;
+    const bool pd_to_dq=repeat_==0xf2 && !operand_override_;
+    const bool pd_to_dq_trunc=operand_override_ && repeat_==0;
+    if(!dq_to_pd&&!pd_to_dq&&!pd_to_dq_trunc)
+      fail("SSE2 packed integer/FP conversion requires F3/F2/66",
+           FaultCode::UnsupportedOpcode);
+    require_sse_state();
+    const auto m=modrm();
+    require_xmm(m.reg);
+    std::array<std::uint8_t,16> result{};
+    if(dq_to_pd) {
+      std::uint64_t low=0;
+      if(m.rm.is_register) {
+        require_xmm(m.rm.index);
+        low=packed_lane(xmm[m.rm.index],0,8);
+      }else low=get(m.rm,8);
+      for(unsigned i=0;i<2;++i) {
+        const auto raw=(low>>(i*32))&0xffffffffULL;
+        const auto signed_int=(raw&0x80000000ULL)?
+            std::int64_t(raw)-0x100000000LL:std::int64_t(raw);
+        packed_set(result,i*8,8,fp64_bits(static_cast<double>(signed_int)));
+      }
+    }else{
+      const auto source=read_xmm_operand(m.rm,false);
+      std::uint32_t flags=0;
+      for(unsigned i=0;i<2;++i) {
+        const auto raw=fp64_input(packed_lane(source,i*8,8),flags);
+        const auto value=fp64_from_bits(raw);
+        long double rounded=0;
+        {
+          HostRound round(mxcsr);
+          volatile double input=value;
+          volatile double output=pd_to_dq_trunc?std::trunc(input):
+                                                std::rint(input);
+          rounded=static_cast<long double>(output);
+          flags|=round.status();
+        }
+        const bool invalid=!std::isfinite(value)||
+                           rounded < -0x1p31L || rounded>=0x1p31L;
+        if(invalid) {
+          flags|=1U;flags&=~32U;
+          packed_set(result,i*4,4,0x80000000ULL);
+        }else {
+          if(rounded!=static_cast<long double>(value))flags|=32U;
+          const auto integer=static_cast<std::int64_t>(rounded);
+          packed_set(result,i*4,4,std::uint64_t(integer)&0xffffffffULL);
+        }
+      }
+      simd_status(flags); // full packed conversion must be atomic on #XM
+    }
+    xmm[m.reg]=result; // upper64 zero for packed FP->DQ
+  }
   void sse2_cmp_vector(bool scalar) {
     if((scalar&&(repeat_!=0xf2||operand_override_))||
        (!scalar&&(!operand_override_||repeat_)))
@@ -2093,6 +2146,8 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0xe6: // CVTDQ2PD, CVTPD2DQ, CVTTPD2DQ
+      sse2_convert_packed();return;
     case 0x54: case 0x55: case 0x56: case 0x57: { // ANDPD/ANDNPD/ORPD/XORPD
       if(!operand_override_||repeat_)
         fail("packed logical SSE2 double requires 66",FaultCode::UnsupportedOpcode);
