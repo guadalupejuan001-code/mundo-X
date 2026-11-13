@@ -155,7 +155,7 @@ int main(){
   try{
     test();
     std::cout<<"REVERSE_WINDOWS_C09R1_RING3_FPU_PASS checks="<<checks
-             <<" windows_iso_used=false cpuid_sse2=false\n";
+             <<" windows_iso_used=false\n";
     return 0;
   }catch(const std::exception& e){
     std::cerr<<"REVERSE_WINDOWS_C09R1_RING3_FPU_FAIL "<<e.what()<<"\n";

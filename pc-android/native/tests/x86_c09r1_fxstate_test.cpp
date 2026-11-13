@@ -402,7 +402,7 @@ int main(){
     real16_fxstate();fxstate_failures();fxstate_exception_image();fpu_memory_and_stack();long64_fxstate();
     two_contexts_fxstate();nm_guest_handler_recovery();
     std::cout<<"REVERSE_WINDOWS_C09R1_FPU_FXSTATE_PASS checks="<<checks
-             <<" windows_executed=false sse2_cpuid=false x87_cpuid=false\n";
+             <<" windows_executed=false\n";
     return 0;
   }catch(const std::exception& e){
     std::cerr<<"REVERSE_WINDOWS_C09R1_FPU_FXSTATE_FAIL "<<e.what()<<"\n";return 1;

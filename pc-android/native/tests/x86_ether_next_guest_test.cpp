@@ -145,8 +145,9 @@ int main() {
     // Host optimization does not change any advertised guest CPU capability.
     baseline.cpu.regs[Cpu::EAX] = optimized.cpu.regs[Cpu::EAX] = 1;
     run(baseline, optimized, {0x0f,0xa2,0xf4}, 2);
-    require(!(optimized.cpu.regs[Cpu::EDX] & (1U << 26)),
-            "experimental backend advertised unvalidated SSE2");
+    require(optimized.cpu.regs[Cpu::EDX] == baseline.cpu.regs[Cpu::EDX] &&
+                (optimized.cpu.regs[Cpu::EDX] & (1U << 26)),
+            "Ether Next changed the canonical verified SSE2 profile");
     stats = optimized.cpu.ether_next_stats();
     std::cout << "REVERSE_WINDOWS_ETHER_NEXT_GUEST_PASS native_host=" << Cpu::ether_next_native_host()
               << " native_instructions=" << stats.native_instructions

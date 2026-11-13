@@ -230,7 +230,7 @@ int main(){
     conversions_and_compare();
     exception_and_context();
     std::cout<<"REVERSE_WINDOWS_C09R1_SSE2_FP_PASS checks="<<checks
-             <<" windows_iso_used=false sse2_cpuid=false x87_cpuid=false\n";
+             <<" windows_iso_used=false\n";
     return 0;
   }catch(const std::exception& error){
     std::cerr<<"REVERSE_WINDOWS_C09R1_SSE2_FP_FAIL "<<error.what()<<"\n";

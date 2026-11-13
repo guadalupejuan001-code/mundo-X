@@ -439,8 +439,9 @@ void paging_and_fault_tests() {
         "modeled CPUID executes correctly in long mode");
   program(cpu, {0x0f,0xa2});
   cpu.regs[Cpu::EAX]=1;
-  check(cpu.step()==StepResult::Executed && !(cpu.regs[Cpu::EDX]&(1ULL<<26)),
-        "CPUID must not advertise unsupported SSE2 in long mode");
+  constexpr std::uint32_t simd=(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
+  check(cpu.step()==StepResult::Executed && (cpu.regs[Cpu::EDX]&(simd|1U))==simd,
+        "long-mode CPUID must expose the verified SIMD features and keep FPU clear");
   program(cpu, {0x48,0xf7,0xe3}); expect_fault(cpu, FaultCode::UnsupportedOpcode, "unimplemented MUL64 stops explicitly");
   program(cpu, {0x0f,0x22,0xe0}); cpu.regs[Cpu::EAX] = 0;
   expect_fault(cpu, FaultCode::ProtectionFault, "PAE cannot be cleared while LMA");

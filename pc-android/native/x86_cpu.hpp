@@ -3348,9 +3348,9 @@ inline void Cpu::extended() {
         ebx=word(0);edx=word(4);ecx=word(8);
       }else if(leaf==1){
         eax=0x00000663U; // modeled family/model/stepping
-        // TSC, MSR, PAE, and tested atomic CMPXCHG16B only.
-        // Never claim SSE2/x87/APIC until guest instructions really work.
-        edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8); // CMPXCHG8B
+        // TSC, MSR, PAE, CX8, MMX, FXSR, SSE and SSE2.
+        // The full x87 instruction set remains incomplete (FPU bit 0).
+        edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
         ecx=(1U<<13); // CMPXCHG16B guest primitive
 
       }else if(leaf==7 && subleaf==0){

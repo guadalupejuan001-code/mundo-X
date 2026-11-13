@@ -100,18 +100,22 @@ State physical(const Sample& input) {
   return state;
 }
 
-bool intel_remainder_passthrough(const Sample& input, const State& modeled,
-                                 const State& native, const std::string& cpu_vendor) {
-  // Intel specifies a direct ST0 result for infinite modulus in the absence
-  // of underflow. AMD applies the unmasked underflow response even when the
-  // exact result equals a subnormal dividend. Require both precise outcomes.
-  if (cpu_vendor != "GenuineIntel" || input.op < 10 || (input.control & 0x12U) != 2 ||
+bool intel_passthrough(const Sample& input, const State& modeled, const State& native,
+                       const std::string& cpu_vendor) {
+  // Intel hardware preserves ST0 for a subnormal dividend with infinite
+  // modulus and a subnormal value scaled by a signed zero. AMD applies the
+  // unmasked underflow response to these exact results. Require both outcomes.
+  if (cpu_vendor != "GenuineIntel" || input.op < 9 || (input.control & 0x12U) != 2 ||
       !(native == State{input.lhs, 0x0002})) return false;
 
   const unsigned sign = unsigned(input.lhs[9] & 0x80U) << 8;
   if (input.lhs[8] != 0 || (input.lhs[9] & 0x7fU) || (input.lhs[7] & 0x80U) ||
       input.lhs == bits(0, sign)) return false;
-  if (input.rhs != bits(int_bit, 0x7fff) && input.rhs != bits(int_bit, 0xffff)) return false;
+  if (input.op == 9) {
+    if (input.rhs != bits(0, 0) && input.rhs != bits(0, integer)) return false;
+  } else if (input.rhs != bits(int_bit, 0x7fff) && input.rhs != bits(int_bit, 0xffff)) {
+    return false;
+  }
 
   std::uint64_t significand = 0;
   for (unsigned i = 0; i < 8; ++i) significand |= std::uint64_t(input.lhs[i]) << (8 * i);
@@ -139,7 +143,7 @@ std::string describe(const Sample& input,const State& actual,const State& expect
 void hardware_matrix(Cpu& cpu) {
   constexpr unsigned count = 21'000;
   const auto cpu_vendor=vendor();
-  unsigned vendor_alternatives=0;
+  unsigned scale_passthrough = 0, remainder_passthrough = 0, failures = 0;
   std::mt19937_64 rng(3620);
   for (unsigned i = 0; i < count; ++i) {
     const auto exp = [](int value) { return unsigned(value<1 ? 1 : value>0x7ffe ? 0x7ffe : value); };
@@ -166,15 +170,18 @@ void hardware_matrix(Cpu& cpu) {
                         bits(sig_b, exp_b | ((rng() & 1) ? integer : 0))};
     const auto modeled=guest(cpu,sample), native=physical(sample);
     if (modeled==native) continue;
-    if (intel_remainder_passthrough(sample, modeled, native, cpu_vendor)) {
-      ++vendor_alternatives;
+    if (intel_passthrough(sample, modeled, native, cpu_vendor)) {
+      ++(sample.op == 9 ? scale_passthrough : remainder_passthrough);
       continue;
     }
-    throw std::runtime_error("x86 hardware differs at arithmetic matrix case "+std::to_string(i)+
-                             " vendor="+cpu_vendor+describe(sample,modeled,native));
+    if (++failures <= 20)
+      std::cerr << "x86 hardware differs at arithmetic matrix case " << i
+                << " vendor=" << cpu_vendor << describe(sample,modeled,native) << '\n';
   }
+  if (failures) throw std::runtime_error("x86 hardware differs in " + std::to_string(failures) + " samples");
   std::cout << "X87_ARITHMETIC_NATIVE_X86_PASS samples=" << count << " vendor=" << cpu_vendor
-            << " intel_remainder_passthrough=" << vendor_alternatives << '\n';
+            << " intel_remainder_passthrough=" << remainder_passthrough
+            << " intel_scale_passthrough=" << scale_passthrough << '\n';
 }
 #endif
 
@@ -225,6 +232,8 @@ void golden_matrix(Cpu& cpu) {
     {{9,0x037f,min_normal,bits(int_bit,(bias+1)|integer)},{bits(0x2000000000000000ULL,0),0}},
     {{9,0x0377,one,bits(int_bit,bias+14)},{bits(int_bit,0x1fff),0x8088}},
     {{9,0x037f,zero,infinity},{indefinite,0x0001}},
+    {{9,0x086f,bits(0x124786c79528ab9cULL,integer),bits(0,integer)},
+      {bits(0x923c363ca9455ce0ULL,0xdffe),0x8092}},
     {{10,0x037f,seven,two},{one,0x4200}},
     {{11,0x037f,seven,two},{minus_one,0x0100}},
     {{10,0x037f,max_normal,two},{bits(int_bit,0x7fbf),0x0400}},
@@ -238,7 +247,7 @@ void golden_matrix(Cpu& cpu) {
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
     const auto native=physical(cases[i].input);
     if (!(native == cases[i].output) &&
-        !intel_remainder_passthrough(cases[i].input, cases[i].output, native, vendor()))
+        !intel_passthrough(cases[i].input, cases[i].output, native, vendor()))
       throw std::runtime_error("incorrect physical x86 reference in golden case " + std::to_string(i) +
                                " vendor="+vendor()+describe(cases[i].input,cases[i].output,native));
 #endif

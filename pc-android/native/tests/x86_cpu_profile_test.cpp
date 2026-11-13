@@ -192,7 +192,8 @@ int main(){
         need((cpu.regs[Cpu::EDX]&(1U<<6))!=0,"PAE declared for IA-32e");
         need((cpu.regs[Cpu::EDX]&(1U<<8))!=0,"CMPXCHG8B must be advertised after test");
         need((cpu.regs[Cpu::ECX]&(1U<<13))!=0,"CMPXCHG16B required for Windows x64");
-        need((cpu.regs[Cpu::EDX]&(1U<<26))==0,"must not claim unimplemented SSE2");
+        constexpr std::uint32_t simd=(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
+        need((cpu.regs[Cpu::EDX]&simd)==simd,"verified MMX/FXSR/SSE/SSE2 capability bits");
         need((cpu.regs[Cpu::EDX]&(1U<<0))==0,"must not claim x87");
         need((cpu.regs[Cpu::ECX]&(1U<<28))==0,"must not claim AVX");
         start(cpu,7);
@@ -226,7 +227,7 @@ int main(){
         std::cout<<"REVERSE_WINDOWS_IA32_TSC_PASS rdmsr=0f32 wrmsr=0f30 rdtsc=0f31 "
                      "protected32=1 cpl_guard=1 tsd=1 reset=1 unknown_msr=1\n";
         std::cout<<"WIN10_CPU_PROFILE_PASS checks="<<checks
-                 <<" SSE2_advertised=0 TSC_synthetic=1 windows_ready=0\n";
+                 <<" MMX=1 FXSR=1 SSE=1 SSE2=1 x87=0 TSC_synthetic=1 windows_ready=0\n";
         return 0;
     }catch(const std::exception& ex){
         std::cerr<<"WIN10_CPU_PROFILE_FAIL "<<ex.what()<<"\n";

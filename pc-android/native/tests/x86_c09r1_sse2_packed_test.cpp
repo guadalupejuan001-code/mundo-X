@@ -134,7 +134,7 @@ void fault_rollback(){
 int main(){
   try{packed_integer();register_moves();fault_rollback();
     std::cout<<"REVERSE_WINDOWS_C09R1_SSE2_PACKED_PASS checks="<<checks
-             <<" SSE2_CPUID=false Windows10_ready=false\n";
+             <<" Windows10_ready=false\n";
     return 0;
   }catch(const std::exception& e){
     std::cerr<<"REVERSE_WINDOWS_C09R1_SSE2_PACKED_FAIL "<<e.what()<<"\n";return 1;
