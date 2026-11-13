@@ -615,6 +615,151 @@ class Cpu {
     return true;
   }
 
+  using Xmm=std::array<std::uint8_t,16>;
+  static std::uint64_t lane(const Xmm& x,unsigned offset,unsigned width) {
+    std::uint64_t result=0;
+    for(unsigned i=0;i<width;++i)
+      result|=std::uint64_t(x.at(offset+i))<<(i*8);
+    return result;
+  }
+  static void set_lane(Xmm& x,unsigned offset,unsigned width,std::uint64_t v) {
+    for(unsigned i=0;i<width;++i)
+      x.at(offset+i)=std::uint8_t(v>>(i*8));
+  }
+  Xmm read_xmm_operand(const Operand& o,bool aligned,unsigned bytes=16) {
+    Xmm result{};
+    if(o.is_register) {
+      result=fx.xmm.at(o.index);
+      return result;
+    }
+    const auto address=segment_linear(o.segment,operand_offset(o),bytes,Access::Read);
+    if(aligned && (address&15U))
+      fail("aligned 128-bit SIMD memory operand required",
+           FaultCode::ProtectionFault);
+    for(unsigned i=0;i<bytes;++i)
+      result[i]=std::uint8_t(read_linear(address+i,1));
+    return result;
+  }
+  void write_xmm_operand(const Operand& o,const Xmm& value,
+                         bool aligned,unsigned bytes=16) {
+    if(o.is_register) {
+      if(bytes==16)fx.xmm.at(o.index)=value;
+      else std::copy_n(value.begin(),bytes,fx.xmm.at(o.index).begin());
+      return;
+    }
+    const auto address=segment_linear(o.segment,operand_offset(o),bytes,Access::Write);
+    if(aligned && (address&15U))
+      fail("aligned 128-bit SIMD memory operand required",
+           FaultCode::ProtectionFault);
+    // Prevalidate all memory bytes before writing. The CPU journal will
+    // restore memory and SIMD state if any subsequent page walk fails.
+    for(unsigned i=0;i<bytes;++i) {
+      const auto p=translate(address+i,Access::Write);
+      if(mmio_at(p))
+        fail("128-bit SIMD writes to device MMIO are unsupported",
+             FaultCode::UnsupportedState);
+      (void)physical_index(p);
+    }
+    for(unsigned i=0;i<bytes;++i)write_linear(address+i,1,value[i]);
+  }
+  bool execute_sse_subset(unsigned op) {
+    const bool p66=operand_override_ && !repeat_;
+    const bool pf3=repeat_==0xf3 && !operand_override_;
+    const bool pf2=repeat_==0xf2 && !operand_override_;
+    const bool aligned=p66&&(op==0x6f||op==0x7f||op==0x28||op==0x29);
+    const bool mov128=((p66||pf3)&&(op==0x6f||op==0x7f))||
+                       (p66&&(op==0x10||op==0x11||op==0x28||op==0x29));
+    const bool mov_scalar=(pf2||pf3)&&(op==0x10||op==0x11);
+    const bool mov_gpr=p66&&(op==0x6e||op==0x7e);
+    const bool packed=p66&&
+      (op==0xef||op==0xdb||op==0xeb||op==0xdf||op==0xd4||
+       op==0xfc||op==0xfd||op==0xfe||op==0xf8||op==0xf9||
+       op==0xfa||op==0xfb||op==0x74||op==0x75||op==0x76||
+       op==0x70||op==0x73);
+    if(!mov128&&!mov_scalar&&!mov_gpr&&!packed)return false;
+    require_xmm();
+    const auto m=modrm();
+    if(m.reg>=fx.xmm.size() || (m.rm.is_register&&m.rm.index>=fx.xmm.size()))
+      fail("XMM register encoding outside 0..15",FaultCode::InvalidInstruction);
+    if(mov_gpr) {
+      const unsigned n=(is_long_mode()&&(rex_&8U))?8U:4U;
+      if(op==0x6e) {
+        Xmm out{};
+        set_lane(out,0,n,get(m.rm,n));
+        fx.xmm[m.reg]=out;
+      }else {
+        put(m.rm,n,lane(fx.xmm[m.reg],0,n));
+      }
+      return true;
+    }
+    if(mov_scalar) {
+      const unsigned n=pf2?8U:4U;
+      if(op==0x10) {
+        const auto from=read_xmm_operand(m.rm,false,n);
+        auto dest=fx.xmm[m.reg];
+        if(!m.rm.is_register)dest={}; // scalar memory load clears upper XMM
+        std::copy_n(from.begin(),n,dest.begin());
+        fx.xmm[m.reg]=dest;
+      }else {
+        write_xmm_operand(m.rm,fx.xmm[m.reg],false,n);
+      }
+      return true;
+    }
+    if(mov128) {
+      if(op==0x6f||op==0x10||op==0x28)
+        fx.xmm[m.reg]=read_xmm_operand(m.rm,aligned);
+      else
+        write_xmm_operand(m.rm,fx.xmm[m.reg],aligned);
+      return true;
+    }
+    if(op==0x73) {
+      if(!m.rm.is_register)
+        fail("PSLLDQ/PSRLDQ require XMM register destination",FaultCode::InvalidInstruction);
+      const auto shift=std::min<unsigned>(fetch8(),16);
+      Xmm output{},src=fx.xmm[m.rm.index];
+      if(m.group==7) {
+        for(unsigned i=shift;i<16;++i)output[i]=src[i-shift];
+      }else if(m.group==3) {
+        for(unsigned i=0;i+shift<16;++i)output[i]=src[i+shift];
+      }else fail("SSE2 shift operation unsupported",FaultCode::UnsupportedOpcode);
+      fx.xmm[m.rm.index]=output;
+      return true;
+    }
+    const auto src=read_xmm_operand(m.rm,false);
+    auto output=fx.xmm[m.reg];
+    if(op==0x70) {
+      const auto selector=fetch8();
+      for(unsigned i=0;i<4;++i) {
+        const auto from=((selector>>(i*2))&3U)*4U;
+        for(unsigned j=0;j<4;++j)output[4*i+j]=src[from+j];
+      }
+      fx.xmm[m.reg]=output;return true;
+    }
+    if(op==0xef||op==0xdb||op==0xeb||op==0xdf) {
+      for(unsigned i=0;i<16;++i) {
+        switch(op) {
+          case 0xef:output[i]^=src[i];break; // PXOR
+          case 0xdb:output[i]&=src[i];break; // PAND
+          case 0xeb:output[i]|=src[i];break; // POR
+          case 0xdf:output[i]=std::uint8_t((~output[i])&src[i]);break; // PANDN
+        }
+      }
+    }else {
+      const unsigned width=(op==0xd4||op==0xfb)?8U:
+        (op==0xfe||op==0xfa||op==0x76)?4U:
+        (op==0xfd||op==0xf9||op==0x75)?2U:1U;
+      for(unsigned i=0;i<16;i+=width) {
+        const auto lhs=lane(output,i,width),rhs=lane(src,i,width);
+        const bool equal=op==0x74||op==0x75||op==0x76;
+        const bool sub=op==0xf8||op==0xf9||op==0xfa||op==0xfb;
+        set_lane(output,i,width,equal?(lhs==rhs?(width==8?UINT64_MAX:((1ULL<<(width*8))-1)):0):
+                 sub?(lhs-rhs):(lhs+rhs));
+      }
+    }
+    fx.xmm[m.reg]=output;
+    return true;
+  }
+
   bool op32_ = false, addr32_ = false, ip_written_ = false, transaction_ = false;
   bool operand_override_ = false, address_override_ = false, lock_prefix_ = false;
   std::uint8_t rex_ = 0;
@@ -1561,6 +1706,7 @@ inline void Cpu::extended() {
     fail("LOCK prefix is supported only on 0F C7 /1 CMPXCHG8B/16B",
          FaultCode::UnsupportedState);
   if(op==0xae && execute_fxstate(op))return;
+  if(execute_sse_subset(op))return;
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
