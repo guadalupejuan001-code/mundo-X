@@ -845,12 +845,21 @@ class Cpu {
       const auto new_ds=wide_pointers?std::uint16_t{0}:load16(buffer,20);
       std::array<Extended80,8> new_regs{};
       std::uint16_t new_tags=0xffff;
+      // FXSAVE stores DATA in logical ST(0..7) order, while FTW bits
+      // describe PHYSICAL R(0..7) tags. Recover the physical data slots
+      // using the TOP field from the saved x87 status word.
+      const auto new_top=(new_status>>11)&7U;
       for(unsigned i=0;i<8;++i) {
-        for(unsigned j=0;j<10;++j)new_regs[i][j]=buffer[32+16*i+j];
-        if(abridged&(1U<<i))
-          new_tags=std::uint16_t((new_tags&~(3U<<(2*i)))|
-                            (classify_ext(new_regs[i])<<(2*i)));
+        const unsigned physical=(new_top+i)&7U;
+        for(unsigned j=0;j<10;++j)
+          new_regs[physical][j]=buffer[32+16*i+j];
       }
+      for(unsigned physical=0;physical<8;++physical)
+        if(abridged&(1U<<physical))
+          new_tags=std::uint16_t(
+              (new_tags&~(3U<<(2*physical)))|
+              (classify_ext(new_regs[physical])<<(2*physical)));
+
       std::array<std::array<std::uint8_t,16>,16> new_xmm=xmm;
       for(unsigned i=0;i<xmm_count();++i)
         for(unsigned j=0;j<16;++j)new_xmm[i][j]=buffer[160+16*i+j];
@@ -871,8 +880,11 @@ class Cpu {
         store32(buffer,16,std::uint32_t(fpu_dp));store16(buffer,20,fpu_ds);
       }
       store32(buffer,24,mxcsr);store32(buffer,28,kMxcsrMask);
+      // X87 saved data ST(i) is LOGICAL, not the physical R(i)
+      // position indicated by the separate abridged tag mask.
       for(unsigned i=0;i<8;++i)
-        for(unsigned j=0;j<10;++j)buffer[32+16*i+j]=x87[i][j];
+        for(unsigned j=0;j<10;++j)
+          buffer[32+16*i+j]=x87[fpu_slot(i)][j];
       for(unsigned i=0;i<xmm_count();++i)
         for(unsigned j=0;j<16;++j)buffer[160+16*i+j]=xmm[i][j];
       // Intel reserves bytes 464-511 for software; never overwrite them.
