@@ -114,10 +114,63 @@ void fxstate_failures() {
   check(execute(cpu,{0x0f,0xae,0x06,0x00,0x40})==StepResult::Faulted&&
         cpu.fault->code==cosmic_pc::FaultCode::DeviceNotAvailable,
         "FXSAVE CR0.TS must produce #NM");
+  check(execute(cpu,{0x0f,0xae,0x0e,0x00,0x40})==StepResult::Faulted&&
+        cpu.fault->code==cosmic_pc::FaultCode::DeviceNotAvailable,
+        "FXRSTOR CR0.TS must produce #NM before validating the image");
+  cpu.cr0=0x14; // EM set, TS clear.
+  for(std::uint8_t form:{0x06,0x0e})
+    check(execute(cpu,{0x0f,0xae,form,0x00,0x40})==StepResult::Faulted&&
+          cpu.fault->code==cosmic_pc::FaultCode::DeviceNotAvailable,
+          "Both FX instructions must signal #NM with CR0.EM");
+  cpu.cr0=0x10;
+  for(const auto modrm:{0xc0,0xc8})
+    check(execute(cpu,{0x0f,0xae,std::uint8_t(modrm)})==StepResult::Faulted&&
+          cpu.fault->code==cosmic_pc::FaultCode::InvalidInstruction,
+          "FX state instructions require a memory operand");
+  check(execute(cpu,{0xf0,0x0f,0xae,0x06,0x00,0x40})==StepResult::Faulted&&
+        cpu.fault->code==cosmic_pc::FaultCode::InvalidInstruction,
+        "LOCK FXSAVE must signal #UD");
   cpu.cr0&=~8U;cpu.cr4=0;
   check(execute(cpu,{0x66,0x0f,0x6f,0x06,0x00,0x40})==StepResult::Faulted,
         "SSE2 cannot operate without CR4.OSFXSR");
   std::cout<<"C09R1_FXSTATE_FAULTS_PASS alignment=1 mxcsr=1 nm=1\n";
+}
+void fxstate_exception_image() {
+  Cpu cpu(2*1024*1024);
+  cpu.reset(0,0x1000);cpu.a20_enabled=true;cpu.cr4=0x200;cpu.cr0|=0x20;
+  for(const bool pending:{false,true}) {
+    const auto control=std::uint16_t(pending?0:0xffffU);
+    const auto status=std::uint16_t(pending?4:0x8080U);
+    const auto expected_control=std::uint16_t(pending?0x0040U:0x1f7fU);
+    const auto expected_status=std::uint16_t(pending?0x8084U:0);
+    cpu.memory.fill(0x4000,0,512);
+    cpu.write16(0x4000,control);cpu.write16(0x4002,status);cpu.write16(0x4006,0xfabc);
+    cpu.write32(0x4018,0x1f80);
+    check(execute(cpu,{0x0f,0xae,0x0e,0x00,0x40})==StepResult::Executed,
+          "FXRSTOR must load an image with pending unmasked x87 status");
+    check(execute(cpu,{0x0f,0xae,0x06,0x00,0x41})==StepResult::Executed,
+          "FXSAVE must save an image with pending unmasked x87 status");
+    check(cpu.read16(0x4100)==expected_control&&cpu.read16(0x4102)==expected_status&&
+          cpu.read16(0x4106)==0x02bc,
+          "FXRSTOR failed to normalize reserved bits and derive x87 exception summary");
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+    alignas(16) std::array<std::uint8_t,512> previous{},source{},observed{};
+    cpu.memory.read_block(0x4000,source.data(),source.size());
+    asm volatile("fxsave64 %[old]; fxrstor64 %[src]; fxsave64 %[out]; fnclex; fxrstor64 %[old]"
+        : [old] "+m"(previous),[out] "=m"(observed) : [src] "m"(source) : "memory");
+    for(unsigned i:{0U,1U,2U,3U})
+      check(cpu.read8(0x4100+i)==observed[i],"FXRSTOR control/status normalization differs from hardware");
+    if(pending)
+      check(cpu.read16(0x4106)==(std::uint16_t(observed[7])<<8|observed[6]),
+            "FXRSTOR exception opcode normalization differs from hardware");
+#endif
+    if(pending)
+      check(execute(cpu,{0x9b})==StepResult::Faulted&&
+            cpu.fault->code==cosmic_pc::FaultCode::X87FloatingPoint,
+            "FWAIT must deliver pending x87 exception established by FXRSTOR");
+    else
+      check(execute(cpu,{0x9b})==StepResult::Executed,"FWAIT must ignore stale exception summary bits");
+  }
 }
 void fpu_memory_and_stack() {
   Cpu cpu(2*1024*1024);
@@ -195,6 +248,74 @@ void long64_fxstate(){
     check(cpu.xmm[0][i]==std::uint8_t(i+3)&&
           cpu.xmm[15][i]==std::uint8_t(i+0x40),
           "FXRSTOR64 failed XMM0/XMM15 state restore");
+  const auto run64=[&](std::initializer_list<std::uint8_t> code) {
+    cpu.memory.write_block(0xa000,code.begin(),code.size());
+    cpu.eip=0xa000;cpu.fault.reset();cpu.halted=false;
+    return cpu.step();
+  };
+  const auto legacy=std::initializer_list<std::uint8_t>{0x0f,0xae,0x04,0x25,0,0x60,0,0};
+  check(run64(legacy)==StepResult::Executed&&
+        cpu.read32(0x6008)==std::uint32_t(cpu.fpu_ip)&&
+        cpu.read32(0x6010)==std::uint32_t(cpu.fpu_dp)&&cpu.read8(0x6000+415)==0x4f,
+        "Unpromoted FXSAVE in long mode must save 32-bit pointers and all sixteen XMMs");
+
+  // The chosen OSFXSR-clear behavior leaves the SIMD portion untouched in
+  // both long-mode formats, even if the image contains invalid MXCSR bits.
+  cpu.cr4&=~0x200U;
+  cpu.fpu_cs=0x33;cpu.fpu_ds=0x2b;cpu.fpu_control=0x077f;
+  cpu.memory.fill(0x6000,0xa5,512);
+  cpu.memory.fill(0x6200,0xa5,512);
+  check(run64(legacy)==StepResult::Executed&&
+        cpu.read32(0x6008)==std::uint32_t(cpu.fpu_ip)&&cpu.read16(0x600c)==0x33&&
+        cpu.read32(0x6010)==std::uint32_t(cpu.fpu_dp)&&cpu.read16(0x6014)==0x2b,
+        "Unpromoted FXSAVE with OSFXSR clear must retain x87 offsets and selectors");
+  check(run64({0x48,0x0f,0xae,0x04,0x25,0x00,0x62,0,0})==StepResult::Executed&&
+        cpu.read64(0x6208)==cpu.fpu_ip&&cpu.read64(0x6210)==cpu.fpu_dp,
+        "FXSAVE64 with OSFXSR clear must retain 64-bit x87 pointers");
+  for(const unsigned area:{0x6000U,0x6200U}) {
+    check(cpu.read64(area+24)==0xa5a5a5a5a5a5a5a5ULL,
+          "FXSAVE with OSFXSR clear changed the MXCSR image");
+    for(unsigned offset=160;offset<416;offset+=8)
+      check(cpu.read64(area+offset)==0xa5a5a5a5a5a5a5a5ULL,
+            "FXSAVE with OSFXSR clear changed the XMM image");
+  }
+  const auto simd_before=cpu.xmm;
+  cpu.fpu_ip=0;cpu.fpu_dp=0;cpu.fpu_control=0x037f;cpu.mxcsr=0x9fc0;
+  check(run64({0x48,0x0f,0xae,0x0c,0x25,0x00,0x62,0,0})==StepResult::Executed&&
+        cpu.fpu_ip==0x00007fff12345678ULL&&cpu.fpu_dp==0x00007fff98765430ULL&&
+        cpu.fpu_control==0x077f&&cpu.xmm==simd_before&&cpu.mxcsr==0x9fc0,
+        "FXRSTOR64 with OSFXSR clear must restore x87 and ignore invalid SIMD state");
+  check(run64({0x0f,0xae,0x0c,0x25,0x00,0x60,0,0})==StepResult::Executed&&
+        cpu.fpu_ip==0x12345678ULL&&cpu.fpu_dp==0x98765430ULL&&
+        cpu.fpu_cs==0x33&&cpu.fpu_ds==0x2b&&cpu.xmm==simd_before&&cpu.mxcsr==0x9fc0,
+        "Unpromoted FXRSTOR with OSFXSR clear must restore x87 state alone");
+  cpu.cr4|=0x200U;
+  std::cout<<"C02_LONG_FXSTATE_OSFXSR_CLEAR_PASS rex_w_0_1=1 simd_preserved=1\n";
+
+  // At offset E30, only the software-owned 48-byte tail crosses the page.
+  for(unsigned i=0;i<512;++i)cpu.write64(0x4000+i*8,(std::uint64_t(i)<<12)|3);
+  cpu.write64(0x3000,0x4003);
+  cpu.write64(0x4000+15*8,0x12003);
+  cpu.write64(0x4000+16*8,0);
+  cpu.idtr={0,0};
+  cpu.memory.fill(0x12e30,0x55,464);
+  const auto bad_save=std::initializer_list<std::uint8_t>{0x0f,0xae,0x04,0x25,0x30,0xfe,0,0};
+  const auto bad_restore=std::initializer_list<std::uint8_t>{0x0f,0xae,0x0c,0x25,0x30,0xfe,0,0};
+  check(run64(bad_save)==StepResult::Faulted&&cpu.fault->code==cosmic_pc::FaultCode::PageFault&&
+        cpu.cr2==0x10000&&cpu.fault->error_code==2&&cpu.read8(0x12e30)==0x55,
+        "Second page check on FX save must be write-sense and precede RAM mutation");
+  const auto xmm_before=cpu.xmm;
+  check(run64(bad_restore)==StepResult::Faulted&&cpu.fault->code==cosmic_pc::FaultCode::PageFault&&
+        cpu.cr2==0x10000&&cpu.fault->error_code==0&&cpu.xmm==xmm_before,
+        "Second page check on FX restore must be read-sense and leave XMM unchanged");
+  cpu.write64(0x4000+16*8,0x15003);
+  cpu.memory.fill(0x15000,0x77,64);
+  const auto walks=cpu.page_walks;
+  check(run64({0x0f,0xae,0x04,0x25,0x40,0xfe,0,0})==StepResult::Executed&&
+        cpu.page_walks-walks==legacy.size()+2&&cpu.read16(0x12e40)==cpu.fpu_control&&
+        cpu.read8(0x15000+15)==0&&
+        cpu.read8(0x15000+16)==0x77&&cpu.read8(0x15000+63)==0x77,
+        "Cross-page FX save must use two data walks and leave software-owned bytes untouched");
   std::cout<<"C09R1_FXSAVE64_XMM15_CONTEXT_PASS xmm16=1\n";
 }
 void two_contexts_fxstate(){
@@ -278,7 +399,7 @@ void nm_guest_handler_recovery(){
 }
 int main(){
   try{
-    real16_fxstate();fxstate_failures();fpu_memory_and_stack();long64_fxstate();
+    real16_fxstate();fxstate_failures();fxstate_exception_image();fpu_memory_and_stack();long64_fxstate();
     two_contexts_fxstate();nm_guest_handler_recovery();
     std::cout<<"REVERSE_WINDOWS_C09R1_FPU_FXSTATE_PASS checks="<<checks
              <<" windows_executed=false sse2_cpuid=false x87_cpuid=false\n";

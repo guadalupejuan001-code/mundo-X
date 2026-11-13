@@ -9,6 +9,9 @@ on:
       - "native/include/mundo_x/experimental/ether_transform.hpp"
       - "native/src/ether_*.cpp"
       - "pc-android/native/x86_cpu.hpp"
+      - "pc-android/native/x86_ext80.hpp"
+      - "pc-android/native/x86_mmx.inc"
+      - "pc-android/native/x86_x87_state.inc"
       - "pc-android/native/pc_8042.hpp"
       - "pc-android/native/pc_machine.hpp"
       - "pc-android/native/tests/pc_8042_test.cpp"
@@ -16,6 +19,11 @@ on:
       - "pc-android/native/tests/x86_sse2_packed_oracle_test.cpp"
       - "pc-android/native/tests/x86_c09r1_stage5_cvt_fxsr_test.cpp"
       - "pc-android/native/tests/x86_sse_fp32_test.cpp"
+      - "pc-android/native/tests/x86_sse_legacy_forms_test.cpp"
+      - "pc-android/native/tests/x86_mmx_test.cpp"
+      - "pc-android/native/tests/x86_x87_arithmetic_oracle_test.cpp"
+      - "pc-android/native/tests/x86_x87_state_test.cpp"
+      - "pc-android/native/tests/x86_c09r1_fxstate_test.cpp"
       - "pc-android/native/tests/x86_lock_rmw_test.cpp"
       - "pc-android/native/tests/x86_protected_real_transition_test.cpp"
   workflow_dispatch:
@@ -26,19 +34,27 @@ permissions:
 jobs:
   canonical-cpu:
     strategy:
+      fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        include:
+          - runner: ubuntu-24.04
+            architecture: x86_64
+          - runner: ubuntu-24.04-arm
+            architecture: aarch64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Test the original Ether Next and canonical guest integration
         shell: bash
         run: |
           set -euo pipefail
           uname -m
+          test "$(uname -m)" = "${{ matrix.architecture }}"
+          git rev-parse HEAD
           cmake -S . -B build/ether-next -DCMAKE_BUILD_TYPE=Release -DMUNDO_X_ETHER_NEXT=ON
           cmake --build build/ether-next --parallel 2 \
             --target test_ether_next test_ether_next_quantum x86_ether_next_guest_test
@@ -75,3 +91,18 @@ jobs:
           set -euo pipefail
           cmake --build build/ether-next --parallel 2 --target x86_sse2_packed_oracle_test x86_c09r1_stage5_cvt_fxsr_test x86_sse_fp32_test
           ctest --test-dir build/ether-next --output-on-failure -V -R '^(x86_sse2_packed_oracle|x86_c09r1_stage5_cvt_fxsr|x86_sse_fp32)$'
+      - name: Verify legacy SSE forms, MMX, x87 and FX state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/ether-next --parallel 2 --target \
+            x86_sse_legacy_forms_test x86_mmx_test x86_x87_arithmetic_oracle_test \
+            x86_x87_state_test x86_c09r1_fxstate_test
+          ctest --test-dir build/ether-next --output-on-failure -V \
+            -R '^(x86_sse_legacy_forms|x86_mmx|x86_x87_arithmetic_oracle|x86_x87_state|x86_c09r1_fxstate)$' \
+            | tee build/ether-next/c02-cpu-conformance.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c02-cpu-conformance-${{ matrix.architecture }}
+          path: build/ether-next/c02-cpu-conformance.log
+          if-no-files-found: error

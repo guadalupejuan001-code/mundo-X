@@ -29,6 +29,7 @@
 #include <xmmintrin.h>
 #endif
 #include "memory_fabric.hpp"
+#include "x86_ext80.hpp"
 #if defined(MUNDO_X_PC_ETHER_NEXT)
 #include "mundo_x/experimental/ether_transform.hpp"
 #endif
@@ -851,6 +852,13 @@ class Cpu {
     fpu_opcode=fpu_cs=fpu_ds=0;fpu_ip=fpu_dp=0;
     // x87 register data becomes architecturally empty; data bits are stale.
   }
+  void fpu_recompute_summary() noexcept {
+    if(fpu_status&~fpu_control&0x3fU)fpu_status|=0x8080U;
+    else fpu_status&=~std::uint16_t(0x8080U);
+  }
+  static constexpr std::uint16_t fpu_normalize_control(std::uint16_t word) noexcept {
+    return std::uint16_t((word&0x1f3fU)|0x0040U);
+  }
   unsigned fpu_top() const {return unsigned((fpu_status>>11)&7U);}
   unsigned fpu_slot(unsigned logical) const {return (fpu_top()+logical)&7U;}
   unsigned fpu_tag(unsigned slot) const {return (fpu_tags>>(2*slot))&3U;}
@@ -890,9 +898,6 @@ class Cpu {
     if(exponent==exp_mask) {
       extended_exp=0x7fff;
       significand=(1ULL<<63)|(fraction<<(63-frac_bits));
-      // Do not pretend to model the pending unmasked sNaN x87 flags yet.
-      if(fraction && !(fraction&(1ULL<<(frac_bits-1))))
-        throw std::runtime_error("signaling NaN in x87 FLD requires exception model");
     }else if(exponent||fraction) {
       int e=exponent?int(exponent)-bias:1-bias;
       significand=(exponent?(1ULL<<frac_bits):0ULL)|fraction;
@@ -910,42 +915,6 @@ class Cpu {
     out[9]=std::uint8_t((extended_exp>>8)|(sign?0x80U:0U));
     return out;
   }
-  static Extended80 extended_from_long_double(long double value) {
-    Extended80 bytes{};
-    const bool negative=std::signbit(value);
-    const auto magnitude=std::fabs(value);
-    std::uint64_t sig=0;unsigned exponent=0;
-    if(std::isnan(value)) {exponent=0x7fff;sig=0xc000000000000000ULL;}
-    else if(std::isinf(value)) {exponent=0x7fff;sig=0x8000000000000000ULL;}
-    else if(magnitude!=0) {
-      int binexp=0;
-      const auto fraction=std::frexp(magnitude,&binexp);
-      const auto biased=binexp-1+16383;
-      if(biased<=0||biased>=0x7fff)
-        throw std::runtime_error("x87 extended exponent outside finite implementation");
-      exponent=unsigned(biased);
-      sig=static_cast<std::uint64_t>(std::ldexp(fraction,64));
-    }
-    for(unsigned i=0;i<8;++i)bytes[i]=std::uint8_t(sig>>(8*i));
-    bytes[8]=std::uint8_t(exponent);
-    bytes[9]=std::uint8_t((exponent>>8)|(negative?0x80U:0));
-    return bytes;
-  }
-  static long double extended_to_long_double(const Extended80& value) {
-    const auto exponent=ext_biased_exp(value);
-    const auto significand=ext_significand(value);
-    const bool sign=(value[9]&0x80U)!=0;
-    long double result=0;
-    if(exponent==0x7fff) {
-      result=significand==0x8000000000000000ULL
-          ?std::numeric_limits<long double>::infinity()
-          :std::numeric_limits<long double>::quiet_NaN();
-    }else if(exponent||significand) {
-      const auto e=(exponent?int(exponent):1)-16383-63;
-      result=std::ldexp(static_cast<long double>(significand),e);
-    }
-    return sign?-result:result;
-  }
   static Extended80 x87_indefinite() {
     Extended80 value{};
     value[7]=0xc0;value[8]=0xff;value[9]=0xff;
@@ -959,44 +928,27 @@ class Cpu {
                               (overflow?0x0200U:0U));
     if(!(fpu_control&1U))fpu_status|=0x8080U; // ES+B
   }
-  void round_x87_precision(Extended80& bits,std::uint32_t& flags) {
-    // C1 describes this operation's rounding, while PE is sticky.
-    fpu_status=std::uint16_t(fpu_status&~0x0200U);
-    const unsigned pc=(fpu_control>>8)&3U;
-    if(pc==1)fail("reserved x87 PC=01",FaultCode::UnsupportedState);
-    const unsigned precision=pc==0?24U:pc==2?53U:64U;
-    if(precision==64)return;
-    auto exponent=ext_biased_exp(bits);
-    auto significand=ext_significand(bits);
-    if(exponent==0x7fff||!significand)return; // NaN, infinity or zero
-    if(!exponent)fail("extended subnormal x87 arithmetic rounding pending",
-                      FaultCode::UnsupportedState);
-    const unsigned drop=64-precision;
-    const auto lowmask=(std::uint64_t{1}<<drop)-1;
-    const auto lost=significand&lowmask;
-    if(!lost)return;
-    const auto half=std::uint64_t{1}<<(drop-1);
-    auto keep=significand>>drop;
-    const unsigned rc=(fpu_control>>10)&3U;
-    const bool negative=(bits[9]&0x80U)!=0;
-    const bool increment=rc==0?(lost>half||(lost==half&&(keep&1))):
-                         rc==1?negative:rc==2?!negative:false;
-    flags|=32U; // x87 PE: result changed by precision narrowing
-    // Intel C1 indicates the last rounded result was rounded upwards.
-    if(increment)fpu_status|=0x0200U;
-    if(increment){
-      ++keep;
-      if(keep==(std::uint64_t{1}<<precision)){
-        keep>>=1;++exponent;
-        if(exponent>=0x7fff)
-          fail("narrow precision x87 overflow pending",FaultCode::UnsupportedState);
-      }
-    }
-    significand=keep<<drop;
-    for(unsigned byte=0;byte<8;++byte)
-      bits[byte]=std::uint8_t(significand>>(byte*8));
-    bits[8]=std::uint8_t(exponent);
-    bits[9]=std::uint8_t((exponent>>8)|(negative?0x80U:0));
+  void fpu_arithmetic_result(const x87_numeric::Result& result, unsigned slot, bool pop) {
+    using namespace x87_numeric;
+    fpu_status=std::uint16_t((fpu_status&~0x0200U) | (result.rounded_up?0x0200U:0U) |
+                             result.exceptions);
+    const auto unmasked=result.exceptions&~fpu_control&0x3fU;
+    if(unmasked) fpu_status|=0x8080U; // ES+B; the next waiting instruction raises #MF.
+    // Invalid operands and division by zero leave the destination unchanged.
+    // Range exceptions with x87 register destinations use a biased exponent.
+    if(unmasked&(Invalid|Denormal|DivideByZero)) return;
+    x87[slot]=result.value;
+    fpu_tag_set(slot,classify_ext(result.value));
+    if(pop) fpu_retire_pop();
+  }
+  void fpu_arithmetic(unsigned group,const Extended80& lhs,const Extended80& rhs,
+                      unsigned slot,bool pop=false,bool memory_denormal=false) {
+    if(((fpu_control>>8)&3U)==1U) fail("reserved x87 PC=01",FaultCode::UnsupportedState);
+    fpu_arithmetic_result(x87_numeric::arithmetic(group,lhs,rhs,fpu_control,memory_denormal),slot,pop);
+  }
+  void fpu_sqrt() {
+    if(((fpu_control>>8)&3U)==1U) fail("reserved x87 PC=01",FaultCode::UnsupportedState);
+    fpu_arithmetic_result(x87_numeric::square_root(fpu_peek(),fpu_control),fpu_slot(0),false);
   }
   void fpu_push(Extended80 value) {
     const auto top=(fpu_top()+7U)&7U;
@@ -1015,19 +967,10 @@ class Cpu {
       fail("x87 stack underflow exception handling not implemented",FaultCode::UnsupportedState);
     return x87[slot];
   }
-  void fpu_pop() {
-    const auto top=fpu_top();
-    if(fpu_tag(top)==3U) {
-      fpu_stack_fault(false);
-      if(!(fpu_control&1U))return;
-      // Underflow masked: pop empty register, preserve all other tags.
-    }else fpu_status=std::uint16_t(fpu_status&~0x0200U);
-    fpu_tag_set(top,3);
-    fpu_status=std::uint16_t((fpu_status&~0x3800U)|(((top+1U)&7U)<<11));
-  }
   void require_fpu() const {
     if(cr0&0xcU)fail("x87 CR0.TS/EM device unavailable",FaultCode::DeviceNotAvailable);
   }
+#include "x86_x87_state.inc"
   static std::uint16_t load16(const std::array<std::uint8_t,512>& src,unsigned off) {
     return std::uint16_t(src[off])|(std::uint16_t(src[off+1])<<8);
   }
@@ -1054,29 +997,40 @@ class Cpu {
     // With OSFXSR clear the x87 image is still available. This CPU profile
     // omits the implementation-dependent XMM and MXCSR fields in that mode.
     const bool save_simd = (cr4 & 0x200U) != 0;
-    const auto address=segment_linear(memory_operand.segment,operand_offset(memory_operand),
-                                      512,restore?Access::Read:Access::Write);
+    const auto access=restore?Access::Read:Access::Write;
+    const auto address=segment_linear(memory_operand.segment,operand_offset(memory_operand),512,access);
     if(address&15U)fail("FXSAVE/FXRSTOR require 16-byte aligned memory",FaultCode::ProtectionFault);
-    // Validate the ENTIRE 512-byte window before changing CPU state or RAM.
-    // Explicit MMIO rejection: these operations are not device DMA commands.
-    for(unsigned i=0;i<512;++i) {
-      const auto p=translate(address+i,restore?Access::Read:Access::Write);
-      if(mmio_at(p))
-        fail("FXSAVE/FXRSTOR on MMIO cannot be atomic",FaultCode::UnsupportedState);
-      (void)physical_index(p);
+    // The architecture checks all 512 bytes, including the software tail.
+    // Preflight both pages exactly once before accessing the state image.
+    std::array<std::size_t,512> indices{};
+    for(unsigned offset=0;offset<indices.size();) {
+      const auto linear=address+offset;
+      const auto physical=translate(linear,access);
+      const auto count=std::min(unsigned(indices.size())-offset,0x1000U-unsigned(linear&0xfffU));
+      for(unsigned i=0;i<count;++i) {
+        const auto bus=physical+i;
+        if(mmio_at(bus))fail("FXSAVE/FXRSTOR requires RAM",FaultCode::UnsupportedState);
+        const auto index=physical_index(bus);
+        if(index>=memory.window_base() && index-memory.window_base()<memory.window_bytes())
+          fail("FXSAVE/FXRSTOR cannot access the Ether window",FaultCode::UnsupportedState);
+        indices[offset+i]=index;
+      }
+      offset+=count;
     }
     std::array<std::uint8_t,512> buffer{};
     if(restore) {
-      for(unsigned i=0;i<416;++i)
-        buffer[i]=std::uint8_t(read_linear(address+i,1));
+      for(unsigned i=0;i<(save_simd?416U:160U);++i) {
+        if(!save_simd&&i>=24&&i<32)continue;
+        buffer[i]=memory.read_byte(indices[i]);
+      }
       const auto candidate_mxcsr=save_simd?load32(buffer,24):mxcsr;
       if(save_simd&&(candidate_mxcsr&~kMxcsrMask))
         fail("FXRSTOR reserved MXCSR bit",FaultCode::ProtectionFault);
       // Parse and validate entire image before committing any CPU state.
-      const auto new_control=load16(buffer,0);
-      auto new_status=load16(buffer,2);
+      const auto new_control=fpu_normalize_control(load16(buffer,0));
+      const auto new_status=load16(buffer,2);
       const auto abridged=buffer[4];
-      const auto new_opcode=load16(buffer,6);
+      const auto new_opcode=std::uint16_t(load16(buffer,6)&0x7ffU);
       const bool wide_pointers=is_long_mode()&&(rex_&8);
       const auto new_ip=wide_pointers?load64(buffer,8):load32(buffer,8);
       const auto new_dp=wide_pointers?load64(buffer,16):load32(buffer,16);
@@ -1104,6 +1058,7 @@ class Cpu {
         for(unsigned i=0;i<xmm_count();++i)
           for(unsigned j=0;j<16;++j)new_xmm[i][j]=buffer[160+16*i+j];
       fpu_control=new_control;fpu_status=new_status;fpu_tags=new_tags;
+      fpu_recompute_summary();
       fpu_opcode=new_opcode;fpu_ip=new_ip;fpu_dp=new_dp;
       fpu_cs=new_cs;fpu_ds=new_ds;x87=new_regs;
       mxcsr=candidate_mxcsr;xmm=new_xmm;
@@ -1111,7 +1066,7 @@ class Cpu {
       store16(buffer,0,fpu_control);store16(buffer,2,fpu_status);
       for(unsigned i=0;i<8;++i)
         if(fpu_tag(i)!=3U)buffer[4]|=std::uint8_t(1U<<i);
-      store16(buffer,6,fpu_opcode);
+      store16(buffer,6,fpu_opcode&0x7ffU);
       const bool wide_pointers=is_long_mode()&&(rex_&8);
       if(wide_pointers){
         store64(buffer,8,fpu_ip);store64(buffer,16,fpu_dp);
@@ -1133,7 +1088,7 @@ class Cpu {
       // Intel reserves bytes 464-511 for software; never overwrite them.
       for(unsigned i=0;i<464;++i) {
         if(!save_simd&&((i>=24&&i<32)||(i>=160&&i<416)))continue;
-        write_linear(address+i,1,buffer[i]);
+        write8(indices[i],buffer[i]);
       }
     }
   }
@@ -1188,6 +1143,33 @@ class Cpu {
       (void)physical_index(p);
     }
     for(unsigned i=0;i<16;++i)write_linear(address+i,1,value[i]);
+  }
+  void masked_store(const std::array<std::uint8_t,16>& data,
+                    const std::array<std::uint8_t,16>& mask_bytes,unsigned bytes) {
+    const auto segment=override_>=0?unsigned(override_):DS;
+    const auto address=segment_linear(segment,get_reg(EDI,address_width()),bytes,Access::Write);
+    std::array<std::uint64_t,16> physical{};
+    // Match the modelled Intel behavior: even masked-off addresses are
+    // checked, but only selected bytes reach the memory bus as stores.
+    for(unsigned done=0;done<bytes;){
+      const auto linear=address+done;
+      const auto first=translate(linear,Access::Write);
+      const auto count=std::min(bytes-done,0x1000U-unsigned(linear&0xfffU));
+      for(unsigned i=0;i<count;++i){
+        const auto bus=first+i;
+        physical[done+i]=bus;
+        if(mask_bytes[done+i]&0x80U){
+          if(mmio_at(bus))
+            fail("masked SIMD store cannot write MMIO",FaultCode::UnsupportedState);
+          (void)physical_index(bus);
+        }
+      }
+      done+=count;
+    }
+    for(unsigned i=0;i<bytes;++i)
+      if(mask_bytes[i]&0x80U)memory.prepare_write(physical_index(physical[i]),1);
+    for(unsigned i=0;i<bytes;++i)
+      if(mask_bytes[i]&0x80U)write8(physical[i],data[i]);
   }
   static std::uint64_t packed_lane(const std::array<std::uint8_t,16>& value,
                                    unsigned offset,unsigned size) {
@@ -1252,6 +1234,38 @@ class Cpu {
   static std::uint32_t fp32_bits(float value) {
     std::uint32_t bits{};std::memcpy(&bits,&value,sizeof(bits));return bits;
   }
+  static std::uint32_t sse_approximate_lane(std::uint32_t raw,bool rsqrt) {
+    const auto sign=raw&0x80000000U;
+    const auto magnitude=raw&0x7fffffffU;
+    if(magnitude>0x7f800000U)return raw|0x00400000U;
+    if(magnitude<0x00800000U)return sign|0x7f800000U; // Signed zero or denormal.
+    if(rsqrt&&sign)return 0xffc00000U;
+    if(magnitude==0x7f800000U)return sign;
+    float value;
+    std::memcpy(&value,&raw,sizeof(value));
+    // The architectural accuracy bound does not prescribe a lookup table.
+    // Round using nearest regardless of guest MXCSR and discard host flags.
+    HostRound nearest(0x1f80);
+    volatile double input=value;
+    volatile float approximate=static_cast<float>(1.0/(rsqrt?std::sqrt(input):input));
+    const auto result=fp32_bits(approximate);
+    return (result&0x7f800000U)?result:sign; // RCP always flushes tiny results.
+  }
+  void sse_approximate(unsigned opcode) {
+    if(operand_override_||(repeat_&&repeat_!=0xf3))
+      fail("invalid reciprocal SSE prefix",FaultCode::InvalidInstruction);
+    require_sse_state();
+    const auto m=modrm();require_xmm(m.reg);
+    const bool scalar=repeat_==0xf3,rsqrt=opcode==0x52;
+    auto result=xmm[m.reg];
+    if(scalar)packed_set(result,0,4,sse_approximate_lane(sse32_source(m.rm),rsqrt));
+    else {
+      const auto source=read_xmm_operand(m.rm,true);
+      for(unsigned offset=0;offset<16;offset+=4)
+        packed_set(result,offset,4,sse_approximate_lane(std::uint32_t(packed_lane(source,offset,4)),rsqrt));
+    }
+    xmm[m.reg]=result;
+  }
   static bool fp32_denormal(std::uint32_t raw) {
     return (raw&0x7f800000U)==0 && (raw&0x007fffffU)!=0;
   }
@@ -1308,12 +1322,38 @@ class Cpu {
     if(source.is_register){require_xmm(source.index);return std::uint32_t(packed_lane(xmm[source.index],0,4));}
     return std::uint32_t(get(source,4));
   }
+  template<typename Float>
+  Float compute_simd_float(unsigned opcode,volatile Float a,volatile Float b) {
+    switch(opcode) {
+      case 0x58:{volatile Float result=a+b;return result;}
+      case 0x5c:{volatile Float result=a-b;return result;}
+      case 0x59:{volatile Float result=a*b;return result;}
+      case 0x5e:{volatile Float result=a/b;return result;}
+      case 0x51:{volatile Float result=std::sqrt(b);return result;}
+      default:fail("unsupported SSE floating-point operation",FaultCode::UnsupportedOpcode);
+    }
+  }
+  template<typename Bits>
+  static std::pair<Bits,int> simd_normalized(Bits magnitude) {
+    constexpr bool single=sizeof(Bits)==4;
+    constexpr unsigned shift=single?23:52;
+    constexpr int bias=single?127:1023;
+    constexpr auto fraction=(Bits{1}<<shift)-1;
+    auto exponent=int(magnitude>>shift);
+    if(!exponent) {
+      exponent=1;
+      while(!(magnitude&(Bits{1}<<shift))){magnitude<<=1;--exponent;}
+    }
+    return {(Bits(bias)<<shift)|(magnitude&fraction),exponent-bias};
+  }
   template<typename Float, typename Bits>
   Bits simd_float_op(unsigned opcode,Bits left_raw,Bits right_raw,std::uint32_t& status) {
     constexpr bool single=sizeof(Bits)==4;
     constexpr Bits sign=Bits{1}<<(sizeof(Bits)*8-1);
     constexpr Bits quiet=Bits{1}<<(single?22:51);
     constexpr Bits indefinite=static_cast<Bits>(single?0xffc00000ULL:0xfff8000000000000ULL);
+    constexpr Bits min_normal=Bits{1}<<(single?23:52);
+    constexpr Bits infinity=static_cast<Bits>(single?0x7f800000ULL:0x7ff0000000000000ULL);
     const auto nan=[](Bits raw) { if constexpr(single)return fp32_nan(raw);else return fp64_nan(raw); };
     const auto denormal=[](Bits raw) { if constexpr(single)return fp32_denormal(raw);else return fp64_subnormal(raw); };
     const auto order=[](Bits raw) { if constexpr(single)return fp32_order_key(raw);else return fp64_order_key(raw); };
@@ -1329,7 +1369,18 @@ class Cpu {
       if(minmax)return right_raw;
       return (left_nan?left_raw:right_raw)|quiet;
     }
-    if(denormal(left_raw)||denormal(right_raw))status|=2U;
+    const auto left_magnitude=left_raw&~sign,right_magnitude=right_raw&~sign;
+    if(opcode==0x51&&(right_raw&sign)&&right_magnitude) {
+      status|=1U;return indefinite; // Invalid precedes denormal on a negative root.
+    }
+    if(opcode==0x5e&&left_magnitude&&left_magnitude<infinity&&!right_magnitude) {
+      status|=4U;return ((left_raw^right_raw)&sign)|infinity; // Divide-by-zero suppresses DE.
+    }
+    const bool denormal_source=denormal(left_raw)||denormal(right_raw);
+    if(denormal_source) {
+      status|=2U;
+      if(!(mxcsr&(1U<<8)))return indefinite; // Unmasked DE precedes arithmetic.
+    }
     if(minmax) {
       const auto l=order(left_raw),r=order(right_raw);
       if(l==r)return right_raw;
@@ -1342,15 +1393,7 @@ class Cpu {
     std::uint32_t result_status=0;
     {
       HostRound rounding(mxcsr);
-      volatile Float a=left,b=right;
-      switch(opcode) {
-        case 0x58:{volatile Float t=a+b;rounded=t;break;} // ADD
-        case 0x5c:{volatile Float t=a-b;rounded=t;break;} // SUB
-        case 0x59:{volatile Float t=a*b;rounded=t;break;} // MUL
-        case 0x5e:{volatile Float t=a/b;rounded=t;break;} // DIV
-        case 0x51:{volatile Float t=std::sqrt(b);rounded=t;break;} // SQRT(src)
-        default:fail("unsupported SSE floating-point operation",FaultCode::UnsupportedOpcode);
-      }
+      rounded=compute_simd_float(opcode,left,right);
       result_status=rounding.status();
     }
     if(result_status&1U) {
@@ -1358,15 +1401,36 @@ class Cpu {
       return indefinite;
     }
     Bits bits{};std::memcpy(&bits,&rounded,sizeof(bits));
-    const bool tiny=denormal(bits);
-    if(!(mxcsr&(1U<<11))&&(tiny||(result_status&16U))) {
-      // Exact tiny results also trap. Rounding to a subnormal is part of
-      // the masked response, so its precision loss is not reported here.
-      result_status=(result_status&~32U)|16U;
+    const auto magnitude=bits&~sign;
+    bool tiny=magnitude<min_normal&&(magnitude||(result_status&16U));
+    std::uint32_t normal_precision=result_status&32U;
+    if((opcode==0x59||opcode==0x5e)&&magnitude<=min_normal&&
+       (magnitude||(result_status&16U))&&(result_status&32U)) {
+      // Intel detects tininess from the arithmetic rounded at its precision
+      // with an unbounded exponent. Rescale the original significands to a
+      // portable normal operation, avoiding host underflow/tininess policy.
+      constexpr int bias=single?127:1023;
+      constexpr unsigned shift=single?23:52;
+      const auto l=simd_normalized(left_magnitude),r=simd_normalized(right_magnitude);
+      const auto lbits=l.first|(left_raw&sign),rbits=r.first|(right_raw&sign);
+      Float a{},b{};
+      std::memcpy(&a,&lbits,sizeof(a));std::memcpy(&b,&rbits,sizeof(b));
+      HostRound rounding(mxcsr);
+      volatile Float normal=compute_simd_float(opcode,a,b);
+      const Float normal_value=normal;
+      Bits normalized{};std::memcpy(&normalized,&normal_value,sizeof(normalized));
+      const auto exponent=int((normalized&~sign)>>shift)-bias+l.second+
+                          (opcode==0x59?r.second:-r.second);
+      tiny=exponent<1-bias;
+      normal_precision=rounding.status()&32U;
+    }
+    result_status&=~16U;
+    if(tiny&&!(mxcsr&(1U<<11))) {
+      result_status=(result_status&~32U)|16U|normal_precision;
     }else if((mxcsr&0x8000U)&&tiny) {
       bits&=sign;
       result_status|=16U|32U;
-    }
+    }else if(tiny&&(result_status&32U))result_status|=16U;
     status|=result_status;
     return bits;
   }
@@ -1399,9 +1463,10 @@ class Cpu {
                                     bool truncate,std::uint32_t& status) {
     // These conversions honor DAZ without raising a denormal-operand
     // exception. Rounding a nonzero subnormal to an integer raises PE.
-    const auto value=fp64_from_bits(fp64_apply_daz(raw));
-    if(std::isfinite(value)) {
+    raw=fp64_apply_daz(raw);
+    if((raw&0x7ff0000000000000ULL)!=0x7ff0000000000000ULL) {
       HostRound mode(mxcsr);
+      const auto value=fp64_from_bits(raw);
       volatile double input=value;
       volatile double rounded=truncate?std::trunc(input):std::rint(input);
       const double limit=bytes==8?0x1p63:0x1p31;
@@ -1695,14 +1760,15 @@ class Cpu {
     xmm[m.reg]=result;
   }
   static void shift_packed_lanes(std::array<std::uint8_t,16>& value,
-                                 unsigned bytes, std::uint64_t count, unsigned operation) {
+                                 unsigned bytes, std::uint64_t count, unsigned operation,
+                                 unsigned vector_bytes = 16) {
     const unsigned bits = 8U * bytes;
     const auto lane_mask = mask(bytes);
     // /2 = logical right, /4 = arithmetic right, /6 = logical left.
     if (operation == 4) count = std::min<std::uint64_t>(count, bits - 1);
     else if (count >= bits) { value.fill(0); return; }
     if (count == 0) return;
-    for (unsigned offset = 0; offset < 16; offset += bytes) {
+    for (unsigned offset = 0; offset < vector_bytes; offset += bytes) {
       const auto lane = packed_lane(value, offset, bytes);
       auto shifted = operation == 6 ? lane << count : lane >> count;
       if (operation == 4 && (lane & sign_bit(bytes)))
@@ -1747,14 +1813,21 @@ class Cpu {
       default: break;
     }
 #endif
-    const auto lhs=xmm[m.reg],rhs=read_xmm_operand(m.rm,true);
+    xmm[m.reg]=packed_integer_result<16>(opcode,xmm[m.reg],read_xmm_operand(m.rm,true));
+  }
+  template<unsigned vector_bytes>
+  std::array<std::uint8_t,16> packed_integer_result(unsigned opcode,
+        const std::array<std::uint8_t,16>& lhs,const std::array<std::uint8_t,16>& rhs) {
+    static_assert(vector_bytes == 8 || vector_bytes == 16);
+    constexpr unsigned half=vector_bytes/2;
     auto result=lhs;
     switch(opcode){
-      case 0xdb: case 0xdf: case 0xeb: { // PAND, PANDN, POR
-        for(unsigned i=0;i<16;++i)
+      case 0xdb: case 0xdf: case 0xeb: case 0xef: { // PAND, PANDN, POR, PXOR
+        for(unsigned i=0;i<vector_bytes;++i)
           result[i]=opcode==0xdb?std::uint8_t(lhs[i]&rhs[i]):
                     opcode==0xdf?std::uint8_t(~lhs[i]&rhs[i]):
-                                     std::uint8_t(lhs[i]|rhs[i]);
+                                     opcode==0xeb?std::uint8_t(lhs[i]|rhs[i]):
+                                     std::uint8_t(lhs[i]^rhs[i]);
         break;
       }
       case 0x60: case 0x61: case 0x62: case 0x6c:
@@ -1763,8 +1836,8 @@ class Cpu {
         const unsigned size=(opcode==0x60||opcode==0x68)?1U:
                             (opcode==0x61||opcode==0x69)?2U:
                             (opcode==0x62||opcode==0x6a)?4U:8U;
-        const unsigned first=high?8U:0U;
-        for(unsigned i=0;i<8U/size;++i){
+        const unsigned first=high?half:0U;
+        for(unsigned i=0;i<half/size;++i){
           for(unsigned j=0;j<size;++j) {
             result[(2*i)*size+j]=lhs[first+i*size+j];
             result[(2*i+1)*size+j]=rhs[first+i*size+j];
@@ -1776,12 +1849,12 @@ class Cpu {
         const unsigned bytes = opcode == 0x6b ? 2U : 1U;
         const auto low = opcode == 0x67 ? 0 : -(std::int64_t{1} << (8U * bytes - 1));
         const auto high = opcode == 0x67 ? 255 : -low - 1;
-        for (unsigned lane = 0; lane < 8U / bytes; ++lane) {
+        for (unsigned lane = 0; lane < half / bytes; ++lane) {
           const auto at = lane * bytes;
           const auto l = signed_value(packed_lane(lhs, at * 2, bytes * 2), bytes * 2);
           const auto r = signed_value(packed_lane(rhs, at * 2, bytes * 2), bytes * 2);
           packed_set(result, at, bytes, std::uint64_t(std::clamp(l, low, high)));
-          packed_set(result, at + 8, bytes, std::uint64_t(std::clamp(r, low, high)));
+          packed_set(result, at + half, bytes, std::uint64_t(std::clamp(r, low, high)));
         }
         break;
       }
@@ -1792,7 +1865,7 @@ class Cpu {
         const bool subtract = (opcode & 4U) == 0;
         const auto low = is_signed ? -(std::int64_t{1} << (8U * bytes - 1)) : 0;
         const auto high = is_signed ? -low - 1 : std::int64_t(mask(bytes));
-        for (unsigned at = 0; at < 16; at += bytes) {
+        for (unsigned at = 0; at < vector_bytes; at += bytes) {
           const auto left = packed_lane(lhs, at, bytes), right = packed_lane(rhs, at, bytes);
           const auto l = is_signed ? signed_value(left, bytes) : std::int64_t(left);
           const auto r = is_signed ? signed_value(right, bytes) : std::int64_t(right);
@@ -1802,7 +1875,7 @@ class Cpu {
         break;
       }
       case 0xd5: case 0xe4: case 0xe5: { // PMULLW, PMULHUW, PMULHW.
-        for (unsigned at = 0; at < 16; at += 2) {
+        for (unsigned at = 0; at < vector_bytes; at += 2) {
           const auto l = packed_lane(lhs, at, 2), r = packed_lane(rhs, at, 2);
           const auto product = opcode == 0xe5
               ? std::uint64_t(signed_value(l, 2) * signed_value(r, 2)) : l * r;
@@ -1811,12 +1884,12 @@ class Cpu {
         break;
       }
       case 0xf4: { // PMULUDQ multiplies even dwords into qwords.
-        for (unsigned at = 0; at < 16; at += 8)
+        for (unsigned at = 0; at < vector_bytes; at += 8)
           packed_set(result, at, 8, packed_lane(lhs, at, 4) * packed_lane(rhs, at, 4));
         break;
       }
       case 0xf5: { // PMADDWD wraps the sum of two signed word products.
-        for (unsigned at = 0; at < 16; at += 4) {
+        for (unsigned at = 0; at < vector_bytes; at += 4) {
           const auto first = signed_value(packed_lane(lhs, at, 2), 2) *
                              signed_value(packed_lane(rhs, at, 2), 2);
           const auto second = signed_value(packed_lane(lhs, at + 2, 2), 2) *
@@ -1828,7 +1901,7 @@ class Cpu {
       case 0xda: case 0xde: case 0xea: case 0xee: { // PMINUB, PMAXUB, PMINSW, PMAXSW.
         const unsigned bytes = (opcode & 0x20U) ? 2U : 1U;
         const bool maximum = (opcode & 4U) != 0;
-        for (unsigned at = 0; at < 16; at += bytes) {
+        for (unsigned at = 0; at < vector_bytes; at += bytes) {
           const auto left = packed_lane(lhs, at, bytes), right = packed_lane(rhs, at, bytes);
           const auto l = bytes == 2 ? signed_value(left, bytes) : std::int64_t(left);
           const auto r = bytes == 2 ? signed_value(right, bytes) : std::int64_t(right);
@@ -1838,14 +1911,14 @@ class Cpu {
       }
       case 0xe0: case 0xe3: { // PAVGB/PAVGW round the unsigned mean upward.
         const unsigned bytes = (opcode & 1U) + 1;
-        for (unsigned at = 0; at < 16; at += bytes) {
+        for (unsigned at = 0; at < vector_bytes; at += bytes) {
           const auto l = packed_lane(lhs, at, bytes), r = packed_lane(rhs, at, bytes);
           packed_set(result, at, bytes, (l + r + 1) / 2);
         }
         break;
       }
       case 0xf6: { // PSADBW writes one zero-extended sum per qword.
-        for (unsigned at = 0; at < 16; at += 8) {
+        for (unsigned at = 0; at < vector_bytes; at += 8) {
           unsigned sum = 0;
           for (unsigned i = at; i < at + 8; ++i)
             sum += lhs[i] >= rhs[i] ? lhs[i] - rhs[i] : rhs[i] - lhs[i];
@@ -1857,7 +1930,7 @@ class Cpu {
       case 0xe1: case 0xe2:            // PSRAW/D.
       case 0xf1: case 0xf2: case 0xf3: // PSLLW/D/Q.
         shift_packed_lanes(result, 2U << ((opcode & 3U) - 1), packed_lane(rhs, 0, 8),
-                           opcode < 0xe0 ? 2 : opcode < 0xf0 ? 4 : 6);
+                           opcode < 0xe0 ? 2 : opcode < 0xf0 ? 4 : 6,vector_bytes);
         break;
       default: { // Packed integer wrapping arithmetic and comparisons.
         const bool is_compare=(opcode>=0x74&&opcode<=0x76)||
@@ -1871,7 +1944,7 @@ class Cpu {
           (opcode==0x75||opcode==0x65||opcode==0xfd||opcode==0xf9)?2U:
           (opcode==0x76||opcode==0x66||opcode==0xfe||opcode==0xfa)?4U:8U;
         const auto lane_mask=size==8?UINT64_MAX:((1ULL<<(8*size))-1);
-        for(unsigned offset=0;offset<16;offset+=size){
+        for(unsigned offset=0;offset<vector_bytes;offset+=size){
           const auto l=packed_lane(lhs,offset,size);
           const auto r=packed_lane(rhs,offset,size);
           std::uint64_t next=0;
@@ -1885,8 +1958,9 @@ class Cpu {
         break;
       }
     }
-    xmm[m.reg]=result; // packed integer SSE2 leaves EFLAGS unchanged
+    return result;
   }
+#include "x86_mmx.inc"
   void require_memory(const Operand& operand) const {
     if (operand.is_register) fail("instruction requires a memory operand", FaultCode::InvalidInstruction);
   }
@@ -2593,6 +2667,7 @@ inline void Cpu::extended() {
       default: fail("LOCK prefix is invalid for this opcode", FaultCode::InvalidInstruction);
     }
   }
+  if (try_mmx(op)) return;
   if (op >= 0x80 && op <= 0x8f) {
     const auto displacement_width = is_long_mode() ? 4 : bytes;
     const auto disp = signed_value(immediate(displacement_width), displacement_width);
@@ -2640,6 +2715,7 @@ inline void Cpu::extended() {
   switch (op) {
     case 0x5a: sse2_convert_precision();return;
     case 0x5b: sse2_convert_dword();return;
+    case 0x52: case 0x53: sse_approximate(op);return;
     case 0xe6: // CVTDQ2PD, CVTPD2DQ, CVTTPD2DQ
       sse2_convert_packed();return;
     case 0x54: case 0x55: case 0x56: case 0x57: { // AND/ANDN/OR/XOR PS and PD
@@ -2828,6 +2904,24 @@ inline void Cpu::extended() {
       write_xmm_operand(m.rm,xmm[m.reg],true);
       return;
     }
+    case 0xc3: { // MOVNTI uses GPRs, without requiring OSFXSR/cleared TS.
+      if(operand_override_||repeat_)
+        fail("invalid MOVNTI prefix",FaultCode::InvalidInstruction);
+      const auto m=modrm();require_memory(m.rm);
+      const unsigned amount=is_long_mode()&&(rex_&8U)?8U:4U;
+      put(m.rm,amount,get_reg(m.reg,amount));
+      return;
+    }
+    case 0xf7: { // MASKMOVDQU xmm data, xmm mask, implicit DS:(R)DI.
+      if(!operand_override_||repeat_)
+        fail("MASKMOVDQU requires 66 prefix",FaultCode::UnsupportedOpcode);
+      require_sse_state();
+      const auto m=modrm();
+      if(!m.rm.is_register)fail("MASKMOVDQU mask must be XMM",FaultCode::InvalidInstruction);
+      require_xmm(m.reg);require_xmm(m.rm.index);
+      masked_store(xmm[m.reg],xmm[m.rm.index],16);
+      return;
+    }
     case 0x10: case 0x11: case 0x28: case 0x29: { // MOVU/MOVA PS and PD
       if(repeat_)fail("invalid packed MOV prefix",FaultCode::InvalidInstruction);
       require_sse_state();
@@ -2865,16 +2959,16 @@ inline void Cpu::extended() {
       return;
     }
     case 0xae: { // FX state, MXCSR, fences and CLFLUSH
+      if(operand_override_||repeat_)
+        fail("unsupported 0F AE mandatory prefix",FaultCode::InvalidInstruction);
       const auto m=modrm();
-      if(!operand_override_&&!repeat_) {
-        if(m.rm.is_register && m.group>=5)
-          return; // The single-vCPU memory bus executes accesses in order.
-        if(!m.rm.is_register && m.group==7) {
-          const auto linear_address=segment_linear(m.rm.segment,operand_offset(m.rm),1,Access::Read);
-          // CLFLUSH checks read permissions even though this CPU has no caches to flush.
-          (void)translate(linear_address,Access::Read);
-          return;
-        }
+      if(m.rm.is_register&&m.group>=5)
+        return; // The single-vCPU memory bus executes accesses in order.
+      if(!m.rm.is_register&&m.group==7) {
+        const auto linear_address=segment_linear(m.rm.segment,operand_offset(m.rm),1,Access::Read);
+        // CLFLUSH checks read permissions even though this CPU has no caches to flush.
+        (void)translate(linear_address,Access::Read);
+        return;
       }
       require_memory(m.rm);
       if(m.group==0||m.group==1){fxstate(m.rm,m.group==1);return;}
@@ -3381,10 +3475,7 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x9b: { // FWAIT: x87 deferred unmasked exceptions.
       if((cr0&0x8U)&&(cr0&0x2U))
         fail("FWAIT with TS and MP",FaultCode::DeviceNotAvailable);
-      if(fpu_status&0x0080U) {
-        if(cr0&0x20U)fail("pending unmasked x87 exception (#MF)",FaultCode::X87FloatingPoint);
-        fail("legacy x87 FERR#/IRQ13 delivery not modeled",FaultCode::UnsupportedState);
-      }
+      require_no_pending_x87();
       return;
     }
     case 0x9a: {
@@ -3515,140 +3606,10 @@ inline void Cpu::execute(std::uint8_t op) {
       jump(target, n);
       return;
     }
-    case 0xd8: case 0xd9: case 0xdb: case 0xdc:
-    case 0xdd: case 0xde: case 0xdf: { // Foundational x87 FPU opcodes
-      require_fpu();
-      const auto encoding=fetch8();
-      const auto group=(encoding>>3)&7U;
-      if(encoding>=0xc0) {
-        const auto reg=unsigned(encoding&7U);
-        if(op==0xdb && encoding==0xe3){ // FNINIT
-          fpu_init();return;
-        }
-        if(op==0xdb && encoding==0xe2){ // FNCLEX
-          fpu_status=std::uint16_t(fpu_status&~0x80ffU);return;
-        }
-        if(op==0xd9 && encoding==0xd0)return; // FNOP
-        if(op==0xd9 && (encoding==0xe8||encoding==0xee)) {
-          // FLD1 / FLDZ (exact 80-bit architectural constants).
-          Extended80 value{};
-          if(encoding==0xe8) {
-            value[7]=0x80;value[8]=0xff;value[9]=0x3f;
-          }
-          fpu_push(value);fpu_ip=start_ip_;fpu_cs=start_cs_;return;
-        }
-        if(op==0xd9 && (encoding&0xf8U)==0xc0) {
-          fpu_push(fpu_peek(reg));fpu_ip=start_ip_;return; // FLD ST(i)
-        }
-        if(op==0xd9 && (encoding&0xf8U)==0xc8) { // FXCH ST(i)
-          const auto first=fpu_slot(0),other=fpu_slot(reg);
-          if(fpu_tag(first)==3U||fpu_tag(other)==3U)
-            fail("FXCH empty register handling pending",FaultCode::UnsupportedState);
-          std::swap(x87[first],x87[other]);
-          const auto first_tag=fpu_tag(first),other_tag=fpu_tag(other);
-          fpu_tag_set(first,other_tag);fpu_tag_set(other,first_tag);
-          return;
-        }
-        if(op==0xdd && (encoding&0xf8U)==0xd8) { // FSTP ST(i)
-          if(reg==0){fpu_pop();return;} // handles empty TOP stack fault
-          const auto value=fpu_peek();
-          const auto slot=fpu_slot(reg);
-          x87[slot]=value;fpu_tag_set(slot,classify_ext(value));fpu_pop();
-          return;
-        }
-        if(op==0xdf && encoding==0xe0) { // FNSTSW AX
-          set_reg16(EAX,fpu_status);return;
-        }
-        if(op==0xd8 && ((encoding&0xf8U)==0xc0 ||
-                       (encoding&0xf8U)==0xc8 ||
-                       (encoding&0xf8U)==0xe0 ||
-                       (encoding&0xf8U)==0xf0)) { // FADD/FMUL/FSUB/FDIV ST0,STi
-          if(fpu_status&0x0080U)
-            fail("x87 pending exception must be serviced before arithmetic",
-                 (cr0&0x20U)?FaultCode::X87FloatingPoint:FaultCode::UnsupportedState);
-          if(((fpu_control>>8)&3U)==1U)
-            fail("reserved x87 precision mode PC=01",FaultCode::UnsupportedState);
-          // x87 PC=24/53/64 and RC=nearest/down/up/zero. The 80-bit
-          // significand is narrowed below, independent of GPU or QSSD.
-          // Arithmetic still relies on host long double until a complete
-          // software extended80 oracle is integrated on ARM64.
-          const auto lhs=extended_to_long_double(fpu_peek());
-          const auto rhs=extended_to_long_double(fpu_peek(reg));
-          long double answer=0;
-          std::uint32_t flags=0;
-          {
-            HostRound rounding(0x1f80U|(((fpu_control>>10)&3U)<<13));
-            volatile long double a=lhs,b=rhs;
-            if((encoding&0xf8U)==0xc0) {
-              volatile long double result=a+b;answer=result;
-            }else if((encoding&0xf8U)==0xc8) {
-              volatile long double result=a*b;answer=result;
-            }else if((encoding&0xf8U)==0xe0) {
-              volatile long double result=a-b;answer=result;
-            }else{
-              volatile long double result=a/b;answer=result;
-            }
-            flags|=rounding.status();
-          }
-          auto converted=extended_from_long_double(answer);
-          round_x87_precision(converted,flags);
-          // Intel keeps ST0 unchanged when a detected exception is unmasked.
-          // #MF is deferred to FWAIT; the sticky flags remain observable.
-          fpu_status|=std::uint16_t(flags);
-          if(flags&~std::uint32_t(fpu_control)&0x3fU){
-            fpu_status|=0x8080U; // ES+B; FNSTSW exposes sticky condition.
-            return;
-          }
-          const auto slot=fpu_slot(0);
-          x87[slot]=converted;fpu_tag_set(slot,classify_ext(converted));
-          fpu_ip=start_ip_;return;
-        }
-        fail("x87 register opcode pending for full FPU",FaultCode::UnsupportedOpcode);
-      }
-      // Decoding a legacy memory ModRM after consuming its byte: rewind so
-      // the canonical ModRM parser handles displacement/SIB and segment.
-      --cursor_;decoded_.pop_back();
-      const auto m=modrm();
-      require_memory(m.rm);
-      const auto data_width=(op==0xd9||op==0xd8)?4U:
-                            (op==0xdd||op==0xdc)?8U:2U;
-      if((op==0xd9||op==0xdd)&&group==0) { // FLD m32real/m64real
-        const auto raw=get(m.rm,data_width);
-        fpu_push(extended_from_ieee(raw,data_width));
-        fpu_ip=start_ip_;fpu_cs=start_cs_;
-        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
-        return;
-      }
-      if((op==0xd9||op==0xdd)&&group==3) { // FSTP m32real/m64real
-        if((fpu_control&0x0c00U)!=0)
-          fail("non-nearest x87 rounding pending",FaultCode::UnsupportedState);
-        const auto number=extended_to_long_double(fpu_peek());
-        if(data_width==4){
-          const auto converted=static_cast<float>(number);
-          std::uint32_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
-          put(m.rm,4,bits);
-        }else{
-          const auto converted=static_cast<double>(number);
-          std::uint64_t bits=0;std::memcpy(&bits,&converted,sizeof(bits));
-          put(m.rm,8,bits);
-        }
-        fpu_pop();
-        fpu_ip=start_ip_;fpu_cs=start_cs_;
-        fpu_dp=operand_offset(m.rm);fpu_ds=segments[m.rm.segment];
-        return;
-      }
-      if(op==0xd9&&group==5) { // FLDCW m16
-        fpu_control=std::uint16_t(get(m.rm,2));
-        return;
-      }
-      if(op==0xd9&&group==7) { // FNSTCW m16
-        put(m.rm,2,fpu_control);return;
-      }
-      if(op==0xdd&&group==7) { // FNSTSW m16
-        put(m.rm,2,fpu_status);return;
-      }
-      fail("x87 memory opcode pending for full FPU",FaultCode::UnsupportedOpcode);
-    }
+    case 0xd8: case 0xd9: case 0xda: case 0xdb:
+    case 0xdc: case 0xdd: case 0xde: case 0xdf:
+      execute_x87(op);
+      return;
     case 0xd7: {
       const auto address = (index(EBX) + reg8(EAX)) & mask(address_width());
       set_reg8(EAX, std::uint8_t(read_segment(data_segment(), address, 1))); return;
