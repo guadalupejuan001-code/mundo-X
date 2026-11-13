@@ -455,6 +455,7 @@ class Cpu {
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
     gdtr = s.gdtr; idtr = s.idtr;
     ldtr = s.ldtr; tr = s.tr;
+    xmm=s.xmm;mxcsr=s.mxcsr;
     a20_enabled = s.a20; halted = s.halted;
   }
   static void check_register(unsigned r) {
