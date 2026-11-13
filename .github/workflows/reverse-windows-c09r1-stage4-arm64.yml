@@ -1,0 +1,88 @@
+name: C09R1 stage4 - native ARM64 FPU and SSE2 golden regressions
+on:
+  push:
+    branches: ["feature/c09r1-stage4-*"]
+  pull_request:
+    paths:
+      - 'pc-android/native/x86_cpu.hpp'
+      - 'pc-android/native/tests/x86_c09r1_stage4_mxcsr_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage4_x87_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage4_sse2_misc_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_fp_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_x87_precision_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_x87_mf_test.cpp'
+      - 'pc-android/native/tests/x86_c09r1_stage3_ring3_test.cpp'
+      - '.github/workflows/reverse-windows-c09r1-stage4-arm64.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm64-canonical-cpu:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify this is ACTUAL ARM64 (not x86 or a Windows guest)
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -m
+          test "$(uname -m)" = "aarch64"
+          g++ --version | head -1
+          echo C09R1_NATIVE_ARM64_RUNNER_VERIFIED
+      - name: Compile canonical Mundo X FPU/ABI tests for native ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/c09r1-arm64
+          for test in \
+            x86_c09r1_stage4_mxcsr \
+            x86_c09r1_stage4_x87 \
+            x86_c09r1_stage4_sse2_misc \
+            x86_c09r1_stage3_fp \
+            x86_c09r1_stage3_x87_precision \
+            x86_c09r1_stage3_x87_mf \
+            x86_c09r1_stage3_ring3 \
+            x86_c09r1_fxstate \
+            x86_c09r1_sse2_packed \
+            x86_c09r1_xmm_subset; do
+            g++ -std=c++17 -O2 -frounding-math -fno-fast-math -pthread \
+              -I native/include -I pc-android/native \
+              "pc-android/native/tests/${test}_test.cpp" \
+              -o "build/c09r1-arm64/${test}"
+          done
+      - name: Execute genuine original x86 guest instructions on ARM64 host
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in \
+            x86_c09r1_stage4_mxcsr \
+            x86_c09r1_stage4_x87 \
+            x86_c09r1_stage4_sse2_misc \
+            x86_c09r1_stage3_fp \
+            x86_c09r1_stage3_x87_precision \
+            x86_c09r1_stage3_x87_mf \
+            x86_c09r1_stage3_ring3 \
+            x86_c09r1_fxstate \
+            x86_c09r1_sse2_packed \
+            x86_c09r1_xmm_subset; do
+            "build/c09r1-arm64/${test}" | tee "build/c09r1-arm64/${test}.log"
+          done
+          grep -q REVERSE_WINDOWS_C09R1_STAGE4_MXCSR_PASS \
+            build/c09r1-arm64/x86_c09r1_stage4_mxcsr.log
+          grep -q REVERSE_WINDOWS_C09R1_STAGE4_X87_PASS \
+            build/c09r1-arm64/x86_c09r1_stage4_x87.log
+          grep -q REVERSE_WINDOWS_C09R1_STAGE4_SSE2_MISC_PASS \
+            build/c09r1-arm64/x86_c09r1_stage4_sse2_misc.log
+          echo C09R1_STAGE4_NATIVE_ARM64_GUEST_ORACLES_PASS Windows_booted=false
+      - name: Archive portable CPU evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverse-windows-c09r1-stage4-native-arm64
+          path: build/c09r1-arm64/*.log
+          if-no-files-found: warn
