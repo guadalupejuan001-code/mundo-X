@@ -19,6 +19,8 @@
 #include <functional>
 #include <iomanip>
 #include <limits>
+#include <memory>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -31,12 +33,12 @@
 #include "memory_fabric.hpp"
 #include "x86_ext80.hpp"
 #include "x86_wide_integer.hpp"
+#include "x86_ether_arm64.hpp"
 #include "../../native/include/mundo_x/experimental/ether_memory_block.hpp"
 #include "../../native/include/mundo_x/experimental/ether_shift_loop.hpp"
 #if defined(MUNDO_X_PC_ETHER_NEXT)
 #include "mundo_x/experimental/ether_transform.hpp"
 #endif
-
 namespace cosmic_pc {
 
 enum class FaultCode {
@@ -130,6 +132,37 @@ class Cpu {
     return {ether_next_native_instructions_, ether_next_cache_.stats()};
   }
 #endif
+  struct EtherArm64Stats {
+    std::uint64_t translated = 0, hits = 0, blocks = 0, steps = 0;
+    std::uint64_t invalidated = 0, data_fallbacks = 0;
+  };
+  static constexpr bool ether_arm64_host() noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    return true;
+#else
+    return false;
+#endif
+  }
+  void enable_ether_arm64_blocks(bool enabled = true) noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    ether_arm64_enabled_ = enabled;
+    if (enabled && !ether_arm64_cache_) {
+      try { ether_arm64_cache_ = std::make_unique<ether_arm64::Cache>(); }
+      catch (const std::bad_alloc&) { ether_arm64_enabled_ = false; }
+    }
+#else
+    (void)enabled;
+#endif
+  }
+  bool ether_arm64_blocks_enabled() const noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    return ether_arm64_enabled_ && !ether_arm64_cache_->host_rejected;
+#else
+    return false;
+#endif
+  }
+  const EtherArm64Stats& ether_arm64_stats() const noexcept { return ether_arm64_stats_; }
+  unsigned try_ether_arm64_block(unsigned budget);
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -224,6 +257,10 @@ class Cpu {
     x87_ignne_ = false;
     interrupt_shadow_ = false;
     last_rep_batch_bytes_ = 0;
+    ether_arm64_stats_ = {};
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    if (ether_arm64_cache_) ether_arm64_cache_->clear();
+#endif
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
     instruction_page_ = {};
     instruction_page_hits = 0;
@@ -654,6 +691,17 @@ class Cpu {
   };
   std::array<CachedTranslation, 256> page_translations_{};
   bool page_translation_cache_enabled_ = false;
+  EtherArm64Stats ether_arm64_stats_{};
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+  std::unique_ptr<ether_arm64::Cache> ether_arm64_cache_;
+  bool ether_arm64_enabled_ = false;
+  static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
+                                  unsigned width) noexcept;
+  static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
+                                    unsigned width, std::uint64_t value) noexcept;
+  std::optional<std::uint64_t> ether_arm64_ram_address(std::uint64_t address, unsigned width,
+                                                       Access access);
+#endif
   CachedTranslation& translation_slot(std::uint64_t linear_page, Access access) noexcept {
     const auto index = (linear_page ^ (linear_page >> 8) ^ (linear_page >> 16) ^
                         (unsigned(access) * 73U)) &
@@ -3163,6 +3211,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
   }
 }
 
+#include "x86_ether_arm64.inc"
 #include "x86_shift_loop.inc"
 
 inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
