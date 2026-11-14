@@ -60,6 +60,57 @@ void run_demo(PcMachine& pc, unsigned width, unsigned height) {
   need(pc.cpu.read32(cosmic_pc::kGraphicsDemoResultAddress) == cosmic_pc::kGraphicsDemoResult,
        "Guest did not verify its own framebuffer pixels");
 }
+void framebuffer_writes() {
+  constexpr auto base = PcVideo::kFramebufferAddress;
+  constexpr auto text = 0xb8000;
+  constexpr auto page = cosmic_pc::MemoryFabric::kPageSize;
+  PcMachine pc(2048ULL * MiB, 32 * MiB);
+  pc.boot_demo();
+  pc.watch_video_writes();
+  auto& ram = pc.cpu.memory;
+  const auto& watch = *ram.write_watch();
+  need(watch.full(), "First text frame should be complete");
+  ram.acknowledge_write_watch();
+  ram.write_byte(base, 0x88);
+  need(!watch.pending(), "Offscreen VRAM should not wake text presentation");
+  ram.write_byte(text + 3999, 0x71);
+  need(watch.pages() == std::vector<std::uint32_t>{0}, "Last VGA text cell must be tracked");
+  ram.acknowledge_write_watch();
+  call(pc, 0x4f02, 0x4142);
+  need(watch.full() && pc.video_info().graphics, "Set mode must invalidate the visible image");
+  ram.acknowledge_write_watch();
+
+  const std::uint8_t bytes[]{1, 2, 3};
+  ram.write_block(base + page - 1, bytes, sizeof(bytes));
+  ram.fill(base + page + 8, 0x55, 12);
+  need(ram.restore_byte(base + page - 1, 0), "Cannot restore the guest store");
+  need(watch.pages() == std::vector<std::uint32_t>({0, 1}), "Track and coalesce cross-page writes");
+  ram.acknowledge_write_watch();
+
+  need(ram.try_fill_repeating_page(base + 3 * page, 0x1234), "Compact video fill rejected");
+  need(ram.try_copy_compact_page(base + 3 * page, base + 4 * page), "Compact video copy rejected");
+  need(ram.try_copy_resident_block(base + page, base + 100, 8), "Resident copy rejected");
+  need(watch.pages() == std::vector<std::uint32_t>({3, 4, 0}), "Fast stores must mark their destinations");
+  ram.acknowledge_write_watch();
+
+  const auto stop = base + pc.video_info().byte_size;
+  ram.write_byte(stop, 0x77);
+  need(!watch.pending(), "The inactive part of VRAM must stay silent");
+  ram.write_block(stop - 1, bytes, sizeof(bytes));
+  need(watch.pages() == std::vector<std::uint32_t>{767}, "The final visible byte must be tracked");
+  ram.acknowledge_write_watch();
+  call(pc, 0x4f02, 0xc142);
+  need(watch.full(), "Preserve-memory mode must republish its visible image");
+  ram.acknowledge_write_watch();
+  ram.reset_zero();
+  need(watch.full(), "A RAM reset must invalidate presentation");
+  call(pc, 0x4f02, 0x0003);
+  need(watch.full() && !pc.video_info().graphics, "Text reentry must invalidate presentation");
+  ram.acknowledge_write_watch();
+  ram.write_byte(text, 0x41);
+  need(watch.pending(), "Text video stores must remain tracked after a mode switch");
+  std::cout << "PRIME_C07_VRAM_WATCH_PASS scalar=1 bulk=1 compact=1 copy=1 restore=1 reset=1 modes=1\n";
+}
 void font_information(PcMachine& pc) {
   call(pc, 0x4f02, 0x4142);
   need(pc.video_info().graphics && pc.video_info().width == 1024 && pc.video_info().height == 768,
@@ -198,6 +249,7 @@ void write_string(PcMachine& pc) {
 
 int main() {
   try {
+    framebuffer_writes();
     PcMachine pc(std::size_t(2048) * MiB);
     pc.boot_demo();
     need(!pc.video_info().graphics && pc.video_info().width == 80 && pc.video_info().height == 25,

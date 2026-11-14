@@ -51,13 +51,19 @@ class PcVideo {
   }
   PcVideoInfo info() const noexcept { return info_; }
   std::uint16_t current_vbe_mode() const noexcept { return current_vbe_mode_; }
-  void text_mode(std::uint16_t mode, bool preserve = false) noexcept {
-    info_ = PcVideoInfo{};
+  void watch_writes(MemoryFabric& ram) const {
+    ram.enable_write_watch(info_.physical_address, info_.byte_size,
+                           available(ram) ? kApertureBytes : info_.byte_size);
+  }
+  void text_mode(MemoryFabric& ram, std::uint16_t mode, bool preserve = false) {
+    const PcVideoInfo text{};
+    ram.move_write_watch(text.physical_address, text.byte_size);
+    info_ = text;
     info_.mode = mode;
     current_vbe_mode_ = mode | (preserve ? 0x8000 : 0);
   }
   void reset(MemoryFabric& ram) {
-    text_mode(3);
+    text_mode(ram, 3);
     if (!available(ram)) return;
     install_font(ram, kFont8Offset, kBiosFont8);
     install_font(ram, kFont14Offset, kBiosFont14);
@@ -184,6 +190,7 @@ class PcVideo {
       // preserve bit15 leaves every pixel (including X bytes) unchanged.
       if (!(request & 0x8000))
         cpu.memory.fill(kFramebufferAddress, 0, static_cast<std::size_t>(candidate.byte_size));
+      cpu.memory.move_write_watch(candidate.physical_address, candidate.byte_size);
       info_ = candidate;
       current_vbe_mode_ = request;
       success(cpu);

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -32,6 +33,51 @@ class MemoryFabric {
   static constexpr std::size_t kPageSize = SparseRam::kPageSize;
   static constexpr std::size_t kPagesPerTable = SparseRam::kPagesPerTable;
   static constexpr std::uint64_t kDefaultPayloadLimit = SparseRam::kDefaultPayloadLimit;
+
+  // One optional consumer of writes to a range of ordinary physical RAM.
+  // Offsets in pages() are relative to that range, even at a partial last page.
+  class WriteWatch {
+   public:
+    explicit WriteWatch(std::size_t max_bytes)
+        : marked_(max_bytes / kPageSize + (max_bytes % kPageSize != 0)) {
+      pages_.reserve(marked_.size());
+    }
+    bool pending() const noexcept { return full_ || !pages_.empty(); }
+    bool full() const noexcept { return full_; }
+    const std::vector<std::uint32_t>& pages() const noexcept { return pages_; }
+
+   private:
+    friend class MemoryFabric;
+    void clear() noexcept {
+      for (auto page : pages_) marked_[page] = false;
+      pages_.clear();
+      full_ = false;
+    }
+    void invalidate() noexcept {
+      clear();
+      full_ = true;
+    }
+    void range(std::uint64_t base, std::size_t bytes) noexcept {
+      base_ = base;
+      end_ = base + bytes;
+      invalidate();
+    }
+    void note(std::uint64_t offset, std::size_t bytes) noexcept {
+      if (full_ || offset >= end_ || offset + bytes <= base_) return;
+      const auto first = (std::max(offset, base_) - base_) / kPageSize;
+      const auto last = (std::min(offset + bytes, end_) - 1 - base_) / kPageSize;
+      for (auto page = first; page <= last; ++page) {
+        if (marked_[page]) continue;
+        marked_[page] = true;
+        pages_.push_back(static_cast<std::uint32_t>(page));
+      }
+    }
+    std::uint64_t base_ = 0;
+    std::uint64_t end_ = 0;
+    bool full_ = true;
+    std::vector<bool> marked_;
+    std::vector<std::uint32_t> pages_;
+  };
 
   class ByteProxy {
    public:
@@ -79,6 +125,8 @@ class MemoryFabric {
     if (bytes == 0 || base > size() || static_cast<std::uint64_t>(bytes) > size() - base)
       throw std::invalid_argument("Ether memory window is outside logical RAM");
     if (!read || !write) throw std::invalid_argument("Ether memory window requires read/write callbacks");
+    if (write_watch_ && base < write_watch_->end_ && base + bytes > write_watch_->base_)
+      throw std::invalid_argument("Ether memory window overlaps a physical write watch");
     invalidate_page_tables();
     base_ = base;
     bytes_ = bytes;
@@ -102,7 +150,9 @@ class MemoryFabric {
     return ram_.adjust_payload_budget(target, reclaim_pages);
   }
   std::uint64_t metadata_bytes() const noexcept {
-    return ram_.metadata_bytes() + sizeof(*this) - sizeof(ram_);
+    return ram_.metadata_bytes() + sizeof(*this) - sizeof(ram_) +
+        (write_watch_ ? sizeof(WriteWatch) + write_watch_->marked_.capacity() / 8 +
+            write_watch_->pages_.capacity() * sizeof(std::uint32_t) : 0);
   }
   Metrics metrics() const noexcept {
     auto out = ram_.metrics();
@@ -113,6 +163,29 @@ class MemoryFabric {
   std::uint64_t window_base() const noexcept { return base_; }
   std::size_t window_bytes() const noexcept { return bytes_; }
   void set_boot_scalar_timing(BootScalarTiming* timing) noexcept { boot_scalar_timing_ = timing; }
+
+  void enable_write_watch(std::uint64_t base, std::size_t bytes, std::size_t capacity) {
+    check_range(base, bytes);
+    if (!bytes || bytes > capacity || capacity / kPageSize >= UINT32_MAX ||
+        overlaps_window(base, bytes))
+      throw std::invalid_argument("MemoryFabric write watch size");
+    write_watch_ = std::make_unique<WriteWatch>(capacity);
+    write_watch_->range(base, bytes);
+  }
+  const WriteWatch* write_watch() const noexcept { return write_watch_.get(); }
+  void move_write_watch(std::uint64_t base, std::size_t bytes) {
+    if (!write_watch_) return;
+    if (!bytes || base > size() || bytes > size() - base ||
+        (bytes - 1) / kPageSize >= write_watch_->marked_.size() || overlaps_window(base, bytes))
+      throw std::invalid_argument("MemoryFabric write watch range");
+    write_watch_->range(base, bytes);
+  }
+  void invalidate_write_watch() noexcept {
+    if (write_watch_) write_watch_->invalidate();
+  }
+  void acknowledge_write_watch() noexcept {
+    if (write_watch_) write_watch_->clear();
+  }
 
   std::uint64_t page_table_epoch() const noexcept { return page_table_epoch_; }
   void watch_page_table(std::uint64_t offset) noexcept {
@@ -152,7 +225,7 @@ class MemoryFabric {
   void write_byte(std::uint64_t offset, std::uint8_t value) {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, 1);
-    note_page_table_write(offset, 1);
+    note_write(offset, 1);
     if (in_window(offset)) {
       write_(offset - base_, value);
       return;
@@ -180,7 +253,7 @@ class MemoryFabric {
     check_range(offset, count);
     if (count && !source) throw std::invalid_argument("MemoryFabric null write source");
     if (!count) return;
-    note_page_table_write(offset, count);
+    note_write(offset, count);
     if (!overlaps_window(offset, count)) {
       ram_.write_block(offset, source, count);
       return;
@@ -217,7 +290,7 @@ class MemoryFabric {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, count);
     if (!count) return;
-    note_page_table_write(offset, count);
+    note_write(offset, count);
     if (!overlaps_window(offset, count)) {
       ram_.fill(offset, value, count);
       return;
@@ -249,21 +322,21 @@ class MemoryFabric {
   bool try_copy_compact_page(std::uint64_t source, std::uint64_t target) {
     if (overlaps_window(source, kPageSize) || overlaps_window(target, kPageSize)) return false;
     if (!ram_.try_copy_compact_page(source, target)) return false;
-    note_page_table_write(target, kPageSize);
+    note_write(target, kPageSize);
     return true;
   }
 
   bool try_fill_repeating_page(std::uint64_t target, std::uint64_t pattern) {
     if (overlaps_window(target, kPageSize) || !ram_.try_fill_repeating_page(target, pattern))
       return false;
-    note_page_table_write(target, kPageSize);
+    note_write(target, kPageSize);
     return true;
   }
 
   bool try_copy_resident_block(std::uint64_t source, std::uint64_t target, std::size_t count) {
     if (overlaps_window(source, count) || overlaps_window(target, count)) return false;
     if (!ram_.try_copy_resident_block(source, target, count)) return false;
-    note_page_table_write(target, count);
+    note_write(target, count);
     return true;
   }
 
@@ -292,7 +365,7 @@ class MemoryFabric {
   bool restore_byte(std::uint64_t offset, std::uint8_t old_value) noexcept {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     if (offset >= size()) return false;
-    note_page_table_write(offset, 1);
+    note_write(offset, 1);
     if (!in_window(offset)) return ram_.restore_byte(offset, old_value);
     try {
       write_(offset - base_, old_value);
@@ -302,7 +375,11 @@ class MemoryFabric {
     }
   }
 
-  void reset_zero() noexcept { invalidate_page_tables(); ram_.reset_zero(); }
+  void reset_zero() noexcept {
+    invalidate_page_tables();
+    ram_.reset_zero();
+    invalidate_write_watch();
+  }
   void clear() noexcept { reset_zero(); }
   std::size_t trim_zero_pages() noexcept { return ram_.trim_zero_pages(); }
   std::size_t compact_repeating_pages(std::size_t max_pages) noexcept {
@@ -323,10 +400,12 @@ class MemoryFabric {
   static std::size_t page_table_bucket(std::uint64_t page) noexcept {
     return std::size_t((page ^ (page >> 6) ^ (page >> 12)) % kPageTableBuckets);
   }
-  void note_page_table_write(std::uint64_t offset, std::size_t count) noexcept {
+  void note_write(std::uint64_t offset, std::size_t count) noexcept {
     if (may_touch_page_tables(offset, count)) invalidate_page_tables();
+    if (write_watch_ && count) write_watch_->note(offset, count);
   }
   SparseRam ram_;
+  std::unique_ptr<WriteWatch> write_watch_;
   std::uint64_t base_ = 0;
   std::size_t bytes_ = 0;
   ReadByte read_;
