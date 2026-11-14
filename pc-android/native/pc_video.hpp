@@ -1,6 +1,7 @@
 #pragma once
 
 #include "x86_cpu.hpp"
+#include "vga_bios_font.hpp"
 #include <array>
 #include <cstring>
 
@@ -29,6 +30,7 @@ class PcVideo {
   static constexpr std::uint64_t kFramebufferAddress = 0x40000000ULL;
   static constexpr std::uint64_t kApertureBytes = 128ULL * 1024 * 1024;
   static constexpr std::uint64_t kBiosTablesAddress = 0xc0000;
+  static constexpr unsigned kBiosFontHeight = 16;
   inline static constexpr std::array<PcVideoMode, 8> kModes{{
     {0x140, 640, 480}, {0x141, 800, 600}, {0x142, 1024, 768},
     {0x143, 1280, 720}, {0x144, 1920, 1080}, {0x145, 2560, 1440},
@@ -57,6 +59,9 @@ class PcVideo {
   void reset(MemoryFabric& ram) {
     text_mode(3);
     if (!available(ram)) return;
+    install_font(ram, kFont8Offset, kBiosFont8);
+    install_font(ram, kFont14Offset, kBiosFont14);
+    install_font(ram, kFont16Offset, kBiosFont16);
     std::array<std::uint8_t, 256> tables{};
     for (std::size_t i = 0; i < kModes.size(); ++i) put16(tables.data(), i * 2, kModes[i].id);
     put16(tables.data(), kModes.size() * 2, 0xffff);
@@ -68,6 +73,37 @@ class PcVideo {
     text(0xa0, "COSMIC X PC");
     text(0xc0, "1");
     ram.write_block(kBiosTablesAddress, tables.data(), tables.size());
+  }
+
+  void install_font_vectors(Cpu& cpu) const {
+    if (!available(cpu.memory)) return;
+    cpu.write32(kFontHighVector * 4, bios_pointer(kFont8Offset + 128 * 8));
+    cpu.write32(kFontActiveVector * 4, bios_pointer(kFont16Offset));
+  }
+
+  bool bios_font_info(Cpu& cpu) const {
+    const auto font = cpu.reg8(7); // BH
+    std::uint32_t pointer;
+    const auto rom_font = [&](unsigned offset, const auto& bitmap, unsigned skip = 0) {
+      // Text-only profiles keep the font tables out of resident RAM until
+      // a guest explicitly requests a ROM bitmap.
+      if (!available(cpu.memory)) install_font(cpu.memory, offset, bitmap);
+      return bios_pointer(offset + skip);
+    };
+    switch (font) {
+      case 0: pointer = cpu.read32(kFontHighVector * 4); break;
+      case 1: pointer = cpu.read32(kFontActiveVector * 4); break;
+      case 2: pointer = rom_font(kFont14Offset, kBiosFont14); break;
+      case 3: pointer = rom_font(kFont8Offset, kBiosFont8); break;
+      case 4: pointer = rom_font(kFont8Offset, kBiosFont8, 128 * 8); break;
+      case 6: pointer = rom_font(kFont16Offset, kBiosFont16); break;
+      default: return false;
+    }
+    cpu.load_real_data_segment(Cpu::ES, std::uint16_t(pointer >> 16));
+    cpu.set_reg16(Cpu::EBP, std::uint16_t(pointer));
+    cpu.set_reg16(Cpu::ECX, cpu.read16(0x485));
+    cpu.set_reg8(Cpu::EDX, cpu.read8(0x484));
+    return true;
   }
 
   // The AX status is the only modified register except BX for 4F03. Unknown
@@ -190,6 +226,25 @@ class PcVideo {
   }
 
  private:
+  static constexpr unsigned kFontHighVector = 0x1f, kFontActiveVector = 0x43;
+  // Keep the VBE info block and OEM strings at C000:0000..00FF.
+  static constexpr unsigned kFont8Offset = 0x0100, kFont14Offset = 0x0900, kFont16Offset = 0x1700;
+  template <std::size_t N>
+  static void install_font(MemoryFabric& ram, unsigned offset, const std::array<std::uint8_t, N>& font) {
+    ram.write_block(kBiosTablesAddress + offset, font.data(), font.size());
+  }
+  template <std::size_t Rows>
+  static constexpr std::array<std::uint8_t, 256 * Rows> scaled_font() {
+    std::array<std::uint8_t, 256 * Rows> glyphs{};
+    for (std::size_t glyph = 0; glyph < 256; ++glyph)
+      for (std::size_t row = 0; row < Rows; ++row) {
+        const auto source = (2 * row + 1) * kBiosFontHeight / (2 * Rows);
+        glyphs[glyph * Rows + row] = kBiosFont16[glyph * kBiosFontHeight + source];
+      }
+    return glyphs;
+  }
+  static const std::array<std::uint8_t, 256 * 8> kBiosFont8;
+  static const std::array<std::uint8_t, 256 * 14> kBiosFont14;
   PcVideoInfo info_;
   std::uint16_t current_vbe_mode_ = 3;
   static void success(Cpu& cpu) { cpu.set_reg16(Cpu::EAX, 0x004f); }
@@ -215,5 +270,8 @@ class PcVideo {
     return address <= cpu.memory.size() && bytes <= cpu.memory.size() - address;
   }
 };
+
+inline constexpr std::array<std::uint8_t, 256 * 8> PcVideo::kBiosFont8 = PcVideo::scaled_font<8>();
+inline constexpr std::array<std::uint8_t, 256 * 14> PcVideo::kBiosFont14 = PcVideo::scaled_font<14>();
 
 } // namespace cosmic_pc
