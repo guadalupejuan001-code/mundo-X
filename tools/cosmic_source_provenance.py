@@ -25,6 +25,8 @@ INTEGRATION_REFERENCE = "d53adc3dc834b4d8400a66230d24d646d9dafb32"
 AUTONOMOUS_C01_REFERENCE = "a41f1b07313406cc5f3a6f083b9851d682d50a7f"
 # Immutable candidate commit introducing the isolated C02 headers and exact tests.
 AUTONOMOUS_C02_REFERENCE = "a058083ce820c2f0dedf7233b4369d994150f497"
+PC_ETHER_SHIFT_REFERENCE = "9141fd2f35cd1ce8778e3bbbd1307cffaf991dee"
+PC_ETHER_RAM_REFERENCE = "00253c80c08d71a4f316de756d5eb94872432ca7"
 ETHER_REFERENCE = "d351e83ca3be47fa63a14c462b358ac0cb5d65d7"
 ETHER_INTEGRATION_REFERENCE = "61917d9c00d90f384a7d98f4f83c5a81399576e8"
 ETHER_FUSION_REFERENCE = "d4b9893ddec9c6fbce3911f3db349b1011686538"
@@ -43,10 +45,8 @@ ETHER_MEMORY_COW_REFERENCE = "b1279b30381974ee82b4c1198eb31c1605b92b48"
 # Existing radial sources landed on main without inventory references.
 MIL_RADIAL_MAIN_REFERENCE = "d4a63cafdb47dc237b07c0d48fe2cf3e254e54b7"
 ETHER_MEMORY_FABRIC_REFERENCE = "8b9d5d40319ff093ea019156b8b476754ed6d504"
-UNIVERSAL_1000_REFERENCE = "018176d45cf1743256b56761c43b4e8656d3848f"
-UNIVERSAL_1000_EXAMS_REFERENCE = "dc38a5a76ed8a39a415d587b1ee86934063c2240"
+UNIVERSAL_1000_REFERENCE = "69f4d5ba9159acbfcc819bc26b6c9fed065635c4"
 MAGIC_GROWTH_REFERENCE = "6cc71c139394399a92d96b21e03c497c8e548d4a"
-ETHER_RENDER_SOURCE_REFERENCE = "f2dee1f4f074a12b30ba8a31357790d90f934669"
 ETHER_RENDER_INTEGRATION_REFERENCE = "2de68561ef0f2c9208e6f151dd163db996e2133c"
 MIL_RENDER_INTEGRATION_REFERENCE = "0817158c866e5708991355b0464b961e09304307"
 SPATIAL_RENDER_REFERENCE = "db79b0a1e805ccadcf3172abbf8966501ebea872"
@@ -101,6 +101,8 @@ ADDITIONAL_SOURCES = {
     "native/include/mundo_x/autonomous_core_c02.hpp": AUTONOMOUS_C02_REFERENCE,
     "native/tests/autonomous_core_c02.cpp": AUTONOMOUS_C02_REFERENCE,
     "native/tests/autonomous_core_c02_benchmark.cpp": AUTONOMOUS_C02_REFERENCE,
+    "native/include/mundo_x/experimental/ether_shift_loop.hpp": PC_ETHER_SHIFT_REFERENCE,
+    "native/include/mundo_x/experimental/ether_memory_block.hpp": PC_ETHER_RAM_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/InfiniteProgram.java": ETHER_FUSION_REFERENCE,
     "native/include/mundo_x/ether_core.hpp": INTERVAL_EVALUATION_REFERENCE,
     "native/tests/ether_core.cpp": ETHER_REFERENCE,
@@ -115,12 +117,12 @@ ADDITIONAL_SOURCES = {
     "native/include/mundo_x/ether_render_engine.hpp": ETHER_ENGINE_FACADE_REFERENCE,
     "native/tests/ether_render_spatial.cpp": SPATIAL_RENDER_REFERENCE,
     "native/tests/ether_surface_buffer.cpp": SURFACE_BUFFER_REFERENCE,
-    "native/tests/rule_renderer.cpp": ETHER_RENDER_SOURCE_REFERENCE,
+    "native/tests/rule_renderer.cpp": ETHER_RENDER_INTEGRATION_REFERENCE,
     "native/tests/xasm_renderer.cpp": MIL_RENDER_INTEGRATION_REFERENCE,
     "graphics-android/app/src/main/java/com/mundox/graphics/EtherCoreNative.java": ETHER_FUSION_REFERENCE,
 }
 REVISED_SOURCES = {
-    "native/tests/native_original_exams.cpp": UNIVERSAL_1000_EXAMS_REFERENCE,
+    "native/tests/native_original_exams.cpp": UNIVERSAL_1000_REFERENCE,
     "native/include/mundo_x/exact_t_experiment.hpp": MAGIC_GROWTH_REFERENCE,
     "native/include/mundo_x/adaptive_phase_core.hpp": UNIVERSAL_1000_REFERENCE,
     "native/include/mundo_x/xasm.hpp": MIL_RENDER_INTEGRATION_REFERENCE,
