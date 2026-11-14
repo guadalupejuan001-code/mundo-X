@@ -328,6 +328,7 @@ class Cpu {
   std::uint8_t read8(std::uint64_t address) const {
     const auto bus=bus_address(address);
     if (mmio_claim_hook && mmio_claim_hook(bus)) {
+      const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
       if (mmio_read_hook) {
         const auto byte=mmio_read_hook(bus);
         if (byte) return *byte;
@@ -342,6 +343,7 @@ class Cpu {
   void write8(std::uint64_t address, std::uint8_t value) {
     const auto bus=bus_address(address);
     if (mmio_claim_hook && mmio_claim_hook(bus)) {
+      const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
       if (!mmio_write_hook || !mmio_write_hook(bus,value))
         fail("claimed MMIO write is unsupported",FaultCode::UnsupportedPort);
       return; // device-side MMIO writes cannot be reversed by RAM journaling
@@ -526,6 +528,20 @@ class Cpu {
     return StepResult::Faulted;
   }
 
+  StepResult step_with_timing(BootTiming& timing) {
+    BootScalarTiming sample(timing);
+    boot_scalar_timing_ = &sample;
+    memory.set_boot_scalar_timing(&sample);
+    struct ResetTiming {
+      Cpu& cpu;
+      ~ResetTiming() {
+        cpu.memory.set_boot_scalar_timing(nullptr);
+        cpu.boot_scalar_timing_ = nullptr;
+      }
+    } reset{*this};
+    return step();
+  }
+
   // External hardware IRQ is not a software INT: it ignores gate DPL,
   // uses the next instruction's IP and obeys IF and the interrupt shadow.
   // Pending IRQs remain with the originating device/controller.
@@ -657,6 +673,7 @@ class Cpu {
   }
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
+  BootScalarTiming* boot_scalar_timing_ = nullptr;
   // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
   // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
   bool supervisor_internal_ = false;
@@ -915,6 +932,7 @@ class Cpu {
     return (v & sign_bit(bytes)) ? std::int64_t(v) - (std::int64_t{1} << (8 * bytes)) : std::int64_t(v);
   }
   std::uint8_t fetch8() {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
     if (decoded_.size() >= 15) fail("instruction exceeds 15 bytes", FaultCode::InvalidInstruction);
     const auto linear = segment_linear(CS, cursor_, 1, Access::Execute);
     auto physical = linear;
@@ -963,6 +981,7 @@ class Cpu {
     return override_ < 0 ? fallback : unsigned(override_);
   }
   ModRM modrm() {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
     const auto encoded = fetch8();
     const unsigned mod = encoded >> 6, group = (encoded >> 3) & 7, rm = encoded & 7;
     const unsigned reg = group + ((rex_ & 4) ? 8 : 0), rm_reg = rm + ((rex_ & 1) ? 8 : 0);
@@ -2309,6 +2328,7 @@ class Cpu {
     if (cpl() > ((eflags >> 12) & 3U))
       fail("CPL exceeds IOPL for IN (TSS I/O bitmap not modeled)", FaultCode::ProtectionFault);
     if (!in_hook) fail("IN has no port backend", FaultCode::UnsupportedPort);
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
     const auto value = in_hook(port, bytes);
     if (!value) fail("IN port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
     return *value & mask(bytes);
@@ -2316,6 +2336,7 @@ class Cpu {
   void port_out(std::uint16_t port, unsigned bytes, std::uint32_t value) {
     if (cpl() > ((eflags >> 12) & 3U))
       fail("CPL exceeds IOPL for OUT (TSS I/O bitmap not modeled)", FaultCode::ProtectionFault);
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
     if (!out_hook || !out_hook(port, bytes, value & mask(bytes)))
       fail("OUT port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
   }
@@ -2349,7 +2370,10 @@ class Cpu {
       return;
     }
     eip = cursor_ & code_mask(); ip_written_ = true;
-    if (interrupt_hook && interrupt_hook(*this, vector)) return;
+    if (interrupt_hook) {
+      const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
+      if (interrupt_hook(*this, vector)) return;
+    }
     dispatch_real_interrupt(real_ivt_target(vector), eip);
   }
 
@@ -2953,6 +2977,7 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
                                     bool speculative) {
   if (ordinary_page) *ordinary_page = false;
   if (!(cr0 & 0x80000000U)) return address;
+  const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
   if (!(efer & 0x400) || !(cr4 & 0x20))
     fail("only four-level IA-32e paging is implemented", FaultCode::UnsupportedState);
   if (!canonical(address)) fail("non-canonical page-walk address", FaultCode::ProtectionFault);

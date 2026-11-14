@@ -15,8 +15,9 @@ namespace cosmic_pc {
 // by elapsed nanoseconds measured by the caller for the sampled scalar step.
 class BootHotspots {
  public:
-  explicit BootHotspots(bool weighted_by_duration = false) noexcept
-      : weighted_by_duration_(weighted_by_duration) {}
+  explicit BootHotspots(bool weighted_by_duration = false, bool by_code_region = false)
+      : entries_(by_code_region ? 128 : 32),
+        weighted_by_duration_(weighted_by_duration), by_code_region_(by_code_region) {}
 
   bool wants_sample(std::uint64_t steps = 1) const noexcept {
     return steps >= until_sample_;
@@ -40,6 +41,15 @@ class BootHotspots {
     return hits;
   }
 
+  // Widen the key to a 64-byte region so a loop's branches and memory
+  // operands contribute together. CS and CPU mode keep contexts separate.
+  void observe_region(std::string_view mode, std::uint16_t cs, std::uint64_t ip,
+                      std::uint64_t ns) noexcept {
+    ++observed_steps_;
+    ++samples_;
+    record({parse_mode(mode), cs, ip & ~(kRegionBytes - 1), {}, 0}, 1, ns);
+  }
+
   void record(std::string_view mode, std::uint16_t cs, std::uint64_t ip,
               const std::vector<std::uint8_t>& bytes, std::uint64_t hits,
               std::uint64_t nanoseconds = 0) noexcept {
@@ -50,74 +60,82 @@ class BootHotspots {
               const std::uint8_t* bytes, std::size_t size, std::uint64_t hits,
               std::uint64_t nanoseconds = 0) noexcept {
     if (!hits || !size || size > kMaxInstructionBytes) return;
-    const Key key{parse_mode(mode), cs, ip, to_bytes(bytes, size), size};
-    attributed_samples_ += hits;
-    const auto weight = weighted_by_duration_ ? std::max<std::uint64_t>(1, nanoseconds) : hits;
-    if (weighted_by_duration_) sampled_ns_ += weight;
-    Entry* minimum = &entries_.front();
-    for (auto& entry : entries_) {
-      if (entry.count && entry.key == key) {
-        entry.count += weight;
-        return;
-      }
-      if (entry.count < minimum->count) minimum = &entry;
-    }
-    // Space-Saving heavy hitters. A replaced slot carries its previous count
-    // as the maximum possible overestimate for its new instruction.
-    *minimum = {key, minimum->count + weight, minimum->count};
+    record({parse_mode(mode), cs, ip, to_bytes(bytes, size), size}, hits, nanoseconds);
   }
 
   void add_elapsed(std::chrono::steady_clock::duration elapsed) noexcept {
     elapsed_ += elapsed;
   }
 
-  void reset() noexcept { *this = BootHotspots{weighted_by_duration_}; }
+  void reset() noexcept {
+    random_ = kSeed;
+    until_sample_ = next_interval();
+    observed_steps_ = samples_ = attributed_samples_ = sampled_ns_ = 0;
+    elapsed_ = {};
+    std::fill(entries_.begin(), entries_.end(), Entry{});
+  }
 
   void write_json(std::ostream& out) const {
-    std::array<const Entry*, kCapacity> ranked{};
-    for (std::size_t i = 0; i < ranked.size(); ++i) ranked[i] = &entries_[i];
+    std::vector<const Entry*> ranked;
+    ranked.reserve(entries_.size());
+    for (const auto& entry : entries_)
+      if (entry.count) ranked.push_back(&entry);
     std::stable_sort(ranked.begin(), ranked.end(), [](const Entry* a, const Entry* b) {
       return a->count > b->count;
     });
     const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(elapsed_).count();
     out << "{\"observed_steps\":" << observed_steps_ << ",\"samples\":" << samples_
-        << ",\"attributed_samples\":" << attributed_samples_
-        << ",\"min_interval_steps\":" << kMinInterval
-        << ",\"max_interval_steps\":" << kMaxInterval;
+        << ",\"attributed_samples\":" << attributed_samples_;
+    if (by_code_region_) {
+      out << ",\"region_bytes\":" << kRegionBytes << ",\"tracked_regions\":" << entries_.size();
+      // Every unlisted key is bounded by the larger of the first omitted
+      // estimate and the minimum counter once the table becomes full.
+      const auto omitted = ranked.size() > kReportLimit ? ranked[kReportLimit]->count :
+          ranked.size() == entries_.size() ? ranked.back()->count : 0;
+      out << ",\"unlisted_upper_bound_ns\":" << omitted;
+    } else {
+      out << ",\"min_interval_steps\":" << kMinInterval << ",\"max_interval_steps\":" << kMaxInterval;
+    }
     if (weighted_by_duration_) out << ",\"sampled_step_ns\":" << sampled_ns_;
     else out << ",\"execution_us\":" << elapsed;
     out << ",\"hotspots\":[";
-    for (std::size_t i = 0; i < kReportLimit && ranked[i]->count; ++i) {
+    for (std::size_t i = 0; i < std::min(kReportLimit, ranked.size()); ++i) {
       const auto& entry = *ranked[i];
       const auto& key = entry.key;
-      const auto prefix_size = prefix_length(key);
-      const auto opcode_size = opcode_length(key, prefix_size);
       if (i) out << ',';
       out << "{\"mode\":\"" << kModes[key.mode] << "\",\"cs\":" << key.cs
           << ",\"ip\":" << key.ip << ",\"cs_hex\":\"";
       hex_number(out, key.cs, 4);
       out << "\",\"ip_hex\":\"";
       hex_number(out, key.ip, 16);
-      out << "\",\"prefixes\":\"";
-      hex_bytes(out, key.bytes.data(), prefix_size);
-      out << "\",\"opcode\":\"";
-      hex_bytes(out, key.bytes.data() + prefix_size, opcode_size);
-      out << "\",\"bytes\":\"";
-      hex_bytes(out, key.bytes.data(), key.size);
-      if (weighted_by_duration_)
-        out << "\",\"estimated_sample_ns\":" << entry.count << ",\"max_error_ns\":" << entry.error << '}';
-      else
+      if (!by_code_region_) {
+        const auto prefix_size = prefix_length(key);
+        const auto opcode_size = opcode_length(key, prefix_size);
+        out << "\",\"prefixes\":\"";
+        hex_bytes(out, key.bytes.data(), prefix_size);
+        out << "\",\"opcode\":\"";
+        hex_bytes(out, key.bytes.data() + prefix_size, opcode_size);
+        out << "\",\"bytes\":\"";
+        hex_bytes(out, key.bytes.data(), key.size);
+      }
+      if (weighted_by_duration_) {
+        out << "\",\"estimated_sample_ns\":" << entry.count << ",\"max_error_ns\":" << entry.error;
+        if (by_code_region_) out << ",\"lower_bound_ns\":" << entry.count - entry.error;
+        out << '}';
+      } else {
         out << "\",\"estimated_samples\":" << entry.count << ",\"max_error_samples\":" << entry.error << '}';
+      }
     }
     out << "]}";
   }
 
  private:
   static constexpr std::size_t kMaxInstructionBytes = 15;
-  static constexpr std::size_t kCapacity = 32;
   static constexpr std::size_t kReportLimit = 8;
+  static constexpr std::uint64_t kRegionBytes = 64;
   static constexpr std::uint64_t kMinInterval = 2048;
   static constexpr std::uint64_t kMaxInterval = 8191;
+  static constexpr std::uint32_t kSeed = 0x6f3d09a7U;
   static constexpr std::array<std::string_view, 8> kModes{
       "unknown", "real16", "real32", "protected16", "protected32", "compat16", "compat32", "long64"};
   using Bytes = std::array<std::uint8_t, kMaxInstructionBytes>;
@@ -140,6 +158,25 @@ class BootHotspots {
     std::uint64_t count = 0;
     std::uint64_t error = 0;
   };
+
+  void record(const Key& key, std::uint64_t hits, std::uint64_t nanoseconds) noexcept {
+    attributed_samples_ += hits;
+    const auto weight = by_code_region_ ? nanoseconds :
+        weighted_by_duration_ ? std::max<std::uint64_t>(1, nanoseconds) : hits;
+    if (!weight) return;
+    if (weighted_by_duration_) sampled_ns_ += weight;
+    Entry* minimum = &entries_.front();
+    for (auto& entry : entries_) {
+      if (entry.count && entry.key == key) {
+        entry.count += weight;
+        return;
+      }
+      if (entry.count < minimum->count) minimum = &entry;
+    }
+    // Space-Saving heavy hitters. A replaced slot carries its previous count
+    // as the maximum possible overestimate for its new instruction.
+    *minimum = {key, minimum->count + weight, minimum->count};
+  }
 
   static std::size_t parse_mode(std::string_view mode) noexcept {
     const auto found = std::find(kModes.begin(), kModes.end(), mode);
@@ -197,13 +234,13 @@ class BootHotspots {
     return kMinInterval + random_ % (kMaxInterval - kMinInterval + 1);
   }
 
-  std::uint32_t random_ = 0x6f3d09a7U;
+  std::vector<Entry> entries_;
+  std::uint32_t random_ = kSeed;
   std::uint64_t until_sample_ = next_interval();
   std::uint64_t observed_steps_ = 0, samples_ = 0, attributed_samples_ = 0;
   std::uint64_t sampled_ns_ = 0;
-  bool weighted_by_duration_;
+  bool weighted_by_duration_, by_code_region_;
   std::chrono::steady_clock::duration elapsed_{};
-  std::array<Entry, kCapacity> entries_{};
 };
 
 }  // namespace cosmic_pc

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "boot_timing.hpp"
 #include "sparse_ram.hpp"
 
 #include <algorithm>
@@ -108,6 +109,7 @@ class MemoryFabric {
   bool has_window() const noexcept { return bytes_ != 0; }
   std::uint64_t window_base() const noexcept { return base_; }
   std::size_t window_bytes() const noexcept { return bytes_; }
+  void set_boot_scalar_timing(BootScalarTiming* timing) noexcept { boot_scalar_timing_ = timing; }
 
   std::uint64_t page_table_epoch() const noexcept { return page_table_epoch_; }
   void watch_page_table(std::uint64_t offset) noexcept {
@@ -138,12 +140,14 @@ class MemoryFabric {
   std::uint8_t at(std::uint64_t offset) const { return read_byte(offset); }
 
   std::uint8_t read_byte(std::uint64_t offset) const {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, 1);
     if (in_window(offset)) return read_(offset - base_);
     return ram_.read_byte(offset);
   }
 
   void write_byte(std::uint64_t offset, std::uint8_t value) {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, 1);
     note_page_table_write(offset, 1);
     if (in_window(offset)) {
@@ -154,6 +158,7 @@ class MemoryFabric {
   }
 
   void read_block(std::uint64_t offset, std::uint8_t* destination, std::size_t count) const {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, count);
     if (count && !destination) throw std::invalid_argument("MemoryFabric null read destination");
     if (!count) return;
@@ -168,6 +173,7 @@ class MemoryFabric {
   // exceptions: Ether bytes are written first with old values retained, and
   // every affected SparseRam page is preflighted before either side commits.
   void write_block(std::uint64_t offset, const std::uint8_t* source, std::size_t count) {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, count);
     if (count && !source) throw std::invalid_argument("MemoryFabric null write source");
     if (!count) return;
@@ -205,6 +211,7 @@ class MemoryFabric {
   }
 
   void fill(std::uint64_t offset, std::uint8_t value, std::size_t count) {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, count);
     if (!count) return;
     note_page_table_write(offset, count);
@@ -253,6 +260,7 @@ class MemoryFabric {
   // The Ether window does not reserve classical pages. Provider-side qstore8
   // commits a complete byte atomically; CPU rollback restores the old byte.
   void prepare_write(std::uint64_t offset, std::size_t count) {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, count);
     if (!count) return;
     if (!overlaps_window(offset, count)) {
@@ -272,6 +280,7 @@ class MemoryFabric {
   }
 
   bool restore_byte(std::uint64_t offset, std::uint8_t old_value) noexcept {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     if (offset >= size()) return false;
     note_page_table_write(offset, 1);
     if (!in_window(offset)) return ram_.restore_byte(offset, old_value);
@@ -294,6 +303,7 @@ class MemoryFabric {
   }
 
  private:
+  BootScalarTiming* boot_scalar_timing_ = nullptr;
   static constexpr std::size_t kPageTableBuckets = 4096;
   // A collision only discards extra translations. All writes reach this
   // fabric, including boot-media copies, device writes to RAM and rollback.
