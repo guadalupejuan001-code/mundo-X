@@ -448,6 +448,145 @@ void instruction_page_fetch() {
         "instruction fetch on a device page must use exact byte callbacks");
 }
 
+void scanned_boot_loop() {
+  constexpr std::uint64_t loop = 0x2a52a9a4;
+  constexpr std::uint64_t physical = 0x400000 + (loop & 0x1fffff);
+  constexpr std::uint64_t source = 0xcfe0, dest = 0x100d8;
+  constexpr unsigned offset = 211;
+  const auto setup = [&](Cpu& cpu, bool accelerated) {
+    boot(cpu);
+    cpu.enable_page_translation_cache(accelerated);
+    cpu.write64(0x3000 + 8 * (loop >> 21), 0x400083);
+    program(cpu, {0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x41,0x8b,0xc0,
+                  0x41,0x89,0x81,0xd8,0x2e,0,0,0x80,0x3a,0xe8,0x75,0xea,0xf4}, physical);
+    cpu.memory.fill(source, 0x8c, offset + 8);
+    cpu.write8(source + offset, 0xe8);
+    cpu.eip = loop;
+    cpu.regs[Cpu::EAX] = 0xff000000ffffff5eULL; // Exercise wrap and zero-extension.
+    cpu.regs[Cpu::EDX] = source - 1;
+    cpu.regs[Cpu::R9] = dest - 0x2ed8;
+    cpu.set_flag(Cpu::DF, true);
+  };
+  Cpu scalar(8U << 20), fast(8U << 20);
+  setup(scalar, false);
+  setup(fast, true);
+  unsigned accelerated_steps = 0;
+  for (unsigned remaining = 1500; remaining && !fast.halted; --remaining) {
+    const auto count = fast.try_scan_loop_batch(103);
+    if (count) {
+      check(count % 6 == 0 && count <= 103, "scan must respect the device budget");
+      accelerated_steps += count;
+    } else if (fast.step() == StepResult::Faulted) {
+      throw std::runtime_error(fast.fault->describe());
+    }
+  }
+  run(scalar, 1500);
+  check(accelerated_steps > 1000 && fast.halted && fast.instructions == scalar.instructions &&
+        fast.regs == scalar.regs && fast.eflags == scalar.eflags && fast.eip == scalar.eip &&
+        fast.read32(dest) == scalar.read32(dest) && fast.regs[Cpu::EDX] == source + offset,
+        "scan must preserve the reported loop's byte, flags, registers and RIP");
+  setup(fast, true);
+  for (unsigned i = 0; i < 6; ++i) one(fast);
+  const auto before = fast.instructions;
+  fast.write8(physical + 19, 0x42);
+  check(fast.try_scan_loop_batch(96) == 0 && fast.instructions == before,
+        "rewritten instruction bytes must invalidate the scan pattern");
+}
+
+void cached_page_translations() {
+  Cpu cpu; boot(cpu);
+  cpu.idtr = {0, 0};
+  cpu.enable_page_translation_cache();
+  for (unsigned i = 0; i < 512; ++i) cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
+  cpu.write64(0x3000, 0x4003);
+  constexpr auto pte = 0x4058;
+  cpu.write64(pte, 0xd003);
+  cpu.write64(0xd000, 0x34);
+  cpu.write64(0xe000, 0x56);
+  program(cpu, {0x48,0x8b,0x03,0xeb,0xfb}); // MOV RAX,[RBX]; JMP to MOV
+  cpu.regs[Cpu::EBX] = 0xb000;
+  for (unsigned i = 0; i < 4; ++i) one(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x34 && cpu.page_translation_hits >= 3,
+        "repeated x64 accesses must share validated translations");
+  cpu.memory[pte + 1] = 0xe0; // Direct guest-memory write through the host API.
+  one(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x56 && (cpu.read64(pte) & 0x20),
+        "page-table changes through any RAM alias must invalidate the cache and restore A");
+  one(cpu);
+  program(cpu, {0x48,0x89,0x03,0xeb,0xfb});
+  cpu.regs[Cpu::EAX] = 0x78;
+  one(cpu);
+  check(cpu.read64(0xe000) == 0x78 && (cpu.read64(pte) & 0x60) == 0x60,
+        "the first write through a cached read mapping must set D");
+  one(cpu);
+  cpu.write64(pte, 0xe021);
+  expect_fault(cpu, FaultCode::PageFault, "cached writes must respect a newly read-only PTE");
+  check(cpu.fault->error_code == 3 && cpu.read64(0xe000) == 0x78, "cached write fault or rollback");
+
+  cpu.write64(pte, 0xe003);
+  program(cpu, {0x90,0xeb,0xfd});
+  for (unsigned i = 0; i < 4; ++i) one(cpu);
+  cpu.efer |= 0x800;
+  cpu.write64(0x4050, 0x800000000000a003ULL);
+  expect_fault(cpu, FaultCode::PageFault, "cached instruction fetch must respect NX");
+  check(cpu.fault->error_code == 17 && cpu.cr2 == 0xa000, "cached NX fault context");
+}
+
+void paged_rep_batch() {
+  Cpu scalar, batched;
+  const auto fixture = [](Cpu& cpu, bool enable, unsigned opcode, bool backward) {
+    boot(cpu);
+    cpu.enable_page_translation_cache(enable);
+    program(cpu, {0xf3,std::uint8_t(opcode),0xf4});
+    cpu.regs[Cpu::EAX] = 0x96;
+    cpu.regs[Cpu::ESI] = backward ? 0xc020 : 0xbfe0;
+    cpu.regs[Cpu::EDI] = backward ? 0xe020 : 0xdfe0;
+    cpu.regs[Cpu::ECX] = 123;
+    cpu.set_flag(Cpu::DF, backward);
+    for (unsigned i = 0; i < 320; ++i)
+      cpu.write8(0xbf60 + i, std::uint8_t(i * 7));
+  };
+  for (const auto op : {0xaaU, 0xa4U}) {
+    for (const auto backward : {false, true}) {
+      fixture(scalar, false, op, backward);
+      fixture(batched, true, op, backward);
+      const auto step = batched.instructions;
+      unsigned batches = 0;
+      for (unsigned i = 0; i < 124 && !batched.halted; ++i) {
+        const auto result = batched.try_rep_batch(17);
+        if (!result) one(batched);
+        else {
+          ++batches;
+          check(result <= 17, "paged REP exceeded the granted device budget");
+        }
+      }
+      run(scalar, 130);
+      check(batched.halted && batches && batched.instructions == scalar.instructions &&
+            batched.instructions == step + 124 && batched.regs == scalar.regs &&
+            batched.eflags == scalar.eflags && batched.eip == scalar.eip,
+            "paged REP must retire the equivalent guest steps and state");
+      std::array<std::uint8_t, 512> expected, actual;
+      scalar.memory.read_block(0xdf00, expected.data(), expected.size());
+      batched.memory.read_block(0xdf00, actual.data(), actual.size());
+      check(actual == expected, "paged REP must write exactly the scalar bytes in both directions");
+    }
+  }
+
+  fixture(batched, true, 0xaa, false);
+  batched.idtr = {0, 0};
+  for (unsigned i = 0; i < 512; ++i) batched.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
+  batched.write64(0x3000, 0x4003);
+  batched.write64(0x4070, 0);
+  one(batched);
+  check(batched.try_rep_batch(128) == 31 && batched.regs[Cpu::EDI] == 0xe000,
+        "paged REP must stop at the end of the mapped destination page");
+  check(batched.try_rep_batch(128) == 0, "batch must leave the absent page to the scalar fault path");
+  expect_fault(batched, FaultCode::PageFault, "REP STOS exact next-page fault");
+  check(batched.cr2 == 0xe000 && batched.fault->error_code == 2 &&
+            batched.regs[Cpu::ECX] == 91 && batched.read8(0xdfff) == 0x96,
+        "fault leaves the committed REP prefix and remaining count intact");
+}
+
 void paging_and_fault_tests() {
   Cpu cpu; boot(cpu);
   // Replace the large identity page by a genuine 4-KiB page table. Data virtual
@@ -653,6 +792,7 @@ int main() {
     enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
+    cached_page_translations(); paged_rep_batch(); scanned_boot_loop();
     conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;
