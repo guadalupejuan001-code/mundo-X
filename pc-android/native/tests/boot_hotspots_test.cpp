@@ -170,6 +170,12 @@ void guest_boot() {
   expect(!pc.boot_timing() && !pc.boot_regions(), "timed profiling did not switch off");
   pc.enable_boot_hotspots(false);
   expect(!pc.boot_hotspots(), "disabling profiling should restore the uninstrumented configuration");
+  pc.enable_boot_hotspots(true, false);
+  expect(without_elapsed(execute_guest()) == without_elapsed(report),
+         "count-only sampling changed guest progress or logical hotspots");
+  expect(pc.boot_hotspots() && !pc.boot_scalar_hotspots() && !pc.boot_timing() &&
+          json(*pc.boot_hotspots()).find("\"execution_us\":0") != std::string::npos,
+         "count-only sampling must keep batch boundaries without running legacy clocks");
 }
 
 void shift_loop_boot() {

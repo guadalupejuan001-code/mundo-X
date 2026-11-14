@@ -75,10 +75,12 @@ class PcMachine {
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
   const BootAcceleration& boot_acceleration() const noexcept { return boot_acceleration_; }
-  void enable_boot_hotspots(bool enabled=true) {
+  // Keep the logical sampler's batch boundaries when using a separate clock.
+  void enable_boot_hotspots(bool enabled=true, bool time_scalar=true) {
     if (enabled) {
       boot_hotspots_.emplace();
-      boot_scalar_hotspots_.emplace(true);
+      if (time_scalar) boot_scalar_hotspots_.emplace(true);
+      else boot_scalar_hotspots_.reset();
     } else {
       boot_hotspots_.reset();
       boot_scalar_hotspots_.reset();
@@ -214,7 +216,8 @@ class PcMachine {
     if(cpu.halted&&!device_step_hook)return;
     budget=std::min(budget,50000u);
     const BootTiming::Scope run_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Run);
-    const auto start=boot_hotspots_?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
+    const auto start=boot_scalar_hotspots_
+        ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     const char* last_mode=cpu.mode_name();
     const auto observe_mode=[&]() {
       const char* mode=cpu.mode_name();
@@ -289,7 +292,7 @@ class PcMachine {
       cpu.memory.compact_repeating_pages(256);
       next_ram_compaction_=cpu.instructions+kRamCompactionInterval;
     }
-    if(boot_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
+    if(boot_scalar_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
   }
   void key(std::uint8_t ascii, std::uint8_t scan) { key_event(ascii, scan, true); }
   void key_event(std::uint8_t ascii, unsigned scan, bool pressed) {
