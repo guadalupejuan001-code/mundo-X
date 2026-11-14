@@ -532,6 +532,40 @@ void cached_page_translations() {
   check(cpu.fault->error_code == 17 && cpu.cr2 == 0xa000, "cached NX fault context");
 }
 
+void colliding_page_translations() {
+  Cpu cpu;
+  boot(cpu);
+  cpu.enable_page_translation_cache();
+  // These two virtual pages hash to the same slot in the original cache.
+  constexpr std::uint64_t first = 0xb000, second = 0x10a000;
+  constexpr auto leaf = [](std::uint64_t address) { return 0x4000 + (address >> 12) * 8; };
+  const auto flags = std::uint64_t{0x23}; // Present, writable and already accessed.
+  cpu.write64(0x3000, 0x4000 | flags);
+  cpu.write64(leaf(0xa000), 0xa000 | flags);
+  cpu.write64(leaf(first), 0xb000 | flags);
+  cpu.write64(leaf(second), 0xd000 | flags);
+  cpu.write32(0xb000, 0x34);
+  cpu.write32(0xd000, 0x56);
+  cpu.write32(0xe000, 0x78);
+  // MOV EAX,[RBX]; MOV ECX,[RDX]; JMP back to the first load.
+  program(cpu, {0x8b,0x03,0x8b,0x0a,0xeb,0xfa});
+  cpu.regs[Cpu::EBX] = first;
+  cpu.regs[Cpu::EDX] = second;
+  for (unsigned i = 0; i < 3; ++i) one(cpu);
+  const auto walks = cpu.page_walks, hits = cpu.page_translation_hits;
+  constexpr unsigned iterations = 512;
+  for (unsigned i = 0; i < 3 * iterations; ++i) one(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x34 && cpu.regs[Cpu::ECX] == 0x56 &&
+        cpu.page_walks == walks && cpu.page_translation_hits - hits >= 2 * iterations,
+        "Both conflicting mappings must remain cached after warmup");
+  cpu.write64(leaf(second), 0xe000 | flags);
+  one(cpu); one(cpu);
+  check(cpu.regs[Cpu::EAX] == 0x34 && cpu.regs[Cpu::ECX] == 0x78,
+        "A changed PTE must invalidate both ways before they return stale physical bytes");
+  std::cout << "PRIME_C04_TRANSLATION_PASS iterations=" << iterations
+            << " data_reads=" << 2 * iterations << " steady_state_walks=0 remap=1\n";
+}
+
 void paged_rep_batch() {
   Cpu scalar, batched;
   const auto fixture = [](Cpu& cpu, bool enable, unsigned opcode, bool backward) {
@@ -809,7 +843,7 @@ int main() {
     enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
-    cached_page_translations(); paged_rep_batch(); scanned_boot_loop();
+    cached_page_translations(); colliding_page_translations(); paged_rep_batch(); scanned_boot_loop();
     conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;

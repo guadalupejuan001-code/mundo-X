@@ -68,6 +68,16 @@ int main() {
                  pc.cpu.read32(0x900c) == 0, "E820 must retain the exact 2-GiB physical boundary");
             need(pc.cpu.read32(0x9010) == (index == 3 ? 2u : 1u),
                  "E820 must reserve VRAM while leaving higher physical RAM usable");
+            if (index == 3) {
+                const auto first = pc.cpu.read64(0x9000);
+                const auto end = first + pc.cpu.read64(0x9008);
+                need(pc.cpu.memory.has_window() && first <= pc.cpu.memory.window_base() &&
+                     pc.cpu.memory.window_base() + pc.cpu.memory.window_bytes() <= end,
+                     "E820 must reserve the complete Ether window");
+                pc.cpu.write8(PcMachine::kEtherMemoryPhysicalBase, 0xa6);
+                need(pc.cpu.read8(PcMachine::kEtherMemoryPhysicalBase) == 0xa6,
+                     "The explicit Ether device must stay accessible inside the reservation");
+            }
             need(pc.cpu.regs[3] == (index == 3 ? 4u : 0u), "E820 enumeration completion");
         }
 
@@ -101,6 +111,11 @@ int main() {
                  high.cpu.reg16(1) == high.cpu.reg16(0) && high.cpu.reg16(2) == high.cpu.reg16(3),
                  "E801 must describe only contiguous extended RAM before video memory");
         }
+
+        PcMachine below_aperture(static_cast<std::size_t>(PcMachine::kEtherMemoryPhysicalBase + 4096 - 1));
+        need(!below_aperture.cpu.memory.has_window() &&
+             below_aperture.usable_ram_bytes() == below_aperture.cpu.memory.size() - 0x60000,
+             "A truncated aperture cannot overlap ordinary RAM described by E820");
 
         // A dword store straddles two new pages with only one page of budget left.
         // It must stop explicitly and leave all guest-visible state unchanged.

@@ -141,7 +141,7 @@ class PcMachine {
     cpu.interrupt_hook=[this](Cpu&,std::uint8_t n){return bios(n);};
     cpu.in_hook=[this](std::uint16_t port,unsigned width){return input(port,width);};
     cpu.out_hook=[this](std::uint16_t port,unsigned width,std::uint32_t v){return output(port,width,v);};
-    if(cpu.memory.size()>=kEtherMemoryPhysicalBase+kEtherMemoryBytes)
+    if(PcVideo::available(cpu.memory))
       cpu.memory.attach_window(
           kEtherMemoryPhysicalBase,kEtherMemoryBytes,
           [this](std::uint64_t offset){
@@ -484,6 +484,7 @@ class PcMachine {
      <<",\"ram_allocated_bytes\":"<<cpu.memory.allocated_bytes()<<",\"ram_budget_bytes\":"<<cpu.memory.budget_bytes()
      <<",\"ram_metadata_bytes\":"<<cpu.memory.metadata_bytes()<<",\"ram_allocated_pages\":"<<cpu.memory.allocated_pages()
      <<",\"ram_pattern_pages\":"<<cpu.memory.pattern_pages()
+     <<",\"ram_sparse_word_pages\":"<<cpu.memory.metrics().sparse_word_pages
      <<",\"ether_memory_physical_base\":"<<(cpu.memory.has_window()?kEtherMemoryPhysicalBase:0)
      <<",\"ether_memory_bytes\":"<<cpu.memory.window_bytes()
      <<",\"ether_memory_logical_byte_base\":"<<(cpu.memory.has_window()?kEtherMemoryLogicalByteBase:0)
