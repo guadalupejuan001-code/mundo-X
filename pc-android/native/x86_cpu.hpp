@@ -151,7 +151,7 @@ class Cpu {
   std::uint64_t page_translation_hits = 0;
 
   // This machine has a single CPU and a stable MMIO map while running.
-  // A caller that changes its bus map must invalidate replayable mappings.
+  // A caller that changes its bus map must invalidate cached translations.
   void enable_page_translation_cache(bool enabled = true) noexcept {
     page_translation_cache_enabled_ = enabled;
     memory.invalidate_page_tables();
@@ -3038,6 +3038,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
     return 0;
   const bool paged = (cr0 & 0x80000000U) != 0;
   if (paged && (!page_translation_cache_enabled_ || !a20_enabled ||
+                (mmio_claim_hook && !mmio_range_claim_hook) ||
                 !(efer & 0x400U) || !(cr4 & 0x20U))) return 0;
 
   // Only use decoded state from a matching scalar iteration. The guest can
@@ -3094,7 +3095,6 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
     const auto dst_physical = paged ? translate(dst_linear, Access::Write, nullptr, true) : dst_linear;
     if (!bulk_ram_range(dst_physical, bytes)) return 0;
     const auto target = bus_address(dst_physical);
-    if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
     const auto overlaps = [](std::uint64_t first, unsigned first_bytes,
                              std::uint64_t second, unsigned second_bytes) {
       return first < second + second_bytes && second < first + first_bytes;
@@ -3111,9 +3111,11 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
       // REP has sequential copy behavior when the ranges overlap, unlike a
       // single memcpy/memmove snapshot of the source.
       if (overlaps(target, bytes, source, bytes)) return 0;
+      if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
       mundo_x::ether_next::copy_ram_block(memory, source, target, bytes);
       put_index(ESI, src + (backward ? -std::uint64_t(bytes) : bytes));
     } else {
+      if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
       mundo_x::ether_next::repeat_ram_value(memory, target, get_reg(EAX, width_bytes), width_bytes, bytes);
     }
     if (completes_page) memory.compact_repeating_page(target);
