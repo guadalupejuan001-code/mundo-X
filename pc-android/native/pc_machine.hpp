@@ -55,6 +55,11 @@ class PcMachine {
   static constexpr std::uint64_t kMaxPhysicalBytes = 1ULL << 32;
   static constexpr std::uint64_t kIoApicAddress = 0xfec00000ULL;
   static constexpr std::uint64_t kLocalApicAddress = Cpu::kLocalApicAddress;
+  // Optional non-prefetchable PCI window used by the virtual motherboard.
+  static constexpr std::uint64_t kPciMmioBase = 0xe0000000ULL;
+  static constexpr std::uint64_t kPciMmioBytes = 32ULL * 1024 * 1024;
+  void reserve_pci_mmio(bool enabled) noexcept { pci_mmio_reserved_ = enabled; }
+  bool pci_mmio_reserved() const noexcept { return pci_mmio_reserved_; }
   static constexpr std::uint32_t kVirtualCyclesPerSecond = 3579545;
   static constexpr unsigned kPitClockDivider = 3; // Both timers derive from the same oscillator.
   static constexpr std::uint64_t max_ram_mib() noexcept {
@@ -575,6 +580,7 @@ class PcMachine {
   Pc8042 kbc_;  // Owned subset of physical PC/AT 8042; no simulated IRQs.
   bool guest_restart_enabled_=false;
   bool bios_hard_disk_attached_=false;
+  bool pci_mmio_reserved_=false;
   GuestRestart guest_restart_=GuestRestart::None;
   BootModeProgress boot_mode_progress_;
   BootAcceleration boot_acceleration_;
@@ -831,7 +837,7 @@ class PcMachine {
   }
   struct BiosMemoryRegion { std::uint64_t base, length; std::uint32_t type; };
   struct BiosMemoryMap {
-    std::array<BiosMemoryRegion, 6> regions{};
+    std::array<BiosMemoryRegion, 8> regions{};
     std::size_t count = 0;
     void append(std::uint64_t base, std::uint64_t end, std::uint32_t type) noexcept {
       if (end > base) regions[count++] = {base, end - base, type};
@@ -843,14 +849,20 @@ class PcMachine {
     BiosMemoryMap map;
     map.append(0, 0xa0000, 1);
     map.append(0xa0000, 0x100000, 2);
+    std::uint64_t next = 0x100000;
     if (PcVideo::available(cpu.memory)) {
       const auto video_end = PcVideo::kFramebufferAddress + PcVideo::kApertureBytes;
-      map.append(0x100000, PcVideo::kFramebufferAddress, 1);
+      map.append(next, PcVideo::kFramebufferAddress, 1);
       map.append(PcVideo::kFramebufferAddress, video_end, 2);
-      map.append(video_end, below_mmio, 1);
-    } else {
-      map.append(0x100000, below_mmio, 1);
+      next = video_end;
     }
+    if (pci_mmio_reserved_ && below_mmio > kPciMmioBase) {
+      const auto pci_end = std::min(below_mmio, kPciMmioBase + kPciMmioBytes);
+      map.append(next, kPciMmioBase, 1);
+      map.append(kPciMmioBase, pci_end, 2);
+      next = pci_end;
+    }
+    map.append(next, below_mmio, 1);
     // The IOAPIC and LAPIC live in the reserved high MMIO area.
     map.append(below_mmio, top, 2);
     return map;
