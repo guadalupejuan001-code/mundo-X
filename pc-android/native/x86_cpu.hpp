@@ -221,6 +221,11 @@ class Cpu {
   // Widths are BYTES (1, 2, or 4). A missing/declined hook is a fault.
   std::function<std::optional<std::uint32_t>(std::uint16_t, unsigned)> in_hook;
   std::function<bool(std::uint16_t, unsigned, std::uint32_t)> out_hook;
+  // Ports may bulk-transfer only within an already prepared hardware phase.
+  // The limit excludes the element that would cause IRQ, I/O or status changes.
+  // A declined transfer must leave the port untouched.
+  std::function<unsigned(std::uint16_t,unsigned,bool,unsigned)> pio_batch_limit_hook;
+  std::function<bool(std::uint16_t,unsigned,bool,std::uint8_t*,unsigned)> pio_batch_transfer_hook;
   // A device claims individual physical bus bytes, including MMIO above RAM.
   // A claimed but unreadable/unwritable address faults rather than becoming RAM.
   std::function<bool(std::uint64_t)> mmio_claim_hook;
@@ -266,7 +271,7 @@ class Cpu {
     instruction_page_hits = 0;
     page_translation_hits = 0;
     memory.invalidate_page_tables();
-    transaction_ = false; journal_.clear(); decoded_.clear();
+    transaction_ = false; clear_write_journal(); decoded_.clear();
   }
   // This CPU asserts FERR# as soon as the unmasked condition is pending.
   // An asserted IGNNE# allows a waiting instruction to execute while the
@@ -289,7 +294,8 @@ class Cpu {
   unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
   bool rep_batch_candidate() const noexcept {
     return repeat_ && start_ip_ == eip && start_cs_ == segments[CS] &&
-           (opcode_ == 0xa4 || opcode_ == 0xa5 || opcode_ == 0xaa || opcode_ == 0xab) &&
+           ((opcode_&0xfeU)==0xa4||(opcode_&0xfeU)==0xaa||
+            (pio_batch_limit_hook&&pio_batch_transfer_hook&&opcode_>=0x6c&&opcode_<=0x6f)) &&
            decoded_.size() >= 2;
   }
   bool scan_loop_batch_candidate() const noexcept {
@@ -364,6 +370,26 @@ class Cpu {
 
   // Physical BUS accesses: A20 masking applies. Direct memory[] access is for
   // host image loading and bypasses CPU bus semantics and the write journal.
+  bool try_read_ram_block(std::uint64_t address, std::uint8_t* data, unsigned bytes) const {
+    if (!bulk_ram_range(address, bytes)) return false;
+    memory.read_block(bus_address(address), data, bytes);
+    return true;
+  }
+  bool try_write_ram_block(std::uint64_t address, const std::uint8_t* data, unsigned bytes) {
+    if (!bulk_ram_range(address, bytes)) return false;
+    const auto physical = bus_address(address);
+    if (transaction_) {
+      // Preserve one contiguous undo record, and order it relative to any
+      // byte writes made by the same BIOS handler.
+      memory.prepare_write(physical, bytes);
+      const auto position = block_journal_bytes_.size();
+      block_journal_bytes_.resize(position + bytes);
+      memory.read_block(physical, block_journal_bytes_.data() + position, bytes);
+      block_journal_.push_back({physical, journal_.size(), position, bytes});
+    }
+    memory.write_block(physical, data, bytes);
+    return true;
+  }
   std::uint8_t read8(std::uint64_t address) const {
     const auto bus=bus_address(address);
     if (mmio_claim_hook && mmio_claim_hook(bus)) {
@@ -447,7 +473,7 @@ class Cpu {
       ~TraceGuard() noexcept {callback();}
     } trace_guard{publish_trace};
     start_ip_ = eip; start_cs_ = segments[CS]; cursor_ = eip;
-    decoded_.clear(); journal_.clear(); opcode_ = 0;
+    decoded_.clear(); clear_write_journal(); opcode_ = 0;
     operand_override_ = address_override_ = lock_prefix_ = false; rex_ = 0;
     op32_ = is_long_mode() || cache_[CS].big;
     addr32_ = op32_; repeat_ = 0; override_ = -1;
@@ -490,7 +516,7 @@ class Cpu {
       if (!ip_written_) eip = cursor_ & code_mask();
       eflags |= 2;
       ++instructions;
-      transaction_ = false; journal_.clear();
+      transaction_ = false; clear_write_journal();
       return halted ? StepResult::Halted : StepResult::Executed;
     } catch (const WaitingForX87&) {
       rollback(before);
@@ -516,7 +542,7 @@ class Cpu {
           const auto target = real_ivt_target(std::uint8_t(vector));
           if (target.cs || target.ip) {
             dispatch_real_interrupt(target, start_ip_);
-            transaction_ = false; journal_.clear();
+            transaction_ = false; clear_write_journal();
             ++instructions;
             delivered_vector = vector;
             fault.reset();
@@ -535,7 +561,7 @@ class Cpu {
           try {
             transaction_ = true;
             dispatch_idt(std::uint8_t(number), start_ip_, false, with_error, code);
-            transaction_ = false; journal_.clear();
+            transaction_ = false; clear_write_journal();
             ++instructions; // bounded interpreter step, not retired opcode
             delivered_vector=int(number);
             delivered_error=code;
@@ -591,7 +617,7 @@ class Cpu {
                           cr2,cr3,efer,fs_base,gs_base,system_call_msrs_,gdtr,idtr,ldtr,tr,a20_enabled,halted,
                           xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
                           fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_base_,apic_task_priority_};
-    start_ip_=eip;start_cs_=segments[CS];journal_.clear();transaction_=true;
+    start_ip_=eip;start_cs_=segments[CS];clear_write_journal();transaction_=true;
     try {
       if (is_real_mode()) {
         dispatch_real_interrupt(real_ivt_target(vector), eip);
@@ -599,7 +625,7 @@ class Cpu {
         dispatch_idt(vector,eip,false,false,0);
       }
       halted=false;
-      transaction_=false;journal_.clear();
+      transaction_=false;clear_write_journal();
       if(irq_trace_hook) {
         try {
           irq_trace_hook(IrqTrace{vector,before.segments[CS],segments[CS],
@@ -727,6 +753,9 @@ class Cpu {
   }
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
+  struct BlockUndo { std::uint64_t address; std::size_t after_bytes, position; unsigned count; };
+  std::vector<BlockUndo> block_journal_;
+  std::vector<std::uint8_t> block_journal_bytes_;
   BootScalarTiming* boot_scalar_timing_ = nullptr;
   // Architectural descriptor/IDT/TSS reads and a supervisor stack switch are
   // performed by the virtual CPU at privilege 0, not by guest CPL3 code.
@@ -746,11 +775,28 @@ class Cpu {
     ~SupervisorAccess() { cpu.supervisor_internal_ = old; }
   };
 
+  void clear_write_journal() noexcept {
+    journal_.clear();
+    block_journal_.clear();
+    block_journal_bytes_.clear();
+  }
   void rollback(const Snapshot& s) {
     // Only our architectural state and write* calls are transactional. Host
     // callbacks can have external side effects that cannot be rolled back.
-    for (auto it = journal_.rbegin(); it != journal_.rend(); ++it) memory.restore_byte(it->first, it->second);
-    transaction_ = false; journal_.clear();
+    auto bytes = journal_.size();
+    const auto restore_bytes = [&](std::size_t until) {
+      while (bytes > until) {
+        const auto& entry = journal_[--bytes];
+        memory.restore_byte(entry.first, entry.second);
+      }
+    };
+    for (auto it = block_journal_.rbegin(); it != block_journal_.rend(); ++it) {
+      restore_bytes(it->after_bytes);
+      for (unsigned i = 0; i < it->count; ++i)
+        memory.restore_byte(it->address + i, block_journal_bytes_[it->position + i]);
+    }
+    restore_bytes(0);
+    transaction_ = false; clear_write_journal();
     regs = s.regs; segments = s.segments; eip = s.eip; eflags = s.eflags;
     cache_ = s.cache; cr0 = s.cr0; cr4 = s.cr4; cr2 = s.cr2; cr3 = s.cr3;
     efer = s.efer; fs_base = s.fs_base; gs_base = s.gs_base;
@@ -3143,7 +3189,10 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
   if (remaining < 2) return 0;
   const bool backward = flag(DF);
   const bool copying = (opcode_ & 0xfeU) == 0xa4;
-  const unsigned width_bytes = opcode_ & 1U ? width() : 1;
+  const bool pio = opcode_ >= 0x6c && opcode_ <= 0x6f;
+  const bool input = (opcode_ & 0xfeU) == 0x6c;
+  if (pio && (backward || cpl() > ((eflags >> 12) & 3U))) return 0;
+  const unsigned width_bytes = opcode_ & 1U ? (pio ? (op32_ ? 4 : 2) : width()) : 1;
   const auto src = index(ESI), dst = index(EDI);
   const auto index_limit = mask(address_width());
   const auto page_bytes = MemoryFabric::kPageSize;
@@ -3174,26 +3223,42 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
           (index_limit - offset - (width_bytes - 1)) / width_bytes;
       return 1 + std::min<std::uint64_t>(by_page - 1, extra_by_index);
     };
-    elements = unsigned(std::min<std::uint64_t>(elements, limit_from(ES, dst, Access::Write)));
-    if (copying)
+    if(!pio||input)
+      elements = unsigned(std::min<std::uint64_t>(elements, limit_from(ES, dst, Access::Write)));
+    if(copying||(pio&&!input))
       elements = unsigned(std::min<std::uint64_t>(elements, limit_from(data_segment(), src, Access::Read)));
+    const auto port=reg16(EDX);
+    if(pio)elements=std::min(elements,pio_batch_limit_hook(port,width_bytes,input,elements));
     if (elements < 2) return 0;
 
     const auto bytes = elements * width_bytes;
     const auto back = backward ? bytes - width_bytes : 0;
-    const auto dst_linear = segment_linear(ES, dst - back, bytes, Access::Write);
-    const auto dst_physical = paged ? translate(dst_linear, Access::Write, nullptr, true) : dst_linear;
+    const auto target_access=pio&&!input?Access::Read:Access::Write;
+    const auto target_segment=pio&&!input?data_segment():ES;
+    const auto target_offset=pio&&!input?src:dst;
+    const auto dst_linear = segment_linear(target_segment, target_offset - back, bytes, target_access);
+    const auto dst_physical = paged ? translate(dst_linear, target_access, nullptr, true) : dst_linear;
     if (!bulk_ram_range(dst_physical, bytes)) return 0;
     const auto target = bus_address(dst_physical);
+    if(bytes>page_bytes-target%page_bytes)return 0;
     const auto overlaps = [](std::uint64_t first, unsigned first_bytes,
                              std::uint64_t second, unsigned second_bytes) {
       return first < second + second_bytes && second < first + first_bytes;
     };
-    if (overlaps(target, bytes, code, length)) return 0;
+    if ((!pio||input)&&overlaps(target, bytes, code, length)) return 0;
 
     const auto within_page = target % page_bytes;
     const bool completes_page = backward ? within_page == 0 : within_page + bytes == page_bytes;
-    if (copying) {
+    if(pio){
+      std::array<std::uint8_t,MemoryFabric::kPageSize> buffer;
+      if(input){
+        if(paged&&memory.may_touch_page_tables(target,bytes))return 0;
+        memory.prepare_write(target,bytes);
+      }else memory.read_block(target,buffer.data(),bytes);
+      if(!pio_batch_transfer_hook(port,width_bytes,input,buffer.data(),elements))return 0;
+      if(input)memory.write_block(target,buffer.data(),bytes);
+      else put_index(ESI,src+bytes);
+    }else if (copying) {
       const auto src_linear = segment_linear(data_segment(), src - back, bytes, Access::Read);
       const auto src_physical = paged ? translate(src_linear, Access::Read, nullptr, true) : src_linear;
       if (!bulk_ram_range(src_physical, bytes)) return 0;
@@ -3208,8 +3273,8 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
       if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
       mundo_x::ether_next::repeat_ram_value(memory, target, get_reg(EAX, width_bytes), width_bytes, bytes);
     }
-    if (completes_page) memory.compact_repeating_page(target);
-    put_index(EDI, dst + (backward ? -std::uint64_t(bytes) : bytes));
+    if (completes_page&&(!pio||input)) memory.compact_repeating_page(target);
+    if(!pio||input)put_index(EDI, dst + (backward ? -std::uint64_t(bytes) : bytes));
     put_index(ECX, remaining - elements);
     if (remaining == elements) eip = cursor_ & code_mask();
     eflags |= 2;
