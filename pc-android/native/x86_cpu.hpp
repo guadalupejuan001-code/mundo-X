@@ -3015,7 +3015,10 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     if (leaf) {
       const std::uint64_t offset_mask = large ? 0x1fffffU : 0xfffU;
       const auto physical = (entry & address_mask & ~offset_mask) | (address & offset_mask);
-      if (cached && ordinary_entries && bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096)) {
+      const bool reusable = cached && ordinary_entries &&
+          bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096);
+      if (speculative && !reusable) return UINT64_MAX;
+      if (reusable) {
         // Register every level after A/D-bit updates. All subsequent stores
         // through the MemoryFabric can then invalidate the cached result.
         for (unsigned i = level - 1; i < table_entries.size(); ++i)

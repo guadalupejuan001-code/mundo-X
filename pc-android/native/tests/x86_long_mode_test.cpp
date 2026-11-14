@@ -585,6 +585,23 @@ void paged_rep_batch() {
   check(batched.cr2 == 0xe000 && batched.fault->error_code == 2 &&
             batched.regs[Cpu::ECX] == 91 && batched.read8(0xdfff) == 0x96,
         "fault leaves the committed REP prefix and remaining count intact");
+
+  fixture(batched, true, 0xa4, false);
+  batched.write64(0x3000, 0x4003);
+  batched.write64(0x4050, 0xa023); // Instruction bytes.
+  batched.write64(0x4058, 0xb023); // Source mapping, modified by the destination.
+  batched.write64(0x4068, 0x4063); // Destination aliases the page table.
+  batched.regs[Cpu::ESI] = 0xb000;
+  batched.regs[Cpu::EDI] = 0xd058;
+  one(batched);
+  check(batched.try_rep_batch(64) == 0, "a paged REP must not batch through its own table");
+
+  fixture(batched, true, 0xaa, false);
+  batched.memory.attach_window(0xd000, 1, [](std::uint64_t) { return std::uint8_t{0}; },
+                              [](std::uint64_t, std::uint8_t) {});
+  one(batched);
+  check(batched.try_rep_batch(124) == 0,
+        "a page containing Ether memory must retain precise scalar callbacks");
 }
 
 void paging_and_fault_tests() {
