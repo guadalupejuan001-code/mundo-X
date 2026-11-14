@@ -211,7 +211,7 @@ class PcMachine {
     if(boot_timing_)boot_timing_->reset();
     if(boot_regions_)boot_regions_->reset();
     next_ram_compaction_=kRamCompactionInterval;
-    video_mode_=3;video_.text_mode(3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
+    video_mode_=3;video_.text_mode(cpu.memory,3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
     kbc_.reset();  // Controller, command/data latches and A20 protocol reset together.
     if(!reader_)return;
     cpu.memory.reset_zero();
@@ -473,6 +473,7 @@ class PcMachine {
     return out;
   }
   PcVideoInfo video_info() const noexcept {return video_.info();}
+  void watch_video_writes() {video_.watch_writes(cpu.memory);}
   void copy_vga_text(std::uint8_t* destination,std::size_t capacity) const {
     if(!destination||capacity<4000)throw std::invalid_argument("Buffer VGA insuficiente");
     cpu.memory.read_block(0xb8000,destination,4000);
@@ -818,7 +819,7 @@ class PcMachine {
     if(!preserve&&cpu.memory.has_page_backing())cpu.memory.prepare_write(0xb8000,4000);
     cpu.write8(0x449,mode);
     video_mode_=mode;
-    video_.text_mode(mode,preserve);
+    video_.text_mode(cpu.memory,mode,preserve);
     sync_bios_font_geometry();
     if(!preserve)clear_screen();
   }
