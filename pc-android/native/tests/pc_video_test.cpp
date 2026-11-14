@@ -75,6 +75,7 @@ void font_information(PcMachine& pc) {
     cpu.set_reg16(Cpu::EAX, 0x1130);
     cpu.set_reg16(Cpu::EBX, std::uint16_t(selector) << 8);
     cpu.regs[Cpu::EBP] = 0x12340000;
+    cpu.regs[Cpu::ECX] = 0x56789abc;
     cpu.regs[Cpu::EDX] = 0x9abcde00;
     cpu.eflags = 0x256;
     pc.run(3);
@@ -83,6 +84,37 @@ void font_information(PcMachine& pc) {
              cpu.eflags == 0x256 && (cpu.regs[Cpu::EBP] >> 16) == 0x1234,
          "FONT INFO must preserve flags, AX, BX and the high half of EBP");
     return cpu.real_mode_segment_address(Cpu::ES, cpu.reg16(Cpu::EBP));
+  };
+  const auto check_alternate = [&](std::uint8_t selector, std::uint64_t base, unsigned rows) {
+    const auto table = query(selector);
+    need(table >= base + 256 * rows && table + 62 * (rows + 1) + 1 <= 0xd0000 &&
+             cpu.regs[Cpu::ECX] == 0x56780010 && cpu.regs[Cpu::EDX] == 0x9abcde2f,
+         "Alternate font must return a ROM patch table and retain the active 1024x768 geometry");
+    unsigned previous = 0;
+    bool expected_glyph = false;
+    std::uint64_t record = table;
+    for (unsigned i = 0; i < 62; ++i, record += rows + 1) {
+      const auto glyph = cpu.read8(record);
+      if (!glyph) break;
+      need(glyph > previous, "Alternate font records must have unique, nonzero character codes");
+      previous = glyph;
+      if (glyph != 'M') continue;
+      expected_glyph = true;
+      for (unsigned row = 0; row < rows; ++row)
+        need(cpu.read8(record + 1 + row) == cpu.read8(base + glyph * rows + row) >> 1,
+             "Alternate M must be centered in the 9-dot cell");
+    }
+    need(expected_glyph && !cpu.read8(record), "Alternate font must terminate after its replacement records");
+
+    // After returning from INT 10h, the real-mode guest reads the table
+    // through its returned ES:BP, without knowing the ROM segment or offset.
+    constexpr std::array<std::uint8_t, 5> read_glyph{0x26, 0x8a, 0x46, 0x00, 0xf4};
+    cpu.memory.write_block(0x20a12, read_glyph.data(), read_glyph.size());
+    cpu.halted = false;
+    pc.run(3);
+    need(cpu.halted && !cpu.fault && cpu.reg8(Cpu::EAX) == cpu.read8(table),
+         "Guest could not read the alternate font through ES:BP");
+    return table;
   };
   const auto fourteen = query(2);
   need(cpu.reg16(Cpu::ECX) == 16 && cpu.regs[Cpu::EDX] == 0x9abcde2f,
@@ -93,13 +125,18 @@ void font_information(PcMachine& pc) {
   for (unsigned row = 0; row < 14; ++row)
     need(cpu.read8(fourteen + 'A' * 14 + row) == cosmic_pc::kBiosFont16['A' * 16 + (2 * row + 1) * 16 / 28],
          "FONT INFO returned the wrong glyph scanline");
+  const auto alternate_fourteen = check_alternate(5, fourteen, 14);
   const auto eight = query(3);
   need(query(4) == eight + 128 * 8 && query(0) == eight + 128 * 8,
        "8x8 high-half pointer and BIOS font vector must agree");
   const auto sixteen = query(6);
+  need(check_alternate(7, sixteen, 16) > alternate_fourteen,
+       "The 9x14 and 9x16 tables must have separate ROM pointers");
   need(query(1) == sixteen, "active font vector must describe the selected 8x16 cells");
   cpu.write32(0x43 * 4, 0x30000120);
   need(query(1) == 0x30120, "FONT INFO must read the guest's current INT 43 pointer");
+  need(query(8) == 0 && cpu.regs[Cpu::ECX] == 0x56789abc && cpu.regs[Cpu::EDX] == 0x9abcde00,
+       "Reserved font selectors must preserve the input registers");
   need(pc.video_info().mode == 0x142 && cpu.read32(PcVideo::kFramebufferAddress) == 0x11223344,
        "FONT INFO must preserve the framebuffer and video mode");
   call(pc, 0x0003);

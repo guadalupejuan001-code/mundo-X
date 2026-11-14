@@ -76,10 +76,16 @@ class PcMachine {
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
   const BootAcceleration& boot_acceleration() const noexcept { return boot_acceleration_; }
   void enable_boot_hotspots(bool enabled=true) {
-    if(enabled) boot_hotspots_.emplace();
-    else boot_hotspots_.reset();
+    if (enabled) {
+      boot_hotspots_.emplace();
+      boot_scalar_hotspots_.emplace(true);
+    } else {
+      boot_hotspots_.reset();
+      boot_scalar_hotspots_.reset();
+    }
   }
   const std::optional<BootHotspots>& boot_hotspots() const noexcept { return boot_hotspots_; }
+  const std::optional<BootHotspots>& boot_scalar_hotspots() const noexcept { return boot_scalar_hotspots_; }
   // Optional external motherboard clock/IRQ polling hook. C06 owners must
   // operate on the SAME Cpu instance; reset() deliberately preserves hooks.
   std::function<void()> device_step_hook;
@@ -173,6 +179,7 @@ class PcMachine {
     boot_mode_progress_={};
     boot_acceleration_={};
     if(boot_hotspots_)boot_hotspots_->reset();
+    if(boot_scalar_hotspots_)boot_scalar_hotspots_->reset();
     next_ram_compaction_=kRamCompactionInterval;
     video_mode_=3;video_.text_mode(3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
     kbc_.reset();  // Controller, command/data latches and A20 protocol reset together.
@@ -225,8 +232,16 @@ class PcMachine {
           continue;
         }
       }
+      const bool time_step=boot_scalar_hotspots_&&!cpu.halted&&boot_scalar_hotspots_->wants_sample();
+      const auto step_start=time_step?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
       const auto r=cpu.step();
-      sample_boot(mode,cs,ip,cpu.instructions-before);
+      const auto elapsed_ns=time_step?std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now()-step_start).count():0;
+      const auto steps=cpu.instructions-before;
+      if(boot_scalar_hotspots_&&steps)
+        if(const auto samples=boot_scalar_hotspots_->advance(steps))
+          boot_scalar_hotspots_->record(mode,cs,ip,cpu.last_decoded_bytes(),samples,elapsed_ns);
+      sample_boot(mode,cs,ip,steps);
       ++i;
       observe_mode();
       if(r==StepResult::Faulted){guest_restart_=GuestRestart::None;pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
@@ -490,6 +505,7 @@ class PcMachine {
   BootAcceleration boot_acceleration_;
   bool boot_acceleration_enabled_=false;
   std::optional<BootHotspots> boot_hotspots_;
+  std::optional<BootHotspots> boot_scalar_hotspots_;
   static constexpr std::uint64_t kRamCompactionInterval=32768;
   std::uint64_t next_ram_compaction_=kRamCompactionInterval;
   unsigned run_boot_batch(unsigned limit) {
@@ -686,7 +702,7 @@ class PcMachine {
       }
       return;
     }
-    if(cpu.reg16(Cpu::EAX)==0x1130&&video_.bios_font_info(cpu))return;
+    if(cpu.reg16(Cpu::EAX)==0x1130){video_.bios_font_info(cpu);return;}
     if(fn==0x0e){emit(lo(0));return;}
     if(fn==0x13){video_write_string();return;}
     if(fn==1)return; // Cursor shape has no semantic effect on the text framebuffer.
