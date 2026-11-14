@@ -3,6 +3,8 @@
 #include "sparse_ram.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -76,6 +78,7 @@ class MemoryFabric {
     if (bytes == 0 || base > size() || static_cast<std::uint64_t>(bytes) > size() - base)
       throw std::invalid_argument("Ether memory window is outside logical RAM");
     if (!read || !write) throw std::invalid_argument("Ether memory window requires read/write callbacks");
+    invalidate_page_tables();
     base_ = base;
     bytes_ = bytes;
     read_ = std::move(read);
@@ -106,6 +109,26 @@ class MemoryFabric {
   std::uint64_t window_base() const noexcept { return base_; }
   std::size_t window_bytes() const noexcept { return bytes_; }
 
+  std::uint64_t page_table_epoch() const noexcept { return page_table_epoch_; }
+  void watch_page_table(std::uint64_t offset) noexcept {
+    if (!page_table_epoch_)
+      page_table_epoch_ = next_page_table_epoch_.fetch_add(1, std::memory_order_relaxed);
+    page_table_buckets_[page_table_bucket(offset / kPageSize)] = true;
+  }
+  void invalidate_page_tables() noexcept {
+    if (!page_table_epoch_) return;
+    page_table_epoch_ = 0;
+    page_table_buckets_.reset();
+  }
+  bool may_touch_page_tables(std::uint64_t offset, std::size_t count) const noexcept {
+    if (!page_table_epoch_ || !count) return false;
+    const auto first = offset / kPageSize, last = (offset + count - 1) / kPageSize;
+    if (last - first >= 64) return true;
+    for (auto page = first; page <= last; ++page)
+      if (page_table_buckets_[page_table_bucket(page)]) return true;
+    return false;
+  }
+
   ByteProxy operator[](std::uint64_t offset) {
     check_range(offset, 1);
     return ByteProxy(*this, offset);
@@ -122,6 +145,7 @@ class MemoryFabric {
 
   void write_byte(std::uint64_t offset, std::uint8_t value) {
     check_range(offset, 1);
+    note_page_table_write(offset, 1);
     if (in_window(offset)) {
       write_(offset - base_, value);
       return;
@@ -147,6 +171,7 @@ class MemoryFabric {
     check_range(offset, count);
     if (count && !source) throw std::invalid_argument("MemoryFabric null write source");
     if (!count) return;
+    note_page_table_write(offset, count);
     if (!overlaps_window(offset, count)) {
       ram_.write_block(offset, source, count);
       return;
@@ -182,6 +207,7 @@ class MemoryFabric {
   void fill(std::uint64_t offset, std::uint8_t value, std::size_t count) {
     check_range(offset, count);
     if (!count) return;
+    note_page_table_write(offset, count);
     if (!overlaps_window(offset, count)) {
       ram_.fill(offset, value, count);
       return;
@@ -212,12 +238,16 @@ class MemoryFabric {
 
   bool try_copy_repeating_page(std::uint64_t source, std::uint64_t target) {
     if (overlaps_window(source, kPageSize) || overlaps_window(target, kPageSize)) return false;
-    return ram_.try_copy_repeating_page(source, target);
+    if (!ram_.try_copy_repeating_page(source, target)) return false;
+    note_page_table_write(target, kPageSize);
+    return true;
   }
 
   bool try_copy_resident_block(std::uint64_t source, std::uint64_t target, std::size_t count) {
     if (overlaps_window(source, count) || overlaps_window(target, count)) return false;
-    return ram_.try_copy_resident_block(source, target, count);
+    if (!ram_.try_copy_resident_block(source, target, count)) return false;
+    note_page_table_write(target, count);
+    return true;
   }
 
   // The Ether window does not reserve classical pages. Provider-side qstore8
@@ -243,6 +273,7 @@ class MemoryFabric {
 
   bool restore_byte(std::uint64_t offset, std::uint8_t old_value) noexcept {
     if (offset >= size()) return false;
+    note_page_table_write(offset, 1);
     if (!in_window(offset)) return ram_.restore_byte(offset, old_value);
     try {
       write_(offset - base_, old_value);
@@ -252,8 +283,8 @@ class MemoryFabric {
     }
   }
 
-  void reset_zero() noexcept { ram_.reset_zero(); }
-  void clear() noexcept { ram_.clear(); }
+  void reset_zero() noexcept { invalidate_page_tables(); ram_.reset_zero(); }
+  void clear() noexcept { reset_zero(); }
   std::size_t trim_zero_pages() noexcept { return ram_.trim_zero_pages(); }
   std::size_t compact_repeating_pages(std::size_t max_pages) noexcept {
     return ram_.compact_repeating_pages(max_pages);
@@ -263,6 +294,18 @@ class MemoryFabric {
   }
 
  private:
+  static constexpr std::size_t kPageTableBuckets = 4096;
+  // A collision only discards extra translations. All writes reach this
+  // fabric, including boot-media copies, device writes to RAM and rollback.
+  std::bitset<kPageTableBuckets> page_table_buckets_;
+  std::uint64_t page_table_epoch_ = 0;
+  inline static std::atomic<std::uint64_t> next_page_table_epoch_{1};
+  static std::size_t page_table_bucket(std::uint64_t page) noexcept {
+    return std::size_t((page ^ (page >> 6) ^ (page >> 12)) % kPageTableBuckets);
+  }
+  void note_page_table_write(std::uint64_t offset, std::size_t count) noexcept {
+    if (may_touch_page_tables(offset, count)) invalidate_page_tables();
+  }
   SparseRam ram_;
   std::uint64_t base_ = 0;
   std::size_t bytes_ = 0;

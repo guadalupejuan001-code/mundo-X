@@ -67,8 +67,10 @@ class PcMachine {
   std::uint64_t disk_reads=0;
   struct BootAcceleration {
     std::uint64_t batches=0, rep_elements=0, bytes=0;
+    std::uint64_t paged_rep_elements=0;
     std::uint64_t shift_loop_batches=0, shift_loop_steps=0;
     std::uint64_t zero_loop_batches=0, zero_loop_steps=0;
+    std::uint64_t scan_loop_steps=0;
   };
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
@@ -429,7 +431,8 @@ class PcMachine {
      <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\""
      <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
      <<",\"engine\":\"cosmic-pc-own-x86\""
-     <<",\"page_walks\":"<<cpu.page_walks<<",\"instruction_page_hits\":"<<cpu.instruction_page_hits;
+     <<",\"page_walks\":"<<cpu.page_walks<<",\"instruction_page_hits\":"<<cpu.instruction_page_hits
+     <<",\"page_translation_hits\":"<<cpu.page_translation_hits;
     if(cpu.fault) {
       o<<",\"fault_context\":{\"cpl\":"<<cpu.cpl()
        <<",\"ss\":"<<cpu.segments[Cpu::SS]
@@ -492,7 +495,8 @@ class PcMachine {
   unsigned run_boot_batch(unsigned limit) {
     const bool rep=cpu.rep_batch_candidate();
     const bool shift=!rep&&cpu.shift_loop_batch_candidate();
-    if(!rep&&!shift&&!cpu.zero_loop_batch_candidate())return 0;
+    const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
+    if(!rep&&!shift&&!scan&&!cpu.zero_loop_batch_candidate())return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;
       limit=std::min(limit,device_batch_limit_hook(limit));
@@ -504,16 +508,20 @@ class PcMachine {
     unsigned completed=0;
     if(rep)completed=cpu.try_rep_batch(limit);
     else if(shift)completed=cpu.try_shift_loop_batch(limit);
+    else if(scan)completed=cpu.try_scan_loop_batch(limit);
     else completed=cpu.try_zero_loop_batch(limit);
     if(!completed)return 0;
     if(device_step_hook)device_batch_advance_hook(completed-1);
     if(rep) {
       ++boot_acceleration_.batches;
       boot_acceleration_.rep_elements+=completed;
+      if(cpu.cr0&0x80000000U)boot_acceleration_.paged_rep_elements+=completed;
       boot_acceleration_.bytes+=cpu.last_rep_batch_bytes();
     } else if(shift) {
       ++boot_acceleration_.shift_loop_batches;
       boot_acceleration_.shift_loop_steps+=completed;
+    } else if(scan) {
+      boot_acceleration_.scan_loop_steps+=completed;
     } else {
       ++boot_acceleration_.zero_loop_batches;
       boot_acceleration_.zero_loop_steps+=completed;
