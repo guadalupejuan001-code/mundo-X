@@ -62,6 +62,8 @@ class PcVideo {
     install_font(ram, kFont8Offset, kBiosFont8);
     install_font(ram, kFont14Offset, kBiosFont14);
     install_font(ram, kFont16Offset, kBiosFont16);
+    install_font(ram, kFont14AltOffset, kBiosFont14Alt);
+    install_font(ram, kFont16AltOffset, kBiosFont16Alt);
     std::array<std::uint8_t, 256> tables{};
     for (std::size_t i = 0; i < kModes.size(); ++i) put16(tables.data(), i * 2, kModes[i].id);
     put16(tables.data(), kModes.size() * 2, 0xffff);
@@ -81,7 +83,7 @@ class PcVideo {
     cpu.write32(kFontActiveVector * 4, bios_pointer(kFont16Offset));
   }
 
-  bool bios_font_info(Cpu& cpu) const {
+  void bios_font_info(Cpu& cpu) const {
     const auto font = cpu.reg8(7); // BH
     std::uint32_t pointer;
     const auto rom_font = [&](unsigned offset, const auto& bitmap, unsigned skip = 0) {
@@ -96,14 +98,15 @@ class PcVideo {
       case 2: pointer = rom_font(kFont14Offset, kBiosFont14); break;
       case 3: pointer = rom_font(kFont8Offset, kBiosFont8); break;
       case 4: pointer = rom_font(kFont8Offset, kBiosFont8, 128 * 8); break;
+      case 5: pointer = rom_font(kFont14AltOffset, kBiosFont14Alt); break;
       case 6: pointer = rom_font(kFont16Offset, kBiosFont16); break;
-      default: return false;
+      case 7: pointer = rom_font(kFont16AltOffset, kBiosFont16Alt); break;
+      default: return; // Standard VGA preserves registers for reserved selectors.
     }
     cpu.load_real_data_segment(Cpu::ES, std::uint16_t(pointer >> 16));
     cpu.set_reg16(Cpu::EBP, std::uint16_t(pointer));
     cpu.set_reg16(Cpu::ECX, cpu.read16(0x485));
     cpu.set_reg8(Cpu::EDX, cpu.read8(0x484));
-    return true;
   }
 
   // The AX status is the only modified register except BX for 4F03. Unknown
@@ -229,6 +232,7 @@ class PcVideo {
   static constexpr unsigned kFontHighVector = 0x1f, kFontActiveVector = 0x43;
   // Keep the VBE info block and OEM strings at C000:0000..00FF.
   static constexpr unsigned kFont8Offset = 0x0100, kFont14Offset = 0x0900, kFont16Offset = 0x1700;
+  static constexpr unsigned kFont14AltOffset = 0x2700, kFont16AltOffset = 0x2b00;
   template <std::size_t N>
   static void install_font(MemoryFabric& ram, unsigned offset, const std::array<std::uint8_t, N>& font) {
     ram.write_block(kBiosTablesAddress + offset, font.data(), font.size());
@@ -245,6 +249,39 @@ class PcVideo {
   }
   static const std::array<std::uint8_t, 256 * 8> kBiosFont8;
   static const std::array<std::uint8_t, 256 * 14> kBiosFont14;
+  static constexpr char kAlternateGlyphs[] =
+      "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  template <std::size_t Rows>
+  using AlternateFont = std::array<std::uint8_t, (sizeof(kAlternateGlyphs) - 1) * (Rows + 1) + 1>;
+  template <std::size_t Rows>
+  static constexpr AlternateFont<Rows> alternate_font(const std::array<std::uint8_t, 256 * Rows>& base) {
+    // VGA's alternate table stores {character, scanlines...} records and
+    // ends with character 0. The ninth dot is blank for these glyphs.
+    // Shift off-center alphanumerics into that extra space. Keep the original
+    // base glyphs for pseudographics, whose ninth dot can repeat the eighth.
+    AlternateFont<Rows> table{};
+    std::size_t next = 0;
+    for (std::uint8_t glyph : kAlternateGlyphs) {
+      if (!glyph) break;
+      const auto first = std::size_t(glyph) * Rows;
+      unsigned ink = 0;
+      for (std::size_t row = 0; row < Rows; ++row) ink |= base[first + row];
+      if (!ink) continue;
+      unsigned left = 0, right = 0;
+      while (!(ink & (0x80U >> left))) ++left;
+      while (!(ink & (1U << right))) ++right;
+      if (right < left + 1) continue;
+      const auto shift = (right + 1 - left) / 2;
+      table[next++] = glyph;
+      for (std::size_t row = 0; row < Rows; ++row)
+        table[next++] = std::uint8_t(base[first + row] >> shift);
+    }
+    return table;
+  }
+  static const AlternateFont<14> kBiosFont14Alt;
+  static const AlternateFont<16> kBiosFont16Alt;
+  static_assert(kFont14AltOffset + AlternateFont<14>{}.size() <= kFont16AltOffset);
+  static_assert(kFont16AltOffset + AlternateFont<16>{}.size() <= 0x3000);
   PcVideoInfo info_;
   std::uint16_t current_vbe_mode_ = 3;
   static void success(Cpu& cpu) { cpu.set_reg16(Cpu::EAX, 0x004f); }
@@ -273,5 +310,7 @@ class PcVideo {
 
 inline constexpr std::array<std::uint8_t, 256 * 8> PcVideo::kBiosFont8 = PcVideo::scaled_font<8>();
 inline constexpr std::array<std::uint8_t, 256 * 14> PcVideo::kBiosFont14 = PcVideo::scaled_font<14>();
+inline constexpr PcVideo::AlternateFont<14> PcVideo::kBiosFont14Alt = PcVideo::alternate_font<14>(kBiosFont14);
+inline constexpr PcVideo::AlternateFont<16> PcVideo::kBiosFont16Alt = PcVideo::alternate_font<16>(kBiosFont16);
 
 } // namespace cosmic_pc

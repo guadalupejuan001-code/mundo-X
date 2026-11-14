@@ -348,8 +348,8 @@ class Cpu {
     }
     const auto index = physical_index(address);
     memory.prepare_write(index, 1);
-    if (transaction_) journal_.emplace_back(index, std::uint8_t(memory[index]));
-    memory[index] = value;
+    if (transaction_) journal_.emplace_back(index, memory.read_byte(index));
+    memory.write_byte(index, value);
   }
   void write16(std::uint64_t address, std::uint16_t value) { write_physical(address, 2, value); }
   void write32(std::uint64_t address, std::uint32_t value) { write_physical(address, 4, value); }
@@ -644,11 +644,6 @@ class Cpu {
         (page_translations_.size() - 1);
     return page_translations_[index];
   }
-  unsigned translation_policy(Access access) const noexcept {
-    const bool user = cpl() == 3 && !supervisor_internal_;
-    return unsigned(access) | (unsigned(user) << 2) | (unsigned(bool(efer & 0x800U)) << 3) |
-        (unsigned(bool(cr0 & 0x10000U)) << 4);
-  }
   bool same_translation(const CachedTranslation& entry, std::uint64_t page, unsigned policy) const noexcept {
     return entry.memory_epoch && entry.memory_epoch == memory.page_table_epoch() &&
         entry.linear_page == page && entry.cr3 == cr3 && entry.policy == policy;
@@ -825,7 +820,7 @@ class Cpu {
       fail("protected-mode segment access denied", FaultCode::ProtectionFault);
     return std::uint32_t(cache.base + offset);
   }
-  std::uint64_t translate(std::uint64_t address, Access access, bool* ordinary_ram = nullptr,
+  std::uint64_t translate(std::uint64_t address, Access access, bool* ordinary_page = nullptr,
                           bool speculative = false);
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
     if (bytes == 0 || bytes > 8 || address > UINT64_MAX - (bytes - 1))
@@ -848,6 +843,12 @@ class Cpu {
     return result;
   }
   void write_linear(std::uint64_t address, unsigned bytes, std::uint64_t value) {
+    // A single byte has no second address to preflight. write8 still handles
+    // MMIO, A20, the Ether window, RAM preparation and rollback.
+    if (bytes == 1) {
+      write8(translate(address, Access::Write), std::uint8_t(value));
+      return;
+    }
     std::array<std::uint64_t, 8> physical{};
     if (bytes == 0 || bytes > physical.size() || address > UINT64_MAX - (bytes - 1))
       fail("invalid write width", FaultCode::InvalidInstruction);
@@ -925,13 +926,12 @@ class Cpu {
         physical = instruction_page_.physical | (linear & 0xfffU);
         ++instruction_page_hits;
       } else {
-        bool ordinary_ram;
-        physical = translate(linear, Access::Execute, &ordinary_ram);
+        bool ordinary_page;
+        physical = translate(linear, Access::Execute, &ordinary_page);
         // The first byte always revalidates the mapping. Ordinary code and
         // paging RAM cannot change during decode; physical I/O stays scalar.
         instruction_page_ = {page, physical & ~std::uint64_t{0xfff},
-                             memory.page_table_epoch(),
-                             ordinary_ram && bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096)};
+                             memory.page_table_epoch(), ordinary_page};
       }
       reusable = instruction_page_.reusable;
     }
@@ -2949,9 +2949,9 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
   throw trap;
 }
 
-inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* ordinary_ram,
+inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* ordinary_page,
                                     bool speculative) {
-  if (ordinary_ram) *ordinary_ram = false;
+  if (ordinary_page) *ordinary_page = false;
   if (!(cr0 & 0x80000000U)) return address;
   if (!(efer & 0x400) || !(cr4 & 0x20))
     fail("only four-level IA-32e paging is implemented", FaultCode::UnsupportedState);
@@ -2967,9 +2967,10 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
   const auto linear_page = address >> 12;
   if (cacheable) {
     cached = &translation_slot(linear_page, access);
-    policy = translation_policy(access);
+    policy = unsigned(access) | (unsigned(user_mode) << 2) | (unsigned(nxe) << 3) |
+        (unsigned(write_protected) << 4);
     if (same_translation(*cached, linear_page, policy)) {
-      if (ordinary_ram) *ordinary_ram = true;
+      if (ordinary_page) *ordinary_page = bulk_ram_range(cached->physical_page, 4096);
       ++page_translation_hits;
       return cached->physical_page | (address & 0xfffU);
     }
@@ -3001,7 +3002,6 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     executable = executable && !(entry >> 63);
     const bool leaf = level == 1 || large;
     if (leaf) {
-      if (ordinary_ram) *ordinary_ram = ordinary_entries;
       if (user_mode && !user_access)
         page_fault(address, access, true, false, "CPL3 access denied by U/S page permissions");
       if (access == Access::Write && !writable && (user_mode || write_protected))
@@ -3015,10 +3015,11 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     if (leaf) {
       const std::uint64_t offset_mask = large ? 0x1fffffU : 0xfffU;
       const auto physical = (entry & address_mask & ~offset_mask) | (address & offset_mask);
-      const bool reusable = cached && ordinary_entries &&
+      const bool reusable = (cached || ordinary_page) && ordinary_entries &&
           bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096);
+      if (ordinary_page) *ordinary_page = reusable;
       if (speculative && !reusable) return UINT64_MAX;
-      if (reusable) {
+      if (cached && reusable) {
         // Register every level after A/D-bit updates. All subsequent stores
         // through the MemoryFabric can then invalidate the cached result.
         for (unsigned i = level - 1; i < table_entries.size(); ++i)

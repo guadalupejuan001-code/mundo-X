@@ -11,10 +11,13 @@
 
 namespace cosmic_pc {
 
-// Bounded, jittered sampling of completed guest steps. No guest reads,
-// clock calls, dynamic storage or instruction tracing in the sampling path.
+// Bounded, jittered sampling of completed guest steps, optionally weighted
+// by elapsed nanoseconds measured by the caller for the sampled scalar step.
 class BootHotspots {
  public:
+  explicit BootHotspots(bool weighted_by_duration = false) noexcept
+      : weighted_by_duration_(weighted_by_duration) {}
+
   bool wants_sample(std::uint64_t steps = 1) const noexcept {
     return steps >= until_sample_;
   }
@@ -38,33 +41,37 @@ class BootHotspots {
   }
 
   void record(std::string_view mode, std::uint16_t cs, std::uint64_t ip,
-              const std::vector<std::uint8_t>& bytes, std::uint64_t hits) noexcept {
-    record(mode, cs, ip, bytes.data(), bytes.size(), hits);
+              const std::vector<std::uint8_t>& bytes, std::uint64_t hits,
+              std::uint64_t nanoseconds = 0) noexcept {
+    record(mode, cs, ip, bytes.data(), bytes.size(), hits, nanoseconds);
   }
 
   void record(std::string_view mode, std::uint16_t cs, std::uint64_t ip,
-              const std::uint8_t* bytes, std::size_t size, std::uint64_t hits) noexcept {
+              const std::uint8_t* bytes, std::size_t size, std::uint64_t hits,
+              std::uint64_t nanoseconds = 0) noexcept {
     if (!hits || !size || size > kMaxInstructionBytes) return;
     const Key key{parse_mode(mode), cs, ip, to_bytes(bytes, size), size};
     attributed_samples_ += hits;
+    const auto weight = weighted_by_duration_ ? std::max<std::uint64_t>(1, nanoseconds) : hits;
+    if (weighted_by_duration_) sampled_ns_ += weight;
     Entry* minimum = &entries_.front();
     for (auto& entry : entries_) {
       if (entry.count && entry.key == key) {
-        entry.count += hits;
+        entry.count += weight;
         return;
       }
       if (entry.count < minimum->count) minimum = &entry;
     }
     // Space-Saving heavy hitters. A replaced slot carries its previous count
     // as the maximum possible overestimate for its new instruction.
-    *minimum = {key, minimum->count + hits, minimum->count};
+    *minimum = {key, minimum->count + weight, minimum->count};
   }
 
   void add_elapsed(std::chrono::steady_clock::duration elapsed) noexcept {
     elapsed_ += elapsed;
   }
 
-  void reset() noexcept { *this = BootHotspots{}; }
+  void reset() noexcept { *this = BootHotspots{weighted_by_duration_}; }
 
   void write_json(std::ostream& out) const {
     std::array<const Entry*, kCapacity> ranked{};
@@ -76,8 +83,10 @@ class BootHotspots {
     out << "{\"observed_steps\":" << observed_steps_ << ",\"samples\":" << samples_
         << ",\"attributed_samples\":" << attributed_samples_
         << ",\"min_interval_steps\":" << kMinInterval
-        << ",\"max_interval_steps\":" << kMaxInterval
-        << ",\"execution_us\":" << elapsed << ",\"hotspots\":[";
+        << ",\"max_interval_steps\":" << kMaxInterval;
+    if (weighted_by_duration_) out << ",\"sampled_step_ns\":" << sampled_ns_;
+    else out << ",\"execution_us\":" << elapsed;
+    out << ",\"hotspots\":[";
     for (std::size_t i = 0; i < kReportLimit && ranked[i]->count; ++i) {
       const auto& entry = *ranked[i];
       const auto& key = entry.key;
@@ -95,8 +104,10 @@ class BootHotspots {
       hex_bytes(out, key.bytes.data() + prefix_size, opcode_size);
       out << "\",\"bytes\":\"";
       hex_bytes(out, key.bytes.data(), key.size);
-      out << "\",\"estimated_samples\":" << entry.count
-          << ",\"max_error_samples\":" << entry.error << '}';
+      if (weighted_by_duration_)
+        out << "\",\"estimated_sample_ns\":" << entry.count << ",\"max_error_ns\":" << entry.error << '}';
+      else
+        out << "\",\"estimated_samples\":" << entry.count << ",\"max_error_samples\":" << entry.error << '}';
     }
     out << "]}";
   }
@@ -189,6 +200,8 @@ class BootHotspots {
   std::uint32_t random_ = 0x6f3d09a7U;
   std::uint64_t until_sample_ = next_interval();
   std::uint64_t observed_steps_ = 0, samples_ = 0, attributed_samples_ = 0;
+  std::uint64_t sampled_ns_ = 0;
+  bool weighted_by_duration_;
   std::chrono::steady_clock::duration elapsed_{};
   std::array<Entry, kCapacity> entries_{};
 };
