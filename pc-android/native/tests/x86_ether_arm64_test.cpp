@@ -273,19 +273,32 @@ void benchmark() {
   PcMachine native, scalar;
   boot(native, true);
   boot(scalar, false);
-  const auto first = execute_loop(true, false, &native);
-  const auto first_scalar = execute_loop(false, false, &scalar);
+  const auto initial_regs = scalar.cpu.regs;
+  const auto initial_steps = scalar.cpu.instructions;
+  const auto measure = [&](PcMachine& machine, bool translated) {
+    machine.cpu.regs = initial_regs;
+    machine.cpu.instructions = initial_steps;
+    return execute_loop(translated, false, &machine);
+  };
+  const auto first_scalar = measure(scalar, false);
+  const auto first = measure(native, true);
   require(first.state == first_scalar.state && first.stats.translated > 0 && first.stats.hits > 0,
           "first pass did not exercise real ARM64 translation");
-  const auto warmup = execute_loop(true, false, &native);
+  // Blocks reached only at loop exit need multiple visits to translate.
+  for (unsigned i = 0; i < 3; ++i) {
+    const auto a = measure(native, true);
+    const auto b = measure(scalar, false);
+    require(a.state == b.state, "ARM64 warm-up changed the guest result");
+  }
+  const auto warm_translations = native.cpu.ether_arm64_stats().translated;
   std::array<std::uint64_t, 7> native_times{}, scalar_times{};
   for (unsigned i = 0; i < native_times.size(); ++i) {
     Result a{}, b{};
-    if (i % 2) a = execute_loop(true, false, &native);
-    b = execute_loop(false, false, &scalar);
-    if (!(i % 2)) a = execute_loop(true, false, &native);
+    if (i % 2) a = measure(native, true);
+    b = measure(scalar, false);
+    if (!(i % 2)) a = measure(native, true);
     require(a.state == b.state, "warm ARM64 run changed the guest result");
-    require(a.stats.translated == warmup.stats.translated,
+    require(a.stats.translated == warm_translations,
             "stable ARM64 blocks were recompiled after warm-up");
     native_times[i] = a.elapsed_ns;
     scalar_times[i] = b.elapsed_ns;
