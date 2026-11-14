@@ -11,10 +11,10 @@
 #include "pc_video.hpp"
 #include "graphics_demo.hpp"
 #include "pc_8042.hpp"
+#include "pc_bios_keyboard.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <deque>
 #include <functional>
 #include <iomanip>
 #include <limits>
@@ -174,7 +174,7 @@ class PcMachine {
     quantum_device.power_reset();
     quantum_output_.clear();quantum_error_.clear();quantum_truncated_=false;
     quantum_cache_valid_=false;
-    host_error.clear();pending.clear();waiting_key=false;keys_.clear();disk_reads=0;last_disk_status_=0;
+    host_error.clear();pending.clear();waiting_key=false;disk_reads=0;last_disk_status_=0;
     guest_restart_=GuestRestart::None;
     boot_mode_progress_={};
     boot_acceleration_={};
@@ -192,6 +192,7 @@ class PcMachine {
     cpu.memory.write_block(std::size_t(plan_.load_segment)*16,plan_.image.data(),plan_.image.size());
     // BIOS data area: video mode 3, 80 columns, page0, conventional RAM.
     cpu.write16(0x410,0x0020);cpu.write16(0x413,640);cpu.write8(0x449,3);cpu.write16(0x44a,80);cpu.write16(0x44c,4000);
+    PcBiosKeyboard::reset(cpu);
     sync_bios_font_geometry();video_.install_font_vectors(cpu);
     sync_bios_hard_disk_count();clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
   }
@@ -254,9 +255,17 @@ class PcMachine {
     }
     if(boot_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
   }
-  void key(std::uint8_t ascii,std::uint8_t scan) {
-    if(waiting_key){cpu.set_reg16(0,std::uint16_t(scan)<<8|ascii);waiting_key=false;}
-    else if(keys_.size()<256)keys_.push_back(std::uint16_t(scan)<<8|ascii);
+  void key(std::uint8_t ascii, std::uint8_t scan) { key_event(ascii, scan, true); }
+  void key_event(std::uint8_t ascii, unsigned scan, bool pressed) {
+    if (!reader_ || cpu.fault) return;
+    const auto key = PcBiosKeyboard::host_key(cpu, ascii, scan, pressed);
+    if (!key || !PcBiosKeyboard::store(cpu, *key) || !waiting_key) return;
+    // An empty blocking INT has already retired. Its AH still selects the
+    // original read service until a compatible key completes the call.
+    if (const auto word = PcBiosKeyboard::read(cpu, hi(Cpu::EAX) == 0x10, true)) {
+      cpu.set_reg16(Cpu::EAX, *word);
+      waiting_key = false;
+    }
   }
   // A single C01 worker owns only the dispatch policy. PC memory windows, GUI
   // and guest ports continue sharing the exact original InfiniteSession.
@@ -552,7 +561,6 @@ class PcMachine {
   Reader reader_;
   std::uint64_t media_bytes_=0;
   BootPlan plan_{};
-  std::deque<std::uint16_t> keys_;
   unsigned row_=0,col_=0;
   std::uint8_t last_disk_status_=0,video_mode_=3,pic1_=0xff,pic2_=0xff,cmos_index_=0;
   std::chrono::steady_clock::time_point started_=std::chrono::steady_clock::now();
@@ -802,6 +810,37 @@ class PcMachine {
     // Unsupported BIOS extensions advertise failure as required by this API.
     high(0,0x86);carry(true);
   }
+  void keyboard_bios() {
+    const auto function = hi(Cpu::EAX);
+    switch (function) {
+      case 0x00: case 0x10:
+        if (const auto word = PcBiosKeyboard::read(cpu, function == 0x10, true))
+          cpu.set_reg16(Cpu::EAX, *word);
+        else
+          waiting_key = true;
+        return;
+      case 0x01: case 0x11: {
+        const auto word = PcBiosKeyboard::read(cpu, function == 0x11, false);
+        zero(!word);
+        if (word) cpu.set_reg16(Cpu::EAX, *word);
+        return;
+      }
+      case 0x02:
+        low(Cpu::EAX, PcBiosKeyboard::shift_status(cpu));
+        return;
+      case 0x05:
+        low(Cpu::EAX, PcBiosKeyboard::store(cpu, cpu.reg16(Cpu::ECX)) ? 0 : 1);
+        return;
+      case 0x12:
+        cpu.set_reg16(Cpu::EAX, PcBiosKeyboard::extended_shift_status(cpu));
+        return;
+      default: {
+        std::ostringstream s;
+        s << "BIOS INT 16h función AH=0x" << std::hex << unsigned(function) << " no implementada";
+        missing(s.str());
+      }
+    }
+  }
   bool bios(std::uint8_t n){
     switch(n){
       case 0x10:video_bios();return true;
@@ -809,7 +848,7 @@ class PcMachine {
       case 0x12:cpu.set_reg16(0,640);return true;
       case 0x13:disk_bios();return true;
       case 0x15:memory_bios();return true;
-      case 0x16:{const auto fn=hi(0);if(fn==0||fn==0x10){if(keys_.empty())waiting_key=true;else{cpu.set_reg16(0,keys_.front());keys_.pop_front();}return true;}if(fn==1||fn==0x11){zero(keys_.empty());if(!keys_.empty())cpu.set_reg16(0,keys_.front());return true;}if(fn==2){low(0,0);return true;}missing("Servicio de teclado BIOS no implementado");}
+      case 0x16:keyboard_bios();return true;
       case 0x1a:if(hi(0)==0){const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started_).count();const std::uint32_t ticks=ms*182/10000;cpu.set_reg16(1,ticks>>16);cpu.set_reg16(2,ticks&0xffff);low(0,0);carry(false);return true;}carry(true);return true;
       case 0x18:missing("BIOS: el invitado no encontró un sistema arrancable (INT 18h)");
       case 0x19:
