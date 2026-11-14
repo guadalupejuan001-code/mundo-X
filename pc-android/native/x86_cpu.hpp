@@ -689,7 +689,11 @@ class Cpu {
     std::uint64_t cr3 = 0, memory_epoch = 0;
     unsigned policy = 0;
   };
-  std::array<CachedTranslation, 256> page_translations_{};
+  struct TranslationSet {
+    std::array<CachedTranslation, 2> ways{};
+    unsigned recent = 0;
+  };
+  std::array<TranslationSet, 128> page_translations_{};
   bool page_translation_cache_enabled_ = false;
   EtherArm64Stats ether_arm64_stats_{};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -702,14 +706,15 @@ class Cpu {
   std::optional<std::uint64_t> ether_arm64_ram_address(std::uint64_t address, unsigned width,
                                                        Access access);
 #endif
-  CachedTranslation& translation_slot(std::uint64_t linear_page, Access access) noexcept {
+  TranslationSet& translation_set(std::uint64_t linear_page, Access access) noexcept {
     const auto index = (linear_page ^ (linear_page >> 8) ^ (linear_page >> 16) ^
                         (unsigned(access) * 73U)) &
         (page_translations_.size() - 1);
     return page_translations_[index];
   }
-  bool same_translation(const CachedTranslation& entry, std::uint64_t page, unsigned policy) const noexcept {
-    return entry.memory_epoch && entry.memory_epoch == memory.page_table_epoch() &&
+  bool same_translation(const CachedTranslation& entry, std::uint64_t page, unsigned policy,
+                        std::uint64_t epoch) const noexcept {
+    return epoch && entry.memory_epoch == epoch &&
         entry.linear_page == page && entry.cr3 == cr3 && entry.policy == policy;
   }
   static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
@@ -3035,17 +3040,23 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
   const bool cacheable = page_translation_cache_enabled_ && a20_enabled &&
       !step_trace_hook && !irq_trace_hook &&
       (!mmio_claim_hook || mmio_range_claim_hook);
-  CachedTranslation* cached = nullptr;
+  TranslationSet* set = nullptr;
   unsigned policy = 0;
   const auto linear_page = address >> 12;
   if (cacheable) {
-    cached = &translation_slot(linear_page, access);
+    set = &translation_set(linear_page, access);
     policy = unsigned(access) | (unsigned(user_mode) << 2) | (unsigned(nxe) << 3) |
         (unsigned(write_protected) << 4);
-    if (same_translation(*cached, linear_page, policy)) {
-      if (ordinary_page) *ordinary_page = bulk_ram_range(cached->physical_page, 4096);
+    const auto epoch = memory.page_table_epoch();
+    for (unsigned probe = 0; probe < set->ways.size(); ++probe) {
+      const auto way = set->recent ^ probe;
+      const auto& entry = set->ways[way];
+      if (!same_translation(entry, linear_page, policy, epoch)) continue;
+      set->recent = way;
+      const auto physical = entry.physical_page;
+      if (ordinary_page) *ordinary_page = bulk_ram_range(physical, 4096);
       ++page_translation_hits;
-      return cached->physical_page | (address & 0xfffU);
+      return physical | (address & 0xfffU);
     }
   }
   ++page_walks;
@@ -3088,17 +3099,18 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     if (leaf) {
       const std::uint64_t offset_mask = large ? 0x1fffffU : 0xfffU;
       const auto physical = (entry & address_mask & ~offset_mask) | (address & offset_mask);
-      const bool reusable = (cached || ordinary_page) && ordinary_entries &&
+      const bool reusable = (set || ordinary_page) && ordinary_entries &&
           bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096);
       if (ordinary_page) *ordinary_page = reusable;
       if (speculative && !reusable) return UINT64_MAX;
-      if (cached && reusable) {
+      if (set && reusable) {
         // Register every level after A/D-bit updates. All subsequent stores
         // through the MemoryFabric can then invalidate the cached result.
         for (unsigned i = level - 1; i < table_entries.size(); ++i)
           memory.watch_page_table(table_entries[i]);
-        *cached = {linear_page, physical & ~std::uint64_t{0xfff}, cr3,
-                   memory.page_table_epoch(), policy};
+        set->recent ^= 1U;
+        set->ways[set->recent] = {linear_page, physical & ~std::uint64_t{0xfff}, cr3,
+                                  memory.page_table_epoch(), policy};
       }
       return physical;
     }

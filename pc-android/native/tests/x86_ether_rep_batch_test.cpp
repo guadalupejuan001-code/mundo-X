@@ -223,12 +223,36 @@ void copy_under_pressure() {
 
   // Replacing a populated page frees its old backing. Mutating the compact
   // destination afterwards must leave the original bytes independent.
-  require(cpu.memory.try_copy_repeating_page(from + 2 * page, 0x15000) &&
+  require(cpu.memory.try_copy_compact_page(from + 2 * page, 0x15000) &&
           cpu.memory.read_byte(0x15000) == 0 && cpu.memory.allocated_pages() == resident - 1,
           "full zero page must replace stale backing");
   cpu.memory.write_byte(to + page + 7, 0x4a);
   require(cpu.read8(from + page + 7) == pattern[7] && cpu.read8(to + page + 7) == 0x4a,
           "copied page writes must not alias the source");
+}
+
+void fill_under_pressure() {
+  constexpr auto page = MemoryFabric::kPageSize;
+  constexpr std::uint32_t address = 0x12000000, word = 0xc3065ad8;
+  Cpu cpu(300 * 1024 * 1024, 3 * page + 2 * sizeof(std::uint64_t));
+  protected_fixture(cpu);
+  cpu.regs[Cpu::EAX] = word;
+  cpu.regs[Cpu::ECX] = 2 * page / sizeof(word);
+  cpu.regs[Cpu::EDI] = address;
+  expect_step(cpu);
+  require(cpu.try_rep_batch(page) == page / sizeof(word) - 1 &&
+              cpu.memory.pattern_pages() == 1, "REP must compact the first, partially-filled page");
+  cpu.memory.write_byte(0x15000, 1); // Consume the space the first dense page will free.
+  const auto resident = cpu.memory.allocated_pages();
+  require(cpu.memory.budget_bytes() - cpu.memory.allocated_bytes() == sizeof(std::uint64_t) &&
+              cpu.try_rep_batch(page) == page / sizeof(word) &&
+              cpu.memory.allocated_pages() == resident && cpu.memory.pattern_pages() == 2 &&
+              cpu.regs[Cpu::ECX] == 0 && cpu.eip == 0x8002,
+          "Full-page STOS must use the available pattern without needing a dense page");
+  for (std::size_t i = 0; i < 2 * page; i += sizeof(word))
+    require(cpu.read32(address + i) == word, "Full-page STOS changed the repeated bytes");
+  std::cout << "PRIME_C04_REP_FILL_PASS page_bytes=" << page
+            << " available_payload_bytes=" << sizeof(std::uint64_t) << '\n';
 }
 
 void resident_copy() {
@@ -300,6 +324,7 @@ int main() {
     a20_alias();
     irq_checkpoint();
     copy_under_pressure();
+    fill_under_pressure();
     resident_copy();
     const auto scalar = measure(false), batched = measure(true);
     require(scalar.steps == batched.steps && batched.batches > 0 && batched.patterns == 256 &&

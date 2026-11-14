@@ -98,6 +98,9 @@ class MemoryFabric {
   [[nodiscard]] SparseRam::WritePins pin_writes() noexcept { return ram_.pin_writes(); }
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
+  SparseRam::BudgetAdjustment adjust_payload_budget(std::uint64_t target, std::size_t reclaim_pages) {
+    return ram_.adjust_payload_budget(target, reclaim_pages);
+  }
   std::uint64_t metadata_bytes() const noexcept {
     return ram_.metadata_bytes() + sizeof(*this) - sizeof(ram_);
   }
@@ -243,9 +246,16 @@ class MemoryFabric {
     }
   }
 
-  bool try_copy_repeating_page(std::uint64_t source, std::uint64_t target) {
+  bool try_copy_compact_page(std::uint64_t source, std::uint64_t target) {
     if (overlaps_window(source, kPageSize) || overlaps_window(target, kPageSize)) return false;
-    if (!ram_.try_copy_repeating_page(source, target)) return false;
+    if (!ram_.try_copy_compact_page(source, target)) return false;
+    note_page_table_write(target, kPageSize);
+    return true;
+  }
+
+  bool try_fill_repeating_page(std::uint64_t target, std::uint64_t pattern) {
+    if (overlaps_window(target, kPageSize) || !ram_.try_fill_repeating_page(target, pattern))
+      return false;
     note_page_table_write(target, kPageSize);
     return true;
   }

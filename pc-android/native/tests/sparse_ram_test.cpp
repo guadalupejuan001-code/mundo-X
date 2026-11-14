@@ -111,7 +111,9 @@ int main() {
              auto* store = backing.get();
              ram.attach_page_backing(std::move(backing));
              ram[0] = 1;
+             ram[8] = 4;
              ram[kPage] = 2;
+             ram[kPage + 8] = 5;
              store->fail_write = true;
              const std::array<std::uint8_t, 2> patch{0xe1, 0xe2};
              expect<std::runtime_error>([&] { ram.write_block(2 * kPage - 1, patch.data(), patch.size()); },
@@ -130,6 +132,83 @@ int main() {
              need(ram[spilled * kPage] == spilled + 1 && ram[spilled * kPage + 1] == 0 &&
                       ram[2 * kPage] == 3 && ram.allocated_bytes() <= ram.budget_bytes(),
                   "A failed reload changed a guest byte or exceeded its resident budget");
+         }},
+        {"zero background retains one exact word and copies it independently", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             SparseRam ram(4 * kPage, 4 * kPage);
+             const std::array<std::uint8_t, 8> word{0, 0x3a, 0x11, 0x6b, 0, 0, 0x95, 0xe3};
+             ram.write_block(120, word.data(), word.size());
+             const auto oracle = read(ram, 0, kPage);
+             const auto before = ram.allocated_bytes() + ram.metadata_bytes();
+             need(ram.adjust_payload_budget(2 * word.size(), 1) == Adjustment::Applied,
+                  "A cold sparse word must fit an eight-byte representation without a spill file");
+             need(ram.metrics().sparse_word_pages == 1 && ram.allocated_pages() == 0 &&
+                      ram.allocated_bytes() == word.size() &&
+                      before - ram.metadata_bytes() - ram.allocated_bytes() == kPage,
+                  "One-word representation must reuse the existing slot padding and payload");
+             need(ram.try_copy_compact_page(0, kPage) &&
+                      read(ram, 0, kPage) == oracle && read(ram, kPage, kPage) == oracle,
+                  "Compact block copy must preserve the whole zero background and exception");
+             need(ram[121] == word[1] && ram[127] == word[7] && ram[128] == 0 &&
+                      ram[kPage + 121] == word[1], "Compact byte read differs from block read");
+             expect<SparseRam::BudgetExceeded>([&] { ram[kPage + 121] = 0x4a; }, "budget exceeded");
+             need(ram.adjust_payload_budget(2 * kPage, 1) == Adjustment::Applied,
+                  "A larger host budget must be immediately usable");
+             ram[kPage + 121] = 0x4a;
+             need(ram[kPage + 121] == 0x4a && ram[121] == word[1] &&
+                      ram.restore_byte(kPage + 121, word[1]) && read(ram, kPage, kPage) == oracle,
+                  "Dense transaction and rollback must preserve independent compact pages");
+             ram.fill(0, 0, kPage);
+             need(ram.metrics().sparse_word_pages == 0 && ram[121] == 0,
+                  "Full zero fill must discard the sparse exception");
+             std::cout << "PRIME_C04_SPARSE_WORD_PASS dense_bytes=" << kPage
+                       << " compact_payload_bytes=" << word.size() << " spill_writes=0\n";
+         }},
+        {"live budget adjusts incrementally and preserves spilled and failed writes", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             SparseRam ram(6 * kPage, 5 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             for (unsigned page = 0; page < 5; ++page) {
+                 ram[page * kPage] = page + 1;
+                 ram[page * kPage + kPage - 1] = page + 31;
+             }
+             store->fail_write = true;
+             expect<std::runtime_error>([&] { ram.adjust_payload_budget(2 * kPage, 1); },
+                                        "backing write I/O error");
+             need(ram.budget_bytes() == 5 * kPage && ram.metrics().backing_writes == 0,
+                  "Failed budget change advertised released memory");
+             store->fail_write = false;
+             {
+                 const auto pins = ram.pin_writes();
+                 need(ram.adjust_payload_budget(2 * kPage, 1) == Adjustment::Blocked,
+                      "Live journal must block budget maintenance");
+             }
+             need(ram.adjust_payload_budget(2 * kPage, 1) == Adjustment::Reclaiming &&
+                      ram.metrics().backing_writes == 1 && ram.budget_bytes() >= ram.allocated_bytes(),
+                  "Host maintenance must reclaim at most the requested number of pages");
+             need(ram.adjust_payload_budget(2 * kPage, 2) == Adjustment::Applied &&
+                      ram.budget_bytes() == 2 * kPage && ram.metrics().backing_writes == 3,
+                  "Incremental reclaims must reach the requested budget");
+             for (unsigned page = 0; page < 5; ++page)
+                 need(ram[page * kPage] == page + 1 && ram[page * kPage + kPage - 1] == page + 31,
+                      "Budget adjustment changed guest bytes");
+         }},
+        {"full dense write may spill a compact page while preserving its exact bytes", [] {
+             SparseRam ram(4 * kPage, 2 * kPage);
+             ram.attach_page_backing(std::make_unique<TestBacking>());
+             ram[9] = 0x61;
+             need(ram.adjust_payload_budget(kPage, 1) == SparseRam::BudgetAdjustment::Applied &&
+                      ram.adjust_payload_budget(kPage - 1, 1) == SparseRam::BudgetAdjustment::Applied &&
+                      ram.metrics().sparse_word_pages == 1, "Fixture must retain a single compact word");
+             ram.adjust_payload_budget(2 * kPage, 1);
+             const std::vector<std::uint8_t> input(2 * kPage, 0xb3);
+             ram.write_block(kPage, input.data(), input.size());
+             need(ram.metrics().spilled_pages == 1 && ram.metrics().sparse_word_pages == 0 &&
+                      ram[8] == 0 && ram[9] == 0x61 && ram[10] == 0 &&
+                      read(ram, kPage, input.size()) == input,
+                  "Compact eviction failed to make room for a dense transaction");
          }},
         {"transaction pins preserve cross-page rollback at capacity", [] {
              SparseRam ram(6 * kPage, 2 * kPage);
