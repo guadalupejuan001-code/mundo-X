@@ -75,10 +75,12 @@ class PcMachine {
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
   const BootAcceleration& boot_acceleration() const noexcept { return boot_acceleration_; }
-  void enable_boot_hotspots(bool enabled=true) {
+  // Keep the logical sampler's batch boundaries when using a separate clock.
+  void enable_boot_hotspots(bool enabled=true, bool time_scalar=true) {
     if (enabled) {
       boot_hotspots_.emplace();
-      boot_scalar_hotspots_.emplace(true);
+      if (time_scalar) boot_scalar_hotspots_.emplace(true);
+      else boot_scalar_hotspots_.reset();
     } else {
       boot_hotspots_.reset();
       boot_scalar_hotspots_.reset();
@@ -86,6 +88,17 @@ class PcMachine {
   }
   const std::optional<BootHotspots>& boot_hotspots() const noexcept { return boot_hotspots_; }
   const std::optional<BootHotspots>& boot_scalar_hotspots() const noexcept { return boot_scalar_hotspots_; }
+  void enable_boot_timing(bool enabled = true) {
+    if (enabled) {
+      boot_regions_.emplace(true, true);
+      boot_timing_.emplace();
+    } else {
+      boot_regions_.reset();
+      boot_timing_.reset();
+    }
+  }
+  const std::optional<BootTiming>& boot_timing() const noexcept { return boot_timing_; }
+  const std::optional<BootHotspots>& boot_regions() const noexcept { return boot_regions_; }
   // Optional external motherboard clock/IRQ polling hook. C06 owners must
   // operate on the SAME Cpu instance; reset() deliberately preserves hooks.
   std::function<void()> device_step_hook;
@@ -180,6 +193,8 @@ class PcMachine {
     boot_acceleration_={};
     if(boot_hotspots_)boot_hotspots_->reset();
     if(boot_scalar_hotspots_)boot_scalar_hotspots_->reset();
+    if(boot_timing_)boot_timing_->reset();
+    if(boot_regions_)boot_regions_->reset();
     next_ram_compaction_=kRamCompactionInterval;
     video_mode_=3;video_.text_mode(3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
     kbc_.reset();  // Controller, command/data latches and A20 protocol reset together.
@@ -200,7 +215,9 @@ class PcMachine {
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault||guest_restart_!=GuestRestart::None)return;
     if(cpu.halted&&!device_step_hook)return;
     budget=std::min(budget,50000u);
-    const auto start=boot_hotspots_?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
+    const BootTiming::Scope run_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Run);
+    const auto start=boot_scalar_hotspots_
+        ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     const char* last_mode=cpu.mode_name();
     const auto observe_mode=[&]() {
       const char* mode=cpu.mode_name();
@@ -211,10 +228,15 @@ class PcMachine {
       }
     };
     for(unsigned i=0;i<budget&&!waiting_key;){
+      auto* sample = boot_timing_ ? boot_timing_->next_iteration() : nullptr;
+      const BootTiming::Scope iteration_timing(sample, BootTimePart::Total);
       // Devices can tick and deliver an enabled IRQ between guest instructions;
       // a pending timer IRQ may wake a halted CPU without a synthetic opcode.
       if(device_step_hook) {
-        device_step_hook();
+        {
+          const BootTiming::Scope device_timing(sample, BootTimePart::Device);
+          device_step_hook();
+        }
         observe_mode();
       }
       if(cpu.fault) {
@@ -227,7 +249,12 @@ class PcMachine {
       const auto before=cpu.instructions;
       if(cpu.halted)cpu.advance_halted_clock();
       if(boot_acceleration_enabled_&&budget-i>1) {
-        if(const auto completed=run_boot_batch(budget-i)) {
+        const auto batch_start=sample ? BootTiming::Clock::now() : BootTiming::Clock::time_point{};
+        const auto completed=run_boot_batch(budget-i);
+        if(sample)sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,
+                                BootTiming::Clock::now()-batch_start);
+        if(completed) {
+          if(sample)sample->add_steps(0,completed);
           sample_boot(mode,cs,ip,completed);
           i+=completed;
           continue;
@@ -235,7 +262,18 @@ class PcMachine {
       }
       const bool time_step=boot_scalar_hotspots_&&!cpu.halted&&boot_scalar_hotspots_->wants_sample();
       const auto step_start=time_step?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
-      const auto r=cpu.step();
+      StepResult r;
+      if(sample) {
+        const auto start=BootTiming::Clock::now();
+        r=cpu.step_with_timing(*sample);
+        const auto elapsed=BootTiming::Clock::now()-start;
+        sample->add_steps(cpu.instructions-before,0);
+        sample->record(BootTimePart::Scalar,elapsed);
+        if(cpu.instructions!=before)
+          boot_regions_->observe_region(mode,cs,ip,std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+      } else {
+        r=cpu.step();
+      }
       const auto elapsed_ns=time_step?std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now()-step_start).count():0;
       const auto steps=cpu.instructions-before;
@@ -250,10 +288,11 @@ class PcMachine {
       if((r==StepResult::Halted||r==StepResult::WaitingForX87)&&!device_step_hook)break;
     }
     if(boot_acceleration_enabled_&&cpu.instructions>=next_ram_compaction_) {
+      const BootTiming::Scope compaction_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Compaction);
       cpu.memory.compact_repeating_pages(256);
       next_ram_compaction_=cpu.instructions+kRamCompactionInterval;
     }
-    if(boot_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
+    if(boot_scalar_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
   }
   void key(std::uint8_t ascii, std::uint8_t scan) { key_event(ascii, scan, true); }
   void key_event(std::uint8_t ascii, unsigned scan, bool pressed) {
@@ -515,6 +554,8 @@ class PcMachine {
   bool boot_acceleration_enabled_=false;
   std::optional<BootHotspots> boot_hotspots_;
   std::optional<BootHotspots> boot_scalar_hotspots_;
+  std::optional<BootTiming> boot_timing_;
+  std::optional<BootHotspots> boot_regions_;
   static constexpr std::uint64_t kRamCompactionInterval=32768;
   std::uint64_t next_ram_compaction_=kRamCompactionInterval;
   unsigned run_boot_batch(unsigned limit) {

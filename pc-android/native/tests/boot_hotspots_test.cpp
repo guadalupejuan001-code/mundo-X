@@ -91,6 +91,27 @@ void bounded_hotspots() {
   expect(entries == 8, "hotspot report must stay bounded to 8 entries");
 }
 
+void bounded_regions() {
+  BootHotspots profile(true, true);
+  for (unsigned i = 0; i < 128; ++i) profile.observe_region("long64", 16, 64 * i, 10);
+  profile.observe_region("long64", 16, 8192, 40);
+  profile.observe_region("long64", 16, 8255, 30);
+  profile.observe_region("protected32", 16, 8192, 5);
+  profile.observe_region("long64", 16, 8255, 0);
+  const auto report = json(profile);
+  expect(report.find("\"samples\":132,\"attributed_samples\":132,\"region_bytes\":64,"
+                     "\"tracked_regions\":128,\"unlisted_upper_bound_ns\":10,\"sampled_step_ns\":1355") !=
+             std::string::npos, "region count, sample weight or omitted bound is wrong");
+  expect(report.find("\"hotspots\":[{\"mode\":\"long64\",\"cs\":16,\"ip\":8192,"
+                     "\"cs_hex\":\"0010\",\"ip_hex\":\"0000000000002000\",\"estimated_sample_ns\":80,"
+                     "\"max_error_ns\":10,\"lower_bound_ns\":70}") != std::string::npos,
+         "two addresses in one region should retain their total device-independent weight");
+  expect(report.find("\"mode\":\"protected32\",\"cs\":16,\"ip\":8192") != std::string::npos,
+         "code regions in different CPU modes must stay distinct");
+  profile.reset();
+  expect(json(profile) == json(BootHotspots(true, true)), "reset left stale regional samples");
+}
+
 void guest_boot() {
   cosmic_pc::PcMachine pc;
   std::array<std::uint8_t, 512> disk{};
@@ -133,11 +154,28 @@ void guest_boot() {
   pc.reset();
   expect(json(*pc.boot_hotspots()) == json(BootHotspots{}), "guest reset must clear previous boot samples");
   pc.enable_boot_acceleration();
+  expect(!pc.boot_timing() && !pc.boot_regions(), "timed profiling must be opt-in on core PcMachine");
+  pc.enable_boot_timing();
   expect(without_elapsed(execute_guest()) == without_elapsed(report),
          "accelerated guest should report the same logical hotspots as the interpreter");
   expect(pc.boot_acceleration().rep_elements > 60'000, "test did not exercise the REP batch path");
+  const auto& timing = pc.boot_timing()->counters();
+  expect(timing.batched_steps > 0 && timing.ns(cosmic_pc::BootTimePart::BatchExecute) > 0,
+         "sampled initial REP batch was not measured");
+  pc.reset();
+  expect(pc.boot_timing()->counters().iterations == 0 &&
+             json(*pc.boot_regions()) == json(BootHotspots(true, true)),
+         "guest reset left stale timing and region data");
+  pc.enable_boot_timing(false);
+  expect(!pc.boot_timing() && !pc.boot_regions(), "timed profiling did not switch off");
   pc.enable_boot_hotspots(false);
   expect(!pc.boot_hotspots(), "disabling profiling should restore the uninstrumented configuration");
+  pc.enable_boot_hotspots(true, false);
+  expect(without_elapsed(execute_guest()) == without_elapsed(report),
+         "count-only sampling changed guest progress or logical hotspots");
+  expect(pc.boot_hotspots() && !pc.boot_scalar_hotspots() && !pc.boot_timing() &&
+          json(*pc.boot_hotspots()).find("\"execution_us\":0") != std::string::npos,
+         "count-only sampling must keep batch boundaries without running legacy clocks");
 }
 
 void shift_loop_boot() {
@@ -192,10 +230,11 @@ int main() {
   try {
     sampling_and_bulk();
     bounded_hotspots();
+    bounded_regions();
     guest_boot();
     shift_loop_boot();
     std::cout << "BOOT_HOTSPOTS_PASS jittered=1 bulk_equivalent=1 bounded_top=8 guest_boot=1"
-                 " shift_loop=1 bit_scan=1\n";
+                 " shift_loop=1 bit_scan=1 weighted_regions=1 timed_batch=1\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "BOOT_HOTSPOTS_FAIL " << error.what() << '\n';
