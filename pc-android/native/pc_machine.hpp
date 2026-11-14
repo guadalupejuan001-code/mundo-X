@@ -67,6 +67,11 @@ class PcMachine {
   bool waiting_key=false;
   std::string host_error, boot_kind="none", pending;
   std::uint64_t disk_reads=0;
+  struct BootMediaReadStats {
+    std::uint64_t bytes=0,bulk_copies=0;
+    std::chrono::nanoseconds backend{},guest_ram{};
+  };
+  const BootMediaReadStats& boot_media_reads() const noexcept { return boot_media_reads_; }
   struct BootAcceleration {
     std::uint64_t batches=0, rep_elements=0, bytes=0;
     std::uint64_t paged_rep_elements=0;
@@ -200,6 +205,7 @@ class PcMachine {
     bios_clock_days_=0;
     boot_mode_progress_={};
     boot_acceleration_={};
+    boot_media_reads_={};
     if(boot_hotspots_)boot_hotspots_->reset();
     if(boot_scalar_hotspots_)boot_scalar_hotspots_->reset();
     if(boot_timing_)boot_timing_->reset();
@@ -571,6 +577,8 @@ class PcMachine {
   GuestRestart guest_restart_=GuestRestart::None;
   BootModeProgress boot_mode_progress_;
   BootAcceleration boot_acceleration_;
+  BootMediaReadStats boot_media_reads_;
+  std::vector<std::uint8_t> boot_media_buffer_;
   bool boot_acceleration_enabled_=false;
   std::optional<BootHotspots> boot_hotspots_;
   std::optional<BootHotspots> boot_scalar_hotspots_;
@@ -703,9 +711,17 @@ class PcMachine {
     if(!reader_||count==0||count>127)return false;
     const auto sector=std::uint64_t(plan_.logical_sector_size), n=sector*count;
     if(lba>media_bytes_/sector||n>media_bytes_-lba*sector||dest>cpu.memory.size()||n>cpu.memory.size()-dest)return false;
-    std::vector<std::uint8_t> tmp(static_cast<std::size_t>(n));
-    if(!reader_(lba*sector,tmp.data(),tmp.size()))return false;
-    for(std::size_t i=0;i<tmp.size();++i)cpu.write8(dest+i,tmp[i]);
+    boot_media_buffer_.resize(static_cast<std::size_t>(n));
+    auto started=std::chrono::steady_clock::now();
+    const auto ok=reader_(lba*sector,boot_media_buffer_.data(),boot_media_buffer_.size());
+    boot_media_reads_.backend+=std::chrono::steady_clock::now()-started;
+    if(!ok)return false;
+    started=std::chrono::steady_clock::now();
+    if(cpu.try_write_ram_block(dest,boot_media_buffer_.data(),static_cast<unsigned>(n)))
+      ++boot_media_reads_.bulk_copies;
+    else for(std::size_t i=0;i<boot_media_buffer_.size();++i)cpu.write8(dest+i,boot_media_buffer_[i]);
+    boot_media_reads_.guest_ram+=std::chrono::steady_clock::now()-started;
+    boot_media_reads_.bytes+=n;
     ++disk_reads;return true;
   }
   void disk_bios(){
