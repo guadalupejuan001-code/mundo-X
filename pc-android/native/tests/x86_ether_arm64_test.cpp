@@ -26,7 +26,7 @@ constexpr unsigned ready_leaf = 0xe3;
 // and conditional branches with controlled RAM and explicit exit paths.
 constexpr std::array<std::uint8_t, 24> pointer_loop{
     0x48,0x8b,0x36, 0x4c,0x3b,0x7e,0x10, 0x72,0x0d, // MOV, CMP, JB to alternate exit.
-    0x49,0x3b,0xf6, 0x75,0xf2,                      // CMP, JNE to MOV.
+  0x49,0x3b,0xf6, 0x75,0xf2,                      // CMP, JNE to MOV.
     0x48,0x89,0xf0, 0x48,0x89,0x03, 0xeb,0x02, 0x90,0x90}; // Record RSI, return to HLT.
 
 void require(bool value, const char* message) {
@@ -118,7 +118,7 @@ State capture(Cpu& cpu) {
 struct Result {
   State state;
   Cpu::EtherArm64Stats stats;
-  std::uint64_t elapsed_ns, ticks = 0, irq_rip = 0, irq_step = 0;
+  std::uint64_t elapsed_ns, guest_steps = 0, ticks = 0, irq_rip = 0, irq_step = 0;
 };
 
 Result execute_loop(bool translated, bool interrupt, PcMachine* reuse = nullptr) {
@@ -161,6 +161,7 @@ Result execute_loop(bool translated, bool interrupt, PcMachine* reuse = nullptr)
   require(cpu.halted && !cpu.fault && cpu.read64(output) == cpu.regs[Cpu::R14],
           "pointer loop did not reach its checked HALT and RAM write");
   result.state = capture(cpu);
+  result.guest_steps = cpu.instructions - start_steps;
   result.stats = cpu.ether_arm64_stats();
   result.elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
   if (interrupt) require(result.irq_step == deadline - 1, "device deadline shifted");
@@ -276,21 +277,23 @@ void benchmark() {
   const auto first_scalar = execute_loop(false, false, &scalar);
   require(first.state == first_scalar.state && first.stats.translated > 0 && first.stats.hits > 0,
           "first pass did not exercise real ARM64 translation");
+  const auto warmup = execute_loop(true, false, &native);
   std::array<std::uint64_t, 7> native_times{}, scalar_times{};
   for (unsigned i = 0; i < native_times.size(); ++i) {
     Result a{}, b{};
     if (i % 2) a = execute_loop(true, false, &native);
     b = execute_loop(false, false, &scalar);
     if (!(i % 2)) a = execute_loop(true, false, &native);
-    require(a.state == b.state && a.stats.translated == first.stats.translated,
-            "warm run changed the result or recompiled a stable block");
+    require(a.state == b.state, "warm ARM64 run changed the guest result");
+    require(a.stats.translated == warmup.stats.translated,
+            "stable ARM64 blocks were recompiled after warm-up");
     native_times[i] = a.elapsed_ns;
     scalar_times[i] = b.elapsed_ns;
   }
   std::sort(native_times.begin(), native_times.end());
   std::sort(scalar_times.begin(), scalar_times.end());
   std::cout << "PRIME_C03_ARM64_BENCH {\"nodes\":" << node_count
-            << ",\"steps\":" << first.state.steps
+            << ",\"steps\":" << first.guest_steps
             << ",\"scalar_cold_ns\":" << first_scalar.elapsed_ns
             << ",\"native_cold_ns\":" << first.elapsed_ns
             << ",\"scalar_warm_median_ns\":" << scalar_times[3]

@@ -20,7 +20,13 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
 
   try {
     const auto physical = translate(eip, Access::Execute, nullptr, true);
-    if (!bulk_ram_range(physical, width)) return 0;
+    if (!bulk_ram_range(physical, width)) {
+      if (entry.code) {
+        ++ether_arm64_stats_.invalidated;
+        entry.invalidate(eip);
+      }
+      return 0;
+    }
     std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> actual;
     const auto length = entry.checked_bytes ? entry.checked_bytes : width;
     memory.read_block(physical, actual.data(), length);
@@ -79,6 +85,10 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
   } catch (const std::exception&) {
     // Speculative walks never set A/D bits or access an I/O provider.
     // Preserve the original scalar path for the first architectural fault.
+    if (entry.code) {
+      ++ether_arm64_stats_.invalidated;
+      entry.invalidate(eip);
+    }
     return 0;
   }
 #else
