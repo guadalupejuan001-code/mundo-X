@@ -55,6 +55,8 @@ class PcMachine {
   static constexpr std::uint64_t kMaxPhysicalBytes = 1ULL << 32;
   static constexpr std::uint64_t kIoApicAddress = 0xfec00000ULL;
   static constexpr std::uint64_t kLocalApicAddress = Cpu::kLocalApicAddress;
+  static constexpr std::uint32_t kVirtualCyclesPerSecond = 3579545;
+  static constexpr unsigned kPitClockDivider = 3; // Both timers derive from the same oscillator.
   static constexpr std::uint64_t max_ram_mib() noexcept {
     return std::min<std::uint64_t>(kMaxPhysicalBytes, std::numeric_limits<std::size_t>::max()) >> 20;
   }
@@ -107,9 +109,13 @@ class PcMachine {
   // transition. The advance callback receives only the additional steps.
   std::function<unsigned(unsigned)> device_batch_limit_hook;
   std::function<void(unsigned)> device_batch_advance_hook;
+  // Same clock budget as run(). Can skip idle cycles preceding a device edge.
+  std::function<unsigned(unsigned)> device_idle_advance_hook;
   // Invoked only after reset finished reloading RAM, boot sector and BIOS BDA.
   // A motherboard can then restore ACPI tables and power-on device registers.
   std::function<void()> device_reset_hook;
+  // A device can stop the current slice at an instruction boundary.
+  void power_off() noexcept { powered_off_ = true; }
   // The hooks capture this address; instances must remain at a stable address.
   PcMachine(const PcMachine&)=delete;
   PcMachine& operator=(const PcMachine&)=delete;
@@ -190,6 +196,8 @@ class PcMachine {
     quantum_cache_valid_=false;
     host_error.clear();pending.clear();waiting_key=false;disk_reads=0;last_disk_status_=0;
     guest_restart_=GuestRestart::None;
+    powered_off_=false;
+    bios_clock_days_=0;
     boot_mode_progress_={};
     boot_acceleration_={};
     if(boot_hotspots_)boot_hotspots_->reset();
@@ -210,10 +218,11 @@ class PcMachine {
     cpu.write16(0x410,0x0020);cpu.write16(0x413,640);cpu.write8(0x449,3);cpu.write16(0x44a,80);cpu.write16(0x44c,4000);
     PcBiosKeyboard::reset(cpu);
     sync_bios_font_geometry();video_.install_font_vectors(cpu);
-    sync_bios_hard_disk_count();clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
+    sync_bios_hard_disk_count();clear_screen();if(device_reset_hook)device_reset_hook();
   }
   void run(unsigned budget) {
-    if(!reader_||!host_error.empty()||waiting_key||cpu.fault||guest_restart_!=GuestRestart::None)return;
+    if(!reader_||!host_error.empty()||waiting_key||cpu.fault||powered_off_||
+       guest_restart_!=GuestRestart::None)return;
     if(cpu.halted&&!device_step_hook)return;
     budget=std::min(budget,50000u);
     const BootTiming::Scope run_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Run);
@@ -248,7 +257,6 @@ class PcMachine {
       const auto ip=cpu.eip;
       const auto* mode=last_mode;
       const auto before=cpu.instructions;
-      if(cpu.halted)cpu.advance_halted_clock();
       if(boot_acceleration_enabled_&&budget-i>1) {
         const auto batch_start=sample ? BootTiming::Clock::now() : BootTiming::Clock::time_point{};
         const auto completed=run_boot_batch(budget-i);
@@ -275,6 +283,15 @@ class PcMachine {
       } else {
         r=cpu.step();
       }
+      if(device_step_hook && (r==StepResult::Halted||r==StepResult::WaitingForX87) &&
+         cpu.instructions==before){
+        const auto remaining=budget-i-1;
+        const auto extra=boot_acceleration_enabled_&&device_idle_advance_hook&&!sample&&
+                         !cpu.step_trace_hook&&!cpu.irq_trace_hook&&r==StepResult::Halted&&remaining
+            ? device_idle_advance_hook(remaining):0;
+        cpu.advance_idle_clock(1+extra);
+        i+=extra;
+      }
       const auto elapsed_ns=time_step?std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now()-step_start).count():0;
       const auto steps=cpu.instructions-before;
@@ -285,7 +302,7 @@ class PcMachine {
       ++i;
       observe_mode();
       if(r==StepResult::Faulted){guest_restart_=GuestRestart::None;pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
-      if(guest_restart_!=GuestRestart::None)break;
+      if(guest_restart_!=GuestRestart::None||powered_off_)break;
       if((r==StepResult::Halted||r==StepResult::WaitingForX87)&&!device_step_hook)break;
     }
     if(boot_acceleration_enabled_&&cpu.instructions>=next_ram_compaction_) {
@@ -463,6 +480,7 @@ class PcMachine {
   }
   std::string status() const {
     if(!host_error.empty()||cpu.fault)return "fault";
+    if(powered_off_)return "powered_off";
     if(!reader_)return "empty";
     if(waiting_key)return "waiting_key";
     if(cpu.halted)return "halted";
@@ -611,7 +629,8 @@ class PcMachine {
   BootPlan plan_{};
   unsigned row_=0,col_=0;
   std::uint8_t last_disk_status_=0,video_mode_=3,pic1_=0xff,pic2_=0xff,cmos_index_=0;
-  std::chrono::steady_clock::time_point started_=std::chrono::steady_clock::now();
+  std::uint64_t bios_clock_days_=0;
+  bool powered_off_=false;
   static constexpr std::uint32_t CF=1,ZF=64;
   std::uint8_t lo(unsigned r)const{return cpu.regs[r]&255;}
   std::uint8_t hi(unsigned r)const{return(cpu.regs[r]>>8)&255;}
@@ -897,7 +916,18 @@ class PcMachine {
       case 0x13:disk_bios();return true;
       case 0x15:memory_bios();return true;
       case 0x16:keyboard_bios();return true;
-      case 0x1a:if(hi(0)==0){const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started_).count();const std::uint32_t ticks=ms*182/10000;cpu.set_reg16(1,ticks>>16);cpu.set_reg16(2,ticks&0xffff);low(0,0);carry(false);return true;}carry(true);return true;
+      case 0x1a:
+        if(hi(0)==0){
+          constexpr std::uint32_t ticks_per_day=0x1800b0;
+          const auto total=cpu.clock_cycles()/(kPitClockDivider*65536U);
+          const auto ticks=std::uint32_t(total%ticks_per_day);
+          const auto days=total/ticks_per_day;
+          cpu.set_reg16(1,ticks>>16);cpu.set_reg16(2,ticks&0xffff);
+          low(0,std::uint8_t(std::min<std::uint64_t>(days-bios_clock_days_,255)));
+          bios_clock_days_=days;
+          carry(false);
+        }else carry(true);
+        return true;
       case 0x18:missing("BIOS: el invitado no encontró un sistema arrancable (INT 18h)");
       case 0x19:
         if(!guest_restart_enabled_)
