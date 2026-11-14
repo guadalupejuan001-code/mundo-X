@@ -60,6 +60,52 @@ void run_demo(PcMachine& pc, unsigned width, unsigned height) {
   need(pc.cpu.read32(cosmic_pc::kGraphicsDemoResultAddress) == cosmic_pc::kGraphicsDemoResult,
        "Guest did not verify its own framebuffer pixels");
 }
+void font_information(PcMachine& pc) {
+  call(pc, 0x4f02, 0x4142);
+  need(pc.video_info().graphics && pc.video_info().width == 1024 && pc.video_info().height == 768,
+       "font query fixture must select the mode observed in the boot report");
+  auto& cpu = pc.cpu;
+  cpu.write32(PcVideo::kFramebufferAddress, 0x11223344);
+  const auto query = [&](std::uint8_t selector) {
+    // Replay the real-mode INT at CS:IP 2000:0a0f followed by HLT.
+    constexpr std::array<std::uint8_t, 3> code{0xcd, 0x10, 0xf4};
+    cpu.reset(0x2000, 0x0a0f);
+    cpu.a20_enabled = true;
+    cpu.memory.write_block(0x20a0f, code.data(), code.size());
+    cpu.set_reg16(Cpu::EAX, 0x1130);
+    cpu.set_reg16(Cpu::EBX, std::uint16_t(selector) << 8);
+    cpu.regs[Cpu::EBP] = 0x12340000;
+    cpu.regs[Cpu::EDX] = 0x9abcde00;
+    cpu.eflags = 0x256;
+    pc.run(3);
+    need(cpu.halted && !cpu.fault && cpu.eip == 0x0a12, "INT 10h 1130 did not return");
+    need(cpu.reg16(Cpu::EAX) == 0x1130 && cpu.reg16(Cpu::EBX) == (selector << 8) &&
+             cpu.eflags == 0x256 && (cpu.regs[Cpu::EBP] >> 16) == 0x1234,
+         "FONT INFO must preserve flags, AX, BX and the high half of EBP");
+    return cpu.real_mode_segment_address(Cpu::ES, cpu.reg16(Cpu::EBP));
+  };
+  const auto fourteen = query(2);
+  need(cpu.reg16(Cpu::ECX) == 16 && cpu.regs[Cpu::EDX] == 0x9abcde2f,
+       "CX and DL report the active character geometry, not the requested bitmap height");
+  need(fourteen >= PcVideo::kBiosTablesAddress && fourteen + 256 * 14 <= 0xd0000 &&
+           cpu.read8(fourteen + 0xdb * 14 + 13) == 0xff,
+       "BH=02h must return a usable full 8x14 CP437 bitmap");
+  for (unsigned row = 0; row < 14; ++row)
+    need(cpu.read8(fourteen + 'A' * 14 + row) == cosmic_pc::kBiosFont16['A' * 16 + (2 * row + 1) * 16 / 28],
+         "FONT INFO returned the wrong glyph scanline");
+  const auto eight = query(3);
+  need(query(4) == eight + 128 * 8 && query(0) == eight + 128 * 8,
+       "8x8 high-half pointer and BIOS font vector must agree");
+  const auto sixteen = query(6);
+  need(query(1) == sixteen, "active font vector must describe the selected 8x16 cells");
+  cpu.write32(0x43 * 4, 0x30000120);
+  need(query(1) == 0x30120, "FONT INFO must read the guest's current INT 43 pointer");
+  need(pc.video_info().mode == 0x142 && cpu.read32(PcVideo::kFramebufferAddress) == 0x11223344,
+       "FONT INFO must preserve the framebuffer and video mode");
+  call(pc, 0x0003);
+  need(query(2) == fourteen && cpu.reg16(Cpu::ECX) == 16 && cpu.reg8(Cpu::EDX) == 24,
+       "VGA text mode must restore the 25-row BIOS geometry");
+}
 void write_string(PcMachine& pc) {
   call(pc,0x0003);
   const auto cell=[&](unsigned row,unsigned column){return pc.cpu.read16(0xb8000+(row*80+column)*2);};
@@ -119,6 +165,7 @@ int main() {
     pc.boot_demo();
     need(!pc.video_info().graphics && pc.video_info().width == 80 && pc.video_info().height == 25,
          "Initial mode must retain VGA text geometry");
+    font_information(pc);
 
     // VBE2 requests receive 512 bytes; legacy callers receive exactly 256.
     pc.cpu.memory.fill(0x9000, 0xa5, 520);

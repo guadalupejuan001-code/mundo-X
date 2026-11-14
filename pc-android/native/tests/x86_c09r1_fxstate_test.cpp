@@ -312,10 +312,10 @@ void long64_fxstate(){
   cpu.memory.fill(0x15000,0x77,64);
   const auto walks=cpu.page_walks;
   check(run64({0x0f,0xae,0x04,0x25,0x40,0xfe,0,0})==StepResult::Executed&&
-        cpu.page_walks-walks==legacy.size()+2&&cpu.read16(0x12e40)==cpu.fpu_control&&
+        cpu.page_walks-walks==3&&cpu.read16(0x12e40)==cpu.fpu_control&&
         cpu.read8(0x15000+15)==0&&
         cpu.read8(0x15000+16)==0x77&&cpu.read8(0x15000+63)==0x77,
-        "Cross-page FX save must use two data walks and leave software-owned bytes untouched");
+        "Cross-page FX save must use one code and two data walks, preserving software-owned bytes");
   std::cout<<"C09R1_FXSAVE64_XMM15_CONTEXT_PASS xmm16=1\n";
 }
 void two_contexts_fxstate(){

@@ -183,7 +183,8 @@ class PcMachine {
     cpu.memory.write_block(std::size_t(plan_.load_segment)*16,plan_.image.data(),plan_.image.size());
     // BIOS data area: video mode 3, 80 columns, page0, conventional RAM.
     cpu.write16(0x410,0x0020);cpu.write16(0x413,640);cpu.write8(0x449,3);cpu.write16(0x44a,80);cpu.write16(0x44c,4000);
-    cpu.write8(0x484,24);sync_bios_hard_disk_count();clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
+    sync_bios_font_geometry();video_.install_font_vectors(cpu);
+    sync_bios_hard_disk_count();clear_screen();started_=std::chrono::steady_clock::now();if(device_reset_hook)device_reset_hook();
   }
   void run(unsigned budget) {
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault||guest_restart_!=GuestRestart::None)return;
@@ -428,7 +429,7 @@ class PcMachine {
      <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\""
      <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
      <<",\"engine\":\"cosmic-pc-own-x86\""
-     <<",\"page_walks\":"<<cpu.page_walks;
+     <<",\"page_walks\":"<<cpu.page_walks<<",\"instruction_page_hits\":"<<cpu.instruction_page_hits;
     if(cpu.fault) {
       o<<",\"fault_context\":{\"cpl\":"<<cpu.cpl()
        <<",\"ss\":"<<cpu.segments[Cpu::SS]
@@ -667,14 +668,17 @@ class PcMachine {
         set_bios_text_mode(mode,request&0x8000);
         cpu.set_reg16(0,0x004f);return;
       }
-      // Any successful VBE call in graphics mode updates the BIOS data
-      // area. Make that page resident before publishing frame state.
-      if(cpu.memory.has_page_backing()&&PcVideo::available(cpu.memory)&&
-         (video_.info().graphics||cpu.reg16(0)==0x4f02))cpu.memory.prepare_write(0x449,1);
+      const bool set_mode=cpu.reg16(0)==0x4f02;
+      // Reserve the BDA page before a VBE mode change publishes new geometry.
+      if(set_mode&&cpu.memory.has_page_backing()&&PcVideo::available(cpu.memory))
+        cpu.memory.prepare_write(0x449,1);
       video_.bios(cpu);
-      if(cpu.reg16(0)==0x004f&&video_.info().graphics){video_mode_=0xff;cpu.write8(0x449,0xff);}
+      if(set_mode&&cpu.reg16(0)==0x004f&&video_.info().graphics){
+        video_mode_=0xff;cpu.write8(0x449,0xff);sync_bios_font_geometry();
+      }
       return;
     }
+    if(cpu.reg16(Cpu::EAX)==0x1130&&video_.bios_font_info(cpu))return;
     if(fn==0x0e){emit(lo(0));return;}
     if(fn==0x13){video_write_string();return;}
     if(fn==1)return; // Cursor shape has no semantic effect on the text framebuffer.
@@ -700,7 +704,14 @@ class PcMachine {
     cpu.write8(0x449,mode);
     video_mode_=mode;
     video_.text_mode(mode,preserve);
+    sync_bios_font_geometry();
     if(!preserve)clear_screen();
+  }
+  void sync_bios_font_geometry(){
+    const auto info=video_.info();
+    const auto rows=info.graphics?info.height/PcVideo::kBiosFontHeight:info.height;
+    cpu.write8(0x484,std::uint8_t(std::min(rows-1,255U)));
+    cpu.write16(0x485,PcVideo::kBiosFontHeight);
   }
   struct BiosMemoryRegion { std::uint64_t base, length; std::uint32_t type; };
   struct BiosMemoryMap {

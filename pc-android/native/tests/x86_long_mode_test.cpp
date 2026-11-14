@@ -413,6 +413,41 @@ void signed_multiply_boundaries() {
   }
 }
 
+void instruction_page_fetch() {
+  Cpu cpu; boot(cpu);
+  cpu.idtr = {0, 0};
+  for (unsigned i = 0; i < 512; ++i) cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
+  cpu.write64(0x3000, 0x4003);
+  cpu.write64(0x4000 + 11 * 8, 0xd003);
+  cpu.write8(0xd000, 0xc0);
+  program(cpu, {0x0f,0x1f}, 0xaffe);
+  cpu.page_walks = cpu.instruction_page_hits = 0;
+  one(cpu);
+  check(cpu.eip == 0xb001 && cpu.page_walks == 2 && cpu.instruction_page_hits == 1,
+        "a cross-page NOP must follow two mappings without fetching extra bytes");
+
+  cpu.write64(0x4000 + 11 * 8, 0);
+  cpu.eip = 0xaffe;
+  expect_fault(cpu, FaultCode::PageFault, "the same NOP must see a guest page-table write");
+  check(cpu.cr2 == 0xb000 && cpu.fault->error_code == 16,
+        "missing continuation page must keep the exact execute fault");
+
+  program(cpu, {0x66,0x0f,0x1f,0xc0,0xf4});
+  cpu.mmio_claim_hook = [](std::uint64_t address) { return address == 0xa001; };
+  cpu.mmio_range_claim_hook = [](std::uint64_t address, std::size_t count) {
+    return address <= 0xa001 && 0xa001 - address < count;
+  };
+  unsigned reads = 0;
+  cpu.mmio_read_hook = [&](std::uint64_t) -> std::optional<std::uint8_t> {
+    ++reads;
+    return 0x0f;
+  };
+  cpu.page_walks = cpu.instruction_page_hits = 0;
+  one(cpu);
+  check(cpu.eip == 0xa004 && reads == 1 && cpu.page_walks == 4 && !cpu.instruction_page_hits,
+        "instruction fetch on a device page must use exact byte callbacks");
+}
+
 void paging_and_fault_tests() {
   Cpu cpu; boot(cpu);
   // Replace the large identity page by a genuine 4-KiB page table. Data virtual
@@ -423,13 +458,13 @@ void paging_and_fault_tests() {
   program(cpu, {0x48,0x8b,0x03,0xf4}); cpu.regs[Cpu::EBX] = 0xb000;
   cpu.page_walks=0; one(cpu);
   check(cpu.regs[Cpu::EAX] == 0x876543219abcdef0ULL, "four-level4KiB translation reads remapped data");
-  check(cpu.page_walks==4,
-        "MOV r64,[mem] must walk three instruction bytes plus one data page, not eight data bytes");
+  check(cpu.page_walks==2,
+        "MOV r64,[mem] must walk one instruction page and one data page");
   one(cpu);
   program(cpu, {0x48,0x89,0x03,0xf4}); cpu.regs[Cpu::EAX] = 0xfedcba9876543210ULL;
   cpu.page_walks=0; one(cpu);
-  check(cpu.page_walks==4,
-        "MOV [mem],r64 must walk three instruction bytes plus one writable data page");
+  check(cpu.page_walks==2,
+        "MOV [mem],r64 must walk one instruction page and one writable data page");
   one(cpu);
   check(cpu.read64(0xd000) == 0xfedcba9876543210ULL && cpu.read64(0xb000) == 0x1111111111111111ULL,
         "four-level4KiB translation writes the remapped physical frame");
@@ -617,7 +652,8 @@ int main() {
     boot_and_register_tests(); multibyte_nops(); addressing_stack_and_alu_tests();
     enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
-    signed_multiply_boundaries(); paging_and_fault_tests(); conditional_moves(); implicit_arithmetic64();
+    signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
+    conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;
   } catch (const std::exception& e) {

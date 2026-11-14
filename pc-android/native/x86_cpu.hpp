@@ -147,6 +147,7 @@ class Cpu {
   // Diagnostic counter: one increment per actual IA-32e page-table walk.
   // Used to prove that multi-byte accesses do not repeat the same walk.
   std::uint64_t page_walks = 0;
+  std::uint64_t instruction_page_hits = 0;
 
   struct StepTrace {
     std::uint64_t sequence=0, rip_before=0, rip_after=0;
@@ -216,6 +217,8 @@ class Cpu {
     interrupt_shadow_ = false;
     last_rep_batch_bytes_ = 0;
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
+    instruction_page_ = {};
+    instruction_page_hits = 0;
     transaction_ = false; journal_.clear(); decoded_.clear();
   }
   // This CPU asserts FERR# as soon as the unmasked condition is pending.
@@ -276,6 +279,11 @@ class Cpu {
   bool is_real_mode() const { return !(cr0 & 1); }
   std::uint32_t real_mode_segment_address(unsigned segment, std::uint16_t offset) const {
     return std::uint32_t(segment_linear(segment, offset, 1, Access::Read));
+  }
+  void load_real_data_segment(unsigned segment, std::uint16_t selector) {
+    if (!is_real_mode() || segment >= segments.size() || segment == CS)
+      fail("BIOS data segment requires real mode", FaultCode::InvalidInstruction);
+    reload_real_segment(segment, selector);
   }
   unsigned cpl() const {
     return is_real_mode() || cache_[CS].inherited_from_real_mode
@@ -600,6 +608,11 @@ class Cpu {
   std::uint8_t repeat_ = 0;
   std::uint16_t start_cs_ = 0, opcode_ = 0;
   std::uint64_t start_ip_ = 0, cursor_ = 0;
+  struct InstructionPage {
+    std::uint64_t linear = 0, physical = 0;
+    bool reusable = false;
+  };
+  InstructionPage instruction_page_;
   static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
   static constexpr std::uint64_t kTscTicksPerStep = 64;
   std::uint64_t tsc_offset_ = 0;
@@ -665,6 +678,17 @@ class Cpu {
     if (mmio_claim_hook && (!mmio_range_claim_hook || mmio_range_claim_hook(bus, bytes))) return false;
     return !(memory.has_window() && bus < memory.window_base() + memory.window_bytes() &&
              memory.window_base() < bus + bytes);
+  }
+  std::uint64_t read_page_entry(std::uint64_t address, bool& ordinary_ram) const {
+    if (bulk_ram_range(address, 8)) {
+      std::array<std::uint8_t, 8> bytes;
+      memory.read_block(bus_address(address), bytes.data(), bytes.size());
+      std::uint64_t value = 0;
+      for (unsigned i = 0; i < bytes.size(); ++i) value |= std::uint64_t(bytes[i]) << (8 * i);
+      return value;
+    }
+    ordinary_ram = false;
+    return read64(address);
   }
   std::size_t physical_index(std::uint64_t address) const {
     const std::uint64_t bus = bus_address(address);
@@ -761,7 +785,7 @@ class Cpu {
       fail("protected-mode segment access denied", FaultCode::ProtectionFault);
     return std::uint32_t(cache.base + offset);
   }
-  std::uint64_t translate(std::uint64_t address, Access access);
+  std::uint64_t translate(std::uint64_t address, Access access, bool* ordinary_ram = nullptr);
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
     if (bytes == 0 || bytes > 8 || address > UINT64_MAX - (bytes - 1))
       fail("invalid linear read width", FaultCode::InvalidInstruction);
@@ -769,9 +793,7 @@ class Cpu {
     unsigned done = 0;
     while (done < bytes) {
       const auto linear = address + done;
-      // One page-table walk validates the whole contiguous remainder of this
-      // 4-KiB page. No persistent TLB is kept, so guest page-table writes
-      // cannot leave stale translations behind.
+      // One page-table walk validates the contiguous remainder of this page.
       const auto physical = translate(linear, access);
       const unsigned chunk = std::min<unsigned>(bytes - done, 0x1000U - unsigned(linear & 0xfffU));
       for (unsigned i = 0; i < chunk; ++i)
@@ -830,7 +852,23 @@ class Cpu {
   }
   std::uint8_t fetch8() {
     if (decoded_.size() >= 15) fail("instruction exceeds 15 bytes", FaultCode::InvalidInstruction);
-    const auto value = std::uint8_t(read_segment(CS, cursor_, 1, Access::Execute));
+    const auto linear = segment_linear(CS, cursor_, 1, Access::Execute);
+    auto physical = linear;
+    if (cr0 & 0x80000000U) {
+      const auto page = linear & ~std::uint64_t{0xfff};
+      if (!decoded_.empty() && instruction_page_.reusable && instruction_page_.linear == page) {
+        physical = instruction_page_.physical | (linear & 0xfffU);
+        ++instruction_page_hits;
+      } else {
+        bool ordinary_ram;
+        physical = translate(linear, Access::Execute, &ordinary_ram);
+        // The first byte always revalidates the mapping. Ordinary code and
+        // paging RAM cannot change during decode; physical I/O stays scalar.
+        instruction_page_ = {page, physical & ~std::uint64_t{0xfff},
+                             ordinary_ram && bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096)};
+      }
+    }
+    const auto value = read8(physical);
     ++cursor_; decoded_.push_back(value);
     return value;
   }
@@ -2840,7 +2878,8 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
   throw trap;
 }
 
-inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
+inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* ordinary_ram) {
+  if (ordinary_ram) *ordinary_ram = false;
   if (!(cr0 & 0x80000000U)) return address;
   ++page_walks;
   if (!(efer & 0x400) || !(cr4 & 0x20))
@@ -2848,12 +2887,13 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
   if (!canonical(address)) fail("non-canonical page-walk address", FaultCode::ProtectionFault);
   constexpr std::uint64_t address_mask = 0x000ffffffffff000ULL;
   std::uint64_t table = cr3 & address_mask;
+  bool ordinary_entries = true;
   bool writable = true, executable = true, user_access = true;
   const bool user_mode = cpl() == 3 && !supervisor_internal_;
   for (unsigned level = 4; level != 0; --level) {
     const unsigned shift = 12 + 9 * (level - 1);
     const auto entry_address = table + (((address >> shift) & 0x1ffU) * 8);
-    const auto entry = read64(entry_address);
+    const auto entry = read_page_entry(entry_address, ordinary_entries);
     if (!(entry & 1)) page_fault(address, access, false, false, "page-table entry is not present");
     if ((entry >> 63) && !(efer & 0x800))
       page_fault(address, access, true, true, "NX bit is reserved while EFER.NXE is clear");
@@ -2869,6 +2909,7 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access) {
     executable = executable && !(entry >> 63);
     const bool leaf = level == 1 || large;
     if (leaf) {
+      if (ordinary_ram) *ordinary_ram = ordinary_entries;
       if (user_mode && !user_access)
         page_fault(address, access, true, false, "CPL3 access denied by U/S page permissions");
       if (access == Access::Write && !writable && (user_mode || (cr0 & 0x10000U)))
