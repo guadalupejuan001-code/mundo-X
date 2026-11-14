@@ -247,7 +247,7 @@ class Cpu {
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     system_call_msrs_ = {};
     tsc_offset_ = 0;
-    halted_clock_steps_ = 0;
+    idle_clock_steps_ = 0;
     apic_task_priority_ = 0;
     apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
@@ -281,8 +281,10 @@ class Cpu {
   bool apic_global_enabled() const noexcept { return (apic_base_ & kApicEnable) != 0; }
   bool local_apic_present() const noexcept { return local_apic_present_; }
   void set_local_apic_present(bool present) noexcept { local_apic_present_ = present; }
-  // A machine with live devices still spends a virtual cycle in HLT.
-  void advance_halted_clock() noexcept { ++halted_clock_steps_; }
+  // A live motherboard spends a cycle even while waiting for an interrupt.
+  void advance_idle_clock(unsigned cycles=1) noexcept { idle_clock_steps_+=cycles; }
+  std::uint64_t clock_cycles() const noexcept { return instructions + idle_clock_steps_; }
+  static constexpr std::uint64_t kTscTicksPerCycle = 64;
   const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
   unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
   bool rep_batch_candidate() const noexcept {
@@ -718,11 +720,10 @@ class Cpu {
         entry.linear_page == page && entry.cr3 == cr3 && entry.policy == policy;
   }
   static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
-  static constexpr std::uint64_t kTscTicksPerStep = 64;
   std::uint64_t tsc_offset_ = 0;
-  std::uint64_t halted_clock_steps_ = 0;
+  std::uint64_t idle_clock_steps_ = 0;
   std::uint64_t timestamp_counter() const noexcept {
-    return tsc_offset_ + (instructions + halted_clock_steps_) * kTscTicksPerStep;
+    return tsc_offset_ + clock_cycles() * kTscTicksPerCycle;
   }
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
@@ -4277,6 +4278,7 @@ inline void Cpu::extended() {
         ebx=word(0);edx=word(4);ecx=word(8);
       }else if(leaf==1){
         eax=0x00000663U; // modeled family/model/stepping
+        ebx=1U<<16;     // One logical processor; initial APIC ID 0.
         // TSC, MSR, PAE, CX8, CMOV, MMX, FXSR, SSE and SSE2.
         // The full x87 instruction set remains incomplete (FPU bit 0).
         edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
