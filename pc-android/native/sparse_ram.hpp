@@ -16,8 +16,8 @@
 
 namespace cosmic_pc {
 
-// Sparse physical RAM. Absent pages read as zero. A compact page retains
-// either an eight-byte repeating pattern or a zero background with one word.
+// Sparse physical RAM. Absent pages read as zero. Compact pages retain an
+// eight-byte repeating pattern, a single word, or a pattern with changed words.
 // Logical addresses are independent of the explicitly bounded payload.
 // Not thread-safe: the CPU and its host must serialize access.
 class SparseRam {
@@ -56,6 +56,8 @@ public:
         std::uint64_t backing_bytes;
         std::uint64_t backing_reads;
         std::uint64_t backing_writes;
+        std::size_t pattern_delta_pages;
+        std::uint64_t pattern_delta_bytes;
     };
 
     class WritePins {
@@ -133,6 +135,8 @@ public:
           allocated_tables_(std::exchange(other.allocated_tables_, 0)),
           pattern_pages_(std::exchange(other.pattern_pages_, 0)),
           sparse_word_pages_(std::exchange(other.sparse_word_pages_, 0)),
+          pattern_delta_pages_(std::exchange(other.pattern_delta_pages_, 0)),
+          pattern_delta_bytes_(std::exchange(other.pattern_delta_bytes_, 0)),
           compaction_page_(std::exchange(other.compaction_page_, 0)),
           backing_(std::move(other.backing_)),
           backing_cache_(std::move(other.backing_cache_)),
@@ -151,6 +155,8 @@ public:
             allocated_tables_ = std::exchange(other.allocated_tables_, 0);
             pattern_pages_ = std::exchange(other.pattern_pages_, 0);
             sparse_word_pages_ = std::exchange(other.sparse_word_pages_, 0);
+            pattern_delta_pages_ = std::exchange(other.pattern_delta_pages_, 0);
+            pattern_delta_bytes_ = std::exchange(other.pattern_delta_bytes_, 0);
             compaction_page_ = std::exchange(other.compaction_page_, 0);
             backing_ = std::move(other.backing_);
             backing_cache_ = std::move(other.backing_cache_);
@@ -166,7 +172,7 @@ public:
 
     std::uint64_t size() const noexcept { return logical_bytes_; }
     bool empty() const noexcept { return logical_bytes_ == 0; }
-    // Counts only full resident pages. Each compact page uses kPatternSize.
+    // Counts only full resident pages.
     std::size_t allocated_pages() const noexcept { return allocated_pages_; }
     std::size_t pattern_pages() const noexcept { return pattern_pages_; }
     std::size_t spilled_pages() const noexcept { return spilled_pages_; }
@@ -215,15 +221,17 @@ public:
     // Exact owned object/table storage, excluding allocator bookkeeping and
     // temporary staging buffers. This is not total process RSS or PSS.
     std::uint64_t metadata_bytes() const noexcept {
+        const auto inline_payload =
+            static_cast<std::uint64_t>(pattern_pages_ + sparse_word_pages_ + pattern_delta_pages_) * kPatternSize;
         return sizeof(*this) +
                static_cast<std::uint64_t>(tables_.capacity()) * sizeof(std::unique_ptr<PageTable>) +
-               static_cast<std::uint64_t>(allocated_tables_) * sizeof(PageTable) - compact_bytes() +
+               static_cast<std::uint64_t>(allocated_tables_) * sizeof(PageTable) - inline_payload +
                (backing_cache_ ? sizeof(BackingCache) : 0);
     }
     Metrics metrics() const noexcept {
         return {size(), allocated_bytes(), budget_bytes(), metadata_bytes(), allocated_pages(), pattern_pages(),
                 sparse_word_pages_, spilled_pages_, static_cast<std::uint64_t>(spilled_pages_) * kPageSize,
-                backing_reads_, backing_writes_};
+                backing_reads_, backing_writes_, pattern_delta_pages_, pattern_delta_bytes_};
     }
 
     ByteProxy operator[](std::uint64_t offset) {
@@ -241,7 +249,7 @@ public:
         const auto* slot = find_slot(page);
         if (!slot) return 0;
         if (slot->spilled) return backed_page(page)[inside];
-        if (backing_ && slot->dense) slot->recently_used = true;
+        if (backing_ && slot->has_dense()) slot->recently_used = true;
         return slot_byte(*slot, inside);
     }
 
@@ -249,13 +257,13 @@ public:
         check_range(offset, 1);
         const auto inside = static_cast<std::size_t>(offset % kPageSize);
         auto* slot = find_slot(offset / kPageSize);
-        if (!slot || !slot->dense) {
+        if (!slot || !slot->has_dense()) {
             if ((!slot || !slot->spilled) && (slot ? slot_byte(*slot, inside) : 0) == value) return;
             prepare_write(offset, 1);
             slot = find_slot(offset / kPageSize);
         }
         if (backing_) mark_write(*slot);
-        (*slot->dense)[inside] = value;
+        slot->payload[inside] = value;
         // Never free a page here, including when it becomes entirely zero.
     }
 
@@ -268,12 +276,12 @@ public:
             const std::size_t chunk = std::min(count, kPageSize - inside);
             const auto page = offset / kPageSize;
             const auto* slot = find_slot(page);
-            if (slot && slot->dense) {
+            if (slot && slot->has_dense()) {
                 if (backing_) slot->recently_used = true;
-                std::memcpy(destination, slot->dense->data() + inside, chunk);
+                std::memcpy(destination, slot->payload.get() + inside, chunk);
             } else if (slot && slot->spilled) {
                 std::memcpy(destination, backed_page(page).data() + inside, chunk);
-            } else if (slot && slot->pattern) copy_compact(*slot, inside, destination, chunk);
+            } else if (slot && slot->has_compact()) copy_compact(*slot, inside, destination, chunk);
             else std::memset(destination, 0, chunk);
             offset += chunk;
             destination += chunk;
@@ -291,8 +299,8 @@ public:
         while (count != 0) {
             const std::size_t inside = static_cast<std::size_t>(offset % kPageSize);
             const std::size_t chunk = std::min(count, kPageSize - inside);
-            auto& page = *find_slot(offset / kPageSize)->dense;
-            std::memcpy(page.data() + inside, source, chunk);
+            auto& page = find_slot(offset / kPageSize)->payload;
+            std::memcpy(page.get() + inside, source, chunk);
             offset += chunk;
             source += chunk;
             count -= chunk;
@@ -311,12 +319,12 @@ public:
             (source < target + count && target < source + count)) return false;
         const auto* from = find_slot(source / kPageSize);
         auto* to = find_slot(target / kPageSize);
-        if (!from || !from->dense || !to || !to->dense) return false;
+        if (!from || !from->has_dense() || !to || !to->has_dense()) return false;
         if (backing_) {
             from->recently_used = true;
             mark_write(*to);
         }
-        std::memcpy(to->dense->data() + to_offset, from->dense->data() + from_offset, count);
+        std::memcpy(to->payload.get() + to_offset, from->payload.get() + from_offset, count);
         return true;
     }
 
@@ -327,9 +335,10 @@ public:
         if ((source % kPageSize) || (target % kPageSize) || has_pinned_writes()) return false;
 
         const auto* from = find_slot(source / kPageSize);
-        if (from && (from->dense || from->spilled)) return false;
+        if (from && (from->has_dense() || from->spilled)) return false;
         return replace_compact_page(target, from ? from->pattern : 0,
-                                    from ? from->word_index : kRepeating);
+                                    from ? from->word_index : kRepeating,
+                                    from ? from->payload.get() : nullptr);
     }
 
     // The pattern is a byte array held in native storage order.
@@ -342,7 +351,7 @@ public:
     void fill(std::uint64_t offset, std::uint8_t value, std::size_t count) {
         check_range(offset, count);
         if (value != 0) prepare_write(offset, count);
-        else if (pattern_pages_ || sparse_word_pages_ || spilled_pages_)
+        else if (compact_bytes() || spilled_pages_)
             prepare_dense_pages(offset, count, false);
         while (count != 0) {
             const std::size_t inside = static_cast<std::size_t>(offset % kPageSize);
@@ -350,9 +359,9 @@ public:
             auto& table = tables_[static_cast<std::size_t>(offset / kPageSize / kPagesPerTable)];
             if (table) {
                 auto& slot = table->slots[static_cast<std::size_t>(offset / kPageSize % kPagesPerTable)];
-                if (slot.dense) {
-                    std::memset(slot.dense->data() + inside, value, chunk);
-                } else if (slot.pattern || slot.spilled) {
+                if (slot.has_dense()) {
+                    std::memset(slot.payload.get() + inside, value, chunk);
+                } else if (slot.has_compact() || slot.spilled) {
                     // All partially covered pages were expanded by preflight.
                     if (slot.spilled) --spilled_pages_;
                     else erase_compact(slot);
@@ -381,8 +390,8 @@ public:
         if (offset >= logical_bytes_) return false;
         const auto inside = static_cast<std::size_t>(offset % kPageSize);
         auto* slot = find_slot(offset / kPageSize);
-        if (slot && slot->dense) {
-            (*slot->dense)[inside] = old_value;
+        if (slot && slot->has_dense()) {
+            slot->payload[inside] = old_value;
             return true;
         }
         return (!slot || !slot->spilled) && (slot ? slot_byte(*slot, inside) : 0) == old_value;
@@ -393,6 +402,7 @@ public:
     void reset_zero() noexcept {
         for (auto& table : tables_) table.reset();
         allocated_pages_ = allocated_tables_ = pattern_pages_ = sparse_word_pages_ = compaction_page_ = 0;
+        pattern_delta_pages_ = pattern_delta_bytes_ = 0;
         spilled_pages_ = backing_reads_ = backing_writes_ = eviction_page_ = compact_eviction_page_ = 0;
         if (backing_) {
             for (auto& entry : backing_cache_->entries) entry.page = BackingCache::kUnused;
@@ -407,9 +417,9 @@ public:
         for (auto& table : tables_) {
             if (!table) continue;
             for (auto& slot : table->slots) {
-                if (slot.dense && std::all_of(slot.dense->begin(), slot.dense->end(),
+                if (slot.has_dense() && std::all_of(slot.payload.get(), slot.payload.get() + kPageSize,
                                              [](std::uint8_t byte) { return byte == 0; })) {
-                    slot.dense.reset();
+                    slot.payload.reset();
                     --table->resident;
                     ++removed;
                 }
@@ -456,14 +466,28 @@ public:
 private:
     using Page = std::array<std::uint8_t, kPageSize>;
     static constexpr std::uint16_t kRepeating = kPageSize / kPatternSize;
+    static constexpr std::size_t kMaxChangedWords = 32;
+    static constexpr std::size_t kPatchIndexSize = sizeof(std::uint16_t);
+    static constexpr std::size_t kPatchSize = kPatchIndexSize + kPatternSize;
+    static_assert(2 * kMaxChangedWords + 1 <= kRepeating);
     struct PageSlot {
-        std::unique_ptr<Page> dense;
-        // Raw bytes in native storage order. All zero means no backing.
+        // Dense bytes or sorted pairs of (word index, exact word bytes).
+        std::unique_ptr<std::uint8_t[]> payload;
         std::uint64_t pattern = 0;
         std::uint32_t write_epoch = 0;
+        // Below kRepeating: one word on zero. Above: number of changed words.
         std::uint16_t word_index = kRepeating;
         mutable bool recently_used = false;
         bool spilled = false;
+
+        bool has_dense() const noexcept { return payload && word_index == kRepeating; }
+        bool has_compact() const noexcept { return pattern || word_index > kRepeating; }
+        std::size_t patch_count() const noexcept {
+            return word_index > kRepeating ? word_index - kRepeating : 0;
+        }
+        std::size_t compact_size() const noexcept {
+            return has_compact() ? kPatternSize + patch_count() * kPatchSize : 0;
+        }
     };
     struct PageTable {
         std::array<PageSlot, kPagesPerTable> slots{};
@@ -488,6 +512,8 @@ private:
     std::size_t allocated_tables_ = 0;
     std::size_t pattern_pages_ = 0;
     std::size_t sparse_word_pages_ = 0;
+    std::size_t pattern_delta_pages_ = 0;
+    std::uint64_t pattern_delta_bytes_ = 0;
     std::uint64_t compaction_page_ = 0;
     std::unique_ptr<PageBacking> backing_;
     std::unique_ptr<BackingCache> backing_cache_;
@@ -500,7 +526,8 @@ private:
     unsigned pin_depth_ = 0;
 
     std::uint64_t compact_bytes() const noexcept {
-        return static_cast<std::uint64_t>(pattern_pages_ + sparse_word_pages_) * kPatternSize;
+        return static_cast<std::uint64_t>(pattern_pages_ + sparse_word_pages_) * kPatternSize +
+               pattern_delta_bytes_;
     }
 
     const Page& backed_page(std::uint64_t page) const {
@@ -519,8 +546,8 @@ private:
         if (pin_depth_) slot.write_epoch = pin_epoch_;
     }
 
-    void write_back(std::uint64_t page, const Page& bytes) {
-        backing_->write(page, bytes.data());
+    void write_back(std::uint64_t page, const std::uint8_t* bytes) {
+        backing_->write(page, bytes);
         if (auto& cached = backing_cache_->entry(page); cached.page == page)
             cached.page = BackingCache::kUnused;
         ++spilled_pages_;
@@ -538,10 +565,10 @@ private:
                 std::uint64_t(kPagesPerTable - page % kPagesPerTable)});
             compact_eviction_page_ = (page + count) % pages;
             remaining -= count;
-            if (!slot || !slot->pattern || (page >= first && page <= last)) continue;
+            if (!slot || !slot->has_compact() || (page >= first && page <= last)) continue;
             Page bytes;
             copy_compact(*slot, 0, bytes.data(), bytes.size());
-            write_back(page, bytes);
+            write_back(page, bytes.data());
             erase_compact(*slot);
             *slot = PageSlot{};
             slot->spilled = true;
@@ -568,16 +595,18 @@ private:
             eviction_page_ = (page + 1) % pages;
             --remaining;
             auto& slot = table->slots[index];
-            if (!slot.dense || (page >= first && page <= last) ||
+            if (!slot.has_dense() || (page >= first && page <= last) ||
                 (pin_depth_ && slot.write_epoch == pin_epoch_)) continue;
             if (std::exchange(slot.recently_used, false)) continue;
-            if ((compact_bytes() + kPatternSize <= compact_limit ||
-                 std::all_of(slot.dense->begin(), slot.dense->end(), [](auto byte) { return byte == 0; })) &&
+            const auto compact_room = compact_limit - std::min(compact_limit, compact_bytes());
+            if ((compact_room >= kPatternSize ||
+                 std::all_of(slot.payload.get(), slot.payload.get() + kPageSize,
+                             [](auto byte) { return byte == 0; })) &&
                 compact_page(table, index)) return true;
-            if (compact_bytes() + kPatternSize <= compact_limit && compact_sparse_word(slot)) return true;
+            if (compact_room >= kPatternSize && compact_changed_words(slot, compact_room)) return true;
             if (!backing_) continue;
-            write_back(page, *slot.dense);
-            slot.dense.reset();
+            write_back(page, slot.payload.get());
+            slot.payload.reset();
             slot.spilled = true;
             --allocated_pages_;
             return true;
@@ -586,23 +615,49 @@ private:
     }
 
     static std::uint8_t slot_byte(const PageSlot& slot, std::size_t inside) noexcept {
-        if (slot.dense) return (*slot.dense)[inside];
-        if (slot.word_index != kRepeating && inside / kPatternSize != slot.word_index) return 0;
+        if (slot.has_dense()) return slot.payload[inside];
+        const auto word = inside / kPatternSize;
+        if (slot.word_index < kRepeating && word != slot.word_index) return 0;
+        std::size_t first = 0, last = slot.patch_count();
+        while (first < last) {
+            const auto middle = first + (last - first) / 2;
+            const auto* patch = slot.payload.get() + middle * kPatchSize;
+            const auto index = patch_index(patch);
+            if (word == index) return patch[kPatchIndexSize + inside % kPatternSize];
+            if (word < index) last = middle;
+            else first = middle + 1;
+        }
         return reinterpret_cast<const unsigned char*>(&slot.pattern)[inside % kPatternSize];
+    }
+
+    static std::uint16_t patch_index(const std::uint8_t* patch) noexcept {
+        std::uint16_t index;
+        std::memcpy(&index, patch, kPatchIndexSize);
+        return index;
     }
 
     static void copy_compact(const PageSlot& slot, std::size_t inside,
                              std::uint8_t* destination, std::size_t count) noexcept {
-        if (slot.word_index == kRepeating) {
-            copy_pattern(slot.pattern, inside, destination, count);
+        if (slot.word_index < kRepeating) {
+            std::memset(destination, 0, count);
+            copy_word_overlap(reinterpret_cast<const unsigned char*>(&slot.pattern),
+                              slot.word_index, inside, destination, count);
             return;
         }
-        std::memset(destination, 0, count);
-        const auto word = static_cast<std::size_t>(slot.word_index) * kPatternSize;
+        copy_pattern(slot.pattern, inside, destination, count);
+        for (std::size_t i = 0; i < slot.patch_count(); ++i) {
+            const auto* patch = slot.payload.get() + i * kPatchSize;
+            const auto index = patch_index(patch);
+            if (index * kPatternSize >= inside + count) break;
+            copy_word_overlap(patch + kPatchIndexSize, index, inside, destination, count);
+        }
+    }
+
+    static void copy_word_overlap(const unsigned char* bytes, std::size_t index, std::size_t inside,
+                                  std::uint8_t* destination, std::size_t count) noexcept {
+        const auto word = index * kPatternSize;
         const auto begin = std::max(word, inside), end = std::min(word + kPatternSize, inside + count);
-        if (begin < end)
-            std::memcpy(destination + begin - inside,
-                        reinterpret_cast<const std::uint8_t*>(&slot.pattern) + begin - word, end - begin);
+        if (begin < end) std::memcpy(destination + (begin - inside), bytes + (begin - word), end - begin);
     }
 
     static void copy_pattern(const std::uint64_t& pattern, std::size_t inside,
@@ -627,35 +682,54 @@ private:
         }
     }
 
-    void erase_compact(PageSlot& slot) noexcept {
-        if (slot.word_index == kRepeating) --pattern_pages_;
+    void record_compact(const PageSlot& slot) noexcept {
+        if (slot.patch_count()) {
+            ++pattern_delta_pages_;
+            pattern_delta_bytes_ += slot.compact_size();
+        } else if (slot.word_index == kRepeating) ++pattern_pages_;
+        else ++sparse_word_pages_;
+    }
+
+    void erase_compact(const PageSlot& slot) noexcept {
+        if (slot.patch_count()) {
+            --pattern_delta_pages_;
+            pattern_delta_bytes_ -= slot.compact_size();
+        } else if (slot.word_index == kRepeating) --pattern_pages_;
         else --sparse_word_pages_;
     }
 
-    bool replace_compact_page(std::uint64_t target, std::uint64_t pattern, std::uint16_t word_index) {
+    bool replace_compact_page(std::uint64_t target, std::uint64_t pattern, std::uint16_t word_index,
+                              const std::uint8_t* patches = nullptr) {
         const auto page = target / kPageSize;
         auto& table = tables_[static_cast<std::size_t>(page / kPagesPerTable)];
         const auto index = static_cast<std::size_t>(page % kPagesPerTable);
-        if (!table && !pattern) return true;
+        if (!table && !pattern && !patches) return true;
         const auto* previous = table ? &table->slots[index] : nullptr;
-        const auto old_bytes = !previous ? 0 : previous->dense ? kPageSize : previous->pattern ? kPatternSize : 0;
+        const auto old_bytes = !previous ? 0 : previous->has_dense() ? kPageSize : previous->compact_size();
         const auto retained = allocated_bytes() - old_bytes;
-        if (pattern && kPatternSize > payload_cap_bytes_ - retained) return false;
+        const auto patch_bytes = patches ? (word_index - kRepeating) * kPatchSize : 0;
+        const auto new_bytes = pattern || patches ? kPatternSize + patch_bytes : 0;
+        if (retained > payload_cap_bytes_ || new_bytes > payload_cap_bytes_ - retained) return false;
+        std::unique_ptr<std::uint8_t[]> payload;
+        if (patches) {
+            payload = std::make_unique<std::uint8_t[]>(patch_bytes);
+            std::memcpy(payload.get(), patches, patch_bytes);
+        }
         if (!table) {
             table = std::make_unique<PageTable>();
             ++allocated_tables_;
         }
         auto& slot = table->slots[index];
-        if (slot.dense || slot.pattern || slot.spilled) --table->resident;
-        if (slot.dense) --allocated_pages_;
-        if (slot.pattern) erase_compact(slot);
+        if (slot.has_dense() || slot.has_compact() || slot.spilled) --table->resident;
+        if (slot.has_dense()) --allocated_pages_;
+        if (slot.has_compact()) erase_compact(slot);
         if (slot.spilled) --spilled_pages_;
         slot = PageSlot{};
-        if (pattern) {
+        if (new_bytes) {
             slot.pattern = pattern;
             slot.word_index = word_index;
-            if (word_index == kRepeating) ++pattern_pages_;
-            else ++sparse_word_pages_;
+            slot.payload = std::move(payload);
+            record_compact(slot);
             ++table->resident;
         }
         release_empty_table(table);
@@ -664,32 +738,64 @@ private:
 
     // Only reclaim cold pages this way. A CPU write still gets a dense
     // destination for its rollback journal.
-    bool compact_sparse_word(PageSlot& slot) noexcept {
-        std::uint64_t value = 0;
-        std::uint16_t word_index = kRepeating;
-        for (std::uint16_t word = 0; word < kRepeating; ++word) {
-            std::uint64_t candidate;
-            std::memcpy(&candidate, slot.dense->data() + word * kPatternSize, kPatternSize);
-            if (!candidate) continue;
-            if (value) return false;
-            value = candidate;
-            word_index = word;
+    bool compact_changed_words(PageSlot& slot, std::uint64_t compact_room) noexcept {
+        const auto* bytes = slot.payload.get();
+        // If a page has at most kMaxChangedWords exceptions, its background
+        // is the majority even in this short prefix. Verify against all words.
+        std::uint64_t pattern = 0;
+        unsigned votes = 0;
+        for (std::size_t word = 0; word < 2 * kMaxChangedWords + 1; ++word) {
+            const auto value = load_word(bytes + word * kPatternSize);
+            if (votes == 0) {
+                pattern = value;
+                votes = 1;
+            } else if (value == pattern) ++votes;
+            else --votes;
         }
-        if (!value) return false;
-        slot.pattern = value;
-        slot.word_index = word_index;
-        slot.dense.reset();
+
+        std::array<std::uint8_t, kMaxChangedWords * kPatchSize> patches;
+        std::size_t changed = 0;
+        for (std::uint16_t word = 0; word < kRepeating; ++word) {
+            const auto value = load_word(bytes + word * kPatternSize);
+            if (value == pattern) continue;
+            if (changed == kMaxChangedWords) return false;
+            auto* patch = patches.data() + changed * kPatchSize;
+            std::memcpy(patch, &word, kPatchIndexSize);
+            std::memcpy(patch + kPatchIndexSize, &value, kPatternSize);
+            ++changed;
+        }
+        if (!changed) return false;
+        if (changed == 1 && pattern == 0) {
+            slot.pattern = load_word(patches.data() + kPatchIndexSize);
+            slot.word_index = patch_index(patches.data());
+            slot.payload.reset();
+        } else {
+            const auto patch_bytes = changed * kPatchSize;
+            if (kPatternSize + patch_bytes > compact_room) return false;
+            std::unique_ptr<std::uint8_t[]> payload(new (std::nothrow) std::uint8_t[patch_bytes]);
+            if (!payload) return false;
+            std::memcpy(payload.get(), patches.data(), patch_bytes);
+            slot.pattern = pattern;
+            slot.word_index = static_cast<std::uint16_t>(kRepeating + changed);
+            slot.payload = std::move(payload);
+        }
         --allocated_pages_;
-        ++sparse_word_pages_;
+        record_compact(slot);
         return true;
+    }
+
+    static std::uint64_t load_word(const std::uint8_t* bytes) noexcept {
+        std::uint64_t value;
+        std::memcpy(&value, bytes, kPatternSize);
+        return value;
     }
 
     bool compact_page(std::unique_ptr<PageTable>& table, std::size_t index) noexcept {
         auto& slot = table->slots[index];
-        if (!slot.dense || std::memcmp(slot.dense->data(), slot.dense->data() + kPatternSize,
-                                      kPageSize - kPatternSize) != 0) return false;
-        std::memcpy(&slot.pattern, slot.dense->data(), kPatternSize);
-        slot.dense.reset();
+        if (!slot.has_dense() || std::memcmp(slot.payload.get(), slot.payload.get() + kPatternSize,
+                                            kPageSize - kPatternSize) != 0) return false;
+        slot.pattern = load_word(slot.payload.get());
+        slot.payload.reset();
         --allocated_pages_;
         if (slot.pattern) ++pattern_pages_;
         else --table->resident;
@@ -708,23 +814,26 @@ private:
                    (page == last && (offset + count) % kPageSize != 0);
         };
         std::size_t missing_pages = 0;
-        std::size_t expanded_compact = 0;
+        std::uint64_t expanded_compact_bytes = 0;
         for (std::uint64_t page = first; page <= last; ++page) {
             auto* slot = find_slot(page);
-            const bool compact = slot && slot->pattern && expands_pattern(page);
-            const bool spilled = slot && slot->spilled && expands_pattern(page);
-            if (compact) ++expanded_compact;
-            if (compact || spilled || (include_implicit && (!slot || !slot->dense))) ++missing_pages;
-            if (backing_ && slot && slot->dense) mark_write(*slot);
+            if (slot && slot->has_dense()) {
+                if (backing_) mark_write(*slot);
+                continue;
+            }
+            if (include_implicit || (slot && (slot->has_compact() || slot->spilled) && expands_pattern(page))) {
+                ++missing_pages;
+                if (slot) expanded_compact_bytes += slot->compact_size();
+            }
         }
         if (missing_pages == 0) return;
         const auto fits = [&] {
-            const auto retained = allocated_bytes() - std::uint64_t(expanded_compact) * kPatternSize;
+            const auto retained = allocated_bytes() - expanded_compact_bytes;
             return retained <= payload_cap_bytes_ && missing_pages <= (payload_cap_bytes_ - retained) / kPageSize;
         };
         if (backing_ && missing_pages <= payload_cap_bytes_ / kPageSize) {
             const auto compact_limit = payload_cap_bytes_ - missing_pages * kPageSize +
-                                       expanded_compact * kPatternSize;
+                                       expanded_compact_bytes;
             while (!fits() && (evict_page(first, last, compact_limit) ||
                                spill_compact_page(compact_limit, first, last))) {}
         }
@@ -745,7 +854,7 @@ private:
         }
         try {
             std::vector<std::pair<std::size_t, std::unique_ptr<PageTable>>> new_tables;
-            std::vector<std::pair<std::uint64_t, std::unique_ptr<Page>>> new_pages;
+            std::vector<std::pair<std::uint64_t, std::unique_ptr<std::uint8_t[]>>> new_pages;
             new_tables.reserve(missing_tables);
             new_pages.reserve(missing_pages);
             for (std::size_t table = first_table; table <= last_table; ++table) {
@@ -754,14 +863,13 @@ private:
             }
             for (std::uint64_t page = first; page <= last; ++page) {
                 const auto* slot = find_slot(page);
-                if (slot && slot->pattern && expands_pattern(page)) {
-                    auto dense = std::make_unique<Page>();
-                    copy_compact(*slot, 0, dense->data(), dense->size());
+                if (slot && (slot->has_compact() || slot->spilled) && expands_pattern(page)) {
+                    std::unique_ptr<std::uint8_t[]> dense(new std::uint8_t[kPageSize]);
+                    if (slot->spilled) std::memcpy(dense.get(), backed_page(page).data(), kPageSize);
+                    else copy_compact(*slot, 0, dense.get(), kPageSize);
                     new_pages.emplace_back(page, std::move(dense));
-                } else if (slot && slot->spilled && expands_pattern(page)) {
-                    new_pages.emplace_back(page, std::make_unique<Page>(backed_page(page)));
-                } else if (include_implicit && (!slot || !slot->dense)) {
-                    new_pages.emplace_back(page, std::make_unique<Page>());
+                } else if (include_implicit && (!slot || !slot->has_dense())) {
+                    new_pages.emplace_back(page, std::make_unique<std::uint8_t[]>(kPageSize));
                 }
             }
             // Everything that can allocate has succeeded. Pointer moves and
@@ -771,10 +879,10 @@ private:
                 PageTable& table = *tables_[static_cast<std::size_t>(page.first / kPagesPerTable)];
                 auto& slot = table.slots[static_cast<std::size_t>(page.first % kPagesPerTable)];
                 if (slot.spilled) --spilled_pages_;
-                else if (slot.pattern) erase_compact(slot);
+                else if (slot.has_compact()) erase_compact(slot);
                 else ++table.resident;
                 slot = PageSlot{};
-                slot.dense = std::move(page.second);
+                slot.payload = std::move(page.second);
                 if (backing_) mark_write(slot);
             }
             allocated_tables_ += missing_tables;
