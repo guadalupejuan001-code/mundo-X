@@ -150,10 +150,21 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
         alu(7, frame.left, frame.right, block.flag_width);
         break;
       case ether_arm64::Instruction::Test:
+      case ether_arm64::Instruction::And:
         alu(4, frame.left, frame.right, block.flag_width);
+        break;
+      case ether_arm64::Instruction::Or:
+        alu(1, frame.left, frame.right, block.flag_width);
         break;
       case ether_arm64::Instruction::Xor:
         alu(6, frame.left, frame.right, block.flag_width);
+        break;
+      case ether_arm64::Instruction::ShiftLeft:
+      case ether_arm64::Instruction::ShiftRight:
+      case ether_arm64::Instruction::ShiftArithmetic:
+        shift_register_result(block.flag_op == ether_arm64::Instruction::ShiftLeft ? 4
+            : block.flag_op == ether_arm64::Instruction::ShiftRight ? 5 : 7,
+            block.flag_width, unsigned(frame.right), frame.left);
         break;
       case ether_arm64::Instruction::Increment:
       case ether_arm64::Instruction::Decrement: {
