@@ -2788,6 +2788,8 @@ class Cpu {
 
   void string_operation(std::uint8_t op);
   void shift(const ModRM& m, unsigned bytes, unsigned count);
+  std::uint64_t shift_register_result(unsigned operation, unsigned bytes, unsigned count,
+                                      std::uint64_t original);
   void double_shift(const ModRM& m, unsigned bytes, unsigned count, bool left);
   void group3(const ModRM& m, unsigned bytes);
   void group3_wide(unsigned operation, std::uint64_t operand);
@@ -3707,9 +3709,30 @@ inline void Cpu::string_operation(std::uint8_t op) {
   }
 }
 
+inline std::uint64_t Cpu::shift_register_result(unsigned operation, unsigned bytes, unsigned count,
+                                                std::uint64_t original) {
+  count &= bytes == 8 ? 63 : 31;
+  const auto value_mask = mask(bytes);
+  original &= value_mask;
+  if (!count) return original;
+  const auto sign = sign_bit(bytes);
+  const bool left = operation == 4 || operation == 6;
+  auto value = left ? (original << count) & value_mask : original >> count;
+  if (operation == 7 && (original & sign)) value |= value_mask ^ (value_mask >> count);
+  set_flag(CF, (original >> (left ? bytes * 8 - count : count - 1)) & 1);
+  szp(value, bytes);
+  if (count == 1)
+    set_flag(OF, left ? ((value & sign) != 0) != flag(CF) : operation == 5 && (original & sign));
+  return value;
+}
+
 inline void Cpu::shift(const ModRM& m, unsigned bytes, unsigned count) {
   count &= bytes == 8 ? 63 : 31;
   const auto original = get(m.rm, bytes);
+  if (m.rm.is_register && bytes >= 4 && m.group >= 4) {
+    put(m.rm, bytes, shift_register_result(m.group, bytes, count, original));
+    return;
+  }
   // The destination is still written for a zero count. In long mode an r32
   // destination therefore clears its high half, while RFLAGS stay unchanged.
   if (count == 0) { put(m.rm, bytes, original); return; }

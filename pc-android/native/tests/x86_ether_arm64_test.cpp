@@ -136,7 +136,7 @@ void decoder_contract() {
   const std::uint8_t immediate[]{0x48,0x83,0x38,0xff,0x0f,0x85,0x04,0,0,0};
   const auto cmp = arm64::decode(immediate, sizeof(immediate), code);
   require(cmp.count == 2 && cmp.flag_width == 8 && cmp.instructions[0].lhs.memory &&
-          cmp.instructions[0].rhs.immediate && cmp.instructions[0].rhs.immediate_value == -1,
+          cmp.instructions[0].rhs.immediate && cmp.instructions[0].rhs.immediate_value == UINT64_MAX,
           "CMP [RAX],imm8 lacks a sign-extended literal");
   const std::uint8_t byte_test[]{0x45,0x84,0xc9,0x7a,0x08};
   const auto test = arm64::decode(byte_test, sizeof(byte_test), code);
@@ -213,6 +213,18 @@ void decoder_contract() {
           copy.instructions[2].kind == arm64::Instruction::MoveByte &&
           copy.instructions[2].lhs.memory && copy.instructions[2].lhs.index == Cpu::R11,
           "observed long64 byte copy did not end with its indexed byte store");
+  const std::uint8_t reference[]{0x48,0xf7,0x05,0xf5,0xff,0xff,0xff,0,0,0,0x80,0x75,2};
+  const auto rip = arm64::decode(reference, sizeof(reference), code);
+  require(rip.count == 2 && rip.instructions[0].lhs.reg == arm64::Operand::kRipBase &&
+          rip.instructions[0].lhs.immediate_value == code &&
+          rip.instructions[0].rhs.immediate_value == 0xffffffff80000000ULL,
+          "RIP-relative TEST must use the end of the immediate and sign-extend it");
+  const std::uint8_t prior_flags[]{0x83,0xf8,1,0xd3,0xe0,0x75,2};
+  require(arm64::decode(prior_flags, sizeof(prior_flags), code).count == 1,
+          "a zero-count shift must preserve the preceding guest flags");
+  const std::uint8_t carry_input[]{0x11,0xc0};
+  require(!arm64::decode(carry_input, sizeof(carry_input), code).count,
+          "ADC needs the interpreter's carry dependence");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -299,6 +311,153 @@ void warm_block(Cpu& cpu, std::uint64_t address, unsigned steps) {
     if (cpu.try_ether_arm64_block(steps) == steps) return;
   }
   throw std::runtime_error("ARM64 block never became executable");
+}
+
+void register_shift_contract() {
+  struct Case {
+    unsigned width;
+    std::uint8_t opcode, modrm, count;
+    std::uint64_t input, result;
+    std::uint32_t arithmetic_flags;
+  };
+  constexpr auto baseline_flags = 2 | Cpu::IF | Cpu::AF;
+  constexpr std::array<Case, 7> cases{{
+      {4,0xd1,0xe0,1,0xdeadbeef80000001,2,Cpu::CF | Cpu::OF},
+      {8,0xc1,0xf0,63,0x8000000000000001,0x8000000000000000,Cpu::SF | Cpu::PF | Cpu::OF},
+      {4,0xd3,0xe8,1,0xdeadbeef80000001,0x40000000,Cpu::CF | Cpu::OF | Cpu::PF},
+      {8,0xd3,0xf8,1,0x8000000000000001,0xc000000000000000,Cpu::CF | Cpu::SF | Cpu::PF},
+      {4,0xc1,0xf8,32,0xdeadbeef80000001,0x80000001,Cpu::OF | Cpu::ZF},
+      {8,0xd3,0xe8,64,0x8000000000000001,0x8000000000000001,Cpu::OF | Cpu::ZF},
+      {4,0xd3,0xe8,255,0xdeadbeef00000001,0,Cpu::OF | Cpu::ZF | Cpu::PF},
+  }};
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (const auto& item : cases) {
+    for (auto* machine : {&native, &scalar}) {
+      auto& cpu = machine->cpu;
+      std::vector<std::uint8_t> program{0x8b,0xd2}; // MOV EDX,EDX leaves the flags alone.
+      if (item.width == 8) program.push_back(0x48);
+      program.insert(program.end(), {item.opcode, item.modrm});
+      if (item.opcode == 0xc1) program.push_back(item.count);
+      program.push_back(0xf4);
+      cpu.memory.write_block(code, program.data(), program.size());
+      cpu.eip = code;
+      cpu.regs[Cpu::EAX] = item.input;
+      cpu.regs[Cpu::ECX] = 0xfedcba9876543200ULL | item.count;
+      cpu.eflags = baseline_flags | Cpu::OF | Cpu::ZF;
+      if (machine == &native && Cpu::ether_arm64_host()) warm_block(cpu, code, 2);
+      else require(cpu.step() == StepResult::Executed && cpu.step() == StepResult::Executed,
+                   "scalar shift fixture faulted");
+      require(cpu.regs[Cpu::EAX] == item.result && cpu.eflags == (baseline_flags | item.arithmetic_flags),
+              "register shift disagreed with its independently calculated result and flags");
+    }
+    require(capture(native.cpu) == capture(scalar.cpu),
+            "shift results, flags or retirement differed between paths");
+  }
+}
+
+void integer_execution_contract() {
+  const std::array<std::uint8_t, 37> program{
+      0xb8,0x78,0x56,0x34,0x12,              // MOV EAX,12345678h
+      0xd3,0xe0,                              // SHL EAX,CL
+      0x81,0xe0,0xfc,0xff,0xff,0x7f,          // AND EAX,7FFFFFFCh
+      0x09,0xd0,                              // OR EAX,EDX
+      0x35,0xb7,0x18,0x67,0x21,              // XOR EAX,216718B7h
+      0x8b,0xf0,                              // MOV ESI,EAX
+      0x81,0xc1,0x01,0,0,0,                 // ADD ECX,1
+      0x81,0xf9,0x20,0x4e,0,0,              // CMP ECX,20000
+      0x75,0xdc,0xf4};                        // JNZ; HLT
+  constexpr unsigned iterations = 20'000, steps = 9 * iterations + 1;
+  for (const bool long_mode : {false, true}) {
+    PcMachine native, scalar;
+    const auto entry = long_mode ? code : protected_code;
+    const auto init = [&](PcMachine& machine, bool translated) {
+      if (long_mode) boot(machine, translated);
+      else boot_protected(machine, translated);
+      machine.cpu.memory.write_block(entry, program.data(), program.size());
+    };
+    init(native, true);
+    init(scalar, false);
+    const auto run = [&](PcMachine& machine) {
+      auto& cpu = machine.cpu;
+      cpu.eip = entry;
+      cpu.halted = false;
+      cpu.eflags = 2 | Cpu::AF | Cpu::OF;
+      cpu.regs[Cpu::ECX] = 0;
+      cpu.regs[Cpu::EDX] = 3;
+      const auto initial_steps = cpu.instructions;
+      const auto start = std::chrono::steady_clock::now();
+      for (unsigned remaining = steps; remaining;) {
+        const auto slice = std::min(remaining, 50'000U);
+        machine.run(slice);
+        remaining -= slice;
+      }
+      const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - start).count();
+      const auto last = std::uint32_t(0x12345678U << ((iterations - 1) & 31));
+      require(!cpu.fault && cpu.halted && cpu.instructions - initial_steps == steps &&
+              cpu.regs[Cpu::ECX] == iterations &&
+              cpu.regs[Cpu::ESI] == (((last & 0x7ffffffcU) | 3) ^ 0x216718b7U),
+              "integer fixture did not complete the expected guest work");
+      return ns;
+    };
+    std::array<std::int64_t, 5> native_ns{}, scalar_ns{};
+    for (unsigned i = 0; i < native_ns.size(); ++i) {
+      if (i & 1) {
+        native_ns[i] = run(native);
+        scalar_ns[i] = run(scalar);
+      } else {
+        scalar_ns[i] = run(scalar);
+        native_ns[i] = run(native);
+      }
+      require(capture(native.cpu) == capture(scalar.cpu),
+              "integer stream changed registers, flags or instruction retirement");
+    }
+    const auto coverage = native.cpu.ether_arm64_stats().steps;
+    require(coverage * 100 >= steps * native_ns.size() * 99 &&
+            coverage == native.boot_acceleration().arm64_block_steps &&
+            scalar.cpu.ether_arm64_stats().steps == 0,
+            "integer fixture did not execute its blocks through the normal Éter path");
+    std::sort(native_ns.begin(), native_ns.end());
+    std::sort(scalar_ns.begin(), scalar_ns.end());
+    std::cout << "PRIME_ETHER_INTEGER_PASS mode=" << (long_mode ? "long64" : "protected32")
+              << " steps=" << steps << " total_native_steps=" << coverage << " repeats=" << native_ns.size()
+              << " native_median_ns=" << native_ns[2] << " scalar_median_ns=" << scalar_ns[2] << '\n';
+  }
+}
+
+void rip_relative_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  const auto data = code + 0x2000;
+  for (auto* machine : {&native, &scalar}) {
+    emit(machine->cpu, code, {
+        0x49,0xb8,0xef,0xcd,0xab,0x89,0x67,0x45,0x23,0x81,  // MOVABS R8
+        0x48,0xc7,0x05,0xeb,0x1f,0,0,0,0,0,0x80,           // MOV qword [RIP+1FEBh],80000000h
+        0x4c,0x8b,0x1d,0xe4,0x1f,0,0,                      // MOV R11,[RIP+1FE4h]
+        0x48,0xf7,0x05,0xd9,0x1f,0,0,0,0,0,0x80,          // TEST qword [RIP+1FD9h],80000000h
+        0x75,1,0x90,0xf4});                                 // JNZ skips NOP; HLT
+  }
+  for (unsigned pass = 0; pass < 5; ++pass) {
+    for (auto* machine : {&native, &scalar}) {
+      auto& cpu = machine->cpu;
+      cpu.eip = code;
+      cpu.halted = false;
+      cpu.eflags = 2 | Cpu::AF;
+      cpu.write64(data, 0);
+      const auto initial = cpu.instructions;
+      machine->run(6);
+      require(cpu.halted && !cpu.fault && cpu.instructions - initial == 6 &&
+              cpu.regs[Cpu::R8] == 0x8123456789abcdefULL &&
+              cpu.regs[Cpu::R11] == 0xffffffff80000000ULL &&
+              cpu.read64(data) == 0xffffffff80000000ULL, "RIP-relative literal or memory state diverged");
+    }
+    require(capture(native.cpu) == capture(scalar.cpu), "RIP-relative native path changed guest state");
+  }
+  require(native.cpu.ether_arm64_stats().steps >= 12, "RIP-relative fixture stayed in the interpreter");
+  std::cout << "PRIME_ETHER_RIP_RELATIVE_PASS\n";
 }
 
 void protected32_contract() {
@@ -849,6 +1008,7 @@ void benchmark() {
 int main() {
   try {
     decoder_contract();
+    register_shift_contract();
     const auto scalar = execute_loop(false, true);
     const auto native = execute_loop(true, true);
     require(native.state == scalar.state && native.ticks == scalar.ticks &&
@@ -860,6 +1020,8 @@ int main() {
       return 0;
     }
     require(native.stats.steps > 4000 && native.stats.hits > 0, "ARM64 loop did not execute");
+    integer_execution_contract();
+    rip_relative_contract();
     protected32_contract();
     byte_copy_contract();
     guard_contract();
