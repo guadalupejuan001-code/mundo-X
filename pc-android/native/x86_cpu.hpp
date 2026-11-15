@@ -398,6 +398,16 @@ class Cpu {
            !is_real_mode() && !(efer & 0x400U) && cache_[CS].big;
   }
   unsigned try_zero_loop_batch(unsigned step_budget);
+  bool counter_loop_batch_candidate() const noexcept {
+    if (opcode_ != 0x75 || !ip_written_ || start_cs_ != segments[CS] ||
+        decoded_.size() != 2 || decoded_[0] != 0x75) return false;
+    const unsigned length = 0x100U - decoded_[1];
+    return length >= 3 && length <= 7 && eip <= code_mask() - length &&
+        cursor_ == eip + length && start_ip_ == cursor_ - 2;
+  }
+  // The machine supplies a budget up to the next device observation.
+  // The returned count is the number of equivalent x86 instructions retired.
+  std::uint64_t try_counter_loop_batch(std::uint64_t step_budget);
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -3468,6 +3478,69 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 
 #include "x86_ether_arm64.inc"
 #include "x86_shift_loop.inc"
+
+inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
+  constexpr unsigned steps_per_iteration = 2;
+  if (step_budget < 2 * steps_per_iteration || !counter_loop_batch_candidate() ||
+      fault || halted || transaction_ || interrupt_shadow_ ||
+      (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
+      step_trace_hook || irq_trace_hook) return 0;
+
+  const auto length = unsigned(cursor_ - eip);
+  const auto body = length - 2;
+  std::array<std::uint8_t, 7> code;
+  try {
+    // Re-read the current bytes as executable RAM. Paged code must already
+    // have valid accessed bits and fit in a single translated page.
+    const auto linear = segment_linear(CS, eip, length, Access::Execute);
+    if (linear % MemoryFabric::kPageSize > MemoryFabric::kPageSize - length) return 0;
+    bool ordinary_page = false;
+    const auto physical = translate(linear, Access::Execute, &ordinary_page, true);
+    if (!bulk_ram_range(physical, length)) return 0;
+    memory.read_block(bus_address(physical), code.data(), length);
+  } catch (const std::exception&) {
+    return 0;
+  }
+  if (code[body] != 0x75 || code[body + 1] != decoded_[1]) return 0;
+
+  const bool override_width = code[0] == 0x66;
+  unsigned pos = override_width ? 1 : 0;
+  const bool long_code = is_long_mode();
+  std::uint8_t rex = 0;
+  if (long_code && pos < body && (code[pos] & 0xf0U) == 0x40U) rex = code[pos++];
+  if (pos == body) return 0;
+  const auto opcode = code[pos++];
+  unsigned reg;
+  bool preserves_carry = true;
+  if (!long_code && opcode >= 0x48 && opcode <= 0x4f && pos == body) {
+    reg = opcode & 7U;
+  } else if (opcode == 0xff && body - pos == 1 && (code[pos] & 0xf8U) == 0xc8U) {
+    reg = (code[pos] & 7U) + ((rex & 1U) ? 8 : 0);
+  } else if (opcode == 0x83 && body - pos == 2 &&
+             (code[pos] & 0xf8U) == 0xe8U && code[pos + 1] == 1) {
+    reg = (code[pos] & 7U) + ((rex & 1U) ? 8 : 0);
+    preserves_carry = false;
+  } else {
+    return 0;
+  }
+
+  const bool dword = (long_code || cache_[CS].big) != override_width;
+  const unsigned bytes = (rex & 8U) ? 8 : dword ? 4 : 2;
+  const auto remaining = get_reg(reg, bytes);
+  const auto iterations = std::min(remaining, step_budget / steps_per_iteration);
+  if (iterations < 2) return 0;
+  const bool carry = flag(CF);
+  // Only the final DEC/SUB contributes arithmetic flags. DEC retains CF
+  // throughout the loop, and JNZ never changes flags.
+  put_reg(reg, bytes, alu(5, remaining - iterations + 1, 1, bytes));
+  if (preserves_carry) set_flag(CF, carry);
+  ip_written_ = remaining != iterations;
+  if (!ip_written_) eip = cursor_ & code_mask();
+  eflags |= 2;
+  const auto steps = iterations * steps_per_iteration;
+  instructions += steps;
+  return steps;
+}
 
 inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
   constexpr unsigned steps_per_iteration = 4;

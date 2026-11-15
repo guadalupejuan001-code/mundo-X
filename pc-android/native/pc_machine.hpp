@@ -97,6 +97,7 @@ class PcMachine {
     std::uint64_t zero_loop_batches=0, zero_loop_steps=0;
     std::uint64_t scan_loop_steps=0;
     std::uint64_t arm64_block_steps=0;
+    std::uint64_t counter_loop_batches=0, counter_loop_steps=0;
   };
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
@@ -665,8 +666,9 @@ class PcMachine {
     const bool shift=!rep&&cpu.shift_loop_batch_candidate();
     const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
     const bool zero=!rep&&!shift&&!scan&&cpu.zero_loop_batch_candidate();
+    const bool counter=!rep&&!shift&&!scan&&!zero&&cpu.counter_loop_batch_candidate();
     const bool arm64=!rep&&!shift&&!scan&&!zero&&cpu.ether_arm64_blocks_enabled()&&cpu.is_long_mode();
-    if (!rep && !shift && !scan && !zero && !arm64) return 0;
+    if (!rep && !shift && !scan && !zero && !counter && !arm64) return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;
       limit=std::min(limit,device_batch_limit_hook(limit));
@@ -676,11 +678,18 @@ class PcMachine {
     if(!rep&&boot_hotspots_)limit=std::min(limit,boot_hotspots_->steps_before_sample());
     if(limit<2)return 0;
     unsigned completed=0;
+    bool counter_batched=false;
     if(rep)completed=cpu.try_rep_batch(limit);
     else if(shift)completed=cpu.try_shift_loop_batch(limit);
     else if(scan)completed=cpu.try_scan_loop_batch(limit);
     else if(zero)completed=cpu.try_zero_loop_batch(limit);
-    else completed=cpu.try_ether_arm64_block(limit);
+    else {
+      if(counter) {
+        completed=unsigned(cpu.try_counter_loop_batch(limit));
+        counter_batched=completed!=0;
+      }
+      if(!completed&&arm64)completed=cpu.try_ether_arm64_block(limit);
+    }
     if(!completed)return 0;
     if(device_step_hook)device_batch_advance_hook(completed-1);
     if(rep) {
@@ -696,6 +705,9 @@ class PcMachine {
     } else if (zero) {
       ++boot_acceleration_.zero_loop_batches;
       boot_acceleration_.zero_loop_steps+=completed;
+    } else if(counter_batched) {
+      ++boot_acceleration_.counter_loop_batches;
+      boot_acceleration_.counter_loop_steps+=completed;
     } else {
       boot_acceleration_.arm64_block_steps+=completed;
     }
