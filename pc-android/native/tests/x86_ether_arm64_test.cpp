@@ -37,6 +37,10 @@ constexpr std::array<std::uint8_t, 20> indexed_loop{
     0x83,0xe9,0x01,           // SUB ECX,1
     0x75,0xed,0xf4};          // JNZ to MOV; HLT
 
+constexpr std::array<std::uint8_t, 7> byte_read_loop{
+    0x44,0x8a,0x5c,0x11,0xff, // Observed MOV R11B,[RCX+RDX-1].
+    0xeb,0xf9};               // Repeat within the machine's step budget.
+
 void require(bool value, const char* message) {
   if (!value) throw std::runtime_error(message);
 }
@@ -146,6 +150,19 @@ void decoder_contract() {
   const std::uint8_t add_inc[]{0x48,0x83,0xc0,0x08,0x48,0xff,0xc2};
   require(arm64::decode(add_inc, sizeof(add_inc), code).count == 1,
           "INC must use the carry produced by ADD");
+  const auto byte_read = arm64::decode(byte_read_loop.data(), byte_read_loop.size(), code);
+  const auto& mov = byte_read.instructions[0];
+  require(byte_read.count == 2 && byte_read.target == code && byte_read.flag_width == 0 &&
+          mov.kind == arm64::Instruction::MoveByte && mov.width == 1 && mov.lhs.reg == Cpu::R11 &&
+          mov.rhs.memory && mov.rhs.reg == Cpu::ECX && mov.rhs.index == Cpu::EDX &&
+          mov.rhs.displacement == 0xffffffffU, "observed indexed byte load did not form a block");
+  const std::uint8_t legacy_load[]{0x8a,0x24,0x24};
+  require(!arm64::decode(legacy_load, sizeof(legacy_load), code).count,
+          "MOV AH,[RSP] must preserve the legacy high-byte path");
+  const std::uint8_t add_byte[]{0x48,0x83,0xc0,0x08,0x44,0x8a,0x5c,0x11,0xff};
+  const auto add_then_read = arm64::decode(add_byte, sizeof(add_byte), code);
+  require(add_then_read.count == 2 && add_then_read.flag_op == arm64::Instruction::Add,
+          "byte load replaced the flags produced by the preceding ADD");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -303,6 +320,51 @@ void indexed_loop_benchmark() {
   std::cout << "ETHER_ARM64_INDEXED_LOOP steps=" << iterations * 5 + 1
             << " native_median_ns=" << native_times[3]
             << " scalar_median_ns=" << scalar_times[3] << '\n';
+}
+
+void byte_read_benchmark() {
+  constexpr unsigned steps = 40000;
+  const auto run = [](bool translated) {
+    PcMachine machine;
+    boot(machine, translated);
+    auto& cpu = machine.cpu;
+    cpu.memory.write_block(code, byte_read_loop.data(), byte_read_loop.size());
+    cpu.write64(nodes + 8, 0x78ab1234fedc00a6ULL);
+    cpu.regs[Cpu::ECX] = nodes;
+    cpu.regs[Cpu::EDX] = 9;
+    cpu.regs[Cpu::R11] = 0xfedcba9876543210ULL;
+    const auto flags = 2 | Cpu::CF | Cpu::AF | Cpu::OF | Cpu::PF;
+    cpu.eflags = flags;
+    const auto before = cpu.instructions;
+    const auto start = std::chrono::steady_clock::now();
+    machine.run(steps);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    require(!cpu.fault && cpu.eip == code && cpu.instructions - before == steps &&
+            cpu.regs[Cpu::R11] == 0xfedcba98765432a6ULL && cpu.eflags == flags &&
+            cpu.read64(nodes + 8) == 0x78ab1234fedc00a6ULL,
+            "byte load changed the upper register bits, flags, RAM or guest step count");
+    Result result{};
+    result.state = capture(cpu);
+    result.stats = cpu.ether_arm64_stats();
+    result.elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+    return result;
+  };
+  std::array<std::uint64_t, 7> native_times{}, scalar_times{};
+  for (unsigned i = 0; i < native_times.size(); ++i) {
+    const bool native_first = i % 2 == 0;
+    const auto first = run(native_first);
+    const auto second = run(!native_first);
+    const auto& native = native_first ? first : second;
+    const auto& scalar = native_first ? second : first;
+    require(native.state == scalar.state && native.stats.steps * 100 >= steps * 99,
+            "byte read loop missed native execution or diverged from the interpreter");
+    native_times[i] = native.elapsed_ns;
+    scalar_times[i] = scalar.elapsed_ns;
+  }
+  std::sort(native_times.begin(), native_times.end());
+  std::sort(scalar_times.begin(), scalar_times.end());
+  std::cout << "ETHER_ARM64_BYTE_READ_LOOP steps=" << steps
+            << " native_median_ns=" << native_times[3] << " scalar_median_ns=" << scalar_times[3] << '\n';
 }
 
 void cache_collision_contract() {
@@ -643,6 +705,7 @@ int main() {
     scan_forms_contract();
     immediate_arithmetic_contract();
     indexed_loop_benchmark();
+    byte_read_benchmark();
     for (bool store : {false, true}) {
       State a{}, b{};
       Cpu::EtherArm64Stats sa{}, sb{};

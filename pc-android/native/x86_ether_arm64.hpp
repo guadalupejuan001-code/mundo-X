@@ -28,7 +28,7 @@ struct Operand {
 };
 
 struct Instruction {
-  enum Kind { Move, Lea, Compare, Test, Increment, Decrement, Add, Subtract, Conditional, Jump };
+  enum Kind { Move, MoveByte, Lea, Compare, Test, Increment, Decrement, Add, Subtract, Conditional, Jump };
   Kind kind = Move;
   Operand lhs, rhs;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
@@ -76,13 +76,14 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
     if (opcode == 0x0f && pos < size && (bytes[pos] == 0xb6 || bytes[pos] == 0xb7))
       opcode = 0x0f00U | bytes[pos++];
     const bool zero_extend = opcode == 0x0fb6 || opcode == 0x0fb7;
+    const bool move_byte = opcode == 0x8a;
     Instruction op;
     op.begin = begin;
     op.opcode = opcode;
     op.width = (rex & 8) ? 8 : 4;
     if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x3b ||
         opcode == 0x39 || opcode == 0x80 || opcode == 0x83 || opcode == 0x84 ||
-        opcode == 0x85 || opcode == 0xff || zero_extend) {
+        opcode == 0x85 || opcode == 0xff || zero_extend || move_byte) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
@@ -109,12 +110,15 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
           other.displacement |= std::uint32_t(bytes[pos++]) << (8 * i);
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
-      const bool reg_first = opcode == 0x8b || opcode == 0x8d || opcode == 0x3b || zero_extend;
+      const bool reg_first = opcode == 0x8b || opcode == 0x8d || opcode == 0x3b || zero_extend || move_byte;
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
-      if (zero_extend) {
-        op.width = opcode == 0x0fb6 ? 1 : 2;
-        if (op.width == 1 && !rex && !other.memory && other.reg >= 4) break;
+      if (zero_extend || move_byte) {
+        op.width = opcode == 0x0fb7 ? 2 : 1;
+        // Without REX, byte register encodings 4 through 7 use the high byte.
+        if (op.width == 1 && !rex && ((move_byte && reg.reg >= 4) ||
+            (!other.memory && other.reg >= 4))) break;
+        if (move_byte) op.kind = Instruction::MoveByte;
       } else if (opcode == 0x8d) {
         if (!other.memory) break;
         op.kind = Instruction::Lea;
@@ -147,7 +151,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       }
       // TEST preserves AF. Retire any earlier producer of AF first.
       if (op.kind == Instruction::Test && block.flag_width && block.flag_op != Instruction::Test) break;
-      if (op.kind != Instruction::Move && op.kind != Instruction::Lea) {
+      if (op.kind != Instruction::Move && op.kind != Instruction::MoveByte && op.kind != Instruction::Lea) {
         block.flag_width = op.width;
         block.flag_op = op.kind;
       }
@@ -216,9 +220,10 @@ class Emitter {
         prepare_access(op.lhs, op.width);
         load(3, op.rhs.reg * 8, op.width);
         call(offsetof(Frame, write));
-      } else if (op.kind == Instruction::Move) {
+      } else if (op.kind == Instruction::Move || op.kind == Instruction::MoveByte) {
         read(op.rhs, op.width);
-        store(9, op.lhs.reg * 8);
+        // A byte store updates only the low byte of the little-endian guest register.
+        store(9, op.lhs.reg * 8, op.kind == Instruction::MoveByte ? 1 : 8);
       } else if (op.kind == Instruction::Lea) {
         address(op.rhs, 9);
         if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
@@ -279,8 +284,9 @@ class Emitter {
     else if (width == 2) load_op = 0x79400000U;
     emit(load_op | ((offset / width) << 10) | (19U << 5) | reg);
   }
-  void store(unsigned reg, unsigned offset) {
-    emit(0xf9000000U | ((offset / 8) << 10) | (19U << 5) | reg);
+  void store(unsigned reg, unsigned offset, unsigned width = 8) {
+    const auto store_op = width == 1 ? 0x39000000U : 0xf9000000U; // STRB or STR X
+    emit(store_op | ((offset / width) << 10) | (19U << 5) | reg);
   }
   void address(const Operand& operand, unsigned reg) {
     load(reg, operand.reg * 8);
