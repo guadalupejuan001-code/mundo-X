@@ -2,6 +2,8 @@
 
 #include "mundo_x/infinite_program.hpp"
 
+#include <algorithm>
+#include <array>
 #include <mutex>
 #include <type_traits>
 
@@ -114,6 +116,35 @@ class InfiniteSession {
     commit_if_changed(std::move(candidate), false);
   }
 
+  // The PC exposes only a finite window of the same byte-addressed state.
+  // Keep a whole operand under one lock and stage its result before publishing.
+  static constexpr std::size_t pc_window_bytes = 256;
+
+  void qload_pc_bytes(std::uint64_t first, std::uint8_t* out, std::size_t bytes) const {
+    check_pc_byte_range(first, out, bytes);
+    std::array<std::uint8_t, pc_window_bytes> values;
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (std::size_t i = 0; i < bytes; ++i) values[i] = qload_pc_byte((first + i) * 8);
+    std::copy_n(values.data(), bytes, out);
+  }
+
+  void qstore_pc_bytes(std::uint64_t first, const std::uint8_t* in, std::size_t bytes) {
+    check_pc_byte_range(first, in, bytes);
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<Gate> flips;
+    for (std::size_t i = 0; i < bytes; ++i) {
+      const auto first_bit = (first + i) * 8;
+      const auto change = qload_pc_byte(first_bit) ^ in[i];
+      for (unsigned bit = 0; bit < 8; ++bit) {
+        if (change & (1U << bit)) flips.push_back({'X', std::to_string(first_bit + bit), {}});
+      }
+    }
+    if (flips.empty()) return;
+    require_epoch();
+    core_.apply(flips);
+    ++epoch_;
+  }
+
   CompactCore::ZMeasurement measure_z(const std::string& address) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto candidate = core_;
@@ -192,6 +223,23 @@ class InfiniteSession {
   }
 
  private:
+  static void check_pc_byte_range(std::uint64_t first, const void* data, std::size_t bytes) {
+    constexpr auto last = std::numeric_limits<std::uint64_t>::max() / 8;
+    if (!data || !bytes || bytes > pc_window_bytes || first > last - (bytes - 1))
+      throw std::out_of_range("InfiniteCore PC byte range");
+  }
+
+  std::uint8_t qload_pc_byte(std::uint64_t first_bit) const {
+    std::uint8_t value = 0;
+    for (unsigned bit = 0; bit < 8; ++bit) {
+      const auto one = core_.probability_one(std::to_string(first_bit + bit));
+      if (one != 0.0 && one != 1.0)
+        throw std::runtime_error("InfiniteCore PC operand contains a quantum bit");
+      if (one == 1.0) value |= std::uint8_t(1U << bit);
+    }
+    return value;
+  }
+
   static void add_transport_bytes(std::size_t& total, std::size_t extra) {
     if (extra > infinite_program_detail::max_batch_address_bytes - total)
       throw std::length_error("request address text exceeds 16 MiB");

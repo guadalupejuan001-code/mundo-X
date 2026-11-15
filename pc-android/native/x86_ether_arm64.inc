@@ -70,12 +70,17 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
       return 0; // Discard staged state. The interpreter takes the exact fault.
     }
     regs = frame.regs;
-    if (block.compare_width) alu(7, frame.left, frame.right, block.compare_width);
+    if (block.flag_width)
+      alu(block.flag_op == ether_arm64::Instruction::Test ? 4 : 7,
+          frame.left, frame.right, block.flag_width);
     const auto& last = block.instructions[block.count - 1];
     start_cs_ = segments[CS];
     start_ip_ = origin + last.begin;
     cursor_ = origin + last.end;
-    ip_written_ = outcome == 2;
+    // TEST uses the canonical flags for the branch too, including x86 parity.
+    ip_written_ = last.kind == ether_arm64::Instruction::Conditional &&
+                  block.flag_op == ether_arm64::Instruction::Test
+        ? condition(last.opcode & 15) : outcome == 2;
     eip = ip_written_ ? block.target : cursor_;
     opcode_ = std::uint16_t(last.opcode);
     repeat_ = 0;

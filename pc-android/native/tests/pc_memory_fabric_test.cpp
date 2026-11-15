@@ -1,6 +1,8 @@
 #include "../pc_machine.hpp"
 
 #include <array>
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -8,6 +10,7 @@
 
 namespace {
 using cosmic_pc::PcMachine;
+using cosmic_pc::Cpu;
 unsigned checks=0;
 void need(bool ok,const char* reason){++checks;if(!ok)throw std::runtime_error(reason);}
 template<class F> void rejected(F fn,const char* reason){
@@ -15,6 +18,104 @@ template<class F> void rejected(F fn,const char* reason){
 }
 std::array<std::uint8_t,4> pixel(const PcMachine& pc,unsigned x,unsigned y){
   std::array<std::uint8_t,4> out{};pc.copy_video_rgba(x,y,1,1,out.data(),out.size());return out;
+}
+
+constexpr std::uint64_t ether_address=PcMachine::kEtherMemoryPhysicalBase;
+constexpr std::uint64_t ether_logical=PcMachine::kEtherMemoryLogicalByteBase;
+constexpr std::uint64_t work_address=0xa000;
+constexpr unsigned iterations=1024;
+constexpr std::uint64_t seed=0x0123456789abcdefULL;
+
+void prepare_x64(PcMachine& pc){
+  pc.boot_long_mode_demo();
+  pc.run(4000);
+  need(pc.cpu.is_long_mode()&&pc.cpu.halted&&!pc.cpu.fault,"Ether test did not reach long mode");
+  // An independent 2 MiB identity mapping covers the existing Ether window.
+  const auto page=ether_address&~0x1fffffULL;
+  pc.cpu.write64(0x2000+8*(ether_address>>30),0x4003);
+  pc.cpu.write64(0x4000+8*((ether_address>>21)&0x1ff),page|0x83);
+  pc.cpu.eip=work_address;
+  pc.cpu.halted=false;
+  pc.cpu.regs[Cpu::EBX]=ether_address;
+}
+
+struct EtherRun {
+  std::array<std::uint64_t,16> registers;
+  std::uint64_t cycles, ip, value, ns;
+  std::uint32_t flags;
+};
+
+EtherRun ether_workload(bool bulk){
+  PcMachine pc(2048ULL<<20,64ULL<<20);
+  prepare_x64(pc);
+  if(!bulk) {
+    const auto session=pc.quantum_session;
+    pc.cpu.memory.attach_window(ether_address, PcMachine::kEtherMemoryBytes,
+        [session](std::uint64_t offset){return session->qload8(std::to_string(ether_logical+offset));},
+        [session](std::uint64_t offset,std::uint8_t x){session->qstore8(std::to_string(ether_logical+offset),x);});
+  }
+  const std::uint8_t code[]{
+    0x48,0x89,0x03, // MOV [RBX],RAX
+    0x48,0x8b,0x13, // MOV RDX,[RBX]
+    0x48,0xf7,0xd0, // NOT RAX
+    0xff,0xc9,      // DEC ECX
+    0x75,0xf3,      // JNZ back to the store
+    0xf4,           // HLT
+  };
+  auto& cpu=pc.cpu;
+  cpu.memory.write_block(work_address, code, sizeof(code));
+  cpu.regs[Cpu::EAX]=seed;
+  cpu.regs[Cpu::ECX]=iterations;
+  const auto begin=std::chrono::steady_clock::now();
+  pc.run(iterations*5+1);
+  const auto ns=std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::steady_clock::now()-begin).count();
+  if(cpu.fault)throw std::runtime_error(cpu.fault->describe());
+  need(cpu.halted&&cpu.regs[Cpu::EDX]==~seed,"x86 loop did not observe its InfiniteCore stores");
+  const auto json=pc.quantum_json();
+  need(json.find(bulk?"\"ether_span_writes\":1024,":"\"ether_span_writes\":0,")!=std::string::npos,
+       "diagnostics did not identify the actual store path");
+  need(json.find("\"guest_requests\":0,")!=std::string::npos,"workload used the command ports");
+  return {cpu.regs,cpu.instructions,cpu.eip,cpu.read64(ether_address),std::uint64_t(ns),cpu.eflags};
+}
+
+void compare_ether_workloads(){
+  std::array<std::uint64_t,3> scalar_ns{}, bulk_ns{};
+  for (std::size_t i=0;i<scalar_ns.size();++i) {
+    const auto first=ether_workload(i%2!=0);
+    const auto second=ether_workload(i%2==0);
+    const auto& scalar=i%2==0?first:second;
+    const auto& bulk=i%2==0?second:first;
+    need(scalar.registers==bulk.registers&&scalar.cycles==bulk.cycles&&scalar.ip==bulk.ip&&
+         scalar.flags==bulk.flags&&scalar.value==bulk.value&&bulk.value==~seed,
+         "InfiniteCore span path diverged from scalar guest semantics");
+    scalar_ns[i]=scalar.ns;
+    bulk_ns[i]=bulk.ns;
+  }
+  std::sort(scalar_ns.begin(),scalar_ns.end());
+  std::sort(bulk_ns.begin(),bulk_ns.end());
+  std::cout<<"PRIME_C09_ETHER_INFINITECORE_PASS iterations="<<iterations
+           <<" scalar_median_ns="<<scalar_ns[1]<<" bulk_median_ns="<<bulk_ns[1]<<'\n';
+}
+
+void test_failed_operand(){
+  PcMachine pc(2048ULL<<20,64ULL<<20);
+  prepare_x64(pc);
+  pc.quantum_session->apply({{'H',std::to_string(8*(ether_logical+7)),{}}});
+  const auto snapshot=pc.quantum_session->snapshot();
+  auto& cpu=pc.cpu;
+  const std::uint8_t bytes[]{0x48,0x89,0x03};
+  cpu.memory.write_block(work_address, bytes, sizeof(bytes));
+  cpu.regs[Cpu::EAX]=UINT64_MAX;
+  need(cpu.step()==cosmic_pc::StepResult::Faulted&&cpu.eip==work_address,
+       "x86 store did not reject a nonclassical byte");
+  need(pc.quantum_session->snapshot()==snapshot,"failed operand changed InfiniteCore state");
+  std::array<std::uint8_t,8> out;
+  out.fill(0x5a);
+  rejected([&]{pc.cpu.memory.read_block(ether_address,out.data(),out.size());},
+           "block read measured a nonclassical byte");
+  need(std::all_of(out.begin(),out.end(),[](auto x){return x==0x5a;}),
+       "failed block read exposed a partial operand");
 }
 }
 
@@ -82,6 +183,9 @@ int main(){
          "PC diagnostics do not expose Ether Memory window");
     need(json.find("\"ram_policy\":\"zero-pages-on-demand+ether-window\"")!=std::string::npos,
          "PC diagnostics do not identify MemoryFabric policy");
+
+    compare_ether_workloads();
+    test_failed_operand();
 
     std::cout<<"{\"suite\":\"pc_memory_fabric\",\"checks\":"<<checks
              <<",\"ether_window_bytes\":"<<PcMachine::kEtherMemoryBytes

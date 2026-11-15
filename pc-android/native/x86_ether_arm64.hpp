@@ -20,10 +20,12 @@ struct Operand {
   unsigned reg = 0;
   std::uint32_t displacement = 0;
   bool memory = false;
+  bool immediate = false;
+  int immediate_value = 0;
 };
 
 struct Instruction {
-  enum Kind { Move, Compare, Conditional, Jump };
+  enum Kind { Move, Compare, Test, Conditional, Jump };
   Kind kind = Move;
   Operand lhs, rhs;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
@@ -32,7 +34,8 @@ struct Instruction {
 struct Block {
   static constexpr unsigned kMaxBytes = 64, kMaxInstructions = 8;
   std::array<Instruction, kMaxInstructions> instructions{};
-  unsigned count = 0, size = 0, compare_width = 0;
+  unsigned count = 0, size = 0, flag_width = 0;
+  Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
 };
 
@@ -65,7 +68,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
     op.begin = begin;
     op.opcode = opcode;
     op.width = (rex & 8) ? 8 : 4;
-    if (opcode == 0x8b || opcode == 0x89 || opcode == 0x3b || opcode == 0x39) {
+    if (opcode == 0x8b || opcode == 0x89 || opcode == 0x3b || opcode == 0x39 ||
+        opcode == 0x83 || opcode == 0x84 || opcode == 0x85) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
@@ -83,8 +87,25 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       const bool reg_first = opcode == 0x8b || opcode == 0x3b;
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
-      op.kind = opcode == 0x8b || opcode == 0x89 ? Instruction::Move : Instruction::Compare;
-      if (op.kind == Instruction::Compare) block.compare_width = op.width;
+      if (opcode == 0x83) {
+        if (((modrm >> 3) & 7U) != 7 || pos == size) break;
+        const unsigned value = bytes[pos++];
+        op.rhs = {0, 0, false, true, int(value) - (value >= 128 ? 256 : 0)};
+        op.kind = Instruction::Compare;
+      } else if (opcode == 0x84 || opcode == 0x85) {
+        if (opcode == 0x84) {
+          // Without REX, encodings 4 through 7 refer to AH, CH, DH and BH.
+          if (!rex && (reg.reg >= 4 || (!other.memory && other.reg >= 4))) break;
+          op.width = 1;
+        }
+        op.kind = Instruction::Test;
+      } else {
+        op.kind = opcode == 0x8b || opcode == 0x89 ? Instruction::Move : Instruction::Compare;
+      }
+      if (op.kind != Instruction::Move) {
+        block.flag_width = op.width;
+        block.flag_op = op.kind;
+      }
     } else {
       if (rex) break;
       unsigned disp_bytes = 1;
@@ -97,7 +118,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
           (opcode >= 0x0f80 && opcode <= 0x0f8f);
       if (conditional) {
         op.condition = kArmCondition[opcode & 15];
-        if (!block.compare_width || op.condition == 16) break;
+        if (!block.flag_width || (op.condition == 16 && block.flag_op != Instruction::Test)) break;
         op.kind = Instruction::Conditional;
       } else if (opcode == 0xeb || opcode == 0xe9) {
         if (opcode == 0xe9) disp_bytes = 4;
@@ -154,7 +175,7 @@ class Emitter {
       } else if (op.kind == Instruction::Move) {
         read(op.rhs, op.width);
         store(9, op.lhs.reg * 8);
-      } else if (op.kind == Instruction::Compare) {
+      } else if (op.kind == Instruction::Compare || op.kind == Instruction::Test) {
         read(op.lhs, op.width);
         store(9, offsetof(Frame, left));
         read(op.rhs, op.width);
@@ -162,10 +183,10 @@ class Emitter {
       }
     }
     const auto& last = block.instructions[block.count - 1];
-    if (last.kind == Instruction::Conditional) {
-      load(9, offsetof(Frame, left), block.compare_width);
-      load(10, offsetof(Frame, right), block.compare_width);
-      emit(block.compare_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
+    if (last.kind == Instruction::Conditional && block.flag_op == Instruction::Compare) {
+      load(9, offsetof(Frame, left), block.flag_width);
+      load(10, offsetof(Frame, right), block.flag_width);
+      emit(block.flag_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
       emit(0x1a9f07e0U | ((last.condition ^ 1U) << 12)); // CSET W0,cc
       emit(0x11000400); // ADD W0,W0,#1
     } else {
@@ -189,7 +210,8 @@ class Emitter {
 
   void emit(std::uint32_t word) { code_.push_back(word); }
   void load(unsigned reg, unsigned offset, unsigned width = 8) {
-    emit((width == 8 ? 0xf9400000U : 0xb9400000U) | ((offset / width) << 10) | (19U << 5) | reg);
+    const auto load_op = width == 8 ? 0xf9400000U : width == 4 ? 0xb9400000U : 0x39400000U;
+    emit(load_op | ((offset / width) << 10) | (19U << 5) | reg);
   }
   void store(unsigned reg, unsigned offset) {
     emit(0xf9000000U | ((offset / 8) << 10) | (19U << 5) | reg);
@@ -216,6 +238,15 @@ class Emitter {
     emit(0); // Patched to CBZ W0 on failure.
   }
   void read(const Operand& operand, unsigned width) {
+    if (operand.immediate) {
+      if (operand.immediate_value < 0) {
+        const auto movn = width == 8 ? 0x92800009U : 0x12800009U;
+        emit(movn | (std::uint32_t(~operand.immediate_value) << 5));
+      } else {
+        emit(0x52800009U | (std::uint32_t(operand.immediate_value) << 5)); // MOVZ W9,imm
+      }
+      return;
+    }
     if (!operand.memory) {
       load(9, operand.reg * 8, width);
       return;

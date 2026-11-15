@@ -179,6 +179,7 @@ class Cpu {
   bool halted = false;
   std::optional<Fault> fault;
   std::uint64_t instructions = 0;
+  std::uint64_t wbinvd_retired = 0;
   // Diagnostic counter: one increment per actual IA-32e page-table walk.
   // Used to prove that multi-byte accesses do not repeat the same walk.
   std::uint64_t page_walks = 0;
@@ -268,7 +269,7 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
 #endif
-    a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0;
+    a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0; wbinvd_retired = 0;
     instruction_page_ = {};
     instruction_page_hits = 0;
     page_translation_hits = 0;
@@ -830,14 +831,18 @@ class Cpu {
     for (unsigned i = 0; i < bytes; ++i) result |= std::uint64_t(data[i]) << (8U * i);
     return result;
   }
-  bool bulk_ram_range(std::uint64_t address, unsigned bytes) const {
+  bool bulk_memory_range(std::uint64_t address, unsigned bytes, bool allow_window = false) const {
     if (!bytes || address > UINT64_MAX - (bytes - 1)) return false;
     const auto bus = bus_address(address);
     if (bus >= memory.size() || bytes > memory.size() - bus ||
         bus_address(address + bytes - 1) != bus + bytes - 1) return false;
     if (mmio_claim_hook && (!mmio_range_claim_hook || mmio_range_claim_hook(bus, bytes))) return false;
-    return !(memory.has_window() && bus < memory.window_base() + memory.window_bytes() &&
-             memory.window_base() < bus + bytes);
+    if (!memory.has_window() || bus >= memory.window_base() + memory.window_bytes() ||
+        memory.window_base() >= bus + bytes) return true;
+    return allow_window && memory.has_window_block(bus, bytes);
+  }
+  bool bulk_ram_range(std::uint64_t address, unsigned bytes) const {
+    return bulk_memory_range(address, bytes);
   }
   std::uint64_t read_page_entry(std::uint64_t address, bool& ordinary_ram) const {
     if (bulk_ram_range(address, 8)) return read_ram_span(bus_address(address), 8);
@@ -951,7 +956,7 @@ class Cpu {
       // One page-table walk validates the contiguous remainder of this page.
       const auto physical = translate(linear, access);
       const unsigned chunk = std::min<unsigned>(bytes - done, 0x1000U - unsigned(linear & 0xfffU));
-      if (chunk > 1 && bulk_ram_range(physical, chunk)) {
+      if (chunk > 1 && bulk_memory_range(physical, chunk, access != Access::Execute)) {
         result |= read_ram_span(bus_address(physical), chunk) << (8U * done);
       } else {
         for (unsigned i = 0; i < chunk; ++i)
@@ -974,7 +979,7 @@ class Cpu {
     const bool page_local = bytes <= 0x1000U - unsigned(address & 0xfffU);
     const auto translated = page_local ? translate(address, Access::Write) : 0;
     if (page_local && bytes > 1) {
-      if (bulk_ram_range(translated, bytes)) {
+      if (bulk_memory_range(translated, bytes, true)) {
         const auto index = bus_address(translated);
         std::array<std::uint8_t, 8> data;
         if (transaction_) {
@@ -4287,6 +4292,7 @@ inline void Cpu::extended() {
       if (cpl() != 0) fail("WBINVD requires CPL0", FaultCode::ProtectionFault);
       // Guest stores reach shared RAM at each retired instruction. This
       // serializing instruction completes on the coherent single-vCPU bus.
+      ++wbinvd_retired;
       return;
     case 0x20: case 0x22: {
       // The MOD bits do not encode a memory operand for MOV CR. REX.R
