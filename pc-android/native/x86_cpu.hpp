@@ -50,7 +50,24 @@ enum class FaultCode {
   StackFault, SegmentNotPresent, DebugException
 };
 
+enum class IdtSource { SoftwareInterrupt, CpuException, HardwareInterrupt };
+
+struct IdtAttempt {
+  IdtSource source = IdtSource::CpuException;
+  std::uint8_t vector = 0;
+  bool has_error = false;
+  std::uint32_t stacked_error = 0;
+  unsigned entry_bytes = 0, bytes_read = 0;
+  std::optional<std::uint64_t> entry_address;
+  std::uint64_t low = 0, high = 0;
+  int failure_vector = -1;
+  std::uint32_t failure_error = 0;
+  std::uint64_t failure_address = 0;
+  std::string failure;
+};
+
 struct Fault {
+  static constexpr unsigned kMaxIdtAttempts = 3;
   FaultCode code = FaultCode::HostError;
   std::uint16_t cs = 0;
   std::uint64_t eip = 0;
@@ -59,6 +76,8 @@ struct Fault {
   std::string reason;
   std::uint64_t linear_address = 0;
   std::uint32_t error_code = 0;
+  std::array<IdtAttempt, kMaxIdtAttempts> idt_attempts{};
+  unsigned idt_attempt_count = 0;
   std::string describe() const {
     std::ostringstream out;
     out << std::hex << std::setfill('0') << std::setw(4) << cs << ':'
@@ -483,6 +502,7 @@ class Cpu {
   StepResult step() {
     if (fault) return StepResult::Faulted;
     if (halted) return StepResult::Halted;
+    failed_idt_count_ = 0;
     const auto memory_writes = memory.pin_writes();
     const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
                           cr2, cr3, efer, fs_base, gs_base, system_call_msrs_, gdtr, idtr, ldtr, tr, a20_enabled, halted,
@@ -612,7 +632,7 @@ class Cpu {
         auto deliver = [&](unsigned number, bool with_error, std::uint32_t code) -> bool {
           try {
             transaction_ = true;
-            dispatch_idt(std::uint8_t(number), start_ip_, false, with_error, code);
+            dispatch_idt(std::uint8_t(number), start_ip_, IdtSource::CpuException, with_error, code);
             transaction_ = false; clear_write_journal();
             ++instructions; // bounded interpreter step, not retired opcode
             delivered_vector=int(number);
@@ -633,6 +653,7 @@ class Cpu {
         }
         fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_,
                       t.reason + " (guest IDT delivery failed; triple fault)", t.address, t.error};
+        attach_idt_attempts();
         return StepResult::Faulted;
       }
     } catch (const MemoryFabric::BudgetExceeded& e) {
@@ -642,6 +663,7 @@ class Cpu {
       rollback(before);
       fault = Fault{FaultCode::HostError, start_cs_, start_ip_, opcode_, decoded_, e.what()};
     }
+    attach_idt_attempts();
     return StepResult::Faulted;
   }
 
@@ -664,6 +686,7 @@ class Cpu {
   // Pending IRQs remain with the originating device/controller.
   bool raise_external_irq(std::uint8_t vector) {
     if (!flag(IF) || interrupt_shadow_ || fault) return false;
+    failed_idt_count_ = 0;
     const auto memory_writes = memory.pin_writes();
     const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
                           cr2,cr3,efer,fs_base,gs_base,system_call_msrs_,gdtr,idtr,ldtr,tr,a20_enabled,halted,
@@ -674,7 +697,7 @@ class Cpu {
       if (is_real_mode()) {
         dispatch_real_interrupt(real_ivt_target(vector), eip);
       } else {
-        dispatch_idt(vector,eip,false,false,0);
+        dispatch_idt(vector,eip,IdtSource::HardwareInterrupt,false,0);
       }
       halted=false;
       transaction_=false;clear_write_journal();
@@ -693,6 +716,7 @@ class Cpu {
       rollback(before);
       fault=Fault{FaultCode::HostError,start_cs_,start_ip_,0,{},std::string("hardware IRQ delivery: ")+e.what()};
     }
+    attach_idt_attempts();
     return false;
   }
 
@@ -701,6 +725,24 @@ class Cpu {
   bool x87_ignne_ = false;
   bool interrupt_shadow_ = false;
   unsigned last_rep_batch_bytes_ = 0;
+  std::array<IdtAttempt, Fault::kMaxIdtAttempts> failed_idt_attempts_{};
+  unsigned failed_idt_count_ = 0;
+
+  void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
+    if (failed_idt_count_ == failed_idt_attempts_.size()) return;
+    try {
+      attempt.failure = message;
+    } catch (...) {
+      // Preserve the original exception if there is no space for its text.
+    }
+    failed_idt_attempts_[failed_idt_count_++] = std::move(attempt);
+  }
+  void attach_idt_attempts() noexcept {
+    if (!fault) return;
+    for (unsigned i = 0; i < failed_idt_count_; ++i)
+      fault->idt_attempts[i] = std::move(failed_idt_attempts_[i]);
+    fault->idt_attempt_count = std::exchange(failed_idt_count_, 0);
+  }
 
   struct Trap : std::runtime_error {
     FaultCode code;
@@ -2542,7 +2584,7 @@ class Cpu {
   }
   void interrupt(std::uint8_t vector) {
     if (!is_real_mode()) {
-      dispatch_idt(vector, cursor_, true, false, 0);
+      dispatch_idt(vector, cursor_, IdtSource::SoftwareInterrupt, false, 0);
       return;
     }
     eip = cursor_ & code_mask(); ip_written_ = true;
@@ -2580,36 +2622,67 @@ class Cpu {
     }
   }
   void dispatch_idt(std::uint8_t vector, std::uint64_t resume_ip,
-                    bool software, bool has_error, std::uint32_t error) {
+                    IdtSource source, bool has_error, std::uint32_t error) {
+    IdtAttempt attempt;
+    attempt.source = source;
+    attempt.vector = vector;
+    attempt.has_error = has_error;
+    attempt.stacked_error = error;
     // EFER.LMA selects the IDT format, including for compatibility code.
-    const bool long_gate = (efer & 0x400U) != 0;
+    attempt.entry_bytes = (efer & 0x400U) ? 16U : 8U;
+    try {
+      deliver_idt_gate(attempt, resume_ip);
+    } catch (const Trap& trap) {
+      attempt.failure_vector = exception_vector(trap.code);
+      attempt.failure_error = trap.error;
+      attempt.failure_address = trap.address;
+      remember_idt_failure(attempt, trap.reason.c_str());
+      throw;
+    } catch (const std::exception& error) {
+      remember_idt_failure(attempt, error.what());
+      throw;
+    }
+  }
+  void deliver_idt_gate(IdtAttempt& attempt, std::uint64_t resume_ip) {
+    const bool software = attempt.source == IdtSource::SoftwareInterrupt;
+    const auto external = software ? 0U : 1U;
+    const auto idt_error = (std::uint32_t(attempt.vector) << 3) | 2U | external;
+    const auto length = attempt.entry_bytes;
+    const bool long_gate = length == 16;
     const auto old_cpl = cpl();
-    const unsigned length = long_gate ? 16U : 8U;
-    const auto slot = std::uint64_t(vector) * length;
-    if (slot + length - 1 > idtr.limit || idtr.base > UINT64_MAX - slot - length)
-      fail("interrupt vector outside guest IDT", FaultCode::ProtectionFault);
-    const auto address = idtr.base + slot;
+    const auto slot = std::uint64_t(attempt.vector) * length;
+    if (idtr.base <= UINT64_MAX - slot) attempt.entry_address = idtr.base + slot;
+    if (slot + length - 1 > idtr.limit || idtr.base > UINT64_MAX - slot - (length - 1))
+      fail("interrupt vector outside guest IDT", FaultCode::ProtectionFault, idt_error);
+    const auto address = *attempt.entry_address;
     if (long_gate && (!canonical(address) || !canonical(address + length - 1)))
       fail("noncanonical IDT entry", FaultCode::ProtectionFault);
-    std::uint64_t low = 0, high = 0;
     {
       SupervisorAccess system(*this);
-      low = read_linear(address, 8);
-      if (long_gate) high = read_linear(address + 8, 8);
+      attempt.low = read_linear(address, 8);
+      attempt.bytes_read = 8;
+      if (long_gate) {
+        attempt.high = read_linear(address + 8, 8);
+        attempt.bytes_read = 16;
+      }
     }
+    const auto low = attempt.low, high = attempt.high;
     const auto selector = std::uint16_t((low >> 16) & 0xffffU);
     const auto ist = unsigned((low >> 32) & 7U);
     const auto reserved = unsigned((low >> 35) & 31U);
     const auto attr = unsigned((low >> 40) & 255U);
     const auto type = attr & 31U;
     const bool gate16 = !long_gate && (type == 6 || type == 7);
-    if ((!gate16 && type != 0xe && type != 0xf) || !(selector & 0xfffcU))
-      fail("IDT gate is not an interrupt or trap gate for this mode", FaultCode::ProtectionFault);
-    if (!(attr & 0x80)) fail("IDT gate not present", FaultCode::ProtectionFault);
+    if (!gate16 && type != 0xe && type != 0xf)
+      fail("IDT gate is not an interrupt or trap gate for this mode", FaultCode::ProtectionFault, idt_error);
     if (software && old_cpl > ((attr >> 5) & 3U))
-      fail("INT gate DPL check failed", FaultCode::ProtectionFault);
+      fail("INT gate DPL check failed", FaultCode::ProtectionFault, idt_error);
+    if (!(attr & 0x80))
+      fail("IDT gate not present", FaultCode::SegmentNotPresent, idt_error);
     if (reserved || (!long_gate && ist) || (long_gate && (high >> 32)))
-      fail("IDT gate reserved fields are set", FaultCode::ProtectionFault);
+      fail("IDT gate reserved fields are set", FaultCode::ProtectionFault, idt_error);
+    if (!(selector & 0xfffcU))
+      fail("IDT gate has a null code selector", FaultCode::ProtectionFault, external);
     const auto target_ip = (low & 0xffffU) | (gate16 ? 0 : ((low >> 48) & 0xffffU) << 16) |
                            ((high & 0xffffffffULL) << 32);
     if (long_gate && !canonical(target_ip))
@@ -2671,7 +2744,7 @@ class Cpu {
       push(original_ss,width); push(original_rsp,width);
     }
     push(original_flags,width);push(original_cs,width);push(resume_ip,width);
-    if (has_error) push(error,width);
+    if (attempt.has_error) push(attempt.stacked_error,width);
     jump(target_ip,width);
     if (type == 6 || type == 0xe) eflags &= ~IF;
     eflags &= ~(TF | 0x34000U); // Clear NT/RF/VM after saving their image.
