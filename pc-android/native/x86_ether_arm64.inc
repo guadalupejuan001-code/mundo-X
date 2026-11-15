@@ -4,19 +4,40 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
       interrupt_shadow_ || !a20_enabled || !page_translation_cache_enabled_ ||
       (cr0 & 0x80000001U) != 0x80000001U || !(cr4 & 0x20U) || !is_long_mode() ||
       (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
-      step_trace_hook || irq_trace_hook || !canonical(eip))
+      step_trace_hook || irq_trace_hook)
     return 0;
 
+  // Return to the machine at its next observation boundary. Short chains
+  // amortize dispatch while leaving the specialized scanner first in line.
+  const auto limit = std::min(budget, 64U);
+  unsigned completed = 0;
+  while (limit - completed >= 2) {
+    const auto retired = retire_ether_arm64_block(limit - completed);
+    if (!retired) break;
+    completed += retired;
+    if (scan_loop_batch_candidate()) break;
+  }
+  return completed;
+#else
+  (void)budget;
+  return 0;
+#endif
+}
+
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+inline unsigned Cpu::retire_ether_arm64_block(unsigned budget) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto origin = eip;
   const auto width = std::min(ether_arm64::Block::kMaxBytes, page_bytes - unsigned(eip % page_bytes));
-  if (width < 2 || eip > UINT64_MAX - width || !canonical(eip + width - 1)) return 0;
-  auto& entry = ether_arm64_cache_->entry(eip, ether_arm64_stats_.compiled_evictions);
+  if (width < 2 || eip > UINT64_MAX - width || !canonical(eip) || !canonical(eip + width - 1)) return 0;
+  const auto lookup = ether_arm64_cache_->lookup(eip);
+  auto& entry = lookup.entry;
   if (!entry.checked_bytes && entry.visits < 2) {
     ++entry.visits;
     return 0;
   }
 
+  auto* active = &entry;
   try {
     const auto physical = translate(eip, Access::Execute, nullptr, true);
     if (!bulk_ram_range(physical, width)) {
@@ -47,11 +68,10 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
       entry.cpl = cpl();
       std::copy_n(actual.begin(), entry.checked_bytes, entry.bytes.begin());
     }
-    const auto& block = entry.block;
-    if (block.count < 2 || block.count > budget) return 0;
+    if (entry.block.count < 2 || entry.block.count > budget) return 0;
     if (!entry.code) {
       const auto start = std::chrono::steady_clock::now();
-      const bool built = entry.code.build(block);
+      const bool built = entry.code.build(entry.block);
       ether_arm64_stats_.native_compile_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now() - start).count();
       if (!built) {
@@ -59,32 +79,50 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
         return 0;
       }
       ++ether_arm64_stats_.translated;
+      if (lookup.pending)
+        active = &ether_arm64_cache_->admit(entry, ether_arm64_stats_.compiled_evictions);
     } else {
       ++ether_arm64_stats_.hits;
     }
 
+    const auto& block = active->block;
+    const auto& last = block.instructions[block.count - 1];
+    decoded_.reserve(last.end - last.begin);
     ether_arm64::Frame frame{regs, 0, 0, 0, &Cpu::ether_arm64_read, &Cpu::ether_arm64_write, this};
-    const auto outcome = entry.code.run(frame);
+    const auto outcome = active->code.run(frame);
     if (!outcome) {
       ++ether_arm64_stats_.data_fallbacks;
       return 0; // Discard staged state. The interpreter takes the exact fault.
     }
     regs = frame.regs;
-    if (block.flag_width)
-      alu(block.flag_op == ether_arm64::Instruction::Test ? 4 : 7,
-          frame.left, frame.right, block.flag_width);
-    const auto& last = block.instructions[block.count - 1];
+    switch (block.flag_op) {
+      case ether_arm64::Instruction::Compare:
+        alu(7, frame.left, frame.right, block.flag_width);
+        break;
+      case ether_arm64::Instruction::Test:
+        alu(4, frame.left, frame.right, block.flag_width);
+        break;
+      case ether_arm64::Instruction::Increment:
+      case ether_arm64::Instruction::Decrement: {
+        const auto carry = flag(CF);
+        alu(block.flag_op == ether_arm64::Instruction::Increment ? 0 : 5,
+            frame.left, 1, block.flag_width);
+        set_flag(CF, carry);
+        break;
+      }
+      default: break;
+    }
     start_cs_ = segments[CS];
     start_ip_ = origin + last.begin;
     cursor_ = origin + last.end;
-    // TEST uses the canonical flags for the branch too, including x86 parity.
+    // Byte arithmetic, parity and inherited flags use the x86 condition.
     ip_written_ = last.kind == ether_arm64::Instruction::Conditional &&
-                  block.flag_op == ether_arm64::Instruction::Test
+                  !block.uses_arm_condition()
         ? condition(last.opcode & 15) : outcome == 2;
     eip = ip_written_ ? block.target : cursor_;
     opcode_ = std::uint16_t(last.opcode);
     repeat_ = 0;
-    decoded_.assign(entry.bytes.begin() + last.begin, entry.bytes.begin() + last.end);
+    decoded_.assign(active->bytes.begin() + last.begin, active->bytes.begin() + last.end);
     instructions += block.count;
     eflags |= 2;
     ++ether_arm64_stats_.blocks;
@@ -93,19 +131,14 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
   } catch (const std::exception&) {
     // Speculative walks never set A/D bits or access an I/O provider.
     // Preserve the original scalar path for the first architectural fault.
-    if (entry.code) {
+    if (active->code) {
       ++ether_arm64_stats_.invalidated;
-      entry.invalidate(eip);
+      active->invalidate(origin);
     }
     return 0;
   }
-#else
-  (void)budget;
-  return 0;
-#endif
 }
 
-#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
 inline std::optional<std::uint64_t> Cpu::ether_arm64_ram_address(
     std::uint64_t address, unsigned width, Access access) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;

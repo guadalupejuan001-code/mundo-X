@@ -730,6 +730,7 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<ether_arm64::Cache> ether_arm64_cache_;
   bool ether_arm64_enabled_ = false;
+  unsigned retire_ether_arm64_block(unsigned budget);
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
                                   unsigned width) noexcept;
   static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
