@@ -176,6 +176,7 @@ class Cpu {
 #endif
   struct EtherArm64Stats {
     std::uint64_t translated = 0, hits = 0, blocks = 0, steps = 0;
+    std::uint64_t protected32_steps = 0;
     std::uint64_t invalidated = 0, data_fallbacks = 0;
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
     std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
@@ -208,6 +209,7 @@ class Cpu {
 #endif
   }
   const EtherArm64Stats& ether_arm64_stats() const noexcept { return ether_arm64_stats_; }
+  bool ether_arm64_block_candidate() const noexcept;
   unsigned try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus = nullptr);
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
@@ -853,7 +855,7 @@ class Cpu {
   static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
                                     unsigned width, std::uint64_t value) noexcept;
   std::optional<std::uint64_t> ether_arm64_ram_address(std::uint64_t address, unsigned width,
-                                                       Access access);
+                                                      bool stack, Access access);
 #endif
   TranslationSet& translation_set(std::uint64_t linear_page, Access access) noexcept {
     const auto index = (linear_page ^ (linear_page >> 8) ^ (linear_page >> 16) ^

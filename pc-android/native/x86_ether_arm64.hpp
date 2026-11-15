@@ -15,6 +15,8 @@
 
 namespace cosmic_pc::ether_arm64 {
 
+inline constexpr unsigned kStackAccess = 16; // Packed alongside the RAM callback's width.
+
 // Decode only the register and ordinary-memory forms the ARM64 backend
 // implements. The interpreter owns all other prefixes, operands and opcodes.
 struct Operand {
@@ -25,10 +27,14 @@ struct Operand {
   bool immediate = false;
   int immediate_value = 0;
   unsigned index = kNoIndex, scale_shift = 0;
+  bool stack = false;
 };
 
 struct Instruction {
-  enum Kind { Move, MoveByte, Lea, Compare, Test, Increment, Decrement, Add, Subtract, Conditional, Jump };
+  enum Kind {
+    Move, MoveByte, MoveZeroExtend, Lea, Compare, Test, Increment, Decrement,
+    Add, Subtract, Xor, Conditional, Jump
+  };
   Kind kind = Move;
   Operand lhs, rhs;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
@@ -40,9 +46,10 @@ struct Block {
   unsigned count = 0, size = 0, flag_width = 0;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
+  bool long_mode = true;
 
   bool uses_arm_condition() const noexcept {
-    if (!count || flag_op != Instruction::Compare || flag_width <= 1) return false;
+    if (!count || flag_op != Instruction::Compare || flag_width < 4) return false;
     const auto& last = instructions[count - 1];
     return last.kind == Instruction::Conditional && last.condition < 16;
   }
@@ -53,8 +60,9 @@ struct Block {
 inline constexpr std::array<unsigned, 16> kArmCondition{
     6, 7, 3, 2, 0, 1, 9, 8, 4, 5, 16, 16, 11, 10, 13, 12};
 
-inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip) {
+inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true) {
   Block block;
+  block.long_mode = long_mode;
   const auto sign_extend = [](std::uint32_t value, unsigned width) {
     return width == 1 && (value & 0x80) ? value | 0xffffff00U : value;
   };
@@ -68,22 +76,31 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
     unsigned pos = block.size;
     const unsigned begin = pos;
     unsigned opcode = bytes[pos++], rex = 0;
-    if (opcode >= 0x40 && opcode <= 0x4f) {
+    const bool word = !long_mode && opcode == 0x66;
+    if (word || (long_mode && opcode >= 0x40 && opcode <= 0x4f)) {
       if (pos == size) break;
-      rex = opcode;
+      if (!word) rex = opcode;
       opcode = bytes[pos++];
     }
     if (opcode == 0x0f && pos < size && (bytes[pos] == 0xb6 || bytes[pos] == 0xb7))
       opcode = 0x0f00U | bytes[pos++];
     const bool zero_extend = opcode == 0x0fb6 || opcode == 0x0fb7;
-    const bool move_byte = opcode == 0x8a;
+    const bool move_byte = opcode == 0x88 || opcode == 0x8a;
+    const bool binary_arithmetic = opcode == 0x01 || opcode == 0x03 ||
+        opcode == 0x29 || opcode == 0x2b || opcode == 0x31 || opcode == 0x33;
+    const bool carry_preserved = !block.flag_width ||
+        block.flag_op == Instruction::Increment || block.flag_op == Instruction::Decrement;
     Instruction op;
     op.begin = begin;
     op.opcode = opcode;
-    op.width = (rex & 8) ? 8 : 4;
-    if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x3b ||
+    op.width = word ? 2 : (rex & 8) ? 8 : 4;
+    if (!long_mode && opcode >= 0x40 && opcode <= 0x4f) {
+      if (!carry_preserved) break;
+      op.lhs.reg = opcode & 7;
+      op.kind = opcode < 0x48 ? Instruction::Increment : Instruction::Decrement;
+    } else if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x3b ||
         opcode == 0x39 || opcode == 0x80 || opcode == 0x83 || opcode == 0x84 ||
-        opcode == 0x85 || opcode == 0xff || zero_extend || move_byte) {
+        opcode == 0x85 || opcode == 0xff || zero_extend || move_byte || binary_arithmetic) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
@@ -91,41 +108,44 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       const Operand reg{((modrm >> 3) & 7U) + ((rex & 4) ? 8U : 0U), 0, false};
       Operand other{rm + ((rex & 1) ? 8U : 0U), 0, mod != 3};
       if (other.memory) {
+        unsigned base = rm;
         if (rm == 4) {
           if (pos == size) break;
           const auto sib = bytes[pos++];
-          const auto base = sib & 7U, index = (sib >> 3) & 7U;
-          if (!mod && base == 5) break;
-          other.reg = base + ((rex & 1) ? 8U : 0U);
+          base = sib & 7U;
+          const auto index = (sib >> 3) & 7U;
           if (index != 4 || (rex & 2)) {
             other.index = index + ((rex & 2) ? 8U : 0U);
             other.scale_shift = sib >> 6;
           }
-        } else if (!mod && rm == 5) {
-          break;
         }
-        const unsigned disp_bytes = mod == 1 ? 1 : mod == 2 ? 4 : 0;
+        const bool absolute = mod == 0 && base == 5;
+        if (long_mode && absolute) break;
+        other.reg = absolute ? Operand::kNoIndex : base + ((rex & 1) ? 8U : 0U);
+        other.stack = !long_mode && !absolute && (base == 4 || base == 5);
+        const unsigned disp_bytes = mod == 1 ? 1 : mod == 2 || absolute ? 4 : 0;
         if (disp_bytes > size - pos) break;
         for (unsigned i = 0; i < disp_bytes; ++i)
           other.displacement |= std::uint32_t(bytes[pos++]) << (8 * i);
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
-      const bool reg_first = opcode == 0x8b || opcode == 0x8d || opcode == 0x3b || zero_extend || move_byte;
+      const bool reg_first = opcode == 0x8b || opcode == 0x8d || opcode == 0x3b ||
+          zero_extend || opcode == 0x8a || (binary_arithmetic && (opcode & 2));
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
       if (zero_extend || move_byte) {
+        if (word && zero_extend) break;
         op.width = opcode == 0x0fb7 ? 2 : 1;
         // Without REX, byte register encodings 4 through 7 use the high byte.
         if (op.width == 1 && !rex && ((move_byte && reg.reg >= 4) ||
             (!other.memory && other.reg >= 4))) break;
-        if (move_byte) op.kind = Instruction::MoveByte;
+        op.kind = move_byte ? Instruction::MoveByte : Instruction::MoveZeroExtend;
       } else if (opcode == 0x8d) {
         if (!other.memory) break;
         op.kind = Instruction::Lea;
       } else if (opcode == 0xff) {
         // INC/DEC preserve carry. Retire its earlier producer first.
-        if (other.memory || group > 1 || (block.flag_width &&
-            block.flag_op != Instruction::Increment && block.flag_op != Instruction::Decrement)) break;
+        if (other.memory || group > 1 || !carry_preserved) break;
         op.kind = group == 0 ? Instruction::Increment : Instruction::Decrement;
       } else if (opcode == 0x80 || opcode == 0x83) {
         const bool register_arithmetic = opcode == 0x83 && !other.memory && (group == 0 || group == 5);
@@ -146,17 +166,15 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
           op.width = 1;
         }
         op.kind = Instruction::Test;
+      } else if (binary_arithmetic) {
+        if (op.lhs.memory) break; // Leave read-modify-write operands to the interpreter.
+        op.kind = opcode < 0x29 ? Instruction::Add
+            : opcode < 0x31 ? Instruction::Subtract : Instruction::Xor;
       } else {
         op.kind = opcode == 0x8b || opcode == 0x89 ? Instruction::Move : Instruction::Compare;
       }
-      // TEST preserves AF. Retire any earlier producer of AF first.
-      if (op.kind == Instruction::Test && block.flag_width && block.flag_op != Instruction::Test) break;
-      if (op.kind != Instruction::Move && op.kind != Instruction::MoveByte && op.kind != Instruction::Lea) {
-        block.flag_width = op.width;
-        block.flag_op = op.kind;
-      }
     } else {
-      if (rex) break;
+      if (rex || word) break;
       unsigned disp_bytes = 1;
       if (opcode == 0x0f && pos < size && bytes[pos] >= 0x80 && bytes[pos] < 0x90) {
         opcode = 0x0f00U | bytes[pos++];
@@ -179,8 +197,18 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       for (unsigned i = 0; i < disp_bytes; ++i)
         displacement |= std::uint32_t(bytes[pos++]) << (8 * i);
       const auto target = rip + pos + signed_offset(sign_extend(displacement, disp_bytes));
-      if (!canonical(target)) break;
-      block.target = target;
+      if (long_mode && !canonical(target)) break;
+      block.target = long_mode ? target : std::uint32_t(target);
+    }
+    // TEST and XOR preserve AF in the original CPU. Retire an earlier producer of AF first.
+    if ((op.kind == Instruction::Test || op.kind == Instruction::Xor) && block.flag_width &&
+        block.flag_op != Instruction::Test && block.flag_op != Instruction::Xor) break;
+    if (op.kind == Instruction::Compare || op.kind == Instruction::Test ||
+        op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
+        op.kind == Instruction::Add || op.kind == Instruction::Subtract ||
+        op.kind == Instruction::Xor) {
+      block.flag_width = op.width;
+      block.flag_op = op.kind;
     }
     op.end = pos;
     block.instructions[block.count++] = op;
@@ -188,7 +216,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
     // Commit a store last. Revalidate code in the next block, including
     // writes through a physical alias.
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
-        (op.kind == Instruction::Move && op.lhs.memory)) break;
+        ((op.kind == Instruction::Move || op.kind == Instruction::MoveByte) && op.lhs.memory)) break;
   }
   return block;
 }
@@ -209,36 +237,48 @@ struct Frame {
 // and all loads go through the original CPU's guarded RAM accessor.
 class Emitter {
  public:
-  explicit Emitter(const Block& block) {
+  explicit Emitter(const Block& block) : long_mode_(block.long_mode) {
     code_.reserve(96);
     emit(0xd503245f); // BTI c (a hint on hosts without BTI).
     emit(0xa9bf7bf3); // STP X19,X30,[SP,#-16]!
     emit(0xaa0003f3); // MOV X19,X0
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
-      if (op.kind == Instruction::Move && op.lhs.memory) {
+      if ((op.kind == Instruction::Move || op.kind == Instruction::MoveByte) && op.lhs.memory) {
         prepare_access(op.lhs, op.width);
         load(3, op.rhs.reg * 8, op.width);
         call(offsetof(Frame, write));
-      } else if (op.kind == Instruction::Move || op.kind == Instruction::MoveByte) {
+      } else if (op.kind == Instruction::Move || op.kind == Instruction::MoveByte ||
+                 op.kind == Instruction::MoveZeroExtend) {
         read(op.rhs, op.width);
-        // A byte store updates only the low byte of the little-endian guest register.
-        store(9, op.lhs.reg * 8, op.kind == Instruction::MoveByte ? 1 : 8);
+        const auto width = op.kind == Instruction::MoveZeroExtend || op.width >= 4 ? 8 : op.width;
+        store(9, op.lhs.reg * 8, width);
       } else if (op.kind == Instruction::Lea) {
         address(op.rhs, 9);
         if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
-        store(9, op.lhs.reg * 8);
+        store(9, op.lhs.reg * 8, op.width == 2 ? 2 : 8);
       } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
-                 op.kind == Instruction::Add || op.kind == Instruction::Subtract) {
+                 op.kind == Instruction::Add || op.kind == Instruction::Subtract ||
+                 op.kind == Instruction::Xor) {
         read(op.lhs, op.width);
         store(9, offsetof(Frame, left));
-        const int amount = op.rhs.immediate ? op.rhs.immediate_value : 1;
-        const bool subtraction = op.kind == Instruction::Decrement || op.kind == Instruction::Subtract;
-        const auto subtract = (subtraction != (amount < 0)) ? 0x40000000U : 0;
-        const auto magnitude = std::uint32_t(amount < 0 ? -amount : amount);
         const auto wide = op.width == 8 ? 0x80000000U : 0;
-        emit(0x11000129U | subtract | wide | (magnitude << 10)); // ADD/SUB X/W9,X/W9,#imm
-        store(9, op.lhs.reg * 8);
+        const bool subtraction = op.kind == Instruction::Decrement || op.kind == Instruction::Subtract;
+        if (op.rhs.immediate || op.kind == Instruction::Increment || op.kind == Instruction::Decrement) {
+          const int amount = op.rhs.immediate ? op.rhs.immediate_value : 1;
+          const auto subtract = (subtraction != (amount < 0)) ? 0x40000000U : 0;
+          const auto magnitude = std::uint32_t(amount < 0 ? -amount : amount);
+          emit(0x11000129U | subtract | wide | (magnitude << 10)); // ADD/SUB X/W9,X/W9,#imm
+          store(9, op.lhs.reg * 8, op.width == 2 ? 2 : 8);
+        } else {
+          read(op.rhs, op.width);
+          store(9, offsetof(Frame, right));
+          load(10, offsetof(Frame, left), op.width);
+          const auto alu = op.kind == Instruction::Xor ? 0x4a090149U
+              : subtraction ? 0x4b090149U : 0x0b090149U;
+          emit(alu | wide); // EOR, SUB or ADD X/W9,X/W10,X/W9
+          store(9, op.lhs.reg * 8, op.width == 2 ? 2 : 8);
+        }
         if (op.rhs.immediate) {
           read(op.rhs, op.width);
           store(9, offsetof(Frame, right));
@@ -275,6 +315,7 @@ class Emitter {
   std::vector<std::uint32_t> code_;
   std::array<std::size_t, Block::kMaxInstructions> failed_access_{};
   unsigned exits_ = 0;
+  bool long_mode_;
 
   void emit(std::uint32_t word) { code_.push_back(word); }
   void load(unsigned reg, unsigned offset, unsigned width = 8) {
@@ -285,11 +326,13 @@ class Emitter {
     emit(load_op | ((offset / width) << 10) | (19U << 5) | reg);
   }
   void store(unsigned reg, unsigned offset, unsigned width = 8) {
-    const auto store_op = width == 1 ? 0x39000000U : 0xf9000000U; // STRB or STR X
+    const auto store_op = width == 1 ? 0x39000000U
+        : width == 2 ? 0x79000000U : 0xf9000000U; // STRB, STRH or STR X
     emit(store_op | ((offset / width) << 10) | (19U << 5) | reg);
   }
   void address(const Operand& operand, unsigned reg) {
-    load(reg, operand.reg * 8);
+    if (operand.reg == Operand::kNoIndex) emit(0x52800000U | reg); // MOV Wd,#0
+    else load(reg, operand.reg * 8);
     const auto regs = (reg << 5) | reg;
     const auto disp = operand.displacement;
     if (disp && disp <= 4095) {
@@ -305,11 +348,13 @@ class Emitter {
       load(10, operand.index * 8);
       emit(0x8b0a0000U | (operand.scale_shift << 10) | regs); // ADD Xd,Xd,X10,LSL #shift
     }
+    if (!long_mode_) emit(0x2a0003e0U | (reg << 16) | reg); // MOV Wd,Wd wraps the 32-bit offset.
   }
   void prepare_access(const Operand& operand, unsigned width) {
     emit(0xaa1303e0); // MOV X0,X19
     address(operand, 1);
-    emit(0x52800002U | (width << 5)); // MOV W2,#width
+    const auto spec = width | (operand.stack ? kStackAccess : 0);
+    emit(0x52800002U | (spec << 5)); // MOV W2,#access
   }
   void call(unsigned offset) {
     load(9, offset);

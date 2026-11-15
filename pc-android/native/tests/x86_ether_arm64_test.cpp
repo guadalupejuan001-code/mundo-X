@@ -41,6 +41,19 @@ constexpr std::array<std::uint8_t, 7> byte_read_loop{
     0x44,0x8a,0x5c,0x11,0xff, // Observed MOV R11B,[RCX+RDX-1].
     0xeb,0xf9};               // Repeat within the machine's step budget.
 
+constexpr std::uint32_t protected_code = 0x459a1f, ds_base = 0x10000, ss_base = 0x20000;
+constexpr std::array<std::uint8_t, 17> protected_loop{
+    0x66,0x8b,0x07,       // MOV AX,[EDI], observed earlier in the same protected32 stage.
+    0x89,0x7d,0xf8,       // MOV [EBP-8],EDI, observed at 0020:00459a22.
+    0x31,0xd6,0x03,0xd8, // XOR ESI,EDX; ADD EBX,EAX.
+    0x83,0xc7,0x02,0x49, // ADD EDI,2; DEC ECX.
+    0x75,0xf0,0xf4};      // JNZ; HLT.
+
+constexpr std::array<std::uint8_t, 25> byte_copy_loop{
+    0x42,0x8a,0x0c,0x1a,0x44,0x03,0xf3,0x43,0x88,0x0c,0x1f, // Observed byte load, ADD and byte store.
+    0x03,0xd3,0x4c,0x03,0xfb,0x44,0x2b,0xd3,0x45,0x85,0xd2, // Observed pointer/counter updates.
+    0x75,0xe8,0xf4};                                           // JNZ; HLT.
+
 void require(bool value, const char* message) {
   if (!value) throw std::runtime_error(message);
 }
@@ -58,6 +71,25 @@ void boot(PcMachine& machine, bool translated) {
   cpu.eip = code;
   cpu.regs[Cpu::ESP] = stack;
   cpu.enable_page_translation_cache();
+  cpu.enable_ether_arm64_blocks(translated);
+  machine.enable_boot_acceleration();
+}
+
+void boot_protected(PcMachine& machine, bool translated) {
+  machine.boot_demo();
+  auto& cpu = machine.cpu;
+  cpu.reset(0, 0x1000);
+  cpu.a20_enabled = true;
+  cpu.gdtr = {0x37, 0x3000};
+  cpu.write64(0x3020, 0x00cf9a000000ffffULL);
+  cpu.write64(0x3028, 0x00cf92010000ffffULL); // DS starts at 0x10000.
+  cpu.write64(0x3030, 0x00cf92020000ffffULL); // SS starts at 0x20000.
+  emit(cpu, 0x1000, {0xb8,0x11,0,0x0f,0x22,0xc0,0x66,0xea,0,0x20,0,0,0x20,0});
+  emit(cpu, 0x2000, {0x66,0xb8,0x28,0,0x8e,0xd8,0x66,0xb8,0x30,0,0x8e,0xd0,0x90});
+  for (unsigned i = 0; i < 8; ++i)
+    require(cpu.step() == StepResult::Executed, "could not enter unpaged protected32");
+  require(std::string(cpu.mode_name()) == "protected32" && cpu.segments[Cpu::CS] == 0x20,
+          "protected32 fixture selected the wrong code descriptor");
   cpu.enable_ether_arm64_blocks(translated);
   machine.enable_boot_acceleration();
 }
@@ -163,6 +195,24 @@ void decoder_contract() {
   const auto add_then_read = arm64::decode(add_byte, sizeof(add_byte), code);
   require(add_then_read.count == 2 && add_then_read.flag_op == arm64::Instruction::Add,
           "byte load replaced the flags produced by the preceding ADD");
+  const auto protected_block = arm64::decode(
+      protected_loop.data(), protected_loop.size(), protected_code, false);
+  require(protected_block.count == 2 && protected_block.instructions[0].width == 2 &&
+          !protected_block.instructions[0].rhs.stack && protected_block.instructions[1].lhs.stack,
+          "protected32 MOV AX and stack store lost their original widths or segments");
+  const std::uint8_t legacy_back[]{0x49,0x75,0xfd};
+  const auto legacy = arm64::decode(legacy_back, sizeof(legacy_back), code, false);
+  require(legacy.count == 2 && legacy.target == code &&
+          legacy.instructions[0].kind == arm64::Instruction::Decrement &&
+          legacy.instructions[0].lhs.reg == Cpu::ECX, "legacy DEC was decoded as REX");
+  const std::uint8_t word_cmp[]{0x66,0x3b,0xc1,0x7c,0x02};
+  require(!arm64::decode(word_cmp, sizeof(word_cmp), code, false).uses_arm_condition(),
+          "word comparison must use the x86 sign bit");
+  const auto copy = arm64::decode(byte_copy_loop.data(), byte_copy_loop.size(), code);
+  require(copy.count == 3 && copy.instructions[1].kind == arm64::Instruction::Add &&
+          copy.instructions[2].kind == arm64::Instruction::MoveByte &&
+          copy.instructions[2].lhs.memory && copy.instructions[2].lhs.index == Cpu::R11,
+          "observed long64 byte copy did not end with its indexed byte store");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -249,6 +299,118 @@ void warm_block(Cpu& cpu, std::uint64_t address, unsigned steps) {
     if (cpu.try_ether_arm64_block(steps) == steps) return;
   }
   throw std::runtime_error("ARM64 block never became executable");
+}
+
+void protected32_contract() {
+  PcMachine native, scalar;
+  boot_protected(native, true);
+  boot_protected(scalar, false);
+  constexpr unsigned count = 20'000, steps = count * 7 + 1;
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    cpu.memory.write_block(protected_code, protected_loop.data(), protected_loop.size());
+    for (unsigned i = 0; i < count; ++i) cpu.write16(ds_base + nodes + 2 * i, std::uint16_t(i ^ 0x652e));
+    cpu.write32(stack, 0x12345678); // The stack store must use SS, not physical EBP.
+  }
+  const auto measure = [&](PcMachine& machine) {
+    auto& cpu = machine.cpu;
+    cpu.halted = false;
+    cpu.eip = protected_code;
+    cpu.eflags = 2 | Cpu::CF | Cpu::AF;
+    cpu.regs[Cpu::ECX] = count;
+    cpu.regs[Cpu::EAX] = 0x0123456789abcdefULL;
+    cpu.regs[Cpu::EDX] = 0x13579bdfULL;
+    cpu.regs[Cpu::ESI] = 0x2468ace0ULL;
+    cpu.regs[Cpu::EDI] = 0xdeadbeef00000000ULL | nodes;
+    cpu.regs[Cpu::EBP] = stack + 8;
+    cpu.regs[Cpu::EBX] = 0xd23f6ae7;
+    const auto initial = cpu.instructions;
+    const auto start = std::chrono::steady_clock::now();
+    for (unsigned remaining = steps; remaining;) {
+      const auto slice = std::min(remaining, 50'000U);
+      machine.run(slice);
+      remaining -= slice;
+    }
+    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    require(!cpu.fault && cpu.halted && cpu.instructions - initial == steps &&
+            cpu.regs[Cpu::EAX] == (0x0123456789ab0000ULL | ((count - 1) ^ 0x652e)) &&
+            cpu.read32(ss_base + stack) == nodes + 2 * (count - 1) &&
+            cpu.read32(stack) == 0x12345678, "protected32 loop changed counts, AX or SS");
+    return elapsed;
+  };
+  std::array<std::int64_t, 5> native_ns{}, scalar_ns{};
+  for (unsigned i = 0; i < native_ns.size(); ++i) {
+    if (i & 1) {
+      native_ns[i] = measure(native);
+      scalar_ns[i] = measure(scalar);
+    } else {
+      scalar_ns[i] = measure(scalar);
+      native_ns[i] = measure(native);
+    }
+    require(capture(native.cpu) == capture(scalar.cpu),
+            "protected32 native execution diverged from scalar state");
+  }
+  const auto native_steps = native.cpu.ether_arm64_stats().protected32_steps;
+  require(native_steps * 100 >= steps * native_ns.size() * 99 &&
+          native.cpu.ether_arm64_stats().steps == native_steps &&
+          scalar.cpu.ether_arm64_stats().steps == 0, "protected32 missed its native path");
+  auto& a = native.cpu;
+  auto& b = scalar.cpu;
+  const auto guard = protected_code + 0x100;
+  for (auto* cpu : {&a, &b}) {
+    emit(*cpu, guard, {0x8b,0xc1,0x66,0x8b,0x07}); // Stage EAX, then cross a page to load AX.
+    cpu->halted = false;
+    cpu->eip = guard;
+    cpu->regs[Cpu::EDI] = 0x17fff;
+    cpu->write16(ds_base + 0x17fff, 0xfe90);
+  }
+  const auto before = capture(a);
+  for (unsigned i = 0; i < 4; ++i)
+    require(!a.try_ether_arm64_block(2) && capture(a) == before,
+            "a rejected protected32 load committed staged register state");
+  require(a.ether_arm64_stats().data_fallbacks > 0, "protected32 data guard was never exercised");
+  for (auto* cpu : {&a, &b})
+    require(cpu->step() == StepResult::Executed && cpu->step() == StepResult::Executed,
+            "scalar cross-page load failed");
+  require(capture(a) == capture(b) && a.reg16(Cpu::EAX) == 0xfe90,
+          "protected32 data fallback changed the guest result");
+  std::sort(native_ns.begin(), native_ns.end());
+  std::sort(scalar_ns.begin(), scalar_ns.end());
+  std::cout << "PRIME_ARM64_PROTECTED32_PASS steps=" << steps << " native_steps=" << native_steps
+            << " repeats=" << native_ns.size() << " native_median_ns=" << native_ns[2]
+            << " scalar_median_ns=" << scalar_ns[2] << '\n';
+}
+
+void byte_copy_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  constexpr unsigned count = 512;
+  std::array<std::uint8_t, count> source{}, actual{};
+  for (unsigned i = 0; i < count; ++i) source[i] = std::uint8_t(0xdfU + 131U * i);
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    cpu.memory.write_block(code, byte_copy_loop.data(), byte_copy_loop.size());
+    cpu.memory.write_block(nodes, source.data(), source.size());
+    cpu.regs[Cpu::ECX] = 0xdeadbeef12345678ULL;
+    cpu.regs[Cpu::EDX] = nodes;
+    cpu.regs[Cpu::EBX] = 1;
+    cpu.regs[Cpu::R10] = count;
+    cpu.regs[Cpu::R11] = 0;
+    cpu.regs[Cpu::R14] = 0x12345678fffffff0ULL;
+    cpu.regs[Cpu::R15] = output;
+    machine->run(count * 8 + 1);
+    cpu.memory.read_block(output, actual.data(), actual.size());
+    require(!cpu.fault && cpu.halted && source == actual &&
+            cpu.regs[Cpu::R14] == 496 && cpu.regs[Cpu::R15] == output + count &&
+            cpu.regs[Cpu::ECX] == (0xdeadbeef12345600ULL | source.back()),
+            "long64 observed indexed byte copy changed memory, width or address");
+  }
+  require(capture(native.cpu) == capture(scalar.cpu) &&
+          native.cpu.ether_arm64_stats().steps >= count * 7,
+          "long64 native byte copy did not match the scalar path");
+  std::cout << "PRIME_ARM64_BYTE_COPY_PASS bytes=" << count << '\n';
 }
 
 void immediate_arithmetic_contract() {
@@ -698,6 +860,8 @@ int main() {
       return 0;
     }
     require(native.stats.steps > 4000 && native.stats.hits > 0, "ARM64 loop did not execute");
+    protected32_contract();
+    byte_copy_contract();
     guard_contract();
     cache_collision_contract();
     flag_contract();
