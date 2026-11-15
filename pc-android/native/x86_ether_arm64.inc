@@ -11,8 +11,7 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
   const auto origin = eip;
   const auto width = std::min(ether_arm64::Block::kMaxBytes, page_bytes - unsigned(eip % page_bytes));
   if (width < 2 || eip > UINT64_MAX - width || !canonical(eip + width - 1)) return 0;
-  auto& entry = ether_arm64_cache_->entry(eip);
-  if (entry.rip != eip) entry.invalidate(eip);
+  auto& entry = ether_arm64_cache_->entry(eip, ether_arm64_stats_.compiled_evictions);
   if (!entry.checked_bytes && entry.visits < 2) {
     ++entry.visits;
     return 0;
@@ -51,7 +50,11 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
     const auto& block = entry.block;
     if (block.count < 2 || block.count > budget) return 0;
     if (!entry.code) {
-      if (!entry.code.build(block)) {
+      const auto start = std::chrono::steady_clock::now();
+      const bool built = entry.code.build(block);
+      ether_arm64_stats_.native_compile_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - start).count();
+      if (!built) {
         ether_arm64_cache_->host_rejected = true;
         return 0;
       }

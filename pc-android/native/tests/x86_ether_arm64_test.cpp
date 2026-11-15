@@ -176,6 +176,48 @@ void warm_block(Cpu& cpu, std::uint64_t address, unsigned steps) {
   throw std::runtime_error("ARM64 block never became executable");
 }
 
+void cache_collision_contract() {
+  PcMachine native(4 * 1024 * 1024), scalar(4 * 1024 * 1024);
+  boot(native, true);
+  boot(scalar, false);
+  // All these instruction addresses hash to the same set.
+  constexpr std::array<std::uint64_t, 2> blocks{0xa140, 0xa540};
+  constexpr std::array<std::uint64_t, 3> probes{0xa940, 0xad40, 0xb160};
+  for (auto* machine : {&native, &scalar}) {
+    for (const auto address : blocks)
+      emit(machine->cpu, address, {0x8b, 0xc1, 0x8b, 0xd0, 0xf4}); // MOV EAX,ECX; MOV EDX,EAX.
+    for (const auto address : probes) emit(machine->cpu, address, {0x90, 0xf4});
+  }
+  for (const auto address : blocks) {
+    warm_block(native.cpu, address, 2);
+    scalar.cpu.eip = address;
+    require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed,
+            "scalar warm-up failed");
+  }
+  const auto warm = native.cpu.ether_arm64_stats();
+  constexpr unsigned rounds = 1024;
+  for (unsigned round = 0; round < rounds; ++round) {
+    const auto probe = probes[round % probes.size()];
+    native.cpu.eip = scalar.cpu.eip = probe;
+    require(!native.cpu.try_ether_arm64_block(2), "untranslated probe became native");
+    require(native.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed,
+            "untranslated probe changed scalar execution");
+    const auto address = blocks[round % blocks.size()];
+    native.cpu.eip = scalar.cpu.eip = address;
+    native.cpu.regs[Cpu::ECX] = scalar.cpu.regs[Cpu::ECX] = 0xfeed00000000ULL | round;
+    require(native.cpu.try_ether_arm64_block(2) == 2, "colliding guest RIP displaced native code");
+    require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+            native.cpu.eip == scalar.cpu.eip && native.cpu.regs == scalar.cpu.regs &&
+            native.cpu.eflags == scalar.cpu.eflags && native.cpu.instructions == scalar.cpu.instructions,
+            "cached block changed guest state");
+  }
+  const auto result = native.cpu.ether_arm64_stats();
+  require(warm.translated == blocks.size() && result.translated == warm.translated &&
+          result.hits - warm.hits == rounds, "cache recompiled the warm blocks");
+  std::cout << "PRIME_C03_ARM64_CACHE_PASS translations=" << result.translated
+            << " warm_hits=" << result.hits - warm.hits << '\n';
+}
+
 void page_fault(bool translated, bool store, bool initially_absent,
                 State& state, Cpu::EtherArm64Stats& stats) {
   constexpr std::uint64_t address = 0x280000, leaf = 0x3008;
@@ -331,6 +373,7 @@ int main() {
     }
     require(native.stats.steps > 4000 && native.stats.hits > 0, "ARM64 loop did not execute");
     guard_contract();
+    cache_collision_contract();
     flag_contract();
     for (bool store : {false, true}) {
       State a{}, b{};

@@ -10,6 +10,7 @@
 // instructions counts these bounded execution steps, not hardware retired ops.
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
@@ -135,6 +136,7 @@ class Cpu {
   struct EtherArm64Stats {
     std::uint64_t translated = 0, hits = 0, blocks = 0, steps = 0;
     std::uint64_t invalidated = 0, data_fallbacks = 0;
+    std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -4281,6 +4283,11 @@ inline void Cpu::extended() {
     case 0x06:
       if (cpl() != 0) fail("CLTS requires CPL0", FaultCode::ProtectionFault);
       cr0 &= ~8U; return;  // no floating-point execution is claimed.
+    case 0x09: // WBINVD
+      if (cpl() != 0) fail("WBINVD requires CPL0", FaultCode::ProtectionFault);
+      // Guest stores reach shared RAM at each retired instruction. This
+      // serializing instruction completes on the coherent single-vCPU bus.
+      return;
     case 0x20: case 0x22: {
       // The MOD bits do not encode a memory operand for MOV CR. REX.R
       // selects the extended control register and REX.B selects a GPR.
