@@ -101,6 +101,9 @@ void decoder_contract() {
   const std::uint8_t legacy_byte[]{0x84,0xe4,0x74,0x08};
   require(!arm64::decode(legacy_byte, sizeof(legacy_byte), code).count,
           "TEST AH must use the interpreter's legacy byte-register semantics");
+  const std::uint8_t cmp_test[]{0x83,0xf8,0x01,0x85,0xc0,0x75,0x08};
+  require(arm64::decode(cmp_test, sizeof(cmp_test), code).count == 1,
+          "A later TEST must preserve AF established by the earlier CMP");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -361,6 +364,19 @@ void observed_flags_contract() {
       }
     }
   }
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    emit(cpu, code, {0x83,0xf8,0x01,0x85,0xc0,0x75,0x08});
+    cpu.eip = code;
+    cpu.eflags = 2;
+    cpu.regs[Cpu::EAX] = 0x10;
+  }
+  require(!native.cpu.try_ether_arm64_block(3) && native.cpu.step() == StepResult::Executed &&
+          scalar.cpu.step() == StepResult::Executed, "CMP before TEST must retire its own flags");
+  warm_block(native.cpu, code + 3, 2);
+  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+          native.cpu.eip == scalar.cpu.eip && native.cpu.eflags == scalar.cpu.eflags &&
+          native.cpu.flag(Cpu::AF), "Translated TEST lost AF established by CMP");
 }
 
 void benchmark() {

@@ -102,6 +102,9 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       } else {
         op.kind = opcode == 0x8b || opcode == 0x89 ? Instruction::Move : Instruction::Compare;
       }
+      // TEST preserves the guest's AF. Retire an earlier CMP before using
+      // TEST as the block's final flag producer.
+      if (op.kind == Instruction::Test && block.flag_op == Instruction::Compare) break;
       if (op.kind != Instruction::Move) {
         block.flag_width = op.width;
         block.flag_op = op.kind;
