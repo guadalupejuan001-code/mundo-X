@@ -279,15 +279,40 @@ struct Cache {
       visits = 0;
     }
   };
-  static constexpr std::size_t kEntries = 32;
-  std::array<Entry, kEntries> entries;
+  static constexpr std::size_t kSets = 32;
+  static constexpr std::size_t kWays = 4;
+  struct Set {
+    std::array<Entry, kWays> entries;
+    std::size_t next_victim = 0;
+  };
+  std::array<Set, kSets> sets;
   bool host_rejected = false;
 
-  Entry& entry(std::uint64_t rip) noexcept {
-    return entries[(rip ^ (rip >> 5) ^ (rip >> 12)) & (kEntries - 1)];
+  Entry& entry(std::uint64_t rip, std::uint64_t& compiled_evictions) noexcept {
+    auto& set = sets[(rip ^ (rip >> 5) ^ (rip >> 12)) & (kSets - 1)];
+    for (auto& item : set.entries) {
+      if (item.rip == rip) return item;
+    }
+    auto victim = set.next_victim;
+    // Prefer a slot without executable code when probing a new guest address.
+    for (std::size_t offset = 0; offset < kWays; ++offset) {
+      const auto candidate = (set.next_victim + offset) % kWays;
+      if (!set.entries[candidate].code) {
+        victim = candidate;
+        break;
+      }
+    }
+    set.next_victim = (victim + 1) % kWays;
+    auto& item = set.entries[victim];
+    if (item.code) ++compiled_evictions;
+    item.invalidate(rip);
+    return item;
   }
   void clear() noexcept {
-    for (auto& item : entries) item.invalidate(0);
+    for (auto& set : sets) {
+      for (auto& item : set.entries) item.invalidate(0);
+      set.next_victim = 0;
+    }
   }
 };
 #endif

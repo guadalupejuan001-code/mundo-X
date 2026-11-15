@@ -10,6 +10,7 @@
 // instructions counts these bounded execution steps, not hardware retired ops.
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
@@ -135,6 +136,7 @@ class Cpu {
   struct EtherArm64Stats {
     std::uint64_t translated = 0, hits = 0, blocks = 0, steps = 0;
     std::uint64_t invalidated = 0, data_fallbacks = 0;
+    std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
