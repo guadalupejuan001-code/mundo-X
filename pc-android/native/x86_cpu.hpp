@@ -137,6 +137,7 @@ class Cpu {
     std::uint64_t translated = 0, hits = 0, blocks = 0, steps = 0;
     std::uint64_t invalidated = 0, data_fallbacks = 0;
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
+    std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -152,6 +153,7 @@ class Cpu {
       try { ether_arm64_cache_ = std::make_unique<ether_arm64::Cache>(); }
       catch (const std::bad_alloc&) { ether_arm64_enabled_ = false; }
     }
+    memory.enable_code_page_versions(ether_arm64_enabled_);
 #else
     (void)enabled;
 #endif

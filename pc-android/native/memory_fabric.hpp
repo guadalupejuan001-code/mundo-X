@@ -4,12 +4,14 @@
 #include "sparse_ram.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -133,6 +135,7 @@ class MemoryFabric {
     if (write_watch_ && base < write_watch_->end_ && base + bytes > write_watch_->base_)
       throw std::invalid_argument("Ether memory window overlaps a physical write watch");
     invalidate_page_tables();
+    if (code_page_versions_) code_page_versions_->clear();
     base_ = base;
     bytes_ = bytes;
     read_ = std::move(read);
@@ -149,6 +152,7 @@ class MemoryFabric {
   bool has_pinned_writes() const noexcept { return ram_.has_pinned_writes(); }
   void attach_page_backing(std::unique_ptr<SparseRam::PageBacking> backing) {
     ram_.attach_page_backing(std::move(backing));
+    if (code_page_versions_) code_page_versions_->clear();
   }
   [[nodiscard]] SparseRam::WritePins pin_writes() noexcept { return ram_.pin_writes(); }
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
@@ -158,6 +162,7 @@ class MemoryFabric {
   }
   std::uint64_t metadata_bytes() const noexcept {
     return ram_.metadata_bytes() + sizeof(*this) - sizeof(ram_) +
+        (code_page_versions_ ? sizeof(CodePageVersions) : 0) +
         (write_watch_ ? sizeof(WriteWatch) + write_watch_->marked_.capacity() / 8 +
             write_watch_->pages_.capacity() * sizeof(std::uint32_t) : 0);
   }
@@ -196,6 +201,18 @@ class MemoryFabric {
   }
   void acknowledge_write_watch() noexcept {
     if (write_watch_) write_watch_->clear();
+  }
+
+  void enable_code_page_versions(bool enabled) noexcept {
+    if (!enabled) code_page_versions_.reset();
+    else if (!code_page_versions_)
+      code_page_versions_.reset(new (std::nothrow) CodePageVersions{});
+  }
+  std::uint64_t code_page_version(std::uint64_t offset) const noexcept {
+    return code_page_versions_ ? code_page_versions_->get(offset / kPageSize) : 0;
+  }
+  std::uint64_t watch_code_page(std::uint64_t offset) noexcept {
+    return code_page_versions_ ? code_page_versions_->watch(offset / kPageSize) : 0;
   }
 
   std::uint64_t page_table_epoch() const noexcept { return page_table_epoch_; }
@@ -396,6 +413,7 @@ class MemoryFabric {
 
   void reset_zero() noexcept {
     invalidate_page_tables();
+    if (code_page_versions_) code_page_versions_->clear();
     ram_.reset_zero();
     invalidate_write_watch();
   }
@@ -409,6 +427,50 @@ class MemoryFabric {
   }
 
  private:
+  // Tracks only physical pages whose instruction bytes have been checked.
+  // Tokens are unique across slot collisions, RAM replacement and reset.
+  class CodePageVersions {
+   public:
+    std::uint64_t get(std::uint64_t page) const noexcept {
+      const auto& slot = slots_[index(page)];
+      return slot.page == page ? slot.version : 0;
+    }
+    std::uint64_t watch(std::uint64_t page) noexcept {
+      auto& slot = slots_[index(page)];
+      if (slot.page != page || !slot.version) slot = {page, next_version()};
+      return slot.version;
+    }
+    void note(std::uint64_t offset, std::size_t count) noexcept {
+      const auto first = offset / kPageSize;
+      const auto last = (offset + count - 1) / kPageSize;
+      if (last - first >= slots_.size()) { clear(); return; }
+      for (auto page = first; page <= last; ++page) {
+        auto& slot = slots_[index(page)];
+        if (slot.page == page) slot.version = 0;
+      }
+    }
+    void clear() noexcept { slots_.fill({}); }
+
+   private:
+    struct Slot { std::uint64_t page = 0, version = 0; };
+    static constexpr std::size_t kSlots = 256;
+    std::array<Slot, kSlots> slots_{};
+    inline static std::atomic<std::uint64_t> next_{1};
+
+    static std::size_t index(std::uint64_t page) noexcept {
+      return (page ^ (page >> 6) ^ (page >> 12)) & (kSlots - 1);
+    }
+    static std::uint64_t next_version() noexcept {
+      auto next = next_.load(std::memory_order_relaxed);
+      // Exhaustion leaves code on the exact byte-comparison path.
+      while (next != UINT64_MAX) {
+        if (next_.compare_exchange_weak(next, next + 1, std::memory_order_relaxed))
+          return next;
+      }
+      return 0;
+    }
+  };
+
   BootScalarTiming* boot_scalar_timing_ = nullptr;
   static constexpr std::size_t kPageTableBuckets = 4096;
   // A collision only discards extra translations. All writes reach this
@@ -422,9 +484,11 @@ class MemoryFabric {
   void note_write(std::uint64_t offset, std::size_t count) noexcept {
     if (may_touch_page_tables(offset, count)) invalidate_page_tables();
     if (write_watch_ && count) write_watch_->note(offset, count);
+    if (code_page_versions_ && count) code_page_versions_->note(offset, count);
   }
   SparseRam ram_;
   std::unique_ptr<WriteWatch> write_watch_;
+  std::unique_ptr<CodePageVersions> code_page_versions_;
   std::uint64_t base_ = 0;
   std::size_t bytes_ = 0;
   ReadByte read_;

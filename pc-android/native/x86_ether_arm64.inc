@@ -47,26 +47,33 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget) {
       }
       return 0;
     }
-    std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> actual;
-    const auto length = entry.checked_bytes ? entry.checked_bytes : width;
-    memory.read_block(physical, actual.data(), length);
-    const auto same_code = [&] {
-      return std::memcmp(actual.data(), entry.bytes.data(), length) == 0;
-    };
-    if (entry.checked_bytes && (entry.physical != physical || entry.cr3 != cr3 ||
-                               entry.cpl != cpl() || !same_code())) {
-      if (entry.code) ++ether_arm64_stats_.invalidated;
-      entry.invalidate(eip);
-      if (length < width)
-        memory.read_block(physical + length, actual.data() + length, width - length);
-    }
-    if (!entry.checked_bytes) {
-      entry.block = ether_arm64::decode(actual.data(), width, eip);
-      entry.checked_bytes = entry.block.count < 2 ? width : entry.block.size;
-      entry.physical = physical;
-      entry.cr3 = cr3;
-      entry.cpl = cpl();
-      std::copy_n(actual.begin(), entry.checked_bytes, entry.bytes.begin());
+    const auto privilege = cpl();
+    const bool same_mapping = entry.checked_bytes && entry.physical == physical &&
+                              entry.cr3 == cr3 && entry.cpl == privilege;
+    const auto version = memory.code_page_version(physical);
+    if (same_mapping && version && version == entry.code_version) {
+      ++ether_arm64_stats_.code_version_hits;
+    } else {
+      ++ether_arm64_stats_.code_byte_checks;
+      std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> actual;
+      const auto length = same_mapping ? entry.checked_bytes : width;
+      memory.read_block(physical, actual.data(), length);
+      ether_arm64_stats_.code_bytes_read += length;
+      if (!same_mapping || std::memcmp(actual.data(), entry.bytes.data(), length) != 0) {
+        if (entry.code) ++ether_arm64_stats_.invalidated;
+        entry.invalidate(eip);
+        if (length < width) {
+          memory.read_block(physical + length, actual.data() + length, width - length);
+          ether_arm64_stats_.code_bytes_read += width - length;
+        }
+        entry.block = ether_arm64::decode(actual.data(), width, eip);
+        entry.checked_bytes = entry.block.count < 2 ? width : entry.block.size;
+        entry.physical = physical;
+        entry.cr3 = cr3;
+        entry.cpl = privilege;
+        std::copy_n(actual.begin(), entry.checked_bytes, entry.bytes.begin());
+      }
+      entry.code_version = memory.watch_code_page(physical);
     }
     if (entry.block.count < 2 || entry.block.count > budget) return 0;
     if (!entry.code) {
@@ -76,6 +83,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget) {
           std::chrono::steady_clock::now() - start).count();
       if (!built) {
         ether_arm64_cache_->host_rejected = true;
+        memory.enable_code_page_versions(false);
         return 0;
       }
       ++ether_arm64_stats_.translated;

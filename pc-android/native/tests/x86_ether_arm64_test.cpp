@@ -302,6 +302,16 @@ void guard_contract() {
   cpu.regs[Cpu::EBX] = 0x450034;
   warm_block(cpu, linear, 2);
   require(cpu.regs[Cpu::ECX] == cpu.regs[Cpu::EAX], "initial mapping computed the wrong value");
+  const auto initial = cpu.ether_arm64_stats();
+  warm_block(cpu, linear, 2);
+  const auto stable = cpu.ether_arm64_stats();
+  require(stable.code_version_hits == initial.code_version_hits + 1 &&
+          stable.code_bytes_read == initial.code_bytes_read, "warm block reread validated code");
+  cpu.write8(physical + 128, 0x5a); // Same page, outside the translated block.
+  warm_block(cpu, linear, 2);
+  const auto rechecked = cpu.ether_arm64_stats();
+  require(rechecked.code_byte_checks == stable.code_byte_checks + 1 &&
+          rechecked.translated == stable.translated, "same-page write lost exact revalidation");
   cpu.write8(physical + 2, 0xd3); // Change the source via its physical alias.
   warm_block(cpu, linear, 2);
   require(cpu.regs[Cpu::ECX] == cpu.regs[Cpu::EBX], "cached code survived a physical alias write");
@@ -447,9 +457,11 @@ void scan_forms_contract() {
 }
 
 void benchmark() {
-  PcMachine native, scalar;
+  PcMachine native, scalar, rereading;
   boot(native, true);
   boot(scalar, false);
+  boot(rereading, true);
+  rereading.cpu.memory.enable_code_page_versions(false);
   const auto initial_regs = scalar.cpu.regs;
   const auto initial_steps = scalar.cpu.instructions;
   const auto measure = [&](PcMachine& machine, bool translated) {
@@ -465,29 +477,48 @@ void benchmark() {
   for (unsigned i = 0; i < 3; ++i) {
     const auto a = measure(native, true);
     const auto b = measure(scalar, false);
-    require(a.state == b.state, "ARM64 warm-up changed the guest result");
+    const auto c = measure(rereading, true);
+    require(a.state == b.state && a.state == c.state, "ARM64 warm-up changed the guest result");
   }
-  const auto warm_translations = native.cpu.ether_arm64_stats().translated;
-  std::array<std::uint64_t, 7> native_times{}, scalar_times{};
+  const auto native_warm = native.cpu.ether_arm64_stats();
+  const auto rereading_warm = rereading.cpu.ether_arm64_stats();
+  std::array<std::uint64_t, 7> native_times{}, scalar_times{}, rereading_times{};
   for (unsigned i = 0; i < native_times.size(); ++i) {
-    Result a{}, b{};
-    if (i % 2) a = measure(native, true);
-    b = measure(scalar, false);
-    if (!(i % 2)) a = measure(native, true);
-    require(a.state == b.state, "warm ARM64 run changed the guest result");
-    require(a.stats.translated == warm_translations,
+    Result a{}, c{};
+    if (i % 2) {
+      a = measure(native, true);
+      c = measure(rereading, true);
+    } else {
+      c = measure(rereading, true);
+      a = measure(native, true);
+    }
+    const auto b = measure(scalar, false);
+    require(a.state == b.state && a.state == c.state, "warm ARM64 run changed the guest result");
+    require(a.stats.translated == native_warm.translated &&
+            c.stats.translated == rereading_warm.translated,
             "stable ARM64 blocks were recompiled after warm-up");
     native_times[i] = a.elapsed_ns;
     scalar_times[i] = b.elapsed_ns;
+    rereading_times[i] = c.elapsed_ns;
   }
+  const auto native_bytes = native.cpu.ether_arm64_stats().code_bytes_read - native_warm.code_bytes_read;
+  const auto rereading_bytes = rereading.cpu.ether_arm64_stats().code_bytes_read - rereading_warm.code_bytes_read;
+  require(rereading_bytes > 0 && native_bytes < rereading_bytes / 10 &&
+          native.cpu.ether_arm64_stats().code_version_hits > native_warm.code_version_hits &&
+          rereading.cpu.ether_arm64_stats().code_version_hits == 0,
+          "code page versions did not replace repeated byte reads");
   std::sort(native_times.begin(), native_times.end());
   std::sort(scalar_times.begin(), scalar_times.end());
+  std::sort(rereading_times.begin(), rereading_times.end());
   std::cout << "PRIME_C03_ARM64_BENCH {\"nodes\":" << node_count
             << ",\"steps\":" << first.guest_steps
             << ",\"scalar_cold_ns\":" << first_scalar.elapsed_ns
             << ",\"native_cold_ns\":" << first.elapsed_ns
             << ",\"scalar_warm_median_ns\":" << scalar_times[3]
             << ",\"native_warm_median_ns\":" << native_times[3]
+            << ",\"rereading_warm_median_ns\":" << rereading_times[3]
+            << ",\"native_warm_code_bytes\":" << native_bytes
+            << ",\"rereading_warm_code_bytes\":" << rereading_bytes
             << ",\"translated_blocks\":" << first.stats.translated
             << ",\"native_steps\":" << first.stats.steps << "}\n";
 }

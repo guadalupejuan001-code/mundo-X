@@ -26,6 +26,57 @@ constexpr std::uint64_t work_address=0xa000;
 constexpr unsigned iterations=1024;
 constexpr std::uint64_t seed=0x0123456789abcdefULL;
 
+void test_code_page_versions() {
+  using cosmic_pc::MemoryFabric;
+  constexpr auto page = MemoryFabric::kPageSize;
+  MemoryFabric ram(512 * page);
+  need(ram.watch_code_page(0) == 0, "unrequested code watch was enabled");
+  ram.enable_code_page_versions(true);
+  const auto first = ram.watch_code_page(0);
+  const auto second = ram.watch_code_page(page);
+  need(first && second && first != second, "code pages lack distinct tokens");
+  ram.write_byte(2 * page, 1);
+  need(ram.code_page_version(0) == first && ram.code_page_version(page) == second,
+       "unrelated write invalidated code");
+  const std::uint8_t bytes[]{1,2};
+  ram.write_block(page - 1, bytes, sizeof(bytes));
+  need(!ram.code_page_version(0) && !ram.code_page_version(page),
+       "cross-page write left a valid code token");
+  const auto restored = ram.watch_code_page(0);
+  need(restored && restored != first && ram.restore_byte(page - 1, 0) &&
+       !ram.code_page_version(0), "rollback did not invalidate code");
+  ram.watch_code_page(page);
+  need(ram.try_fill_repeating_page(page, 0x0101010101010101ULL) &&
+       !ram.code_page_version(page), "compact fill left a stale token");
+  ram.watch_code_page(2 * page);
+  need(ram.try_copy_compact_page(page, 2 * page) && !ram.code_page_version(2 * page),
+       "compact copy left a stale token");
+  ram.prepare_write(3 * page, 2 * page);
+  ram.watch_code_page(4 * page);
+  need(ram.try_copy_resident_block(3 * page, 4 * page, 8) && !ram.code_page_version(4 * page),
+       "resident copy left a stale token");
+
+  const auto original = ram.watch_code_page(0);
+  for (std::uint64_t at = page; at < ram.size() && ram.code_page_version(0); at += page)
+    ram.watch_code_page(at);
+  need(!ram.code_page_version(0) && ram.watch_code_page(0) != original,
+       "a colliding code page reused an old token");
+  ram.watch_code_page(page);
+  ram.fill(0, 0, 257 * page);
+  need(!ram.code_page_version(0) && !ram.code_page_version(page),
+       "bulk zero left tracked code versions valid");
+  const auto old = ram.watch_code_page(0);
+  ram.reset_zero();
+  need(!ram.code_page_version(0) && ram.watch_code_page(0) != old,
+       "RAM reset reused a valid code token");
+  MemoryFabric replacement(ram.size());
+  replacement.enable_code_page_versions(true);
+  const auto fresh = replacement.watch_code_page(0);
+  need(fresh && fresh != ram.code_page_version(0), "replacement RAM reused a token");
+  ram = std::move(replacement);
+  need(ram.code_page_version(0) == fresh, "code tokens moved separately from their RAM");
+}
+
 void prepare_x64(PcMachine& pc){
   pc.boot_long_mode_demo();
   pc.run(4000);
@@ -186,6 +237,7 @@ int main(){
 
     compare_ether_workloads();
     test_failed_operand();
+    test_code_page_versions();
 
     std::cout<<"{\"suite\":\"pc_memory_fabric\",\"checks\":"<<checks
              <<",\"ether_window_bytes\":"<<PcMachine::kEtherMemoryBytes

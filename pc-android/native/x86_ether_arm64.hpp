@@ -342,6 +342,7 @@ struct Cache {
   struct Entry {
     std::uint64_t rip = 0, physical = 0, cr3 = 0;
     std::uint64_t last_used = 0;
+    std::uint64_t code_version = 0;
     unsigned cpl = 0, checked_bytes = 0, visits = 0;
     bool occupied = false;
     std::array<std::uint8_t, Block::kMaxBytes> bytes{};
@@ -357,6 +358,7 @@ struct Cache {
     void clear() noexcept {
       code.clear();
       checked_bytes = 0;
+      code_version = 0;
       visits = 0;
       occupied = false;
     }
