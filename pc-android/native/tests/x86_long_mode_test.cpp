@@ -92,6 +92,46 @@ void boot_and_register_tests() {
   check(cpu.regs[Cpu::EAX] == cpu.cr0, "SMSW r64 in long mode preserves PG in the returned value");
 }
 
+void expanded_physical_ram() {
+  constexpr auto high = 64ULL << 30;
+  constexpr auto frame = high + 0x7000;
+  constexpr auto logical = 0x200ff8;
+  constexpr auto payload = 0xf1e2d3c4b5a69788ULL;
+  Cpu cpu(high + 0x8000, 64 * 4096);
+  boot(cpu);
+  program(cpu, {0x0f, 0xa2, 0xf4});
+  cpu.regs[Cpu::EAX] = 0x80000008U;
+  run(cpu);
+  check(cpu.regs[Cpu::EAX] == (37U | (48U << 8)), "CPUID physical width covers all 64 GiB");
+
+  cpu.write64(high, (high + 0x1000) | 3);
+  cpu.write64(high + 0x1000, (high + 0x2000) | 3);
+  cpu.write64(high + 0x2000, 0xe3); // Preserve the low identity map used by the code.
+  cpu.write64(high + 0x2008, (high + 0x3000) | 3);
+  cpu.write64(high + 0x3000, frame | 3);
+  const auto low = cpu.read64(0x7ff8);
+  cpu.enable_page_translation_cache();
+  program(cpu, {0x0f,0x22,0xd8, 0x48,0x89,0x1f, 0x48,0x8b,0x0f, 0x48,0x8b,0x17, 0xf4});
+  cpu.regs[Cpu::EAX] = high;
+  cpu.regs[Cpu::EBX] = payload;
+  cpu.regs[Cpu::EDI] = logical;
+  run(cpu);
+  check(cpu.cr3 == high && cpu.read64(frame + 0xff8) == payload && cpu.read64(0x7ff8) == low &&
+        cpu.regs[Cpu::ECX] == payload && cpu.regs[Cpu::EDX] == payload && cpu.page_translation_hits,
+        "A guest must walk, cache and read/write high physical addresses without aliasing");
+
+  cpu.idtr = {0, 0};
+  cpu.write64(high + 0x3000, (1ULL << 37) | frame | 3);
+  program(cpu, {0x48,0x8b,0x0f});
+  expect_fault(cpu, FaultCode::PageFault, "An address bit beyond CPUID width is reserved");
+  check(cpu.fault->error_code == 9 && cpu.cr2 == logical, "The page fault must report P/RSVD");
+
+  program(cpu, {0x0f,0x22,0xd8});
+  cpu.regs[Cpu::EAX] = 1ULL << 37;
+  expect_fault(cpu, FaultCode::ProtectionFault, "CR3 must reject bits beyond CPUID width");
+  check(cpu.cr3 == high, "Failed CR3 write must leave the live translation root intact");
+}
+
 void multibyte_nops() {
   Cpu cpu(8U << 20); boot(cpu);
   constexpr std::uint64_t observed_rip = 0x2a5a73aa;
@@ -839,7 +879,7 @@ void implicit_arithmetic64() {
 
 int main() {
   try {
-    boot_and_register_tests(); multibyte_nops(); addressing_stack_and_alu_tests();
+    boot_and_register_tests(); expanded_physical_ram(); multibyte_nops(); addressing_stack_and_alu_tests();
     enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
