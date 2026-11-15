@@ -24,10 +24,51 @@ void boot(PcMachine& pc, std::initializer_list<std::uint8_t> code) {
         std::copy_n(bytes->data() + off, n, dst); return true;
     }, bytes->size(), "raw");
 }
+
+void verify_expanded_memory_map() {
+    constexpr auto installed = 64ULL << 30;
+    constexpr auto top = PcMachine::high_ram_address_space(installed, true);
+    PcMachine pc(top, 32 * MiB);
+    pc.reserve_pci_mmio(true);
+    pc.boot_demo();
+    auto& cpu = pc.cpu;
+    constexpr std::uint8_t code[]{0xcd, 0x15, 0xf4};
+    cpu.memory.write_block(0x1000, code, sizeof(code));
+    std::uint64_t usable = 0, end = 0;
+    bool pci_reserved = false, apic_reserved = false, upper_ram = false;
+    unsigned token = 0, entries = 0;
+    do {
+        cpu.reset(0, 0x1000);
+        cpu.regs[cosmic_pc::Cpu::EAX] = 0xe820;
+        cpu.regs[cosmic_pc::Cpu::EBX] = token;
+        cpu.regs[cosmic_pc::Cpu::ECX] = 24;
+        cpu.regs[cosmic_pc::Cpu::EDX] = 0x534d4150;
+        cpu.regs[cosmic_pc::Cpu::EDI] = 0x9000;
+        pc.run(2);
+        need(!cpu.fault && cpu.halted && !cpu.flag(cosmic_pc::Cpu::CF),
+             "Expanded guest must receive every E820 entry");
+        const auto base = cpu.read64(0x9000), length = cpu.read64(0x9008);
+        const auto type = cpu.read32(0x9010);
+        need(base == end && length && length <= top - base, "Expanded E820 map must be contiguous");
+        end = base + length;
+        if (type == 1) usable += length;
+        if (base == PcMachine::kPciMmioBase)
+            pci_reserved = type == 2 && length == PcMachine::kPciMmioBytes;
+        if (base == PcMachine::kIoApicAddress)
+            apic_reserved = type == 2 && end == PcMachine::kLegacyPhysicalLimit;
+        if (base == PcMachine::kLegacyPhysicalLimit) upper_ram = type == 1 && end == top;
+        token = cpu.regs[cosmic_pc::Cpu::EBX];
+        need(++entries <= 9, "Expanded E820 map must terminate");
+    } while (token);
+    need(pci_reserved && apic_reserved && upper_ram && usable == installed &&
+         pc.usable_ram_bytes() == installed && cpu.memory.allocated_bytes() < MiB,
+         "E820 must expose exactly 64 GiB and keep the device holes reserved");
+}
 }
 
 int main() {
     try {
+        verify_expanded_memory_map();
         PcMachine pc(std::size_t(2048) * MiB, std::size_t(1024) * MiB);
         need(pc.cpu.memory.size() == std::uint64_t(2048) * MiB, "Logical RAM must be 2 GiB");
         need(pc.cpu.memory.budget_bytes() == std::uint64_t(1024) * MiB, "Resident guest budget must be 1 GiB");
@@ -82,7 +123,7 @@ int main() {
         }
 
         if (PcMachine::max_ram_mib() >= 4096) {
-            constexpr auto physical = PcMachine::kMaxPhysicalBytes;
+            constexpr auto physical = PcMachine::kLegacyPhysicalLimit;
             PcMachine high(static_cast<std::size_t>(physical), 768 * MiB);
             const auto e820 = [&](std::uint8_t index) {
                 boot(high, {0x66,0xb8,0x20,0xe8,0,0, 0x66,0xba,0x50,0x41,0x4d,0x53,

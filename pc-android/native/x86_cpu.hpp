@@ -242,7 +242,9 @@ class Cpu {
   explicit Cpu(std::size_t ram_bytes = 2 * 1024 * 1024)
       : Cpu(ram_bytes, MemoryFabric::default_budget(ram_bytes)) {}
   Cpu(std::size_t ram_bytes, std::size_t resident_budget_bytes)
-      : memory(ram_bytes, resident_budget_bytes) {
+      : memory(ram_bytes, resident_budget_bytes),
+        physical_address_bits_(physical_address_width(ram_bytes)),
+        physical_page_mask_((1ULL << physical_address_bits_) - 4096) {
     if (ram_bytes == 0) throw std::invalid_argument("RAM must not be empty");
     decoded_.reserve(15);
     journal_.reserve(64);
@@ -824,6 +826,14 @@ class Cpu {
   std::uint64_t bus_address(std::uint64_t address) const {
     return a20_enabled ? address : address & ~std::uint64_t{0x100000};
   }
+  static unsigned physical_address_width(std::uint64_t ram_bytes) noexcept {
+    unsigned bits = 32;
+    for (auto high = ram_bytes ? (ram_bytes - 1) >> 32 : 0; high && bits < 52; high >>= 1)
+      ++bits;
+    return bits;
+  }
+  unsigned physical_address_bits_;
+  std::uint64_t physical_page_mask_;
   bool mmio_at(std::uint64_t address) const {
     return mmio_claim_hook && mmio_claim_hook(bus_address(address));
   }
@@ -2932,9 +2942,8 @@ inline void Cpu::write_cr0(std::uint64_t value) {
 }
 
 inline void Cpu::write_cr3(std::uint64_t value) {
-  // This implementation has four-level paging, a 52-bit physical address
-  // field and no PCID. PWT/PCD are retained; the bus has no cache timing model.
-  if (value & ~std::uint64_t{0x000ffffffffff018ULL})
+  // Four-level paging without PCID. PWT/PCD are retained.
+  if (value & ~(physical_page_mask_ | 0x18U))
     fail("unsupported/reserved CR3 address or PCID bits", FaultCode::ProtectionFault);
   cr3 = value;
   memory.invalidate_page_tables();
@@ -2973,11 +2982,10 @@ inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
     return;
   }
   if (number == 0x1bU) {
-    constexpr std::uint64_t address_mask = 0xfffff000ULL; // CPUID.MAXPHYADDR = 32.
-    if (value & ~(address_mask | kApicBsp | kApicEnable))
+    if (value & ~(physical_page_mask_ | kApicBsp | kApicEnable))
       fail("IA32_APIC_BASE reserved bits or unsupported x2APIC mode", FaultCode::ProtectionFault);
     // The virtual board reserves exactly this local APIC MMIO page.
-    if ((value & address_mask) != kLocalApicAddress)
+    if ((value & physical_page_mask_) != kLocalApicAddress)
       fail("the virtual local APIC cannot be relocated", FaultCode::UnsupportedState);
     apic_base_ = value;
     return;
@@ -3117,7 +3125,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     }
   }
   ++page_walks;
-  constexpr std::uint64_t address_mask = 0x000ffffffffff000ULL;
+  constexpr std::uint64_t physical_field = 0x000ffffffffff000ULL;
+  const auto address_mask = physical_page_mask_;
   std::uint64_t table = cr3 & address_mask;
   bool ordinary_entries = true;
   bool writable = true, executable = true, user_access = true;
@@ -3129,6 +3138,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     if (speculative && !bulk_ram_range(entry_address, 8)) return UINT64_MAX;
     const auto entry = read_page_entry(entry_address, ordinary_entries);
     if (!(entry & 1)) page_fault(address, access, false, false, "page-table entry is not present");
+    if (entry & (physical_field & ~address_mask))
+      page_fault(address, access, true, true, "page-table physical address exceeds CPUID width");
     if ((entry >> 63) && !nxe)
       page_fault(address, access, true, true, "NX bit is reserved while EFER.NXE is clear");
     if (level == 4 && (entry & 0x80))
@@ -4374,7 +4385,7 @@ inline void Cpu::extended() {
         edx=(1U<<20)|(1U<<29); // NX and modeled IA-32e long mode
         ecx=(1U<<0)|(1U<<8); // tested LAHF/SAHF and non-faulting PREFETCHW
       }else if(leaf==0x80000008U){
-        eax=32U|(48U<<8); // physical-address and virtual-address bit sizes
+        eax=physical_address_bits_|(48U<<8);
       }
       put_reg(EAX, 4, eax);put_reg(EBX, 4, ebx);
       put_reg(ECX, 4, ecx);put_reg(EDX, 4, edx);

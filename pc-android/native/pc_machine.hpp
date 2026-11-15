@@ -52,12 +52,24 @@ class PcMachine {
       PcVideo::kFramebufferAddress + PcVideo::kApertureBytes - 4096;
   static constexpr std::size_t kEtherMemoryBytes = mundo_x::InfiniteSession::pc_window_bytes;
   static constexpr std::uint64_t kEtherMemoryLogicalByteBase = 1000000000000ULL;
-  static constexpr std::uint64_t kMaxPhysicalBytes = 1ULL << 32;
+  static constexpr std::uint64_t kLegacyPhysicalLimit = 1ULL << 32;
   static constexpr std::uint64_t kIoApicAddress = 0xfec00000ULL;
   static constexpr std::uint64_t kLocalApicAddress = Cpu::kLocalApicAddress;
   // Optional non-prefetchable PCI window used by the virtual motherboard.
   static constexpr std::uint64_t kPciMmioBase = 0xe0000000ULL;
   static constexpr std::uint64_t kPciMmioBytes = 32ULL * 1024 * 1024;
+  static constexpr std::uint64_t kConventionalRamEnd = 0xa0000;
+  static constexpr std::uint64_t kExtendedRamStart = 0x100000;
+  static constexpr std::uint64_t kFixedReservedBytes = kExtendedRamStart - kConventionalRamEnd +
+      PcVideo::kApertureBytes + kLegacyPhysicalLimit - kIoApicAddress;
+  static constexpr std::uint64_t kMaxPhysicalBytes = (128ULL << 30) +
+      kFixedReservedBytes + kPciMmioBytes;
+  // On an expanded PC, move the DRAM hidden by legacy holes above 4 GiB.
+  // The caller must enable the PCI reservation when including its hole.
+  static constexpr std::uint64_t high_ram_address_space(std::uint64_t installed_bytes,
+                                                       bool pci_mmio) noexcept {
+    return installed_bytes + kFixedReservedBytes + (pci_mmio ? kPciMmioBytes : 0);
+  }
   void reserve_pci_mmio(bool enabled) noexcept { pci_mmio_reserved_ = enabled; }
   bool pci_mmio_reserved() const noexcept { return pci_mmio_reserved_; }
   static constexpr std::uint32_t kVirtualCyclesPerSecond = 3579545;
@@ -133,7 +145,7 @@ class PcMachine {
   PcMachine& operator=(PcMachine&&)=delete;
   static std::size_t checked_ram(std::size_t bytes) {
     if (bytes < 2 * 1024 * 1024 || std::uint64_t(bytes) > kMaxPhysicalBytes)
-      throw std::invalid_argument("El espacio físico de la RAM virtual debe estar entre 2 MiB y 4 GiB.");
+      throw std::invalid_argument("El espacio físico solicitado excede el rango de RAM de la máquina.");
     return bytes;
   }
   std::uint64_t usable_ram_bytes() const noexcept {
@@ -855,7 +867,7 @@ class PcMachine {
   }
   struct BiosMemoryRegion { std::uint64_t base, length; std::uint32_t type; };
   struct BiosMemoryMap {
-    std::array<BiosMemoryRegion, 8> regions{};
+    std::array<BiosMemoryRegion, 9> regions{};
     std::size_t count = 0;
     void append(std::uint64_t base, std::uint64_t end, std::uint32_t type) noexcept {
       if (end > base) regions[count++] = {base, end - base, type};
@@ -865,9 +877,9 @@ class PcMachine {
     const auto top = cpu.memory.size();
     const auto below_mmio = std::min(top, kIoApicAddress);
     BiosMemoryMap map;
-    map.append(0, 0xa0000, 1);
-    map.append(0xa0000, 0x100000, 2);
-    std::uint64_t next = 0x100000;
+    map.append(0, kConventionalRamEnd, 1);
+    map.append(kConventionalRamEnd, kExtendedRamStart, 2);
+    std::uint64_t next = kExtendedRamStart;
     if (PcVideo::available(cpu.memory)) {
       const auto video_end = PcVideo::kFramebufferAddress + PcVideo::kApertureBytes;
       map.append(next, PcVideo::kFramebufferAddress, 1);
@@ -882,7 +894,8 @@ class PcMachine {
     }
     map.append(next, below_mmio, 1);
     // The IOAPIC and LAPIC live in the reserved high MMIO area.
-    map.append(below_mmio, top, 2);
+    map.append(below_mmio, std::min(top, kLegacyPhysicalLimit), 2);
+    map.append(kLegacyPhysicalLimit, top, 1);
     return map;
   }
   void memory_bios(){
