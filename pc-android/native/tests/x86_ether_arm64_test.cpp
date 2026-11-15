@@ -67,7 +67,7 @@ void initialize_loop(Cpu& cpu) {
 
 void decoder_contract() {
   const auto first = arm64::decode(pointer_loop.data(), pointer_loop.size(), code);
-  require(first.count == 3 && first.size == 9 && first.compare_width == 8 &&
+  require(first.count == 3 && first.size == 9 && first.flag_width == 8 &&
           first.instructions[0].rhs.memory && first.instructions[0].rhs.reg == Cpu::ESI &&
           first.instructions[1].lhs.reg == Cpu::R15 && first.instructions[1].rhs.displacement == 16 &&
           first.instructions[2].condition == 3 && first.target == code + 22,
@@ -88,6 +88,22 @@ void decoder_contract() {
   const std::uint8_t near_back[]{0x48,0x3b,0xf6,0x0f,0x85,0xf7,0xff,0xff,0xff};
   require(arm64::decode(near_back, sizeof(near_back), code).target == code,
           "near relative branch must sign-extend its displacement");
+  const std::uint8_t immediate[]{0x48,0x83,0x38,0xff,0x0f,0x85,0x04,0,0,0};
+  const auto cmp = arm64::decode(immediate, sizeof(immediate), code);
+  require(cmp.count == 2 && cmp.flag_width == 8 && cmp.instructions[0].lhs.memory &&
+          cmp.instructions[0].rhs.immediate && cmp.instructions[0].rhs.immediate_value == -1,
+          "CMP [RAX],imm8 lacks a sign-extended literal");
+  const std::uint8_t byte_test[]{0x45,0x84,0xc9,0x7a,0x08};
+  const auto test = arm64::decode(byte_test, sizeof(byte_test), code);
+  require(test.count == 2 && test.flag_op == arm64::Instruction::Test && test.flag_width == 1 &&
+          test.instructions[0].lhs.reg == Cpu::R9 && test.instructions[0].rhs.reg == Cpu::R9,
+          "TEST R9B,R9B must decode with parity and REX registers");
+  const std::uint8_t legacy_byte[]{0x84,0xe4,0x74,0x08};
+  require(!arm64::decode(legacy_byte, sizeof(legacy_byte), code).count,
+          "TEST AH must use the interpreter's legacy byte-register semantics");
+  const std::uint8_t cmp_test[]{0x83,0xf8,0x01,0x85,0xc0,0x75,0x08};
+  require(arm64::decode(cmp_test, sizeof(cmp_test), code).count == 1,
+          "A later TEST must preserve AF established by the earlier CMP");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -311,6 +327,58 @@ void flag_contract() {
   }
 }
 
+void observed_flags_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  constexpr std::array<std::uint64_t, 8> values{
+      0, 1, 3, 0x80, 0x100, 0x80000000ULL, 0x8000000000000000ULL, UINT64_MAX};
+  for (unsigned cc = 0; cc < 16; ++cc) {
+    for (unsigned variant = 0; variant < 5; ++variant) {
+      const bool compare = variant >= 3;
+      if (compare && (cc == 10 || cc == 11)) continue;
+      const auto branch = std::uint8_t(0x70 | cc);
+      for (auto* machine : {&native, &scalar}) {
+        auto& cpu = machine->cpu;
+        switch (variant) {
+        case 0: emit(cpu, code, {0x45,0x84,0xc9,branch,0x08}); break; // TEST R9B,R9B
+        case 1: emit(cpu, code, {0x48,0x85,0xc9,branch,0x08}); break; // TEST RCX,RCX
+        case 2: emit(cpu, code, {0x44,0x84,0x08,branch,0x08}); break; // TEST [RAX],R9B
+        case 3: emit(cpu, code, {0x48,0x83,0x38,0xff,branch,0x08}); break; // CMP [RAX],-1
+        case 4: emit(cpu, code, {0x83,0xf9,0x01,branch,0x08}); break; // CMP ECX,1
+        }
+      }
+      for (const auto value : values) {
+        for (auto* machine : {&native, &scalar}) {
+          auto& cpu = machine->cpu;
+          cpu.eip = code;
+          cpu.eflags = 2 | Cpu::IF | Cpu::AF | Cpu::CF | Cpu::OF;
+          cpu.regs[Cpu::EAX] = nodes;
+          cpu.regs[Cpu::ECX] = cpu.regs[Cpu::R9] = value;
+          cpu.write64(nodes, value);
+        }
+        warm_block(native.cpu, code, 2);
+        require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+                native.cpu.eip == scalar.cpu.eip && native.cpu.eflags == scalar.cpu.eflags &&
+                native.cpu.regs == scalar.cpu.regs, "TEST/CMP flags or branch differ from scalar x86");
+      }
+    }
+  }
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    emit(cpu, code, {0x83,0xf8,0x01,0x85,0xc0,0x75,0x08});
+    cpu.eip = code;
+    cpu.eflags = 2;
+    cpu.regs[Cpu::EAX] = 0x10;
+  }
+  require(!native.cpu.try_ether_arm64_block(3) && native.cpu.step() == StepResult::Executed &&
+          scalar.cpu.step() == StepResult::Executed, "CMP before TEST must retire its own flags");
+  warm_block(native.cpu, code + 3, 2);
+  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+          native.cpu.eip == scalar.cpu.eip && native.cpu.eflags == scalar.cpu.eflags &&
+          native.cpu.flag(Cpu::AF), "Translated TEST lost AF established by CMP");
+}
+
 void benchmark() {
   PcMachine native, scalar;
   boot(native, true);
@@ -375,6 +443,7 @@ int main() {
     guard_contract();
     cache_collision_contract();
     flag_contract();
+    observed_flags_contract();
     for (bool store : {false, true}) {
       State a{}, b{};
       Cpu::EtherArm64Stats sa{}, sb{};

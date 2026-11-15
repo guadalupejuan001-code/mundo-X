@@ -28,6 +28,8 @@ class MemoryFabric {
  public:
   using ReadByte = std::function<std::uint8_t(std::uint64_t)>;
   using WriteByte = std::function<void(std::uint64_t, std::uint8_t)>;
+  using ReadWindowBlock = std::function<void(std::uint64_t, std::uint8_t*, std::size_t)>;
+  using WriteWindowBlock = std::function<void(std::uint64_t, const std::uint8_t*, std::size_t)>;
   using BudgetExceeded = SparseRam::BudgetExceeded;
   using Metrics = SparseRam::Metrics;
   static constexpr std::size_t kPageSize = SparseRam::kPageSize;
@@ -121,10 +123,13 @@ class MemoryFabric {
   MemoryFabric(MemoryFabric&&) noexcept = default;
   MemoryFabric& operator=(MemoryFabric&&) noexcept = default;
 
-  void attach_window(std::uint64_t base, std::size_t bytes, ReadByte read, WriteByte write) {
+  void attach_window(std::uint64_t base, std::size_t bytes, ReadByte read, WriteByte write,
+                     ReadWindowBlock read_block = {}, WriteWindowBlock write_block = {}) {
     if (bytes == 0 || base > size() || static_cast<std::uint64_t>(bytes) > size() - base)
       throw std::invalid_argument("Ether memory window is outside logical RAM");
     if (!read || !write) throw std::invalid_argument("Ether memory window requires read/write callbacks");
+    if (bool(read_block) != bool(write_block))
+      throw std::invalid_argument("Ether block access requires paired callbacks");
     if (write_watch_ && base < write_watch_->end_ && base + bytes > write_watch_->base_)
       throw std::invalid_argument("Ether memory window overlaps a physical write watch");
     invalidate_page_tables();
@@ -132,6 +137,8 @@ class MemoryFabric {
     bytes_ = bytes;
     read_ = std::move(read);
     write_ = std::move(write);
+    read_window_block_ = std::move(read_block);
+    write_window_block_ = std::move(write_block);
   }
 
   std::uint64_t size() const noexcept { return ram_.size(); }
@@ -162,6 +169,10 @@ class MemoryFabric {
   bool has_window() const noexcept { return bytes_ != 0; }
   std::uint64_t window_base() const noexcept { return base_; }
   std::size_t window_bytes() const noexcept { return bytes_; }
+  bool has_window_block(std::uint64_t offset, std::size_t count) const noexcept {
+    return offset >= base_ && offset - base_ < bytes_ && count &&
+           count <= bytes_ - (offset - base_) && bool(read_window_block_);
+  }
   void set_boot_scalar_timing(BootScalarTiming* timing) noexcept { boot_scalar_timing_ = timing; }
 
   void enable_write_watch(std::uint64_t base, std::size_t bytes, std::size_t capacity) {
@@ -242,6 +253,10 @@ class MemoryFabric {
       ram_.read_block(offset, destination, count);
       return;
     }
+    if (has_window_block(offset, count)) {
+      read_window_block_(offset - base_, destination, count);
+      return;
+    }
     split_read(offset, destination, count);
   }
 
@@ -256,6 +271,10 @@ class MemoryFabric {
     note_write(offset, count);
     if (!overlaps_window(offset, count)) {
       ram_.write_block(offset, source, count);
+      return;
+    }
+    if (has_window_block(offset, count)) {
+      write_window_block_(offset - base_, source, count);
       return;
     }
     const auto pins = pin_writes();
@@ -410,6 +429,8 @@ class MemoryFabric {
   std::size_t bytes_ = 0;
   ReadByte read_;
   WriteByte write_;
+  ReadWindowBlock read_window_block_;
+  WriteWindowBlock write_window_block_;
 
   void check_range(std::uint64_t offset, std::size_t count) const {
     if (offset > size() || static_cast<std::uint64_t>(count) > size() - offset)

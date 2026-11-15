@@ -50,7 +50,7 @@ class PcMachine {
   // The maximum 8K framebuffer ends 1,507,328 bytes before this page.
   static constexpr std::uint64_t kEtherMemoryPhysicalBase =
       PcVideo::kFramebufferAddress + PcVideo::kApertureBytes - 4096;
-  static constexpr std::size_t kEtherMemoryBytes = 256;
+  static constexpr std::size_t kEtherMemoryBytes = mundo_x::InfiniteSession::pc_window_bytes;
   static constexpr std::uint64_t kEtherMemoryLogicalByteBase = 1000000000000ULL;
   static constexpr std::uint64_t kMaxPhysicalBytes = 1ULL << 32;
   static constexpr std::uint64_t kIoApicAddress = 0xfec00000ULL;
@@ -166,6 +166,17 @@ class PcMachine {
           [this](std::uint64_t offset,std::uint8_t value){
             quantum_session->qstore8(std::to_string(kEtherMemoryLogicalByteBase+offset),value);
             quantum_cache_valid_=false;
+          },
+          [this](std::uint64_t offset,std::uint8_t* data,std::size_t bytes){
+            quantum_session->qload_pc_bytes(kEtherMemoryLogicalByteBase+offset,data,bytes);
+            ++ether_operand_reads_;
+            ether_operand_read_bytes_+=bytes;
+          },
+          [this](std::uint64_t offset,const std::uint8_t* data,std::size_t bytes){
+            quantum_session->qstore_pc_bytes(kEtherMemoryLogicalByteBase+offset,data,bytes);
+            quantum_cache_valid_=false;
+            ++ether_operand_writes_;
+            ether_operand_written_bytes_+=bytes;
           });
     clear_screen();
     video_.reset(cpu.memory);
@@ -202,6 +213,7 @@ class PcMachine {
   void reset() {
     quantum_session->reset(mundo_x::InfiniteCore::Background::Zero);
     quantum_device.power_reset();
+    ether_operand_reads_=ether_operand_writes_=ether_operand_read_bytes_=ether_operand_written_bytes_=0;
     quantum_output_.clear();quantum_error_.clear();quantum_truncated_=false;
     quantum_cache_valid_=false;
     host_error.clear();pending.clear();waiting_key=false;disk_reads=0;last_disk_status_=0;
@@ -469,7 +481,10 @@ class PcMachine {
     o<<"],\"output\":"<<quote(quantum_output_)<<",\"output_truncated\":"<<(quantum_truncated_?"true":"false")
      <<",\"error\":"<<quote(quantum_error_)<<",\"port_status\":"<<unsigned(quantum_device.status())
      <<",\"guest_requests\":"<<quantum_device.requests()<<",\"guest_errors\":"<<quantum_device.errors()
-     <<",\"request_bytes\":"<<quantum_device.request_bytes()<<",\"response_bytes\":"<<quantum_device.remaining()<<"}";
+     <<",\"request_bytes\":"<<quantum_device.request_bytes()<<",\"response_bytes\":"<<quantum_device.remaining()
+     <<",\"ether_span_reads\":"<<ether_operand_reads_<<",\"ether_span_writes\":"<<ether_operand_writes_
+     <<",\"ether_span_read_bytes\":"<<ether_operand_read_bytes_
+     <<",\"ether_span_written_bytes\":"<<ether_operand_written_bytes_<<"}";
     return o.str();
   }
   std::string screen() const {
@@ -508,6 +523,7 @@ class PcMachine {
     o<<"],\"regs_hex\":[";
     for(unsigned i=0;i<cpu.regs.size();++i){if(i)o<<',';o<<quote(hex64(cpu.regs[i]));}
     o<<"],\"rip_hex\":"<<quote(hex64(cpu.eip))<<",\"cpu_mode\":"<<quote(cpu.mode_name())
+     <<",\"wbinvd_retired\":"<<cpu.wbinvd_retired
      <<",\"message\":"<<quote(message)<<",\"boot_kind\":"<<quote(boot_kind)<<",\"pending\":"<<quote(pending)
      <<",\"disk_reads\":"<<disk_reads<<",\"ram_bytes\":"<<cpu.memory.size()
      <<",\"ram_usable_bytes\":"<<usable_ram_bytes()
@@ -573,6 +589,8 @@ class PcMachine {
   bool quantum_truncated_=false;
   mutable bool quantum_cache_valid_=false;
   mutable mundo_x::InfiniteSession::Observation quantum_observation_;
+  std::uint64_t ether_operand_reads_=0,ether_operand_writes_=0;
+  std::uint64_t ether_operand_read_bytes_=0,ether_operand_written_bytes_=0;
   static std::vector<mundo_x::InfiniteSession::Observable> correlation_observables(const std::string& a,const std::string& b){
     return {{1,{{a,'X'},{b,'X'}}},{1,{{a,'Y'},{b,'Y'}}},{1,{{a,'Z'},{b,'Z'}}},{1,{{a,'Z'}}},{1,{{b,'Z'}}}};
   }
