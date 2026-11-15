@@ -45,6 +45,11 @@ std::vector<std::uint8_t> read(const SparseRam& ram, std::uint64_t offset, std::
     return result;
 }
 
+void keep_dense(SparseRam& ram, std::uint64_t page) {
+    // More changed words than the compact representation can hold.
+    ram.fill(page * kPage + 256, 0x58, 512);
+}
+
 struct TestBacking : SparseRam::PageBacking {
     using Page = std::array<std::uint8_t, kPage>;
     std::unordered_map<std::uint64_t, Page> pages;
@@ -73,6 +78,7 @@ int main() {
              const auto* store = backing.get();
              ram.attach_page_backing(std::move(backing));
              for (std::size_t page = 0; page < 12; ++page) {
+                 keep_dense(ram, page);
                  ram[page * kPage] = static_cast<std::uint8_t>(page + 1);
                  ram[page * kPage + kPage - 1] = static_cast<std::uint8_t>(page + 15);
              }
@@ -110,6 +116,8 @@ int main() {
              auto backing = std::make_unique<TestBacking>();
              auto* store = backing.get();
              ram.attach_page_backing(std::move(backing));
+             keep_dense(ram, 0);
+             keep_dense(ram, 1);
              ram[0] = 1;
              ram[8] = 4;
              ram[kPage] = 2;
@@ -164,6 +172,59 @@ int main() {
              std::cout << "PRIME_C04_SPARSE_WORD_PASS dense_bytes=" << kPage
                        << " compact_payload_bytes=" << word.size() << " spill_writes=0\n";
          }},
+        {"cold pages retain exact changes above repeating and zero backgrounds", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             SparseRam ram(4 * kPage, 4 * kPage);
+             const std::array<std::uint8_t, 8> pattern{0x2a, 4, 0, 7, 0xb2, 1, 9, 5};
+             std::vector<std::uint8_t> repeated(kPage), mostly_zero(kPage);
+             for (std::size_t i = 0; i < kPage; ++i) repeated[i] = pattern[i % pattern.size()];
+             repeated[0] = 0;
+             repeated[15] = 0xcd;
+             repeated[kPage - 1] = 0xfe;
+             mostly_zero[8] = 0x18;
+             mostly_zero[kPage - 2] = 0x81;
+             ram.write_block(0, repeated.data(), repeated.size());
+             ram.write_block(kPage, mostly_zero.data(), mostly_zero.size());
+             constexpr auto patch_bytes = 5 * (SparseRam::kPatternSize + sizeof(std::uint16_t));
+             constexpr auto compact_bytes = 2 * SparseRam::kPatternSize + patch_bytes;
+             const auto before = ram.allocated_bytes() + ram.metadata_bytes();
+             need(ram.adjust_payload_budget(compact_bytes, 2) == Adjustment::Applied &&
+                      ram.allocated_pages() == 0 && ram.allocated_bytes() == compact_bytes &&
+                      ram.metrics().pattern_delta_pages == 2 &&
+                      ram.metrics().pattern_delta_bytes == compact_bytes &&
+                      before - ram.metadata_bytes() - ram.allocated_bytes() == 2 * kPage - patch_bytes,
+                  "Both backgrounds must compact without increasing per-page metadata");
+             need(read(ram, 0, kPage) == repeated && read(ram, kPage, kPage) == mostly_zero &&
+                      ram[0] == repeated[0] && ram[15] == repeated[15] &&
+                      ram[kPage + 8] == mostly_zero[8] && ram[2 * kPage - 2] == mostly_zero[kPage - 2],
+                  "Compact byte and block readers must reconstruct both backgrounds exactly");
+             need(read(ram, kPage - 2, 4) == std::vector<std::uint8_t>{repeated[kPage - 2], 0xfe, 0, 0},
+                  "An unaligned cross-page read lost the last override");
+             ram[15] = repeated[15];
+             need(!ram.try_copy_compact_page(kPage, 2 * kPage) && ram[2 * kPage + 8] == 0 &&
+                      ram.metrics().pattern_delta_bytes == compact_bytes,
+                  "A no-op write or over-budget copy changed the compact representation");
+             expect<SparseRam::BudgetExceeded>([&] { ram[15] = 3; }, "budget exceeded");
+             need(read(ram, 0, kPage) == repeated, "Failed expansion changed a compact byte");
+             ram.adjust_payload_budget(3 * kPage, 0);
+             need(ram.try_copy_compact_page(kPage, 2 * kPage) &&
+                      ram.try_copy_compact_page(2 * kPage, 2 * kPage),
+                  "Compact replacement and self-copy must preserve independent payloads");
+             SparseRam moved(0);
+             moved = std::move(ram);
+             need(moved.metrics().pattern_delta_pages == 3 && ram.metrics().pattern_delta_bytes == 0 &&
+                      read(moved, 2 * kPage, kPage) == mostly_zero,
+                  "Moving RAM lost its compact encodings or counters");
+             moved.fill(2 * kPage + 7, 0, 3);
+             need(moved[2 * kPage + 8] == 0 && moved[3 * kPage - 2] == 0x81 &&
+                      read(moved, kPage, kPage) == mostly_zero,
+                  "A partial zero fill changed another page or dropped an untouched byte");
+             moved.fill(0, 0, 2 * kPage);
+             need(moved.metrics().pattern_delta_bytes == 0 && moved[15] == 0 && moved[kPage + 8] == 0,
+                  "Fully clearing compact pages must discard their backing");
+             std::cout << "PRIME_RAM_PATTERN_DELTA_PASS dense_bytes=" << 2 * kPage
+                       << " compact_payload_bytes=" << compact_bytes << " spill_writes=0\n";
+         }},
         {"live budget adjusts incrementally and preserves spilled and failed writes", [] {
              using Adjustment = SparseRam::BudgetAdjustment;
              SparseRam ram(6 * kPage, 5 * kPage);
@@ -171,6 +232,7 @@ int main() {
              auto* store = backing.get();
              ram.attach_page_backing(std::move(backing));
              for (unsigned page = 0; page < 5; ++page) {
+                 keep_dense(ram, page);
                  ram[page * kPage] = page + 1;
                  ram[page * kPage + kPage - 1] = page + 31;
              }
@@ -213,6 +275,8 @@ int main() {
         {"transaction pins preserve cross-page rollback at capacity", [] {
              SparseRam ram(6 * kPage, 2 * kPage);
              ram.attach_page_backing(std::make_unique<TestBacking>());
+             keep_dense(ram, 0);
+             keep_dense(ram, 1);
              ram[0] = 7;
              ram[kPage - 1] = 8;
              ram[kPage] = 9;
