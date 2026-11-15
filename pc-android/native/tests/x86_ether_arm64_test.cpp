@@ -29,6 +29,14 @@ constexpr std::array<std::uint8_t, 24> pointer_loop{
   0x49,0x3b,0xf6, 0x75,0xf2,                      // CMP, JNE to MOV.
     0x48,0x89,0xf0, 0x48,0x89,0x03, 0xeb,0x02, 0x90,0x90}; // Record RSI, return to HLT.
 
+// The first three instructions use encodings from the boot profile.
+constexpr std::array<std::uint8_t, 20> indexed_loop{
+    0x4c,0x8b,0x4c,0xd4,0xf8, // MOV R9,[RSP+RDX*8-8]
+    0x0f,0xb7,0x44,0x24,0x58, // MOVZX EAX,word [RSP+58h]
+    0x48,0x83,0xc0,0x08,      // ADD RAX,8
+    0x83,0xe9,0x01,           // SUB ECX,1
+    0x75,0xed,0xf4};          // JNZ to MOV; HLT
+
 void require(bool value, const char* message) {
   if (!value) throw std::runtime_error(message);
 }
@@ -119,6 +127,25 @@ void decoder_contract() {
   const std::uint8_t mov_branch[]{0x8b,0xc1,0x74,0x02};
   require(arm64::decode(mov_branch, sizeof(mov_branch), code).count == 2,
           "a branch using incoming flags should extend a MOV block");
+  const auto indexed = arm64::decode(indexed_loop.data(), indexed_loop.size(), code);
+  const auto& address = indexed.instructions[0].rhs;
+  require(indexed.count == 5 && indexed.target == code &&
+          address.reg == Cpu::ESP && address.index == Cpu::EDX &&
+          address.displacement == 0xfffffff8U && address.scale_shift == 3 &&
+          indexed.instructions[1].width == 2 && indexed.instructions[1].rhs.index == arm64::Operand::kNoIndex &&
+          indexed.instructions[2].kind == arm64::Instruction::Add &&
+          indexed.flag_op == arm64::Instruction::Subtract,
+          "indexed MOV, MOVZX and immediate arithmetic did not form a single block");
+  const std::uint8_t rex_index[]{0x4b,0x8b,0x44,0xa0,0xf0,0x75,0x02};
+  const auto extended = arm64::decode(rex_index, sizeof(rex_index), code);
+  require(extended.count == 2 && extended.instructions[0].rhs.reg == Cpu::R8 &&
+          extended.instructions[0].rhs.index == Cpu::R12, "REX.X must retain an R12 index");
+  const std::uint8_t high_byte[]{0x0f,0xb6,0xc4};
+  require(!arm64::decode(high_byte, sizeof(high_byte), code).count,
+          "MOVZX AH must use legacy byte-register semantics");
+  const std::uint8_t add_inc[]{0x48,0x83,0xc0,0x08,0x48,0xff,0xc2};
+  require(arm64::decode(add_inc, sizeof(add_inc), code).count == 1,
+          "INC must use the carry produced by ADD");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -205,6 +232,77 @@ void warm_block(Cpu& cpu, std::uint64_t address, unsigned steps) {
     if (cpu.try_ether_arm64_block(steps) == steps) return;
   }
   throw std::runtime_error("ARM64 block never became executable");
+}
+
+void immediate_arithmetic_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (const bool wide : {false, true}) {
+    for (const std::uint8_t modrm : {0xc0, 0xe8}) {
+      for (const std::uint8_t imm : {0x08, 0x80}) {
+        for (const auto initial : {0ULL, 0x7fffffffULL, 0x80000000ULL,
+                                  0x7fffffffffffffffULL, 0x8000000000000000ULL, ~0ULL}) {
+          for (auto* machine : {&native, &scalar}) {
+            auto& cpu = machine->cpu;
+            if (wide) emit(cpu, code, {0x48,0x83,modrm,imm,0x72,0x04});
+            else emit(cpu, code, {0x83,modrm,imm,0x72,0x04});
+            cpu.eip = code;
+            cpu.eflags = 2 | Cpu::IF | Cpu::AF | Cpu::CF;
+            cpu.regs[Cpu::EAX] = initial;
+          }
+          warm_block(native.cpu, code, 2);
+          require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+                  capture(native.cpu) == capture(scalar.cpu),
+                  "immediate arithmetic changed register state, flags or the carry branch");
+        }
+      }
+    }
+  }
+}
+
+void indexed_loop_benchmark() {
+  constexpr unsigned iterations = 4096;
+  const auto run = [](bool translated) {
+    PcMachine machine;
+    boot(machine, translated);
+    auto& cpu = machine.cpu;
+    cpu.memory.write_block(code, indexed_loop.data(), indexed_loop.size());
+    cpu.write64(stack + 8, 0xf0e1d2c3b4a59687ULL);
+    cpu.write64(stack + 0x58, 0xdeadbeef5566fffaULL);
+    cpu.regs[Cpu::EDX] = 2;
+    cpu.regs[Cpu::ECX] = iterations;
+    const auto initial_steps = cpu.instructions;
+    const auto start = std::chrono::steady_clock::now();
+    machine.run(iterations * 5 + 1);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    require(cpu.halted && !cpu.fault && cpu.regs[Cpu::EAX] == 0x10002 &&
+            cpu.regs[Cpu::R9] == 0xf0e1d2c3b4a59687ULL && !cpu.regs[Cpu::ECX],
+            "indexed loop produced an incorrect guest result");
+    Result result{};
+    result.state = capture(cpu);
+    result.stats = cpu.ether_arm64_stats();
+    result.guest_steps = cpu.instructions - initial_steps;
+    result.elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+    return result;
+  };
+  std::array<std::uint64_t, 7> native_times{}, scalar_times{};
+  for (unsigned i = 0; i < native_times.size(); ++i) {
+    const auto first = run(i % 2 == 0);
+    const auto second = run(i % 2 != 0);
+    const auto& native = i % 2 == 0 ? first : second;
+    const auto& scalar = i % 2 == 0 ? second : first;
+    require(native.state == scalar.state && native.guest_steps == iterations * 5 + 1 &&
+            native.stats.steps * 100 >= native.guest_steps * 99,
+            "indexed loop diverged from scalar execution or missed the native path");
+    native_times[i] = native.elapsed_ns;
+    scalar_times[i] = scalar.elapsed_ns;
+  }
+  std::sort(native_times.begin(), native_times.end());
+  std::sort(scalar_times.begin(), scalar_times.end());
+  std::cout << "ETHER_ARM64_INDEXED_LOOP steps=" << iterations * 5 + 1
+            << " native_median_ns=" << native_times[3]
+            << " scalar_median_ns=" << scalar_times[3] << '\n';
 }
 
 void cache_collision_contract() {
@@ -543,6 +641,8 @@ int main() {
     flag_contract();
     observed_flags_contract();
     scan_forms_contract();
+    immediate_arithmetic_contract();
+    indexed_loop_benchmark();
     for (bool store : {false, true}) {
       State a{}, b{};
       Cpu::EtherArm64Stats sa{}, sb{};

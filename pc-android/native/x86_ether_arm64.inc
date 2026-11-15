@@ -114,6 +114,12 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
     }
     regs = frame.regs;
     switch (block.flag_op) {
+      case ether_arm64::Instruction::Add:
+        alu(0, frame.left, frame.right, block.flag_width);
+        break;
+      case ether_arm64::Instruction::Subtract:
+        alu(5, frame.left, frame.right, block.flag_width);
+        break;
       case ether_arm64::Instruction::Compare:
         alu(7, frame.left, frame.right, block.flag_width);
         break;
