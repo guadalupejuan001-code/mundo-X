@@ -667,7 +667,7 @@ class PcMachine {
     const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
     const bool zero=!rep&&!shift&&!scan&&cpu.zero_loop_batch_candidate();
     const bool counter=!rep&&!shift&&!scan&&!zero&&cpu.counter_loop_batch_candidate();
-    const bool arm64=!rep&&!shift&&!scan&&!zero&&cpu.ether_arm64_blocks_enabled()&&cpu.is_long_mode();
+    const bool arm64=!rep&&!shift&&!scan&&!zero&&cpu.ether_arm64_block_candidate();
     if (!rep && !shift && !scan && !zero && !counter && !arm64) return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;

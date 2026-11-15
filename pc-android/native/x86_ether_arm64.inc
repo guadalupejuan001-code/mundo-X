@@ -1,8 +1,23 @@
+inline bool Cpu::ether_arm64_block_candidate() const noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+  if (!ether_arm64_blocks_enabled() || !a20_enabled) return false;
+  if (is_long_mode())
+    return page_translation_cache_enabled_ && (cr0 & 0x80000001U) == 0x80000001U && (cr4 & 0x20U);
+  // Every branch target and fetch must be valid within the current CS.
+  // DS and SS can have distinct bases, limits and permissions and are
+  // checked separately by each translated memory access.
+  const auto& code = cache_[CS];
+  return (cr0 & 0x80000001U) == 1 && !(efer & 0x400U) && code.valid &&
+         code.code && code.big && !code.expand_down && !code.base && code.limit == UINT32_MAX;
+#else
+  return false;
+#endif
+}
+
 inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
-  if (!ether_arm64_blocks_enabled() || budget < 2 || fault || halted || transaction_ ||
-      interrupt_shadow_ || !a20_enabled || !page_translation_cache_enabled_ ||
-      (cr0 & 0x80000001U) != 0x80000001U || !(cr4 & 0x20U) || !is_long_mode() ||
+  if (!ether_arm64_block_candidate() || budget < 2 || fault || halted || transaction_ ||
+      interrupt_shadow_ ||
       (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
       step_trace_hook || irq_trace_hook)
     return 0;
@@ -29,12 +44,22 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
 inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto origin = eip;
+  const bool long_mode = is_long_mode();
   const auto width = std::min(ether_arm64::Block::kMaxBytes, page_bytes - unsigned(eip % page_bytes));
-  if (width < 2 || eip > UINT64_MAX - width || !canonical(eip) || !canonical(eip + width - 1)) return 0;
+  if (width < 2 || (long_mode
+          ? eip > UINT64_MAX - width || !canonical(eip) || !canonical(eip + width - 1)
+          : eip > UINT32_MAX)) return 0;
   const auto lookup = ether_arm64_cache_->lookup(eip);
   auto& entry = lookup.entry;
   if (!entry.checked_bytes && entry.visits < 2) {
     ++entry.visits;
+    return 0;
+  }
+  // An unpaged decode miss only depends on the identity-mapped code bytes.
+  // Leave cold or unsupported instructions on the scalar path immediately.
+  if (!long_mode && entry.checked_bytes && !entry.block.long_mode && entry.block.count < 2 &&
+      entry.code_version && entry.code_version == memory.code_page_version(eip)) {
+    ++ether_arm64_stats_.code_version_hits;
     return 0;
   }
 
@@ -50,7 +75,8 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
     }
     const auto privilege = cpl();
     const bool same_mapping = entry.checked_bytes && entry.physical == physical &&
-                              entry.cr3 == cr3 && entry.cpl == privilege;
+                              entry.cr3 == cr3 && entry.cpl == privilege &&
+                              entry.block.long_mode == long_mode;
     const auto version = memory.code_page_version(physical);
     if (same_mapping && version && version == entry.code_version) {
       ++ether_arm64_stats_.code_version_hits;
@@ -67,7 +93,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
           memory.read_block(physical + length, actual.data() + length, width - length);
           ether_arm64_stats_.code_bytes_read += width - length;
         }
-        entry.block = ether_arm64::decode(actual.data(), width, eip);
+        entry.block = ether_arm64::decode(actual.data(), width, eip, long_mode);
         entry.checked_bytes = entry.block.count < 2 ? width : entry.block.size;
         entry.physical = physical;
         entry.cr3 = cr3;
@@ -126,6 +152,9 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
       case ether_arm64::Instruction::Test:
         alu(4, frame.left, frame.right, block.flag_width);
         break;
+      case ether_arm64::Instruction::Xor:
+        alu(6, frame.left, frame.right, block.flag_width);
+        break;
       case ether_arm64::Instruction::Increment:
       case ether_arm64::Instruction::Decrement: {
         const auto carry = flag(CF);
@@ -143,7 +172,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
     ip_written_ = last.kind == ether_arm64::Instruction::Conditional &&
                   !block.uses_arm_condition()
         ? condition(last.opcode & 15) : outcome == 2;
-    eip = ip_written_ ? block.target : cursor_;
+    eip = ip_written_ ? block.target : long_mode ? cursor_ : std::uint32_t(cursor_);
     opcode_ = std::uint16_t(last.opcode);
     repeat_ = 0;
     decoded_.assign(active->bytes.begin() + last.begin, active->bytes.begin() + last.end);
@@ -151,6 +180,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
     eflags |= 2;
     ++ether_arm64_stats_.blocks;
     ether_arm64_stats_.steps += block.count;
+    if (!long_mode) ether_arm64_stats_.protected32_steps += block.count;
     return block.count;
   } catch (const std::exception&) {
     // Speculative walks never set A/D bits or access an I/O provider.
@@ -164,10 +194,10 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
 }
 
 inline std::optional<std::uint64_t> Cpu::ether_arm64_ram_address(
-    std::uint64_t address, unsigned width, Access access) {
+    std::uint64_t address, unsigned width, bool stack, Access access) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
-  if (address % page_bytes > page_bytes - width || !canonical(address) ||
-      address > UINT64_MAX - (width - 1) || !canonical(address + width - 1))
+  address = segment_linear(stack ? SS : DS, address, width, access);
+  if (address % page_bytes > page_bytes - width)
     return std::nullopt;
   const auto physical = translate(address, access, nullptr, true);
   if (!bulk_ram_range(physical, width)) return std::nullopt;
@@ -175,10 +205,12 @@ inline std::optional<std::uint64_t> Cpu::ether_arm64_ram_address(
 }
 
 inline unsigned Cpu::ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
-                                      unsigned width) noexcept {
+                                      unsigned spec) noexcept {
   auto& cpu = *static_cast<Cpu*>(frame->cpu);
   try {
-    const auto physical = cpu.ether_arm64_ram_address(address, width, Access::Read);
+    const auto width = spec & (ether_arm64::kStackAccess - 1);
+    const auto physical = cpu.ether_arm64_ram_address(
+        address, width, spec & ether_arm64::kStackAccess, Access::Read);
     if (!physical) return 0;
     frame->loaded = cpu.read_ram_span(*physical, width);
     return 1;
@@ -188,10 +220,12 @@ inline unsigned Cpu::ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t a
 }
 
 inline unsigned Cpu::ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
-                                       unsigned width, std::uint64_t value) noexcept {
+                                       unsigned spec, std::uint64_t value) noexcept {
   auto& cpu = *static_cast<Cpu*>(frame->cpu);
   try {
-    const auto physical = cpu.ether_arm64_ram_address(address, width, Access::Write);
+    const auto width = spec & (ether_arm64::kStackAccess - 1);
+    const auto physical = cpu.ether_arm64_ram_address(
+        address, width, spec & ether_arm64::kStackAccess, Access::Write);
     if (!physical || cpu.memory.may_touch_page_tables(*physical, width)) return 0;
     std::array<std::uint8_t, 8> data;
     for (unsigned i = 0; i < width; ++i) data[i] = std::uint8_t(value >> (8 * i));
