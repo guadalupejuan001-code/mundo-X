@@ -21,6 +21,7 @@
 #include <iomanip>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <optional>
 #include <sstream>
@@ -46,7 +47,7 @@ enum class FaultCode {
   MemoryBounds, SegmentLimit, InvalidInstruction, UnsupportedOpcode,
   UnsupportedState, DivideError, UnsupportedPort, HostError, ProtectionFault,
   PageFault, MemoryBudget, DeviceNotAvailable, SimdFloatingPoint, X87FloatingPoint,
-  StackFault, SegmentNotPresent
+  StackFault, SegmentNotPresent, DebugException
 };
 
 struct Fault {
@@ -72,7 +73,28 @@ struct Fault {
 
 enum class StepResult { Executed, Halted, Faulted, WaitingForX87 };
 
+// One x86 package, with contiguous xAPIC IDs and one or two threads per core.
+struct CpuTopology {
+  static constexpr unsigned kMaxLogical = 16;
+  unsigned cores = 1;
+  unsigned threads_per_core = 1;
+
+  bool valid() const noexcept {
+    return (threads_per_core == 1 || threads_per_core == 2) &&
+           cores && cores <= kMaxLogical / threads_per_core;
+  }
+  unsigned logical_processors() const noexcept { return cores * threads_per_core; }
+  static unsigned id_shift(unsigned count) noexcept {
+    unsigned width = 0;
+    for (unsigned encoded = count ? count - 1 : 0; encoded; encoded >>= 1) ++width;
+    return width;
+  }
+};
+
 class Cpu {
+ private:
+  std::unique_ptr<MemoryFabric> owned_memory_;
+
  public:
   static constexpr std::uint64_t kLocalApicAddress = 0xfee00000ULL;
   enum Register : unsigned { EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI, R8, R9, R10, R11, R12, R13, R14, R15 };
@@ -153,7 +175,8 @@ class Cpu {
       try { ether_arm64_cache_ = std::make_unique<ether_arm64::Cache>(); }
       catch (const std::bad_alloc&) { ether_arm64_enabled_ = false; }
     }
-    memory.enable_code_page_versions(ether_arm64_enabled_);
+    if (ether_arm64_enabled_ || topology_.logical_processors() == 1)
+      memory.enable_code_page_versions(ether_arm64_enabled_);
 #else
     (void)enabled;
 #endif
@@ -166,7 +189,7 @@ class Cpu {
 #endif
   }
   const EtherArm64Stats& ether_arm64_stats() const noexcept { return ether_arm64_stats_; }
-  unsigned try_ether_arm64_block(unsigned budget);
+  unsigned try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus = nullptr);
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -176,7 +199,7 @@ class Cpu {
   std::uint64_t fpu_ip=0, fpu_dp=0;
   DescriptorTable gdtr{0, 0}, idtr{0x3ff, 0};
   SystemRegister ldtr{}, tr{};
-  MemoryFabric memory;
+  MemoryFabric& memory;
   bool a20_enabled = false;
   bool halted = false;
   std::optional<Fault> fault;
@@ -188,7 +211,7 @@ class Cpu {
   std::uint64_t instruction_page_hits = 0;
   std::uint64_t page_translation_hits = 0;
 
-  // This machine has a single CPU and a stable MMIO map while running.
+  // When CPUs share this fabric, the machine serializes RAM and device access.
   // A caller that changes its bus map must invalidate cached translations.
   void enable_page_translation_cache(bool enabled = true) noexcept {
     page_translation_cache_enabled_ = enabled;
@@ -242,12 +265,31 @@ class Cpu {
   explicit Cpu(std::size_t ram_bytes = 2 * 1024 * 1024)
       : Cpu(ram_bytes, MemoryFabric::default_budget(ram_bytes)) {}
   Cpu(std::size_t ram_bytes, std::size_t resident_budget_bytes)
-      : memory(ram_bytes, resident_budget_bytes),
+      : owned_memory_(std::make_unique<MemoryFabric>(ram_bytes, resident_budget_bytes)),
+        memory(*owned_memory_),
         physical_address_bits_(physical_address_width(ram_bytes)),
         physical_page_mask_((1ULL << physical_address_bits_) - 4096) {
-    if (ram_bytes == 0) throw std::invalid_argument("RAM must not be empty");
-    decoded_.reserve(15);
-    journal_.reserve(64);
+    reserve_execution_state();
+  }
+  // The owning CPU and its motherboard outlive all CPUs on the same bus.
+  explicit Cpu(MemoryFabric& shared_memory)
+      : memory(shared_memory),
+        physical_address_bits_(physical_address_width(memory.size())),
+        physical_page_mask_((1ULL << physical_address_bits_) - 4096) {
+    reserve_execution_state();
+  }
+
+  void configure_topology(CpuTopology topology, unsigned apic_id) {
+    if (!topology.valid() || apic_id >= topology.logical_processors())
+      throw std::invalid_argument("Invalid x86 CPU topology or APIC ID");
+    topology_ = topology;
+    apic_id_ = apic_id;
+    apic_base_ = (apic_base_ & ~kApicBsp) | (apic_id_ == 0 ? kApicBsp : 0);
+  }
+  CpuTopology topology() const noexcept { return topology_; }
+  unsigned apic_id() const noexcept { return apic_id_; }
+  const std::uint64_t* set_shared_clock(const std::uint64_t* cycles) noexcept {
+    return std::exchange(shared_clock_, cycles);
   }
 
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
@@ -261,7 +303,10 @@ class Cpu {
     tsc_offset_ = 0;
     idle_clock_steps_ = 0;
     apic_task_priority_ = 0;
-    apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
+    apic_base_ = kLocalApicAddress | kApicEnable | (apic_id_ == 0 ? kApicBsp : 0);
+    debug_address_.fill(0);
+    dr6_ = 0xffff0ff0;
+    dr7_ = 0x400;
     cache_.fill(SegmentCache{}); cache_[CS].code = true;
     cache_[CS].selector = cs; cache_[CS].base = std::uint64_t(cs) << 4;
     gdtr = {0, 0}; idtr = {0x3ff, 0};
@@ -707,6 +752,17 @@ class Cpu {
   enum class Access { Read, Write, Execute };
   std::uint64_t apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
   bool local_apic_present_ = false;
+  CpuTopology topology_;
+  unsigned apic_id_ = 0;
+  const std::uint64_t* shared_clock_ = nullptr;
+  std::array<std::uint64_t, 4> debug_address_{};
+  std::uint32_t dr6_ = 0xffff0ff0, dr7_ = 0x400;
+
+  void reserve_execution_state() {
+    if (memory.empty()) throw std::invalid_argument("RAM must not be empty");
+    decoded_.reserve(15);
+    journal_.reserve(64);
+  }
   std::array<SegmentCache, 6> cache_{};
   SystemCallMsrs system_call_msrs_;
   int override_ = -1;
@@ -734,7 +790,7 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<ether_arm64::Cache> ether_arm64_cache_;
   bool ether_arm64_enabled_ = false;
-  unsigned retire_ether_arm64_block(unsigned budget);
+  unsigned retire_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus);
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
                                   unsigned width) noexcept;
   static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
@@ -757,7 +813,7 @@ class Cpu {
   std::uint64_t tsc_offset_ = 0;
   std::uint64_t idle_clock_steps_ = 0;
   std::uint64_t timestamp_counter() const noexcept {
-    return tsc_offset_ + clock_cycles() * kTscTicksPerCycle;
+    return tsc_offset_ + (shared_clock_ ? *shared_clock_ : clock_cycles()) * kTscTicksPerCycle;
   }
   std::vector<std::uint8_t> decoded_;
   std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
@@ -2510,6 +2566,7 @@ class Cpu {
   static int exception_vector(FaultCode code) {
     switch (code) {
       case FaultCode::DivideError: return 0;      // #DE
+      case FaultCode::DebugException: return 1;  // #DB
       case FaultCode::InvalidInstruction: return 6;
       case FaultCode::DeviceNotAvailable: return 7; // #NM
       case FaultCode::SimdFloatingPoint: return 19; // #XM/#XF
@@ -2953,7 +3010,7 @@ inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
   // PSE, PAE and PGE. Discard software translations on changes.
-  constexpr std::uint32_t supported = 0x000006b0U | kCr4Tsd; // OSFXSR and OSXMMEXCPT, no OSXSAVE
+  constexpr std::uint32_t supported = 0x000006b0U | kCr4Tsd | (1U << 3); // OSFXSR and OSXMMEXCPT, no OSXSAVE
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   if (cr4 != value) memory.invalidate_page_tables();
@@ -2988,6 +3045,8 @@ inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
     if ((value & physical_page_mask_) != kLocalApicAddress)
       fail("the virtual local APIC cannot be relocated", FaultCode::UnsupportedState);
     apic_base_ = value;
+    if (topology_.logical_processors() > 1)
+      apic_base_ = (apic_base_ & ~kApicBsp) | (apic_id_ == 0 ? kApicBsp : 0);
     return;
   }
   if (number == 0xc0000080U) {
@@ -4305,7 +4364,7 @@ inline void Cpu::extended() {
     case 0x09: // WBINVD
       if (cpl() != 0) fail("WBINVD requires CPL0", FaultCode::ProtectionFault);
       // Guest stores reach shared RAM at each retired instruction. This
-      // serializing instruction completes on the coherent single-vCPU bus.
+      // serializing instruction completes on the coherent emulated bus.
       ++wbinvd_retired;
       return;
     case 0x20: case 0x22: {
@@ -4337,6 +4396,35 @@ inline void Cpu::extended() {
       }
       return;
     }
+    case 0x21: case 0x23: {
+      const auto encoded = fetch8();
+      auto debug = unsigned((encoded >> 3) & 7U);
+      const auto general = unsigned(encoded & 7U) + ((rex_ & 1U) ? 8U : 0U);
+      if (rex_ & 4U) fail("REX.R is invalid for MOV DR", FaultCode::InvalidInstruction);
+      if (debug == 4 || debug == 5) {
+        if (cr4 & 8U) fail("DR4/DR5 are reserved with CR4.DE set", FaultCode::InvalidInstruction);
+        debug += 2;
+      }
+      if (cpl() != 0) fail("MOV DR requires CPL0", FaultCode::ProtectionFault);
+      if (dr7_ & 0x2000U) {
+        dr7_ &= ~0x2000U;
+        dr6_ |= 0x2000U;
+        fail("DR7.GD detected debug-register access", FaultCode::DebugException);
+      }
+      const auto width = is_long_mode() ? 8U : 4U;
+      if (op == 0x21) {
+        put_reg(general, width, debug < 4 ? debug_address_[debug] : debug == 6 ? dr6_ : dr7_);
+      } else {
+        const auto value = get_reg(general, width);
+        if (debug < 4) debug_address_[debug] = value;
+        else {
+          if (value >> 32) fail("reserved upper MOV DR6/DR7 bits", FaultCode::ProtectionFault);
+          if (debug == 6) dr6_ = std::uint32_t(value & 0xe00fU) | 0xffff0ff0U;
+          else dr7_ = std::uint32_t(value & 0xffff23ffU) | 0x400U;
+        }
+      }
+      return;
+    }
     case 0x30:
       if (cpl() != 0) fail("WRMSR requires CPL0", FaultCode::ProtectionFault);
       write_msr(std::uint32_t(regs[ECX]), (std::uint64_t(std::uint32_t(regs[EDX])) << 32) | std::uint32_t(regs[EAX])); return;
@@ -4357,8 +4445,9 @@ inline void Cpu::extended() {
       const auto leaf = std::uint32_t(regs[EAX]);
       const auto subleaf = std::uint32_t(regs[ECX]);
       std::uint32_t eax=0,ebx=0,ecx=0,edx=0;
+      const auto logical = topology_.logical_processors();
       if(leaf==0) {
-        eax=7;
+        eax=logical > 1 ? 0x0b : 7;
         // "MUNDOX PC   " is a 12-character emulated CPU vendor identifier.
         const char vendor[13]="MUNDOX PC   ";
         auto word=[&](unsigned start){
@@ -4370,13 +4459,22 @@ inline void Cpu::extended() {
         ebx=word(0);edx=word(4);ecx=word(8);
       }else if(leaf==1){
         eax=0x00000663U; // modeled family/model/stepping
-        ebx=1U<<16;     // One logical processor; initial APIC ID 0.
+        ebx=(std::uint32_t(apic_id_) << 24) | (std::uint32_t(logical) << 16);
         // TSC, MSR, PAE, CX8, CMOV, MMX, FXSR, SSE and SSE2.
         // The full x87 instruction set remains incomplete (FPU bit 0).
         edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
         if (local_apic_present() && apic_global_enabled()) edx |= 1U << 9;
+        if (logical > 1) edx |= 1U << 28; // Logical processors share the package.
         ecx=(1U<<13); // CMPXCHG16B guest primitive
 
+      }else if(leaf==0x0bU && logical > 1) {
+        edx=apic_id_;
+        ecx=subleaf & 255U;
+        if (subleaf < 2) {
+          ebx = subleaf == 0 ? topology_.threads_per_core : logical;
+          eax = CpuTopology::id_shift(ebx);
+          ecx |= (subleaf + 1) << 8;
+        }
       }else if(leaf==7 && subleaf==0){
         // Extended feature bits remain zero: no SMEP/AVX2/etc.
       }else if(leaf==0x80000000U){
