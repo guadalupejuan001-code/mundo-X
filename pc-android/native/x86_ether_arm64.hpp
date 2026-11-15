@@ -18,15 +18,17 @@ namespace cosmic_pc::ether_arm64 {
 // Decode only the register and ordinary-memory forms the ARM64 backend
 // implements. The interpreter owns all other prefixes, operands and opcodes.
 struct Operand {
+  static constexpr unsigned kNoIndex = 16;
   unsigned reg = 0;
   std::uint32_t displacement = 0;
   bool memory = false;
   bool immediate = false;
   int immediate_value = 0;
+  unsigned index = kNoIndex, scale_shift = 0;
 };
 
 struct Instruction {
-  enum Kind { Move, Lea, Compare, Test, Increment, Decrement, Conditional, Jump };
+  enum Kind { Move, Lea, Compare, Test, Increment, Decrement, Add, Subtract, Conditional, Jump };
   Kind kind = Move;
   Operand lhs, rhs;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
@@ -71,13 +73,16 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       rex = opcode;
       opcode = bytes[pos++];
     }
+    if (opcode == 0x0f && pos < size && (bytes[pos] == 0xb6 || bytes[pos] == 0xb7))
+      opcode = 0x0f00U | bytes[pos++];
+    const bool zero_extend = opcode == 0x0fb6 || opcode == 0x0fb7;
     Instruction op;
     op.begin = begin;
     op.opcode = opcode;
     op.width = (rex & 8) ? 8 : 4;
     if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x3b ||
         opcode == 0x39 || opcode == 0x80 || opcode == 0x83 || opcode == 0x84 ||
-        opcode == 0x85 || opcode == 0xff) {
+        opcode == 0x85 || opcode == 0xff || zero_extend) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
@@ -85,34 +90,51 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       const Operand reg{((modrm >> 3) & 7U) + ((rex & 4) ? 8U : 0U), 0, false};
       Operand other{rm + ((rex & 1) ? 8U : 0U), 0, mod != 3};
       if (other.memory) {
-        if (rm == 4 || (!mod && rm == 5)) break;
+        if (rm == 4) {
+          if (pos == size) break;
+          const auto sib = bytes[pos++];
+          const auto base = sib & 7U, index = (sib >> 3) & 7U;
+          if (!mod && base == 5) break;
+          other.reg = base + ((rex & 1) ? 8U : 0U);
+          if (index != 4 || (rex & 2)) {
+            other.index = index + ((rex & 2) ? 8U : 0U);
+            other.scale_shift = sib >> 6;
+          }
+        } else if (!mod && rm == 5) {
+          break;
+        }
         const unsigned disp_bytes = mod == 1 ? 1 : mod == 2 ? 4 : 0;
         if (disp_bytes > size - pos) break;
         for (unsigned i = 0; i < disp_bytes; ++i)
           other.displacement |= std::uint32_t(bytes[pos++]) << (8 * i);
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
-      const bool reg_first = opcode == 0x8b || opcode == 0x8d || opcode == 0x3b;
+      const bool reg_first = opcode == 0x8b || opcode == 0x8d || opcode == 0x3b || zero_extend;
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
-      if (opcode == 0x8d) {
+      if (zero_extend) {
+        op.width = opcode == 0x0fb6 ? 1 : 2;
+        if (op.width == 1 && !rex && !other.memory && other.reg >= 4) break;
+      } else if (opcode == 0x8d) {
         if (!other.memory) break;
         op.kind = Instruction::Lea;
       } else if (opcode == 0xff) {
-        // INC/DEC preserve carry. Retire a preceding CMP or TEST that
-        // defines this flag before allowing INC/DEC to use it.
-        if (other.memory || group > 1 || block.flag_op == Instruction::Compare ||
-            block.flag_op == Instruction::Test) break;
+        // INC/DEC preserve carry. Retire its earlier producer first.
+        if (other.memory || group > 1 || (block.flag_width &&
+            block.flag_op != Instruction::Increment && block.flag_op != Instruction::Decrement)) break;
         op.kind = group == 0 ? Instruction::Increment : Instruction::Decrement;
       } else if (opcode == 0x80 || opcode == 0x83) {
-        if (group != 7 || pos == size) break;
+        const bool register_arithmetic = opcode == 0x83 && !other.memory && (group == 0 || group == 5);
+        if ((group != 7 && !register_arithmetic) || pos == size) break;
         const unsigned value = bytes[pos++];
         if (opcode == 0x80) {
           if (!rex && !other.memory && other.reg >= 4) break;
           op.width = 1;
         }
         op.rhs = {0, 0, false, true, int(value) - (op.width > 1 && value >= 128 ? 256 : 0)};
-        op.kind = Instruction::Compare;
+        if (group == 0) op.kind = Instruction::Add;
+        else if (group == 5) op.kind = Instruction::Subtract;
+        else op.kind = Instruction::Compare;
       } else if (opcode == 0x84 || opcode == 0x85) {
         if (opcode == 0x84) {
           // Without REX, encodings 4 through 7 refer to AH, CH, DH and BH.
@@ -201,13 +223,21 @@ class Emitter {
         address(op.rhs, 9);
         if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
         store(9, op.lhs.reg * 8);
-      } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement) {
+      } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
+                 op.kind == Instruction::Add || op.kind == Instruction::Subtract) {
         read(op.lhs, op.width);
         store(9, offsetof(Frame, left));
-        const auto subtract = op.kind == Instruction::Decrement ? 0x40000000U : 0;
+        const int amount = op.rhs.immediate ? op.rhs.immediate_value : 1;
+        const bool subtraction = op.kind == Instruction::Decrement || op.kind == Instruction::Subtract;
+        const auto subtract = (subtraction != (amount < 0)) ? 0x40000000U : 0;
+        const auto magnitude = std::uint32_t(amount < 0 ? -amount : amount);
         const auto wide = op.width == 8 ? 0x80000000U : 0;
-        emit(0x11000529U | subtract | wide); // ADD/SUB X/W9,X/W9,#1
+        emit(0x11000129U | subtract | wide | (magnitude << 10)); // ADD/SUB X/W9,X/W9,#imm
         store(9, op.lhs.reg * 8);
+        if (op.rhs.immediate) {
+          read(op.rhs, op.width);
+          store(9, offsetof(Frame, right));
+        }
       } else if (op.kind == Instruction::Compare || op.kind == Instruction::Test) {
         read(op.lhs, op.width);
         store(9, offsetof(Frame, left));
@@ -243,7 +273,10 @@ class Emitter {
 
   void emit(std::uint32_t word) { code_.push_back(word); }
   void load(unsigned reg, unsigned offset, unsigned width = 8) {
-    const auto load_op = width == 8 ? 0xf9400000U : width == 4 ? 0xb9400000U : 0x39400000U;
+    std::uint32_t load_op = 0x39400000U; // LDRB
+    if (width == 8) load_op = 0xf9400000U;
+    else if (width == 4) load_op = 0xb9400000U;
+    else if (width == 2) load_op = 0x79400000U;
     emit(load_op | ((offset / width) << 10) | (19U << 5) | reg);
   }
   void store(unsigned reg, unsigned offset) {
@@ -261,6 +294,10 @@ class Emitter {
       emit(0x5280000aU | ((disp & 0xffff) << 5)); // MOVZ W10,low
       emit(0x72a0000aU | ((disp >> 16) << 5)); // MOVK W10,high,LSL #16
       emit(0x8b2ac000U | regs); // ADD Xd,Xd,W10,SXTW
+    }
+    if (operand.index != Operand::kNoIndex) {
+      load(10, operand.index * 8);
+      emit(0x8b0a0000U | (operand.scale_shift << 10) | regs); // ADD Xd,Xd,X10,LSL #shift
     }
   }
   void prepare_access(const Operand& operand, unsigned width) {
