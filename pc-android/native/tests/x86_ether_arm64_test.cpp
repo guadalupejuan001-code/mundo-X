@@ -83,8 +83,9 @@ void decoder_contract() {
   require(arm64::decode(write_then_read, sizeof(write_then_read), code).count == 1,
           "RAM writes must terminate the block");
   const std::uint8_t parity[]{0x49,0x3b,0xf6,0x7a,0xfb};
-  require(arm64::decode(parity, sizeof(parity), code).count == 1,
-          "parity branches must use x86 parity");
+  const auto parity_block = arm64::decode(parity, sizeof(parity), code);
+  require(parity_block.count == 2 && !parity_block.uses_arm_condition(),
+          "parity branches must use the canonical x86 flags");
   const std::uint8_t near_back[]{0x48,0x3b,0xf6,0x0f,0x85,0xf7,0xff,0xff,0xff};
   require(arm64::decode(near_back, sizeof(near_back), code).target == code,
           "near relative branch must sign-extend its displacement");
@@ -104,6 +105,20 @@ void decoder_contract() {
   const std::uint8_t cmp_test[]{0x83,0xf8,0x01,0x85,0xc0,0x75,0x08};
   require(arm64::decode(cmp_test, sizeof(cmp_test), code).count == 1,
           "A later TEST must preserve AF established by the earlier CMP");
+  const std::uint8_t scan_prefix[]{0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x80,0x3a,0xe8,0x75,0xf4};
+  const auto scan = arm64::decode(scan_prefix, sizeof(scan_prefix), code);
+  require(scan.count == 4 && scan.target == code &&
+          scan.instructions[0].kind == arm64::Instruction::Lea &&
+          scan.instructions[0].lhs.reg == Cpu::R8 && scan.instructions[0].rhs.displacement == 1 &&
+          scan.instructions[1].kind == arm64::Instruction::Increment && scan.flag_width == 1 &&
+          scan.instructions[2].rhs.immediate_value == 0xe8 && !scan.uses_arm_condition(),
+          "diagnostic LEA/INC/CMP byte/JNE sequence did not decode");
+  const std::uint8_t cmp_inc[]{0x83,0xf8,0x01,0x48,0xff,0xc2};
+  require(arm64::decode(cmp_inc, sizeof(cmp_inc), code).count == 1,
+          "INC must preserve carry established by the preceding CMP");
+  const std::uint8_t mov_branch[]{0x8b,0xc1,0x74,0x02};
+  require(arm64::decode(mov_branch, sizeof(mov_branch), code).count == 2,
+          "a branch using incoming flags should extend a MOV block");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -196,9 +211,9 @@ void cache_collision_contract() {
   PcMachine native(4 * 1024 * 1024), scalar(4 * 1024 * 1024);
   boot(native, true);
   boot(scalar, false);
-  // All these instruction addresses hash to the same set.
-  constexpr std::array<std::uint64_t, 2> blocks{0xa140, 0xa540};
-  constexpr std::array<std::uint64_t, 3> probes{0xa940, 0xad40, 0xb160};
+  // Fill every way of one set before touching cold or unsupported RIPs.
+  constexpr std::array<std::uint64_t, 4> blocks{0xa140, 0xa350, 0xb560, 0xb770};
+  constexpr std::array<std::uint64_t, 4> probes{0xc980, 0xcb90, 0xdda0, 0xdfb0};
   for (auto* machine : {&native, &scalar}) {
     for (const auto address : blocks)
       emit(machine->cpu, address, {0x8b, 0xc1, 0x8b, 0xd0, 0xf4}); // MOV EAX,ECX; MOV EDX,EAX.
@@ -229,7 +244,8 @@ void cache_collision_contract() {
   }
   const auto result = native.cpu.ether_arm64_stats();
   require(warm.translated == blocks.size() && result.translated == warm.translated &&
-          result.hits - warm.hits == rounds, "cache recompiled the warm blocks");
+          result.hits - warm.hits == rounds && result.compiled_evictions == warm.compiled_evictions,
+          "cold or unsupported addresses evicted a warm block");
   std::cout << "PRIME_C03_ARM64_CACHE_PASS translations=" << result.translated
             << " warm_hits=" << result.hits - warm.hits << '\n';
 }
@@ -286,6 +302,16 @@ void guard_contract() {
   cpu.regs[Cpu::EBX] = 0x450034;
   warm_block(cpu, linear, 2);
   require(cpu.regs[Cpu::ECX] == cpu.regs[Cpu::EAX], "initial mapping computed the wrong value");
+  const auto initial = cpu.ether_arm64_stats();
+  warm_block(cpu, linear, 2);
+  const auto stable = cpu.ether_arm64_stats();
+  require(stable.code_version_hits == initial.code_version_hits + 1 &&
+          stable.code_bytes_read == initial.code_bytes_read, "warm block reread validated code");
+  cpu.write8(physical + 128, 0x5a); // Same page, outside the translated block.
+  warm_block(cpu, linear, 2);
+  const auto rechecked = cpu.ether_arm64_stats();
+  require(rechecked.code_byte_checks == stable.code_byte_checks + 1 &&
+          rechecked.translated == stable.translated, "same-page write lost exact revalidation");
   cpu.write8(physical + 2, 0xd3); // Change the source via its physical alias.
   warm_block(cpu, linear, 2);
   require(cpu.regs[Cpu::ECX] == cpu.regs[Cpu::EBX], "cached code survived a physical alias write");
@@ -334,9 +360,7 @@ void observed_flags_contract() {
   constexpr std::array<std::uint64_t, 8> values{
       0, 1, 3, 0x80, 0x100, 0x80000000ULL, 0x8000000000000000ULL, UINT64_MAX};
   for (unsigned cc = 0; cc < 16; ++cc) {
-    for (unsigned variant = 0; variant < 5; ++variant) {
-      const bool compare = variant >= 3;
-      if (compare && (cc == 10 || cc == 11)) continue;
+    for (unsigned variant = 0; variant < 9; ++variant) {
       const auto branch = std::uint8_t(0x70 | cc);
       for (auto* machine : {&native, &scalar}) {
         auto& cpu = machine->cpu;
@@ -346,13 +370,17 @@ void observed_flags_contract() {
         case 2: emit(cpu, code, {0x44,0x84,0x08,branch,0x08}); break; // TEST [RAX],R9B
         case 3: emit(cpu, code, {0x48,0x83,0x38,0xff,branch,0x08}); break; // CMP [RAX],-1
         case 4: emit(cpu, code, {0x83,0xf9,0x01,branch,0x08}); break; // CMP ECX,1
+        case 5: emit(cpu, code, {0x80,0x38,0xe8,branch,0x08}); break; // CMP BYTE [RAX],E8
+        case 6: emit(cpu, code, {0x48,0xff,0xc1,branch,0x08}); break; // INC RCX
+        case 7: emit(cpu, code, {0xff,0xc9,branch,0x08}); break; // DEC ECX
+        case 8: emit(cpu, code, {0x44,0x8d,0x88,0x00,0x80,0xff,0xff,branch,0x08}); break;
         }
       }
       for (const auto value : values) {
         for (auto* machine : {&native, &scalar}) {
           auto& cpu = machine->cpu;
           cpu.eip = code;
-          cpu.eflags = 2 | Cpu::IF | Cpu::AF | Cpu::CF | Cpu::OF;
+          cpu.eflags = 2 | Cpu::IF | Cpu::AF | Cpu::OF | (value & 1 ? Cpu::CF : 0);
           cpu.regs[Cpu::EAX] = nodes;
           cpu.regs[Cpu::ECX] = cpu.regs[Cpu::R9] = value;
           cpu.write64(nodes, value);
@@ -360,7 +388,7 @@ void observed_flags_contract() {
         warm_block(native.cpu, code, 2);
         require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
                 native.cpu.eip == scalar.cpu.eip && native.cpu.eflags == scalar.cpu.eflags &&
-                native.cpu.regs == scalar.cpu.regs, "TEST/CMP flags or branch differ from scalar x86");
+                native.cpu.regs == scalar.cpu.regs, "translated flags or branch differ from scalar x86");
       }
     }
   }
@@ -379,10 +407,61 @@ void observed_flags_contract() {
           native.cpu.flag(Cpu::AF), "Translated TEST lost AF established by CMP");
 }
 
+void scan_forms_contract() {
+  // Use the byte comparison and addressing forms seen in the boot traces,
+  // with a distinct loop body to exercise general translation.
+  constexpr unsigned count = 4096;
+  const auto run = [](bool translated, bool specialized) {
+    PcMachine machine;
+    boot(machine, translated);
+    auto& cpu = machine.cpu;
+    if (specialized) {
+      emit(cpu, code, {0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x41,0x8b,0xc0,
+                      0x41,0x89,0x81,0xd8,0x2e,0,0,0x80,0x3a,0xe8,0x75,0xea,0xf4});
+      cpu.regs[Cpu::R9] = output - 0x2ed8;
+      machine.enable_boot_acceleration(translated);
+    } else {
+      emit(cpu, code, {0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x41,0x8b,0xc0,
+                      0x80,0x3a,0xe8,0x75,0xf1,0xf4});
+    }
+    std::array<std::uint8_t, count> bytes{};
+    bytes.back() = 0xe8;
+    cpu.memory.write_block(nodes, bytes.data(), bytes.size());
+    cpu.regs[Cpu::EDX] = nodes - 1;
+    cpu.regs[Cpu::EAX] = 0xdeadbeeffffffff0ULL;
+    const auto initial = cpu.instructions;
+    machine.run(count * 6 + 32);
+    require(cpu.halted && !cpu.fault && cpu.regs[Cpu::EDX] == nodes + count - 1 &&
+            cpu.regs[Cpu::EAX] == std::uint32_t(0xfffffff0U + count),
+            "byte scan failed to stop at its first match");
+    if (specialized) {
+      require(cpu.read64(output) == cpu.regs[Cpu::EAX], "original byte scan changed the output");
+      if (translated) require(machine.boot_acceleration().scan_loop_steps > 0,
+                              "native chaining bypassed the faster specialized byte scanner");
+    }
+    Result result{};
+    result.state = capture(cpu);
+    result.stats = cpu.ether_arm64_stats();
+    result.guest_steps = cpu.instructions - initial;
+    return result;
+  };
+  const auto scalar = run(false, false);
+  const auto native = run(true, false);
+  require(native.state == scalar.state, "translated scan changed the guest state");
+  require(native.stats.steps * 100 >= native.guest_steps * 99 &&
+          native.stats.translated == 1, "diagnostic scan lost its warm native block");
+  require(run(true, true).state == run(false, true).state,
+          "original byte scan diverged from the interpreter");
+  std::cout << "ETHER_ARM64_SCAN_FORMS steps=" << native.guest_steps
+            << " native_steps=" << native.stats.steps << '\n';
+}
+
 void benchmark() {
-  PcMachine native, scalar;
+  PcMachine native, scalar, rereading;
   boot(native, true);
   boot(scalar, false);
+  boot(rereading, true);
+  rereading.cpu.memory.enable_code_page_versions(false);
   const auto initial_regs = scalar.cpu.regs;
   const auto initial_steps = scalar.cpu.instructions;
   const auto measure = [&](PcMachine& machine, bool translated) {
@@ -398,29 +477,48 @@ void benchmark() {
   for (unsigned i = 0; i < 3; ++i) {
     const auto a = measure(native, true);
     const auto b = measure(scalar, false);
-    require(a.state == b.state, "ARM64 warm-up changed the guest result");
+    const auto c = measure(rereading, true);
+    require(a.state == b.state && a.state == c.state, "ARM64 warm-up changed the guest result");
   }
-  const auto warm_translations = native.cpu.ether_arm64_stats().translated;
-  std::array<std::uint64_t, 7> native_times{}, scalar_times{};
+  const auto native_warm = native.cpu.ether_arm64_stats();
+  const auto rereading_warm = rereading.cpu.ether_arm64_stats();
+  std::array<std::uint64_t, 7> native_times{}, scalar_times{}, rereading_times{};
   for (unsigned i = 0; i < native_times.size(); ++i) {
-    Result a{}, b{};
-    if (i % 2) a = measure(native, true);
-    b = measure(scalar, false);
-    if (!(i % 2)) a = measure(native, true);
-    require(a.state == b.state, "warm ARM64 run changed the guest result");
-    require(a.stats.translated == warm_translations,
+    Result a{}, c{};
+    if (i % 2) {
+      a = measure(native, true);
+      c = measure(rereading, true);
+    } else {
+      c = measure(rereading, true);
+      a = measure(native, true);
+    }
+    const auto b = measure(scalar, false);
+    require(a.state == b.state && a.state == c.state, "warm ARM64 run changed the guest result");
+    require(a.stats.translated == native_warm.translated &&
+            c.stats.translated == rereading_warm.translated,
             "stable ARM64 blocks were recompiled after warm-up");
     native_times[i] = a.elapsed_ns;
     scalar_times[i] = b.elapsed_ns;
+    rereading_times[i] = c.elapsed_ns;
   }
+  const auto native_bytes = native.cpu.ether_arm64_stats().code_bytes_read - native_warm.code_bytes_read;
+  const auto rereading_bytes = rereading.cpu.ether_arm64_stats().code_bytes_read - rereading_warm.code_bytes_read;
+  require(rereading_bytes > 0 && native_bytes < rereading_bytes / 10 &&
+          native.cpu.ether_arm64_stats().code_version_hits > native_warm.code_version_hits &&
+          rereading.cpu.ether_arm64_stats().code_version_hits == 0,
+          "code page versions did not replace repeated byte reads");
   std::sort(native_times.begin(), native_times.end());
   std::sort(scalar_times.begin(), scalar_times.end());
+  std::sort(rereading_times.begin(), rereading_times.end());
   std::cout << "PRIME_C03_ARM64_BENCH {\"nodes\":" << node_count
             << ",\"steps\":" << first.guest_steps
             << ",\"scalar_cold_ns\":" << first_scalar.elapsed_ns
             << ",\"native_cold_ns\":" << first.elapsed_ns
             << ",\"scalar_warm_median_ns\":" << scalar_times[3]
             << ",\"native_warm_median_ns\":" << native_times[3]
+            << ",\"rereading_warm_median_ns\":" << rereading_times[3]
+            << ",\"native_warm_code_bytes\":" << native_bytes
+            << ",\"rereading_warm_code_bytes\":" << rereading_bytes
             << ",\"translated_blocks\":" << first.stats.translated
             << ",\"native_steps\":" << first.stats.steps << "}\n";
 }
@@ -444,6 +542,7 @@ int main() {
     cache_collision_contract();
     flag_contract();
     observed_flags_contract();
+    scan_forms_contract();
     for (bool store : {false, true}) {
       State a{}, b{};
       Cpu::EtherArm64Stats sa{}, sb{};

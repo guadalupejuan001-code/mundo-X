@@ -165,6 +165,13 @@ ADDITIONAL_SOURCES.update(dict.fromkeys((
     "native/tests/ether_next_quantum.cpp",
 ), ETHER_NEXT_PC_REFERENCE))
 
+
+# Exact source revisions for the PC operand bridge and Pauli query optimization.
+ADDITIONAL_SOURCES.update({
+    "native/include/mundo_x/infinite_session.hpp": "b9eee187b96ab905821ee1ebc98c6e6173e1a34f",
+    "native/include/mundo_x/ether_core.hpp": "f7fb3fdf23dd606241e6ac7e1fff1a044666e8e4",
+})
+
 RESOLUTION_SOURCE = "graphics-android/app/src/main/java/com/mundox/graphics/RenderResolution.java"
 
 
