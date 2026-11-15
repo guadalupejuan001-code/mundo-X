@@ -274,6 +274,40 @@ void apic_msr() {
   cpu.set_local_apic_present(false);
   check(!apic_cpuid(), "CPUID must stop announcing the detached xAPIC");
 }
+
+void cache_writeback() {
+  Cpu cpu(4U << 20);
+  constexpr auto data = 0x10000;
+  constexpr auto marker = 0x78563412U;
+  const auto verify = [&] {
+    program(cpu, {0x0f, 0x09, 0x90});
+    cpu.write32(data, marker);
+    cpu.regs[Cpu::EAX] = 0x9abcdef0U;
+    cpu.eflags |= Cpu::CF | Cpu::DF;
+    const auto registers = cpu.regs;
+    const auto flags = cpu.eflags;
+    const auto count = cpu.instructions;
+    step(cpu);
+    check(cpu.eip == kKernel + 2 && cpu.instructions == count + 1 &&
+              cpu.regs == registers && cpu.eflags == flags && cpu.read32(data) == marker,
+          "WBINVD must retire once and preserve guest RAM, registers and flags");
+    step(cpu);
+    check(cpu.eip == kKernel + 3, "execution did not continue after WBINVD");
+  };
+  verify();
+  configure(cpu);
+  verify();
+
+  program(cpu, {0xf0, 0x0f, 0x09});
+  fault(cpu, FaultCode::InvalidInstruction, "LOCK WBINVD must raise #UD even in ring zero");
+  program(cpu, {0x48, 0x0f, 0x07}); // SYSRETQ to ring three.
+  cpu.regs[Cpu::ECX] = kUser;
+  cpu.regs[Cpu::R11] = 2;
+  step(cpu);
+  program(cpu, {0x0f, 0x09}, kUser);
+  fault(cpu, FaultCode::ProtectionFault, "ring-three WBINVD must raise #GP(0)");
+  check(cpu.fault->error_code == 0, "WBINVD #GP must have error code zero");
+}
 } // namespace
 
 int main() {
@@ -282,8 +316,9 @@ int main() {
     compatibility_and_invalid_modes();
     privilege_canonical_reset();
     apic_msr();
+    cache_writeback();
     std::cout << "X86_SYSTEM64_PASS checks=" << checks
-              << " syscall=1 sysret64=1 sysret32=1 swapgs=1 msr_roundtrip=1 apic_base=1\n";
+              << " syscall=1 sysret64=1 sysret32=1 swapgs=1 msr_roundtrip=1 apic_base=1 wbinvd=1\n";
   } catch (const std::exception& error) {
     std::cerr << "X86_SYSTEM64_FAIL " << error.what() << '\n';
     return 1;
