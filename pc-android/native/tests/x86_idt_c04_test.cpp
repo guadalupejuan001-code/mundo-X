@@ -172,6 +172,39 @@ void long_double_fault_and_rejection() {
        "invalid/missing IDT must be a visible terminal triple fault");
   std::cout<<"C04_DOUBLE_AND_TRIPLE_FAULT_PASS\n";
 }
+void long_int3_gate_faults() {
+  Cpu cpu(64ULL*1024*1024,16ULL*1024*1024); start(cpu);
+  constexpr std::uint64_t handler = 0x12800;
+  write_code(cpu,0xa000,{0xcc});
+  gate(cpu,3,0x12600,true,0x0e);
+  gate(cpu,11,handler,true);
+  expect_next(cpu,handler,11);
+  need(cpu.read64(cpu.regs[Cpu::ESP]) == ((3U << 3) | 2U) &&
+           cpu.read64(cpu.regs[Cpu::ESP] + 8) == 0xa000,
+       "INT3 into a nonpresent gate must deliver #NP with its IDT selector code and restart RIP");
+
+  cpu.eip = 0xa000;
+  cpu.regs[Cpu::ESP] = 0x190000;
+  const auto slot = cpu.idtr.base + 3 * 16;
+  constexpr std::uint64_t low = 0x00008a000018b340ULL;
+  constexpr std::uint64_t high = 0x0000000012345678ULL;
+  cpu.write64(slot,low);
+  cpu.write64(slot + 8,high);
+  need(cpu.step() == StepResult::Faulted && cpu.fault &&
+           cpu.fault->idt_attempt_count == 3, "a terminal INT3 must retain all three IDT rejections");
+  const auto& trace = cpu.fault->idt_attempts;
+  need(trace[0].source == cosmic_pc::IdtSource::SoftwareInterrupt && trace[0].vector == 3 &&
+           trace[0].entry_address == slot && trace[0].bytes_read == 16 &&
+           trace[0].low == low && trace[0].high == high && trace[0].failure_vector == 13 &&
+           trace[0].failure_error == ((3U << 3) | 2U),
+       "INT3 fault did not capture the bytes actually read and the gate error");
+  need(trace[1].vector == 13 && trace[1].stacked_error == ((3U << 3) | 2U) &&
+           trace[2].vector == 8 && trace[2].has_error && trace[2].stacked_error == 0 &&
+           trace[2].failure_error == ((8U << 3) | 3U),
+       "fault diagnostics must preserve the #GP and #DF attempts in execution order");
+  need(cpu.regs[Cpu::ESP] == 0x190000, "a terminal exception must roll back partial frames");
+  std::cout << "C04_INT3_IDT_DIAGNOSTIC_PASS attempts=3 np=1\n";
+}
 void protected32_soft_int_and_ud() {
   Cpu cpu(64ULL*1024*1024,16ULL*1024*1024); start(cpu,false);
   gate(cpu,0x33,0x13000,false);
@@ -200,6 +233,7 @@ int main() {
     long_de_retry();
     long_gp_skip();
     long_double_fault_and_rejection();
+    long_int3_gate_faults();
     protected32_soft_int_and_ud();
     std::cout<<"REVERSE_WINDOWS_C04_IDT_PASS checks="<<checks
              <<" windows10_booted=false ring3=false tss=false\n";

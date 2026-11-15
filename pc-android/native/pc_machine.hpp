@@ -569,7 +569,12 @@ class PcMachine {
        <<",\"idtr_base_hex\":"<<quote(hex64(cpu.idtr.base))
        <<",\"idtr_limit\":"<<cpu.idtr.limit
        <<",\"linear_address_hex\":"<<quote(hex64(cpu.fault->linear_address))
-       <<",\"error_code\":"<<cpu.fault->error_code<<'}';
+       <<",\"error_code\":"<<cpu.fault->error_code;
+      if (cpu.fault->idt_attempt_count) {
+        o << ",\"idt_attempts\":";
+        write_idt_attempts(o, *cpu.fault);
+      }
+      o << '}';
     }
     o
      <<",\"system_registers\":{\"ldtr_selector\":"<<cpu.ldtr.selector
@@ -597,6 +602,35 @@ class PcMachine {
   }
   static std::string hex64(std::uint64_t value){std::ostringstream o;o<<std::hex<<std::uppercase<<std::setfill('0')<<std::setw(16)<<value;return o.str();}
   static std::string quote(const std::string& s){std::ostringstream o;o<<'"';for(unsigned char c:s){if(c=='"'||c=='\\')o<<'\\'<<char(c);else if(c=='\n')o<<"\\n";else if(c=='\r')o<<"\\r";else if(c=='\t')o<<"\\t";else if(c<32)o<<"\\u00"<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(c)<<std::dec;else o<<char(c);}o<<'"';return o.str();}
+  static void write_idt_attempts(std::ostream& out, const Fault& fault) {
+    constexpr char digits[] = "0123456789ABCDEF";
+    out << '[';
+    for (unsigned i = 0; i < fault.idt_attempt_count; ++i) {
+      const auto& attempt = fault.idt_attempts[i];
+      if (i) out << ',';
+      const char* source = attempt.source == IdtSource::SoftwareInterrupt ? "software" :
+          attempt.source == IdtSource::HardwareInterrupt ? "hardware" : "exception";
+      out << "{\"source\":\"" << source << "\",\"vector\":" << unsigned(attempt.vector)
+          << ",\"entry_address_hex\":";
+      if (attempt.entry_address) out << quote(hex64(*attempt.entry_address));
+      else out << "null";
+      out << ",\"entry_size\":" << attempt.entry_bytes
+          << ",\"bytes_read\":" << attempt.bytes_read << ",\"gate_bytes_hex\":\"";
+      for (unsigned byte = 0; byte < attempt.bytes_read; ++byte) {
+        const auto word = byte < 8 ? attempt.low : attempt.high;
+        const auto value = std::uint8_t(word >> (8 * (byte % 8)));
+        out << digits[value >> 4] << digits[value & 15U];
+      }
+      out << "\",\"stacked_error\":";
+      if (attempt.has_error) out << attempt.stacked_error;
+      else out << "null";
+      out << ",\"failure_vector\":" << attempt.failure_vector
+          << ",\"failure_error_code\":" << attempt.failure_error
+          << ",\"failure_linear_address_hex\":" << quote(hex64(attempt.failure_address))
+          << ",\"failure\":" << quote(attempt.failure) << '}';
+    }
+    out << ']';
+  }
  private:
   std::string quantum_first_="0",quantum_second_="1000000000";
   std::string quantum_output_,quantum_error_;
