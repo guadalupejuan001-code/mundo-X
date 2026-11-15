@@ -240,8 +240,11 @@ class EtherCore {
                                   p.phase == 0 ? 1 : -1, address_bytes, limits);
     }
 
+    if (!p.cells.empty() && rule_count() >= 32)
+      return pullback_intervals(p, address_bytes, limits);
+
     std::size_t peak = p.cells.size();
-    if (!p.cells.empty() && rule_count() && !pullback_intervals(p, limits, peak)) {
+    if (!p.cells.empty() && rule_count()) {
       auto left = rule_count();
       if (last_rule_ == Rule::HAll) { conjugate_h_all(p); --left; }
       // The remaining word starts with CZ in pullback order. H cannot grow
@@ -266,10 +269,7 @@ class EtherCore {
       if (axis == 'Y') y_count = (y_count + 1U) & 3U;
       out.terms.push_back({std::move(cell.key()), axis});
     }
-    const unsigned residual = (static_cast<unsigned>(p.phase) + 4U - y_count) & 3U;
-    if (residual & 1U)
-      throw std::logic_error("non-Hermitian phase after Clifford propagation");
-    out.sign = residual == 0 ? 1 : -1;
+    out.sign = pauli_sign(p.phase, y_count);
     out.stats = {rule_count(), sites, peak, address_bytes};
     return out;
   }
@@ -284,6 +284,13 @@ class EtherCore {
   };
   using CellMap = std::map<std::string, Bits, AddressLess>;
   struct Pauli { CellMap cells; int phase = 0; };
+
+  static int pauli_sign(int phase, unsigned y_count) {
+    const unsigned residual = (static_cast<unsigned>(phase) + 4U - y_count) & 3U;
+    if (residual & 1U)
+      throw std::logic_error("non-Hermitian phase after Clifford propagation");
+    return residual == 0 ? 1 : -1;
+  }
 
   // Keep the tail internally so the frequent one-rule update compares a
   // stored enum directly. The public first/count descriptor is derived in O(1).
@@ -339,14 +346,17 @@ class EtherCore {
     }
     if (offset || borrow) throw std::logic_error("negative Ether offset");
     const auto first = address.find_first_not_of('0');
-    return first == std::string::npos ? std::string("0") : address.substr(first);
+    if (first == std::string::npos) return "0";
+    if (first) address.erase(0, first);
+    return address;
   }
 
   static SupportRun generator_support(const std::string& address, std::size_t order,
                                       const QueryLimits& limits) {
     if (order == 0) return {};
     const auto radius = order - 1;
-    check_address(add_offset(address, radius), limits);
+    if (limits.max_address_digits != std::numeric_limits<std::size_t>::max())
+      check_address(add_offset(address, radius), limits);
     const auto r = std::to_string(radius);
     if (!AddressLess{}(address, r))
       return {subtract_offset(address, radius), radius + 1};
@@ -429,20 +439,34 @@ class EtherCore {
     return (last >> 1U) & 1U;
   }
   struct IntervalIndex {
-    std::vector<std::string> points;
+    struct Endpoint { std::string address; std::size_t id = 0; };
+    std::vector<Endpoint> points;
+    std::vector<std::size_t> ranks;
     std::vector<unsigned char> events, prefix;
+
     void prepare() {
-      std::sort(points.begin(), points.end(), AddressLess{});
-      points.erase(std::unique(points.begin(), points.end()), points.end());
-      events.assign(points.size(), 0);
-      prefix.assign(points.size() + 1, 0);
+      std::sort(points.begin(), points.end(), [](const Endpoint& a, const Endpoint& b) {
+        return AddressLess{}(a.address, b.address);
+      });
+      ranks.resize(points.size());
+      // Consecutive aliases share a rank. Images can use that rank directly
+      // without copying or searching their decimal addresses again.
+      std::size_t unique = 0;
+      for (std::size_t i = 0; i < points.size(); ++i) {
+        const auto id = points[i].id;
+        if (!unique || points[unique - 1].address != points[i].address) {
+          if (unique != i) points[unique].address = std::move(points[i].address);
+          ++unique;
+        }
+        ranks[id] = unique - 1;
+      }
+      points.resize(unique);
+      events.assign(unique, 0);
+      prefix.assign(unique + 1, 0);
     }
-    std::size_t find(const std::string& address) const {
-      return static_cast<std::size_t>(std::lower_bound(points.begin(), points.end(), address,
-                                                       AddressLess{}) - points.begin());
-    }
+
     void toggle_z(std::size_t at) {
-      const unsigned delta = 1U | (half_parity(points[at]) << 1U);
+      const unsigned delta = 1U | (half_parity(points[at].address) << 1U);
       // Fenwick XOR tree: prefix count parity and endpoint-coordinate parity.
       for (auto i = at + 1; i < prefix.size(); i += i & (~i + 1)) prefix[i] ^= delta;
     }
@@ -451,16 +475,26 @@ class EtherCore {
       for (auto i = at; i; i &= i - 1) value ^= prefix[i];
       // XOR_e<t (t-e mod 2), with t=(address-parity)/2. This is the parity
       // of covered sites before t; no integer address conversion is needed.
-      return ((value & 1U) & half_parity(points[at])) ^ (value >> 1U);
+      return ((value & 1U) & half_parity(points[at].address)) ^ (value >> 1U);
     }
   };
 
-  bool pullback_intervals(Pauli& source, const QueryLimits& limits, std::size_t& peak) const {
-    // Short words need less scratch with direct propagation. Reserve the
-    // interval index for depths where avoiding layer replay pays for it.
-    if (rule_count() < 32) return false;
-    std::vector<std::pair<Interval, Interval>> images;
+  Observable pullback_intervals(const Pauli& source, std::size_t address_bytes,
+                                const QueryLimits& limits) const {
+    struct Range { std::size_t begin = 0, end = 0; unsigned parity = 0; };
+    std::vector<std::pair<Range, Range>> images;
+    images.reserve(source.cells.size());
     std::array<IntervalIndex, 2> index;
+    const auto add_range = [&](SupportRun run) -> Range {
+      auto endpoints = interval(std::move(run));
+      if (endpoints.begin.empty()) return {};
+      const auto parity = sublattice(endpoints.begin);
+      auto& points = index[parity].points;
+      const auto id = points.size();
+      points.push_back({std::move(endpoints.begin), id});
+      points.push_back({std::move(endpoints.end), id + 1});
+      return {id, id + 1, parity};
+    };
     // Symbolic endpoints are not materialized Pauli sites. Validate digits and
     // support on the combined output, allowing cancelled images to stay implicit.
     const QueryLimits symbolic;
@@ -468,47 +502,65 @@ class EtherCore {
       for (const auto& item : source.cells) {
         if (!(x ? item.second.x : item.second.z)) continue;
         auto runs = generator_runs(item.first, x, symbolic, false);
-        images.emplace_back(interval(std::move(runs.first)), interval(std::move(runs.second)));
-        for (const auto* run : {&images.back().first, &images.back().second}) {
-          if (run->begin.empty()) continue;
-          auto& points = index[sublattice(run->begin)].points;
-          points.push_back(run->begin); points.push_back(run->end);
-        }
+        const auto x_range = add_range(std::move(runs.first));
+        const auto z_range = add_range(std::move(runs.second));
+        images.emplace_back(x_range, z_range);
       }
     }
     for (auto& table : index) table.prepare();
-    Pauli result;
-    result.phase = source.phase;
+    auto phase = source.phase;
     // Canonical input is i^phase (product X) (product Z). Preserve the order
     // and add 2 * (current Z dot incoming X) mod 4 at each multiplication.
     for (const auto& image : images) {
       for (const bool x : {true, false}) {
         const auto& run = x ? image.first : image.second;
-        if (run.begin.empty()) continue;
-        auto& table = index[sublattice(run.begin)];
-        const auto a = table.find(run.begin), b = table.find(run.end);
-        if (x) result.phase = (result.phase + 2 * (table.integral(a) ^ table.integral(b))) & 3;
+        if (run.begin == run.end) continue;
+        auto& table = index[run.parity];
+        const auto a = table.ranks[run.begin], b = table.ranks[run.end];
+        if (x) phase = (phase + 2 * (table.integral(a) ^ table.integral(b))) & 3;
         else { table.toggle_z(a); table.toggle_z(b); }
         table.events[a] ^= x ? 1U : 2U;
         table.events[b] ^= x ? 1U : 2U;
       }
     }
-    for (const auto& table : index) {
+    Observable out;
+    out.terms.reserve(source.cells.size());
+    unsigned y_count = 0;
+    std::size_t even_sites = 0;
+    // Every active span lies in at least one generator interval. Its order
+    // is at most floor(depth/2) + 2, so a larger budget needs no decimal work.
+    const auto max_interval_sites = rule_count() / 2 + 2;
+    for (unsigned parity = 0; parity < index.size(); ++parity) {
+      const auto& table = index[parity];
       unsigned bits = 0;
       for (std::size_t i = 0; i + 1 < table.points.size(); ++i) {
         bits ^= table.events[i];
         if (!bits) continue;
-        const auto left = limits.max_sites - result.cells.size();
-        const auto bound = add_offset(add_offset(table.points[i], left), left);
-        if (AddressLess{}(bound, table.points[i + 1]))
-          throw std::length_error("Ether query cone site budget exceeded");
-        for (auto address = table.points[i]; address != table.points[i + 1]; advance_two(address))
-          set_bits(result, address, bits & 1U, bits & 2U, limits);
+        const auto& begin = table.points[i].address;
+        const auto& end = table.points[i + 1].address;
+        const auto left = limits.max_sites - out.terms.size();
+        if (left < max_interval_sites) {
+          const auto bound = add_offset(add_offset(begin, left), left);
+          if (AddressLess{}(bound, end))
+            throw std::length_error("Ether query cone site budget exceeded");
+        }
+        const char axis = bits == 3 ? 'Y' : bits == 1 ? 'X' : 'Z';
+        for (auto address = begin; address != end; advance_two(address)) {
+          check_address(address, limits);
+          out.terms.push_back({address, axis});
+          if (axis == 'Y') y_count = (y_count + 1U) & 3U;
+        }
       }
+      if (parity == 0) even_sites = out.terms.size();
     }
-    peak = std::max(peak, result.cells.size());
-    source = std::move(result);
-    return true;
+    // Each sublattice was emitted in sorted order. Merge their terms
+    // directly, without creating a tree node for every output site.
+    std::inplace_merge(out.terms.begin(), out.terms.begin() + even_sites, out.terms.end(),
+                       [](const Term& a, const Term& b) { return AddressLess{}(a.address, b.address); });
+    const auto sites = out.terms.size();
+    out.sign = pauli_sign(phase, y_count);
+    out.stats = {rule_count(), sites, std::max(source.cells.size(), sites), address_bytes};
+    return out;
   }
 
   static std::string canonical(const std::string& input) {
@@ -543,15 +595,6 @@ class EtherCore {
   static void check_address(const std::string& address, const QueryLimits& limits) {
     if (address.size() > limits.max_address_digits)
       throw std::length_error("Ether query address digit budget exceeded");
-  }
-
-  static void set_bits(Pauli& p, const std::string& address, bool x, bool z,
-                       const QueryLimits& limits) {
-    if (!x && !z) { p.cells.erase(address); return; }
-    check_address(address, limits);
-    if (p.cells.find(address) == p.cells.end() && p.cells.size() >= limits.max_sites)
-      throw std::length_error("Ether query cone site budget exceeded");
-    p.cells[address] = Bits{x,z};
   }
 
   static bool toggle_z(Pauli& p, std::string address,
