@@ -1,4 +1,4 @@
-inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
+inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (!ether_arm64_blocks_enabled() || budget < 2 || fault || halted || transaction_ ||
       interrupt_shadow_ || !a20_enabled || !page_translation_cache_enabled_ ||
@@ -12,20 +12,21 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget) {
   const auto limit = std::min(budget, 64U);
   unsigned completed = 0;
   while (limit - completed >= 2) {
-    const auto retired = retire_ether_arm64_block(limit - completed);
+    const auto retired = retire_ether_arm64_block(limit - completed, bus);
     if (!retired) break;
     completed += retired;
-    if (scan_loop_batch_candidate()) break;
+    if (bus || scan_loop_batch_candidate()) break;
   }
   return completed;
 #else
   (void)budget;
+  (void)bus;
   return 0;
 #endif
 }
 
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
-inline unsigned Cpu::retire_ether_arm64_block(unsigned budget) {
+inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto origin = eip;
   const auto width = std::min(ether_arm64::Block::kMaxBytes, page_bytes - unsigned(eip % page_bytes));
@@ -83,7 +84,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget) {
           std::chrono::steady_clock::now() - start).count();
       if (!built) {
         ether_arm64_cache_->host_rejected = true;
-        memory.enable_code_page_versions(false);
+        if (topology_.logical_processors() == 1) memory.enable_code_page_versions(false);
         return 0;
       }
       ++ether_arm64_stats_.translated;
@@ -97,7 +98,16 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget) {
     const auto& last = block.instructions[block.count - 1];
     decoded_.reserve(last.end - last.begin);
     ether_arm64::Frame frame{regs, 0, 0, 0, &Cpu::ether_arm64_read, &Cpu::ether_arm64_write, this};
+    // The code bytes and translations were validated under the bus lock.
+    // Register-only native code touches only this CPU's private frame. The
+    // motherboard defers asynchronous INIT/SIPI until this CPU yields.
+    const bool private_frame = bus && std::none_of(block.instructions.begin(),
+        block.instructions.begin() + block.count, [](const auto& instruction) {
+          return instruction.lhs.memory || instruction.rhs.memory;
+        });
+    if (private_frame) bus->unlock();
     const auto outcome = active->code.run(frame);
+    if (private_frame) bus->lock();
     if (!outcome) {
       ++ether_arm64_stats_.data_fallbacks;
       return 0; // Discard staged state. The interpreter takes the exact fault.

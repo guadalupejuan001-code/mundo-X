@@ -39,6 +39,7 @@ class PcMachine {
   // The owner may flush storage and select boot media once run() returns.
   void enable_guest_restart() noexcept { guest_restart_enabled_=true; }
   GuestRestart guest_restart() const noexcept { return guest_restart_; }
+  void yield_after_instruction() noexcept { yield_requested_=true; }
   const BootModeProgress& boot_mode_progress() const noexcept { return boot_mode_progress_; }
   // A BIOS bridge may provide DL=80h while the current boot source is DL=E0h.
   void set_bios_hard_disk_attached(bool attached) {
@@ -256,6 +257,7 @@ class PcMachine {
     sync_bios_hard_disk_count();clear_screen();if(device_reset_hook)device_reset_hook();
   }
   void run(unsigned budget) {
+    yield_requested_=false;
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault||powered_off_||
        guest_restart_!=GuestRestart::None)return;
     if(cpu.halted&&!device_step_hook)return;
@@ -337,7 +339,7 @@ class PcMachine {
       ++i;
       observe_mode();
       if(r==StepResult::Faulted){guest_restart_=GuestRestart::None;pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
-      if(guest_restart_!=GuestRestart::None||powered_off_)break;
+      if(guest_restart_!=GuestRestart::None||powered_off_||yield_requested_)break;
       if((r==StepResult::Halted||r==StepResult::WaitingForX87)&&!device_step_hook)break;
     }
     if(boot_acceleration_enabled_&&cpu.instructions>=next_ram_compaction_) {
@@ -609,6 +611,7 @@ class PcMachine {
   PcVideo video_;
   Pc8042 kbc_;  // Owned subset of physical PC/AT 8042; no simulated IRQs.
   bool guest_restart_enabled_=false;
+  bool yield_requested_=false;
   bool bios_hard_disk_attached_=false;
   bool pci_mmio_reserved_=false;
   GuestRestart guest_restart_=GuestRestart::None;

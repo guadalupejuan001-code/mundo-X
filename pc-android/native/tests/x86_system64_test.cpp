@@ -317,6 +317,15 @@ int main() {
     privilege_canonical_reset();
     apic_msr();
     cache_writeback();
+    Cpu debug_cpu(4U << 20);
+    boot(debug_cpu);
+    program(debug_cpu, {0x41,0x0f,0x23,0xc0, 0x41,0x0f,0x21,0xc1, 0x0f,0x21,0xfa});
+    debug_cpu.regs[Cpu::R8] = 0x112233448abcdef0ULL;
+    step(debug_cpu); // MOV DR0, R8.
+    step(debug_cpu); // MOV R9, DR0.
+    step(debug_cpu); // MOV RDX, DR7.
+    check(debug_cpu.regs[Cpu::R9] == debug_cpu.regs[Cpu::R8] &&
+          debug_cpu.regs[Cpu::EDX] == 0x400, "MOV DR retained virtual debug-register state");
     std::cout << "X86_SYSTEM64_PASS checks=" << checks
               << " syscall=1 sysret64=1 sysret32=1 swapgs=1 msr_roundtrip=1 apic_base=1 wbinvd=1\n";
   } catch (const std::exception& error) {
