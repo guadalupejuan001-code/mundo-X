@@ -280,6 +280,11 @@ class Cpu {
   std::function<bool(std::uint64_t, std::size_t)> mmio_range_claim_hook;
   std::function<std::optional<std::uint8_t>(std::uint64_t)> mmio_read_hook;
   std::function<bool(std::uint64_t, std::uint8_t)> mmio_write_hook;
+  // The device must own all four bytes of this aligned, A20-normalized span.
+  // An empty result falls back to byte access without any device side effects.
+  // A false write result means the device rejected the transaction.
+  std::function<std::optional<std::uint32_t>(std::uint64_t)> mmio_read32_hook;
+  std::function<std::optional<bool>(std::uint64_t, std::uint32_t)> mmio_write32_hook;
 
   explicit Cpu(std::size_t ram_bytes = 2 * 1024 * 1024)
       : Cpu(ram_bytes, MemoryFabric::default_budget(ram_bytes)) {}
@@ -971,13 +976,29 @@ class Cpu {
     for (unsigned i = 0; i < bytes; ++i)
       if (!mmio_at(address + i)) (void)physical_index(address + i);
   }
+  std::optional<std::uint32_t> read_mmio32(std::uint64_t address) const {
+    if (!mmio_read32_hook || (address & 3U) || !mmio_at(address)) return std::nullopt;
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
+    return mmio_read32_hook(bus_address(address));
+  }
+  bool write_mmio32(std::uint64_t address, std::uint32_t value) {
+    if (!mmio_write32_hook || (address & 3U) || !mmio_at(address)) return false;
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
+    const auto written = mmio_write32_hook(bus_address(address), value);
+    if (!written) return false;
+    if (!*written) fail("claimed MMIO write is unsupported", FaultCode::UnsupportedPort);
+    return true;
+  }
   std::uint64_t read_physical(std::uint64_t address, unsigned bytes) const {
+    if (bytes == 4)
+      if (const auto word = read_mmio32(address)) return *word;
     preflight(address, bytes);
     std::uint64_t result = 0;
     for (unsigned i = 0; i < bytes; ++i) result |= std::uint64_t(read8(address + i)) << (8U * i);
     return result;
   }
   void write_physical(std::uint64_t address, unsigned bytes, std::uint64_t value) {
+    if (bytes == 4 && write_mmio32(address, std::uint32_t(value))) return;
     preflight(address, bytes);
     bool ram_only=true;
     for (unsigned i=0;i<bytes;++i) ram_only &= !mmio_at(address+i);
@@ -1070,6 +1091,8 @@ class Cpu {
       if (chunk > 1 && bulk_memory_range(physical, chunk, access != Access::Execute)) {
         result |= read_ram_span(bus_address(physical), chunk) << (8U * done);
       } else {
+        if (bytes == 4 && chunk == 4 && access == Access::Read)
+          if (const auto word = read_mmio32(physical)) return *word;
         for (unsigned i = 0; i < chunk; ++i)
           result |= std::uint64_t(read8(physical + i)) << (8U * (done + i));
       }
@@ -1104,6 +1127,7 @@ class Cpu {
         memory.write_block(index, data.data(), bytes);
         return;
       }
+      if (bytes == 4 && write_mmio32(translated, std::uint32_t(value))) return;
     }
     // Resolve one translation per touched page, then validate every physical
     // byte before committing any guest write. This preserves the previous
