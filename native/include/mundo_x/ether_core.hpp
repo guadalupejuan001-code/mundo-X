@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -198,15 +199,15 @@ class EtherCore {
     std::size_t address_bytes = 0, active_sites = 0;
     for (const auto& term : terms) {
       check_address(term.address, limits);
-      const auto address = canonical(term.address);
       // Retain identity entries until validation finishes, so they also catch
       // aliases without a second tree of every address. Erase them below.
-      auto inserted = p.cells.emplace(address, Bits{});
+      auto inserted = p.cells.emplace(canonical(term.address), Bits{});
       if (!inserted.second)
         throw std::invalid_argument("duplicate canonical address in Pauli query");
-      if (address.size() > std::numeric_limits<std::size_t>::max() - address_bytes)
+      const auto digits = inserted.first->first.size();
+      if (digits > std::numeric_limits<std::size_t>::max() - address_bytes)
         throw std::length_error("Pauli address text overflows");
-      address_bytes += address.size();
+      address_bytes += digits;
       auto& bits = inserted.first->second;
       switch (term.axis) {
         case 'I': break;
@@ -224,8 +225,10 @@ class EtherCore {
         ++active_sites;
       }
     }
-    for (auto it = p.cells.begin(); it != p.cells.end();)
-      if (!it->second.x && !it->second.z) it = p.cells.erase(it); else ++it;
+    if (active_sites != p.cells.size()) {
+      for (auto it = p.cells.begin(); it != p.cells.end();)
+        if (!it->second.x && !it->second.z) it = p.cells.erase(it); else ++it;
+    }
 
     // A single X or Z has an exact closed pullback on the half-line. Avoid
     // replaying a deep alternating word (and rebuilding its cone each layer).
@@ -253,19 +256,21 @@ class EtherCore {
     }
 
     Observable out;
-    out.terms.reserve(p.cells.size());
+    const auto sites = p.cells.size();
+    out.terms.reserve(sites);
     unsigned y_count = 0;
-    for (const auto& item : p.cells) {
-      const auto bits = item.second;
+    while (!p.cells.empty()) {
+      auto cell = p.cells.extract(p.cells.begin());
+      const auto bits = cell.mapped();
       const char axis = bits.x ? (bits.z ? 'Y' : 'X') : 'Z';
       if (axis == 'Y') y_count = (y_count + 1U) & 3U;
-      out.terms.push_back({item.first, axis});
+      out.terms.push_back({std::move(cell.key()), axis});
     }
     const unsigned residual = (static_cast<unsigned>(p.phase) + 4U - y_count) & 3U;
     if (residual & 1U)
       throw std::logic_error("non-Hermitian phase after Clifford propagation");
     out.sign = residual == 0 ? 1 : -1;
-    out.stats = {rule_count(), p.cells.size(), peak, address_bytes};
+    out.stats = {rule_count(), sites, peak, address_bytes};
     return out;
   }
 
@@ -508,9 +513,8 @@ class EtherCore {
 
   static std::string canonical(const std::string& input) {
     if (input.empty()) throw std::invalid_argument("address cannot be empty");
-    for (const char c : input)
-      if (c < '0' || c > '9')
-        throw std::invalid_argument("address requires ASCII decimal digits");
+    if (std::strspn(input.c_str(), "0123456789") != input.size())
+      throw std::invalid_argument("address requires ASCII decimal digits");
     const auto first = input.find_first_not_of('0');
     return first == std::string::npos ? std::string("0") : input.substr(first);
   }
@@ -536,11 +540,6 @@ class EtherCore {
     return out;
   }
 
-  static Bits get_bits(const Pauli& p, const std::string& address) {
-    const auto it = p.cells.find(address);
-    return it == p.cells.end() ? Bits{} : it->second;
-  }
-
   static void check_address(const std::string& address, const QueryLimits& limits) {
     if (address.size() > limits.max_address_digits)
       throw std::length_error("Ether query address digit budget exceeded");
@@ -555,12 +554,21 @@ class EtherCore {
     p.cells[address] = Bits{x,z};
   }
 
-  static void toggle_z(Pauli& p, const std::string& address,
+  static bool toggle_z(Pauli& p, std::string address,
                        const QueryLimits& limits, std::size_t& peak) {
-    auto bits = get_bits(p,address);
-    bits.z = !bits.z;
-    set_bits(p,address,bits.x,bits.z,limits);
+    const auto cell = p.cells.lower_bound(address);
+    if (cell != p.cells.end() && cell->first == address) {
+      const bool has_x = cell->second.x;
+      cell->second.z = !cell->second.z;
+      if (!has_x && !cell->second.z) p.cells.erase(cell);
+      return has_x;
+    }
+    check_address(address, limits);
+    if (p.cells.size() >= limits.max_sites)
+      throw std::length_error("Ether query cone site budget exceeded");
+    p.cells.emplace_hint(cell, std::move(address), Bits{false, true});
     peak = std::max(peak, p.cells.size());
+    return false;
   }
 
   static void conjugate_h_all(Pauli& p) {
@@ -584,9 +592,8 @@ class EtherCore {
       const auto& q = it->first;
       auto next = successor(q);
       check_address(next, limits);
-      if (get_bits(p,next).x) p.phase = (p.phase + 2) & 3;
       if (q != "0") toggle_z(p,predecessor(q),limits,peak);
-      toggle_z(p,next,limits,peak);
+      if (toggle_z(p,std::move(next),limits,peak)) p.phase = (p.phase + 2) & 3;
     }
   }
 };

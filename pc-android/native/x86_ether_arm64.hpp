@@ -9,6 +9,7 @@
 #define MUNDO_X_ETHER_ARM64_BLOCKS 1
 #include <sys/mman.h>
 #include <cstring>
+#include <utility>
 #include <vector>
 #endif
 
@@ -25,18 +26,24 @@ struct Operand {
 };
 
 struct Instruction {
-  enum Kind { Move, Compare, Test, Conditional, Jump };
+  enum Kind { Move, Lea, Compare, Test, Increment, Decrement, Conditional, Jump };
   Kind kind = Move;
   Operand lhs, rhs;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
 };
 
 struct Block {
-  static constexpr unsigned kMaxBytes = 64, kMaxInstructions = 8;
+  static constexpr unsigned kMaxBytes = 64, kMaxInstructions = 16;
   std::array<Instruction, kMaxInstructions> instructions{};
   unsigned count = 0, size = 0, flag_width = 0;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
+
+  bool uses_arm_condition() const noexcept {
+    if (!count || flag_op != Instruction::Compare || flag_width <= 1) return false;
+    const auto& last = instructions[count - 1];
+    return last.kind == Instruction::Conditional && last.condition < 16;
+  }
 };
 
 // x86 carry on subtraction is ARM's inverse carry. Parity conditions use
@@ -68,12 +75,13 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
     op.begin = begin;
     op.opcode = opcode;
     op.width = (rex & 8) ? 8 : 4;
-    if (opcode == 0x8b || opcode == 0x89 || opcode == 0x3b || opcode == 0x39 ||
-        opcode == 0x83 || opcode == 0x84 || opcode == 0x85) {
+    if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x3b ||
+        opcode == 0x39 || opcode == 0x80 || opcode == 0x83 || opcode == 0x84 ||
+        opcode == 0x85 || opcode == 0xff) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
-      const auto rm = modrm & 7U;
+      const auto rm = modrm & 7U, group = (modrm >> 3) & 7U;
       const Operand reg{((modrm >> 3) & 7U) + ((rex & 4) ? 8U : 0U), 0, false};
       Operand other{rm + ((rex & 1) ? 8U : 0U), 0, mod != 3};
       if (other.memory) {
@@ -84,13 +92,26 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
           other.displacement |= std::uint32_t(bytes[pos++]) << (8 * i);
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
-      const bool reg_first = opcode == 0x8b || opcode == 0x3b;
+      const bool reg_first = opcode == 0x8b || opcode == 0x8d || opcode == 0x3b;
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
-      if (opcode == 0x83) {
-        if (((modrm >> 3) & 7U) != 7 || pos == size) break;
+      if (opcode == 0x8d) {
+        if (!other.memory) break;
+        op.kind = Instruction::Lea;
+      } else if (opcode == 0xff) {
+        // INC/DEC preserve carry. Retire a preceding CMP or TEST that
+        // defines this flag before allowing INC/DEC to use it.
+        if (other.memory || group > 1 || block.flag_op == Instruction::Compare ||
+            block.flag_op == Instruction::Test) break;
+        op.kind = group == 0 ? Instruction::Increment : Instruction::Decrement;
+      } else if (opcode == 0x80 || opcode == 0x83) {
+        if (group != 7 || pos == size) break;
         const unsigned value = bytes[pos++];
-        op.rhs = {0, 0, false, true, int(value) - (value >= 128 ? 256 : 0)};
+        if (opcode == 0x80) {
+          if (!rex && !other.memory && other.reg >= 4) break;
+          op.width = 1;
+        }
+        op.rhs = {0, 0, false, true, int(value) - (op.width > 1 && value >= 128 ? 256 : 0)};
         op.kind = Instruction::Compare;
       } else if (opcode == 0x84 || opcode == 0x85) {
         if (opcode == 0x84) {
@@ -102,10 +123,9 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
       } else {
         op.kind = opcode == 0x8b || opcode == 0x89 ? Instruction::Move : Instruction::Compare;
       }
-      // TEST preserves the guest's AF. Retire an earlier CMP before using
-      // TEST as the block's final flag producer.
-      if (op.kind == Instruction::Test && block.flag_op == Instruction::Compare) break;
-      if (op.kind != Instruction::Move) {
+      // TEST preserves AF. Retire any earlier producer of AF first.
+      if (op.kind == Instruction::Test && block.flag_width && block.flag_op != Instruction::Test) break;
+      if (op.kind != Instruction::Move && op.kind != Instruction::Lea) {
         block.flag_width = op.width;
         block.flag_op = op.kind;
       }
@@ -121,7 +141,6 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip)
           (opcode >= 0x0f80 && opcode <= 0x0f8f);
       if (conditional) {
         op.condition = kArmCondition[opcode & 15];
-        if (!block.flag_width || (op.condition == 16 && block.flag_op != Instruction::Test)) break;
         op.kind = Instruction::Conditional;
       } else if (opcode == 0xeb || opcode == 0xe9) {
         if (opcode == 0xe9) disp_bytes = 4;
@@ -172,11 +191,22 @@ class Emitter {
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
       if (op.kind == Instruction::Move && op.lhs.memory) {
-        address(op.lhs, op.width);
+        prepare_access(op.lhs, op.width);
         load(3, op.rhs.reg * 8, op.width);
         call(offsetof(Frame, write));
       } else if (op.kind == Instruction::Move) {
         read(op.rhs, op.width);
+        store(9, op.lhs.reg * 8);
+      } else if (op.kind == Instruction::Lea) {
+        address(op.rhs, 9);
+        if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
+        store(9, op.lhs.reg * 8);
+      } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement) {
+        read(op.lhs, op.width);
+        store(9, offsetof(Frame, left));
+        const auto subtract = op.kind == Instruction::Decrement ? 0x40000000U : 0;
+        const auto wide = op.width == 8 ? 0x80000000U : 0;
+        emit(0x11000529U | subtract | wide); // ADD/SUB X/W9,X/W9,#1
         store(9, op.lhs.reg * 8);
       } else if (op.kind == Instruction::Compare || op.kind == Instruction::Test) {
         read(op.lhs, op.width);
@@ -186,7 +216,7 @@ class Emitter {
       }
     }
     const auto& last = block.instructions[block.count - 1];
-    if (last.kind == Instruction::Conditional && block.flag_op == Instruction::Compare) {
+    if (block.uses_arm_condition()) {
       load(9, offsetof(Frame, left), block.flag_width);
       load(10, offsetof(Frame, right), block.flag_width);
       emit(block.flag_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
@@ -219,19 +249,23 @@ class Emitter {
   void store(unsigned reg, unsigned offset) {
     emit(0xf9000000U | ((offset / 8) << 10) | (19U << 5) | reg);
   }
-  void address(const Operand& operand, unsigned width) {
-    emit(0xaa1303e0); // MOV X0,X19
-    load(1, operand.reg * 8);
+  void address(const Operand& operand, unsigned reg) {
+    load(reg, operand.reg * 8);
+    const auto regs = (reg << 5) | reg;
     const auto disp = operand.displacement;
     if (disp && disp <= 4095) {
-      emit(0x91000021U | (disp << 10)); // ADD X1,X1,#disp
+      emit(0x91000000U | (disp << 10) | regs); // ADD Xd,Xd,#disp
     } else if (disp >= 0xfffff001U) {
-      emit(0xd1000021U | ((0U - disp) << 10)); // SUB X1,X1,#-disp
+      emit(0xd1000000U | ((0U - disp) << 10) | regs); // SUB Xd,Xd,#-disp
     } else if (disp) {
       emit(0x5280000aU | ((disp & 0xffff) << 5)); // MOVZ W10,low
       emit(0x72a0000aU | ((disp >> 16) << 5)); // MOVK W10,high,LSL #16
-      emit(0x8b2ac021); // ADD X1,X1,W10,SXTW
+      emit(0x8b2ac000U | regs); // ADD Xd,Xd,W10,SXTW
     }
+  }
+  void prepare_access(const Operand& operand, unsigned width) {
+    emit(0xaa1303e0); // MOV X0,X19
+    address(operand, 1);
     emit(0x52800002U | (width << 5)); // MOV W2,#width
   }
   void call(unsigned offset) {
@@ -254,7 +288,7 @@ class Emitter {
       load(9, operand.reg * 8, width);
       return;
     }
-    address(operand, width);
+    prepare_access(operand, width);
     call(offsetof(Frame, read));
     load(9, offsetof(Frame, loaded), width);
   }
@@ -266,6 +300,11 @@ class NativeCode {
   NativeCode() = default;
   NativeCode(const NativeCode&) = delete;
   NativeCode& operator=(const NativeCode&) = delete;
+  NativeCode& operator=(NativeCode&& other) noexcept {
+    std::swap(mapping_, other.mapping_);
+    std::swap(bytes_, other.bytes_);
+    return *this;
+  }
   ~NativeCode() { clear(); }
 
   bool build(const Block& block) {
@@ -291,6 +330,7 @@ class NativeCode {
   void clear() noexcept {
     if (mapping_) munmap(mapping_, bytes_);
     mapping_ = nullptr;
+    bytes_ = 0;
   }
 
  private:
@@ -301,51 +341,80 @@ class NativeCode {
 struct Cache {
   struct Entry {
     std::uint64_t rip = 0, physical = 0, cr3 = 0;
+    std::uint64_t last_used = 0;
     unsigned cpl = 0, checked_bytes = 0, visits = 0;
+    bool occupied = false;
     std::array<std::uint8_t, Block::kMaxBytes> bytes{};
     Block block;
     NativeCode code;
 
     void invalidate(std::uint64_t address) noexcept {
-      code.clear();
+      clear();
       rip = address;
+      occupied = true;
+    }
+
+    void clear() noexcept {
+      code.clear();
       checked_bytes = 0;
       visits = 0;
+      occupied = false;
     }
   };
-  static constexpr std::size_t kSets = 32;
+  static constexpr std::size_t kSets = 128;
   static constexpr std::size_t kWays = 4;
   struct Set {
     std::array<Entry, kWays> entries;
-    std::size_t next_victim = 0;
+    std::array<Entry, kWays> probes;
+    std::uint64_t clock = 0;
+    std::size_t next_probe = 0;
   };
+  struct Lookup { Entry& entry; bool pending; };
   std::array<Set, kSets> sets;
   bool host_rejected = false;
 
-  Entry& entry(std::uint64_t rip, std::uint64_t& compiled_evictions) noexcept {
-    auto& set = sets[(rip ^ (rip >> 5) ^ (rip >> 12)) & (kSets - 1)];
+  static std::size_t set_index(std::uint64_t rip) noexcept {
+    return (rip ^ (rip >> 5) ^ (rip >> 12)) & (kSets - 1);
+  }
+
+  Lookup lookup(std::uint64_t rip) noexcept {
+    auto& set = sets[set_index(rip)];
     for (auto& item : set.entries) {
-      if (item.rip == rip) return item;
-    }
-    auto victim = set.next_victim;
-    // Prefer a slot without executable code when probing a new guest address.
-    for (std::size_t offset = 0; offset < kWays; ++offset) {
-      const auto candidate = (set.next_victim + offset) % kWays;
-      if (!set.entries[candidate].code) {
-        victim = candidate;
-        break;
+      if (item.occupied && item.rip == rip) {
+        item.last_used = ++set.clock;
+        return {item, false};
       }
     }
-    set.next_victim = (victim + 1) % kWays;
-    auto& item = set.entries[victim];
-    if (item.code) ++compiled_evictions;
-    item.invalidate(rip);
-    return item;
+    for (auto& item : set.probes) {
+      if (item.occupied && item.rip == rip) return {item, true};
+    }
+    auto& probe = set.probes[set.next_probe];
+    set.next_probe = (set.next_probe + 1) % kWays;
+    probe.invalidate(rip);
+    return {probe, true};
+  }
+
+  Entry& admit(Entry& probe, std::uint64_t& compiled_evictions) noexcept {
+    auto& set = sets[set_index(probe.rip)];
+    auto* victim = &set.entries.front();
+    // Only compiled blocks can replace native code. Prefer a vacant way
+    // and then the least recently used translation.
+    for (auto& item : set.entries) {
+      if (!item.code) { victim = &item; break; }
+      if (item.last_used < victim->last_used) victim = &item;
+    }
+    if (victim->code) ++compiled_evictions;
+    *victim = std::move(probe);
+    victim->last_used = ++set.clock;
+    probe.clear();
+    return *victim;
   }
   void clear() noexcept {
     for (auto& set : sets) {
-      for (auto& item : set.entries) item.invalidate(0);
-      set.next_victim = 0;
+      for (auto& item : set.entries) item.clear();
+      for (auto& probe : set.probes) probe.clear();
+      set.next_probe = 0;
+      set.clock = 0;
     }
   }
 };
