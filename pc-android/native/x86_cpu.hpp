@@ -537,7 +537,7 @@ class Cpu {
     }
     const auto index = physical_index(address);
     memory.prepare_write(index, 1);
-    if (transaction_) journal_.emplace_back(index, memory.read_byte(index));
+    if (transaction_) journal_.push_back({index, {memory.read_byte(index)}, 1});
     memory.write_byte(index, value);
   }
   void write16(std::uint64_t address, std::uint16_t value) { write_physical(address, 2, value); }
@@ -948,8 +948,13 @@ class Cpu {
     return tsc_offset_ + (shared_clock_ ? *shared_clock_ : clock_cycles()) * kTscTicksPerCycle;
   }
   std::vector<std::uint8_t> decoded_;
-  std::vector<std::pair<std::size_t, std::uint8_t>> journal_;
-  struct BlockUndo { std::uint64_t address; std::size_t after_bytes, position; unsigned count; };
+  struct WordUndo {
+    std::uint64_t address;
+    std::array<std::uint8_t, 8> previous;
+    unsigned count;
+  };
+  std::vector<WordUndo> journal_;
+  struct BlockUndo { std::uint64_t address; std::size_t after_words, position; unsigned count; };
   std::vector<BlockUndo> block_journal_;
   std::vector<std::uint8_t> block_journal_bytes_;
   BootScalarTiming* boot_scalar_timing_ = nullptr;
@@ -979,19 +984,20 @@ class Cpu {
   void rollback(const Snapshot& s) {
     // Only our architectural state and write* calls are transactional. Host
     // callbacks can have external side effects that cannot be rolled back.
-    auto bytes = journal_.size();
-    const auto restore_bytes = [&](std::size_t until) {
-      while (bytes > until) {
-        const auto& entry = journal_[--bytes];
-        memory.restore_byte(entry.first, entry.second);
+    auto words = journal_.size();
+    const auto restore_words = [&](std::size_t until) {
+      while (words > until) {
+        const auto& entry = journal_[--words];
+        for (unsigned i = entry.count; i > 0; --i)
+          memory.restore_byte(entry.address + i - 1, entry.previous[i - 1]);
       }
     };
     for (auto it = block_journal_.rbegin(); it != block_journal_.rend(); ++it) {
-      restore_bytes(it->after_bytes);
+      restore_words(it->after_words);
       for (unsigned i = 0; i < it->count; ++i)
         memory.restore_byte(it->address + i, block_journal_bytes_[it->position + i]);
     }
-    restore_bytes(0);
+    restore_words(0);
     transaction_ = false; clear_write_journal();
     regs = s.regs; segments = s.segments; eip = s.eip; eflags = s.eflags;
     cache_ = s.cache; cr0 = s.cr0; cr4 = s.cr4; cr2 = s.cr2; cr3 = s.cr3;
@@ -1025,12 +1031,43 @@ class Cpu {
   bool mmio_at(std::uint64_t address) const {
     return mmio_claim_hook && mmio_claim_hook(bus_address(address));
   }
+  static std::uint64_t little_endian_word(const std::uint8_t* data, unsigned bytes) noexcept {
+    std::uint64_t result = 0;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    std::memcpy(&result, data, bytes);
+#else
+    for (unsigned i = 0; i < bytes; ++i) result |= std::uint64_t(data[i]) << (8U * i);
+#endif
+    return result;
+  }
   std::uint64_t read_ram_span(std::uint64_t index, unsigned bytes) const {
     std::array<std::uint8_t, 8> data;
     memory.read_block(index, data.data(), bytes);
-    std::uint64_t result = 0;
-    for (unsigned i = 0; i < bytes; ++i) result |= std::uint64_t(data[i]) << (8U * i);
-    return result;
+    return little_endian_word(data.data(), bytes);
+  }
+  void write_ram_word(std::uint64_t index, unsigned bytes, std::uint64_t value) {
+    std::array<std::uint8_t, 8> data;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    std::memcpy(data.data(), &value, bytes);
+#else
+    for (unsigned i = 0; i < bytes; ++i) data[i] = std::uint8_t(value >> (8U * i));
+#endif
+    if (transaction_) {
+      if (!memory.has_window_block(index, bytes)) {
+        // Reserve the undo record before touching RAM. A failed preflight
+        // leaves the record empty and the original bytes intact.
+        journal_.push_back({index, {}, 0});
+        auto& entry = journal_.back();
+        memory.write_ram_block_with_previous(index, data.data(), entry.previous.data(), bytes);
+        entry.count = bytes;
+        return;
+      }
+      memory.prepare_write(index, bytes);
+      WordUndo entry{index, {}, bytes};
+      memory.read_block(index, entry.previous.data(), bytes);
+      journal_.push_back(entry);
+    }
+    memory.write_block(index, data.data(), bytes);
   }
   bool bulk_memory_range(std::uint64_t address, unsigned bytes, bool allow_window = false) const {
     if (!bytes || address > UINT64_MAX - (bytes - 1)) return false;
@@ -1077,6 +1114,7 @@ class Cpu {
   std::uint64_t read_physical(std::uint64_t address, unsigned bytes) const {
     if (bytes == 4)
       if (const auto word = read_mmio32(address)) return *word;
+    if (bulk_ram_range(address, bytes)) return read_ram_span(bus_address(address), bytes);
     preflight(address, bytes);
     std::uint64_t result = 0;
     for (unsigned i = 0; i < bytes; ++i) result |= std::uint64_t(read8(address + i)) << (8U * i);
@@ -1084,6 +1122,10 @@ class Cpu {
   }
   void write_physical(std::uint64_t address, unsigned bytes, std::uint64_t value) {
     if (bytes == 4 && write_mmio32(address, std::uint32_t(value))) return;
+    if (bulk_ram_range(address, bytes)) {
+      write_ram_word(bus_address(address), bytes, value);
+      return;
+    }
     preflight(address, bytes);
     bool ram_only=true;
     for (unsigned i=0;i<bytes;++i) ram_only &= !mmio_at(address+i);
@@ -1222,17 +1264,7 @@ class Cpu {
     const auto translated = page_local ? translate(address, Access::Write) : 0;
     if (page_local && bytes > 1) {
       if (bulk_memory_range(translated, bytes, true)) {
-        const auto index = bus_address(translated);
-        std::array<std::uint8_t, 8> data;
-        if (transaction_) {
-          // Hold write pins before reading old values. Backing I/O and RAM
-          // preparation can still fail, so commit only after journaling.
-          memory.prepare_write(index, bytes);
-          memory.read_block(index, data.data(), bytes);
-          for (unsigned i = 0; i < bytes; ++i) journal_.emplace_back(index + i, data[i]);
-        }
-        for (unsigned i = 0; i < bytes; ++i) data[i] = std::uint8_t(value >> (8U * i));
-        memory.write_block(index, data.data(), bytes);
+        write_ram_word(bus_address(translated), bytes, value);
         return;
       }
       if (bytes == 4 && write_mmio32(translated, std::uint32_t(value))) return;
@@ -1304,6 +1336,21 @@ class Cpu {
     return value;
   }
   std::uint64_t immediate(unsigned bytes) {
+    const auto offset = unsigned(cursor_ & 0xfffU);
+    if (bytes >= 4 && bytes <= 8 && !decoded_.empty() && decoded_.size() + bytes <= 15 &&
+        bytes <= 0x1000U - offset && (cr0 & 0x80000000U) && is_long_mode() &&
+        instruction_page_.reusable && instruction_page_.linear == cursor_ - offset &&
+        instruction_page_.memory_epoch == memory.page_table_epoch()) {
+      // The opcode already established a readable executable RAM page.
+      // Page crossings and overlength encodings keep byte-precise fetches.
+      const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
+      std::array<std::uint8_t, 8> data;
+      memory.read_block(bus_address(instruction_page_.physical + offset), data.data(), bytes);
+      decoded_.insert(decoded_.end(), data.begin(), data.begin() + bytes);
+      cursor_ += bytes;
+      instruction_page_hits += bytes;
+      return little_endian_word(data.data(), bytes);
+    }
     std::uint64_t value = 0;
     for (unsigned i = 0; i < bytes; ++i) value |= std::uint64_t(fetch8()) << (8 * i);
     return value;
@@ -1422,7 +1469,7 @@ class Cpu {
       const auto previous = memory.read_byte(index);
       const auto next = std::uint8_t(value >> (8U * i));
       if (previous == next) continue;
-      journal_.emplace_back(index, previous);
+      journal_.push_back({index, {previous}, 1});
       memory.write_byte(index, next);
     }
   }

@@ -474,6 +474,24 @@ void instruction_page_fetch() {
   check(cpu.cr2 == 0xb000 && cpu.fault->error_code == 16,
         "missing continuation page must keep the exact execute fault");
 
+  program(cpu, {0x48,0xb8,0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef});
+  cpu.instruction_page_hits = 0;
+  one(cpu);
+  check(cpu.regs[Cpu::EAX] == 0xefcdab8967452301ULL && cpu.eip == 0xa00a &&
+        cpu.last_decoded_bytes().size() == 10 && cpu.instruction_page_hits == 9,
+        "contiguous immediate fetch changed the value, RIP, trace bytes or fetch accounting");
+
+  program(cpu, {0xb8,0x01,0x02}, 0xaffd);
+  expect_fault(cpu, FaultCode::PageFault, "a split immediate must fault on its next page");
+  check(cpu.cr2 == 0xb000 && cpu.fault->error_code == 16 &&
+        cpu.fault->bytes == std::vector<std::uint8_t>({0xb8,0x01,0x02}),
+        "split immediate must preserve every byte before the missing page");
+
+  program(cpu, {0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0xb8,1,2,3,4});
+  expect_fault(cpu, FaultCode::InvalidInstruction, "an immediate cannot extend an instruction past 15 bytes");
+  check(cpu.fault->bytes.size() == 15 && cpu.fault->bytes.back() == 3,
+        "overlength immediate must preserve the first 15 decoded bytes");
+
   program(cpu, {0x66,0x0f,0x1f,0xc0,0xf4});
   cpu.mmio_claim_hook = [](std::uint64_t address) { return address == 0xa001; };
   cpu.mmio_range_claim_hook = [](std::uint64_t address, std::size_t count) {
