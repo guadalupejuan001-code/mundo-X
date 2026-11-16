@@ -18,6 +18,9 @@ inline std::optional<std::uint64_t> Cpu::read_platform_msr(std::uint32_t number)
     // signature. Physical firmware updates do not describe this processor.
     case 0x17: return 1ULL << 50;
     case 0xfe: return 0x508; // Eight variable ranges, fixed ranges and WC.
+    case 0x174: return platform_msrs_.sysenter_cs;
+    case 0x175: return platform_msrs_.sysenter_esp;
+    case 0x176: return platform_msrs_.sysenter_eip;
     case 0x277: return platform_msrs_.pat;
     case 0x2ff: return platform_msrs_.mtrr_default_type;
     case 0x179: return 1; // One MCA bank. No global control or CMCI extensions.
@@ -48,6 +51,15 @@ inline bool Cpu::write_platform_msr(std::uint32_t number, std::uint64_t value) {
     return true;
   }
   switch (number) {
+    // The x64 kernel clears these registers while initializing a processor.
+    // This models their storage and WRMSR checks, without advertising SEP.
+    case 0x174:
+      platform_msrs_.sysenter_cs = std::uint32_t(value); // Bits 63:32 are ignored.
+      return true;
+    case 0x175: case 0x176:
+      if (!canonical(value)) fail("noncanonical IA32_SYSENTER pointer", FaultCode::ProtectionFault);
+      (number == 0x175 ? platform_msrs_.sysenter_esp : platform_msrs_.sysenter_eip) = value;
+      return true;
     case 0x1a0: {
       constexpr auto writable = kMiscXdDisable | 1;
       require(!(value & ~(writable | 0x1800U)));
