@@ -406,7 +406,9 @@ class Cpu {
     if (opcode_ != 0x75 || !ip_written_ || start_cs_ != segments[CS] ||
         decoded_.size() != 2 || decoded_[0] != 0x75) return false;
     const unsigned length = 0x100U - decoded_[1];
-    return length >= 3 && length <= 7 && eip <= code_mask() - length &&
+    const bool supported_length = (length >= 3 && length <= 7) ||
+        ((length == 9 || length == 10) && is_long_mode());
+    return supported_length && eip <= code_mask() - length &&
         cursor_ == eip + length && start_ip_ == cursor_ - 2;
   }
   // The machine supplies a budget up to the next device observation.
@@ -3489,15 +3491,17 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_shift_loop.inc"
 
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
-  constexpr unsigned steps_per_iteration = 2;
-  if (step_budget < 2 * steps_per_iteration || !counter_loop_batch_candidate() ||
+  if (step_budget < 4 || !counter_loop_batch_candidate() ||
       fault || halted || transaction_ || interrupt_shadow_ ||
       (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
       step_trace_hook || irq_trace_hook) return 0;
 
   const auto length = unsigned(cursor_ - eip);
   const auto body = length - 2;
-  std::array<std::uint8_t, 7> code;
+  const bool has_accumulator = length >= 9;
+  const unsigned steps_per_iteration = has_accumulator ? 3 : 2;
+  if (step_budget < 2 * steps_per_iteration) return 0;
+  std::array<std::uint8_t, 10> code;
   try {
     // Re-read the current bytes as executable RAM. Paged code must already
     // have valid accessed bits and fit in a single translated page.
@@ -3512,8 +3516,21 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   }
   if (code[body] != 0x75 || code[body + 1] != decoded_[1]) return 0;
 
-  const bool override_width = code[0] == 0x66;
-  unsigned pos = override_width ? 1 : 0;
+  unsigned pos = 0, accumulator = 0, accumulator_operation = 0;
+  std::uint64_t operand = 0;
+  if (has_accumulator) {
+    // REX.W ADD/SUB r64, sign-extended imm8. Both operands of the countdown
+    // are verified below, so each iteration adds an independent constant.
+    if ((code[0] & 0xfeU) != 0x48U || code[1] != 0x83) return 0;
+    const auto form = code[2] & 0xf8U;
+    if (form != 0xc0U && form != 0xe8U) return 0;
+    accumulator = (code[2] & 7U) + ((code[0] & 1U) ? 8 : 0);
+    accumulator_operation = form == 0xc0U ? 0 : 5;
+    operand = std::uint64_t(signed_value(code[3], 1));
+    pos = 4;
+  }
+  const bool override_width = code[pos] == 0x66;
+  if (override_width) ++pos;
   const bool long_code = is_long_mode();
   std::uint8_t rex = 0;
   if (long_code && pos < body && (code[pos] & 0xf0U) == 0x40U) rex = code[pos++];
@@ -3535,12 +3552,20 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
 
   const bool dword = (long_code || cache_[CS].big) != override_width;
   const unsigned bytes = (rex & 8U) ? 8 : dword ? 4 : 2;
+  if (has_accumulator && (bytes != 8 || accumulator == reg)) return 0;
   const auto remaining = get_reg(reg, bytes);
   const auto iterations = std::min(remaining, step_budget / steps_per_iteration);
   if (iterations < 2) return 0;
+  if (has_accumulator) {
+    // Unsigned arithmetic gives the exact modulo-2^64 recurrence. The
+    // final ADD/SUB also establishes the carry that a following DEC keeps.
+    const auto delta = accumulator_operation ? 0U - operand : operand;
+    const auto before_last = regs[accumulator] + (iterations - 1) * delta;
+    put_reg(accumulator, 8, alu(accumulator_operation, before_last, operand, 8));
+  }
   const bool carry = flag(CF);
-  // Only the final DEC/SUB contributes arithmetic flags. DEC retains CF
-  // throughout the loop, and JNZ never changes flags.
+  // DEC retains carry and writes the other arithmetic flags. SUB writes
+  // all arithmetic flags, and JNZ keeps the flags from the countdown.
   put_reg(reg, bytes, alu(5, remaining - iterations + 1, 1, bytes));
   if (preserves_carry) set_flag(CF, carry);
   ip_written_ = remaining != iterations;
