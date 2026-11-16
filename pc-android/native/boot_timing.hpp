@@ -106,6 +106,8 @@ inline void BootTiming::Counters::write_json(std::ostream& out) const {
   const auto arm64_execute = ns(BootTimePart::Arm64Execute);
   const auto profile = ns(BootTimePart::Profile);
     const auto scalar = ns(BootTimePart::Scalar);
+  const auto attributed = devices + batch_dispatch + batch_execute + scalar;
+  const auto loop_other = total >= attributed ? total - attributed : 0;
     const auto decode = ns(BootTimePart::Decode);
     const auto ram = ns(BootTimePart::Ram);
     const auto io = ns(BootTimePart::GuestIo);
@@ -130,9 +132,8 @@ inline void BootTiming::Counters::write_json(std::ostream& out) const {
         << ",\"sampled_scalar_guest_io_ns\":" << io
         << ",\"sampled_scalar_cpu_other_ns\":"
         << (scalar >= decode + ram + io ? scalar - decode - ram - io : 0)
-      << ",\"sampled_loop_other_ns\":"
-      << (total >= devices + batch_dispatch + batch_execute + scalar + profile
-              ? total - devices - batch_dispatch - batch_execute - scalar - profile : 0)
+      << ",\"sampled_loop_other_ns\":" << loop_other
+      << ",\"sampled_loop_unattributed_ns\":" << (loop_other >= profile ? loop_other - profile : 0)
         << ",\"compaction_ns\":" << ns(BootTimePart::Compaction)
         << ",\"run_ns\":" << ns(BootTimePart::Run) << '}';
 }
