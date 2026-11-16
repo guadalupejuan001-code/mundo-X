@@ -22,12 +22,12 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
       step_trace_hook || irq_trace_hook)
     return 0;
 
-  // Return to the machine at its next observation boundary. Short chains
-  // amortize dispatch while leaving the specialized scanner first in line.
+  // Keep short chains for different RIPs. A guarded backedge can use more
+  // of the caller's budget without looking up a second block.
   const auto limit = std::min(budget, 64U);
   unsigned completed = 0;
-  while (limit - completed >= 2) {
-    const auto retired = retire_ether_arm64_block(limit - completed, bus);
+  while (completed + 2 <= limit) {
+    const auto retired = retire_ether_arm64_block(limit - completed, budget - completed, bus);
     if (!retired) break;
     completed += retired;
     if (bus || scan_loop_batch_candidate()) break;
@@ -41,7 +41,8 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
 }
 
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
-inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
+inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_budget,
+                                             std::unique_lock<std::mutex>* bus) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto origin = eip;
   const bool long_mode = is_long_mode();
@@ -123,6 +124,10 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
 
     const auto& block = active->block;
     const auto& last = block.instructions[block.count - 1];
+    // Other vCPUs can change memory when a worker releases the bus lock.
+    // Only the boot CPU's serialized run may reuse this guard across rounds.
+    const auto repetitions = block.repeats && !bus
+        ? std::min(256U, loop_budget / block.count) : 1U;
     decoded_.reserve(last.end - last.begin);
     ether_arm64::PendingRamWrites pending;
     const bool staged = block.stages_ram();
@@ -132,7 +137,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
       pending.count = 0;
     }
     ether_arm64::Frame frame{regs, 0, 0, 0, &Cpu::ether_arm64_read, &Cpu::ether_arm64_write, this,
-                             staged ? &pending : nullptr};
+                             staged ? &pending : nullptr, repetitions};
     // The code bytes and translations were validated under the bus lock.
     // Register-only native code touches only this CPU's private frame. The
     // motherboard defers asynchronous INIT/SIPI until this CPU yields.
@@ -147,6 +152,8 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
       ++ether_arm64_stats_.data_fallbacks;
       return 0; // Discard staged state. The interpreter takes the exact fault.
     }
+    const auto rounds = block.repeats ? repetitions - frame.loop_remaining : 1U;
+    const auto retired = rounds * block.count;
     if (staged) {
       // A later speculative page walk may have discovered a new page table.
       for (unsigned i = 0; i < pending.count; ++i) {
@@ -175,8 +182,8 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
         return 0;
       }
       ++ether_arm64_stats_.staged_ram_blocks;
-      ether_arm64_stats_.staged_ram_steps += block.count;
-      ether_arm64_stats_.coalesced_ram_writes += block.writes - pending.count;
+      ether_arm64_stats_.staged_ram_steps += retired;
+      ether_arm64_stats_.coalesced_ram_writes += block.writes * rounds - pending.count;
     }
     regs = frame.regs;
     switch (block.flag_op) {
@@ -227,12 +234,16 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
     opcode_ = std::uint16_t(last.opcode);
     repeat_ = 0;
     decoded_.assign(active->bytes.begin() + last.begin, active->bytes.begin() + last.end);
-    instructions += block.count;
+    instructions += retired;
     eflags |= 2;
     ++ether_arm64_stats_.blocks;
-    ether_arm64_stats_.steps += block.count;
-    if (!long_mode) ether_arm64_stats_.protected32_steps += block.count;
-    return block.count;
+    ether_arm64_stats_.steps += retired;
+    if (!long_mode) ether_arm64_stats_.protected32_steps += retired;
+    if (rounds > 1) {
+      ++ether_arm64_stats_.repeated_loop_dispatches;
+      ether_arm64_stats_.repeated_loop_steps += retired;
+    }
+    return retired;
   } catch (const std::exception&) {
     // Speculative walks never set A/D bits or access an I/O provider.
     // Preserve the original scalar path for the first architectural fault.

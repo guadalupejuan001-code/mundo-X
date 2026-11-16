@@ -55,6 +55,10 @@ struct Instruction {
   bool writes_ram() const noexcept {
     return lhs.memory && (kind == Move || kind == MoveByte || kind == Subtract);
   }
+  bool writes_register() const noexcept {
+    return !lhs.memory && kind != Nop && kind != Compare && kind != Test &&
+        kind != Conditional && kind != Jump;
+  }
 };
 
 struct Block {
@@ -64,18 +68,49 @@ struct Block {
   unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
-  bool long_mode = true;
+  bool long_mode = true, repeats = false;
 
   bool stages_ram() const noexcept {
     return writes && (writes > 1 || !instructions[count - 1].writes_ram());
   }
 
   bool uses_arm_condition() const noexcept {
-    if (!count || flag_op != Instruction::Compare || flag_width < 4) return false;
+    if (!count || flag_width < 4 ||
+        (flag_op != Instruction::Compare && flag_op != Instruction::Subtract)) return false;
     const auto& last = instructions[count - 1];
     return last.kind == Instruction::Conditional && last.condition < 16;
   }
 };
+
+inline bool fixed_loop_addresses(const Block& block) noexcept {
+  unsigned fixed = 0xffffU;
+  for (unsigned i = 0; i < block.count; ++i) {
+    const auto& op = block.instructions[i];
+    if (op.writes_register()) fixed &= ~(1U << op.lhs.reg);
+  }
+  const auto fixed_register = [&](unsigned reg) {
+    return reg >= Operand::kNoIndex || (fixed & (1U << reg)) != 0;
+  };
+  const auto fixed_address = [&](const Operand& operand) {
+    return !operand.memory || (fixed_register(operand.reg) && fixed_register(operand.index));
+  };
+  for (unsigned i = 0; i < block.count; ++i) {
+    const auto& op = block.instructions[i];
+    if (!fixed_address(op.lhs) || (op.kind != Instruction::Lea && !fixed_address(op.rhs)))
+      return false;
+    if (op.writes_register()) {
+      const auto bit = 1U << op.lhs.reg;
+      // A full-width move from an invariant input overwrites any
+      // loop-carried value. A partial move still depends on the old register.
+      if (op.kind == Instruction::Move && op.width >= 4 && !op.rhs.memory &&
+          (op.rhs.immediate || fixed_register(op.rhs.reg)))
+        fixed |= bit;
+      else
+        fixed &= ~bit;
+    }
+  }
+  return true;
+}
 
 // x86 carry on subtraction is ARM's inverse carry. Parity conditions use
 // the original interpreter, which also owns the final x86 flag calculation.
@@ -296,6 +331,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     if (op.writes_ram() && (++block.writes == Block::kMaxWrites || !long_mode)) break;
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump) break;
   }
+  block.repeats = long_mode && block.target == rip && block.uses_arm_condition() &&
+      fixed_loop_addresses(block);
   return block;
 }
 
@@ -312,9 +349,13 @@ struct PendingRamWrites {
   bool stage(std::uint64_t physical, unsigned width, std::uint64_t value) noexcept {
     // A store to the executing bytes would change a later x86 fetch.
     if (physical < code_end && code_first < physical + width) return false;
-    if (count && stores[count - 1].physical == physical && stores[count - 1].width == width) {
-      // Replacing the most recent store preserves the order of partial aliases.
-      stores[count - 1].value = value;
+    for (unsigned i = count; i > 0; --i) {
+      const auto& store = stores[i - 1];
+      if (store.physical != physical || store.width != width) continue;
+      // The new store covers the older store completely. Place it after
+      // intermediate partial aliases so loads still read the newest bytes.
+      if (i < count) std::move(stores.begin() + i, stores.begin() + count, stores.begin() + i - 1);
+      stores[count - 1] = {physical, value, width};
       return true;
     }
     if (count == stores.size()) return false;
@@ -325,10 +366,13 @@ struct PendingRamWrites {
   template <class Read>
   std::uint64_t load(std::uint64_t address, unsigned width, Read&& read) const {
     const auto end = address + width;
-    if (count) {
-      const auto& last = stores[count - 1];
-      if (address >= last.physical && end <= last.physical + last.width)
-        return (last.value >> (8 * (address - last.physical))) & mask(width);
+    for (unsigned i = count; i > 0; --i) {
+      const auto& store = stores[i - 1];
+      const auto store_end = store.physical + store.width;
+      if (store_end <= address || end <= store.physical) continue;
+      if (address >= store.physical && end <= store_end)
+        return (store.value >> (8 * (address - store.physical))) & mask(width);
+      break;
     }
     auto result = read();
     for (unsigned i = 0; i < count; ++i) {
@@ -359,6 +403,7 @@ struct Frame {
   Write write;
   void* cpu;
   PendingRamWrites* pending;
+  unsigned loop_remaining = 1;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
@@ -371,6 +416,7 @@ class Emitter {
     emit(0xd503245f); // BTI c (a hint on hosts without BTI).
     emit(0xa9bf7bf3); // STP X19,X30,[SP,#-16]!
     emit(0xaa0003f3); // MOV X19,X0
+    const auto loop_start = static_cast<std::int32_t>(code_.size());
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
       const bool capture_flags = block.flag_width && i == block.flag_index;
@@ -417,6 +463,14 @@ class Emitter {
       load(10, offsetof(Frame, right), block.flag_width);
       emit(block.flag_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
       emit(0x1a9f07e0U | ((last.condition ^ 1U) << 12)); // CSET W0,cc
+      if (block.repeats) {
+        load(11, offsetof(Frame, loop_remaining), 4);
+        emit(0x5100056b); // SUB W11,W11,#1
+        store(11, offsetof(Frame, loop_remaining), 4);
+        emit(0x34000040); // CBZ W0,+8 (guest branch fell through)
+        const auto back = loop_start - static_cast<std::int32_t>(code_.size());
+        emit(0x3500000bU | ((static_cast<std::uint32_t>(back) & 0x7ffffU) << 5)); // CBNZ W11,loop_start
+      }
       emit(0x11000400); // ADD W0,W0,#1
     } else {
       emit(last.kind == Instruction::Jump ? 0x52800040 : 0x52800020); // MOV W0,#2/#1
@@ -486,7 +540,7 @@ class Emitter {
   }
   void store(unsigned reg, unsigned offset, unsigned width = 8) {
     const auto store_op = width == 1 ? 0x39000000U
-        : width == 2 ? 0x79000000U : 0xf9000000U; // STRB, STRH or STR X
+        : width == 2 ? 0x79000000U : width == 4 ? 0xb9000000U : 0xf9000000U;
     emit(store_op | ((offset / width) << 10) | (19U << 5) | reg);
   }
   void address(const Operand& operand, unsigned reg) {
