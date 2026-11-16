@@ -276,6 +276,59 @@ void resident_copy() {
   require(!memory.try_copy_resident_block(from, to, input.size()), "Ether callbacks must remain observable");
 }
 
+void copy_to_implicit_pages() {
+  constexpr auto page = MemoryFabric::kPageSize;
+  constexpr std::uint32_t from = 0x32000, to = 0x11c1c000, copy_ip = 0x8002;
+  constexpr auto bytes = 17 * page;
+  std::vector<std::uint8_t> input(bytes);
+  for (std::size_t i = 0; i < input.size(); ++i) input[i] = std::uint8_t(i ^ (i >> 3) ^ (i >> 7));
+
+  Cpu scalar(300 * 1024 * 1024), batched(300 * 1024 * 1024);
+  for (auto* cpu : {&scalar, &batched}) {
+    protected_fixture(*cpu);
+    cpu->memory.write_block(from, input.data(), input.size());
+    cpu->eip = copy_ip;
+    cpu->regs[Cpu::ESI] = from;
+    cpu->regs[Cpu::EDI] = to;
+    cpu->regs[Cpu::ECX] = bytes / sizeof(std::uint32_t);
+    cpu->set_flag(Cpu::CF, true);
+  }
+  batched.memory.enable_code_page_versions(true);
+  const auto watch = batched.memory.watch_code_page(to + page);
+  expect_step(batched);
+  std::uint64_t direct_bytes = 0;
+  while (batched.eip == copy_ip) {
+    require(batched.try_rep_batch(page / sizeof(std::uint32_t)) > 0, "REP MOVSD batch did not advance");
+    direct_bytes += batched.last_rep_direct_page_copy_bytes();
+  }
+  while (scalar.eip == copy_ip) expect_step(scalar);
+  require(direct_bytes == bytes - page && watch &&
+              batched.memory.code_page_version(to + page) != watch,
+          "Only untouched destination pages may be copied directly, and code watches must be notified");
+  require(batched.regs == scalar.regs && batched.eflags == scalar.eflags &&
+              batched.eip == scalar.eip && batched.instructions == scalar.instructions,
+          "Direct page copies changed the architectural REP MOVSD state");
+  std::vector<std::uint8_t> result(bytes);
+  batched.memory.read_block(to, result.data(), result.size());
+  require(result == input, "Direct REP MOVSD changed guest bytes");
+  batched.memory.read_block(from, result.data(), result.size());
+  require(result == input, "Direct REP MOVSD changed source bytes");
+
+  MemoryFabric capped(3 * page, page);
+  capped.write_block(0, input.data(), page);
+  require(!capped.try_copy_to_implicit_page(0, page) && capped.allocated_pages() == 1 &&
+              capped.read_byte(page + 1) == 0,
+          "A direct copy must leave existing memory intact when the resident budget is full");
+  MemoryFabric mapped(3 * page);
+  mapped.write_block(0, input.data(), page);
+  mapped.attach_window(page + 1, 1, [](std::uint64_t) { return std::uint8_t{0x7b}; },
+                       [](std::uint64_t, std::uint8_t) {});
+  require(!mapped.try_copy_to_implicit_page(0, page) && mapped.allocated_pages() == 1,
+          "The direct path must reject mapped devices without creating a destination page");
+  std::cout << "ETHER_REP_DIRECT_COPY_PASS bytes=" << bytes
+            << " direct_bytes=" << direct_bytes << " exact_registers=1 exact_bytes=1\n";
+}
+
 struct BenchResult {
   std::uint64_t steps = 0;
   std::int64_t host_us = 0;
@@ -326,6 +379,7 @@ int main() {
     copy_under_pressure();
     fill_under_pressure();
     resident_copy();
+    copy_to_implicit_pages();
     const auto scalar = measure(false), batched = measure(true);
     require(scalar.steps == batched.steps && batched.batches > 0 && batched.patterns == 256 &&
             !scalar.patterns, "REP changed step count or failed to compact full STOS pages");

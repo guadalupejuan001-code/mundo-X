@@ -340,6 +340,7 @@ class Cpu {
     x87_ignne_ = false;
     interrupt_shadow_ = false;
     last_rep_batch_bytes_ = 0;
+    last_rep_direct_page_copy_bytes_ = 0;
     ether_arm64_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
@@ -370,6 +371,7 @@ class Cpu {
   static constexpr std::uint64_t kTscTicksPerCycle = 64;
   const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
   unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
+  unsigned last_rep_direct_page_copy_bytes() const noexcept { return last_rep_direct_page_copy_bytes_; }
   bool rep_batch_candidate() const noexcept {
     return repeat_ && start_ip_ == eip && start_cs_ == segments[CS] &&
            ((opcode_&0xfeU)==0xa4||(opcode_&0xfeU)==0xaa||
@@ -742,6 +744,7 @@ class Cpu {
   bool x87_ignne_ = false;
   bool interrupt_shadow_ = false;
   unsigned last_rep_batch_bytes_ = 0;
+  unsigned last_rep_direct_page_copy_bytes_ = 0;
   std::array<IdtAttempt, Fault::kMaxIdtAttempts> failed_idt_attempts_{};
   unsigned failed_idt_count_ = 0;
 
@@ -3359,6 +3362,7 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
 
 inline unsigned Cpu::try_rep_batch(unsigned budget) {
   last_rep_batch_bytes_ = 0;
+  last_rep_direct_page_copy_bytes_ = 0;
   if (budget < 2 || !rep_batch_candidate() || fault || halted || transaction_ ||
       interrupt_shadow_ || (eflags & (TF | 0x20000U)) ||
       (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook || lock_prefix_)
@@ -3458,7 +3462,8 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
       // single memcpy/memmove snapshot of the source.
       if (overlaps(target, bytes, source, bytes)) return 0;
       if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
-      mundo_x::ether_next::copy_ram_block(memory, source, target, bytes);
+      if (mundo_x::ether_next::copy_ram_block(memory, source, target, bytes))
+        last_rep_direct_page_copy_bytes_ = bytes;
       put_index(ESI, src + (backward ? -std::uint64_t(bytes) : bytes));
     } else {
       if (paged && memory.may_touch_page_tables(target, bytes)) return 0;

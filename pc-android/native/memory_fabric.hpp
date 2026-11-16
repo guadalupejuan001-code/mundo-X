@@ -376,6 +376,13 @@ class MemoryFabric {
     return true;
   }
 
+  bool try_copy_to_implicit_page(std::uint64_t source, std::uint64_t target) {
+    if (overlaps_window(source, kPageSize) || overlaps_window(target, kPageSize)) return false;
+    if (!ram_.try_copy_to_implicit_page(source, target)) return false;
+    note_write(target, kPageSize);
+    return true;
+  }
+
   // The Ether window does not reserve classical pages. Provider-side qstore8
   // commits a complete byte atomically; CPU rollback restores the old byte.
   void prepare_write(std::uint64_t offset, std::size_t count) {
