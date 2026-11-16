@@ -16,6 +16,7 @@
 namespace cosmic_pc::ether_arm64 {
 
 inline constexpr unsigned kStackAccess = 16; // Packed alongside the RAM callback's width.
+inline constexpr unsigned kSubtractAccess = 32;
 
 // Decode only the register and ordinary-memory forms the ARM64 backend
 // implements. The interpreter owns all other prefixes, operands and opcodes.
@@ -37,7 +38,7 @@ struct Operand {
 
 struct Instruction {
   enum Kind {
-    Unsupported, Move, MoveByte, MoveZeroExtend, Lea, Nop, Compare, Test, Increment, Decrement,
+    Unsupported, Move, MoveByte, MoveZeroExtend, MoveSignExtend, Lea, Nop, Compare, Test, Increment, Decrement,
     Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic, Conditional, Jump
   };
   Kind kind = Move;
@@ -97,13 +98,16 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       if (!word) rex = opcode;
       opcode = bytes[pos++];
     }
-    if (opcode == 0x0f && pos < size && (bytes[pos] == 0xb6 || bytes[pos] == 0xb7))
+    if (opcode == 0x0f && pos < size &&
+        ((bytes[pos] & 0xfeU) == 0xb6U || (long_mode && (bytes[pos] & 0xfeU) == 0xbeU)))
       opcode = 0x0f00U | bytes[pos++];
     const auto form = opcode & 7;
     const auto direct_alu = opcode <= 0x3d && form <= 5
         ? kGroupOne[opcode >> 3] : Instruction::Unsupported;
     const bool binary_alu = direct_alu != Instruction::Unsupported && form < 4;
     const bool zero_extend = opcode == 0x0fb6 || opcode == 0x0fb7;
+    const bool sign_extend_move = opcode == 0x0fbe || opcode == 0x0fbf ||
+        (long_mode && opcode == 0x63 && (rex & 8));
     const bool move_byte = opcode == 0x88 || opcode == 0x8a;
     const bool group_immediate = opcode == 0x80 || opcode == 0x81 || opcode == 0x83;
     const bool move_immediate = opcode == 0xc6 || opcode == 0xc7;
@@ -143,7 +147,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     } else if (opcode == 0x90 && !(rex & 1)) {
       op.kind = Instruction::Nop;
     } else if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x84 ||
-        opcode == 0x85 || opcode == 0xff || zero_extend || move_byte || binary_alu ||
+        opcode == 0x85 || opcode == 0xff || zero_extend || sign_extend_move || move_byte || binary_alu ||
         group_immediate || move_immediate || test_immediate || shift) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
@@ -175,7 +179,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
       const bool reg_first = opcode == 0x8b || opcode == 0x8d ||
-          zero_extend || opcode == 0x8a || (binary_alu && (opcode & 2));
+          zero_extend || sign_extend_move || opcode == 0x8a || (binary_alu && (opcode & 2));
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
       if (zero_extend || move_byte) {
@@ -185,6 +189,9 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         if (op.width == 1 && !rex && ((move_byte && reg.reg >= 4) ||
             (!other.memory && other.reg >= 4))) break;
         op.kind = move_byte ? Instruction::MoveByte : Instruction::MoveZeroExtend;
+      } else if (sign_extend_move) {
+        if (opcode == 0x0fbe && !rex && !other.memory && other.reg >= 4) break;
+        op.kind = Instruction::MoveSignExtend;
       } else if (opcode == 0x8d) {
         if (!other.memory) break;
         op.kind = Instruction::Lea;
@@ -224,7 +231,9 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         }
         op.kind = Instruction::Test;
       } else if (binary_alu) {
-        if (op.lhs.memory && direct_alu != Instruction::Compare) break;
+        // Only the observed 64-bit SUB r/m64,r64 variant has a guarded write.
+        const bool subtract_memory = opcode == 0x29 && op.width == 8;
+        if (op.lhs.memory && direct_alu != Instruction::Compare && !subtract_memory) break;
         if (!(opcode & 1)) {
           op.width = 1;
           if (!rex && (reg.reg >= 4 || (!other.memory && other.reg >= 4))) break;
@@ -277,8 +286,9 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     block.size = pos;
     // Commit a store last. Revalidate code in the next block, including
     // writes through a physical alias.
-    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
-        ((op.kind == Instruction::Move || op.kind == Instruction::MoveByte) && op.lhs.memory)) break;
+    const bool writes_ram = op.lhs.memory &&
+        (op.kind == Instruction::Move || op.kind == Instruction::MoveByte || op.kind == Instruction::Subtract);
+    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump || writes_ram) break;
   }
   return block;
 }
@@ -307,8 +317,10 @@ class Emitter {
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
       const bool capture_flags = block.flag_width && i == block.flag_index;
-      if ((op.kind == Instruction::Move || op.kind == Instruction::MoveByte) && op.lhs.memory) {
-        prepare_access(op.lhs, op.width);
+      if ((op.kind == Instruction::Move || op.kind == Instruction::MoveByte ||
+           op.kind == Instruction::Subtract) && op.lhs.memory) {
+        const auto access = op.kind == Instruction::Subtract ? kSubtractAccess : 0;
+        prepare_access(op.lhs, op.width, access);
         if (op.rhs.immediate) literal(3, op.rhs.immediate_value, op.width);
         else load(3, op.rhs.reg * 8, op.width);
         call(offsetof(Frame, write));
@@ -317,6 +329,12 @@ class Emitter {
         read(op.rhs, op.width);
         const auto width = op.kind == Instruction::MoveZeroExtend || op.width >= 4 ? 8 : op.width;
         store(9, op.lhs.reg * 8, width);
+      } else if (op.kind == Instruction::MoveSignExtend) {
+        const auto source = op.opcode == 0x63 ? 4U : (op.opcode & 1U) ? 2U : 1U;
+        read(op.rhs, source);
+        const auto wide = op.width == 8 ? 0x80400000U : 0; // sf and N for SBFM X.
+        emit(0x13000129U | wide | ((source * 8U - 1U) << 10)); // SXTB/SXTH/SXTW W/X9,W/X9
+        store(9, op.lhs.reg * 8);
       } else if (op.kind == Instruction::Lea) {
         address(op.rhs, 9);
         if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
@@ -439,10 +457,10 @@ class Emitter {
     }
     if (!long_mode_) emit(0x2a0003e0U | (reg << 16) | reg); // MOV Wd,Wd wraps the 32-bit offset.
   }
-  void prepare_access(const Operand& operand, unsigned width) {
+  void prepare_access(const Operand& operand, unsigned width, unsigned access = 0) {
     emit(0xaa1303e0); // MOV X0,X19
     address(operand, 1);
-    const auto spec = width | (operand.stack ? kStackAccess : 0);
+    const auto spec = width | access | (operand.stack ? kStackAccess : 0);
     emit(0x52800002U | (spec << 5)); // MOV W2,#access
   }
   void call(unsigned offset) {

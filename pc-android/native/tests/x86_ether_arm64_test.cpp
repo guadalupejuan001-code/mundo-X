@@ -54,6 +54,17 @@ constexpr std::array<std::uint8_t, 25> byte_copy_loop{
     0x03,0xd3,0x4c,0x03,0xfb,0x44,0x2b,0xd3,0x45,0x85,0xd2, // Observed pointer/counter updates.
     0x75,0xe8,0xf4};                                           // JNZ; HLT.
 
+constexpr std::array<std::uint8_t, 16> signed_load_loop{
+    0x8b,0xc1,                             // MOV EAX,ECX
+    0x45,0x0f,0xbf,0x44,0x41,0x1c,         // Observed MOVSX R8D, word [R9+RAX*2+1Ch]
+    0x49,0x63,0xc0,                        // Observed MOVSXD RAX,R8D
+    0xff,0xc9,0x75,0xf1,0xf4};             // DEC ECX; JNZ; HLT
+
+constexpr std::array<std::uint8_t, 15> memory_subtractions{
+    0x48,0x89,0xdf,0x4e,0x29,0x1c,0xc9,    // MOV RDI,RBX; observed SUB [RCX+R9*8],R11
+    0x4c,0x89,0xca,0x4a,0x29,0x04,0xc9,    // MOV RDX,R9; observed SUB [RCX+R9*8],RAX
+    0xf4};
+
 void require(bool value, const char* message) {
   if (!value) throw std::runtime_error(message);
 }
@@ -225,6 +236,23 @@ void decoder_contract() {
   const std::uint8_t carry_input[]{0x11,0xc0};
   require(!arm64::decode(carry_input, sizeof(carry_input), code).count,
           "ADC needs the interpreter's carry dependence");
+  const auto signed_loop = arm64::decode(signed_load_loop.data(), signed_load_loop.size(), code);
+  require(signed_loop.count == 5 && signed_loop.target == code &&
+          signed_loop.instructions[1].kind == arm64::Instruction::MoveSignExtend &&
+          signed_loop.instructions[1].width == 4 && signed_loop.instructions[1].lhs.reg == Cpu::R8 &&
+          signed_loop.instructions[1].rhs.reg == Cpu::R9 && signed_loop.instructions[1].rhs.scale_shift == 1 &&
+          signed_loop.instructions[2].kind == arm64::Instruction::MoveSignExtend &&
+          signed_loop.instructions[2].width == 8, "signed boot loads formed the wrong block");
+  const std::uint8_t sign_ah[]{0x0f,0xbe,0xc4};
+  require(!arm64::decode(sign_ah, sizeof(sign_ah), code).count,
+          "MOVSX AH must retain legacy high-byte semantics");
+  const auto rmw = arm64::decode(memory_subtractions.data(), memory_subtractions.size(), code);
+  require(rmw.count == 2 && rmw.size == 7 && rmw.flag_op == arm64::Instruction::Subtract &&
+          rmw.instructions[1].lhs.memory && rmw.instructions[1].lhs.index == Cpu::R9 &&
+          rmw.instructions[1].rhs.reg == Cpu::R11, "observed subtraction must end its block");
+  const std::uint8_t locked_sub[]{0xf0,0x4e,0x29,0x1c,0xc9};
+  require(!arm64::decode(locked_sub, sizeof(locked_sub), code).count,
+          "LOCK SUB must execute through the CPU's atomic memory path");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -311,6 +339,111 @@ void warm_block(Cpu& cpu, std::uint64_t address, unsigned steps) {
     if (cpu.try_ether_arm64_block(steps) == steps) return;
   }
   throw std::runtime_error("ARM64 block never became executable");
+}
+
+void signed_load_contract() {
+  constexpr unsigned iterations = 20'000, steps = 5 * iterations + 1;
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    cpu.memory.write_block(code, signed_load_loop.data(), signed_load_loop.size());
+    for (unsigned i = 1; i <= iterations; ++i)
+      cpu.write16(nodes + 0x1c + 2 * i, std::uint16_t(i * 17U + 0x80e0U));
+  }
+  const auto run = [&](PcMachine& machine) {
+    auto& cpu = machine.cpu;
+    cpu.eip = code;
+    cpu.halted = false;
+    cpu.eflags = 2 | Cpu::CF | Cpu::IF;
+    cpu.regs[Cpu::ECX] = iterations;
+    cpu.regs[Cpu::R9] = nodes;
+    cpu.regs[Cpu::R8] = UINT64_MAX;
+    const auto retired = cpu.instructions;
+    const auto start = std::chrono::steady_clock::now();
+    for (unsigned remaining = steps; remaining;) {
+      const auto slice = std::min(remaining, 50'000U);
+      machine.run(slice);
+      remaining -= slice;
+    }
+    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    require(cpu.halted && !cpu.fault && cpu.instructions - retired == steps &&
+            cpu.regs[Cpu::R8] == 0xffff80f1ULL && cpu.regs[Cpu::EAX] == 0xffffffffffff80f1ULL &&
+            cpu.eflags == (2 | Cpu::CF | Cpu::IF | Cpu::ZF | Cpu::PF),
+            "sign extension changed width, flags or guest instructions");
+    return ns;
+  };
+  std::array<std::int64_t, 5> native_ns{}, scalar_ns{};
+  for (unsigned i = 0; i < native_ns.size(); ++i) {
+    if (i & 1U) {
+      native_ns[i] = run(native);
+      scalar_ns[i] = run(scalar);
+    } else {
+      scalar_ns[i] = run(scalar);
+      native_ns[i] = run(native);
+    }
+    require(capture(native.cpu) == capture(scalar.cpu), "signed loop diverged from scalar state");
+  }
+  const auto covered = native.cpu.ether_arm64_stats().steps;
+  require(covered * 100 >= steps * native_ns.size() * 99 &&
+          scalar.cpu.ether_arm64_stats().steps == 0, "signed loop missed native execution");
+  std::sort(native_ns.begin(), native_ns.end());
+  std::sort(scalar_ns.begin(), scalar_ns.end());
+  std::cout << "PRIME_ETHER_SIGNED_BOOT_PASS steps=" << steps << " native_steps=" << covered
+            << " repeats=" << native_ns.size() << " native_median_ns=" << native_ns[2]
+            << " scalar_median_ns=" << scalar_ns[2] << '\n';
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    emit(cpu, code, {0x48,0x0f,0xbe,0xc2,0x90,0xf4}); // MOVSX RAX,DL; NOP.
+    cpu.halted = false;
+    cpu.eip = code;
+    cpu.regs[Cpu::EDX] = 0x80;
+  }
+  warm_block(native.cpu, code, 2);
+  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+          capture(native.cpu) == capture(scalar.cpu) && native.cpu.regs[Cpu::EAX] == 0xffffffffffffff80ULL,
+          "MOVSX r64,r8 changed signed value or CPU state");
+}
+
+void memory_subtraction_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  constexpr auto high = 0x8000000000000000ULL;
+  constexpr auto boundary = output + 0xffc;
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    cpu.memory.write_block(code, memory_subtractions.data(), memory_subtractions.size());
+    cpu.regs[Cpu::ECX] = output - 8;
+    cpu.regs[Cpu::R9] = 1;
+    cpu.regs[Cpu::R11] = 1;
+    cpu.regs[Cpu::EAX] = UINT64_MAX;
+    cpu.write64(output, high);
+    cpu.write64(boundary, high);
+  }
+  warm_block(native.cpu, code, 2);
+  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+          capture(native.cpu) == capture(scalar.cpu) && native.cpu.read64(output) == high - 1,
+          "first indexed subtraction wrote the wrong value or flags");
+  warm_block(native.cpu, code + 7, 2);
+  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+          capture(native.cpu) == capture(scalar.cpu) && native.cpu.read64(output) == high &&
+          native.cpu.flag(Cpu::CF) && native.cpu.flag(Cpu::OF), "second indexed subtraction changed x86 state");
+
+  for (auto* machine : {&native, &scalar}) {
+    machine->cpu.eip = code;
+    machine->cpu.regs[Cpu::ECX] = boundary - 8;
+  }
+  const auto before = capture(native.cpu);
+  require(!native.cpu.try_ether_arm64_block(2) && capture(native.cpu) == before &&
+          native.cpu.read64(boundary) == high, "cross-page subtraction altered state before fallback");
+  for (auto* machine : {&native, &scalar})
+    require(machine->cpu.step() == StepResult::Executed && machine->cpu.step() == StepResult::Executed &&
+            machine->cpu.read64(boundary) == high - 1, "scalar cross-page subtraction failed");
+  require(capture(native.cpu) == capture(scalar.cpu), "subtraction fallback changed guest state");
+  std::cout << "PRIME_ETHER_RMW_BOOT_PASS variants=2 cross_page=1\n";
 }
 
 void register_shift_contract() {
@@ -1022,6 +1155,8 @@ int main() {
     require(native.stats.steps > 4000 && native.stats.hits > 0, "ARM64 loop did not execute");
     integer_execution_contract();
     rip_relative_contract();
+    signed_load_contract();
+    memory_subtraction_contract();
     protected32_contract();
     byte_copy_contract();
     guard_contract();
