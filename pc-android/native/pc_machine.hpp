@@ -1103,18 +1103,18 @@ class PcMachine {
   }
   std::optional<std::uint32_t> input(std::uint16_t p,unsigned width){
     if(p==PcQuantumDevice::data_port||p==PcQuantumDevice::control_port)return quantum_device.input(p,width);
-    if(width!=1)return std::nullopt;
+    if(width!=1)return video_.input(p,width);
     if(p==0x92)return cpu.a20_enabled?2u:0u;
     if(p==0x21)return pic1_;
     if(p==0xa1)return pic2_;
     if(p==0x64 || p==0x60)return kbc_.input(p,width,cpu.a20_enabled);
     if(p==0x71){if(cmos_index_==0x0a)return 0x26u;if(cmos_index_==0x0b)return 2u;if(cmos_index_==0x0d)return 0x80u;return std::nullopt;}
     if(p==0x3fd)return 0x60u;
-    return std::nullopt;
+    return video_.input(p,width);
   }
   bool output(std::uint16_t p,unsigned width,std::uint32_t v){
     if(p==PcQuantumDevice::data_port||p==PcQuantumDevice::control_port)return quantum_device.output(p,width,v);
-    if(width!=1)return false;
+    if(width!=1)return video_.output(p,width,v);
     if(p==0x64 || p==0x60) {
       bool reset_requested=false;
       if(kbc_.output(p,width,v,cpu.a20_enabled,guest_restart_enabled_?&reset_requested:nullptr)) {
@@ -1139,7 +1139,7 @@ class PcMachine {
     if(p==0x70){cmos_index_=v&0x7f;return true;}
     if(p==0x80)return true; // POST delay port has no guest-visible output.
     if(p==0x3f8){if(serial_.size()<65536)serial_+=char(v&255);return true;}
-    return false;
+    return video_.output(p,width,v);
   }
   std::string serial_;
 };
