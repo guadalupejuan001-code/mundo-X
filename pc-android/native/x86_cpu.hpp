@@ -340,6 +340,11 @@ class Cpu {
   }
   CpuTopology topology() const noexcept { return topology_; }
   unsigned apic_id() const noexcept { return apic_id_; }
+  void use_windows_x64_profile(bool enabled = true) noexcept { windows_x64_profile_ = enabled; }
+  bool windows_x64_profile() const noexcept { return windows_x64_profile_; }
+  const char* cpuid_vendor() const noexcept {
+    return windows_x64_profile_ ? "GenuineIntel" : "MUNDOX PC   ";
+  }
   const std::uint64_t* set_shared_clock(const std::uint64_t* cycles) noexcept {
     return std::exchange(shared_clock_, cycles);
   }
@@ -352,6 +357,7 @@ class Cpu {
     segments.fill(0); segments[CS] = cs;
     eip = ip; eflags = 2; cr0 = 0x10; cr2 = cr3 = cr4 = efer = fs_base = gs_base = 0;
     system_call_msrs_ = {};
+    platform_msrs_ = {};
     tsc_offset_ = 0;
     idle_clock_steps_ = 0;
     apic_task_priority_ = 0;
@@ -565,10 +571,7 @@ class Cpu {
     if (halted) return StepResult::Halted;
     failed_idt_count_ = 0;
     const auto memory_writes = memory.pin_writes();
-    const Snapshot before{regs, segments, cache_, eip, eflags, cr0, cr4,
-                          cr2, cr3, efer, fs_base, gs_base, system_call_msrs_, gdtr, idtr, ldtr, tr, a20_enabled, halted,
-                          xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_base_,apic_task_priority_};
+    const auto before = snapshot();
     const bool was_shadowed=interrupt_shadow_;
     interrupt_shadow_=false;
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
@@ -612,6 +615,7 @@ class Cpu {
     addr32_ = op32_; repeat_ = 0; override_ = -1;
     ip_written_ = false; transaction_ = true;
     pending_simd_flags_=0;
+    pending_io_debug_=0;
     try {
       if (!is_real_mode() && cpl() != 0 && cpl() != 3)
         fail("only CPL0/CPL3 are modeled", FaultCode::UnsupportedState);
@@ -650,13 +654,24 @@ class Cpu {
       eflags |= 2;
       ++instructions;
       transaction_ = false; clear_write_journal();
+      if (pending_io_debug_) {
+        dr6_ |= pending_io_debug_;
+        Trap debug{FaultCode::DebugException, "I/O breakpoint"};
+        debug.after_instruction = true;
+        throw debug;
+      }
       return halted ? StepResult::Halted : StepResult::Executed;
     } catch (const WaitingForX87&) {
       rollback(before);
       waiting_for_x87=true;
       return StepResult::WaitingForX87;
     } catch (const Trap& t) {
-      rollback(before);
+      // I/O data breakpoints are traps: the completed instruction and its
+      // device effects precede delivery of #DB, even if the gate fails.
+      const auto retired = t.after_instruction ? std::optional<Snapshot>{snapshot()} : std::nullopt;
+      const auto& saved = retired ? *retired : before;
+      const auto resume_ip = retired ? saved.eip : start_ip_;
+      rollback(saved);
       // Intel preserves MXCSR sticky status across #XM/#UD on an unmasked
       // SIMD arithmetic exception even when the instruction does not retire.
       // Snapshot rollback must NOT erase these architecturally sticky flags.
@@ -664,26 +679,26 @@ class Cpu {
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
       int vector = exception_vector(t.code);
-      const bool real_fp_exception = t.code == FaultCode::X87FloatingPoint ||
+      const bool real_exception = retired || t.code == FaultCode::X87FloatingPoint ||
           t.code == FaultCode::SimdFloatingPoint || t.code == FaultCode::DeviceNotAvailable ||
           t.code == FaultCode::InvalidInstruction;
-      if (is_real_mode() && real_fp_exception) {
+      if (is_real_mode() && real_exception) {
         // Deliver FP/SIMD exception vectors regardless of IF or BIOS hooks.
         // An empty or inaccessible vector preserves the terminal diagnostic.
         try {
           transaction_ = true;
           const auto target = real_ivt_target(std::uint8_t(vector));
           if (target.cs || target.ip) {
-            dispatch_real_interrupt(target, start_ip_);
+            dispatch_real_interrupt(target, resume_ip);
             transaction_ = false; clear_write_journal();
-            ++instructions;
+            if (!retired) ++instructions;
             delivered_vector = vector;
             fault.reset();
             return StepResult::Executed;
           }
           transaction_ = false;
         } catch (const std::exception&) {
-          rollback(before);
+          rollback(saved);
           if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
         }
       }
@@ -696,16 +711,16 @@ class Cpu {
         for (unsigned i = 0; i < Fault::kMaxIdtAttempts; ++i) {
           const auto saved_cr2 = cr2;
           const auto restore = [&] {
-            rollback(before);
+            rollback(saved);
             cr2 = saved_cr2;
             if (pending_simd_flags_) mxcsr |= pending_simd_flags_;
           };
           try {
             transaction_ = true;
             const bool with_error = vector == 8 || (vector >= 11 && vector <= 14);
-            dispatch_idt(std::uint8_t(vector), start_ip_, IdtSource::CpuException, with_error, error);
+            dispatch_idt(std::uint8_t(vector), resume_ip, IdtSource::CpuException, with_error, error);
             transaction_ = false; clear_write_journal();
-            ++instructions; // bounded interpreter step, not retired opcode
+            if (!retired) ++instructions; // Ordinary faults count as a bounded interpreter step.
             delivered_vector = vector;
             delivered_error = error;
             delivered_linear = address;
@@ -837,12 +852,21 @@ class Cpu {
     std::string reason;
     std::uint64_t address = 0;
     std::uint32_t error = 0;
+    bool after_instruction = false;
     Trap(FaultCode c, std::string message)
         : std::runtime_error(message), code(c), reason(std::move(message)) {}
   };
   struct SystemCallMsrs {
     std::uint64_t star = 0, lstar = 0, cstar = 0, kernel_gs_base = 0;
     std::uint32_t fmask = 0;
+  };
+  struct PlatformMsrs {
+    std::uint64_t pat = 0x0007040600070406ULL;
+    std::uint64_t misc_enable = 1;
+    std::uint64_t mtrr_default_type = 0;
+    std::array<std::uint64_t, 16> mtrr_variable{};
+    std::array<std::uint64_t, 11> mtrr_fixed{};
+    std::uint64_t machine_check_control = 0;
   };
   struct Snapshot {
     std::array<std::uint64_t, 16> regs;
@@ -863,6 +887,12 @@ class Cpu {
     std::uint64_t tsc_offset, apic_base;
     std::uint8_t apic_task_priority;
   };
+  Snapshot snapshot() const noexcept {
+    return {regs, segments, cache_, eip, eflags, cr0, cr4, cr2, cr3, efer, fs_base, gs_base,
+            system_call_msrs_, gdtr, idtr, ldtr, tr, a20_enabled, halted, xmm, mxcsr, x87,
+            fpu_control, fpu_status, fpu_tags, fpu_opcode, fpu_cs, fpu_ds, fpu_ip, fpu_dp,
+            tsc_offset_, apic_base_, apic_task_priority_};
+  }
   struct Operand {
     bool is_register = false;
     unsigned index = 0;
@@ -895,11 +925,14 @@ class Cpu {
                                                         unsigned bytes, Access access);
   std::uint64_t apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
   bool local_apic_present_ = false;
+  bool windows_x64_profile_ = false;
   CpuTopology topology_;
   unsigned apic_id_ = 0;
   const std::uint64_t* shared_clock_ = nullptr;
   std::array<std::uint64_t, 4> debug_address_{};
   std::uint32_t dr6_ = 0xffff0ff0, dr7_ = 0x400;
+  unsigned pending_io_debug_ = 0;
+  unsigned io_breakpoint_mask(std::uint16_t port, unsigned bytes) const noexcept;
 
   void reserve_execution_state() {
     if (memory.empty()) throw std::invalid_argument("RAM must not be empty");
@@ -908,6 +941,14 @@ class Cpu {
   }
   std::array<SegmentCache, 6> cache_{};
   SystemCallMsrs system_call_msrs_;
+  PlatformMsrs platform_msrs_;
+  static constexpr std::uint64_t kMiscXdDisable = 1ULL << 34;
+  static int fixed_mtrr_index(std::uint32_t number) noexcept;
+  std::optional<std::uint64_t> read_platform_msr(std::uint32_t number) const noexcept;
+  bool write_platform_msr(std::uint32_t number, std::uint64_t value);
+  template <bool Inspect>
+  std::uint64_t translate_legacy(std::uint64_t address, Access access, bool speculative,
+                                 unsigned* mapping_bytes_left);
   int override_ = -1;
   std::uint8_t repeat_ = 0;
   std::uint16_t start_cs_ = 0, opcode_ = 0;
@@ -2763,6 +2804,7 @@ class Cpu {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
     const auto value = in_hook(port, bytes);
     if (!value) fail("IN port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
+    pending_io_debug_ |= io_breakpoint_mask(port, bytes);
     return *value & mask(bytes);
   }
   void port_out(std::uint16_t port, unsigned bytes, std::uint32_t value) {
@@ -2771,6 +2813,7 @@ class Cpu {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::GuestIo);
     if (!out_hook || !out_hook(port, bytes, value & mask(bytes)))
       fail("OUT port not implemented: " + std::to_string(port), FaultCode::UnsupportedPort);
+    pending_io_debug_ |= io_breakpoint_mask(port, bytes);
   }
   void restore_flags(std::uint32_t value, unsigned bytes) {
     if (value & TF) fail("trap flag requires an unimplemented debug exception", FaultCode::UnsupportedState);
@@ -3291,10 +3334,13 @@ inline void Cpu::write_cr0(std::uint64_t value) {
     fail("CR0.PG requires CR0.PE", FaultCode::ProtectionFault);
   const bool enabling_paging = !(cr0 & 0x80000000U) && (value & 0x80000000U);
   if (enabling_paging) {
-    if (!(efer & 0x100)) fail("legacy non-IA-32e paging is not implemented", FaultCode::UnsupportedState);
-    if (!(cr4 & 0x20)) fail("long-mode paging requires CR4.PAE", FaultCode::ProtectionFault);
-    if (cache_[CS].long_code) fail("paging cannot be enabled while CS.L is set", FaultCode::ProtectionFault);
-    if (cr3 & 0xfe7U) fail("PML4 CR3 address is misaligned", FaultCode::ProtectionFault);
+    if (efer & 0x100) {
+      if (!(cr4 & 0x20)) fail("long-mode paging requires CR4.PAE", FaultCode::ProtectionFault);
+      if (cache_[CS].long_code) fail("paging cannot be enabled while CS.L is set", FaultCode::ProtectionFault);
+      if (cr3 & 0xfe7U) fail("PML4 CR3 address is misaligned", FaultCode::ProtectionFault);
+    } else if (!windows_x64_profile_ || (cr4 & 0x20) || cr3 > UINT32_MAX) {
+      fail("unsupported legacy paging configuration", FaultCode::UnsupportedState);
+    }
   }
   if ((cr0 & 0x80000000U) && !(value & 0x80000000U) && is_long_mode())
     fail("leave 64-bit code before disabling paging", FaultCode::ProtectionFault);
@@ -3308,7 +3354,7 @@ inline void Cpu::write_cr0(std::uint64_t value) {
   // Changing PE does not reload the visible selectors or descriptor caches.
   if ((cr0 ^ value) & 0x80010001U) memory.invalidate_page_tables();
   cr0 = std::uint32_t(value) | 0x10U;
-  if (enabling_paging) efer |= 0x400U;
+  if (enabling_paging && (efer & 0x100)) efer |= 0x400U;
   else if (!(cr0 & 0x80000000U)) efer &= ~std::uint64_t{0x400};
 }
 
@@ -3316,6 +3362,8 @@ inline void Cpu::write_cr3(std::uint64_t value) {
   // Four-level paging without PCID. PWT/PCD are retained.
   if (value & ~(physical_page_mask_ | 0x18U))
     fail("unsupported/reserved CR3 address or PCID bits", FaultCode::ProtectionFault);
+  if (windows_x64_profile_ && !(efer & 0x400) && value > UINT32_MAX)
+    fail("legacy CR3 address exceeds 32 bits", FaultCode::ProtectionFault);
   cr3 = value;
   memory.invalidate_page_tables();
 }
@@ -3323,8 +3371,11 @@ inline void Cpu::write_cr3(std::uint64_t value) {
 inline void Cpu::write_cr4(std::uint64_t value) {
   if ((efer & 0x400) && !(value & 0x20))
     fail("cannot clear CR4.PAE while long mode is active", FaultCode::ProtectionFault);
+  if (!(efer & 0x400) && (cr0 & 0x80000000U) && (value & 0x20))
+    fail("legacy PAE paging is not implemented", FaultCode::UnsupportedState);
   // PSE, PAE and PGE. Discard software translations on changes.
-  constexpr std::uint32_t supported = 0x000006b0U | kCr4Tsd | (1U << 3); // OSFXSR and OSXMMEXCPT, no OSXSAVE
+  const std::uint32_t supported = (0x000006b0U | kCr4Tsd | (1U << 3)) |
+      (windows_x64_profile_ ? 1U << 6 : 0); // CR4.MCE in the Windows profile.
   if (value & ~std::uint64_t(supported))
     fail("CR4 requests an unimplemented feature (e.g. SIMD, PCID, LA57, SMEP or SMAP)", FaultCode::UnsupportedState);
   if (cr4 != value) memory.invalidate_page_tables();
@@ -3342,6 +3393,8 @@ inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
   if (number == 0xc0000100U) return fs_base;
   if (number == 0xc0000101U) return gs_base;
   if (number == 0xc0000102U) return system_call_msrs_.kernel_gs_base;
+  if (windows_x64_profile_)
+    if (const auto value = read_platform_msr(number)) return *value;
   std::ostringstream reason;
   reason << "RDMSR register is not implemented (ECX=0x" << std::hex << number << ')';
   fail(reason.str(), FaultCode::UnsupportedState);
@@ -3366,6 +3419,8 @@ inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
   if (number == 0xc0000080U) {
     constexpr std::uint64_t supported = 0xd01U; // SCE, LME, read-only LMA, NXE.
     if (value & ~supported) fail("EFER requests an unimplemented feature or reserved bit", FaultCode::UnsupportedState);
+    if ((platform_msrs_.misc_enable & kMiscXdDisable) && (value & 0x800U))
+      fail("IA32_MISC_ENABLE disables NX", FaultCode::ProtectionFault);
     if ((cr0 & 0x80000000U) && ((value ^ efer) & 0x100))
       fail("cannot change EFER.LME while paging is enabled", FaultCode::ProtectionFault);
     if ((efer ^ value) & 0x900U) memory.invalidate_page_tables();
@@ -3403,6 +3458,7 @@ inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
     system_call_msrs_.kernel_gs_base = value;
     return;
   }
+  if (windows_x64_profile_ && write_platform_msr(number, value)) return;
   std::ostringstream reason;
   reason << "WRMSR register is not implemented (ECX=0x" << std::hex << number << ')';
   fail(reason.str(), FaultCode::UnsupportedState);
@@ -3470,6 +3526,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
   if (ordinary_page) *ordinary_page = false;
   if (!(cr0 & 0x80000000U)) return address;
   const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
+  if (windows_x64_profile_ && !(efer & 0x400) && !(cr4 & 0x20))
+    return translate_legacy<Inspect>(address, access, speculative, mapping_bytes_left);
   if (!(efer & 0x400) || !(cr4 & 0x20))
     fail("only four-level IA-32e paging is implemented", FaultCode::UnsupportedState);
   if (!canonical(address)) fail("non-canonical page-walk address", FaultCode::ProtectionFault);
@@ -3562,6 +3620,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
   }
   fail("invalid page walker state", FaultCode::HostError);
 }
+
+#include "x86_platform_profile.inc"
 
 inline void Cpu::capture_interrupt_origin() noexcept {
   auto& origin = fault->interrupt_origin.emplace();
@@ -3656,7 +3716,10 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
     if(copying||(pio&&!input))
       elements = unsigned(std::min<std::uint64_t>(elements, limit_from(data_segment(), src, Access::Read)));
     const auto port=reg16(EDX);
-    if(pio)elements=std::min(elements,pio_batch_limit_hook(port,width_bytes,input,elements));
+    if (pio) {
+      if (io_breakpoint_mask(port, width_bytes)) return 0;
+      elements = std::min(elements, pio_batch_limit_hook(port, width_bytes, input, elements));
+    }
     if (elements < 2) return 0;
 
     const auto bytes = elements * width_bytes;
@@ -4915,23 +4978,27 @@ inline void Cpu::extended() {
       const auto subleaf = std::uint32_t(regs[ECX]);
       std::uint32_t eax=0,ebx=0,ecx=0,edx=0;
       const auto logical = topology_.logical_processors();
+      const auto word=[](const char* text) {
+        return std::uint32_t(std::uint8_t(text[0])) |
+            (std::uint32_t(std::uint8_t(text[1])) << 8) |
+            (std::uint32_t(std::uint8_t(text[2])) << 16) |
+            (std::uint32_t(std::uint8_t(text[3])) << 24);
+      };
       if(leaf==0) {
         eax=logical > 1 ? 0x0b : 7;
-        // "MUNDOX PC   " is a 12-character emulated CPU vendor identifier.
-        const char vendor[13]="MUNDOX PC   ";
-        auto word=[&](unsigned start){
-          return std::uint32_t(std::uint8_t(vendor[start]))
-              |(std::uint32_t(std::uint8_t(vendor[start+1]))<<8)
-              |(std::uint32_t(std::uint8_t(vendor[start+2]))<<16)
-              |(std::uint32_t(std::uint8_t(vendor[start+3]))<<24);
-        };
-        ebx=word(0);edx=word(4);ecx=word(8);
+        const auto* vendor=cpuid_vendor();
+        ebx=word(vendor);edx=word(vendor+4);ecx=word(vendor+8);
       }else if(leaf==1){
-        eax=0x00000663U; // modeled family/model/stepping
+        eax=windows_x64_profile_ ? 0x0001067aU : 0x00000663U;
         ebx=(std::uint32_t(apic_id_) << 24) | (std::uint32_t(logical) << 16);
         // TSC, MSR, PAE, CX8, CMOV, MMX, FXSR, SSE and SSE2.
-        // The full x87 instruction set remains incomplete (FPU bit 0).
         edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
+        if (windows_x64_profile_) {
+          ebx |= 8U << 8; // CLFLUSH line size in units of eight bytes.
+          // x87, DE, PSE, MCE, MTRR, PGE, MCA, PAT and CLFLUSH.
+          edx |= (1U<<0)|(1U<<2)|(1U<<3)|(1U<<7)|(1U<<12)|(1U<<13)|
+                 (1U<<14)|(1U<<16)|(1U<<19);
+        }
         if (local_apic_present() && apic_global_enabled()) edx |= 1U << 9;
         if (logical > 1) edx |= 1U << 28; // Logical processors share the package.
         ecx=(1U<<13); // CMPXCHG16B guest primitive
@@ -4950,7 +5017,15 @@ inline void Cpu::extended() {
         eax=0x80000008U;
       }else if(leaf==0x80000001U){
         edx=(1U<<20)|(1U<<29); // NX and modeled IA-32e long mode
+        if (windows_x64_profile_) {
+          edx|=1U<<11; // Verified SYSCALL/SYSRET.
+          if (platform_msrs_.misc_enable & kMiscXdDisable) edx &= ~(1U<<20);
+        }
         ecx=(1U<<0)|(1U<<8); // tested LAHF/SAHF and non-faulting PREFETCHW
+      }else if(windows_x64_profile_ && leaf>=0x80000002U && leaf<=0x80000004U){
+        static constexpr char brand[48]="Mundo X Virtual x86-64";
+        const auto* part=brand+16*(leaf-0x80000002U);
+        eax=word(part);ebx=word(part+4);ecx=word(part+8);edx=word(part+12);
       }else if(leaf==0x80000008U){
         eax=physical_address_bits_|(48U<<8);
       }

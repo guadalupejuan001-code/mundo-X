@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'pc-android/native/x86_cpu.hpp'
+      - 'pc-android/native/x86_platform_profile.inc'
       - 'pc-android/native/tests/x86_idt_c04_test.cpp'
       - 'pc-android/native/tests/x86_cpl_c05_test.cpp'
       - 'pc-android/native/tests/x86_bus_c06_test.cpp'
