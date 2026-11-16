@@ -275,6 +275,50 @@ void apic_msr() {
   check(!apic_cpuid(), "CPUID must stop announcing the detached xAPIC");
 }
 
+void sysenter_registers() {
+  constexpr std::uint32_t cs = 0x174, esp = 0x175, eip = 0x176;
+  constexpr std::uint64_t kernel_stack = 0xfffff80160004000ULL;
+  constexpr std::uint64_t kernel_entry = 0xfffff80110001000ULL;
+  Cpu cpu(4U << 20);
+  cpu.use_windows_x64_profile();
+  boot(cpu);
+  write_msr(cpu, cs, 0x123456789abc0010ULL);
+  write_msr(cpu, esp, kernel_stack);
+  write_msr(cpu, eip, kernel_entry);
+  check(read_msr(cpu, cs) == 0x9abc0010U && read_msr(cpu, esp) == kernel_stack &&
+            read_msr(cpu, eip) == kernel_entry, "SYSENTER MSRs must preserve the architecturally readable bits");
+
+  for (auto number : {esp, eip}) {
+    program(cpu, {0x0f, 0x30});
+    cpu.regs[Cpu::ECX] = number;
+    cpu.regs[Cpu::EAX] = std::uint32_t(kNoncanonical);
+    cpu.regs[Cpu::EDX] = kNoncanonical >> 32;
+    fault(cpu, FaultCode::ProtectionFault, "WRMSR must reject a noncanonical SYSENTER pointer");
+    check(read_msr(cpu, number) == (number == esp ? kernel_stack : kernel_entry),
+          "failed WRMSR changed the SYSENTER pointer");
+  }
+
+  // The real x64 boot writes zero to CS, EIP and ESP in this order.
+  program(cpu, {0x33, 0xc0, 0x33, 0xd2,
+                0xb9, 0x74, 0x01, 0, 0, 0x0f, 0x30,
+                0xb9, 0x76, 0x01, 0, 0, 0x0f, 0x30,
+                0xb9, 0x75, 0x01, 0, 0, 0x0f, 0x30});
+  for (unsigned i = 0; i < 8; ++i) step(cpu);
+  check(cpu.eip == kKernel + 25 && read_msr(cpu, cs) == 0 && read_msr(cpu, esp) == 0 &&
+            read_msr(cpu, eip) == 0, "the kernel must be able to clear all three SYSENTER MSRs");
+
+  program(cpu, {0x0f, 0xa2});
+  cpu.regs[Cpu::EAX] = 1;
+  step(cpu);
+  check(!(cpu.regs[Cpu::EDX] & (1U << 11)), "register storage alone must not advertise SEP");
+  write_msr(cpu, cs, 0x10);
+  write_msr(cpu, esp, kernel_stack);
+  write_msr(cpu, eip, kernel_entry);
+  boot(cpu);
+  check(read_msr(cpu, cs) == 0 && read_msr(cpu, esp) == 0 && read_msr(cpu, eip) == 0,
+        "CPU reset must clear SYSENTER MSRs");
+}
+
 void cache_writeback() {
   Cpu cpu(4U << 20);
   constexpr auto data = 0x10000;
@@ -316,6 +360,7 @@ int main() {
     compatibility_and_invalid_modes();
     privilege_canonical_reset();
     apic_msr();
+    sysenter_registers();
     cache_writeback();
     Cpu debug_cpu(4U << 20);
     boot(debug_cpu);
@@ -327,7 +372,7 @@ int main() {
     check(debug_cpu.regs[Cpu::R9] == debug_cpu.regs[Cpu::R8] &&
           debug_cpu.regs[Cpu::EDX] == 0x400, "MOV DR retained virtual debug-register state");
     std::cout << "X86_SYSTEM64_PASS checks=" << checks
-              << " syscall=1 sysret64=1 sysret32=1 swapgs=1 msr_roundtrip=1 apic_base=1 wbinvd=1\n";
+              << " syscall=1 sysret64=1 sysret32=1 swapgs=1 msr_roundtrip=1 sysenter_msrs=1 apic_base=1 wbinvd=1\n";
   } catch (const std::exception& error) {
     std::cerr << "X86_SYSTEM64_FAIL " << error.what() << '\n';
     return 1;

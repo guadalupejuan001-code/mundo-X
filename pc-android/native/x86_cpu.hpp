@@ -376,6 +376,7 @@ class Cpu {
     last_idt_load_.reset();
     near_calls_written_ = near_calls_count_ = 0;
     last_relative_call_return_ip_ = 0;
+    last_xmm_copy_end_ip_ = 0;
     counted_call_loop_.reset();
     idt_bulk_reads = 0;
     ether_arm64_stats_ = {};
@@ -447,7 +448,9 @@ class Cpu {
       return false;
     const auto length = cursor_ - eip;
     if (length >= 17) {
-      if (!is_long_mode() || length > ether_arm64::Block::kMaxBytes ||
+      if (!is_long_mode()) return false;
+      if (sse_copy_loop_tail(length, branch_bytes)) return true;
+      if (length > ether_arm64::Block::kMaxBytes ||
           last_relative_call_return_ip_ <= eip || last_relative_call_return_ip_ >= start_ip_) return false;
       const auto counter_bytes = start_ip_ - last_relative_call_return_ip_;
       return counter_bytes >= 3 && counter_bytes <= 7;
@@ -827,6 +830,7 @@ class Cpu {
   std::optional<IdtLoad> last_idt_load_;
   std::array<NearCall, InterruptFaultOrigin::kRecentCalls> recent_near_calls_{};
   std::uint64_t last_relative_call_return_ip_ = 0;
+  std::uint64_t last_xmm_copy_end_ip_ = 0;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 
   void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
@@ -867,6 +871,8 @@ class Cpu {
     std::array<std::uint64_t, 16> mtrr_variable{};
     std::array<std::uint64_t, 11> mtrr_fixed{};
     std::uint64_t machine_check_control = 0;
+    std::uint64_t sysenter_esp = 0, sysenter_eip = 0;
+    std::uint32_t sysenter_cs = 0;
   };
   struct Snapshot {
     std::array<std::uint64_t, 16> regs;
@@ -912,6 +918,12 @@ class Cpu {
   std::optional<CountedCallLoop> counted_call_loop_;
   std::optional<CountedCallLoop> decode_counted_call_loop(const std::uint8_t* code, unsigned length);
   std::uint64_t try_counted_call_loop_batch(std::uint64_t step_budget);
+  static constexpr unsigned kSseCopyLoopBytes = 47, kStreamingSseCopyLoopBytes = 52;
+  bool sse_copy_loop_tail(std::uint64_t length, unsigned branch_bytes) const noexcept {
+    return (length == kSseCopyLoopBytes || length == kStreamingSseCopyLoopBytes) &&
+        branch_bytes == 2 && last_xmm_copy_end_ip_ == start_ip_;
+  }
+  std::uint64_t try_sse_copy_loop_batch(std::uint64_t step_budget, unsigned length);
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
   using AtomicRam = std::array<std::size_t, 16>;
 
@@ -3784,6 +3796,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_ether_arm64.inc"
 #include "x86_shift_loop.inc"
 #include "x86_counted_call_loop.inc"
+#include "x86_sse_copy_loop.inc"
 
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   if (step_budget < 4 || !counter_loop_batch_candidate() ||
@@ -3792,6 +3805,8 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
       step_trace_hook || irq_trace_hook) return 0;
 
   const auto length = unsigned(cursor_ - eip);
+  if (sse_copy_loop_tail(length, unsigned(decoded_.size())))
+    return try_sse_copy_loop_batch(step_budget, length);
   if (length >= 17) return try_counted_call_loop_batch(step_budget);
   const auto body = length - 2;
   const bool has_accumulator = length >= 9;
@@ -4543,6 +4558,7 @@ inline void Cpu::extended() {
       const bool aligned=op==0x28||op==0x29;
       if(op==0x10||op==0x28)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
       else write_xmm_operand(m.rm,xmm[m.reg],aligned);
+      if(op==0x28 && decoded_.size()==3 && decoded_[2]==0xc4) last_xmm_copy_end_ip_=cursor_;
       return;
     }
     case 0x6f: case 0x7f: { // 66 MOVDQA / F3 MOVDQU

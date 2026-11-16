@@ -149,6 +149,95 @@ void guarded_accumulator_dispatch() {
             "machine dispatch changed device ticks or skipped the accumulator");
 }
 
+void sse_copy_loops() {
+    // These are the two instruction streams sampled during the x64 ISO boot.
+    constexpr std::uint8_t ordinary[]{
+        0x0f,0x10,0x0c,0x11, 0x0f,0x10,0x54,0x11,0x10, 0x0f,0x10,0x5c,0x11,0x20,
+        0x0f,0x10,0x64,0x11,0x30, 0x0f,0x29,0x41,0xf0, 0x48,0x83,0xc1,0x40, 0x49,0xff,0xc9,
+        0x0f,0x29,0x49,0xc0, 0x0f,0x29,0x51,0xd0, 0x0f,0x29,0x59,0xe0, 0x0f,0x28,0xc4, 0x75,0xd1,
+        0x0f,0x29,0x41,0xf0};
+    constexpr std::uint8_t streaming[]{
+        0x0f,0x10,0x0c,0x11, 0x0f,0x10,0x54,0x11,0x10, 0x0f,0x10,0x5c,0x11,0x20,
+        0x0f,0x10,0x64,0x11,0x30, 0x0f,0x2b,0x41,0xf0, 0x48,0x83,0xc1,0x40, 0x0f,0x18,0x44,0x11,0x40,
+        0x49,0xff,0xc9, 0x0f,0x2b,0x49,0xc0, 0x0f,0x2b,0x51,0xd0, 0x0f,0x2b,0x59,0xe0,
+        0x0f,0x28,0xc4, 0x75,0xcc, 0x0f,0x2b,0x41,0xf0};
+    constexpr std::uint64_t source = 0x2a005, destination = 0x2c000;
+    constexpr unsigned rounds = 26;
+    for (bool non_temporal : {false, true}) {
+        const unsigned instructions = non_temporal ? 13 : 12;
+        PcMachine scalar(4U << 20), fast(4U << 20);
+        for (auto* pc : {&scalar, &fast}) {
+            boot(*pc, true);
+            auto& cpu = pc->cpu;
+            cpu.cr0 &= ~0xcU;
+            cpu.cr4 |= 0x200U;
+            cpu.memory.write_block(entry, non_temporal ? streaming : ordinary,
+                                   non_temporal ? sizeof(streaming) : sizeof(ordinary));
+            for (unsigned i = 0; i < rounds * 64; ++i) cpu.write8(source + i, std::uint8_t(i ^ (i >> 4)));
+            for (unsigned i = 0; i < 16; ++i) cpu.xmm[0][i] = std::uint8_t(0xf0 + i);
+            cpu.eip = entry;
+            cpu.halted = false;
+            cpu.eflags = 2 | Cpu::CF | Cpu::DF;
+            cpu.regs[Cpu::ECX] = destination + 16;
+            cpu.regs[Cpu::EDX] = source - cpu.regs[Cpu::ECX];
+            cpu.regs[Cpu::R9] = rounds;
+            for (unsigned i = 0; i < instructions; ++i)
+                require(cpu.step() == StepResult::Executed, "could not seed the SSE copy loop");
+            require(cpu.counter_loop_batch_candidate() && cpu.eip == entry, "SSE loop branch did not return to its entry");
+        }
+        auto& cpu = fast.cpu;
+        const auto registers = cpu.regs;
+        const auto xmm = cpu.xmm;
+        const auto retired = cpu.instructions;
+        const auto denied = [&] {
+            require(cpu.try_counter_loop_batch(10 * instructions) == 0 && cpu.instructions == retired &&
+                    cpu.xmm == xmm && cpu.eip == entry && !cpu.fault, "SSE copy guard changed guest state");
+        };
+        cpu.write8(entry + 1, 0x11);
+        denied();
+        cpu.write8(entry + 1, 0x10);
+        cpu.regs[Cpu::EDX] = -16ULL; // Same physical source and destination.
+        denied();
+        cpu.regs[Cpu::EDX] = registers[Cpu::EDX];
+        cpu.regs[Cpu::ECX] = destination + 0xfd0; // Only one complete round before the page boundary.
+        denied();
+        cpu.regs[Cpu::ECX] = registers[Cpu::ECX];
+        cpu.cr0 |= 8U;
+        denied();
+        cpu.cr0 &= ~8U;
+
+        const auto compare = [&] {
+            const auto& expected = scalar.cpu;
+            require(cpu.regs == expected.regs && cpu.eflags == expected.eflags && cpu.xmm == expected.xmm &&
+                    cpu.eip == expected.eip && cpu.clock_cycles() == expected.clock_cycles() &&
+                    cpu.last_decoded_bytes() == expected.last_decoded_bytes(), "SSE batch changed x86 state");
+            for (unsigned i = 0; i < rounds * 64 + 16; ++i)
+                require(cpu.read8(destination + i) == expected.read8(destination + i), "SSE batch changed RAM");
+        };
+        const unsigned limit = 8 * instructions;
+        fast.enable_boot_acceleration();
+        unsigned ticks = 0;
+        fast.device_step_hook = [&] { ++ticks; };
+        fast.device_batch_limit_hook = [limit](unsigned budget) { return std::min(budget, limit); };
+        fast.device_batch_advance_hook = [&](unsigned extra) { ticks += extra; };
+        fast.run(limit);
+        scalar.run(limit);
+        compare();
+        require(ticks == limit && fast.boot_acceleration().counter_loop_steps == limit,
+                "SSE copy bypassed the production device budget or batch dispatch");
+
+        const unsigned tail_steps = (rounds - 9) * instructions;
+        require(cpu.try_counter_loop_batch(tail_steps + instructions - 1) == tail_steps,
+                "SSE copy did not retire exactly the remaining rounds");
+        scalar.run(tail_steps);
+        compare();
+        require(cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed,
+                "SSE tail could not store the final vector");
+        compare();
+    }
+    std::cout << "ETHER_SSE_COPY_LOOP_PASS variants=2 paging=1 state=1 device_bound=1\n";
+}
+
 void counted_calls() {
     constexpr std::uint64_t high = 0xffff800000000000ULL, start = high + entry;
     constexpr std::uint64_t callee = entry + 0x80, data = 0x2a000, word = 0x2c000, stack = 0x30000;
@@ -352,6 +441,7 @@ int main(int argc, char** argv) {
         measure_large_loop(true);
         guarded_accumulator_dispatch();
         counted_calls();
+        sse_copy_loops();
         std::cout << "ETHER_COUNTER_LOOP_PASS widths=16,32,64 flags=1 paging=1 fallbacks=1\n";
         return 0;
     } catch (const std::exception& error) {
