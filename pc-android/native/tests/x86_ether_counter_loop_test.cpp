@@ -203,6 +203,108 @@ void timed_rotate_xor_slice() {
     std::cout << "ETHER_TIMED_ROTATE_XOR_PASS steps=" << steps << '\n';
 }
 
+void affine_ram_rotations() {
+    constexpr std::array<std::uint8_t, 24> program{
+        0x4d,0x33,0x02, 0x4c,0x03,0xd6, 0x49,0xd3,0xc0, // XOR R8,[R10]; ADD R10,RSI; ROL R8,CL
+        0x4d,0x33,0x02, 0x4c,0x03,0xd6, 0x49,0xd3,0xc0,
+        0x48,0x2b,0xc7, 0x75,0xe9, 0xf4};              // SUB RAX,RDI; JNZ; HLT
+    constexpr std::uint64_t data = 0x18000, decrement = 7;
+    constexpr unsigned steps_per_round = 8;
+    const auto prepare_ram = [&](PcMachine& pc, std::uint64_t initial, std::uint64_t stride,
+                                 unsigned count, unsigned rounds, bool right) {
+        boot(pc, true);
+        auto& cpu = pc.cpu;
+        cpu.memory.enable_code_page_versions(true);
+        auto bytes = program;
+        if (right) bytes[17] = 0xc8;
+        cpu.memory.write_block(entry, bytes.data(), bytes.size());
+        for (unsigned offset = 0; offset < 8192; offset += 8) {
+            const auto mask = (0x9e3779b97f4a7c15ULL * (offset + 1)) ^ (offset >> 3);
+            cpu.write64(data + offset, mask);
+        }
+        cpu.halted = false;
+        cpu.eip = entry;
+        cpu.eflags = 2 | Cpu::DF | Cpu::CF | Cpu::OF;
+        cpu.regs[Cpu::EAX] = rounds * decrement;
+        cpu.regs[Cpu::ECX] = count;
+        cpu.regs[Cpu::EDI] = decrement;
+        cpu.regs[Cpu::ESI] = stride;
+        cpu.regs[Cpu::R8] = 0xfeeab001d1376363ULL;
+        cpu.regs[Cpu::R10] = initial;
+        for (unsigned i = 0; i < steps_per_round; ++i)
+            require(cpu.step() == StepResult::Executed, "could not seed the RAM rotation loop");
+        require(cpu.affine_ram_rotate_loop_candidate(), "expected a taken branch over a runtime rotation");
+    };
+    const auto finish_scalar = [&](PcMachine& scalar, const PcMachine& batch, unsigned steps) {
+        for (unsigned i = 0; i < steps; ++i)
+            require(scalar.cpu.step() == StepResult::Executed, "scalar RAM rotation failed");
+        require(scalar.cpu.regs == batch.cpu.regs && scalar.cpu.eflags == batch.cpu.eflags &&
+                    scalar.cpu.eip == batch.cpu.eip && scalar.cpu.instructions == batch.cpu.instructions &&
+                    scalar.cpu.clock_cycles() == batch.cpu.clock_cycles() &&
+                    scalar.cpu.last_decoded_bytes() == batch.cpu.last_decoded_bytes(),
+                "composing RAM-derived masks changed architectural state");
+    };
+    unsigned cases = 0;
+    for (auto count : {0U, 1U, 17U, 63U, 64U, 255U}) for (bool right : {false, true}) {
+        const auto stride = right ? std::uint64_t(-8) : std::uint64_t(8);
+        const auto initial = right ? data + 4096 : data;
+        PcMachine scalar(4U << 20), batch(4U << 20);
+        prepare_ram(scalar, initial, stride, count, 41, right);
+        prepare_ram(batch, initial, stride, count, 41, right);
+        require(!batch.cpu.try_affine_ram_rotate_loop(15), "a partial round was eligible");
+        const auto first = batch.cpu.try_affine_ram_rotate_loop(47);
+        require(first == 40, "RAM rotation did not obey the device step budget");
+        finish_scalar(scalar, batch, first);
+        // A later slice must use the new RAM word and the changed rotation.
+        const auto changed = batch.cpu.regs[Cpu::R10];
+        for (auto* pc : {&scalar, &batch}) {
+            pc->cpu.write64(changed, 0xdef01024abd66601ULL);
+            pc->cpu.write8(entry + 17, right ? 0xc0 : 0xc8);
+        }
+        const auto rest = batch.cpu.try_affine_ram_rotate_loop(1000);
+        require(rest == 35 * steps_per_round && batch.cpu.eip == entry + 23,
+                "RAM rotation did not stop when the x86 counter became zero");
+        finish_scalar(scalar, batch, rest);
+        ++cases;
+    }
+
+    PcMachine scalar(4U << 20), batch(4U << 20);
+    for (auto* pc : {&scalar, &batch})
+        prepare_ram(*pc, data + 4096 - 64, 8, 13, 30, false);
+    constexpr auto mmio = data + 4096;
+    unsigned device_reads = 0;
+    batch.cpu.mmio_claim_hook = [](std::uint64_t address) { return address == mmio; };
+    batch.cpu.mmio_range_claim_hook = [](std::uint64_t address, std::size_t bytes) {
+        return address <= mmio && mmio - address < bytes;
+    };
+    batch.cpu.mmio_read_hook = [&](auto) -> std::optional<std::uint8_t> {
+        ++device_reads;
+        return 0xa1;
+    };
+    const auto whole = batch.cpu.try_affine_ram_rotate_loop(100);
+    require(whole == 24 && device_reads == 0 && batch.cpu.regs[Cpu::R10] == mmio,
+            "a RAM rotation read an MMIO register or retired a partial round");
+    finish_scalar(scalar, batch, whole);
+    const auto before = batch.cpu.regs;
+    require(!batch.cpu.try_affine_ram_rotate_loop(100) && batch.cpu.regs == before &&
+                batch.cpu.step() == StepResult::Executed && device_reads == 1,
+            "the fallback did not leave the exact MMIO load for the interpreter");
+
+    PcMachine routed(4U << 20);
+    prepare_ram(routed, data, 8, 9, 24, false);
+    unsigned ticks = 0;
+    routed.enable_boot_acceleration();
+    routed.device_step_hook = [&] { ++ticks; };
+    routed.device_batch_limit_hook = [](unsigned budget) { return std::min(budget, 24U); };
+    routed.device_batch_advance_hook = [&](unsigned extra) { ticks += extra; };
+    routed.run(23 * steps_per_round);
+    require(routed.cpu.regs[Cpu::EAX] == 0 && !routed.cpu.fault &&
+                ticks == 23 * steps_per_round && routed.boot_acceleration().affine_ram_rotate_batches > 1,
+            "RAM rotation did not integrate with the device clock and ordinary boot dispatch");
+    std::cout << "ETHER_AFFINE_RAM_ROTATE_PASS cases=" << cases
+              << " changing_ram=1 mmio=1 device_clock=1\n";
+}
+
 void sse_copy_loops() {
     // These are the two instruction streams sampled during the x64 ISO boot.
     constexpr std::uint8_t ordinary[]{
@@ -661,6 +763,7 @@ int main(int argc, char** argv) {
         measure_large_loop(true);
         measure_rotate_xor_loop();
         timed_rotate_xor_slice();
+        affine_ram_rotations();
         guarded_accumulator_dispatch();
         counted_calls();
         sse_copy_loops();

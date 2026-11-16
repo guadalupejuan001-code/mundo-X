@@ -204,6 +204,7 @@ class Cpu {
     std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
     std::uint64_t repeated_loop_dispatches = 0, repeated_loop_steps = 0, rotate_steps = 0;
+    std::uint64_t variable_rotate_steps = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -378,7 +379,9 @@ class Cpu {
     last_relative_call_return_ip_ = 0;
     last_xmm_copy_end_ip_ = 0;
     last_immediate_rotate_ip_ = UINT64_MAX;
+    last_variable_rotate_ip_ = UINT64_MAX;
     counted_call_loop_.reset();
+    affine_ram_rotate_block_.reset();
     idt_bulk_reads = 0;
     ether_arm64_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -448,6 +451,13 @@ class Cpu {
         start_ip_ == cursor_ - 2 && decoded_.size() == 2 && cursor_ - eip == 0x100U - decoded_[1] &&
         eip <= last_immediate_rotate_ip_ && last_immediate_rotate_ip_ < start_ip_ && is_long_mode();
   }
+  bool affine_ram_rotate_loop_candidate() const noexcept {
+    return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
+        cursor_ > eip && cursor_ - eip >= 13 && cursor_ - eip <= ether_arm64::Block::kMaxBytes &&
+        start_ip_ == cursor_ - 2 && decoded_.size() == 2 && cursor_ - eip == 0x100U - decoded_[1] &&
+        eip <= last_variable_rotate_ip_ && last_variable_rotate_ip_ < start_ip_ && is_long_mode();
+  }
+  std::uint64_t try_affine_ram_rotate_loop(std::uint64_t step_budget);
   bool wide_multiply_loop_batch_candidate() const noexcept {
     return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
         cursor_ > eip && cursor_ - eip == kWideMultiplyLoopBytes &&
@@ -847,6 +857,7 @@ class Cpu {
   std::uint64_t last_relative_call_return_ip_ = 0;
   std::uint64_t last_xmm_copy_end_ip_ = 0;
   std::uint64_t last_immediate_rotate_ip_ = UINT64_MAX;
+  std::uint64_t last_variable_rotate_ip_ = UINT64_MAX;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 
   void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
@@ -943,6 +954,12 @@ class Cpu {
   static constexpr unsigned kWideMultiplyLoopBytes = 31;
   std::uint64_t try_wide_multiply_loop_batch(std::uint64_t step_budget);
   std::uint64_t try_rotate_xor_loop_batch(std::uint64_t step_budget);
+  struct AffineRamRotateBlock {
+    std::uint64_t ip, physical, version;
+    unsigned length;
+    ether_arm64::Block block;
+  };
+  std::optional<AffineRamRotateBlock> affine_ram_rotate_block_;
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
   using AtomicRam = std::array<std::size_t, 16>;
 
@@ -3870,6 +3887,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_sse_copy_loop.inc"
 #include "x86_wide_multiply_loop.inc"
 #include "x86_rotate_xor_loop.inc"
+#include "x86_affine_ram_rotate_loop.inc"
 
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   if (step_budget < 4 || !counter_loop_batch_candidate() ||
@@ -5329,6 +5347,8 @@ inline void Cpu::execute(std::uint8_t op) {
       shift(m, w, count);
       if (w == 8 && m.group < 2 && m.rm.is_register && (op == 0xc1 || op == 0xd1) && (count & 63U))
         last_immediate_rotate_ip_ = start_ip_;
+      if (w == 8 && m.group < 2 && m.rm.is_register && op == 0xd3)
+        last_variable_rotate_ip_ = start_ip_;
       return;
     }
     case 0xc2: case 0xc3: {

@@ -11,6 +11,7 @@ on:
       - "pc-android/native/x86_cpu.hpp"
       - "pc-android/native/x86_ether_arm64.hpp"
       - "pc-android/native/x86_ether_arm64.inc"
+      - "pc-android/native/x86_affine_ram_rotate_loop.inc"
       - "pc-android/native/tests/x86_ether_arm64_test.cpp"
       - "pc-android/native/tests/x86_ether_ram_benchmark.cpp"
       - "pc-android/native/sparse_ram.hpp"
@@ -98,6 +99,7 @@ jobs:
           "$RUNNER_TEMP/ether-ram-after" | sed 's/^/current /' | tee -a "$GITHUB_STEP_SUMMARY"
           for revision in before after after before; do
             "$RUNNER_TEMP/ether-ram-$revision" --rotations | sed "s/^/$revision /" | tee -a "$GITHUB_STEP_SUMMARY"
+            "$RUNNER_TEMP/ether-ram-$revision" --affine-ram | sed "s/^/$revision /" | tee -a "$GITHUB_STEP_SUMMARY"
           done
           source=pc-android/native/tests/x86_ether_counter_loop_test.cpp
           g++ -std=c++17 -O2 -DNDEBUG -frounding-math -pthread \
