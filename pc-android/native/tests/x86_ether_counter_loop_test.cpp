@@ -149,6 +149,60 @@ void guarded_accumulator_dispatch() {
             "machine dispatch changed device ticks or skipped the accumulator");
 }
 
+void measure_rotate_xor_loop() {
+    constexpr std::uint64_t rounds = (1ULL << 40) + 11;
+    constexpr unsigned steps_per_round = 4;
+    constexpr std::uint64_t initial = 0x92ba8401381c0fffULL;
+    PcMachine pc(4U << 20);
+    prepare(pc, true, {0x49,0xc1,0xc0,17, 0x49,0x83,0xf0,0xf3, 0x49,0xff,0xc9, 0x75,0xf3},
+            Cpu::R9, rounds, entry, steps_per_round);
+    auto& cpu = pc.cpu;
+    // A 64-bit rotation by 17 visits every bit in 64 rounds; applying
+    // those same XOR masks twice cancels them. Check a nonzero tail.
+    auto expected = initial;
+    for (unsigned i = 0; i < rounds % 128; ++i)
+        expected = ((expected << 17) | (expected >> 47)) ^ 0xfffffffffffffff3ULL;
+    std::array<std::int64_t, 101> samples{};
+    for (auto& ns : samples) {
+        cpu.eip = entry;
+        cpu.eflags = 2 | Cpu::DF | Cpu::CF;
+        cpu.regs[Cpu::R8] = initial;
+        cpu.regs[Cpu::R9] = rounds;
+        const auto before = cpu.instructions;
+        const auto start = Clock::now();
+        for (unsigned i = 0; i < steps_per_round; ++i)
+            require(cpu.step() == StepResult::Executed, "rotate/XOR seed failed");
+        const auto completed = cpu.try_counter_loop_batch((rounds - 1) * steps_per_round);
+        ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
+        require(completed == (rounds - 1) * steps_per_round && cpu.instructions - before == rounds * steps_per_round &&
+                    cpu.regs[Cpu::R8] == expected && cpu.regs[Cpu::R9] == 0 && cpu.eip == entry + 13 &&
+                    cpu.eflags == (2 | Cpu::DF | Cpu::ZF | Cpu::PF), "rotate/XOR composition changed guest state");
+    }
+    std::sort(samples.begin(), samples.end());
+    std::cout << "ETHER_ROTATE_XOR_PASS equivalent_steps=" << rounds * steps_per_round
+              << " median_ns=" << samples[samples.size() / 2] << '\n';
+}
+
+void timed_rotate_xor_slice() {
+    constexpr unsigned steps = 2'000'000, rounds = 800'000;
+    PcMachine pc(4U << 20);
+    prepare(pc, true, {0x49,0xc1,0xc0,17, 0x49,0x83,0xf0,0xf3, 0x49,0xff,0xc9, 0x75,0xf3},
+            Cpu::R9, rounds, entry, 4);
+    pc.enable_boot_acceleration();
+    const auto before = pc.cpu.instructions;
+    pc.run(steps);
+    require(pc.cpu.instructions - before == PcMachine::kDefaultRunSteps, "legacy run budget changed");
+    const auto timed_start = pc.cpu.instructions;
+    pc.run(steps, PcMachine::RunClock::now() - std::chrono::milliseconds(1));
+    require(pc.cpu.instructions == timed_start, "expired host slice executed guest instructions");
+    pc.run(steps, PcMachine::RunClock::now() + std::chrono::seconds(1));
+    require(pc.cpu.instructions - timed_start == steps && pc.cpu.eip == entry &&
+                pc.cpu.regs[Cpu::R9] == rounds - 1 - (steps + PcMachine::kDefaultRunSteps) / 4 &&
+                pc.boot_acceleration().rotate_xor_loop_steps == steps + PcMachine::kDefaultRunSteps,
+            "timed slice changed the guest instruction budget or countdown");
+    std::cout << "ETHER_TIMED_ROTATE_XOR_PASS steps=" << steps << '\n';
+}
+
 void sse_copy_loops() {
     // These are the two instruction streams sampled during the x64 ISO boot.
     constexpr std::uint8_t ordinary[]{
@@ -596,9 +650,17 @@ int main(int argc, char** argv) {
         compare(true, {0x49, 0xff, 0xc9, 0x75, 0xfb}, Cpu::R9, 0x8000000000000002, 4, 4);
         compare(true, {0x49,0x83,0xc0,0x80,0x49,0xff,0xc9,0x75,0xf7}, Cpu::R9, 30, 31, 30, 3);
         compare(true, {0x49,0x83,0xe8,0xff,0x49,0x83,0xe9,1,0x75,0xf6}, Cpu::R9, 5, 30, 12, 3);
+        compare(true, {0x49,0xc1,0xc0,17,0x49,0x83,0xf0,0xf3,0x49,0xff,0xc9,0x75,0xf3},
+                Cpu::R9, 25, 47, 44, 4);
+        compare(true, {0x49,0x83,0xf0,0xf3,0x49,0xd1,0xc8,0x49,0xff,0xc9,0x75,0xf4},
+                Cpu::R9, 17, 99, 64, 4);
+        compare(true, {0x49,0x81,0xf0,0x26,0x0d,0x04,0x81,0x49,0xc1,0xc8,13,0x49,0x83,0xe9,1,0x75,0xef},
+                Cpu::R9, 21, 89, 80, 4);
         unsafe_spans();
         measure_large_loop(false);
         measure_large_loop(true);
+        measure_rotate_xor_loop();
+        timed_rotate_xor_slice();
         guarded_accumulator_dispatch();
         counted_calls();
         sse_copy_loops();

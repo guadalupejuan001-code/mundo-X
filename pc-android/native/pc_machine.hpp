@@ -30,6 +30,8 @@ namespace cosmic_pc {
 class PcMachine {
  public:
   using Reader=std::function<bool(std::uint64_t,std::uint8_t*,std::size_t)>;
+  using RunClock=std::chrono::steady_clock;
+  static constexpr unsigned kDefaultRunSteps=50000;
   enum class GuestRestart { None, A20Port, KeyboardController, BiosBootstrap };
   struct BootModeProgress {
     std::uint64_t changes=0, step=0;
@@ -100,6 +102,7 @@ class PcMachine {
     std::uint64_t arm64_block_steps=0;
     std::uint64_t counter_loop_batches=0, counter_loop_steps=0;
     std::uint64_t wide_multiply_loop_batches=0, wide_multiply_loop_steps=0;
+    std::uint64_t rotate_xor_loop_batches=0, rotate_xor_loop_steps=0;
   };
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
@@ -259,12 +262,13 @@ class PcMachine {
     sync_bios_font_geometry();video_.install_font_vectors(cpu);
     sync_bios_hard_disk_count();clear_screen();if(device_reset_hook)device_reset_hook();
   }
-  void run(unsigned budget) {
+  void run(unsigned budget, RunClock::time_point deadline=RunClock::time_point::max()) {
     yield_requested_=false;
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault||powered_off_||
        guest_restart_!=GuestRestart::None)return;
     if(cpu.halted&&!device_step_hook)return;
-    budget=std::min(budget,50000u);
+    const bool timed=deadline!=RunClock::time_point::max();
+    if(!timed)budget=std::min(budget,kDefaultRunSteps);
     const BootTiming::Scope run_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Run);
     const auto start=boot_scalar_hotspots_
         ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
@@ -277,7 +281,9 @@ class PcMachine {
         last_mode=mode;
       }
     };
+    unsigned dispatches=0;
     for(unsigned i=0;i<budget&&!waiting_key;){
+      if(timed && (dispatches++ & 63U)==0 && RunClock::now()>=deadline)break;
       auto* sample = boot_timing_ ? boot_timing_->next_iteration() : nullptr;
       const BootTiming::Scope iteration_timing(sample, BootTimePart::Total);
       // Devices can tick and deliver an enabled IRQ between guest instructions;
@@ -737,12 +743,14 @@ class PcMachine {
     unsigned completed=0;
     bool native_batched=false;
     bool wide_multiply=false;
+    bool rotate_xor=false;
     if(rep)completed=cpu.try_rep_batch(limit);
     else if(shift)completed=cpu.try_shift_loop_batch(limit);
     else if(scan)completed=cpu.try_scan_loop_batch(limit);
     else if(zero)completed=cpu.try_zero_loop_batch(limit);
     else if(counter) {
       wide_multiply=cpu.wide_multiply_loop_batch_candidate();
+      rotate_xor=cpu.rotate_xor_loop_batch_candidate();
       completed=unsigned(cpu.try_counter_loop_batch(limit));
     }
     if(!completed&&arm64) {
@@ -773,6 +781,10 @@ class PcMachine {
       if(wide_multiply) {
         ++boot_acceleration_.wide_multiply_loop_batches;
         boot_acceleration_.wide_multiply_loop_steps+=completed;
+      }
+      if(rotate_xor) {
+        ++boot_acceleration_.rotate_xor_loop_batches;
+        boot_acceleration_.rotate_xor_loop_steps+=completed;
       }
     }
     return completed;
