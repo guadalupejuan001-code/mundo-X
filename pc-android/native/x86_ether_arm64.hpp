@@ -136,12 +136,17 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     unsigned pos = block.size;
     const unsigned begin = pos;
     unsigned opcode = bytes[pos++], rex = 0;
-    const bool word = !long_mode && opcode == 0x66;
-    if (word || (long_mode && opcode >= 0x40 && opcode <= 0x4f)) {
+    const bool word = opcode == 0x66;
+    if (word) {
       if (pos == size) break;
-      if (!word) rex = opcode;
       opcode = bytes[pos++];
     }
+    if (long_mode && opcode >= 0x40 && opcode <= 0x4f) {
+      if (pos == size) break;
+      rex = opcode;
+      opcode = bytes[pos++];
+    }
+    if (long_mode && word && opcode != 0x89 && opcode != 0x8b) break;
     if (opcode == 0x0f && pos < size &&
         ((bytes[pos] & 0xfeU) == 0xb6U || (long_mode && (bytes[pos] & 0xfeU) == 0xbeU)))
       opcode = 0x0f00U | bytes[pos++];
@@ -168,7 +173,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     Instruction op;
     op.begin = begin;
     op.opcode = opcode;
-    op.width = word ? 2 : (rex & 8) ? 8 : 4;
+    op.width = (rex & 8) ? 8 : word ? 2 : 4;
     if (!long_mode && opcode >= 0x40 && opcode <= 0x4f) {
       if (!carry_preserved) break;
       op.lhs.reg = opcode & 7;

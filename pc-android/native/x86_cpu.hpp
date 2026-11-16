@@ -369,6 +369,8 @@ class Cpu {
     last_rep_direct_page_copy_bytes_ = 0;
     last_idt_load_.reset();
     near_calls_written_ = near_calls_count_ = 0;
+    last_relative_call_return_ip_ = 0;
+    counted_call_loop_.reset();
     idt_bulk_reads = 0;
     ether_arm64_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -433,13 +435,21 @@ class Cpu {
   }
   unsigned try_zero_loop_batch(unsigned step_budget);
   bool counter_loop_batch_candidate() const noexcept {
-    if (opcode_ != 0x75 || !ip_written_ || start_cs_ != segments[CS] ||
-        decoded_.size() != 2 || decoded_[0] != 0x75) return false;
-    const unsigned length = 0x100U - decoded_[1];
+    if (!ip_written_ || start_cs_ != segments[CS] || cursor_ <= eip) return false;
+    const unsigned branch_bytes = opcode_ == 0x75 ? 2 : opcode_ == 0x0f85 ? 6 : 0;
+    if (!branch_bytes || decoded_.size() != branch_bytes || start_ip_ != cursor_ - branch_bytes)
+      return false;
+    const auto length = cursor_ - eip;
+    if (length >= 17) {
+      if (!is_long_mode() || length > ether_arm64::Block::kMaxBytes ||
+          last_relative_call_return_ip_ <= eip || last_relative_call_return_ip_ >= start_ip_) return false;
+      const auto counter_bytes = start_ip_ - last_relative_call_return_ip_;
+      return counter_bytes >= 3 && counter_bytes <= 7;
+    }
+    if (branch_bytes != 2 || decoded_[0] != 0x75 || length != 0x100U - decoded_[1]) return false;
     const bool supported_length = (length >= 3 && length <= 7) ||
         ((length == 9 || length == 10) && is_long_mode());
-    return supported_length && eip <= code_mask() - length &&
-        cursor_ == eip + length && start_ip_ == cursor_ - 2;
+    return supported_length && eip <= code_mask() - length;
   }
   // The machine supplies a budget up to the next device observation.
   // The returned count is the number of equivalent x86 instructions retired.
@@ -801,6 +811,7 @@ class Cpu {
   unsigned failed_idt_count_ = 0;
   std::optional<IdtLoad> last_idt_load_;
   std::array<NearCall, InterruptFaultOrigin::kRecentCalls> recent_near_calls_{};
+  std::uint64_t last_relative_call_return_ip_ = 0;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 
   void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
@@ -860,6 +871,17 @@ class Cpu {
     bool uses_esp = false;
     bool rip_relative = false;
   };
+  struct CountedCallLoop {
+    std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code{};
+    std::array<std::uint8_t, 12> callee{};
+    std::array<ether_arm64::Instruction, 4> stores{};
+    std::uint64_t entry, target, delta, multiplier;
+    unsigned code_bytes, callee_bytes, call_offset, store_count;
+    unsigned accumulator, counter, counter_width, saved, source, product;
+  };
+  std::optional<CountedCallLoop> counted_call_loop_;
+  std::optional<CountedCallLoop> decode_counted_call_loop(const std::uint8_t* code, unsigned length);
+  std::uint64_t try_counted_call_loop_batch(std::uint64_t step_budget);
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
   using AtomicRam = std::array<std::size_t, 16>;
 
@@ -869,6 +891,8 @@ class Cpu {
   std::uint8_t apic_task_priority_ = 0;
   static constexpr std::uint64_t kApicBsp = 1U << 8, kApicEnable = 1U << 11;
   enum class Access { Read, Write, Execute };
+  std::optional<std::uint64_t> counted_loop_ram_address(unsigned segment, std::uint64_t offset,
+                                                        unsigned bytes, Access access);
   std::uint64_t apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
   bool local_apic_present_ = false;
   CpuTopology topology_;
@@ -2674,16 +2698,19 @@ class Cpu {
   void relative(std::int64_t displacement, unsigned bytes) {
     jump(cursor_ + std::uint64_t(displacement), is_long_mode() ? 8 : bytes);
   }
+  void record_near_call(const NearCall& call) noexcept {
+    recent_near_calls_[near_calls_written_] = call;
+    near_calls_written_ = (near_calls_written_ + 1) % recent_near_calls_.size();
+    near_calls_count_ = std::min(near_calls_count_ + 1, unsigned(recent_near_calls_.size()));
+  }
   void near_call(std::uint64_t target, unsigned bytes) {
     const auto return_ip = cursor_ & mask(bytes);
     jump(target, bytes);
     push(return_ip, bytes);
+    if (opcode_ == 0xe8) last_relative_call_return_ip_ = return_ip;
     // Only kernel-half calls are needed for the boot fault evidence.
     if ((start_ip_ >> 63) && is_long_mode() && cpl() == 0) {
-      recent_near_calls_[near_calls_written_] = {
-          start_ip_, eip, return_ip, regs[ESP], {regs[ECX], regs[EDX], regs[R8], regs[R9]}};
-      near_calls_written_ = (near_calls_written_ + 1) % recent_near_calls_.size();
-      near_calls_count_ = std::min(near_calls_count_ + 1, unsigned(recent_near_calls_.size()));
+      record_near_call({start_ip_, eip, return_ip, regs[ESP], {regs[ECX], regs[EDX], regs[R8], regs[R9]}});
     }
   }
   void push(std::uint64_t value, unsigned bytes) {
@@ -3693,6 +3720,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 
 #include "x86_ether_arm64.inc"
 #include "x86_shift_loop.inc"
+#include "x86_counted_call_loop.inc"
 
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   if (step_budget < 4 || !counter_loop_batch_candidate() ||
@@ -3701,6 +3729,7 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
       step_trace_hook || irq_trace_hook) return 0;
 
   const auto length = unsigned(cursor_ - eip);
+  if (length >= 17) return try_counted_call_loop_batch(step_budget);
   const auto body = length - 2;
   const bool has_accumulator = length >= 9;
   const unsigned steps_per_iteration = has_accumulator ? 3 : 2;
