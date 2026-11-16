@@ -377,6 +377,7 @@ class Cpu {
     near_calls_written_ = near_calls_count_ = 0;
     last_relative_call_return_ip_ = 0;
     last_xmm_copy_end_ip_ = 0;
+    last_immediate_rotate_ip_ = UINT64_MAX;
     counted_call_loop_.reset();
     idt_bulk_reads = 0;
     ether_arm64_stats_ = {};
@@ -441,6 +442,12 @@ class Cpu {
            !is_real_mode() && !(efer & 0x400U) && cache_[CS].big;
   }
   unsigned try_zero_loop_batch(unsigned step_budget);
+  bool rotate_xor_loop_batch_candidate() const noexcept {
+    return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
+        cursor_ > eip && cursor_ - eip >= 12 && cursor_ - eip <= 17 &&
+        start_ip_ == cursor_ - 2 && decoded_.size() == 2 && cursor_ - eip == 0x100U - decoded_[1] &&
+        eip <= last_immediate_rotate_ip_ && last_immediate_rotate_ip_ < start_ip_ && is_long_mode();
+  }
   bool wide_multiply_loop_batch_candidate() const noexcept {
     return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
         cursor_ > eip && cursor_ - eip == kWideMultiplyLoopBytes &&
@@ -453,6 +460,7 @@ class Cpu {
     if (!branch_bytes || decoded_.size() != branch_bytes || start_ip_ != cursor_ - branch_bytes)
       return false;
     const auto length = cursor_ - eip;
+    if (length >= 12 && length <= 17 && rotate_xor_loop_batch_candidate()) return true;
     if (length >= 17) {
       if (!is_long_mode()) return false;
       if (sse_copy_loop_tail(length, branch_bytes) ||
@@ -527,13 +535,13 @@ class Cpu {
     if (!bulk_ram_range(address, bytes)) return false;
     const auto physical = bus_address(address);
     if (transaction_) {
-      // Preserve one contiguous undo record, and order it relative to any
-      // byte writes made by the same BIOS handler.
-      memory.prepare_write(physical, bytes);
+      // Capture the original RAM and commit the store in one backing pass.
       const auto position = block_journal_bytes_.size();
       block_journal_bytes_.resize(position + bytes);
-      memory.read_block(physical, block_journal_bytes_.data() + position, bytes);
-      block_journal_.push_back({physical, journal_.size(), position, bytes});
+      block_journal_.push_back({physical, journal_.size(), position, 0});
+      memory.write_ram_block_with_previous(physical, data, block_journal_bytes_.data() + position, bytes);
+      block_journal_.back().count = bytes;
+      return true;
     }
     memory.write_block(physical, data, bytes);
     return true;
@@ -838,6 +846,7 @@ class Cpu {
   std::array<NearCall, InterruptFaultOrigin::kRecentCalls> recent_near_calls_{};
   std::uint64_t last_relative_call_return_ip_ = 0;
   std::uint64_t last_xmm_copy_end_ip_ = 0;
+  std::uint64_t last_immediate_rotate_ip_ = UINT64_MAX;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 
   void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
@@ -933,6 +942,7 @@ class Cpu {
   std::uint64_t try_sse_copy_loop_batch(std::uint64_t step_budget, unsigned length);
   static constexpr unsigned kWideMultiplyLoopBytes = 31;
   std::uint64_t try_wide_multiply_loop_batch(std::uint64_t step_budget);
+  std::uint64_t try_rotate_xor_loop_batch(std::uint64_t step_budget);
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
   using AtomicRam = std::array<std::size_t, 16>;
 
@@ -1852,6 +1862,13 @@ class Cpu {
     const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Read);
     if(aligned&&(address&15U))fail("aligned SSE2 operand requires 16-byte alignment",FaultCode::ProtectionFault);
     std::array<std::uint8_t,16> result{};
+    if (result.size() <= MemoryFabric::kPageSize - (address % MemoryFabric::kPageSize)) {
+      const auto physical = translate(address, Access::Read);
+      if (bulk_ram_range(physical, result.size())) {
+        memory.read_block(bus_address(physical), result.data(), result.size());
+        return result;
+      }
+    }
     for(unsigned i=0;i<16;++i)result[i]=std::uint8_t(read_linear(address+i,1));
     return result;
   }
@@ -1859,6 +1876,12 @@ class Cpu {
     if(m.is_register){require_xmm(m.index);xmm[m.index]=value;return;}
     const auto address=segment_linear(m.segment,operand_offset(m),16,Access::Write);
     if(aligned&&(address&15U))fail("aligned SSE2 operand requires 16-byte alignment",FaultCode::ProtectionFault);
+    if (value.size() <= MemoryFabric::kPageSize - (address % MemoryFabric::kPageSize) &&
+        (!(cr0 & 0x80000000U) || can_cache_translations())) {
+      const auto physical = translate(address, Access::Write);
+      if (!memory.may_touch_page_tables(bus_address(physical), value.size()) &&
+          try_write_ram_block(physical, value.data(), value.size())) return;
+    }
     // Preflight the entire destination before the first guest byte write.
     for(unsigned i=0;i<16;++i){
       const auto p=translate(address+i,Access::Write);
@@ -3807,6 +3830,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_counted_call_loop.inc"
 #include "x86_sse_copy_loop.inc"
 #include "x86_wide_multiply_loop.inc"
+#include "x86_rotate_xor_loop.inc"
 
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   if (step_budget < 4 || !counter_loop_batch_candidate() ||
@@ -3815,6 +3839,8 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
       step_trace_hook || irq_trace_hook) return 0;
 
   const auto length = unsigned(cursor_ - eip);
+  if (length >= 12 && length <= 17 && rotate_xor_loop_batch_candidate())
+    return try_rotate_xor_loop_batch(step_budget);
   if (sse_copy_loop_tail(length, unsigned(decoded_.size())))
     return try_sse_copy_loop_batch(step_budget, length);
   if (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())
@@ -4107,11 +4133,14 @@ inline void Cpu::shift(const ModRM& m, unsigned bytes, unsigned count) {
   if (operation <= 1) effective %= bits;
   if (operation == 2 || operation == 3) effective %= (bits + 1);
   if ((operation == 2 || operation == 3) && effective == 0) { put(m.rm, bytes, original); return; }
+  if (operation <= 1 && effective) {
+    const auto left = operation == 0 ? effective : bits - effective;
+    value = ((value << left) | (value >> (bits - left))) & mask_value;
+    effective = 0;
+  }
   for (unsigned i = 0; i < effective; ++i) {
     const bool old_cf = flag(CF);
     switch (operation) {
-      case 0: value = ((value << 1) | ((value & sign) ? 1U : 0U)) & mask_value; break;
-      case 1: value = (value >> 1) | ((value & 1) ? sign : 0U); break;
       case 2: set_flag(CF, (value & sign) != 0); value = ((value << 1) | (old_cf ? 1U : 0U)) & mask_value; break;
       case 3: set_flag(CF, (value & 1) != 0); value = (value >> 1) | (old_cf ? sign : 0U); break;
       case 4: case 6: set_flag(CF, (value & sign) != 0); value = (value << 1) & mask_value; break;
@@ -5264,7 +5293,10 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0xc0: case 0xc1: case 0xd0: case 0xd1: case 0xd2: case 0xd3: {
       const auto m = modrm(); const unsigned w = (op & 1U) ? bytes : 1;
       const unsigned count = op < 0xd0 ? immediate(1) : op < 0xd2 ? 1 : reg8(ECX);
-      shift(m, w, count); return;
+      shift(m, w, count);
+      if (w == 8 && m.group < 2 && m.rm.is_register && (op == 0xc1 || op == 0xd1) && (count & 63U))
+        last_immediate_rotate_ip_ = start_ip_;
+      return;
     }
     case 0xc2: case 0xc3: {
       const auto adjustment = op == 0xc2 ? immediate(2) : 0;
