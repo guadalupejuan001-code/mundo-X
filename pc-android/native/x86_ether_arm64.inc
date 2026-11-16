@@ -106,6 +106,8 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     }
     if (!entry.block.can_translate() || entry.block.count > budget) return 0;
     if (!entry.code) {
+      auto* slot = lookup.pending ? ether_arm64_cache_->admission_slot(lookup) : &entry;
+      if (!slot) return 0;
       const auto start = std::chrono::steady_clock::now();
       const bool built = entry.code.build(entry.block);
       ether_arm64_stats_.native_compile_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -116,8 +118,10 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
         return 0;
       }
       ++ether_arm64_stats_.translated;
-      if (lookup.pending)
-        active = &ether_arm64_cache_->admit(entry, ether_arm64_stats_.compiled_evictions);
+      if (lookup.pending) {
+        ether_arm64_cache_->admit(entry, *slot, ether_arm64_stats_.compiled_evictions);
+        active = slot;
+      }
     } else {
       ++ether_arm64_stats_.hits;
     }
@@ -194,6 +198,9 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     }
     if (!direct_regs) regs = frame.regs;
     switch (block.flag_op) {
+      case ether_arm64::Instruction::SignedMultiply:
+        multiply_signed(last.lhs.reg, frame.left, frame.right, block.flag_width);
+        break;
       case ether_arm64::Instruction::Add:
         alu(0, frame.left, frame.right, block.flag_width);
         break;
