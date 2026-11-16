@@ -917,10 +917,13 @@ void guard_contract() {
   warm_block(cpu, linear, 2);
   require(cpu.regs[Cpu::ECX] == cpu.regs[Cpu::EAX], "initial mapping computed the wrong value");
   const auto initial = cpu.ether_arm64_stats();
+  const auto instruction_page_reuses = cpu.instruction_page_reuses;
   warm_block(cpu, linear, 2);
   const auto stable = cpu.ether_arm64_stats();
   require(stable.code_version_hits == initial.code_version_hits + 1 &&
           stable.code_bytes_read == initial.code_bytes_read, "warm block reread validated code");
+  require(cpu.instruction_page_reuses == instruction_page_reuses + 1,
+          "warm native block missed its guarded instruction mapping");
   cpu.write8(physical + 128, 0x5a); // Same page, outside the translated block.
   warm_block(cpu, linear, 2);
   const auto rechecked = cpu.ether_arm64_stats();

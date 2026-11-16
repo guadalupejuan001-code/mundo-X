@@ -252,6 +252,7 @@ class Cpu {
   // Used to prove that multi-byte accesses do not repeat the same walk.
   std::uint64_t page_walks = 0;
   std::uint64_t instruction_page_hits = 0;
+  std::uint64_t instruction_page_reuses = 0;
   std::uint64_t page_translation_hits = 0;
   std::uint64_t idt_bulk_reads = 0;
 
@@ -374,6 +375,7 @@ class Cpu {
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0; wbinvd_retired = 0;
     instruction_page_ = {};
     instruction_page_hits = 0;
+    instruction_page_reuses = 0;
     page_translation_hits = 0;
     memory.invalidate_page_tables();
     transaction_ = false; clear_write_journal(); decoded_.clear();
@@ -886,7 +888,8 @@ class Cpu {
   std::uint64_t start_ip_ = 0, cursor_ = 0;
   struct InstructionPage {
     std::uint64_t linear = 0, physical = 0;
-    std::uint64_t memory_epoch = 0;
+    std::uint64_t memory_epoch = 0, cr3 = 0;
+    unsigned policy = 0;
     bool reusable = false;
   };
   InstructionPage instruction_page_;
@@ -924,6 +927,14 @@ class Cpu {
                         std::uint64_t epoch) const noexcept {
     return epoch && entry.memory_epoch == epoch &&
         entry.linear_page == page && entry.cr3 == cr3 && entry.policy == policy;
+  }
+  bool can_cache_translations() const noexcept {
+    return page_translation_cache_enabled_ && a20_enabled && !step_trace_hook &&
+        !irq_trace_hook && (!mmio_claim_hook || mmio_range_claim_hook);
+  }
+  unsigned paging_policy(Access access) const noexcept {
+    return unsigned(access) | (unsigned(cpl() == 3 && !supervisor_internal_) << 2) |
+        (unsigned((efer & 0x800U) != 0) << 3) | (unsigned((cr0 & 0x10000U) != 0) << 4);
   }
   static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
   std::uint64_t tsc_offset_ = 0;
@@ -1148,6 +1159,26 @@ class Cpu {
   template <bool Inspect = false>
   std::uint64_t translate(std::uint64_t address, Access access, bool* ordinary_page = nullptr,
                           bool speculative = false, unsigned* mapping_bytes_left = nullptr);
+  std::uint64_t translate_instruction(std::uint64_t linear, bool& ordinary, bool speculative = false) {
+    const auto page = linear & ~std::uint64_t{0xfff};
+    const auto& cached = instruction_page_;
+    const auto policy = paging_policy(Access::Execute);
+    if (cached.reusable && cached.linear == page && cached.memory_epoch &&
+        cached.memory_epoch == memory.page_table_epoch() && cached.cr3 == cr3 &&
+        cached.policy == policy && (efer & 0x400U) && (cr4 & 0x20U) &&
+        can_cache_translations() && bulk_ram_range(cached.physical, 4096)) {
+      // The mapping and permissions match. Fetch the current bytes from RAM
+      // and recheck that no device owns the page on this instruction boundary.
+      ordinary = true;
+      ++page_translation_hits;
+      ++instruction_page_reuses;
+      return cached.physical | (linear & 0xfffU);
+    }
+    const auto physical = translate(linear, Access::Execute, &ordinary, speculative);
+    instruction_page_ = {page, physical & ~std::uint64_t{0xfff},
+                         memory.page_table_epoch(), cr3, policy, ordinary};
+    return physical;
+  }
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
     if (bytes == 0 || bytes > 8 || address > UINT64_MAX - (bytes - 1))
       fail("invalid linear read width", FaultCode::InvalidInstruction);
@@ -1257,11 +1288,7 @@ class Cpu {
         ++instruction_page_hits;
       } else {
         bool ordinary_page;
-        physical = translate(linear, Access::Execute, &ordinary_page);
-        // The first byte always revalidates the mapping. Ordinary code and
-        // paging RAM cannot change during decode; physical I/O stays scalar.
-        instruction_page_ = {page, physical & ~std::uint64_t{0xfff},
-                             memory.page_table_epoch(), ordinary_page};
+        physical = translate_instruction(linear, ordinary_page);
       }
       reusable = instruction_page_.reusable;
     }
@@ -3368,16 +3395,13 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
   const bool user_mode = cpl() == 3 && !supervisor_internal_;
   const bool write_protected = (cr0 & 0x10000U) != 0;
   const bool nxe = (efer & 0x800U) != 0;
-  const bool cacheable = !Inspect && page_translation_cache_enabled_ && a20_enabled &&
-      !step_trace_hook && !irq_trace_hook &&
-      (!mmio_claim_hook || mmio_range_claim_hook);
+  const bool cacheable = !Inspect && can_cache_translations();
   TranslationSet* set = nullptr;
   unsigned policy = 0;
   const auto linear_page = address >> 12;
   if (cacheable) {
     set = &translation_set(linear_page, access);
-    policy = unsigned(access) | (unsigned(user_mode) << 2) | (unsigned(nxe) << 3) |
-        (unsigned(write_protected) << 4);
+    policy = paging_policy(access);
     const auto epoch = memory.page_table_epoch();
     for (unsigned probe = 0; probe < set->ways.size(); ++probe) {
       const auto way = set->recent ^ probe;

@@ -298,12 +298,20 @@ class PcMachine {
       const auto before=cpu.instructions;
       if(boot_acceleration_enabled_&&budget-i>1) {
         const auto batch_start=sample ? BootTiming::Clock::now() : BootTiming::Clock::time_point{};
+        const auto native_before=sample ? boot_acceleration_.arm64_block_steps : 0;
         const auto completed=run_boot_batch(budget-i);
-        if(sample)sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,
-                                BootTiming::Clock::now()-batch_start);
+        if(sample) {
+          const auto elapsed=BootTiming::Clock::now()-batch_start;
+          sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,elapsed);
+          if(boot_acceleration_.arm64_block_steps!=native_before)
+            sample->record(BootTimePart::Arm64Execute,elapsed);
+        }
         if(completed) {
           if(sample)sample->add_steps(0,completed);
-          sample_boot(mode,cs,ip,completed);
+          {
+            const BootTiming::Scope profile_timing(sample, BootTimePart::Profile);
+            sample_boot(mode,cs,ip,completed);
+          }
           i+=completed;
           continue;
         }
@@ -311,14 +319,13 @@ class PcMachine {
       const bool time_step=boot_scalar_hotspots_&&!cpu.halted&&boot_scalar_hotspots_->wants_sample();
       const auto step_start=time_step?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
       StepResult r;
+      BootTiming::Duration scalar_time{};
       if(sample) {
         const auto start=BootTiming::Clock::now();
         r=cpu.step_with_timing(*sample);
-        const auto elapsed=BootTiming::Clock::now()-start;
+        scalar_time=BootTiming::Clock::now()-start;
         sample->add_steps(cpu.instructions-before,0);
-        sample->record(BootTimePart::Scalar,elapsed);
-        if(cpu.instructions!=before)
-          boot_regions_->observe_region(mode,cs,ip,std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+        sample->record(BootTimePart::Scalar,scalar_time);
       } else {
         r=cpu.step();
       }
@@ -334,10 +341,15 @@ class PcMachine {
       const auto elapsed_ns=time_step?std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now()-step_start).count():0;
       const auto steps=cpu.instructions-before;
-      if(boot_scalar_hotspots_&&steps)
-        if(const auto samples=boot_scalar_hotspots_->advance(steps))
-          boot_scalar_hotspots_->record(mode,cs,ip,cpu.last_decoded_bytes(),samples,elapsed_ns);
-      sample_boot(mode,cs,ip,steps);
+      {
+        const BootTiming::Scope profile_timing(sample, BootTimePart::Profile);
+        if(sample&&steps)
+          boot_regions_->observe_region(mode,cs,ip,std::chrono::duration_cast<std::chrono::nanoseconds>(scalar_time).count());
+        if(boot_scalar_hotspots_&&steps)
+          if(const auto samples=boot_scalar_hotspots_->advance(steps))
+            boot_scalar_hotspots_->record(mode,cs,ip,cpu.last_decoded_bytes(),samples,elapsed_ns);
+        sample_boot(mode,cs,ip,steps);
+      }
       ++i;
       observe_mode();
       if(r==StepResult::Faulted){guest_restart_=GuestRestart::None;pending="Consulta el diagnóstico de la CPU y la memoria. Windows completo sigue pendiente.";break;}
@@ -559,6 +571,7 @@ class PcMachine {
      <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
      <<",\"engine\":\"cosmic-pc-own-x86\""
      <<",\"page_walks\":"<<cpu.page_walks<<",\"instruction_page_hits\":"<<cpu.instruction_page_hits
+     <<",\"instruction_page_reuses\":"<<cpu.instruction_page_reuses
      <<",\"page_translation_hits\":"<<cpu.page_translation_hits
      <<",\"idt_bulk_reads\":"<<cpu.idt_bulk_reads;
     if(cpu.fault) {

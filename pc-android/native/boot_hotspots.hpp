@@ -73,6 +73,7 @@ class BootHotspots {
     observed_steps_ = samples_ = attributed_samples_ = sampled_ns_ = 0;
     elapsed_ = {};
     std::fill(entries_.begin(), entries_.end(), Entry{});
+    last_entry_ = 0;
   }
 
   void write_json(std::ostream& out) const {
@@ -165,10 +166,16 @@ class BootHotspots {
         weighted_by_duration_ ? std::max<std::uint64_t>(1, nanoseconds) : hits;
     if (!weight) return;
     if (weighted_by_duration_) sampled_ns_ += weight;
+    auto& recent = entries_[last_entry_];
+    if (recent.count && recent.key == key) {
+      recent.count += weight;
+      return;
+    }
     Entry* minimum = &entries_.front();
     for (auto& entry : entries_) {
       if (entry.count && entry.key == key) {
         entry.count += weight;
+        last_entry_ = static_cast<std::size_t>(&entry - entries_.data());
         return;
       }
       if (entry.count < minimum->count) minimum = &entry;
@@ -176,6 +183,7 @@ class BootHotspots {
     // Space-Saving heavy hitters. A replaced slot carries its previous count
     // as the maximum possible overestimate for its new instruction.
     *minimum = {key, minimum->count + weight, minimum->count};
+    last_entry_ = static_cast<std::size_t>(minimum - entries_.data());
   }
 
   static std::size_t parse_mode(std::string_view mode) noexcept {
@@ -235,6 +243,7 @@ class BootHotspots {
   }
 
   std::vector<Entry> entries_;
+  std::size_t last_entry_ = 0;
   std::uint32_t random_ = kSeed;
   std::uint64_t until_sample_ = next_interval();
   std::uint64_t observed_steps_ = 0, samples_ = 0, attributed_samples_ = 0;

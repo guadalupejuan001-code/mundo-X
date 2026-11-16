@@ -65,8 +65,9 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
 
   auto* active = &entry;
   try {
-    const auto physical = translate(eip, Access::Execute, nullptr, true);
-    if (!bulk_ram_range(physical, width)) {
+    bool ordinary_page = false;
+    const auto physical = long_mode ? translate_instruction(eip, ordinary_page, true) : eip;
+    if (!ordinary_page && !bulk_ram_range(physical, width)) {
       if (entry.code) {
         ++ether_arm64_stats_.invalidated;
         entry.invalidate(eip);

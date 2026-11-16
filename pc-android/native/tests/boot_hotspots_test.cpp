@@ -162,6 +162,9 @@ void guest_boot() {
   const auto& timing = pc.boot_timing()->counters();
   expect(timing.batched_steps > 0 && timing.ns(cosmic_pc::BootTimePart::BatchExecute) > 0,
          "sampled initial REP batch was not measured");
+  expect(timing.ns(cosmic_pc::BootTimePart::Arm64Execute) == 0 &&
+             timing.ns(cosmic_pc::BootTimePart::Profile) > 0,
+         "REP work and profiling overhead must stay out of native execution timing");
   pc.reset();
   expect(pc.boot_timing()->counters().iterations == 0 &&
              json(*pc.boot_regions()) == json(BootHotspots(true, true)),

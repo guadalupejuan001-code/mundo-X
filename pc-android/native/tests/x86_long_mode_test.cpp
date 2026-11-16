@@ -731,6 +731,57 @@ void cached_page_translations() {
   check(cpu.fault->error_code == 17 && cpu.cr2 == 0xa000, "cached NX fault context");
 }
 
+void retained_instruction_mapping() {
+  Cpu cpu;
+  boot(cpu);
+  cpu.idtr = {0, 0};
+  cpu.enable_page_translation_cache();
+  // An alternate CR3 remaps the same x86 instruction address.
+  cpu.write64(0x10000, 0x11023);
+  cpu.write64(0x11000, 0x12023);
+  cpu.write64(0x12000, 0x13023);
+  cpu.write64(0x13050, 0xe023);
+  program(cpu, {0xb8,3,0,0,0,0xeb,0xf9}, 0xe000);
+  program(cpu, {0xb8,1,0,0,0,0xeb,0xf9});
+  one(cpu);
+  const auto walks = cpu.page_walks;
+  const auto reuses = cpu.instruction_page_reuses;
+  for (unsigned i = 0; i < 64; ++i) one(cpu);
+  check(cpu.page_walks == walks && cpu.instruction_page_reuses - reuses == 64,
+        "successive scalar instructions should share the guarded fetch translation");
+  cpu.write8(0xa001, 2);
+  cpu.eip = 0xa000;
+  one(cpu);
+  check(cpu.regs[Cpu::EAX] == 2, "reused mapping must still fetch the current opcode bytes");
+
+  cpu.cr3 = 0x10000;
+  cpu.eip = 0xa000;
+  one(cpu);
+  check(cpu.regs[Cpu::EAX] == 3, "reused code mapping must follow the current CR3");
+  unsigned reads = 0;
+  constexpr auto device_byte = 0xe001U;
+  cpu.mmio_claim_hook = [](std::uint64_t address) { return address == device_byte; };
+  cpu.mmio_range_claim_hook = [](std::uint64_t address, std::size_t count) {
+    return address <= device_byte && device_byte - address < count;
+  };
+  cpu.mmio_read_hook = [&](std::uint64_t address) -> std::optional<std::uint8_t> {
+    check(address == device_byte, "instruction fetch reached the wrong device byte");
+    ++reads;
+    return 5;
+  };
+  cpu.eip = 0xa000;
+  one(cpu);
+  check(cpu.regs[Cpu::EAX] == 5 && reads == 1,
+        "a change in device ownership must preserve exact fetch callbacks");
+
+  cpu.mmio_claim_hook = {};
+  cpu.efer |= 0x800;
+  cpu.write64(0x13050, 0x800000000000e023ULL);
+  cpu.eip = 0xa000;
+  expect_fault(cpu, FaultCode::PageFault, "the code mapping must respect an NX permission change");
+  check(cpu.cr2 == 0xa000 && cpu.fault->error_code == 17, "execute fault caught at the original RIP");
+}
+
 void colliding_page_translations() {
   Cpu cpu;
   boot(cpu);
@@ -1046,7 +1097,8 @@ int main(int argc, char** argv) {
     enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
-    cached_page_translations(); colliding_page_translations(); paged_rep_batch(); scanned_boot_loop(); scan_large_mapping();
+    cached_page_translations(); retained_instruction_mapping(); colliding_page_translations();
+    paged_rep_batch(); scanned_boot_loop(); scan_large_mapping();
     conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;

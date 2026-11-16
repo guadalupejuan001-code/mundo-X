@@ -9,7 +9,8 @@
 namespace cosmic_pc {
 
 enum class BootTimePart : std::size_t {
-  Total, Device, BatchDispatch, BatchExecute, Scalar, Decode, Ram, GuestIo, Compaction, Run, Count
+  Total, Device, BatchDispatch, BatchExecute, Arm64Execute, Scalar, Decode, Ram, GuestIo, Profile,
+  Compaction, Run, Count
 };
 
 class BootTiming {
@@ -102,6 +103,8 @@ inline void BootTiming::Counters::write_json(std::ostream& out) const {
     const auto devices = ns(BootTimePart::Device);
   const auto batch_dispatch = ns(BootTimePart::BatchDispatch);
   const auto batch_execute = ns(BootTimePart::BatchExecute);
+  const auto arm64_execute = ns(BootTimePart::Arm64Execute);
+  const auto profile = ns(BootTimePart::Profile);
     const auto scalar = ns(BootTimePart::Scalar);
     const auto decode = ns(BootTimePart::Decode);
     const auto ram = ns(BootTimePart::Ram);
@@ -118,6 +121,9 @@ inline void BootTiming::Counters::write_json(std::ostream& out) const {
         << ",\"sampled_device_ns\":" << devices
       << ",\"sampled_batch_dispatch_ns\":" << batch_dispatch
       << ",\"sampled_batch_execute_ns\":" << batch_execute
+      << ",\"sampled_arm64_execute_ns\":" << arm64_execute
+      << ",\"sampled_bulk_execute_ns\":" << (batch_execute - arm64_execute)
+      << ",\"sampled_profile_ns\":" << profile
         << ",\"sampled_scalar_ns\":" << scalar
         << ",\"sampled_scalar_fetch_decode_ns\":" << decode
         << ",\"sampled_scalar_other_ram_ns\":" << ram
@@ -125,8 +131,8 @@ inline void BootTiming::Counters::write_json(std::ostream& out) const {
         << ",\"sampled_scalar_cpu_other_ns\":"
         << (scalar >= decode + ram + io ? scalar - decode - ram - io : 0)
       << ",\"sampled_loop_other_ns\":"
-      << (total >= devices + batch_dispatch + batch_execute + scalar
-              ? total - devices - batch_dispatch - batch_execute - scalar : 0)
+      << (total >= devices + batch_dispatch + batch_execute + scalar + profile
+              ? total - devices - batch_dispatch - batch_execute - scalar - profile : 0)
         << ",\"compaction_ns\":" << ns(BootTimePart::Compaction)
         << ",\"run_ns\":" << ns(BootTimePart::Run) << '}';
 }
