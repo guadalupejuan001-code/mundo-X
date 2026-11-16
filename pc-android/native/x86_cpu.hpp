@@ -1120,13 +1120,29 @@ class Cpu {
   static std::uint64_t little_endian_word(const std::uint8_t* data, unsigned bytes) noexcept {
     std::uint64_t result = 0;
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    std::memcpy(&result, data, bytes);
+    switch (bytes) {
+      case 1: return *data;
+      case 2: {
+        std::uint16_t word;
+        std::memcpy(&word, data, sizeof(word));
+        return word;
+      }
+      case 4: {
+        std::uint32_t word;
+        std::memcpy(&word, data, sizeof(word));
+        return word;
+      }
+      case 8: std::memcpy(&result, data, sizeof(result)); break;
+      default: std::memcpy(&result, data, bytes); break;
+    }
 #else
     for (unsigned i = 0; i < bytes; ++i) result |= std::uint64_t(data[i]) << (8U * i);
 #endif
     return result;
   }
   std::uint64_t read_ram_span(std::uint64_t index, unsigned bytes) const {
+    if (const auto* data = memory.resident_ram_span(index, bytes))
+      return little_endian_word(data, bytes);
     std::array<std::uint8_t, 8> data;
     memory.read_block(index, data.data(), bytes);
     return little_endian_word(data.data(), bytes);
@@ -1399,9 +1415,24 @@ class Cpu {
     if (bytes == 8) return (v & sign_bit(8)) ? -1 - std::int64_t(~v) : std::int64_t(v);
     return (v & sign_bit(bytes)) ? std::int64_t(v) - (std::int64_t{1} << (8 * bytes)) : std::int64_t(v);
   }
+  bool can_reuse_long_code_page(unsigned bytes) const noexcept {
+    const auto offset = unsigned(cursor_ & 0xfffU);
+    return !decoded_.empty() && instruction_page_.reusable &&
+        instruction_page_.linear == cursor_ - offset && bytes <= 0x1000U - offset &&
+        instruction_page_.memory_epoch == memory.page_table_epoch() &&
+        (cr0 & 0x80000000U) && is_long_mode();
+  }
+
   std::uint8_t fetch8() {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
     if (decoded_.size() >= 15) fail("instruction exceeds 15 bytes", FaultCode::InvalidInstruction);
+    if (can_reuse_long_code_page(1)) {
+      const auto value = memory.read_byte(bus_address(instruction_page_.physical | (cursor_ & 0xfffU)));
+      ++instruction_page_hits;
+      ++cursor_;
+      decoded_.push_back(value);
+      return value;
+    }
     const auto linear = segment_linear(CS, cursor_, 1, Access::Execute);
     auto physical = linear;
     bool reusable = false;
@@ -1422,20 +1453,22 @@ class Cpu {
     return value;
   }
   std::uint64_t immediate(unsigned bytes) {
-    const auto offset = unsigned(cursor_ & 0xfffU);
-    if (bytes >= 4 && bytes <= 8 && !decoded_.empty() && decoded_.size() + bytes <= 15 &&
-        bytes <= 0x1000U - offset && (cr0 & 0x80000000U) && is_long_mode() &&
-        instruction_page_.reusable && instruction_page_.linear == cursor_ - offset &&
-        instruction_page_.memory_epoch == memory.page_table_epoch()) {
+    if (bytes >= 2 && bytes <= 8 && decoded_.size() + bytes <= 15 &&
+        can_reuse_long_code_page(bytes)) {
       // The opcode already established a readable executable RAM page.
       // Page crossings and overlength encodings keep byte-precise fetches.
       const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
-      std::array<std::uint8_t, 8> data;
-      memory.read_block(bus_address(instruction_page_.physical + offset), data.data(), bytes);
-      decoded_.insert(decoded_.end(), data.begin(), data.begin() + bytes);
+      const auto physical = bus_address(instruction_page_.physical | (cursor_ & 0xfffU));
+      std::array<std::uint8_t, 8> buffer;
+      const auto* data = memory.resident_ram_span(physical, bytes);
+      if (!data) {
+        memory.read_block(physical, buffer.data(), bytes);
+        data = buffer.data();
+      }
+      decoded_.insert(decoded_.end(), data, data + bytes);
       cursor_ += bytes;
       instruction_page_hits += bytes;
-      return little_endian_word(data.data(), bytes);
+      return little_endian_word(data, bytes);
     }
     std::uint64_t value = 0;
     for (unsigned i = 0; i < bytes; ++i) value |= std::uint64_t(fetch8()) << (8 * i);

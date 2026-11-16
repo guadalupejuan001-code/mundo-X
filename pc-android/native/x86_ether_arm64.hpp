@@ -68,7 +68,16 @@ struct Block {
   unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
-  bool long_mode = true, repeats = false;
+  bool long_mode = true, repeats = false, register_only = true;
+
+  bool can_translate() const noexcept {
+    if (count > 1) return true;
+    if (!count || !register_only) return false;
+    const auto& op = instructions.front();
+    // Dispatch an isolated arithmetic or register operation only when it
+    // cannot reach a device or need a speculative memory transaction.
+    return op.writes_register() || op.kind == Instruction::Compare || op.kind == Instruction::Test;
+  }
 
   bool stages_ram() const noexcept {
     return writes && (writes > 1 || !instructions[count - 1].writes_ram());
@@ -332,6 +341,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.rhs.immediate_value = rip + pos + signed_offset(op.rhs.displacement);
     op.end = pos;
     block.instructions[block.count++] = op;
+    block.register_only = block.register_only && !op.lhs.memory && !op.rhs.memory;
     block.size = pos;
     if (op.writes_ram() && (++block.writes == Block::kMaxWrites || !long_mode)) break;
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump) break;
@@ -409,6 +419,7 @@ struct Frame {
   void* cpu;
   PendingRamWrites* pending;
   unsigned loop_remaining = 1;
+  std::uint64_t* guest_regs;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
@@ -416,11 +427,19 @@ struct Frame {
 // and all loads go through the original CPU's guarded RAM accessor.
 class Emitter {
  public:
-  explicit Emitter(const Block& block) : long_mode_(block.long_mode) {
+  explicit Emitter(const Block& block)
+      : long_mode_(block.long_mode), register_only_(block.register_only) {
     code_.reserve(96);
     emit(0xd503245f); // BTI c (a hint on hosts without BTI).
-    emit(0xa9bf7bf3); // STP X19,X30,[SP,#-16]!
-    emit(0xaa0003f3); // MOV X19,X0
+    if (register_only_) {
+      // Leaf blocks never call a memory helper. X12 holds the frame and X13
+      // holds the guest register file without saving any host registers.
+      emit(0xaa0003ec); // MOV X12,X0
+      load(13, offsetof(Frame, guest_regs));
+    } else {
+      emit(0xa9bf7bf3); // STP X19,X30,[SP,#-16]!
+      emit(0xaa0003f3); // MOV X19,X0
+    }
     const auto loop_start = static_cast<std::int32_t>(code_.size());
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
@@ -481,7 +500,7 @@ class Emitter {
       emit(last.kind == Instruction::Jump ? 0x52800040 : 0x52800020); // MOV W0,#2/#1
     }
     const auto epilogue = code_.size();
-    emit(0xa8c17bf3); // LDP X19,X30,[SP],#16
+    if (!register_only_) emit(0xa8c17bf3); // LDP X19,X30,[SP],#16
     emit(0xd65f03c0); // RET
     for (unsigned i = 0; i < exits_; ++i) {
       const auto pos = failed_access_[i];
@@ -495,7 +514,7 @@ class Emitter {
   std::vector<std::uint32_t> code_;
   std::array<std::size_t, Block::kMaxInstructions> failed_access_{};
   unsigned exits_ = 0;
-  bool long_mode_;
+  bool long_mode_, register_only_;
 
   void register_alu(const Instruction& op, bool capture_flags) {
     read(op.lhs, op.width);
@@ -536,17 +555,21 @@ class Emitter {
   }
 
   void emit(std::uint32_t word) { code_.push_back(word); }
+  unsigned base_register(unsigned offset) const noexcept {
+    if (!register_only_) return 19;
+    return offset < offsetof(Frame, left) ? 13 : 12;
+  }
   void load(unsigned reg, unsigned offset, unsigned width = 8) {
     std::uint32_t load_op = 0x39400000U; // LDRB
     if (width == 8) load_op = 0xf9400000U;
     else if (width == 4) load_op = 0xb9400000U;
     else if (width == 2) load_op = 0x79400000U;
-    emit(load_op | ((offset / width) << 10) | (19U << 5) | reg);
+    emit(load_op | ((offset / width) << 10) | (base_register(offset) << 5) | reg);
   }
   void store(unsigned reg, unsigned offset, unsigned width = 8) {
     const auto store_op = width == 1 ? 0x39000000U
         : width == 2 ? 0x79000000U : width == 4 ? 0xb9000000U : 0xf9000000U;
-    emit(store_op | ((offset / width) << 10) | (19U << 5) | reg);
+    emit(store_op | ((offset / width) << 10) | (base_register(offset) << 5) | reg);
   }
   void address(const Operand& operand, unsigned reg) {
     if (operand.reg == Operand::kRipBase) {
