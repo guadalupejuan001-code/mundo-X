@@ -6,6 +6,7 @@
 #include <ctime>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 using cosmic_pc::Cpu;
@@ -79,13 +80,88 @@ void measure(bool same_word) {
             << " steps=" << steps << " native_steps=" << native_steps << " blocks=" << blocks
             << " wall_median_ns=" << wall_ns[2] << " cpu_median_ns=" << cpu_ns[2] << '\n';
 }
+
+void measure_scalar() {
+  constexpr unsigned rounds = 100'000, guest_steps = 11 * rounds + 1;
+  constexpr std::uint64_t stack = 0x90000, word_base = other + 0x18;
+  constexpr std::uint64_t initial = 0x9745397ea123b111ULL;
+  constexpr std::uint64_t addend = 0x01234567, multiplier = 0x2431;
+  constexpr std::array<std::uint8_t, 34> body{
+      0x48,0x81,0xc3,0x67,0x45,0x23,0x01, // ADD RBX,0x01234567
+      0x4a,0x29,0x04,0xc9,                 // Observed SUB [RCX+R9*8],RAX
+      0x4e,0x29,0x1c,0xc9,                 // Observed SUB [RCX+R9*8],R11
+      0x66,0x89,0x48,0xe8,                 // Observed MOV [RAX-0x18],CX
+      0xe8,0x68,0,0,0,                     // CALL code+0x80
+      0x83,0xea,1,                         // SUB EDX,1
+      0x0f,0x85,0xdf,0xff,0xff,0xff,       // JNZ back to the loop
+      0xf4};
+  constexpr std::array<std::uint8_t, 10> callee{
+      0x53,0x4c,0x69,0xf3,0x31,0x24,0,0,0x5b,0xc3}; // PUSH RBX; IMUL R14,RBX,0x2431; POP RBX; RET
+
+  PcMachine machine;
+  machine.boot_long_mode_demo();
+  machine.run(4000);
+  auto& cpu = machine.cpu;
+  if (!cpu.is_long_mode() || !cpu.halted || cpu.fault)
+    throw std::runtime_error("scalar long-mode fixture failed");
+  cpu.enable_page_translation_cache();
+  cpu.enable_ether_arm64_blocks(false);
+  machine.enable_boot_acceleration(false);
+  cpu.memory.write_block(code, body.data(), body.size());
+  cpu.memory.write_block(code + 0x80, callee.data(), callee.size());
+
+  std::array<std::int64_t, 5> wall_ns{}, cpu_ns{};
+  for (unsigned sample = 0; sample <= wall_ns.size(); ++sample) {
+    cpu.halted = false;
+    cpu.eip = code;
+    cpu.eflags = 2 | Cpu::IF;
+    cpu.regs[Cpu::EAX] = word_base;
+    cpu.regs[Cpu::EBX] = 5;
+    cpu.regs[Cpu::ECX] = first - 8;
+    cpu.regs[Cpu::EDX] = rounds;
+    cpu.regs[Cpu::ESP] = stack;
+    cpu.regs[Cpu::R9] = 1;
+    cpu.regs[Cpu::R11] = 7;
+    cpu.write64(first, initial);
+    cpu.write64(other, 0);
+    const auto retired = cpu.instructions;
+    const auto start = std::chrono::steady_clock::now();
+    const auto cpu_start = std::clock();
+    for (unsigned remaining = guest_steps; remaining;) {
+      const auto slice = std::min(remaining, 50'000U);
+      machine.run(slice);
+      remaining -= slice;
+    }
+    const auto cpu_end = std::clock();
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    const auto expected_rbx = 5 + addend * rounds;
+    if (!cpu.halted || cpu.fault || cpu.instructions - retired != guest_steps ||
+        cpu.ether_arm64_stats().steps != 0 || cpu.regs[Cpu::EDX] != 0 ||
+        cpu.regs[Cpu::EBX] != expected_rbx || cpu.regs[Cpu::R14] != expected_rbx * multiplier ||
+        cpu.regs[Cpu::ESP] != stack || cpu.read64(first) != initial - (word_base + 7) * rounds ||
+        cpu.read16(other) != std::uint16_t(first - 8) ||
+        cpu.eflags != (2 | Cpu::IF | Cpu::ZF | Cpu::PF) || cpu_start == std::clock_t(-1) || cpu_end < cpu_start)
+      throw std::runtime_error("mixed x86 interpreter benchmark changed the guest result");
+    if (sample == 0) continue;
+    wall_ns[sample - 1] = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+    cpu_ns[sample - 1] = std::int64_t(cpu_end - cpu_start) * 1'000'000'000 / CLOCKS_PER_SEC;
+  }
+  std::sort(wall_ns.begin(), wall_ns.end());
+  std::sort(cpu_ns.begin(), cpu_ns.end());
+  std::cout << "PRIME_X86_SCALAR_BENCH steps=" << guest_steps
+            << " wall_median_ns=" << wall_ns[2] << " cpu_median_ns=" << cpu_ns[2] << '\n';
+}
 }  // namespace
 
-int main() {
-  if (!Cpu::ether_arm64_host()) return 1;
+int main(int argc, char** argv) {
+  const bool scalar_only = argc == 2 && std::string_view(argv[1]) == "--scalar";
+  if (!scalar_only && !Cpu::ether_arm64_host()) return 1;
   try {
-    measure(true);
-    measure(false);
+    if (!scalar_only) {
+      measure(true);
+      measure(false);
+    }
+    measure_scalar();
     return 0;
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

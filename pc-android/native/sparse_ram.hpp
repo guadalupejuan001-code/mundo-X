@@ -343,14 +343,18 @@ public:
     // Guest bytes change only after the range, budget and allocations are
     // checked. The caller's source must remain valid for the full call.
     void write_block(std::uint64_t offset, const std::uint8_t* source,
-                     std::size_t count) {
+                     std::size_t count, std::uint8_t* previous = nullptr) {
         check_range(offset, count);
         if (count != 0 && !source) throw std::invalid_argument("SparseRam null write source.");
-        prepare_write(offset, count);
+        prepare_dense_pages(offset, count, true);
         while (count != 0) {
             const std::size_t inside = static_cast<std::size_t>(offset % kPageSize);
             const std::size_t chunk = std::min(count, kPageSize - inside);
             auto& page = find_slot(offset / kPageSize)->payload;
+            if (previous) {
+                std::memcpy(previous, page.get() + inside, chunk);
+                previous += chunk;
+            }
             std::memcpy(page.get() + inside, source, chunk);
             offset += chunk;
             source += chunk;

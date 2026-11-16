@@ -330,6 +330,18 @@ class MemoryFabric {
     }
   }
 
+  // Capture old RAM bytes in the same pass that commits the store. The
+  // backing preflight finishes before either byte range is modified.
+  void write_ram_block_with_previous(std::uint64_t offset, const std::uint8_t* source,
+                                     std::uint8_t* previous, std::size_t count) {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
+    check_range(offset, count);
+    if (overlaps_window(offset, count))
+      throw std::invalid_argument("A RAM undo capture cannot overlap the Ether window");
+    note_write(offset, count);
+    ram_.write_block(offset, source, count, previous);
+  }
+
   void fill(std::uint64_t offset, std::uint8_t value, std::size_t count) {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, count);
