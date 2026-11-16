@@ -30,7 +30,8 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
     const auto retired = retire_ether_arm64_block(limit - completed, budget - completed, bus);
     if (!retired) break;
     completed += retired;
-    if (bus || scan_loop_batch_candidate() || wide_multiply_loop_batch_candidate()) break;
+    if (bus || scan_loop_batch_candidate() || wide_multiply_loop_batch_candidate() ||
+        rotate_xor_loop_batch_candidate()) break;
   }
   return completed;
 #else
@@ -237,6 +238,29 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       }
       default: break;
     }
+    if (block.auxiliary_index != ether_arm64::Block::kNoFlagSource &&
+        block.auxiliary_index != block.flag_index) {
+      const auto kind = block.instructions[block.auxiliary_index].kind;
+      const auto left = frame.auxiliary_left;
+      const auto right = kind == ether_arm64::Instruction::Increment ||
+          kind == ether_arm64::Instruction::Decrement ? 1 : frame.auxiliary_right;
+      const auto result = kind == ether_arm64::Instruction::Add ||
+          kind == ether_arm64::Instruction::Increment ? left + right : left - right;
+      set_flag(AF, ((left ^ right ^ result) & 0x10U) != 0);
+    }
+    if (block.rotate_carry_index != ether_arm64::Block::kNoFlagSource) {
+      const auto& op = block.instructions[block.rotate_carry_index];
+      const auto carry = op.kind == ether_arm64::Instruction::RotateLeft ? 1 : sign_bit(op.width);
+      set_flag(CF, (frame.rotate_carry_result & carry) != 0);
+    }
+    if (block.rotate_overflow_index != ether_arm64::Block::kNoFlagSource) {
+      const auto& op = block.instructions[block.rotate_overflow_index];
+      const auto value = block.rotate_overflow_index == block.rotate_carry_index
+          ? frame.rotate_carry_result : frame.rotate_overflow_result;
+      const auto sign = sign_bit(op.width);
+      const auto low = op.kind == ether_arm64::Instruction::RotateLeft ? 1 : sign >> 1;
+      set_flag(OF, bool(value & sign) != bool(value & low));
+    }
     start_cs_ = segments[CS];
     start_ip_ = origin + last.begin;
     cursor_ = origin + last.end;
@@ -252,6 +276,9 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     eflags |= 2;
     ++ether_arm64_stats_.blocks;
     ether_arm64_stats_.steps += retired;
+    if (block.rotates) ether_arm64_stats_.rotate_steps += rounds * block.rotates;
+    if (block.last_wide_rotate_offset != ether_arm64::Block::kMaxBytes)
+      last_immediate_rotate_ip_ = origin + block.last_wide_rotate_offset;
     if (!long_mode) ether_arm64_stats_.protected32_steps += retired;
     if (rounds > 1) {
       ++ether_arm64_stats_.repeated_loop_dispatches;
