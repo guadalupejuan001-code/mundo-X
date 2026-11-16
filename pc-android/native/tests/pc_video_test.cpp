@@ -109,16 +109,47 @@ void vga_graphics_ports() {
   need(execute({0xec}, data) == UINT64_MAX, "Reserved VGA index should read the open bus value");
   execute({0xee}, index, 8);
   need(execute({0xec}, data) == 0xffffffffffffffd9ULL, "VGA registers must keep independent values");
+
+  // BOOTVID saves the sequencer index, tests Chain 4 while in reset,
+  // restores the memory mode and releases reset before restoring the index.
+  constexpr std::uint16_t seq_index = 0x3c4, seq_data = 0x3c5;
+  const auto saved_index = std::uint8_t(execute({0xec}, seq_index));
+  need(saved_index == 0, "Long64 must be able to read the VGA sequencer index");
+  execute({0xee}, seq_index, 0xfc);
+  need(std::uint16_t(execute({0x66, 0xed}, seq_index)) == 0x0204,
+       "Sequencer uses a three-bit index and retains the text memory mode");
+  const auto memory_mode = std::uint8_t(execute({0xec}, seq_data));
+  execute({0x66, 0xef}, seq_index, 0x0100);
+  need(std::uint16_t(execute({0x66, 0xed}, seq_index)) == 0x0100,
+       "The guest must be able to assert the synchronous sequencer reset");
+  execute({0xee}, seq_index, 4);
+  execute({0xee}, seq_data, memory_mode ^ 0x08);
+  need(std::uint8_t(execute({0xec}, seq_data)) == (memory_mode ^ 0x08),
+       "Sequencer Chain 4 must be readable during reset");
+  execute({0xee}, seq_data, memory_mode);
+  execute({0x66, 0xef}, seq_index, 0x0300);
+  need(std::uint16_t(execute({0x66, 0xed}, seq_index)) == 0x0300,
+       "A paired word write must release sequencer reset");
+  execute({0xee}, seq_index, saved_index);
+  need(std::uint16_t(execute({0x66, 0xed}, index)) == 0xd908,
+       "Sequencer I/O must preserve the independent graphics registers");
   need(pc.video_info().graphics && pc.video_info().mode == 0x142 &&
        cpu.read32(PcVideo::kFramebufferAddress) == 0x11223344,
        "The legacy VGA registers must preserve the active linear VBE mode and its pixels");
 
+  execute({0x66, 0xef}, seq_index, 0x0a04);
   pc.reset();
   pc.run(4000);
   need(execute({0xec}, index) == 0xffffffffffffff00ULL, "Reset must restore the VGA index");
   execute({0xee}, index, 8);
   need(execute({0xec}, data) == UINT64_MAX, "Reset must restore the text-mode bit mask");
+  need(std::uint16_t(execute({0x66, 0xed}, seq_index)) == 0x0300,
+       "Machine reset must restore the sequencer index and release state");
+  execute({0xee}, seq_index, 4);
+  need(std::uint8_t(execute({0xec}, seq_data)) == memory_mode,
+       "Machine reset must restore the sequencer memory mode");
   std::cout << "VGA_GRAPHICS_PORTS_PASS long64=1 byte=1 word=1 reset=1 vbe=1\n";
+  std::cout << "VGA_SEQUENCER_PORTS_PASS long64=1 chain4=1 reset=1 independent=1\n";
 }
 void framebuffer_writes() {
   constexpr auto base = PcVideo::kFramebufferAddress;
