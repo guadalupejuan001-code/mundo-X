@@ -53,24 +53,18 @@ class PcVideo {
   PcVideoInfo info() const noexcept { return info_; }
   std::uint16_t current_vbe_mode() const noexcept { return current_vbe_mode_; }
   std::optional<std::uint32_t> input(std::uint16_t port, unsigned width) const noexcept {
-    if (port == kGraphicsIndexPort) {
-      if (width == 1) return graphics_index_;
-      if (width == 2) return graphics_index_ | (std::uint32_t(graphics_data()) << 8);
+    switch (port & 0xfffeU) {
+      case kGraphicsIndexPort: return graphics_.input(port & 1U, width);
+      case kSequencerIndexPort: return sequencer_.input(port & 1U, width);
+      default: return std::nullopt;
     }
-    if (port == kGraphicsDataPort && width == 1) return graphics_data();
-    return std::nullopt;
   }
   bool output(std::uint16_t port, unsigned width, std::uint32_t value) noexcept {
-    if (port == kGraphicsIndexPort && (width == 1 || width == 2)) {
-      graphics_index_ = std::uint8_t(value & 0x0f);
-      if (width == 1) return true;
-      value >>= 8; // OUTW writes the index first and the data at the next port.
-    } else if (port != kGraphicsDataPort || width != 1) {
-      return false;
+    switch (port & 0xfffeU) {
+      case kGraphicsIndexPort: return graphics_.output(port & 1U, width, value, 0x0f, kGraphicsMasks);
+      case kSequencerIndexPort: return sequencer_.output(port & 1U, width, value, 0x07, kSequencerMasks);
+      default: return false;
     }
-    if (graphics_index_ < graphics_registers_.size())
-      graphics_registers_[graphics_index_] = std::uint8_t(value & kGraphicsMasks[graphics_index_]);
-    return true;
   }
   void watch_writes(MemoryFabric& ram) const {
     ram.enable_write_watch(info_.physical_address, info_.byte_size,
@@ -82,8 +76,8 @@ class PcVideo {
     info_ = text;
     info_.mode = mode;
     current_vbe_mode_ = mode | (preserve ? 0x8000 : 0);
-    graphics_index_ = 0;
-    graphics_registers_ = kTextGraphicsRegisters;
+    graphics_ = {kTextGraphicsRegisters};
+    sequencer_ = {kTextSequencerRegisters};
   }
   void reset(MemoryFabric& ram) {
     text_mode(ram, 3);
@@ -260,17 +254,44 @@ class PcVideo {
 
  private:
   // IBM PS/2 Hardware Interface Technical Reference, Video Subsystems,
-  // pp. 2-76 through 2-86. These registers record the VGA controller's state;
-  // the linear VBE framebuffer has its own mode, address and pixel format.
-  static constexpr std::uint16_t kGraphicsIndexPort = 0x3ce, kGraphicsDataPort = 0x3cf;
+  // pp. 2-45 through 2-52 and 2-76 through 2-86. The linear VBE framebuffer
+  // has its own mode, address and pixel format.
+  static constexpr std::uint16_t kGraphicsIndexPort = 0x3ce, kSequencerIndexPort = 0x3c4;
   inline static constexpr std::array<std::uint8_t, 9> kGraphicsMasks{
     0x0f, 0x0f, 0x0f, 0x1f, 0x03, 0x7b, 0x0f, 0x0f, 0xff};
   inline static constexpr std::array<std::uint8_t, 9> kTextGraphicsRegisters{
     0, 0, 0, 0, 0, 0x10, 0x0e, 0, 0xff};
-  std::uint8_t graphics_data() const noexcept {
-    // A reserved register index has no backing register.
-    return graphics_index_ < graphics_registers_.size() ? graphics_registers_[graphics_index_] : 0xff;
-  }
+  inline static constexpr std::array<std::uint8_t, 5> kSequencerMasks{
+    0x03, 0x3d, 0x0f, 0x3f, 0x0e};
+  inline static constexpr std::array<std::uint8_t, 5> kTextSequencerRegisters{
+    0x03, 0, 0x03, 0, 0x02};
+
+  template <std::size_t Count>
+  struct IndexedVgaRegisters {
+    std::array<std::uint8_t, Count> values;
+    std::uint8_t index = 0;
+
+    std::uint8_t data() const noexcept {
+      return index < values.size() ? values[index] : 0xff;
+    }
+    std::optional<std::uint32_t> input(unsigned offset, unsigned width) const noexcept {
+      if (width == 1) return offset ? data() : index;
+      if (offset == 0 && width == 2) return index | (std::uint32_t(data()) << 8);
+      return std::nullopt;
+    }
+    bool output(unsigned offset, unsigned width, std::uint32_t value,
+                std::uint8_t index_mask, const std::array<std::uint8_t, Count>& masks) noexcept {
+      if (offset == 0 && (width == 1 || width == 2)) {
+        index = std::uint8_t(value & index_mask);
+        if (width == 1) return true;
+        value >>= 8; // OUTW writes the index first and the data at the next port.
+      } else if (offset != 1 || width != 1) {
+        return false;
+      }
+      if (index < values.size()) values[index] = std::uint8_t(value & masks[index]);
+      return true;
+    }
+  };
   static constexpr unsigned kFontHighVector = 0x1f, kFontActiveVector = 0x43;
   // Keep the VBE info block and OEM strings at C000:0000..00FF.
   static constexpr unsigned kFont8Offset = 0x0100, kFont14Offset = 0x0900, kFont16Offset = 0x1700;
@@ -326,8 +347,8 @@ class PcVideo {
   static_assert(kFont16AltOffset + AlternateFont<16>{}.size() <= 0x3000);
   PcVideoInfo info_;
   std::uint16_t current_vbe_mode_ = 3;
-  std::uint8_t graphics_index_ = 0;
-  std::array<std::uint8_t, 9> graphics_registers_ = kTextGraphicsRegisters;
+  IndexedVgaRegisters<9> graphics_{kTextGraphicsRegisters};
+  IndexedVgaRegisters<5> sequencer_{kTextSequencerRegisters};
   static void success(Cpu& cpu) { cpu.set_reg16(Cpu::EAX, 0x004f); }
   static void failure(Cpu& cpu) { cpu.set_reg16(Cpu::EAX, 0x014f); }
   static constexpr std::uint32_t bios_pointer(std::uint16_t offset) {
