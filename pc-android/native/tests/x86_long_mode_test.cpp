@@ -741,6 +741,7 @@ void retained_instruction_mapping() {
   cpu.write64(0x11000, 0x12023);
   cpu.write64(0x12000, 0x13023);
   cpu.write64(0x13050, 0xe023);
+  program(cpu, {0xb8,4,0,0,0,0xeb,0xf9}, 0xf000);
   program(cpu, {0xb8,3,0,0,0,0xeb,0xf9}, 0xe000);
   program(cpu, {0xb8,1,0,0,0,0xeb,0xf9});
   one(cpu);
@@ -755,11 +756,21 @@ void retained_instruction_mapping() {
   check(cpu.regs[Cpu::EAX] == 2, "reused mapping must still fetch the current opcode bytes");
 
   cpu.cr3 = 0x10000;
+  cpu.step_trace_hook = [](const Cpu::StepTrace&) {};
   cpu.eip = 0xa000;
   one(cpu);
-  check(cpu.regs[Cpu::EAX] == 3, "reused code mapping must follow the current CR3");
+  check(cpu.regs[Cpu::EAX] == 3, "the current CR3 must select the alternate mapping");
+  const auto epoch = cpu.memory.page_table_epoch();
+  cpu.write64(0x13050, 0xf023);
+  check(epoch && cpu.memory.page_table_epoch() == epoch,
+        "traced fetch should leave the alternate page table untracked");
+  cpu.step_trace_hook = {};
+  cpu.eip = 0xa000;
+  one(cpu);
+  check(cpu.regs[Cpu::EAX] == 4, "a previously untracked instruction mapping must be translated again");
+
   unsigned reads = 0;
-  constexpr auto device_byte = 0xe001U;
+  constexpr auto device_byte = 0xf001U;
   cpu.mmio_claim_hook = [](std::uint64_t address) { return address == device_byte; };
   cpu.mmio_range_claim_hook = [](std::uint64_t address, std::size_t count) {
     return address <= device_byte && device_byte - address < count;
@@ -776,7 +787,7 @@ void retained_instruction_mapping() {
 
   cpu.mmio_claim_hook = {};
   cpu.efer |= 0x800;
-  cpu.write64(0x13050, 0x800000000000e023ULL);
+  cpu.write64(0x13050, 0x800000000000f023ULL);
   cpu.eip = 0xa000;
   expect_fault(cpu, FaultCode::PageFault, "the code mapping must respect an NX permission change");
   check(cpu.cr2 == 0xa000 && cpu.fault->error_code == 17, "execute fault caught at the original RIP");

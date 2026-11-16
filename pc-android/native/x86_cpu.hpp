@@ -891,6 +891,7 @@ class Cpu {
     std::uint64_t memory_epoch = 0, cr3 = 0;
     unsigned policy = 0;
     bool reusable = false;
+    bool tracked = false;
   };
   InstructionPage instruction_page_;
   struct CachedTranslation {
@@ -1162,11 +1163,12 @@ class Cpu {
   std::uint64_t translate_instruction(std::uint64_t linear, bool& ordinary, bool speculative = false) {
     const auto page = linear & ~std::uint64_t{0xfff};
     const auto& cached = instruction_page_;
+    const bool cacheable = can_cache_translations();
     const auto policy = paging_policy(Access::Execute);
-    if (cached.reusable && cached.linear == page && cached.memory_epoch &&
+    if (cacheable && cached.tracked && cached.linear == page && cached.memory_epoch &&
         cached.memory_epoch == memory.page_table_epoch() && cached.cr3 == cr3 &&
         cached.policy == policy && (efer & 0x400U) && (cr4 & 0x20U) &&
-        can_cache_translations() && bulk_ram_range(cached.physical, 4096)) {
+        bulk_ram_range(cached.physical, 4096)) {
       // The mapping and permissions match. Fetch the current bytes from RAM
       // and recheck that no device owns the page on this instruction boundary.
       ordinary = true;
@@ -1175,8 +1177,9 @@ class Cpu {
       return cached.physical | (linear & 0xfffU);
     }
     const auto physical = translate(linear, Access::Execute, &ordinary, speculative);
+    // Only walks with dependency tracking can outlive the current instruction.
     instruction_page_ = {page, physical & ~std::uint64_t{0xfff},
-                         memory.page_table_epoch(), cr3, policy, ordinary};
+                         memory.page_table_epoch(), cr3, policy, ordinary, ordinary && cacheable};
     return physical;
   }
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
