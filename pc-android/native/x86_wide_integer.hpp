@@ -13,6 +13,10 @@ inline DoubleWord negate(DoubleWord value) {
 }
 
 inline DoubleWord multiply(std::uint64_t lhs, std::uint64_t rhs) {
+#if defined(__SIZEOF_INT128__)
+  const auto product = static_cast<__uint128_t>(lhs) * rhs;
+  return {std::uint64_t(product >> 64), std::uint64_t(product)};
+#else
   constexpr std::uint64_t half = 0xffffffffULL;
   const auto a = lhs & half, b = lhs >> 32;
   const auto c = rhs & half, d = rhs >> 32;
@@ -20,6 +24,7 @@ inline DoubleWord multiply(std::uint64_t lhs, std::uint64_t rhs) {
   const auto cross = b * c + (low >> 32);
   const auto middle = a * d + (cross & half);
   return {b * d + (cross >> 32) + (middle >> 32), (middle << 32) | (low & half)};
+#endif
 }
 
 struct Division {

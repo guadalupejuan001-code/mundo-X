@@ -441,6 +441,12 @@ class Cpu {
            !is_real_mode() && !(efer & 0x400U) && cache_[CS].big;
   }
   unsigned try_zero_loop_batch(unsigned step_budget);
+  bool wide_multiply_loop_batch_candidate() const noexcept {
+    return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
+        cursor_ > eip && cursor_ - eip == kWideMultiplyLoopBytes &&
+        start_ip_ == cursor_ - 2 && decoded_.size() == 2 && decoded_[1] == 0xe1 &&
+        (regs[R9] >> 63) && is_long_mode();
+  }
   bool counter_loop_batch_candidate() const noexcept {
     if (!ip_written_ || start_cs_ != segments[CS] || cursor_ <= eip) return false;
     const unsigned branch_bytes = opcode_ == 0x75 ? 2 : opcode_ == 0x0f85 ? 6 : 0;
@@ -449,7 +455,8 @@ class Cpu {
     const auto length = cursor_ - eip;
     if (length >= 17) {
       if (!is_long_mode()) return false;
-      if (sse_copy_loop_tail(length, branch_bytes)) return true;
+      if (sse_copy_loop_tail(length, branch_bytes) ||
+          (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())) return true;
       if (length > ether_arm64::Block::kMaxBytes ||
           last_relative_call_return_ip_ <= eip || last_relative_call_return_ip_ >= start_ip_) return false;
       const auto counter_bytes = start_ip_ - last_relative_call_return_ip_;
@@ -924,6 +931,8 @@ class Cpu {
         branch_bytes == 2 && last_xmm_copy_end_ip_ == start_ip_;
   }
   std::uint64_t try_sse_copy_loop_batch(std::uint64_t step_budget, unsigned length);
+  static constexpr unsigned kWideMultiplyLoopBytes = 31;
+  std::uint64_t try_wide_multiply_loop_batch(std::uint64_t step_budget);
   struct ModRM { unsigned reg; Operand rm; unsigned group = 0; };
   using AtomicRam = std::array<std::size_t, 16>;
 
@@ -3797,6 +3806,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_shift_loop.inc"
 #include "x86_counted_call_loop.inc"
 #include "x86_sse_copy_loop.inc"
+#include "x86_wide_multiply_loop.inc"
 
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   if (step_budget < 4 || !counter_loop_batch_candidate() ||
@@ -3807,6 +3817,8 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   const auto length = unsigned(cursor_ - eip);
   if (sse_copy_loop_tail(length, unsigned(decoded_.size())))
     return try_sse_copy_loop_batch(step_budget, length);
+  if (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())
+    return try_wide_multiply_loop_batch(step_budget);
   if (length >= 17) return try_counted_call_loop_batch(step_budget);
   const auto body = length - 2;
   const bool has_accumulator = length >= 9;
