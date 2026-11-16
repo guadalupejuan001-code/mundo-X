@@ -238,6 +238,14 @@ inline unsigned Cpu::ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t 
     const auto physical = cpu.ether_arm64_ram_address(
         address, width, spec & ether_arm64::kStackAccess, Access::Write);
     if (!physical || cpu.memory.may_touch_page_tables(*physical, width)) return 0;
+    if (spec & ether_arm64::kSubtractAccess) {
+      const auto source = cpu.ether_arm64_ram_address(
+          address, width, spec & ether_arm64::kStackAccess, Access::Read);
+      if (!source || *source != *physical) return 0;
+      frame->left = cpu.read_ram_span(*source, width);
+      frame->right = value;
+      value = frame->left - value;
+    }
     std::array<std::uint8_t, 8> data;
     for (unsigned i = 0; i < width; ++i) data[i] = std::uint8_t(value >> (8 * i));
     cpu.memory.write_block(*physical, data.data(), width);
