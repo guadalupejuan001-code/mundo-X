@@ -149,6 +149,123 @@ void guarded_accumulator_dispatch() {
             "machine dispatch changed device ticks or skipped the accumulator");
 }
 
+void counted_calls() {
+    constexpr std::uint64_t high = 0xffff800000000000ULL, start = high + entry;
+    constexpr std::uint64_t callee = entry + 0x80, data = 0x2a000, word = 0x2c000, stack = 0x30000;
+    constexpr unsigned steps_per_round = 11, rounds = 29, device_deadline = 36;
+    constexpr std::array<std::uint8_t, 26> loop{
+        0x49,0x83,0xc4,0xfd,       // ADD R12,-3
+        0x4c,0x29,0x17,            // SUB [RDI],R10
+        0x4c,0x29,0x1e,            // SUB [RSI],R11
+        0x66,0x89,0x48,0xe8,       // MOV [RAX-0x18],CX
+        0xe8,0x6d,0,0,0,          // CALL callee
+        0x49,0x83,0xe9,1,          // SUB R9,1
+        0x75,0xe7,0xcc};           // JNZ start; INT3
+    constexpr std::array<std::uint8_t, 9> leaf{
+        0x41,0x54,                // PUSH R12
+        0x4d,0x6b,0xc1,0xfb,      // IMUL R8,R9,-5
+        0x41,0x5c,0xc3};           // POP R12; RET
+    PcMachine scalar(4U << 20), batch(4U << 20);
+    for (auto* pc : {&scalar, &batch}) {
+        boot(*pc, true);
+        auto& cpu = pc->cpu;
+        const auto pml4 = cpu.cr3 & ~std::uint64_t{0xfff};
+        cpu.write64(pml4 + 256 * 8, cpu.read64(pml4) & ~0x20ULL);
+        cpu.memory.write_block(entry, loop.data(), loop.size());
+        cpu.memory.write_block(callee, leaf.data(), leaf.size());
+        cpu.idtr = {0xfff, 0xd000}; // Empty IDT to expose the recent kernel calls.
+        cpu.halted = false;
+        cpu.eip = start;
+        cpu.eflags = 2 | Cpu::DF;
+        cpu.regs[Cpu::EAX] = word + 0x18;
+        cpu.regs[Cpu::ECX] = 0x123456789abc5678ULL;
+        cpu.regs[Cpu::ESI] = high + data;
+        cpu.regs[Cpu::EDI] = data;
+        cpu.regs[Cpu::ESP] = stack;
+        cpu.regs[Cpu::R9] = rounds;
+        cpu.regs[Cpu::R10] = 7;
+        cpu.regs[Cpu::R11] = 11;
+        cpu.regs[Cpu::R12] = 1;
+        cpu.write64(data, 0x3141592653589793ULL);
+        cpu.write64(word, 0x1122334455667788ULL);
+        for (unsigned i = 0; i < steps_per_round; ++i)
+            require(cpu.step() == StepResult::Executed, "could not seed the counted CALL loop");
+        require(cpu.eip == start && cpu.counter_loop_batch_candidate(), "expected a counted CALL loop");
+    }
+
+    const auto check_state = [&] {
+        const auto& a = scalar.cpu;
+        const auto& b = batch.cpu;
+        require(!a.fault && !b.fault && a.regs == b.regs && a.eflags == b.eflags && a.eip == b.eip &&
+                a.instructions == b.instructions && a.clock_cycles() == b.clock_cycles() &&
+                a.last_decoded_bytes() == b.last_decoded_bytes(), "counted CALL loop changed x86 state");
+        for (const auto address : {data, word, stack - 16, stack - 8})
+            require(a.read64(address) == b.read64(address), "counted CALL loop changed guest RAM");
+    };
+
+    auto& cpu = batch.cpu;
+    batch.enable_boot_acceleration();
+    unsigned ticks = 0;
+    decltype(cpu.regs) observed_regs{};
+    std::uint64_t observed_ip = 0;
+    batch.device_step_hook = [&] {
+        if (ticks == device_deadline) {
+            observed_regs = cpu.regs;
+            observed_ip = cpu.eip;
+        }
+        ++ticks;
+    };
+    batch.device_batch_limit_hook = [&](unsigned limit) {
+        return ticks < device_deadline ? std::min(limit, device_deadline - ticks + 1) : 1U;
+    };
+    batch.device_batch_advance_hook = [&](unsigned extra) { ticks += extra; };
+
+    // Finish the partially executed round to re-enter the same cached loop.
+    constexpr unsigned tail = steps_per_round - device_deadline % steps_per_round;
+    batch.run(device_deadline + tail);
+    scalar.run(device_deadline);
+    require(observed_regs == scalar.cpu.regs && observed_ip == scalar.cpu.eip &&
+            batch.boot_acceleration().counter_loop_steps == 33, "counted CALL loop skipped a device deadline");
+    scalar.run(tail);
+    check_state();
+    require(ticks == device_deadline + tail && cpu.eip == start, "wrong clock at the cache test entry");
+
+    auto retired = cpu.instructions;
+    cpu.write8(callee + leaf.size() - 1, 0x90);
+    require(!cpu.try_counter_loop_batch(100) && cpu.instructions == retired,
+            "counted CALL loop ignored a modified cached callee");
+    cpu.write8(callee + leaf.size() - 1, leaf.back());
+    check_state();
+    const auto original_output = cpu.regs[Cpu::EDI];
+    cpu.regs[Cpu::EDI] = stack - 16;
+    require(!cpu.try_counter_loop_batch(100) && cpu.instructions == retired,
+            "counted CALL loop accepted a stack alias");
+    cpu.regs[Cpu::EDI] = original_output;
+    check_state();
+
+    const auto budget = (rounds - 1) * steps_per_round - device_deadline - tail;
+    require(cpu.try_counter_loop_batch(budget + 1) == budget, "counted CALL loop consumed the next opcode");
+    scalar.run(budget);
+    check_state();
+    require(cpu.eip == start + loop.size() - 1 && cpu.regs[Cpu::R9] == 0,
+            "counted CALL loop did not exit on zero");
+
+    require(scalar.cpu.step() == StepResult::Faulted && cpu.step() == StepResult::Faulted &&
+            scalar.cpu.fault && cpu.fault && scalar.cpu.fault->interrupt_origin && cpu.fault->interrupt_origin,
+            "expected the post-loop INT3 to report kernel CALL evidence");
+    const auto& a = *scalar.cpu.fault->interrupt_origin;
+    const auto& b = *cpu.fault->interrupt_origin;
+    require(a.call_count == a.kRecentCalls && a.call_count == b.call_count, "wrong number of recent CALLs");
+    for (unsigned i = 0; i < a.call_count; ++i) {
+        const auto& lhs = a.recent_calls[i];
+        const auto& rhs = b.recent_calls[i];
+        require(lhs.from == rhs.from && lhs.target == rhs.target && lhs.return_ip == rhs.return_ip &&
+                lhs.rsp == rhs.rsp && lhs.argument_registers == rhs.argument_registers,
+                "counted CALL loop changed the recorded kernel CALL");
+    }
+    std::cout << "ETHER_COUNTED_CALL_LOOP_PASS device_deadline=1 self_modifying_code=1 aliases=1 kernel_calls=1\n";
+}
+
 void measure_mixed(bool native) {
     PcMachine pc(4U << 20);
     boot(pc, true);
@@ -234,6 +351,7 @@ int main(int argc, char** argv) {
         measure_large_loop(false);
         measure_large_loop(true);
         guarded_accumulator_dispatch();
+        counted_calls();
         std::cout << "ETHER_COUNTER_LOOP_PASS widths=16,32,64 flags=1 paging=1 fallbacks=1\n";
         return 0;
     } catch (const std::exception& error) {

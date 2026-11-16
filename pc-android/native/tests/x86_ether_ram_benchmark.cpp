@@ -81,7 +81,7 @@ void measure(bool same_word) {
             << " wall_median_ns=" << wall_ns[2] << " cpu_median_ns=" << cpu_ns[2] << '\n';
 }
 
-void measure_scalar() {
+void measure_mixed(bool counted) {
   constexpr unsigned rounds = 100'000, guest_steps = 11 * rounds + 1;
   constexpr std::uint64_t stack = 0x90000, word_base = other + 0x18;
   constexpr std::uint64_t initial = 0x9745397ea123b111ULL;
@@ -106,11 +106,12 @@ void measure_scalar() {
     throw std::runtime_error("scalar long-mode fixture failed");
   cpu.enable_page_translation_cache();
   cpu.enable_ether_arm64_blocks(false);
-  machine.enable_boot_acceleration(false);
+  machine.enable_boot_acceleration(counted);
   cpu.memory.write_block(code, body.data(), body.size());
   cpu.memory.write_block(code + 0x80, callee.data(), callee.size());
 
   std::array<std::int64_t, 5> wall_ns{}, cpu_ns{};
+  std::uint64_t counter_steps = 0, counter_batches = 0;
   for (unsigned sample = 0; sample <= wall_ns.size(); ++sample) {
     cpu.halted = false;
     cpu.eip = code;
@@ -125,6 +126,7 @@ void measure_scalar() {
     cpu.write64(first, initial);
     cpu.write64(other, 0);
     const auto retired = cpu.instructions;
+    const auto before = machine.boot_acceleration();
     const auto start = std::chrono::steady_clock::now();
     const auto cpu_start = std::clock();
     for (unsigned remaining = guest_steps; remaining;) {
@@ -134,12 +136,15 @@ void measure_scalar() {
     }
     const auto cpu_end = std::clock();
     const auto elapsed = std::chrono::steady_clock::now() - start;
+    counter_steps = machine.boot_acceleration().counter_loop_steps - before.counter_loop_steps;
+    counter_batches = machine.boot_acceleration().counter_loop_batches - before.counter_loop_batches;
     const auto expected_rbx = 5 + addend * rounds;
     if (!cpu.halted || cpu.fault || cpu.instructions - retired != guest_steps ||
-        cpu.ether_arm64_stats().steps != 0 || cpu.regs[Cpu::EDX] != 0 ||
+        cpu.eip != code + body.size() || cpu.ether_arm64_stats().steps != 0 || cpu.regs[Cpu::EDX] != 0 ||
         cpu.regs[Cpu::EBX] != expected_rbx || cpu.regs[Cpu::R14] != expected_rbx * multiplier ||
         cpu.regs[Cpu::ESP] != stack || cpu.read64(first) != initial - (word_base + 7) * rounds ||
         cpu.read16(other) != std::uint16_t(first - 8) ||
+        cpu.read64(stack - 16) != expected_rbx || cpu.read64(stack - 8) != code + 0x18 ||
         cpu.eflags != (2 | Cpu::IF | Cpu::ZF | Cpu::PF) || cpu_start == std::clock_t(-1) || cpu_end < cpu_start)
       throw std::runtime_error("mixed x86 interpreter benchmark changed the guest result");
     if (sample == 0) continue;
@@ -148,20 +153,23 @@ void measure_scalar() {
   }
   std::sort(wall_ns.begin(), wall_ns.end());
   std::sort(cpu_ns.begin(), cpu_ns.end());
-  std::cout << "PRIME_X86_SCALAR_BENCH steps=" << guest_steps
-            << " wall_median_ns=" << wall_ns[2] << " cpu_median_ns=" << cpu_ns[2] << '\n';
+  std::cout << (counted ? "PRIME_X86_COUNTED_BENCH" : "PRIME_X86_SCALAR_BENCH") << " steps=" << guest_steps
+            << " wall_median_ns=" << wall_ns[2] << " cpu_median_ns=" << cpu_ns[2]
+            << " counter_steps=" << counter_steps << " counter_batches=" << counter_batches << '\n';
 }
 }  // namespace
 
 int main(int argc, char** argv) {
   const bool scalar_only = argc == 2 && std::string_view(argv[1]) == "--scalar";
-  if (!scalar_only && !Cpu::ether_arm64_host()) return 1;
+  const bool counted_only = argc == 2 && std::string_view(argv[1]) == "--counted";
+  if (!scalar_only && !counted_only && !Cpu::ether_arm64_host()) return 1;
   try {
-    if (!scalar_only) {
+    if (!scalar_only && !counted_only) {
       measure(true);
       measure(false);
     }
-    measure_scalar();
+    if (!counted_only) measure_mixed(false);
+    if (!scalar_only) measure_mixed(true);
     return 0;
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
