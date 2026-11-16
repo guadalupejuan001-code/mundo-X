@@ -250,6 +250,12 @@ class MemoryFabric {
     return ram_.read_byte(offset);
   }
 
+  const std::uint8_t* resident_ram_span(std::uint64_t offset, unsigned bytes) const noexcept {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
+    if (overlaps_window(offset, bytes)) return nullptr;
+    return ram_.resident_span(offset, bytes);
+  }
+
   void write_byte(std::uint64_t offset, std::uint8_t value) {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, 1);
