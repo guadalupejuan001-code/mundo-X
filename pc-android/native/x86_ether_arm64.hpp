@@ -40,7 +40,8 @@ struct Operand {
 struct Instruction {
   enum Kind {
     Unsupported, Move, MoveByte, MoveZeroExtend, MoveSignExtend, Lea, Nop, Compare, Test, Increment, Decrement,
-    Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic, SignedMultiply, Conditional, Jump
+    Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic,
+    RotateLeft, RotateRight, SignedMultiply, Conditional, Jump
   };
   Kind kind = Move;
   Operand lhs, rhs;
@@ -52,6 +53,13 @@ struct Instruction {
   }
   static bool shift(Kind kind) noexcept {
     return kind == ShiftLeft || kind == ShiftRight || kind == ShiftArithmetic;
+  }
+  static bool rotate(Kind kind) noexcept {
+    return kind == RotateLeft || kind == RotateRight;
+  }
+  static bool sets_auxiliary(Kind kind) noexcept {
+    return kind == Add || kind == Subtract || kind == Compare ||
+        kind == Increment || kind == Decrement;
   }
   bool writes_ram() const noexcept {
     return lhs.memory && (kind == Move || kind == MoveByte || kind == Subtract);
@@ -65,8 +73,12 @@ struct Instruction {
 struct Block {
   static constexpr unsigned kMaxBytes = 64, kMaxInstructions = 16;
   static constexpr unsigned kMaxWrites = 4;
+  static constexpr unsigned kNoFlagSource = kMaxInstructions;
   std::array<Instruction, kMaxInstructions> instructions{};
   unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
+  unsigned auxiliary_index = kNoFlagSource, rotate_carry_index = kNoFlagSource;
+  unsigned rotate_overflow_index = kNoFlagSource, rotates = 0;
+  unsigned last_wide_rotate_offset = kMaxBytes;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
   bool long_mode = true, repeats = false, register_only = true;
@@ -80,7 +92,7 @@ struct Block {
   }
 
   bool uses_arm_condition() const noexcept {
-    if (!count || flag_width < 4 ||
+    if (!count || flag_width < 4 || rotate_carry_index != kNoFlagSource ||
         (flag_op != Instruction::Compare && flag_op != Instruction::Subtract)) return false;
     const auto& last = instructions[count - 1];
     return last.kind == Instruction::Conditional && last.condition < 16;
@@ -170,8 +182,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     const bool multiply_immediate = opcode == 0x69 || opcode == 0x6b;
     const bool multiply = opcode == 0x0faf || multiply_immediate;
     const bool shift = opcode == 0xc1 || opcode == 0xd1 || opcode == 0xd3;
-    const bool carry_preserved = !block.flag_width ||
-        block.flag_op == Instruction::Increment || block.flag_op == Instruction::Decrement;
+    const bool carry_preserved = block.rotate_carry_index == Block::kNoFlagSource &&
+        (!block.flag_width || block.flag_op == Instruction::Increment || block.flag_op == Instruction::Decrement);
     const auto immediate = [&](unsigned width, bool sign) {
       std::uint64_t value = 0;
       for (unsigned i = 0; i < width; ++i) value |= std::uint64_t(bytes[pos++]) << (8 * i);
@@ -282,13 +294,19 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
           op.multiplier = immediate(literal_width, true).immediate_value;
         }
       } else if (shift) {
-        // A zero count can keep all incoming flags. Even on a nonzero count,
-        // OF or AF can depend on their previous values.
-        if (other.memory || op.width < 4 || group < 4 || block.flag_width) break;
+        if (other.memory || op.width < 4) break;
         if (opcode == 0xc1 && pos == size) break;
-        op.kind = group == 5 ? Instruction::ShiftRight
-            : group == 7 ? Instruction::ShiftArithmetic : Instruction::ShiftLeft;
-        op.rhs = opcode == 0xd3 ? Operand{1} : Operand::literal(opcode == 0xd1 ? 1 : bytes[pos++]);
+        if (group <= 1 && opcode != 0xd3) {
+          op.kind = group == 0 ? Instruction::RotateLeft : Instruction::RotateRight;
+          const auto count = opcode == 0xd1 ? 1U : unsigned(bytes[pos++]);
+          op.rhs = Operand::literal(count & (op.width * 8 - 1));
+        } else {
+          // Shifts can keep incoming OF, and variable zero counts can keep all flags.
+          if (group < 4 || block.flag_width || block.rotate_carry_index != Block::kNoFlagSource) break;
+          op.kind = group == 5 ? Instruction::ShiftRight
+              : group == 7 ? Instruction::ShiftArithmetic : Instruction::ShiftLeft;
+          op.rhs = opcode == 0xd3 ? Operand{1} : Operand::literal(opcode == 0xd1 ? 1 : bytes[pos++]);
+        }
       } else if (opcode == 0x84 || opcode == 0x85) {
         if (opcode == 0x84) {
           // Without REX, encodings 4 through 7 refer to AH, CH, DH and BH.
@@ -333,9 +351,10 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       if (long_mode && !canonical(target)) break;
       block.target = long_mode ? target : std::uint32_t(target);
     }
-    // Logical operations and shifts preserve AF. Retire an earlier producer of AF first.
-    if (Instruction::logical(op.kind) && block.flag_width &&
-        !Instruction::logical(block.flag_op) && !Instruction::shift(block.flag_op)) break;
+    // A guarded memory SUB uses the primary flag slots in its write callback.
+    // Commit it before a subsequent logical operation that inherits its AF.
+    if (Instruction::logical(op.kind) && block.auxiliary_index != Block::kNoFlagSource &&
+        block.instructions[block.auxiliary_index].writes_ram()) break;
     if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) ||
         op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
         op.kind == Instruction::Add || op.kind == Instruction::Subtract ||
@@ -343,6 +362,15 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       block.flag_width = op.width;
       block.flag_op = op.kind;
       block.flag_index = block.count;
+      block.rotate_carry_index = block.rotate_overflow_index = Block::kNoFlagSource;
+      if (Instruction::sets_auxiliary(op.kind)) block.auxiliary_index = block.count;
+    } else if (Instruction::rotate(op.kind)) {
+      ++block.rotates;
+      const auto count = op.rhs.immediate_value;
+      if (count) block.rotate_carry_index = block.count;
+      if (count && op.width == 8) block.last_wide_rotate_offset = op.begin;
+      // Match the interpreter's retained OF for counts greater than one.
+      if (count == 1) block.rotate_overflow_index = block.count;
     }
     if (op.lhs.memory && op.lhs.reg == Operand::kRipBase)
       op.lhs.immediate_value = rip + pos + signed_offset(op.lhs.displacement);
@@ -425,6 +453,7 @@ struct Frame {
   using Write = unsigned (*)(Frame*, std::uint64_t, unsigned, std::uint64_t) noexcept;
   std::array<std::uint64_t, 16> regs;
   std::uint64_t left = 0, right = 0, loaded = 0;
+  std::uint64_t auxiliary_left, auxiliary_right, rotate_carry_result, rotate_overflow_result;
   Read read;
   Write write;
   void* cpu;
@@ -455,6 +484,8 @@ class Emitter {
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
       const bool capture_flags = block.flag_width && i == block.flag_index;
+      const unsigned flag_slot = capture_flags ? offsetof(Frame, left)
+          : i == block.auxiliary_index ? offsetof(Frame, auxiliary_left) : 0;
       if (op.writes_ram()) {
         const auto access = op.kind == Instruction::Subtract ? kSubtractAccess : 0;
         prepare_access(op.lhs, op.width, access);
@@ -485,19 +516,30 @@ class Emitter {
         if (immediate) literal(9, op.multiplier, op.width);
         else read(op.rhs, op.width);
         store(9, offsetof(Frame, right));
+      } else if (Instruction::rotate(op.kind)) {
+        read(op.lhs, op.width);
+        const auto count = unsigned(op.rhs.immediate_value);
+        if (count) {
+          const auto right = op.kind == Instruction::RotateLeft ? op.width * 8 - count : count;
+          const auto extr = op.width == 8 ? 0x93c00000U : 0x13800000U;
+          emit(extr | (9U << 16) | (right << 10) | (9U << 5) | 9U); // ROR X/W9,X/W9,#right
+        }
+        store(9, op.lhs.reg * 8);
+        if (i == block.rotate_carry_index) store(9, offsetof(Frame, rotate_carry_result));
+        else if (i == block.rotate_overflow_index) store(9, offsetof(Frame, rotate_overflow_result));
       } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
                  op.kind == Instruction::Add || op.kind == Instruction::Subtract || op.kind == Instruction::Xor ||
                  op.kind == Instruction::And || op.kind == Instruction::Or || Instruction::shift(op.kind)) {
-        register_alu(op, capture_flags);
+        register_alu(op, flag_slot);
       } else if (op.kind == Instruction::Compare || op.kind == Instruction::Test) {
         // Preserve guarded reads even if later instructions overwrite these flags.
-        if (capture_flags || op.lhs.memory) {
+        if (flag_slot || op.lhs.memory) {
           read(op.lhs, op.width);
-          if (capture_flags) store(9, offsetof(Frame, left));
+          if (flag_slot) store(9, flag_slot);
         }
-        if (capture_flags || op.rhs.memory) {
+        if (flag_slot || op.rhs.memory) {
           read(op.rhs, op.width);
-          if (capture_flags) store(9, offsetof(Frame, right));
+          if (flag_slot) store(9, flag_slot + sizeof(std::uint64_t));
         }
       }
     }
@@ -536,9 +578,10 @@ class Emitter {
   unsigned exits_ = 0;
   bool long_mode_, register_only_;
 
-  void register_alu(const Instruction& op, bool capture_flags) {
+  void register_alu(const Instruction& op, unsigned flag_slot) {
     read(op.lhs, op.width);
-    if (capture_flags || op.rhs.memory) store(9, offsetof(Frame, left));
+    const unsigned left_slot = flag_slot ? flag_slot : offsetof(Frame, left);
+    if (flag_slot || op.rhs.memory) store(9, left_slot);
     const auto wide = op.width == 8 ? 0x80000000U : 0;
     const auto dest_width = op.width < 4 ? op.width : 8;
     const bool inc_dec = op.kind == Instruction::Increment || op.kind == Instruction::Decrement;
@@ -549,16 +592,16 @@ class Emitter {
       const bool subtract = (op.kind == Instruction::Decrement || op.kind == Instruction::Subtract) != negative;
       emit(0x11000129U | (subtract ? 0x40000000U : 0) | wide | (std::uint32_t(amount) << 10));
       store(9, op.lhs.reg * 8, dest_width);
-      if (capture_flags && !inc_dec) {
+      if (flag_slot && !inc_dec) {
         read(op.rhs, op.width);
-        store(9, offsetof(Frame, right));
+        store(9, flag_slot + sizeof(std::uint64_t));
       }
       return;
     }
     if (!op.rhs.memory) emit(0xaa0903ea); // MOV X10,X9 (left).
     read(op.rhs, op.width);
-    if (capture_flags) store(9, offsetof(Frame, right));
-    if (op.rhs.memory) load(10, offsetof(Frame, left), op.width);
+    if (flag_slot) store(9, flag_slot + sizeof(std::uint64_t));
+    if (op.rhs.memory) load(10, left_slot, op.width);
     std::uint32_t alu;
     switch (op.kind) {
       case Instruction::Subtract: alu = 0x4b090149U; break;

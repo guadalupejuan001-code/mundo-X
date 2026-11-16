@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 namespace {
 using cosmic_pc::Cpu;
@@ -157,13 +158,86 @@ void measure_mixed(bool counted) {
             << " wall_median_ns=" << wall_ns[2] << " cpu_median_ns=" << cpu_ns[2]
             << " counter_steps=" << counter_steps << " counter_batches=" << counter_batches << '\n';
 }
+
+void measure_rotations() {
+  // Long-mode arithmetic and stack forms present in the Galaxy's slow phase.
+  // The body crosses a native block boundary so every round is dispatched.
+  constexpr std::array<std::uint8_t, 28> sequence{
+      0xc1,0xc8,7, 0x33,0xd0, 0x03,0xc8, 0xc1,0xc9,19, 0x41,0x23,0xc3,
+      0x89,0x4c,0x24,0x10, 0x44,0x8b,0x54,0x24,0x10, 0x41,0x33,0xc2, 0xc1,0xc2,6};
+  constexpr unsigned rounds = 100'000, guest_steps = 20 * rounds + 1;
+  constexpr std::uint64_t stack = 0x90000;
+  constexpr std::uint32_t initial_a = 0x8137b123, initial_c = 0xbe17a83d, initial_d = 0x5728cef0;
+  constexpr std::uint32_t mask = 0xf7ff7fff;
+  std::vector<std::uint8_t> body;
+  for (unsigned i = 0; i < 2; ++i) body.insert(body.end(), sequence.begin(), sequence.end());
+  body.insert(body.end(), {0x41,0x83,0xe8,1,0x75,0xc2,0xf4}); // SUB R8D,1; JNZ; HLT
+  auto a = initial_a, c = initial_c, d = initial_d;
+  for (unsigned i = 0; i < 2 * rounds; ++i) {
+    a = (a >> 7) | (a << 25);
+    d ^= a;
+    c += a;
+    c = (c >> 19) | (c << 13);
+    a = (a & mask) ^ c;
+    d = (d << 6) | (d >> 26);
+  }
+
+  PcMachine machine;
+  machine.boot_long_mode_demo();
+  machine.run(4000);
+  auto& cpu = machine.cpu;
+  if (!cpu.is_long_mode() || !cpu.halted || cpu.fault)
+    throw std::runtime_error("rotation benchmark did not enter long mode");
+  cpu.enable_page_translation_cache();
+  cpu.enable_ether_arm64_blocks();
+  machine.enable_boot_acceleration();
+  cpu.memory.write_block(code, body.data(), body.size());
+  std::array<std::int64_t, 5> elapsed{};
+  std::uint64_t translated = 0;
+  for (unsigned sample = 0; sample <= elapsed.size(); ++sample) {
+    cpu.halted = false;
+    cpu.eip = code;
+    cpu.eflags = 2 | Cpu::IF;
+    cpu.regs[Cpu::EAX] = initial_a;
+    cpu.regs[Cpu::ECX] = initial_c;
+    cpu.regs[Cpu::EDX] = initial_d;
+    cpu.regs[Cpu::R11] = mask;
+    cpu.regs[Cpu::R8] = rounds;
+    cpu.regs[Cpu::ESP] = stack;
+    cpu.write32(stack + 0x10, 0);
+    const auto retired = cpu.instructions;
+    const auto before = cpu.ether_arm64_stats().steps;
+    const auto start = std::chrono::steady_clock::now();
+    for (unsigned remaining = guest_steps; remaining;) {
+      const auto slice = std::min(remaining, 50'000U);
+      machine.run(slice);
+      remaining -= slice;
+    }
+    const auto duration = std::chrono::steady_clock::now() - start;
+    translated = cpu.ether_arm64_stats().steps - before;
+    if (!cpu.halted || cpu.fault || cpu.instructions - retired != guest_steps ||
+        cpu.regs[Cpu::EAX] != a || cpu.regs[Cpu::ECX] != c || cpu.regs[Cpu::EDX] != d ||
+        cpu.regs[Cpu::R10] != c || cpu.read32(stack + 0x10) != c || cpu.regs[Cpu::R8] != 0 ||
+        cpu.eip != code + body.size() || cpu.eflags != (2 | Cpu::IF | Cpu::ZF | Cpu::PF))
+      throw std::runtime_error("rotation benchmark changed the x86 result");
+    if (sample) elapsed[sample - 1] = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+  }
+  std::sort(elapsed.begin(), elapsed.end());
+  std::cout << "PRIME_ETHER_ROTATION_BENCH steps=" << guest_steps
+            << " native_steps=" << translated << " median_ns=" << elapsed[elapsed.size() / 2] << '\n';
+}
 }  // namespace
 
 int main(int argc, char** argv) {
   const bool scalar_only = argc == 2 && std::string_view(argv[1]) == "--scalar";
   const bool counted_only = argc == 2 && std::string_view(argv[1]) == "--counted";
-  if (!scalar_only && !counted_only && !Cpu::ether_arm64_host()) return 1;
+  const bool rotate_only = argc == 2 && std::string_view(argv[1]) == "--rotations";
+  if (!scalar_only && !counted_only && !rotate_only && !Cpu::ether_arm64_host()) return 1;
   try {
+    if (rotate_only) {
+      measure_rotations();
+      return 0;
+    }
     if (!scalar_only && !counted_only) {
       measure(true);
       measure(false);

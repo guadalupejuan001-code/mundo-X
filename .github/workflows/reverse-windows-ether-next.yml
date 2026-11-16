@@ -96,6 +96,9 @@ jobs:
             "$source" -o "$RUNNER_TEMP/ether-ram-after"
           "$RUNNER_TEMP/ether-ram-before" | sed 's/^/parent /' | tee -a "$GITHUB_STEP_SUMMARY"
           "$RUNNER_TEMP/ether-ram-after" | sed 's/^/current /' | tee -a "$GITHUB_STEP_SUMMARY"
+          for revision in before after after before; do
+            "$RUNNER_TEMP/ether-ram-$revision" --rotations | sed "s/^/$revision /" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
           source=pc-android/native/tests/x86_ether_counter_loop_test.cpp
           g++ -std=c++17 -O2 -DNDEBUG -frounding-math -pthread \
             -I "$base/native/include" -I "$base/pc-android/native" \

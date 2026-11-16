@@ -167,8 +167,14 @@ void decoder_contract() {
   require(!arm64::decode(legacy_byte, sizeof(legacy_byte), code).count,
           "TEST AH must use the interpreter's legacy byte-register semantics");
   const std::uint8_t cmp_test[]{0x83,0xf8,0x01,0x85,0xc0,0x75,0x08};
-  require(arm64::decode(cmp_test, sizeof(cmp_test), code).count == 1,
-          "A later TEST must preserve AF established by the earlier CMP");
+  const auto inherited_aux = arm64::decode(cmp_test, sizeof(cmp_test), code);
+  require(inherited_aux.count == 3 && inherited_aux.auxiliary_index == 0 && inherited_aux.flag_index == 1,
+          "A grouped TEST must preserve AF established by the earlier CMP");
+  const std::uint8_t rotate_branch[]{0x83,0xf8,0x01,0xc1,0xc8,7,0x72,8};
+  const auto rotated = arm64::decode(rotate_branch, sizeof(rotate_branch), code);
+  require(rotated.count == 3 && rotated.rotates == 1 && rotated.rotate_carry_index == 1 &&
+          rotated.rotate_overflow_index == arm64::Block::kNoFlagSource && !rotated.uses_arm_condition(),
+          "A rotate between CMP and JC must update carry before the guest condition");
   const std::uint8_t scan_prefix[]{0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x80,0x3a,0xe8,0x75,0xf4};
   const auto scan = arm64::decode(scan_prefix, sizeof(scan_prefix), code);
   require(scan.count == 4 && scan.target == code &&
@@ -229,7 +235,7 @@ void decoder_contract() {
   require(!arm64::decode(word_cmp, sizeof(word_cmp), code, false).uses_arm_condition(),
           "word comparison must use the x86 sign bit");
   const auto copy = arm64::decode(byte_copy_loop.data(), byte_copy_loop.size(), code);
-  require(copy.count == 6 && copy.stages_ram() &&
+  require(copy.count == 8 && copy.stages_ram() && copy.auxiliary_index == 5 &&
           copy.instructions[1].kind == arm64::Instruction::Add &&
           copy.instructions[2].kind == arm64::Instruction::MoveByte &&
           copy.instructions[2].lhs.memory && copy.instructions[2].lhs.index == Cpu::R11,
@@ -1230,14 +1236,58 @@ void observed_flags_contract() {
     cpu.eflags = 2;
     cpu.regs[Cpu::EAX] = 0x10;
   }
-  require(!native.cpu.try_ether_arm64_block(3) && native.cpu.step() == StepResult::Executed &&
-          scalar.cpu.step() == StepResult::Executed &&
-          capture(native.cpu) == capture(scalar.cpu) && native.cpu.flag(Cpu::AF),
-          "CMP before TEST must retire its own flags");
-  warm_block(native.cpu, code + 3, 2);
-  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
-          native.cpu.eip == scalar.cpu.eip && native.cpu.eflags == scalar.cpu.eflags &&
-          native.cpu.flag(Cpu::AF), "Translated TEST lost AF established by CMP");
+  warm_block(native.cpu, code, 3);
+  for (unsigned i = 0; i < 3; ++i)
+    require(scalar.cpu.step() == StepResult::Executed, "scalar CMP/TEST/branch failed");
+  require(capture(native.cpu) == capture(scalar.cpu) && native.cpu.flag(Cpu::AF),
+          "Translated TEST lost AF established by CMP");
+}
+
+void rotation_contract() {
+  struct Probe {
+    std::vector<std::uint8_t> bytes;
+    unsigned steps, rotates;
+  };
+  const std::array<Probe, 6> probes{{
+      {{0x83,0xc0,0x01, 0xc1,0xc8,7, 0x33,0xd0, 0xc1,0xc9,19, 0x72,8}, 5, 2},
+      {{0x83,0xf8,0x00, 0x41,0xd1,0xc0, 0x41,0xc1,0xc9,6, 0x70,8}, 4, 2},
+      {{0x48,0x83,0xf8,0x01, 0x48,0xc1,0xc8,63, 0x72,8}, 3, 1},
+      {{0xc1,0xc0,32, 0x49,0xc1,0xc8,64, 0x70,8}, 3, 2},
+      {{0x48,0xd1,0xc0, 0x48,0x85,0xc0, 0x72,8}, 3, 1},
+      {{0x89,0x54,0x24,0x10, 0x03,0x44,0x24,0x10, 0xc1,0xc8,7, 0x33,0xc1, 0x75,8}, 5, 1},
+  }};
+  constexpr std::array<std::uint64_t, 8> values{
+      0, 1, 0x10, 0xff, 0x7fffffff, 0xffffffff00000000ULL, 0x8000000000000000ULL, UINT64_MAX};
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  unsigned cases = 0;
+  for (const auto& probe : probes) {
+    for (auto* machine : {&native, &scalar})
+      machine->cpu.memory.write_block(code, probe.bytes.data(), probe.bytes.size());
+    for (auto value : values) for (auto flags : {0U, Cpu::CF | Cpu::OF | Cpu::AF | Cpu::ZF}) {
+      for (auto* machine : {&native, &scalar}) {
+        auto& cpu = machine->cpu;
+        cpu.eip = code;
+        cpu.eflags = 2 | Cpu::DF | flags;
+        cpu.regs[Cpu::EAX] = cpu.regs[Cpu::R8] = value;
+        cpu.regs[Cpu::ECX] = cpu.regs[Cpu::R9] = ~value;
+        cpu.regs[Cpu::EDX] = value ^ 0x16;
+        cpu.write32(stack + 0x10, 0);
+      }
+      const auto before = native.cpu.ether_arm64_stats().rotate_steps;
+      warm_block(native.cpu, code, probe.steps);
+      for (unsigned i = 0; i < probe.steps; ++i)
+        require(scalar.cpu.step() == StepResult::Executed, "scalar rotation fixture failed");
+      require(capture(native.cpu) == capture(scalar.cpu) &&
+              native.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes() &&
+              native.cpu.read32(stack + 0x10) == scalar.cpu.read32(stack + 0x10) &&
+              native.cpu.ether_arm64_stats().rotate_steps - before == probe.rotates,
+              "ARM64 rotation changed flags, registers, branch target, memory or retired work");
+      ++cases;
+    }
+  }
+  std::cout << "PRIME_ETHER_ROTATION_PASS cases=" << cases << " flags=1 stack=1 exact_steps=1\n";
 }
 
 void scan_forms_contract() {
@@ -1386,6 +1436,7 @@ int main() {
     cache_collision_contract();
     flag_contract();
     observed_flags_contract();
+    rotation_contract();
     scan_forms_contract();
     immediate_arithmetic_contract();
     indexed_loop_benchmark();
