@@ -78,7 +78,8 @@ struct Block {
   unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
   unsigned auxiliary_index = kNoFlagSource, rotate_carry_index = kNoFlagSource;
   unsigned rotate_overflow_index = kNoFlagSource, rotates = 0;
-  unsigned last_wide_rotate_offset = kMaxBytes;
+  unsigned variable_rotates = 0;
+  unsigned last_wide_rotate_offset = kMaxBytes, last_variable_rotate_offset = kMaxBytes;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
   bool long_mode = true, repeats = false, register_only = true;
@@ -296,10 +297,16 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       } else if (shift) {
         if (other.memory || op.width < 4) break;
         if (opcode == 0xc1 && pos == size) break;
-        if (group <= 1 && opcode != 0xd3) {
+        if (group <= 1) {
+          // A runtime zero count inherits CF and OF. Keep any earlier
+          // outstanding rotate flags in the preceding block.
+          if (opcode == 0xd3 && block.rotate_carry_index != Block::kNoFlagSource) break;
           op.kind = group == 0 ? Instruction::RotateLeft : Instruction::RotateRight;
-          const auto count = opcode == 0xd1 ? 1U : unsigned(bytes[pos++]);
-          op.rhs = Operand::literal(count & (op.width * 8 - 1));
+          if (opcode == 0xd3) op.rhs = Operand{1}; // CL
+          else {
+            const auto count = opcode == 0xd1 ? 1U : unsigned(bytes[pos++]);
+            op.rhs = Operand::literal(count & (op.width * 8 - 1));
+          }
         } else {
           // Shifts can keep incoming OF, and variable zero counts can keep all flags.
           if (group < 4 || block.flag_width || block.rotate_carry_index != Block::kNoFlagSource) break;
@@ -367,10 +374,16 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     } else if (Instruction::rotate(op.kind)) {
       ++block.rotates;
       const auto count = op.rhs.immediate_value;
-      if (count) block.rotate_carry_index = block.count;
-      if (count && op.width == 8) block.last_wide_rotate_offset = op.begin;
-      // Match the interpreter's retained OF for counts greater than one.
-      if (count == 1) block.rotate_overflow_index = block.count;
+      if (!op.rhs.immediate) {
+        ++block.variable_rotates;
+        block.rotate_carry_index = block.rotate_overflow_index = block.count;
+        if (op.width == 8) block.last_variable_rotate_offset = op.begin;
+      } else {
+        if (count) block.rotate_carry_index = block.count;
+        if (count && op.width == 8) block.last_wide_rotate_offset = op.begin;
+        // Match the interpreter's retained OF for counts greater than one.
+        if (count == 1) block.rotate_overflow_index = block.count;
+      }
     }
     if (op.lhs.memory && op.lhs.reg == Operand::kRipBase)
       op.lhs.immediate_value = rip + pos + signed_offset(op.lhs.displacement);
@@ -459,6 +472,7 @@ struct Frame {
   void* cpu;
   PendingRamWrites* pending;
   unsigned loop_remaining = 1;
+  unsigned rotate_count;
   std::uint64_t* guest_regs;
 };
 
@@ -519,7 +533,14 @@ class Emitter {
       } else if (Instruction::rotate(op.kind)) {
         read(op.lhs, op.width);
         const auto count = unsigned(op.rhs.immediate_value);
-        if (count) {
+        if (!op.rhs.immediate) {
+          load(10, op.rhs.reg * 8, 4);
+          if (i == block.rotate_carry_index || i == block.rotate_overflow_index)
+            store(10, offsetof(Frame, rotate_count), 4);
+          if (op.kind == Instruction::RotateLeft) emit(0x4b0a03eaU); // NEG W10,W10
+          const auto rorv = op.width == 8 ? 0x9ac02c00U : 0x1ac02c00U;
+          emit(rorv | (10U << 16) | (9U << 5) | 9U); // RORV X/W9,X/W9,X/W10
+        } else if (count) {
           const auto right = op.kind == Instruction::RotateLeft ? op.width * 8 - count : count;
           const auto extr = op.width == 8 ? 0x93c00000U : 0x13800000U;
           emit(extr | (9U << 16) | (right << 10) | (9U << 5) | 9U); // ROR X/W9,X/W9,#right

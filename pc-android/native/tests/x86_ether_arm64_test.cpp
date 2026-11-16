@@ -175,6 +175,11 @@ void decoder_contract() {
   require(rotated.count == 3 && rotated.rotates == 1 && rotated.rotate_carry_index == 1 &&
           rotated.rotate_overflow_index == arm64::Block::kNoFlagSource && !rotated.uses_arm_condition(),
           "A rotate between CMP and JC must update carry before the guest condition");
+  const std::uint8_t runtime_rotate[]{0x49,0xd3,0xc0,0x4d,0x33,0x02,0xf4};
+  const auto runtime = arm64::decode(runtime_rotate, sizeof(runtime_rotate), code);
+  require(runtime.count == 2 && runtime.variable_rotates == 1 &&
+          runtime.instructions.front().rhs.reg == Cpu::ECX &&
+          runtime.instructions[1].rhs.memory, "observed ROL R8,CL and XOR R8,[R10] must share a block");
   const std::uint8_t scan_prefix[]{0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x80,0x3a,0xe8,0x75,0xf4};
   const auto scan = arm64::decode(scan_prefix, sizeof(scan_prefix), code);
   require(scan.count == 4 && scan.target == code &&
@@ -1290,6 +1295,44 @@ void rotation_contract() {
   std::cout << "PRIME_ETHER_ROTATION_PASS cases=" << cases << " flags=1 stack=1 exact_steps=1\n";
 }
 
+void variable_rotation_contract() {
+  const std::array<std::vector<std::uint8_t>, 3> programs{{
+      {0x48,0x83,0xf8,0x01, 0x49,0xd3,0xc0, 0x72,8}, // CMP; ROL R8,CL; JC
+      {0xd3,0xc8, 0xc1,0xc9,7, 0x70,8},             // ROR EAX,CL; ROR ECX,7; JO
+      {0x49,0xd3,0xc8, 0x4d,0x33,0x02, 0x75,8},     // ROR R8,CL; XOR R8,[R10]; JNZ
+  }};
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  unsigned cases = 0;
+  for (const auto& bytes : programs) {
+    for (auto* machine : {&native, &scalar})
+      machine->cpu.memory.write_block(code, bytes.data(), bytes.size());
+    for (auto count : {0ULL,1ULL,7ULL,31ULL,32ULL,63ULL,64ULL,255ULL})
+      for (auto value : {0ULL,0x0123456789abcdefULL,0x80000000ff000001ULL})
+        for (auto flags : {0U,Cpu::CF | Cpu::OF | Cpu::AF}) {
+          for (auto* machine : {&native, &scalar}) {
+            auto& cpu = machine->cpu;
+            cpu.eip = code;
+            cpu.eflags = 2 | Cpu::DF | flags;
+            cpu.regs[Cpu::EAX] = cpu.regs[Cpu::R8] = value;
+            cpu.regs[Cpu::ECX] = count;
+            cpu.regs[Cpu::R10] = nodes;
+            cpu.write64(nodes, value + 0xc0017a123ULL);
+          }
+          const auto before = native.cpu.ether_arm64_stats().variable_rotate_steps;
+          warm_block(native.cpu, code, 3);
+          for (unsigned i = 0; i < 3; ++i)
+            require(scalar.cpu.step() == StepResult::Executed, "scalar variable rotation failed");
+          require(capture(native.cpu) == capture(scalar.cpu) &&
+                  native.cpu.ether_arm64_stats().variable_rotate_steps - before == 1,
+                  "native variable rotation changed registers, flags, branch or retired steps");
+          ++cases;
+        }
+  }
+  std::cout << "PRIME_ETHER_VARIABLE_ROTATION_PASS cases=" << cases << " flags=1 ram=1\n";
+}
+
 void scan_forms_contract() {
   // Use the byte comparison and addressing forms seen in the boot traces,
   // with a distinct loop body to exercise general translation.
@@ -1437,6 +1480,7 @@ int main() {
     flag_contract();
     observed_flags_contract();
     rotation_contract();
+    variable_rotation_contract();
     scan_forms_contract();
     immediate_arithmetic_contract();
     indexed_loop_benchmark();

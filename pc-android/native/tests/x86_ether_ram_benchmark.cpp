@@ -226,16 +226,76 @@ void measure_rotations() {
   std::cout << "PRIME_ETHER_ROTATION_BENCH steps=" << guest_steps
             << " native_steps=" << translated << " median_ns=" << elapsed[elapsed.size() / 2] << '\n';
 }
+
+void measure_affine_ram() {
+  constexpr std::array<std::uint8_t, 24> loop{
+      0x4d,0x33,0x02, 0x4c,0x03,0xd6, 0x49,0xd3,0xc0,
+      0x4d,0x33,0x02, 0x4c,0x03,0xd6, 0x49,0xd3,0xc0,
+      0x48,0x2b,0xc7, 0x75,0xe9, 0xf4};
+  constexpr unsigned rounds = 50'000, words = 2 * rounds, steps = 8 * rounds + 1;
+  constexpr std::uint64_t initial = 0xa439ff801267715dULL, data = 0x18000;
+  PcMachine machine;
+  machine.boot_long_mode_demo();
+  machine.run(4000);
+  auto& cpu = machine.cpu;
+  if (!cpu.is_long_mode() || !cpu.halted || cpu.fault)
+    throw std::runtime_error("RAM rotation benchmark did not enter long mode");
+  cpu.enable_page_translation_cache();
+  cpu.enable_ether_arm64_blocks();
+  machine.enable_boot_acceleration();
+  cpu.memory.write_block(code, loop.data(), loop.size());
+  auto expected = initial;
+  for (unsigned i = 0; i < words; ++i) {
+    const auto word = (0x9e3779b97f4a7c15ULL * (i + 1)) ^ i;
+    cpu.write64(data + 8ULL * i, word);
+    expected ^= word;
+    expected = (expected << 17) | (expected >> 47);
+  }
+  std::array<std::int64_t, 5> elapsed{};
+  for (unsigned sample = 0; sample <= elapsed.size(); ++sample) {
+    cpu.halted = false;
+    cpu.eip = code;
+    cpu.eflags = 2 | Cpu::IF;
+    cpu.regs[Cpu::EAX] = rounds * 7;
+    cpu.regs[Cpu::ECX] = 17;
+    cpu.regs[Cpu::EDI] = 7;
+    cpu.regs[Cpu::ESI] = 8;
+    cpu.regs[Cpu::R8] = initial;
+    cpu.regs[Cpu::R10] = data;
+    const auto retired = cpu.instructions;
+    const auto start = std::chrono::steady_clock::now();
+    for (unsigned remaining = steps; remaining;) {
+      const auto slice = std::min(remaining, 50'000U);
+      machine.run(slice);
+      remaining -= slice;
+    }
+    const auto duration = std::chrono::steady_clock::now() - start;
+    if (!cpu.halted || cpu.fault || cpu.instructions - retired != steps ||
+        cpu.regs[Cpu::EAX] != 0 || cpu.regs[Cpu::R8] != expected ||
+        cpu.regs[Cpu::R10] != data + 8ULL * words ||
+        cpu.eflags != (2 | Cpu::IF | Cpu::ZF | Cpu::PF))
+      throw std::runtime_error("RAM rotation benchmark changed the x86 result");
+    if (sample) elapsed[sample - 1] = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+  }
+  std::sort(elapsed.begin(), elapsed.end());
+  std::cout << "PRIME_ETHER_AFFINE_RAM_BENCH steps=" << steps << " words=" << words
+            << " median_ns=" << elapsed[elapsed.size() / 2] << '\n';
+}
 }  // namespace
 
 int main(int argc, char** argv) {
   const bool scalar_only = argc == 2 && std::string_view(argv[1]) == "--scalar";
   const bool counted_only = argc == 2 && std::string_view(argv[1]) == "--counted";
   const bool rotate_only = argc == 2 && std::string_view(argv[1]) == "--rotations";
-  if (!scalar_only && !counted_only && !rotate_only && !Cpu::ether_arm64_host()) return 1;
+  const bool affine_only = argc == 2 && std::string_view(argv[1]) == "--affine-ram";
+  if (!scalar_only && !counted_only && !rotate_only && !affine_only && !Cpu::ether_arm64_host()) return 1;
   try {
     if (rotate_only) {
       measure_rotations();
+      return 0;
+    }
+    if (affine_only) {
+      measure_affine_ram();
       return 0;
     }
     if (!scalar_only && !counted_only) {
