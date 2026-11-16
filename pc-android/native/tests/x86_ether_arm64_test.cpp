@@ -991,6 +991,39 @@ void cache_collision_contract() {
           "cold or unsupported addresses evicted a warm block");
   std::cout << "PRIME_C03_ARM64_CACHE_PASS translations=" << result.translated
             << " warm_hits=" << result.hits - warm.hits << '\n';
+
+  // A supported block can collide repeatedly without reusing its translation
+  // sooner than any of the four resident blocks. Keep those blocks warm.
+  const auto candidate = probes.front();
+  for (auto* machine : {&native, &scalar})
+    emit(machine->cpu, candidate, {0x8b,0xc1,0x8b,0xd0,0xf4});
+  const auto before_pressure = native.cpu.ether_arm64_stats();
+  for (unsigned round = 0; round < 256; ++round) {
+    for (const auto address : blocks) {
+      native.cpu.eip = scalar.cpu.eip = address;
+      require(native.cpu.try_ether_arm64_block(2) == 2 &&
+              scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed,
+              "a recurring colder candidate evicted a resident block");
+    }
+    native.cpu.eip = scalar.cpu.eip = candidate;
+    require(!native.cpu.try_ether_arm64_block(2) &&
+            native.cpu.step() == StepResult::Executed && native.cpu.step() == StepResult::Executed &&
+            scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+            capture(native.cpu) == capture(scalar.cpu),
+            "colliding candidate changed guest state or displaced a hotter block");
+  }
+  const auto after_pressure = native.cpu.ether_arm64_stats();
+  require(after_pressure.translated == before_pressure.translated &&
+          after_pressure.compiled_evictions == before_pressure.compiled_evictions &&
+          after_pressure.hits - before_pressure.hits == 1024,
+          "recurring colder block caused compilation during steady reuse");
+  warm_block(native.cpu, candidate, 2);
+  scalar.cpu.eip = candidate;
+  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+          capture(native.cpu) == capture(scalar.cpu) &&
+          native.cpu.ether_arm64_stats().compiled_evictions == before_pressure.compiled_evictions + 1,
+          "cache failed to adapt when the candidate became hot");
+  std::cout << "PRIME_C03_ARM64_ADMISSION_PASS hot_hits=1024 pressure_evictions=0 phase_evictions=1\n";
 }
 
 void page_fault(bool translated, bool store, bool initially_absent,
@@ -1081,15 +1114,47 @@ void single_register_contract() {
     machine->cpu.regs[Cpu::R8] = 0x7fffffffffffffffULL;
     machine->cpu.eflags = 2 | Cpu::DF;
   }
-  unsigned retired = 0;
-  for (unsigned attempt = 0; attempt < 4 && !retired; ++attempt)
-    retired = native.cpu.try_ether_arm64_block(2);
-  require(scalar.cpu.step() == StepResult::Executed && retired == 1 &&
+  for (unsigned attempt = 0; attempt < 8; ++attempt)
+    require(!native.cpu.try_ether_arm64_block(2), "single instruction entered the native cache");
+  require(native.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
           native.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes() &&
           capture(native.cpu) == capture(scalar.cpu) &&
-          native.cpu.ether_arm64_stats().steps == 1,
+          native.cpu.ether_arm64_stats().translated == 0,
           "isolated register operation did not retire with exact flags and state");
-  std::cout << "PRIME_ETHER_SINGLE_REGISTER_PASS steps=1 flags=1\n";
+  std::cout << "PRIME_ETHER_SINGLE_REGISTER_PASS steps=1 flags=1 compiled=0\n";
+}
+
+void signed_multiply_contract() {
+  constexpr std::array<std::uint64_t, 5> factors{
+      0, 1, UINT64_MAX, 0x8000000000000000ULL, 0x7fffffffffffffffULL};
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (bool wide : {false, true}) {
+    const auto prefix = std::uint8_t(wide ? 0x48 : 0x40);
+    for (bool immediate : {false, true}) {
+      for (auto* machine : {&native, &scalar}) {
+        auto& cpu = machine->cpu;
+        if (immediate) emit(cpu, code, {0x48,0x89,0xd8,prefix,0x6b,0xcb,0xff,0xf4});
+        else emit(cpu, code, {0x48,0x89,0xd8,prefix,0x0f,0xaf,0xc1,0xf4});
+      }
+      for (auto left : factors) for (auto right : factors) {
+        for (auto* machine : {&native, &scalar}) {
+          auto& cpu = machine->cpu;
+          cpu.eip = code;
+          cpu.regs[Cpu::EBX] = left;
+          cpu.regs[Cpu::ECX] = right;
+          cpu.eflags = 2 | Cpu::IF | Cpu::DF | Cpu::AF | Cpu::ZF | Cpu::CF;
+        }
+        warm_block(native.cpu, code, 2);
+        require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+                capture(native.cpu) == capture(scalar.cpu) &&
+                native.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(),
+                "translated IMUL changed sign, width, destination or inherited flags");
+      }
+    }
+  }
+  std::cout << "PRIME_ETHER_IMUL_PASS widths=32,64 immediate=1 flags=1\n";
 }
 
 void flag_contract() {
@@ -1165,10 +1230,8 @@ void observed_flags_contract() {
     cpu.eflags = 2;
     cpu.regs[Cpu::EAX] = 0x10;
   }
-  unsigned retired = 0;
-  for (unsigned attempt = 0; attempt < 4 && !retired; ++attempt)
-    retired = native.cpu.try_ether_arm64_block(2);
-  require(retired == 1 && scalar.cpu.step() == StepResult::Executed &&
+  require(!native.cpu.try_ether_arm64_block(3) && native.cpu.step() == StepResult::Executed &&
+          scalar.cpu.step() == StepResult::Executed &&
           capture(native.cpu) == capture(scalar.cpu) && native.cpu.flag(Cpu::AF),
           "CMP before TEST must retire its own flags");
   warm_block(native.cpu, code + 3, 2);
@@ -1319,6 +1382,7 @@ int main() {
     byte_copy_contract();
     guard_contract();
     single_register_contract();
+    signed_multiply_contract();
     cache_collision_contract();
     flag_contract();
     observed_flags_contract();

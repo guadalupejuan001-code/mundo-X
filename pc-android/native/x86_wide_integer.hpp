@@ -27,6 +27,24 @@ inline DoubleWord multiply(std::uint64_t lhs, std::uint64_t rhs) {
 #endif
 }
 
+inline DoubleWord multiply_signed(std::uint64_t lhs, std::uint64_t rhs) {
+  constexpr std::uint64_t sign = 1ULL << 63;
+#if defined(__SIZEOF_INT128__)
+  const auto signed_bits = [](std::uint64_t bits) {
+    return bits & sign ? -1 - std::int64_t(~bits) : std::int64_t(bits);
+  };
+  const auto product = static_cast<__int128_t>(signed_bits(lhs)) * signed_bits(rhs);
+  const auto bits = static_cast<__uint128_t>(product);
+  return {std::uint64_t(bits >> 64), std::uint64_t(bits)};
+#else
+  auto product = multiply(lhs, rhs);
+  // Correct the unsigned high word for each negative input.
+  if (lhs & sign) product.high -= rhs;
+  if (rhs & sign) product.high -= lhs;
+  return product;
+#endif
+}
+
 struct Division {
   std::uint64_t quotient, remainder;
 };
