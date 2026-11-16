@@ -1165,8 +1165,12 @@ void observed_flags_contract() {
     cpu.eflags = 2;
     cpu.regs[Cpu::EAX] = 0x10;
   }
-  require(!native.cpu.try_ether_arm64_block(3) && native.cpu.step() == StepResult::Executed &&
-          scalar.cpu.step() == StepResult::Executed, "CMP before TEST must retire its own flags");
+  unsigned retired = 0;
+  for (unsigned attempt = 0; attempt < 4 && !retired; ++attempt)
+    retired = native.cpu.try_ether_arm64_block(2);
+  require(retired == 1 && scalar.cpu.step() == StepResult::Executed &&
+          capture(native.cpu) == capture(scalar.cpu) && native.cpu.flag(Cpu::AF),
+          "CMP before TEST must retire its own flags");
   warm_block(native.cpu, code + 3, 2);
   require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
           native.cpu.eip == scalar.cpu.eip && native.cpu.eflags == scalar.cpu.eflags &&
