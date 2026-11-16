@@ -14,6 +14,9 @@ inline std::optional<std::uint64_t> Cpu::read_platform_msr(std::uint32_t number)
   if (const auto index = fixed_mtrr_index(number); index >= 0)
     return platform_msrs_.mtrr_fixed[index];
   switch (number) {
+    // Platform 1 identifies the emulated package independently of its ISA
+    // signature. Physical firmware updates do not describe this processor.
+    case 0x17: return 1ULL << 50;
     case 0xfe: return 0x508; // Eight variable ranges, fixed ranges and WC.
     case 0x277: return platform_msrs_.pat;
     case 0x2ff: return platform_msrs_.mtrr_default_type;
@@ -72,7 +75,7 @@ inline bool Cpu::write_platform_msr(std::uint32_t number, std::uint64_t value) {
     case 0x8b: case 0x17a: case 0x401: case 0x402: case 0x403:
       require(!value);
       return true;
-    case 0xfe: case 0x179:
+    case 0x17: case 0xfe: case 0x179:
       require(false);
       return true;
     default:

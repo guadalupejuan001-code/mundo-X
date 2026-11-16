@@ -216,6 +216,11 @@ void windows_x64_platform_registers() {
   check(read(0xfe) == 0x508 && read(0x179) == 1 &&
         read(0x277) == 0x0007040600070406ULL && read(0x401) == 0, "wrong platform MSR reset values");
   check(read(0x1a0) == 0x1801U, "Windows loader must be able to query IA32_MISC_ENABLE");
+  check(read(0x17) == (1ULL<<50) && read(0x8b) == 0,
+        "Windows microcode discovery must see the virtual package and firmware identity");
+  check(write(0x17,0) == StepResult::Faulted &&
+        cpu.fault->code == cosmic_pc::FaultCode::ProtectionFault && read(0x17) == (1ULL<<50),
+        "virtual platform ID must be read-only");
   const auto nx = [&] {
     program(cpu,0xa000,{0x0f,0xa2});
     cpu.regs[Cpu::EAX] = 0x80000001U;
