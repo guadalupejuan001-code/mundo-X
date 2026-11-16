@@ -559,7 +559,8 @@ class PcMachine {
      <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
      <<",\"engine\":\"cosmic-pc-own-x86\""
      <<",\"page_walks\":"<<cpu.page_walks<<",\"instruction_page_hits\":"<<cpu.instruction_page_hits
-     <<",\"page_translation_hits\":"<<cpu.page_translation_hits;
+     <<",\"page_translation_hits\":"<<cpu.page_translation_hits
+     <<",\"idt_bulk_reads\":"<<cpu.idt_bulk_reads;
     if(cpu.fault) {
       o<<",\"fault_context\":{\"cpl\":"<<cpu.cpl()
        <<",\"ss\":"<<cpu.segments[Cpu::SS]
@@ -575,6 +576,10 @@ class PcMachine {
       if (cpu.fault->idt_attempt_count) {
         o << ",\"idt_attempts\":";
         write_idt_attempts(o, *cpu.fault);
+      }
+      if (cpu.fault->interrupt_origin) {
+        o << ",\"interrupt_origin\":";
+        write_interrupt_origin(o, *cpu.fault->interrupt_origin);
       }
       o << '}';
     }
@@ -632,6 +637,42 @@ class PcMachine {
           << ",\"failure\":" << quote(attempt.failure) << '}';
     }
     out << ']';
+  }
+  static void write_interrupt_origin(std::ostream& out, const InterruptFaultOrigin& origin) {
+    const auto write_bytes = [&](const std::uint8_t* bytes, unsigned count) {
+      constexpr char digits[] = "0123456789ABCDEF";
+      out << '"';
+      for (unsigned i = 0; i < count; ++i) out << digits[bytes[i] >> 4] << digits[bytes[i] & 15U];
+      out << '"';
+    };
+    out << "{\"rip_hex\":" << quote(hex64(origin.rip)) << ",\"rsp_hex\":" << quote(hex64(origin.rsp))
+        << ",\"last_lidt\":";
+    if (const auto& load = origin.last_idt_load) {
+      out << "{\"rip_hex\":" << quote(hex64(load->ip))
+          << ",\"operand_hex\":" << quote(hex64(load->operand))
+          << ",\"base_hex\":" << quote(hex64(load->base))
+          << ",\"cr3_hex\":" << quote(hex64(load->cr3)) << ",\"limit\":" << load->limit << '}';
+    } else {
+      out << "null";
+    }
+    out << ",\"recent_calls\":[";
+    for (unsigned i = 0; i < origin.call_count; ++i) {
+      const auto& call = origin.recent_calls[i];
+      if (i) out << ',';
+      out << "{\"from_hex\":" << quote(hex64(call.from)) << ",\"target_hex\":" << quote(hex64(call.target))
+          << ",\"return_ip_hex\":" << quote(hex64(call.return_ip)) << ",\"rsp_hex\":" << quote(hex64(call.rsp))
+          << ",\"arguments_hex\":[";
+      for (unsigned reg = 0; reg < call.argument_registers.size(); ++reg) {
+        if (reg) out << ',';
+        out << quote(hex64(call.argument_registers[reg]));
+      }
+      out << "]}";
+    }
+    out << "],\"code_hex\":";
+    write_bytes(origin.code.data(), origin.code_bytes);
+    out << ",\"stack_hex\":";
+    write_bytes(origin.stack.data(), origin.stack_bytes);
+    out << '}';
   }
  private:
   std::string quantum_first_="0",quantum_second_="1000000000";

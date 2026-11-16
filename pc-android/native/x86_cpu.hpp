@@ -66,8 +66,29 @@ struct IdtAttempt {
   std::string failure;
 };
 
+struct IdtLoad {
+  std::uint64_t ip, operand, base, cr3;
+  std::uint16_t limit;
+};
+
+struct NearCall {
+  std::uint64_t from, target, return_ip, rsp;
+  std::array<std::uint64_t, 4> argument_registers;
+};
+
+struct InterruptFaultOrigin {
+  static constexpr unsigned kRecentCalls = 8;
+  std::uint64_t rip = 0, rsp = 0;
+  std::optional<IdtLoad> last_idt_load;
+  std::array<NearCall, kRecentCalls> recent_calls{};
+  unsigned call_count = 0;
+  std::array<std::uint8_t, 32> code{};
+  std::array<std::uint8_t, 128> stack{};
+  unsigned code_bytes = 0, stack_bytes = 0;
+};
+
 struct Fault {
-  static constexpr unsigned kMaxIdtAttempts = 3;
+  static constexpr unsigned kMaxIdtAttempts = 4;
   FaultCode code = FaultCode::HostError;
   std::uint16_t cs = 0;
   std::uint64_t eip = 0;
@@ -78,6 +99,7 @@ struct Fault {
   std::uint32_t error_code = 0;
   std::array<IdtAttempt, kMaxIdtAttempts> idt_attempts{};
   unsigned idt_attempt_count = 0;
+  std::optional<InterruptFaultOrigin> interrupt_origin = std::nullopt;
   std::string describe() const {
     std::ostringstream out;
     out << std::hex << std::setfill('0') << std::setw(4) << cs << ':'
@@ -231,6 +253,7 @@ class Cpu {
   std::uint64_t page_walks = 0;
   std::uint64_t instruction_page_hits = 0;
   std::uint64_t page_translation_hits = 0;
+  std::uint64_t idt_bulk_reads = 0;
 
   // When CPUs share this fabric, the machine serializes RAM and device access.
   // A caller that changes its bus map must invalidate cached translations.
@@ -341,6 +364,9 @@ class Cpu {
     interrupt_shadow_ = false;
     last_rep_batch_bytes_ = 0;
     last_rep_direct_page_copy_bytes_ = 0;
+    last_idt_load_.reset();
+    near_calls_written_ = near_calls_count_ = 0;
+    idt_bulk_reads = 0;
     ether_arm64_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
@@ -623,7 +649,7 @@ class Cpu {
       if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
       fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_, t.reason, t.address, t.error};
       if (t.code == FaultCode::PageFault) cr2 = t.address;
-      const int vector = exception_vector(t.code);
+      int vector = exception_vector(t.code);
       const bool real_fp_exception = t.code == FaultCode::X87FloatingPoint ||
           t.code == FaultCode::SimdFloatingPoint || t.code == FaultCode::DeviceNotAvailable ||
           t.code == FaultCode::InvalidInstruction;
@@ -650,30 +676,50 @@ class Cpu {
       // Synchronous architectural exception: restart faulting instruction
       // after the guest handler completes. Unsupported/host failures stop.
       if (vector >= 0 && !is_real_mode()) {
-        auto deliver = [&](unsigned number, bool with_error, std::uint32_t code) -> bool {
+        auto error = t.error;
+        auto address = t.address;
+        bool shutdown = false;
+        for (unsigned i = 0; i < Fault::kMaxIdtAttempts; ++i) {
+          const auto saved_cr2 = cr2;
+          const auto restore = [&] {
+            rollback(before);
+            cr2 = saved_cr2;
+            if (pending_simd_flags_) mxcsr |= pending_simd_flags_;
+          };
           try {
             transaction_ = true;
-            dispatch_idt(std::uint8_t(number), start_ip_, IdtSource::CpuException, with_error, code);
+            const bool with_error = vector == 8 || (vector >= 11 && vector <= 14);
+            dispatch_idt(std::uint8_t(vector), start_ip_, IdtSource::CpuException, with_error, error);
             transaction_ = false; clear_write_journal();
             ++instructions; // bounded interpreter step, not retired opcode
-            delivered_vector=int(number);
-            delivered_error=code;
-            delivered_linear=t.address;
-            return true;
+            delivered_vector = vector;
+            delivered_error = error;
+            delivered_linear = address;
+            fault.reset();
+            return StepResult::Executed;
+          } catch (const Trap& nested) {
+            restore();
+            if (nested.code == FaultCode::PageFault) cr2 = nested.address;
+            const auto next = exception_vector(nested.code);
+            if (next < 0) break;
+            if (vector == 8 && (contributory_exception(next) || next == 14)) {
+              shutdown = true;
+              break;
+            }
+            const bool double_fault =
+                (contributory_exception(vector) && contributory_exception(next)) ||
+                (vector == 14 && (contributory_exception(next) || next == 14));
+            vector = double_fault ? 8 : next;
+            error = double_fault ? 0 : nested.error;
+            address = double_fault ? 0 : nested.address;
           } catch (const std::exception&) {
-            rollback(before); // Undo any partial frame/descriptor writes.
-            if(pending_simd_flags_)mxcsr|=pending_simd_flags_;
-            if (t.code == FaultCode::PageFault) cr2 = t.address;
-            return false;
+            restore();
+            break;
           }
-        };
-        if (deliver(unsigned(vector), vector >= 11 && vector <= 14, t.error) ||
-            deliver(8, true, 0)) { // Nested delivery failure -> #DF.
-          fault.reset(); // A guest-handled event must not leave a host fault latched.
-          return StepResult::Executed;
         }
         fault = Fault{t.code, start_cs_, start_ip_, opcode_, decoded_,
-                      t.reason + " (guest IDT delivery failed; triple fault)", t.address, t.error};
+                      t.reason + (shutdown ? " (guest IDT delivery failed; triple fault)"
+                                           : " (guest IDT delivery stopped)"), t.address, t.error};
         attach_idt_attempts();
         return StepResult::Faulted;
       }
@@ -749,6 +795,9 @@ class Cpu {
   unsigned last_rep_direct_page_copy_bytes_ = 0;
   std::array<IdtAttempt, Fault::kMaxIdtAttempts> failed_idt_attempts_{};
   unsigned failed_idt_count_ = 0;
+  std::optional<IdtLoad> last_idt_load_;
+  std::array<NearCall, InterruptFaultOrigin::kRecentCalls> recent_near_calls_{};
+  unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 
   void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
     if (failed_idt_count_ == failed_idt_attempts_.size()) return;
@@ -764,7 +813,9 @@ class Cpu {
     for (unsigned i = 0; i < failed_idt_count_; ++i)
       fault->idt_attempts[i] = std::move(failed_idt_attempts_[i]);
     fault->idt_attempt_count = std::exchange(failed_idt_count_, 0);
+    if (fault->idt_attempt_count && is_long_mode() && cpl() == 0) capture_interrupt_origin();
   }
+  void capture_interrupt_origin() noexcept;
 
   struct Trap : std::runtime_error {
     FaultCode code;
@@ -1094,6 +1145,7 @@ class Cpu {
       fail("protected-mode segment access denied", FaultCode::ProtectionFault);
     return std::uint32_t(cache.base + offset);
   }
+  template <bool Inspect = false>
   std::uint64_t translate(std::uint64_t address, Access access, bool* ordinary_page = nullptr,
                           bool speculative = false, unsigned* mapping_bytes_left = nullptr);
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
@@ -2541,6 +2593,18 @@ class Cpu {
   void relative(std::int64_t displacement, unsigned bytes) {
     jump(cursor_ + std::uint64_t(displacement), is_long_mode() ? 8 : bytes);
   }
+  void near_call(std::uint64_t target, unsigned bytes) {
+    const auto return_ip = cursor_ & mask(bytes);
+    jump(target, bytes);
+    push(return_ip, bytes);
+    // Only kernel-half calls are needed for the boot fault evidence.
+    if ((start_ip_ >> 63) && is_long_mode() && cpl() == 0) {
+      recent_near_calls_[near_calls_written_] = {
+          start_ip_, eip, return_ip, regs[ESP], {regs[ECX], regs[EDX], regs[R8], regs[R9]}};
+      near_calls_written_ = (near_calls_written_ + 1) % recent_near_calls_.size();
+      near_calls_count_ = std::min(near_calls_count_ + 1, unsigned(recent_near_calls_.size()));
+    }
+  }
   void push(std::uint64_t value, unsigned bytes) {
     const auto n = stack_address_width();
     const auto sp = (get_reg(ESP, n) - bytes) & mask(n);
@@ -2663,6 +2727,9 @@ class Cpu {
       default: return -1; // Unsupported opcodes and host/resource failures.
     }
   }
+  static bool contributory_exception(int vector) noexcept {
+    return vector == 0 || (vector >= 10 && vector <= 13);
+  }
   void dispatch_idt(std::uint8_t vector, std::uint64_t resume_ip,
                     IdtSource source, bool has_error, std::uint32_t error) {
     IdtAttempt attempt;
@@ -2701,11 +2768,13 @@ class Cpu {
       fail("noncanonical IDT entry", FaultCode::ProtectionFault);
     {
       SupervisorAccess system(*this);
-      attempt.low = read_linear(address, 8);
-      attempt.bytes_read = 8;
-      if (long_gate) {
-        attempt.high = read_linear(address + 8, 8);
-        attempt.bytes_read = 16;
+      if (!long_gate || !try_read_idt_gate(attempt, address)) {
+        attempt.low = read_linear(address, 8);
+        attempt.bytes_read = 8;
+        if (long_gate) {
+          attempt.high = read_linear(address + 8, 8);
+          attempt.bytes_read = 16;
+        }
       }
     }
     const auto low = attempt.low, high = attempt.high;
@@ -2790,6 +2859,26 @@ class Cpu {
     jump(target_ip,width);
     if (type == 6 || type == 0xe) eflags &= ~IF;
     eflags &= ~(TF | 0x34000U); // Clear NT/RF/VM after saving their image.
+  }
+  bool try_read_idt_gate(IdtAttempt& attempt, std::uint64_t address) {
+    if (!page_translation_cache_enabled_ || !a20_enabled || step_trace_hook || irq_trace_hook ||
+        (mmio_claim_hook && !mmio_range_claim_hook) || (address & 0xfffU) > 4096 - 16) return false;
+    std::uint64_t physical;
+    try {
+      physical = translate(address, Access::Read, nullptr, true);
+    } catch (const std::exception&) {
+      return false;
+    }
+    if (!bulk_ram_range(physical, 16)) return false;
+    std::array<std::uint8_t, 16> bytes;
+    memory.read_block(bus_address(physical), bytes.data(), bytes.size());
+    for (unsigned i = 0; i < 8; ++i) {
+      attempt.low |= std::uint64_t(bytes[i]) << (8 * i);
+      attempt.high |= std::uint64_t(bytes[i + 8]) << (8 * i);
+    }
+    attempt.bytes_read = bytes.size();
+    ++idt_bulk_reads;
+    return true;
   }
 
   void string_operation(std::uint8_t op);
@@ -3267,6 +3356,7 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
   throw trap;
 }
 
+template <bool Inspect>
 inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* ordinary_page,
                                     bool speculative, unsigned* mapping_bytes_left) {
   if (ordinary_page) *ordinary_page = false;
@@ -3278,7 +3368,7 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
   const bool user_mode = cpl() == 3 && !supervisor_internal_;
   const bool write_protected = (cr0 & 0x10000U) != 0;
   const bool nxe = (efer & 0x800U) != 0;
-  const bool cacheable = page_translation_cache_enabled_ && a20_enabled &&
+  const bool cacheable = !Inspect && page_translation_cache_enabled_ && a20_enabled &&
       !step_trace_hook && !irq_trace_hook &&
       (!mmio_claim_hook || mmio_range_claim_hook);
   TranslationSet* set = nullptr;
@@ -3302,7 +3392,7 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
       return physical | (address & 0xfffU);
     }
   }
-  ++page_walks;
+  if constexpr (!Inspect) ++page_walks;
   constexpr std::uint64_t physical_field = 0x000ffffffffff000ULL;
   const auto address_mask = physical_page_mask_;
   std::uint64_t table = cr3 & address_mask;
@@ -3313,7 +3403,7 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     const unsigned shift = 12 + 9 * (level - 1);
     const auto entry_address = table + (((address >> shift) & 0x1ffU) * 8);
     if (cacheable) table_entries[level - 1] = entry_address;
-    if (speculative && !bulk_ram_range(entry_address, 8)) return UINT64_MAX;
+    if ((Inspect || speculative) && !bulk_ram_range(entry_address, 8)) return UINT64_MAX;
     const auto entry = read_page_entry(entry_address, ordinary_entries);
     if (!(entry & 1)) page_fault(address, access, false, false, "page-table entry is not present");
     if (entry & (physical_field & ~address_mask))
@@ -3340,8 +3430,10 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
         page_fault(address, access, true, false, "instruction fetch denied by NX page permissions");
     }
     const auto marked = entry | 0x20U | (leaf && access == Access::Write ? 0x40U : 0U);
-    if (speculative && marked != entry) return UINT64_MAX;
-    if (marked != entry) write64(entry_address, marked);
+    if constexpr (!Inspect) {
+      if (speculative && marked != entry) return UINT64_MAX;
+      if (marked != entry) write64(entry_address, marked);
+    }
     if (leaf) {
       const unsigned offset_mask = large ? 0x1fffffU : 0xfffU;
       const auto physical = (entry & address_mask & ~std::uint64_t(offset_mask)) | (address & offset_mask);
@@ -3364,6 +3456,36 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     table = entry & address_mask;
   }
   fail("invalid page walker state", FaultCode::HostError);
+}
+
+inline void Cpu::capture_interrupt_origin() noexcept {
+  auto& origin = fault->interrupt_origin.emplace();
+  origin.rip = fault->eip;
+  origin.rsp = regs[ESP];
+  origin.last_idt_load = last_idt_load_;
+  origin.call_count = near_calls_count_;
+  const auto first = (near_calls_written_ + recent_near_calls_.size() - near_calls_count_) %
+      recent_near_calls_.size();
+  for (unsigned i = 0; i < origin.call_count; ++i)
+    origin.recent_calls[i] = recent_near_calls_[(first + i) % recent_near_calls_.size()];
+  const auto read = [&](std::uint64_t start, std::uint8_t* bytes, unsigned count, Access access) {
+    unsigned done = 0;
+    try {
+      for (; done < count && start <= UINT64_MAX - done;) {
+        const auto address = start + done;
+        const auto chunk = std::min(count - done, 4096U - unsigned(address & 0xfffU));
+        const auto physical = translate<true>(address, access);
+        if (!bulk_ram_range(physical, chunk)) break;
+        memory.read_block(bus_address(physical), bytes + done, chunk);
+        done += chunk;
+      }
+    } catch (const std::exception&) {
+      // Preserve any readable prefix and the original terminal fault.
+    }
+    return done;
+  };
+  origin.code_bytes = read(origin.rip, origin.code.data(), origin.code.size(), Access::Execute);
+  origin.stack_bytes = read(origin.rsp, origin.stack.data(), origin.stack.size(), Access::Read);
 }
 
 inline unsigned Cpu::try_rep_batch(unsigned budget) {
@@ -4594,6 +4716,7 @@ inline void Cpu::extended() {
             (is_long_mode() ? UINT64_MAX : op32_ ? 0xffffffffULL : 0x00ffffffULL);
         if (is_long_mode() && !canonical(base)) fail("non-canonical descriptor-table base", FaultCode::ProtectionFault);
         table = {limit, base};
+        if (m.group == 3) last_idt_load_ = IdtLoad{start_ip_, address, base, cr3, limit};
       }
       return;
     }
@@ -5066,7 +5189,8 @@ inline void Cpu::execute(std::uint8_t op) {
         fail("operand-size override on a 64-bit near call is not implemented", FaultCode::UnsupportedState);
       const unsigned n = is_long_mode() ? 4 : bytes, target_bytes = is_long_mode() ? 8 : bytes;
       const auto disp = signed_value(immediate(n), n);
-      const auto return_ip = cursor_ & mask(target_bytes); relative(disp, target_bytes); push(return_ip, target_bytes); return;
+      near_call(cursor_ + std::uint64_t(disp), target_bytes);
+      return;
     }
     case 0xe9: { const unsigned n = is_long_mode() ? 4 : bytes; const auto disp = signed_value(immediate(n), n); relative(disp, bytes); return; }
     case 0xea: {
@@ -5105,8 +5229,9 @@ inline void Cpu::execute(std::uint8_t op) {
         if (is_long_mode() && operand_override_)
           fail("operand-size override on a 64-bit indirect branch is not implemented", FaultCode::UnsupportedState);
         const unsigned n = is_long_mode() ? 8 : bytes;
-        const auto target = get(m.rm, n); jump(target, n);
-        if (m.group == 2) push(cursor_ & mask(n), n);
+        const auto target = get(m.rm, n);
+        if (m.group == 2) near_call(target, n);
+        else jump(target, n);
         return;
       }
       indirect_far_branch(m.rm, bytes, m.group == 3);

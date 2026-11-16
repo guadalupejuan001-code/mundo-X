@@ -157,9 +157,19 @@ void long_gp_skip() {
 }
 void long_double_fault_and_rejection() {
   Cpu cpu(64ULL*1024*1024,16ULL*1024*1024); start(cpu);
-  // Missing #UD IDT gate, but valid #DF gate: reject first delivery and enter #DF.
+  // A benign #UD with an invalid gate first raises #GP.
+  gate(cpu,13,0x12600,true);
   gate(cpu,8,0x12800,true);
   write_code(cpu,0xa000,{0x0f,0x0b});
+  expect_next(cpu,0x12600,13);
+  need(cpu.read64(cpu.regs[Cpu::ESP])==((6U<<3)|3U) &&
+       cpu.read64(cpu.regs[Cpu::ESP]+8)==0xa000,
+       "The replacement #GP must preserve the invalid #UD gate code and original RIP");
+
+  // A second #GP trying to deliver #GP requires #DF.
+  cpu.write64(cpu.idtr.base + 13*16,0);
+  cpu.write64(cpu.idtr.base + 13*16 + 8,0);
+  cpu.eip=0xa000; cpu.regs[Cpu::ESP]=0x190000;
   write_code(cpu,0x12800,{0xf4});
   expect_next(cpu,0x12800,8);
   need(cpu.read64(cpu.regs[Cpu::ESP])==0,"#DF pushes zero error code");
@@ -171,6 +181,108 @@ void long_double_fault_and_rejection() {
        cpu.fault->reason.find("triple fault")!=std::string::npos,
        "invalid/missing IDT must be a visible terminal triple fault");
   std::cout<<"C04_DOUBLE_AND_TRIPLE_FAULT_PASS\n";
+}
+void faults_during_exception_delivery() {
+  Cpu cpu(64ULL*1024*1024,16ULL*1024*1024);
+  constexpr auto tss = 0x17000U, ist_address = tss + 36;
+  for (const bool original_page_fault : {false,true}) {
+    start(cpu);
+    cpu.write64(0x3000,0x4003);
+    for (unsigned i=0;i<512;++i) cpu.write64(0x4000+i*8,std::uint64_t(i*4096)|3U);
+    cpu.write64(0x4000+(tss>>12)*8,0);
+    cpu.tr.base=tss; cpu.tr.limit=0x67; cpu.tr.valid=true;
+    gate(cpu,8,0x12800,true);
+    gate(cpu,13,0x12600,true);
+    gate(cpu,14,0x12400,true);
+    cpu.write64(cpu.idtr.base+3*16,0); // Invalid INT3 gate raises the first #GP.
+    cpu.write64(cpu.idtr.base+3*16+8,0);
+    const unsigned vector = original_page_fault ? 14 : 13;
+    const auto slot = cpu.idtr.base+vector*16;
+    cpu.write64(slot,cpu.read64(slot)|(1ULL<<32)); // IST1 reads from the absent TSS page.
+    if (original_page_fault) {
+      cpu.write64(0x4000+11*8,0);
+      write_code(cpu,0xa000,{0x48,0x8b,0x04,0x25,0x00,0xb0,0x00,0x00});
+    } else {
+      write_code(cpu,0xa000,{0xcc});
+    }
+    expect_next(cpu,original_page_fault ? 0x12800 : 0x12400,original_page_fault ? 8 : 14);
+    need(cpu.cr2==ist_address && cpu.read64(cpu.regs[Cpu::ESP])==0 &&
+         cpu.read64(cpu.regs[Cpu::ESP]+8)==0xa000,
+         "The latest #PF address and clean original stack must survive delivery rollback");
+  }
+  std::cout<<"C04_NESTED_EXCEPTION_CLASSES_PASS serial=1 double=1 latest_cr2=1\n";
+}
+void long_cached_gate_reads() {
+  Cpu cpu(4U<<20);
+  start(cpu);
+  cpu.enable_page_translation_cache();
+  gate(cpu,3,0x12600,true);
+  write_code(cpu,0xa000,{0xcc,0xeb,0xfd}); // INT3; JMP back.
+  write_code(cpu,0x12600,{0x48,0xcf}); // IRETQ
+  constexpr unsigned iterations=512;
+  for (unsigned i=0;i<3*iterations;++i)
+    if (cpu.step()!=StepResult::Executed) throw std::runtime_error("cached INT3 delivery failed");
+  need(cpu.idt_bulk_reads==iterations && cpu.eip==0xa000 && cpu.regs[Cpu::ESP]==0x190000,
+       "Exact 16-byte gate reads must retain complete interrupt and IRETQ behavior");
+  std::cout<<"C04_ETHER_IDT_READ_PASS bulk_reads="<<cpu.idt_bulk_reads<<" gate_bytes=16\n";
+}
+void high_kernel_interrupt_origin() {
+  Cpu cpu(4U<<20);
+  start(cpu);
+  constexpr auto high = 0xffff800000000000ULL;
+  cpu.write64(0x1800,0x2003); // Map the low boot page tables into the high half.
+  cpu.write64(0x3000,0x4003);
+  for (unsigned i=0;i<512;++i) cpu.write64(0x4000+i*8,std::uint64_t(i*4096)|3U);
+  cpu.write8(0x190000,0xab); // The trace crosses onto this unaccessed stack page.
+  cpu.write16(0xb000,0x0fff);
+  cpu.write64(0xb002,high+0x15000);
+  write_code(cpu,0xa000,{0x0f,0x01,0x1d,0xf9,0x0f,0,0, 0xe8,0xf4,0,0,0});
+  write_code(cpu,0xa100,{0xcc,0xc3});
+  cpu.write64(0x15030,0);
+  cpu.write64(0x150d0,0);
+  cpu.write64(0x15080,0);
+  cpu.eip=high+0xa000;
+  cpu.regs[Cpu::ESP]=high+0x190000;
+  cpu.regs[Cpu::ECX]=0x42;
+  need(cpu.step()==StepResult::Executed && cpu.step()==StepResult::Executed,
+       "64-bit LIDT and CALL fixture");
+  need(cpu.step()==StepResult::Faulted && cpu.fault && cpu.fault->interrupt_origin,
+       "Terminal INT3 must retain its origin evidence");
+  const auto& origin=*cpu.fault->interrupt_origin;
+  need(origin.last_idt_load && origin.last_idt_load->ip==high+0xa000 &&
+       origin.last_idt_load->operand==high+0xb000 && origin.last_idt_load->base==high+0x15000,
+       "Captured LIDT must match the instruction, operand and table");
+  need(origin.call_count==1 && origin.recent_calls[0].from==high+0xa007 &&
+       origin.recent_calls[0].target==origin.rip && origin.recent_calls[0].return_ip==high+0xa00c &&
+       origin.recent_calls[0].argument_registers[0]==0x42 &&
+       origin.rsp==high+0x18fff8 && origin.rsp==origin.recent_calls[0].rsp,
+       "Captured CALL must preserve the real caller, argument and resume address");
+  need(origin.code_bytes==32 && origin.code[0]==0xcc && origin.code[1]==0xc3 &&
+       origin.stack_bytes==128 && origin.stack[0]==0x0c && origin.stack[1]==0xa0 &&
+       origin.stack[5]==0x80 && origin.stack[6]==0xff && origin.stack[7]==0xff && origin.stack[8]==0xab,
+       "Fault evidence must read guest code and the actual saved return address");
+  need((cpu.read64(0x4000+(0x190000>>12)*8)&0x20)==0,
+       "Fault evidence must not set the accessed bit of the next stack page");
+  std::cout<<"C04_INTERRUPT_ORIGIN_PASS lidt=1 calls="<<origin.call_count
+           <<" code_bytes="<<origin.code_bytes<<" stack_bytes="<<origin.stack_bytes<<"\n";
+}
+void split_gate_fault_prefix() {
+  Cpu cpu(4U<<20);
+  start(cpu);
+  cpu.enable_page_translation_cache();
+  cpu.write64(0x3000,0x4003);
+  for (unsigned i=0;i<512;++i) cpu.write64(0x4000+i*8,std::uint64_t(i*4096)|3U);
+  cpu.idtr.base=0x15fc8;
+  constexpr auto low=0x00008e000018b340ULL;
+  cpu.write64(0x15ff8,low);
+  cpu.write64(0x4000+(0x16000>>12)*8,0);
+  write_code(cpu,0xa000,{0xcc});
+  need(cpu.step()==StepResult::Faulted && cpu.fault && cpu.fault->idt_attempt_count==3,
+       "INT3 across an unmapped half of the IDT gate must fault precisely");
+  const auto& first=cpu.fault->idt_attempts[0];
+  need(!cpu.idt_bulk_reads && first.bytes_read==8 && first.low==low &&
+       first.failure_vector==14 && first.failure_address==0x16000,
+       "The gate fast path must leave partial reads and #PF addresses intact");
 }
 void long_int3_gate_faults() {
   Cpu cpu(64ULL*1024*1024,16ULL*1024*1024); start(cpu);
@@ -233,6 +345,10 @@ int main() {
     long_de_retry();
     long_gp_skip();
     long_double_fault_and_rejection();
+    faults_during_exception_delivery();
+    long_cached_gate_reads();
+    high_kernel_interrupt_origin();
+    split_gate_fault_prefix();
     long_int3_gate_faults();
     protected32_soft_int_and_ud();
     std::cout<<"REVERSE_WINDOWS_C04_IDT_PASS checks="<<checks
