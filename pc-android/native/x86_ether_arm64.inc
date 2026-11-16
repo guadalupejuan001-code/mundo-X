@@ -30,7 +30,7 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
     const auto retired = retire_ether_arm64_block(limit - completed, budget - completed, bus);
     if (!retired) break;
     completed += retired;
-    if (bus || scan_loop_batch_candidate()) break;
+    if (bus || scan_loop_batch_candidate() || wide_multiply_loop_batch_candidate()) break;
   }
   return completed;
 #else

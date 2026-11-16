@@ -238,6 +238,162 @@ void sse_copy_loops() {
     std::cout << "ETHER_SSE_COPY_LOOP_PASS variants=2 paging=1 state=1 device_bound=1\n";
 }
 
+constexpr std::uint8_t kMultiplyAdd[]{
+        0x4b,0x8b,0x04,0x08, 0x49,0xf7,0xe2, 0x49,0x03,0xc3, 0x48,0x83,0xd2,0,
+        0x4a,0x01,0x04,0x09, 0x48,0x83,0xd2,0, 0x49,0x83,0xc1,8, 0x4c,0x8b,0xda, 0x75,0xe1};
+constexpr std::uint8_t kMultiplySubtract[]{
+        0x4b,0x8b,0x04,0xc8, 0x4c,0x8b,0xda, 0x49,0xf7,0xe2, 0x4a,0x29,0x04,0xc9,
+        0x48,0x83,0xd2,0, 0x4e,0x29,0x1c,0xc9, 0x48,0x83,0xd2,0, 0x49,0xff,0xc1, 0x75,0xe1};
+static_assert(sizeof(kMultiplyAdd) == sizeof(kMultiplySubtract));
+constexpr unsigned kWideStepsPerRound = 9;
+
+void prepare_wide_multiply(PcMachine& pc, bool subtract, std::uint64_t source,
+                           std::uint64_t target, unsigned rounds) {
+    constexpr std::array<std::uint64_t, 5> input{0, 1, UINT64_MAX, UINT64_MAX - 1, 0x0123456789abcdefULL};
+    boot(pc, true);
+    auto& cpu = pc.cpu;
+    cpu.memory.write_block(entry, subtract ? kMultiplySubtract : kMultiplyAdd, sizeof(kMultiplyAdd));
+    for (unsigned i = 0; i < rounds; ++i) {
+        cpu.write64(source + 8 * i, input[i % input.size()]);
+        if (target != source) cpu.write64(target + 8 * i, input[(i + 2) % input.size()]);
+    }
+    cpu.eip = entry;
+    cpu.halted = false;
+    cpu.eflags = 2 | Cpu::CF | Cpu::DF | Cpu::OF;
+    cpu.regs[Cpu::ECX] = target + 8 * rounds;
+    cpu.regs[Cpu::R8] = source + 8 * rounds;
+    cpu.regs[Cpu::R9] = 0ULL - rounds * (subtract ? 1 : 8);
+    cpu.regs[Cpu::R10] = UINT64_MAX;
+    cpu.regs[Cpu::EDX] = UINT64_MAX;
+    cpu.regs[Cpu::R11] = UINT64_MAX;
+}
+
+void wide_multiply_loops() {
+    constexpr std::uint64_t source = 0x2a005;
+    constexpr unsigned rounds = 38, steps_per_round = kWideStepsPerRound;
+    for (bool subtract : {false, true}) {
+        for (const auto target : {source, std::uint64_t{0x2c007}}) {
+            PcMachine scalar(4U << 20), fast(4U << 20);
+            const auto prepare = [&](PcMachine& pc) { prepare_wide_multiply(pc, subtract, source, target, rounds); };
+            prepare(scalar);
+            prepare(fast);
+            for (auto* pc : {&scalar, &fast}) {
+                for (unsigned i = 0; i < steps_per_round; ++i)
+                    require(pc->cpu.step() == StepResult::Executed, "wide multiply seed did not execute");
+                require(pc->cpu.wide_multiply_loop_batch_candidate(), "wide multiply branch did not form a candidate");
+            }
+            auto& cpu = fast.cpu;
+            const auto before = cpu.regs;
+            const auto initial_steps = cpu.instructions;
+            const auto flags = cpu.eflags;
+            const auto must_fall_back = [&](unsigned limit) {
+                const auto registers = cpu.regs;
+                require(cpu.try_counter_loop_batch(limit) == 0 && cpu.instructions == initial_steps &&
+                        cpu.regs == registers && cpu.eip == entry && cpu.eflags == flags && !cpu.fault,
+                        "wide multiply guard changed guest state");
+            };
+            must_fall_back(2 * steps_per_round - 1);
+            cpu.write8(entry + 4, 0x90);
+            must_fall_back(200);
+            cpu.write8(entry + 4, (subtract ? kMultiplySubtract : kMultiplyAdd)[4]);
+            cpu.regs[Cpu::ECX] = cpu.regs[Cpu::R8] + 8;
+            must_fall_back(200); // A store would overwrite the next input word.
+            cpu.regs[Cpu::ECX] = 0x30000 + 8 * (rounds - 2);
+            must_fall_back(200); // Exactly one word before the page boundary.
+            cpu.regs = before;
+            require(cpu.read64(target + 8) == scalar.cpu.read64(target + 8), "wide multiply fallback wrote RAM");
+
+            const auto compare = [&] {
+                const auto& reference = scalar.cpu;
+                require(cpu.regs == reference.regs && cpu.eip == reference.eip && cpu.eflags == reference.eflags &&
+                        cpu.instructions == reference.instructions && cpu.clock_cycles() == reference.clock_cycles() &&
+                        cpu.last_decoded_bytes() == reference.last_decoded_bytes(), "wide multiply changed x86 state");
+                for (unsigned i = 0; i < rounds; ++i)
+                    require(cpu.read64(target + i * 8) == scalar.cpu.read64(target + i * 8), "wide multiply changed RAM");
+            };
+            constexpr unsigned partial = 8 * steps_per_round, tail = (rounds - 9) * steps_per_round;
+            unsigned ticks = 0;
+            fast.enable_boot_acceleration();
+            fast.device_step_hook = [&] { ++ticks; };
+            fast.device_batch_limit_hook = [partial](unsigned budget) { return std::min(budget, partial); };
+            fast.device_batch_advance_hook = [&](unsigned extra) { ticks += extra; };
+            fast.run(partial);
+            scalar.run(partial);
+            compare();
+            require(ticks == partial && fast.boot_acceleration().wide_multiply_loop_steps == partial,
+                    "wide multiply did not take the production path within the device budget");
+            require(cpu.try_counter_loop_batch(tail + steps_per_round - 1) == tail,
+                    "wide multiply did not terminate on the original branch");
+            scalar.run(tail);
+            compare();
+
+            fast.device_step_hook = {};
+            fast.device_batch_limit_hook = {};
+            fast.device_batch_advance_hook = {};
+            fast.enable_boot_acceleration(false);
+            prepare(scalar);
+            prepare(fast);
+            fast.enable_boot_acceleration();
+            cpu.enable_ether_arm64_blocks();
+            const auto previous = fast.boot_acceleration().wide_multiply_loop_steps;
+            fast.run(rounds * steps_per_round);
+            scalar.run(rounds * steps_per_round);
+            compare();
+            require(fast.boot_acceleration().wide_multiply_loop_steps > previous,
+                    "the native chain hid the wide multiply loop backedge");
+        }
+    }
+    std::cout << "ETHER_WIDE_MULTIPLY_LOOP_PASS variants=2 paging=1 aliases=1 carries=1 device_bound=1\n";
+}
+
+void measure_wide_multiply() {
+    constexpr std::uint64_t source = 0x2a000, target = 0x2c000;
+    for (const auto rounds : {32U, 480U}) {
+        for (bool subtract : {false, true}) {
+            const unsigned steps = rounds * kWideStepsPerRound;
+            PcMachine scalar(4U << 20), fast(4U << 20);
+            std::array<std::int64_t, 51> scalar_ns{}, fast_ns{};
+            const auto measure = [&](PcMachine& pc, bool batch) {
+                pc.enable_boot_acceleration(false);
+                pc.cpu.enable_ether_arm64_blocks(false);
+                prepare_wide_multiply(pc, subtract, source, target, rounds);
+                pc.enable_boot_acceleration(batch);
+                pc.cpu.enable_ether_arm64_blocks(batch);
+                const auto retired = pc.cpu.instructions;
+                const auto start = Clock::now();
+                pc.run(steps);
+                const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start);
+                require(!pc.cpu.fault && pc.cpu.instructions - retired == steps && pc.cpu.regs[Cpu::R9] == 0,
+                        "wide multiply benchmark did not finish the guest loop");
+                return elapsed.count();
+            };
+            for (unsigned i = 0; i < scalar_ns.size(); ++i) {
+                if (i % 2) {
+                    fast_ns[i] = measure(fast, true);
+                    scalar_ns[i] = measure(scalar, false);
+                } else {
+                    scalar_ns[i] = measure(scalar, false);
+                    fast_ns[i] = measure(fast, true);
+                }
+                require(fast.cpu.regs == scalar.cpu.regs && fast.cpu.eflags == scalar.cpu.eflags &&
+                            fast.cpu.eip == scalar.cpu.eip && fast.boot_acceleration().wide_multiply_loop_steps != 0,
+                        "wide multiply benchmark changed guest state or missed the batch path");
+                for (unsigned i = 0; i < rounds; ++i)
+                    require(fast.cpu.read64(target + i * 8) == scalar.cpu.read64(target + i * 8),
+                            "wide multiply benchmark changed guest output");
+            }
+            std::sort(scalar_ns.begin(), scalar_ns.end());
+            std::sort(fast_ns.begin(), fast_ns.end());
+            const auto scalar_median = scalar_ns[scalar_ns.size() / 2], fast_median = fast_ns[fast_ns.size() / 2];
+            std::cout << "ETHER_WIDE_MULTIPLY_RATE mode=" << (subtract ? "subtract" : "add")
+                      << " words=" << rounds << " runs=" << scalar_ns.size() << " steps=" << steps
+                      << " scalar_ns=" << scalar_median << " batch_ns=" << fast_median
+                      << " scalar_steps_per_s=" << double(steps) * 1e9 / double(scalar_median)
+                      << " batch_steps_per_s=" << double(steps) * 1e9 / double(fast_median) << '\n';
+        }
+    }
+}
+
 void counted_calls() {
     constexpr std::uint64_t high = 0xffff800000000000ULL, start = high + entry;
     constexpr std::uint64_t callee = entry + 0x80, data = 0x2a000, word = 0x2c000, stack = 0x30000;
@@ -426,6 +582,10 @@ int main(int argc, char** argv) {
             if (Cpu::ether_arm64_host()) measure_mixed(true);
             return 0;
         }
+        if (argc == 2 && std::string_view(argv[1]) == "--measure-wide-multiply") {
+            measure_wide_multiply();
+            return 0;
+        }
         if (argc != 1) return 2;
         compare(false, {0x49, 0x75, 0xfd}, Cpu::ECX, 0x1122334455660021, 17, 16);
         compare(false, {0x49, 0x75, 0xfd}, Cpu::ECX, 0x1122334455660006, 20, 10);
@@ -442,6 +602,7 @@ int main(int argc, char** argv) {
         guarded_accumulator_dispatch();
         counted_calls();
         sse_copy_loops();
+        wide_multiply_loops();
         std::cout << "ETHER_COUNTER_LOOP_PASS widths=16,32,64 flags=1 paging=1 fallbacks=1\n";
         return 0;
     } catch (const std::exception& error) {

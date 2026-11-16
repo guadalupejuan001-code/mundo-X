@@ -99,6 +99,7 @@ class PcMachine {
     std::uint64_t scan_loop_steps=0;
     std::uint64_t arm64_block_steps=0;
     std::uint64_t counter_loop_batches=0, counter_loop_steps=0;
+    std::uint64_t wide_multiply_loop_batches=0, wide_multiply_loop_steps=0;
   };
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
@@ -735,11 +736,15 @@ class PcMachine {
     if(limit<2)return 0;
     unsigned completed=0;
     bool native_batched=false;
+    bool wide_multiply=false;
     if(rep)completed=cpu.try_rep_batch(limit);
     else if(shift)completed=cpu.try_shift_loop_batch(limit);
     else if(scan)completed=cpu.try_scan_loop_batch(limit);
     else if(zero)completed=cpu.try_zero_loop_batch(limit);
-    else if(counter)completed=unsigned(cpu.try_counter_loop_batch(limit));
+    else if(counter) {
+      wide_multiply=cpu.wide_multiply_loop_batch_candidate();
+      completed=unsigned(cpu.try_counter_loop_batch(limit));
+    }
     if(!completed&&arm64) {
       completed=cpu.try_ether_arm64_block(limit);
       native_batched=completed!=0;
@@ -765,6 +770,10 @@ class PcMachine {
     } else if(counter) {
       ++boot_acceleration_.counter_loop_batches;
       boot_acceleration_.counter_loop_steps+=completed;
+      if(wide_multiply) {
+        ++boot_acceleration_.wide_multiply_loop_batches;
+        boot_acceleration_.wide_multiply_loop_steps+=completed;
+      }
     }
     return completed;
   }
