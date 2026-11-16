@@ -4208,19 +4208,17 @@ inline void Cpu::double_shift(const ModRM& m, unsigned bytes, unsigned count, bo
 
 inline void Cpu::multiply_signed(unsigned destination, std::uint64_t a,
                                  std::uint64_t b, unsigned bytes) {
-  const auto value_mask = mask(bytes);
-  const auto sign_bit = std::uint64_t{1} << (bytes * 8U - 1);
-  a &= value_mask;
-  b &= value_mask;
-  // Unsigned magnitudes also represent INT64_MIN without negating a signed
-  // minimum. Check the mathematical product before its modular multiplication;
-  // no overflowing signed arithmetic or compiler-specific intrinsic is needed.
-  const auto magnitude_a = (a & sign_bit) ? ((std::uint64_t{0} - a) & value_mask) : a;
-  const auto magnitude_b = (b & sign_bit) ? ((std::uint64_t{0} - b) & value_mask) : b;
-  const auto limit = ((a ^ b) & sign_bit) ? sign_bit : sign_bit - 1;
-  const bool overflow = magnitude_b != 0 && magnitude_a > limit / magnitude_b;
-  const auto low = (a * b) & value_mask;
-  put_reg(destination, bytes, low);
+  bool overflow;
+  if (bytes == 8) {
+    const auto product = wide_integer::multiply_signed(a, b);
+    overflow = product.high != (product.low & sign_bit(8) ? UINT64_MAX : 0);
+    put_reg(destination, bytes, product.low);
+  } else {
+    const auto product = signed_value(a, bytes) * signed_value(b, bytes);
+    const auto low = std::uint64_t(product);
+    overflow = product != signed_value(low, bytes);
+    put_reg(destination, bytes, low);
+  }
   set_flag(CF, overflow); set_flag(OF, overflow);
 }
 
@@ -4229,12 +4227,8 @@ inline void Cpu::group3_wide(unsigned operation, std::uint64_t operand) {
   const auto sign = sign_bit(8);
   const bool is_signed = (operation & 1U) != 0;
   if (operation < 6) {
-    auto product = wide_integer::multiply(low, operand);
-    if (is_signed) {
-      // Convert the unsigned high word to its two's-complement product.
-      if (low & sign) product.high -= operand;
-      if (operand & sign) product.high -= low;
-    }
+    const auto product = is_signed ? wide_integer::multiply_signed(low, operand)
+        : wide_integer::multiply(low, operand);
     const bool overflow = product.high != (is_signed && (product.low & sign) ? UINT64_MAX : 0);
     put_reg(EAX, 8, product.low); put_reg(EDX, 8, product.high);
     set_flag(CF, overflow); set_flag(OF, overflow);

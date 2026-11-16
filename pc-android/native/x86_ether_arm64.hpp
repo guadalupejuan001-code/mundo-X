@@ -40,10 +40,11 @@ struct Operand {
 struct Instruction {
   enum Kind {
     Unsupported, Move, MoveByte, MoveZeroExtend, MoveSignExtend, Lea, Nop, Compare, Test, Increment, Decrement,
-    Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic, Conditional, Jump
+    Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic, SignedMultiply, Conditional, Jump
   };
   Kind kind = Move;
   Operand lhs, rhs;
+  std::uint64_t multiplier = 0;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
 
   static bool logical(Kind kind) noexcept {
@@ -157,7 +158,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     }
     if (long_mode && word && opcode != 0x89 && opcode != 0x8b) break;
     if (opcode == 0x0f && pos < size &&
-        ((bytes[pos] & 0xfeU) == 0xb6U || (long_mode && (bytes[pos] & 0xfeU) == 0xbeU)))
+        ((bytes[pos] & 0xfeU) == 0xb6U || bytes[pos] == 0xaf ||
+         (long_mode && (bytes[pos] & 0xfeU) == 0xbeU)))
       opcode = 0x0f00U | bytes[pos++];
     const auto form = opcode & 7;
     const auto direct_alu = opcode <= 0x3d && form <= 5
@@ -170,6 +172,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     const bool group_immediate = opcode == 0x80 || opcode == 0x81 || opcode == 0x83;
     const bool move_immediate = opcode == 0xc6 || opcode == 0xc7;
     const bool test_immediate = opcode == 0xf6 || opcode == 0xf7;
+    const bool multiply_immediate = opcode == 0x69 || opcode == 0x6b;
+    const bool multiply = opcode == 0x0faf || multiply_immediate;
     const bool shift = opcode == 0xc1 || opcode == 0xd1 || opcode == 0xd3;
     const bool carry_preserved = !block.flag_width ||
         block.flag_op == Instruction::Increment || block.flag_op == Instruction::Decrement;
@@ -206,7 +210,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.kind = Instruction::Nop;
     } else if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x84 ||
         opcode == 0x85 || opcode == 0xff || zero_extend || sign_extend_move || move_byte || binary_alu ||
-        group_immediate || move_immediate || test_immediate || shift) {
+        group_immediate || move_immediate || test_immediate || shift || multiply) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
@@ -237,7 +241,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
       const bool reg_first = opcode == 0x8b || opcode == 0x8d ||
-          zero_extend || sign_extend_move || opcode == 0x8a || (binary_alu && (opcode & 2));
+          zero_extend || sign_extend_move || opcode == 0x8a || multiply || (binary_alu && (opcode & 2));
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
       if (zero_extend || move_byte) {
@@ -273,6 +277,15 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         const unsigned literal_width = opcode == 0x83 ? 1 : (op.width == 8 ? 4 : op.width);
         if (literal_width > size - pos) break;
         op.rhs = immediate(literal_width, opcode == 0x83 || op.width == 8);
+      } else if (multiply) {
+        // IMUL changes CF and OF while preserving the other arithmetic flags.
+        if (op.width < 4 || block.flag_width) break;
+        op.kind = Instruction::SignedMultiply;
+        if (multiply_immediate) {
+          const unsigned literal_width = opcode == 0x6b ? 1 : 4;
+          if (literal_width > size - pos) break;
+          op.multiplier = immediate(literal_width, true).immediate_value;
+        }
       } else if (shift) {
         // A zero count can keep all incoming flags. Even on a nonzero count,
         // OF or AF can depend on their previous values.
@@ -330,7 +343,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         !Instruction::logical(block.flag_op) && !Instruction::shift(block.flag_op)) break;
     if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) ||
         op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
-        op.kind == Instruction::Add || op.kind == Instruction::Subtract) {
+        op.kind == Instruction::Add || op.kind == Instruction::Subtract ||
+        op.kind == Instruction::SignedMultiply) {
       block.flag_width = op.width;
       block.flag_op = op.kind;
       block.flag_index = block.count;
@@ -341,10 +355,12 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.rhs.immediate_value = rip + pos + signed_offset(op.rhs.displacement);
     op.end = pos;
     block.instructions[block.count++] = op;
-    block.register_only = block.register_only && !op.lhs.memory && !op.rhs.memory;
+    block.register_only = block.register_only && !op.lhs.memory &&
+        (!op.rhs.memory || op.kind == Instruction::Lea);
     block.size = pos;
     if (op.writes_ram() && (++block.writes == Block::kMaxWrites || !long_mode)) break;
-    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump) break;
+    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
+        op.kind == Instruction::SignedMultiply) break;
   }
   block.repeats = long_mode && block.target == rip && block.uses_arm_condition() &&
       fixed_loop_addresses(block);
@@ -465,6 +481,15 @@ class Emitter {
         address(op.rhs, 9);
         if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
         store(9, op.lhs.reg * 8, op.width == 2 ? 2 : 8);
+      } else if (op.kind == Instruction::SignedMultiply) {
+        // The last operation commits through the CPU's exact signed
+        // multiplication, including its partial flag update.
+        const bool immediate = op.opcode != 0x0faf;
+        read(immediate ? op.rhs : op.lhs, op.width);
+        store(9, offsetof(Frame, left));
+        if (immediate) literal(9, op.multiplier, op.width);
+        else read(op.rhs, op.width);
+        store(9, offsetof(Frame, right));
       } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
                  op.kind == Instruction::Add || op.kind == Instruction::Subtract || op.kind == Instruction::Xor ||
                  op.kind == Instruction::And || op.kind == Instruction::Or || Instruction::shift(op.kind)) {

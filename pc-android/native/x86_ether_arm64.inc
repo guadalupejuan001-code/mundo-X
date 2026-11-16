@@ -194,6 +194,9 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     }
     if (!direct_regs) regs = frame.regs;
     switch (block.flag_op) {
+      case ether_arm64::Instruction::SignedMultiply:
+        multiply_signed(last.lhs.reg, frame.left, frame.right, block.flag_width);
+        break;
       case ether_arm64::Instruction::Add:
         alu(0, frame.left, frame.right, block.flag_width);
         break;
