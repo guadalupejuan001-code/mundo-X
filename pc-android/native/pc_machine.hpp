@@ -92,6 +92,7 @@ class PcMachine {
   const BootMediaReadStats& boot_media_reads() const noexcept { return boot_media_reads_; }
   struct BootAcceleration {
     std::uint64_t batches=0, rep_elements=0, bytes=0;
+    std::uint64_t rep_direct_page_copy_bytes=0;
     std::uint64_t paged_rep_elements=0;
     std::uint64_t shift_loop_batches=0, shift_loop_steps=0;
     std::uint64_t zero_loop_batches=0, zero_loop_steps=0;
@@ -697,6 +698,7 @@ class PcMachine {
       boot_acceleration_.rep_elements+=completed;
       if(cpu.cr0&0x80000000U)boot_acceleration_.paged_rep_elements+=completed;
       boot_acceleration_.bytes+=cpu.last_rep_batch_bytes();
+      boot_acceleration_.rep_direct_page_copy_bytes+=cpu.last_rep_direct_page_copy_bytes();
     } else if(shift) {
       ++boot_acceleration_.shift_loop_batches;
       boot_acceleration_.shift_loop_steps+=completed;

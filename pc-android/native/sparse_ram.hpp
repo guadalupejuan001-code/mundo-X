@@ -328,6 +328,40 @@ public:
         return true;
     }
 
+    // A full-page copy can initialize an implicit destination directly.
+    // Require spare backing so allocating it cannot evict the source.
+    bool try_copy_to_implicit_page(std::uint64_t source, std::uint64_t target) {
+        check_range(source, kPageSize);
+        check_range(target, kPageSize);
+        if (source % kPageSize || target % kPageSize || has_pinned_writes()) return false;
+
+        const auto* from = find_slot(source / kPageSize);
+        if (!from || !from->has_dense()) return false;
+        const auto page = target / kPageSize;
+        const auto* to = find_slot(page);
+        if (to && (to->has_dense() || to->has_compact() || to->spilled)) return false;
+        if (payload_cap_bytes_ < kPageSize || allocated_bytes() > payload_cap_bytes_ - kPageSize)
+            return false;
+
+        std::unique_ptr<std::uint8_t[]> payload(new std::uint8_t[kPageSize]);
+        std::memcpy(payload.get(), from->payload.get(), kPageSize);
+        auto& table = tables_[static_cast<std::size_t>(page / kPagesPerTable)];
+        if (!table) {
+            table = std::make_unique<PageTable>();
+            ++allocated_tables_;
+        }
+        auto& destination = table->slots[static_cast<std::size_t>(page % kPagesPerTable)];
+        destination = PageSlot{};
+        destination.payload = std::move(payload);
+        ++table->resident;
+        ++allocated_pages_;
+        if (backing_) {
+            from->recently_used = true;
+            mark_write(destination);
+        }
+        return true;
+    }
+
     // Copy the exact compact representation into an independent slot.
     bool try_copy_compact_page(std::uint64_t source, std::uint64_t target) {
         check_range(source, kPageSize);

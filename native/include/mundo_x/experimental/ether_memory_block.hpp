@@ -10,14 +10,19 @@ namespace mundo_x::ether_next {
 
 // Materialize one bounded block of classical guest bytes. The CPU validates
 // every address in the span and supplies the exact number of safe elements.
+// A true result means an implicit destination was initialized directly.
 template <class Memory>
-void copy_ram_block(Memory& memory, std::uint64_t from, std::uint64_t to,
+bool copy_ram_block(Memory& memory, std::uint64_t from, std::uint64_t to,
                     std::size_t bytes) {
-  if (bytes == Memory::kPageSize && memory.try_copy_compact_page(from, to)) return;
-  if (memory.try_copy_resident_block(from, to, bytes)) return;
+  if (bytes == Memory::kPageSize) {
+    if (memory.try_copy_compact_page(from, to)) return false;
+    if (memory.try_copy_to_implicit_page(from, to)) return true;
+  }
+  if (memory.try_copy_resident_block(from, to, bytes)) return false;
   std::array<std::uint8_t, Memory::kPageSize> block;
   memory.read_block(from, block.data(), bytes);
   memory.write_block(to, block.data(), bytes);
+  return false;
 }
 
 template <class Memory>
