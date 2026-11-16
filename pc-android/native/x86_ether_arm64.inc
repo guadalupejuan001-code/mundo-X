@@ -58,7 +58,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
   }
   // An unpaged decode miss only depends on the identity-mapped code bytes.
   // Leave cold or unsupported instructions on the scalar path immediately.
-  if (!long_mode && entry.checked_bytes && !entry.block.long_mode && entry.block.count < 2 &&
+  if (!long_mode && entry.checked_bytes && !entry.block.long_mode && !entry.block.can_translate() &&
       entry.code_version && entry.code_version == memory.code_page_version(eip)) {
     ++ether_arm64_stats_.code_version_hits;
     return 0;
@@ -96,7 +96,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
           ether_arm64_stats_.code_bytes_read += width - length;
         }
         entry.block = ether_arm64::decode(actual.data(), width, eip, long_mode);
-        entry.checked_bytes = entry.block.count < 2 ? width : entry.block.size;
+        entry.checked_bytes = entry.block.can_translate() ? entry.block.size : width;
         entry.physical = physical;
         entry.cr3 = cr3;
         entry.cpl = privilege;
@@ -104,7 +104,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       }
       entry.code_version = memory.watch_code_page(physical);
     }
-    if (entry.block.count < 2 || entry.block.count > budget) return 0;
+    if (!entry.block.can_translate() || entry.block.count > budget) return 0;
     if (!entry.code) {
       const auto start = std::chrono::steady_clock::now();
       const bool built = entry.code.build(entry.block);
@@ -136,15 +136,22 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       pending.code_end = physical + block.size;
       pending.count = 0;
     }
-    ether_arm64::Frame frame{regs, 0, 0, 0, &Cpu::ether_arm64_read, &Cpu::ether_arm64_write, this,
-                             staged ? &pending : nullptr, repetitions};
+    // A register-only block on the serialized CPU cannot fail a memory
+    // guard. It can update the guest register file directly. Blocks that
+    // may fall back or release the bus keep a private working copy.
+    const bool direct_regs = block.register_only && !bus;
+    ether_arm64::Frame frame;
+    if (!direct_regs) frame.regs = regs;
+    frame.read = &Cpu::ether_arm64_read;
+    frame.write = &Cpu::ether_arm64_write;
+    frame.cpu = this;
+    frame.pending = staged ? &pending : nullptr;
+    frame.loop_remaining = repetitions;
+    frame.guest_regs = direct_regs ? regs.data() : frame.regs.data();
     // The code bytes and translations were validated under the bus lock.
     // Register-only native code touches only this CPU's private frame. The
     // motherboard defers asynchronous INIT/SIPI until this CPU yields.
-    const bool private_frame = bus && std::none_of(block.instructions.begin(),
-        block.instructions.begin() + block.count, [](const auto& instruction) {
-          return instruction.lhs.memory || instruction.rhs.memory;
-        });
+    const bool private_frame = bus && block.register_only;
     if (private_frame) bus->unlock();
     const auto outcome = active->code.run(frame);
     if (private_frame) bus->lock();
@@ -185,8 +192,11 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       ether_arm64_stats_.staged_ram_steps += retired;
       ether_arm64_stats_.coalesced_ram_writes += block.writes * rounds - pending.count;
     }
-    regs = frame.regs;
+    if (!direct_regs) regs = frame.regs;
     switch (block.flag_op) {
+      case ether_arm64::Instruction::SignedMultiply:
+        multiply_signed(last.lhs.reg, frame.left, frame.right, block.flag_width);
+        break;
       case ether_arm64::Instruction::Add:
         alu(0, frame.left, frame.right, block.flag_width);
         break;

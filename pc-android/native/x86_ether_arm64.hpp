@@ -40,10 +40,11 @@ struct Operand {
 struct Instruction {
   enum Kind {
     Unsupported, Move, MoveByte, MoveZeroExtend, MoveSignExtend, Lea, Nop, Compare, Test, Increment, Decrement,
-    Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic, Conditional, Jump
+    Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic, SignedMultiply, Conditional, Jump
   };
   Kind kind = Move;
   Operand lhs, rhs;
+  std::uint64_t multiplier = 0;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
 
   static bool logical(Kind kind) noexcept {
@@ -68,7 +69,16 @@ struct Block {
   unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
-  bool long_mode = true, repeats = false;
+  bool long_mode = true, repeats = false, register_only = true;
+
+  bool can_translate() const noexcept {
+    if (count > 1) return true;
+    if (!count || !register_only) return false;
+    const auto& op = instructions.front();
+    // Dispatch an isolated arithmetic or register operation only when it
+    // cannot reach a device or need a speculative memory transaction.
+    return op.writes_register() || op.kind == Instruction::Compare || op.kind == Instruction::Test;
+  }
 
   bool stages_ram() const noexcept {
     return writes && (writes > 1 || !instructions[count - 1].writes_ram());
@@ -148,7 +158,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     }
     if (long_mode && word && opcode != 0x89 && opcode != 0x8b) break;
     if (opcode == 0x0f && pos < size &&
-        ((bytes[pos] & 0xfeU) == 0xb6U || (long_mode && (bytes[pos] & 0xfeU) == 0xbeU)))
+        ((bytes[pos] & 0xfeU) == 0xb6U || bytes[pos] == 0xaf ||
+         (long_mode && (bytes[pos] & 0xfeU) == 0xbeU)))
       opcode = 0x0f00U | bytes[pos++];
     const auto form = opcode & 7;
     const auto direct_alu = opcode <= 0x3d && form <= 5
@@ -161,6 +172,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     const bool group_immediate = opcode == 0x80 || opcode == 0x81 || opcode == 0x83;
     const bool move_immediate = opcode == 0xc6 || opcode == 0xc7;
     const bool test_immediate = opcode == 0xf6 || opcode == 0xf7;
+    const bool multiply_immediate = opcode == 0x69 || opcode == 0x6b;
+    const bool multiply = opcode == 0x0faf || multiply_immediate;
     const bool shift = opcode == 0xc1 || opcode == 0xd1 || opcode == 0xd3;
     const bool carry_preserved = !block.flag_width ||
         block.flag_op == Instruction::Increment || block.flag_op == Instruction::Decrement;
@@ -197,7 +210,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.kind = Instruction::Nop;
     } else if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x84 ||
         opcode == 0x85 || opcode == 0xff || zero_extend || sign_extend_move || move_byte || binary_alu ||
-        group_immediate || move_immediate || test_immediate || shift) {
+        group_immediate || move_immediate || test_immediate || shift || multiply) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
@@ -228,7 +241,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
       const bool reg_first = opcode == 0x8b || opcode == 0x8d ||
-          zero_extend || sign_extend_move || opcode == 0x8a || (binary_alu && (opcode & 2));
+          zero_extend || sign_extend_move || opcode == 0x8a || multiply || (binary_alu && (opcode & 2));
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
       if (zero_extend || move_byte) {
@@ -264,6 +277,15 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         const unsigned literal_width = opcode == 0x83 ? 1 : (op.width == 8 ? 4 : op.width);
         if (literal_width > size - pos) break;
         op.rhs = immediate(literal_width, opcode == 0x83 || op.width == 8);
+      } else if (multiply) {
+        // IMUL changes CF and OF while preserving the other arithmetic flags.
+        if (op.width < 4 || block.flag_width) break;
+        op.kind = Instruction::SignedMultiply;
+        if (multiply_immediate) {
+          const unsigned literal_width = opcode == 0x6b ? 1 : 4;
+          if (literal_width > size - pos) break;
+          op.multiplier = immediate(literal_width, true).immediate_value;
+        }
       } else if (shift) {
         // A zero count can keep all incoming flags. Even on a nonzero count,
         // OF or AF can depend on their previous values.
@@ -321,7 +343,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         !Instruction::logical(block.flag_op) && !Instruction::shift(block.flag_op)) break;
     if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) ||
         op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
-        op.kind == Instruction::Add || op.kind == Instruction::Subtract) {
+        op.kind == Instruction::Add || op.kind == Instruction::Subtract ||
+        op.kind == Instruction::SignedMultiply) {
       block.flag_width = op.width;
       block.flag_op = op.kind;
       block.flag_index = block.count;
@@ -332,9 +355,12 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.rhs.immediate_value = rip + pos + signed_offset(op.rhs.displacement);
     op.end = pos;
     block.instructions[block.count++] = op;
+    block.register_only = block.register_only && !op.lhs.memory &&
+        (!op.rhs.memory || op.kind == Instruction::Lea);
     block.size = pos;
     if (op.writes_ram() && (++block.writes == Block::kMaxWrites || !long_mode)) break;
-    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump) break;
+    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
+        op.kind == Instruction::SignedMultiply) break;
   }
   block.repeats = long_mode && block.target == rip && block.uses_arm_condition() &&
       fixed_loop_addresses(block);
@@ -409,6 +435,7 @@ struct Frame {
   void* cpu;
   PendingRamWrites* pending;
   unsigned loop_remaining = 1;
+  std::uint64_t* guest_regs;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
@@ -416,11 +443,19 @@ struct Frame {
 // and all loads go through the original CPU's guarded RAM accessor.
 class Emitter {
  public:
-  explicit Emitter(const Block& block) : long_mode_(block.long_mode) {
+  explicit Emitter(const Block& block)
+      : long_mode_(block.long_mode), register_only_(block.register_only) {
     code_.reserve(96);
     emit(0xd503245f); // BTI c (a hint on hosts without BTI).
-    emit(0xa9bf7bf3); // STP X19,X30,[SP,#-16]!
-    emit(0xaa0003f3); // MOV X19,X0
+    if (register_only_) {
+      // Leaf blocks never call a memory helper. X12 holds the frame and X13
+      // holds the guest register file without saving any host registers.
+      emit(0xaa0003ec); // MOV X12,X0
+      load(13, offsetof(Frame, guest_regs));
+    } else {
+      emit(0xa9bf7bf3); // STP X19,X30,[SP,#-16]!
+      emit(0xaa0003f3); // MOV X19,X0
+    }
     const auto loop_start = static_cast<std::int32_t>(code_.size());
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
@@ -446,6 +481,15 @@ class Emitter {
         address(op.rhs, 9);
         if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
         store(9, op.lhs.reg * 8, op.width == 2 ? 2 : 8);
+      } else if (op.kind == Instruction::SignedMultiply) {
+        // The last operation commits through the CPU's exact signed
+        // multiplication, including its partial flag update.
+        const bool immediate = op.opcode != 0x0faf;
+        read(immediate ? op.rhs : op.lhs, op.width);
+        store(9, offsetof(Frame, left));
+        if (immediate) literal(9, op.multiplier, op.width);
+        else read(op.rhs, op.width);
+        store(9, offsetof(Frame, right));
       } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
                  op.kind == Instruction::Add || op.kind == Instruction::Subtract || op.kind == Instruction::Xor ||
                  op.kind == Instruction::And || op.kind == Instruction::Or || Instruction::shift(op.kind)) {
@@ -481,7 +525,7 @@ class Emitter {
       emit(last.kind == Instruction::Jump ? 0x52800040 : 0x52800020); // MOV W0,#2/#1
     }
     const auto epilogue = code_.size();
-    emit(0xa8c17bf3); // LDP X19,X30,[SP],#16
+    if (!register_only_) emit(0xa8c17bf3); // LDP X19,X30,[SP],#16
     emit(0xd65f03c0); // RET
     for (unsigned i = 0; i < exits_; ++i) {
       const auto pos = failed_access_[i];
@@ -495,7 +539,7 @@ class Emitter {
   std::vector<std::uint32_t> code_;
   std::array<std::size_t, Block::kMaxInstructions> failed_access_{};
   unsigned exits_ = 0;
-  bool long_mode_;
+  bool long_mode_, register_only_;
 
   void register_alu(const Instruction& op, bool capture_flags) {
     read(op.lhs, op.width);
@@ -536,17 +580,21 @@ class Emitter {
   }
 
   void emit(std::uint32_t word) { code_.push_back(word); }
+  unsigned base_register(unsigned offset) const noexcept {
+    if (!register_only_) return 19;
+    return offset < offsetof(Frame, left) ? 13 : 12;
+  }
   void load(unsigned reg, unsigned offset, unsigned width = 8) {
     std::uint32_t load_op = 0x39400000U; // LDRB
     if (width == 8) load_op = 0xf9400000U;
     else if (width == 4) load_op = 0xb9400000U;
     else if (width == 2) load_op = 0x79400000U;
-    emit(load_op | ((offset / width) << 10) | (19U << 5) | reg);
+    emit(load_op | ((offset / width) << 10) | (base_register(offset) << 5) | reg);
   }
   void store(unsigned reg, unsigned offset, unsigned width = 8) {
     const auto store_op = width == 1 ? 0x39000000U
         : width == 2 ? 0x79000000U : width == 4 ? 0xb9000000U : 0xf9000000U;
-    emit(store_op | ((offset / width) << 10) | (19U << 5) | reg);
+    emit(store_op | ((offset / width) << 10) | (base_register(offset) << 5) | reg);
   }
   void address(const Operand& operand, unsigned reg) {
     if (operand.reg == Operand::kRipBase) {
