@@ -12,6 +12,7 @@ on:
       - "pc-android/native/x86_ether_arm64.hpp"
       - "pc-android/native/x86_ether_arm64.inc"
       - "pc-android/native/tests/x86_ether_arm64_test.cpp"
+      - "pc-android/native/tests/x86_ether_ram_benchmark.cpp"
       - "pc-android/native/sparse_ram.hpp"
       - "pc-android/native/memory_fabric.hpp"
       - "pc-android/native/tests/sparse_ram_test.cpp"
@@ -73,6 +74,22 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          fetch-depth: 2
+      - name: Measure the observed x64 RAM instructions on ARM64
+        if: matrix.architecture == 'aarch64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/ether-ram-base"
+          mkdir "$base"
+          git archive HEAD^ native/include pc-android/native | tar -x -C "$base"
+          source=pc-android/native/tests/x86_ether_ram_benchmark.cpp
+          g++ -std=c++17 -O2 -pthread -I "$base/native/include" -I "$base/pc-android/native" \
+            "$source" -o "$RUNNER_TEMP/ether-ram-before"
+          g++ -std=c++17 -O2 -pthread -I native/include -I pc-android/native \
+            "$source" -o "$RUNNER_TEMP/ether-ram-after"
+          "$RUNNER_TEMP/ether-ram-before" | sed 's/^/parent /' | tee -a "$GITHUB_STEP_SUMMARY"
+          "$RUNNER_TEMP/ether-ram-after" | sed 's/^/current /' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Test the original Ether Next and canonical guest integration
         shell: bash
         run: |

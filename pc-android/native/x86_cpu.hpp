@@ -202,6 +202,7 @@ class Cpu {
     std::uint64_t invalidated = 0, data_fallbacks = 0;
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
     std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
+    std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -915,6 +916,8 @@ class Cpu {
                                   unsigned width) noexcept;
   static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
                                     unsigned width, std::uint64_t value) noexcept;
+  std::uint64_t ether_arm64_load_ram(const ether_arm64::Frame& frame, std::uint64_t physical, unsigned width);
+  void ether_arm64_commit_word(std::uint64_t physical, unsigned width, std::uint64_t value);
   std::optional<std::uint64_t> ether_arm64_ram_address(std::uint64_t address, unsigned width,
                                                       bool stack, Access access);
 #endif

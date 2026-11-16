@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -51,15 +52,23 @@ struct Instruction {
   static bool shift(Kind kind) noexcept {
     return kind == ShiftLeft || kind == ShiftRight || kind == ShiftArithmetic;
   }
+  bool writes_ram() const noexcept {
+    return lhs.memory && (kind == Move || kind == MoveByte || kind == Subtract);
+  }
 };
 
 struct Block {
   static constexpr unsigned kMaxBytes = 64, kMaxInstructions = 16;
+  static constexpr unsigned kMaxWrites = 4;
   std::array<Instruction, kMaxInstructions> instructions{};
-  unsigned count = 0, size = 0, flag_width = 0, flag_index = 0;
+  unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
   bool long_mode = true;
+
+  bool stages_ram() const noexcept {
+    return writes && (writes > 1 || !instructions[count - 1].writes_ram());
+  }
 
   bool uses_arm_condition() const noexcept {
     if (!count || flag_op != Instruction::Compare || flag_width < 4) return false;
@@ -284,16 +293,63 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     op.end = pos;
     block.instructions[block.count++] = op;
     block.size = pos;
-    // Commit a store last. Revalidate code in the next block, including
-    // writes through a physical alias.
-    const bool writes_ram = op.lhs.memory &&
-        (op.kind == Instruction::Move || op.kind == Instruction::MoveByte || op.kind == Instruction::Subtract);
-    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump || writes_ram) break;
+    if (op.writes_ram() && (++block.writes == Block::kMaxWrites || !long_mode)) break;
+    if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump) break;
   }
   return block;
 }
 
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+struct PendingRamWrites {
+  struct Store {
+    std::uint64_t physical, value;
+    unsigned width;
+  };
+  std::array<Store, Block::kMaxWrites> stores;
+  std::uint64_t code_first, code_end;
+  unsigned count;
+
+  bool stage(std::uint64_t physical, unsigned width, std::uint64_t value) noexcept {
+    // A store to the executing bytes would change a later x86 fetch.
+    if (physical < code_end && code_first < physical + width) return false;
+    if (count && stores[count - 1].physical == physical && stores[count - 1].width == width) {
+      // Replacing the most recent store preserves the order of partial aliases.
+      stores[count - 1].value = value;
+      return true;
+    }
+    if (count == stores.size()) return false;
+    stores[count++] = {physical, value, width};
+    return true;
+  }
+
+  template <class Read>
+  std::uint64_t load(std::uint64_t address, unsigned width, Read&& read) const {
+    const auto end = address + width;
+    if (count) {
+      const auto& last = stores[count - 1];
+      if (address >= last.physical && end <= last.physical + last.width)
+        return (last.value >> (8 * (address - last.physical))) & mask(width);
+    }
+    auto result = read();
+    for (unsigned i = 0; i < count; ++i) {
+      const auto& store = stores[i];
+      const auto first = std::max(address, store.physical);
+      const auto last = std::min(end, store.physical + store.width);
+      if (first >= last) continue;
+      const auto bits = mask(static_cast<unsigned>(last - first));
+      const auto shift = 8 * (first - address);
+      const auto value = store.value >> (8 * (first - store.physical));
+      result = (result & ~(bits << shift)) | ((value & bits) << shift);
+    }
+    return result;
+  }
+
+ private:
+  static std::uint64_t mask(unsigned width) noexcept {
+    return width == 8 ? UINT64_MAX : (std::uint64_t{1} << (width * 8)) - 1;
+  }
+};
+
 struct Frame {
   using Read = unsigned (*)(Frame*, std::uint64_t, unsigned) noexcept;
   using Write = unsigned (*)(Frame*, std::uint64_t, unsigned, std::uint64_t) noexcept;
@@ -302,6 +358,7 @@ struct Frame {
   Read read;
   Write write;
   void* cpu;
+  PendingRamWrites* pending;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
@@ -317,8 +374,7 @@ class Emitter {
     for (unsigned i = 0; i < block.count; ++i) {
       const auto& op = block.instructions[i];
       const bool capture_flags = block.flag_width && i == block.flag_index;
-      if ((op.kind == Instruction::Move || op.kind == Instruction::MoveByte ||
-           op.kind == Instruction::Subtract) && op.lhs.memory) {
+      if (op.writes_ram()) {
         const auto access = op.kind == Instruction::Subtract ? kSubtractAccess : 0;
         prepare_access(op.lhs, op.width, access);
         if (op.rhs.immediate) literal(3, op.rhs.immediate_value, op.width);

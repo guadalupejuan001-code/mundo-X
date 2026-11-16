@@ -124,7 +124,15 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
     const auto& block = active->block;
     const auto& last = block.instructions[block.count - 1];
     decoded_.reserve(last.end - last.begin);
-    ether_arm64::Frame frame{regs, 0, 0, 0, &Cpu::ether_arm64_read, &Cpu::ether_arm64_write, this};
+    ether_arm64::PendingRamWrites pending;
+    const bool staged = block.stages_ram();
+    if (staged) {
+      pending.code_first = physical;
+      pending.code_end = physical + block.size;
+      pending.count = 0;
+    }
+    ether_arm64::Frame frame{regs, 0, 0, 0, &Cpu::ether_arm64_read, &Cpu::ether_arm64_write, this,
+                             staged ? &pending : nullptr};
     // The code bytes and translations were validated under the bus lock.
     // Register-only native code touches only this CPU's private frame. The
     // motherboard defers asynchronous INIT/SIPI until this CPU yields.
@@ -138,6 +146,37 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, std::unique_lock<
     if (!outcome) {
       ++ether_arm64_stats_.data_fallbacks;
       return 0; // Discard staged state. The interpreter takes the exact fault.
+    }
+    if (staged) {
+      // A later speculative page walk may have discovered a new page table.
+      for (unsigned i = 0; i < pending.count; ++i) {
+        const auto& store = pending.stores[i];
+        if (memory.may_touch_page_tables(store.physical, store.width)) {
+          ++ether_arm64_stats_.data_fallbacks;
+          return 0;
+        }
+      }
+      try {
+        if (pending.count == 1) {
+          const auto& store = pending.stores[0];
+          ether_arm64_commit_word(store.physical, store.width, store.value);
+        } else {
+          // Pin and reserve all destinations before changing guest bytes.
+          const auto pins = memory.pin_writes();
+          for (unsigned i = 0; i < pending.count; ++i)
+            memory.prepare_write(pending.stores[i].physical, pending.stores[i].width);
+          for (unsigned i = 0; i < pending.count; ++i) {
+            const auto& store = pending.stores[i];
+            ether_arm64_commit_word(store.physical, store.width, store.value);
+          }
+        }
+      } catch (const std::exception&) {
+        ++ether_arm64_stats_.data_fallbacks;
+        return 0;
+      }
+      ++ether_arm64_stats_.staged_ram_blocks;
+      ether_arm64_stats_.staged_ram_steps += block.count;
+      ether_arm64_stats_.coalesced_ram_writes += block.writes - pending.count;
     }
     regs = frame.regs;
     switch (block.flag_op) {
@@ -224,11 +263,23 @@ inline unsigned Cpu::ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t a
     const auto physical = cpu.ether_arm64_ram_address(
         address, width, spec & ether_arm64::kStackAccess, Access::Read);
     if (!physical) return 0;
-    frame->loaded = cpu.read_ram_span(*physical, width);
+    frame->loaded = cpu.ether_arm64_load_ram(*frame, *physical, width);
     return 1;
   } catch (const std::exception&) {
     return 0;
   }
+}
+
+inline std::uint64_t Cpu::ether_arm64_load_ram(const ether_arm64::Frame& frame, std::uint64_t physical,
+                                               unsigned width) {
+  if (!frame.pending) return read_ram_span(physical, width);
+  return frame.pending->load(physical, width, [&] { return read_ram_span(physical, width); });
+}
+
+inline void Cpu::ether_arm64_commit_word(std::uint64_t physical, unsigned width, std::uint64_t value) {
+  std::array<std::uint8_t, 8> data;
+  for (unsigned i = 0; i < width; ++i) data[i] = std::uint8_t(value >> (8 * i));
+  memory.write_block(physical, data.data(), width);
 }
 
 inline unsigned Cpu::ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
@@ -240,16 +291,13 @@ inline unsigned Cpu::ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t 
         address, width, spec & ether_arm64::kStackAccess, Access::Write);
     if (!physical || cpu.memory.may_touch_page_tables(*physical, width)) return 0;
     if (spec & ether_arm64::kSubtractAccess) {
-      const auto source = cpu.ether_arm64_ram_address(
-          address, width, spec & ether_arm64::kStackAccess, Access::Read);
-      if (!source || *source != *physical) return 0;
-      frame->left = cpu.read_ram_span(*source, width);
+      // This x64 RAM form has no separate read permission from its validated write.
+      frame->left = cpu.ether_arm64_load_ram(*frame, *physical, width);
       frame->right = value;
       value = frame->left - value;
     }
-    std::array<std::uint8_t, 8> data;
-    for (unsigned i = 0; i < width; ++i) data[i] = std::uint8_t(value >> (8 * i));
-    cpu.memory.write_block(*physical, data.data(), width);
+    if (frame->pending) return frame->pending->stage(*physical, width, value);
+    cpu.ether_arm64_commit_word(*physical, width, value);
     return 1;
   } catch (const std::exception&) {
     return 0;

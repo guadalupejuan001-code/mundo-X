@@ -135,8 +135,10 @@ void decoder_contract() {
   require(!arm64::decode(unsupported, sizeof(unsupported), code).count,
           "segment override must stay in the interpreter");
   const std::uint8_t write_then_read[]{0x89,0x03,0x8b,0x33};
-  require(arm64::decode(write_then_read, sizeof(write_then_read), code).count == 1,
-          "RAM writes must terminate the block");
+  const auto forwarded = arm64::decode(write_then_read, sizeof(write_then_read), code);
+  require(forwarded.count == 2 && forwarded.stages_ram() &&
+          arm64::decode(write_then_read, sizeof(write_then_read), code, false).count == 1,
+          "long64 must stage the RAM store before the following load");
   const std::uint8_t parity[]{0x49,0x3b,0xf6,0x7a,0xfb};
   const auto parity_block = arm64::decode(parity, sizeof(parity), code);
   require(parity_block.count == 2 && !parity_block.uses_arm_condition(),
@@ -220,10 +222,11 @@ void decoder_contract() {
   require(!arm64::decode(word_cmp, sizeof(word_cmp), code, false).uses_arm_condition(),
           "word comparison must use the x86 sign bit");
   const auto copy = arm64::decode(byte_copy_loop.data(), byte_copy_loop.size(), code);
-  require(copy.count == 3 && copy.instructions[1].kind == arm64::Instruction::Add &&
+  require(copy.count == 6 && copy.stages_ram() &&
+          copy.instructions[1].kind == arm64::Instruction::Add &&
           copy.instructions[2].kind == arm64::Instruction::MoveByte &&
           copy.instructions[2].lhs.memory && copy.instructions[2].lhs.index == Cpu::R11,
-          "observed long64 byte copy did not end with its indexed byte store");
+          "observed long64 byte copy lost its indexed store or pointer updates");
   const std::uint8_t reference[]{0x48,0xf7,0x05,0xf5,0xff,0xff,0xff,0,0,0,0x80,0x75,2};
   const auto rip = arm64::decode(reference, sizeof(reference), code);
   require(rip.count == 2 && rip.instructions[0].lhs.reg == arm64::Operand::kRipBase &&
@@ -247,9 +250,11 @@ void decoder_contract() {
   require(!arm64::decode(sign_ah, sizeof(sign_ah), code).count,
           "MOVSX AH must retain legacy high-byte semantics");
   const auto rmw = arm64::decode(memory_subtractions.data(), memory_subtractions.size(), code);
-  require(rmw.count == 2 && rmw.size == 7 && rmw.flag_op == arm64::Instruction::Subtract &&
+  require(rmw.count == 4 && rmw.size == 14 && rmw.writes == 2 && rmw.stages_ram() &&
+          rmw.flag_op == arm64::Instruction::Subtract &&
           rmw.instructions[1].lhs.memory && rmw.instructions[1].lhs.index == Cpu::R9 &&
-          rmw.instructions[1].rhs.reg == Cpu::R11, "observed subtraction must end its block");
+          rmw.instructions[1].rhs.reg == Cpu::R11 &&
+          rmw.instructions[3].rhs.reg == Cpu::EAX, "observed subtractions must share a block");
   const std::uint8_t locked_sub[]{0xf0,0x4e,0x29,0x1c,0xc9};
   require(!arm64::decode(locked_sub, sizeof(locked_sub), code).count,
           "LOCK SUB must execute through the CPU's atomic memory path");
@@ -423,27 +428,80 @@ void memory_subtraction_contract() {
     cpu.write64(output, high);
     cpu.write64(boundary, high);
   }
-  warm_block(native.cpu, code, 2);
-  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
-          capture(native.cpu) == capture(scalar.cpu) && native.cpu.read64(output) == high - 1,
-          "first indexed subtraction wrote the wrong value or flags");
-  warm_block(native.cpu, code + 7, 2);
-  require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
-          capture(native.cpu) == capture(scalar.cpu) && native.cpu.read64(output) == high &&
-          native.cpu.flag(Cpu::CF) && native.cpu.flag(Cpu::OF), "second indexed subtraction changed x86 state");
+  warm_block(native.cpu, code, 4);
+  for (unsigned i = 0; i < 4; ++i)
+    require(scalar.cpu.step() == StepResult::Executed, "scalar indexed subtraction failed");
+  const auto& stats = native.cpu.ether_arm64_stats();
+  require(capture(native.cpu) == capture(scalar.cpu) && native.cpu.read64(output) == high &&
+          native.cpu.flag(Cpu::CF) && native.cpu.flag(Cpu::OF) &&
+          stats.staged_ram_blocks == 1 && stats.staged_ram_steps == 4 &&
+          stats.coalesced_ram_writes == 1, "combined indexed subtractions changed x86 state");
 
   for (auto* machine : {&native, &scalar}) {
     machine->cpu.eip = code;
     machine->cpu.regs[Cpu::ECX] = boundary - 8;
   }
   const auto before = capture(native.cpu);
-  require(!native.cpu.try_ether_arm64_block(2) && capture(native.cpu) == before &&
+  const auto fallbacks = stats.data_fallbacks;
+  require(!native.cpu.try_ether_arm64_block(4) && stats.data_fallbacks == fallbacks + 1 &&
+          capture(native.cpu) == before &&
           native.cpu.read64(boundary) == high, "cross-page subtraction altered state before fallback");
   for (auto* machine : {&native, &scalar})
     require(machine->cpu.step() == StepResult::Executed && machine->cpu.step() == StepResult::Executed &&
             machine->cpu.read64(boundary) == high - 1, "scalar cross-page subtraction failed");
   require(capture(native.cpu) == capture(scalar.cpu), "subtraction fallback changed guest state");
   std::cout << "PRIME_ETHER_RMW_BOOT_PASS variants=2 cross_page=1\n";
+}
+
+void staged_ram_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  const auto alias_code = code + 0x40, blocked = code + 0x80, modified = code + 0xc0;
+  for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+    // Write 8 bytes, overwrite the middle byte, then read through both stores.
+    emit(*cpu, alias_code, {0x48,0x89,0x07,0x88,0x4f,0x03,0x4c,0x8b,0x17,0xf4});
+    // The second store crosses a page and requires the scalar path.
+    emit(*cpu, blocked, {0x48,0x89,0x07,0x48,0x89,0x06,0xf4});
+    // Write HLT over the immediately following NOP.
+    emit(*cpu, modified, {0x88,0x07,0x90,0xf4});
+    cpu->regs[Cpu::EAX] = 0x1122334455667788ULL;
+    cpu->regs[Cpu::ECX] = 0xab;
+    cpu->regs[Cpu::EDI] = output;
+    cpu->regs[Cpu::ESI] = output + 0x1ffc;
+    cpu->write64(output, 0);
+  }
+  warm_block(native.cpu, alias_code, 3);
+  scalar.cpu.eip = alias_code;
+  for (unsigned i = 0; i < 3; ++i)
+    require(scalar.cpu.step() == StepResult::Executed, "scalar forwarding fixture failed");
+  require(capture(native.cpu) == capture(scalar.cpu) &&
+          native.cpu.read64(output) == 0x11223344ab667788ULL &&
+          native.cpu.regs[Cpu::R10] == native.cpu.read64(output),
+          "overlapping staged writes changed the load or the final RAM bytes");
+
+  auto& cpu = native.cpu;
+  cpu.eip = blocked;
+  const auto before = capture(cpu);
+  const auto fallbacks = cpu.ether_arm64_stats().data_fallbacks;
+  for (unsigned i = 0; i < 4; ++i)
+    require(!cpu.try_ether_arm64_block(2) && capture(cpu) == before &&
+            cpu.read64(output + 0x1ffc) == 0, "rejected second store committed the first store");
+  require(cpu.ether_arm64_stats().data_fallbacks > fallbacks &&
+          cpu.step() == StepResult::Executed && cpu.read64(output) == cpu.regs[Cpu::EAX],
+          "scalar fallback did not execute the initial store");
+
+  cpu.eip = modified;
+  cpu.regs[Cpu::EDI] = modified + 2;
+  cpu.regs[Cpu::EAX] = 0xf4;
+  const auto code_fallbacks = cpu.ether_arm64_stats().data_fallbacks;
+  for (unsigned i = 0; i < 4; ++i)
+    require(!cpu.try_ether_arm64_block(2) && cpu.read8(modified + 2) == 0x90,
+            "staged block ran across a change to its executing bytes");
+  require(cpu.ether_arm64_stats().data_fallbacks > code_fallbacks &&
+          cpu.step() == StepResult::Executed && cpu.step() == StepResult::Halted,
+          "scalar fallback did not fetch the modified instruction");
+  std::cout << "PRIME_ETHER_STAGED_RAM_PASS overlap=1 rollback=1 code_guard=1\n";
 }
 
 void register_shift_contract() {
@@ -1160,6 +1218,7 @@ int main() {
     rip_relative_contract();
     signed_load_contract();
     memory_subtraction_contract();
+    staged_ram_contract();
     protected32_contract();
     byte_copy_contract();
     guard_contract();
