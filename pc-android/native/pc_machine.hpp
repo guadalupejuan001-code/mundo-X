@@ -570,6 +570,7 @@ class PcMachine {
      <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\""
      <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
      <<",\"engine\":\"cosmic-pc-own-x86\""
+     <<",\"cpuid_vendor\":"<<quote(cpu.cpuid_vendor())
      <<",\"page_walks\":"<<cpu.page_walks<<",\"instruction_page_hits\":"<<cpu.instruction_page_hits
      <<",\"instruction_page_reuses\":"<<cpu.instruction_page_reuses
      <<",\"page_translation_hits\":"<<cpu.page_translation_hits
