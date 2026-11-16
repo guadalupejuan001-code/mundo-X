@@ -41,6 +41,7 @@ public:
         virtual ~PageBacking() = default;
         virtual void read(std::uint64_t page, std::uint8_t* bytes) = 0;
         virtual void write(std::uint64_t page, const std::uint8_t* bytes) = 0;
+        virtual void discard(std::uint64_t) noexcept {}
         virtual void reset() noexcept = 0;
     };
 
@@ -463,7 +464,7 @@ public:
                     std::memset(slot.payload.get() + inside, value, chunk);
                 } else if (slot.has_compact() || slot.spilled) {
                     // All partially covered pages were expanded by preflight.
-                    if (slot.spilled) --spilled_pages_;
+                    if (slot.spilled) discard_spill(offset / kPageSize);
                     else erase_compact(slot);
                     slot = PageSlot{};
                     --table->resident;
@@ -654,6 +655,11 @@ private:
         ++backing_writes_;
     }
 
+    void discard_spill(std::uint64_t page) noexcept {
+        backing_->discard(page);
+        --spilled_pages_;
+    }
+
     bool spill_compact_page(std::uint64_t compact_limit, std::uint64_t first = UINT64_MAX,
                             std::uint64_t last = UINT64_MAX) {
         if (!backing_ || compact_bytes() <= compact_limit) return false;
@@ -823,7 +829,7 @@ private:
         if (slot.has_dense() || slot.has_compact() || slot.spilled) --table->resident;
         if (slot.has_dense()) --allocated_pages_;
         if (slot.has_compact()) erase_compact(slot);
-        if (slot.spilled) --spilled_pages_;
+        if (slot.spilled) discard_spill(page);
         slot = PageSlot{};
         if (new_bytes) {
             slot.pattern = pattern;
@@ -978,7 +984,7 @@ private:
             for (auto& page : new_pages) {
                 PageTable& table = *tables_[static_cast<std::size_t>(page.first / kPagesPerTable)];
                 auto& slot = table.slots[static_cast<std::size_t>(page.first % kPagesPerTable)];
-                if (slot.spilled) --spilled_pages_;
+                if (slot.spilled) discard_spill(page.first);
                 else if (slot.has_compact()) erase_compact(slot);
                 else ++table.resident;
                 slot = PageSlot{};
