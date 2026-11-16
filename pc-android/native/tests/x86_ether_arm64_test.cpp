@@ -65,6 +65,13 @@ constexpr std::array<std::uint8_t, 15> memory_subtractions{
     0x4c,0x89,0xca,0x4a,0x29,0x04,0xc9,    // MOV RDX,R9; observed SUB [RCX+R9*8],RAX
     0xf4};
 
+constexpr std::array<std::uint8_t, 16> repeated_alias_loop{
+    0x4c,0x29,0x1f,       // SUB [RDI],R11
+    0x88,0x4f,0x03,       // MOV [RDI+3],CL (overlaps the subtraction)
+    0x4c,0x8b,0x17,       // MOV R10,[RDI]
+    0x48,0x83,0xea,0x01,  // SUB RDX,1
+    0x75,0xf1,0xf4};      // JNZ; HLT
+
 void require(bool value, const char* message) {
   if (!value) throw std::runtime_error(message);
 }
@@ -178,7 +185,7 @@ void decoder_contract() {
           "a branch using incoming flags should extend a MOV block");
   const auto indexed = arm64::decode(indexed_loop.data(), indexed_loop.size(), code);
   const auto& address = indexed.instructions[0].rhs;
-  require(indexed.count == 5 && indexed.target == code &&
+  require(indexed.count == 5 && indexed.target == code && indexed.repeats &&
           address.reg == Cpu::ESP && address.index == Cpu::EDX &&
           address.displacement == 0xfffffff8U && address.scale_shift == 3 &&
           indexed.instructions[1].width == 2 && indexed.instructions[1].rhs.index == arm64::Operand::kNoIndex &&
@@ -258,6 +265,13 @@ void decoder_contract() {
   const std::uint8_t locked_sub[]{0xf0,0x4e,0x29,0x1c,0xc9};
   require(!arm64::decode(locked_sub, sizeof(locked_sub), code).count,
           "LOCK SUB must execute through the CPU's atomic memory path");
+  const auto repeated = arm64::decode(repeated_alias_loop.data(), repeated_alias_loop.size(), code);
+  require(repeated.count == 5 && repeated.writes == 2 && repeated.repeats,
+          "fixed-address RAM loop missed its native backedge");
+  const std::uint8_t moving_store[]{0x4c,0x29,0x1f,0x48,0x83,0xc7,8,0x48,0x83,0xea,1,0x75,0xf3};
+  const auto moving = arm64::decode(moving_store, sizeof(moving_store), code);
+  require(moving.count == 4 && moving.target == code && !moving.repeats,
+          "a moving destination must remain a one-round RAM block");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -502,6 +516,63 @@ void staged_ram_contract() {
           cpu.step() == StepResult::Executed && cpu.step() == StepResult::Halted,
           "scalar fallback did not fetch the modified instruction");
   std::cout << "PRIME_ETHER_STAGED_RAM_PASS overlap=1 rollback=1 code_guard=1\n";
+}
+
+void repeated_loop_contract() {
+  struct Run {
+    State terminal;
+    std::uint64_t ticks = 0, irq_rip = 0, irq_steps = 0, irq_word = 0;
+    Cpu::EtherArm64Stats stats;
+  };
+  const auto execute = [](bool translated) {
+    PcMachine machine;
+    boot(machine, translated);
+    auto& cpu = machine.cpu;
+    cpu.memory.write_block(code, repeated_alias_loop.data(), repeated_alias_loop.size());
+    cpu.regs[Cpu::EDI] = output;
+    cpu.regs[Cpu::R11] = 0x12345678;
+    cpu.regs[Cpu::R13] = 0;
+    cpu.regs[Cpu::ECX] = 0xab;
+    cpu.regs[Cpu::EDX] = 40;
+    cpu.eflags = 2 | Cpu::IF;
+    cpu.write64(output, 0x1122334455667788ULL);
+
+    Run run{};
+    const auto start_steps = cpu.instructions;
+    constexpr unsigned deadline = 62; // Between instructions inside a loop round.
+    gate(machine, 0x40);
+    emit(cpu, irq_handler, {0x49,0xff,0xc5,0x48,0xcf}); // INC R13; IRETQ.
+    machine.device_step_hook = [&] {
+      if (++run.ticks != deadline) return;
+      run.irq_rip = cpu.eip;
+      run.irq_steps = cpu.instructions - start_steps;
+      run.irq_word = cpu.read64(output);
+      require(cpu.raise_external_irq(0x40), "repeated block lost its IRQ");
+    };
+    machine.device_batch_limit_hook = [&](unsigned budget) {
+      return run.ticks < deadline ? std::min(budget, unsigned(deadline - run.ticks)) : budget;
+    };
+    machine.device_batch_advance_hook = [&](unsigned steps) { run.ticks += steps; };
+    machine.run(351);
+    require(cpu.halted && !cpu.fault && cpu.regs[Cpu::EDX] == 0 &&
+            cpu.regs[Cpu::R13] == 1 && cpu.instructions - start_steps == 203,
+            "repeated block failed to retire the exact guest loop and IRQ");
+    run.terminal = capture(cpu);
+    run.stats = cpu.ether_arm64_stats();
+    return run;
+  };
+
+  const auto native = execute(true);
+  const auto scalar = execute(false);
+  require(native.terminal == scalar.terminal && native.ticks == scalar.ticks &&
+          native.irq_rip == scalar.irq_rip && native.irq_word == scalar.irq_word &&
+          native.irq_steps == scalar.irq_steps && native.irq_steps == 61,
+          "native rounds crossed an IRQ boundary or changed overlapping RAM writes");
+  require(native.stats.repeated_loop_dispatches >= 2 && native.stats.repeated_loop_steps >= 150 &&
+          native.stats.coalesced_ram_writes >= 50 && scalar.stats.repeated_loop_steps == 0,
+          "fixed-address loop did not amortize dispatch and RAM writes");
+  std::cout << "PRIME_ETHER_REPEATED_LOOP_PASS steps=" << native.stats.repeated_loop_steps
+            << " dispatches=" << native.stats.repeated_loop_dispatches << " irq_step=" << native.irq_steps << '\n';
 }
 
 void register_shift_contract() {
@@ -1219,6 +1290,7 @@ int main() {
     signed_load_contract();
     memory_subtraction_contract();
     staged_ram_contract();
+    repeated_loop_contract();
     protected32_contract();
     byte_copy_contract();
     guard_contract();

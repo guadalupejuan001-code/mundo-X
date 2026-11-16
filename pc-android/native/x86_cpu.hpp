@@ -203,6 +203,7 @@ class Cpu {
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
     std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
+    std::uint64_t repeated_loop_dispatches = 0, repeated_loop_steps = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -911,7 +912,7 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<ether_arm64::Cache> ether_arm64_cache_;
   bool ether_arm64_enabled_ = false;
-  unsigned retire_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus);
+  unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus);
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
                                   unsigned width) noexcept;
   static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
