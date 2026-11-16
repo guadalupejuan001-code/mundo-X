@@ -133,6 +133,33 @@ int main() {
                       moved.metrics().backing_writes == 0 && moved.metrics().spilled_pages == 0,
                   "RAM reset exposed a page from an old boot");
          }},
+        {"full overwrites bypass backing reads after successful preflight", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             SparseRam ram(6 * kPage, 3 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             for (unsigned page = 0; page < 3; ++page) keep_dense(ram, page);
+             need(ram.adjust_payload_budget(0, 3) == Adjustment::Applied && ram.spilled_pages() == 3 &&
+                      ram.adjust_payload_budget(3 * kPage, 0) == Adjustment::Applied,
+                  "Full-overwrite fixture must leave all three pages in backing");
+
+             const std::vector<std::uint8_t> replacement(2 * kPage, 0xb7);
+             std::vector<std::uint8_t> previous(kPage);
+             store->fail_read = true;
+             expect<std::runtime_error>([&] { ram.write_block(0, replacement.data(), kPage + 1); },
+                                        "test backing read I/O error");
+             expect<std::runtime_error>([&] { ram.write_block(0, replacement.data(), kPage, previous.data()); },
+                                        "test backing read I/O error");
+             need(ram.spilled_pages() == 3 && ram.metrics().backing_overwrite_pages == 0,
+                  "A partial write or undo capture failure must leave every old page intact");
+             ram.write_block(0, replacement.data(), replacement.size());
+             ram.fill(2 * kPage, 0x2a, kPage);
+             need(ram.metrics().backing_reads == 0 && ram.metrics().backing_overwrite_pages == 3 &&
+                      ram.spilled_pages() == 0 && read(ram, 0, replacement.size()) == replacement &&
+                      read(ram, 2 * kPage, kPage) == std::vector<std::uint8_t>(kPage, 0x2a),
+                  "Full-page writes and fills must replace cold bytes without a backing read");
+         }},
         {"backing I/O failures preserve resident and spilled bytes", [] {
              SparseRam ram(5 * kPage, 2 * kPage);
              auto backing = std::make_unique<TestBacking>();
