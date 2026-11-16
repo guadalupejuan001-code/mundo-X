@@ -28,6 +28,7 @@ public:
     static constexpr std::uint64_t kDefaultPayloadLimit = std::uint64_t{1} << 30;
 
     enum class BudgetAdjustment { Applied, Reclaiming, Blocked };
+    enum class BackingCachePolicy { Fixed, Adaptive };
 
     class BudgetExceeded : public std::runtime_error {
     public:
@@ -59,6 +60,10 @@ public:
         std::uint64_t backing_writes;
         std::size_t pattern_delta_pages;
         std::uint64_t pattern_delta_bytes;
+        std::uint64_t backing_cache_hits;
+        std::uint64_t backing_cache_bytes;
+        std::uint64_t backing_cache_capacity_bytes;
+        std::uint64_t backing_overwrite_pages;
     };
 
     class WritePins {
@@ -179,9 +184,12 @@ public:
     std::size_t spilled_pages() const noexcept { return spilled_pages_; }
     bool has_page_backing() const noexcept { return bool(backing_); }
     bool has_pinned_writes() const noexcept { return pin_depth_ != 0; }
-    void attach_page_backing(std::unique_ptr<PageBacking> backing) {
+    void attach_page_backing(std::unique_ptr<PageBacking> backing,
+                             BackingCachePolicy policy = BackingCachePolicy::Fixed) {
         if (!backing || backing_) throw std::invalid_argument("SparseRam expects one page backing.");
-        backing_cache_ = std::make_unique<BackingCache>();
+        auto cache = std::make_unique<BackingCache>(policy);
+        cache->resize(cache->sets_for(payload_cap_bytes_, payload_cap_bytes_ - allocated_bytes()));
+        backing_cache_ = std::move(cache);
         backing_ = std::move(backing);
     }
     // A CPU journal holds these pins through rollback. Read-only accesses
@@ -199,24 +207,31 @@ public:
         return static_cast<std::uint64_t>(allocated_pages_) * kPageSize + compact_bytes();
     }
     std::uint64_t budget_bytes() const noexcept { return payload_cap_bytes_; }
+    std::uint64_t backing_cache_bytes() const noexcept {
+        return backing_cache_ ? backing_cache_->payload_bytes() : 0;
+    }
     BudgetAdjustment adjust_payload_budget(std::uint64_t target, std::size_t reclaim_pages) {
         if (has_pinned_writes()) return BudgetAdjustment::Blocked;
-        if (target < allocated_bytes()) {
-            for (std::size_t i = 0; i < reclaim_pages && allocated_bytes() > target; ++i)
-                if (!evict_page(UINT64_MAX, UINT64_MAX, target) && !spill_compact_page(target))
+        const auto cache_sets = backing_cache_ ? backing_cache_->sets_for(target, target) : 0;
+        const auto guest_target = target - (backing_cache_ ? backing_cache_->reserved_bytes(cache_sets) : 0);
+        if (backing_cache_ && cache_sets < backing_cache_->active_sets) backing_cache_->resize(cache_sets);
+        if (guest_target < allocated_bytes()) {
+            for (std::size_t i = 0; i < reclaim_pages && allocated_bytes() > guest_target; ++i)
+                if (!evict_page(UINT64_MAX, UINT64_MAX, guest_target) && !spill_compact_page(guest_target))
                     return BudgetAdjustment::Blocked;
             const auto used = allocated_bytes();
-            if (used > target) {
+            if (used > guest_target) {
                 if (backing_ && reclaim_pages != 0) {
                     const auto reserve = std::min<std::uint64_t>(
                         std::max<std::size_t>(1, reclaim_pages / 2),
-                        (payload_cap_bytes_ - used) / kPageSize) * kPageSize;
-                    payload_cap_bytes_ = used + reserve;
+                        (guest_payload_limit() - used) / kPageSize) * kPageSize;
+                    payload_cap_bytes_ = used + reserve + backing_cache_->reserved_bytes(backing_cache_->active_sets);
                 }
                 return BudgetAdjustment::Reclaiming;
             }
         }
         payload_cap_bytes_ = target;
+        if (backing_cache_) backing_cache_->resize(cache_sets);
         return BudgetAdjustment::Applied;
     }
     // Exact owned object/table storage, excluding allocator bookkeeping and
@@ -227,12 +242,15 @@ public:
         return sizeof(*this) +
                static_cast<std::uint64_t>(tables_.capacity()) * sizeof(std::unique_ptr<PageTable>) +
                static_cast<std::uint64_t>(allocated_tables_) * sizeof(PageTable) - inline_payload +
-               (backing_cache_ ? sizeof(BackingCache) : 0);
+               (backing_cache_ ? backing_cache_->storage_bytes() : 0);
     }
     Metrics metrics() const noexcept {
         return {size(), allocated_bytes(), budget_bytes(), metadata_bytes(), allocated_pages(), pattern_pages(),
                 sparse_word_pages_, spilled_pages_, static_cast<std::uint64_t>(spilled_pages_) * kPageSize,
-                backing_reads_, backing_writes_, pattern_delta_pages_, pattern_delta_bytes_};
+                backing_reads_, backing_writes_, pattern_delta_pages_, pattern_delta_bytes_,
+                backing_cache_ ? backing_cache_->hits : 0, backing_cache_bytes(),
+                backing_cache_ ? backing_cache_->active_sets * BackingCache::kBytesPerSet : 0,
+                backing_cache_ ? backing_cache_->overwrite_pages : 0};
     }
 
     ByteProxy operator[](std::uint64_t offset) {
@@ -292,7 +310,7 @@ public:
                 if (backing_) slot->recently_used = true;
                 std::memcpy(destination, slot->payload.get() + inside, chunk);
             } else if (slot && slot->spilled) {
-                std::memcpy(destination, backed_page(page).data() + inside, chunk);
+                std::memcpy(destination, backed_page(page) + inside, chunk);
             } else if (slot && slot->has_compact()) copy_compact(*slot, inside, destination, chunk);
             else std::memset(destination, 0, chunk);
             offset += chunk;
@@ -331,7 +349,7 @@ public:
                 if (backing_) slot.recently_used = true;
                 bytes = slot.payload.get() + inside;
             } else if (slot.spilled) {
-                bytes = backed_page(page).data() + inside;
+                bytes = backed_page(page) + inside;
             } else if (slot.word_index == kRepeating) {
                 const auto* pattern = reinterpret_cast<const unsigned char*>(&slot.pattern);
                 const auto probe = slot.pattern ? std::min(chunk, kPatternSize) : 1;
@@ -357,17 +375,23 @@ public:
     void write_block(std::uint64_t offset, const std::uint8_t* source,
                      std::size_t count, std::uint8_t* previous = nullptr) {
         check_range(offset, count);
-        if (count != 0 && !source) throw std::invalid_argument("SparseRam null write source.");
-        prepare_dense_pages(offset, count, true);
+        if (!count) return;
+        if (!source) throw std::invalid_argument("SparseRam null write source.");
+        const auto first_offset = static_cast<std::size_t>(offset % kPageSize);
+        if (count <= kPageSize - first_offset) {
+            auto* slot = find_slot(offset / kPageSize);
+            if (slot && slot->has_dense()) {
+                if (backing_) mark_write(*slot);
+                write_dense_bytes(*slot, first_offset, source, count, previous);
+                return;
+            }
+        }
+        prepare_dense_pages(offset, count, true, previous == nullptr);
         while (count != 0) {
             const std::size_t inside = static_cast<std::size_t>(offset % kPageSize);
             const std::size_t chunk = std::min(count, kPageSize - inside);
-            auto& page = find_slot(offset / kPageSize)->payload;
-            if (previous) {
-                std::memcpy(previous, page.get() + inside, chunk);
-                previous += chunk;
-            }
-            std::memcpy(page.get() + inside, source, chunk);
+            write_dense_bytes(*find_slot(offset / kPageSize), inside, source, chunk, previous);
+            if (previous) previous += chunk;
             offset += chunk;
             source += chunk;
             count -= chunk;
@@ -407,7 +431,8 @@ public:
         const auto page = target / kPageSize;
         const auto* to = find_slot(page);
         if (to && (to->has_dense() || to->has_compact() || to->spilled)) return false;
-        if (payload_cap_bytes_ < kPageSize || allocated_bytes() > payload_cap_bytes_ - kPageSize)
+        const auto limit = guest_payload_limit();
+        if (limit < kPageSize || allocated_bytes() > limit - kPageSize)
             return false;
 
         std::unique_ptr<std::uint8_t[]> payload(new std::uint8_t[kPageSize]);
@@ -451,7 +476,7 @@ public:
 
     void fill(std::uint64_t offset, std::uint8_t value, std::size_t count) {
         check_range(offset, count);
-        if (value != 0) prepare_write(offset, count);
+        if (value != 0) prepare_dense_pages(offset, count, true, true);
         else if (compact_bytes() || spilled_pages_)
             prepare_dense_pages(offset, count, false);
         while (count != 0) {
@@ -506,7 +531,8 @@ public:
         pattern_delta_pages_ = pattern_delta_bytes_ = 0;
         spilled_pages_ = backing_reads_ = backing_writes_ = eviction_page_ = compact_eviction_page_ = 0;
         if (backing_) {
-            for (auto& entry : backing_cache_->entries) entry.page = BackingCache::kUnused;
+            backing_cache_->clear();
+            backing_cache_->hits = backing_cache_->overwrite_pages = 0;
             backing_->reset();
         }
     }
@@ -596,14 +622,84 @@ private:
     };
     struct BackingCache {
         static constexpr std::uint64_t kUnused = UINT64_MAX;
+        static constexpr std::size_t kBytesPerSet = 2 * kPageSize;
         struct Entry {
             std::uint64_t page = kUnused;
-            Page bytes;
+            std::unique_ptr<std::uint8_t[]> bytes;
         };
-        std::array<Entry, 16> entries;
-        Entry& entry(std::uint64_t page) {
-            return entries[(page ^ (page >> 4)) % entries.size()];
+        struct Set {
+            std::array<Entry, 2> entries;
+            unsigned newest = 0;
+        };
+
+        explicit BackingCache(BackingCachePolicy policy)
+            : adaptive(policy == BackingCachePolicy::Adaptive), sets(adaptive ? 256 : 8) {}
+
+        std::size_t sets_for(std::uint64_t budget, std::uint64_t unused) const noexcept {
+            if (!adaptive) return sets.size();
+            // Reserve at most 1/128 of the resident budget, up to 2 MiB.
+            return static_cast<std::size_t>(std::min<std::uint64_t>(sets.size(),
+                std::min(budget / 128, unused) / kBytesPerSet));
         }
+        std::uint64_t reserved_bytes(std::size_t count) const noexcept {
+            return adaptive ? count * kBytesPerSet : 0;
+        }
+        std::uint64_t payload_bytes() const noexcept { return allocated * kPageSize; }
+        std::uint64_t storage_bytes() const noexcept {
+            return sizeof(*this) + sets.capacity() * sizeof(Set) + payload_bytes();
+        }
+        void clear() noexcept {
+            for (std::size_t i = 0; i < active_sets; ++i) sets[i] = {};
+            allocated = 0;
+        }
+        void resize(std::size_t count) noexcept {
+            if (count == active_sets) return;
+            clear();
+            active_sets = count;
+        }
+        Set& set_for(std::uint64_t page) noexcept {
+            return sets[(page ^ (page >> 9) ^ (page >> 18)) % active_sets];
+        }
+        void invalidate(std::uint64_t page) noexcept {
+            if (!active_sets) return;
+            for (auto& entry : set_for(page).entries)
+                if (entry.page == page) entry.page = kUnused;
+        }
+        const std::uint8_t* read(std::uint64_t page, PageBacking& backing, std::uint64_t& reads) {
+            if (!active_sets) return read_storage(page, backing, reads, scratch.data());
+            auto& set = set_for(page);
+            for (unsigned index = 0; index < set.entries.size(); ++index) {
+                auto& entry = set.entries[index];
+                if (entry.page != page) continue;
+                set.newest = index;
+                ++hits;
+                return entry.bytes.get();
+            }
+            unsigned index = 1 - set.newest;
+            if (set.entries[set.newest].page == kUnused) index = set.newest;
+            auto& entry = set.entries[index];
+            if (!entry.bytes) {
+                entry.bytes.reset(new (std::nothrow) std::uint8_t[kPageSize]);
+                if (!entry.bytes) return read_storage(page, backing, reads, scratch.data());
+                ++allocated;
+            }
+            entry.page = kUnused;
+            read_storage(page, backing, reads, entry.bytes.get());
+            entry.page = page;
+            set.newest = index;
+            return entry.bytes.get();
+        }
+        static const std::uint8_t* read_storage(std::uint64_t page, PageBacking& backing,
+                                                std::uint64_t& reads, std::uint8_t* buffer) {
+            backing.read(page, buffer);
+            ++reads;
+            return buffer;
+        }
+        const bool adaptive;
+        std::vector<Set> sets;
+        Page scratch;
+        std::size_t active_sets = 0, allocated = 0;
+        std::uint64_t hits = 0, overwrite_pages = 0;
     };
 
     std::uint64_t logical_bytes_ = 0;
@@ -631,15 +727,20 @@ private:
                pattern_delta_bytes_;
     }
 
-    const Page& backed_page(std::uint64_t page) const {
-        auto& entry = backing_cache_->entry(page);
-        if (entry.page != page) {
-            entry.page = BackingCache::kUnused;
-            backing_->read(page, entry.bytes.data());
-            entry.page = page;
-            ++backing_reads_;
-        }
-        return entry.bytes;
+    std::uint64_t guest_payload_limit() const noexcept {
+        return backing_cache_ ? payload_cap_bytes_ - backing_cache_->reserved_bytes(backing_cache_->active_sets)
+                              : payload_cap_bytes_;
+    }
+
+    const std::uint8_t* backed_page(std::uint64_t page) const {
+        return backing_cache_->read(page, *backing_, backing_reads_);
+    }
+
+    static void write_dense_bytes(PageSlot& slot, std::size_t inside, const std::uint8_t* source,
+                                  std::size_t count, std::uint8_t* previous) noexcept {
+        auto* destination = slot.payload.get() + inside;
+        if (previous) std::memcpy(previous, destination, count);
+        std::memcpy(destination, source, count);
     }
 
     void mark_write(PageSlot& slot) noexcept {
@@ -649,14 +750,14 @@ private:
 
     void write_back(std::uint64_t page, const std::uint8_t* bytes) {
         backing_->write(page, bytes);
-        if (auto& cached = backing_cache_->entry(page); cached.page == page)
-            cached.page = BackingCache::kUnused;
+        backing_cache_->invalidate(page);
         ++spilled_pages_;
         ++backing_writes_;
     }
 
     void discard_spill(std::uint64_t page) noexcept {
         backing_->discard(page);
+        backing_cache_->invalidate(page);
         --spilled_pages_;
     }
 
@@ -815,7 +916,8 @@ private:
         const auto retained = allocated_bytes() - old_bytes;
         const auto patch_bytes = patches ? (word_index - kRepeating) * kPatchSize : 0;
         const auto new_bytes = pattern || patches ? kPatternSize + patch_bytes : 0;
-        if (retained > payload_cap_bytes_ || new_bytes > payload_cap_bytes_ - retained) return false;
+        const auto limit = guest_payload_limit();
+        if (retained > limit || new_bytes > limit - retained) return false;
         std::unique_ptr<std::uint8_t[]> payload;
         if (patches) {
             payload = std::make_unique<std::uint8_t[]>(patch_bytes);
@@ -909,15 +1011,17 @@ private:
         return true;
     }
 
-    void prepare_dense_pages(std::uint64_t offset, std::size_t count, bool include_implicit) {
+    void prepare_dense_pages(std::uint64_t offset, std::size_t count, bool include_implicit,
+                             bool replace_full_pages = false) {
         if (count == 0) return;
         const std::uint64_t first = offset / kPageSize;
         const std::uint64_t last = (offset + static_cast<std::uint64_t>(count) - 1) / kPageSize;
-        const auto expands_pattern = [&](std::uint64_t page) {
-            // During a zero fill, only pages that retain bytes outside the
-            // span need expansion. Fully covered compact pages become zero.
-            return include_implicit || (page == first && offset % kPageSize != 0) ||
+        const auto partial_page = [&](std::uint64_t page) {
+            return (page == first && offset % kPageSize != 0) ||
                    (page == last && (offset + count) % kPageSize != 0);
+        };
+        const auto replaces_page = [&](std::uint64_t page) {
+            return replace_full_pages && !partial_page(page);
         };
         std::size_t missing_pages = 0;
         std::uint64_t expanded_compact_bytes = 0;
@@ -927,19 +1031,19 @@ private:
                 if (backing_) mark_write(*slot);
                 continue;
             }
-            if (include_implicit || (slot && (slot->has_compact() || slot->spilled) && expands_pattern(page))) {
+            if (include_implicit || (slot && (slot->has_compact() || slot->spilled) && partial_page(page))) {
                 ++missing_pages;
                 if (slot) expanded_compact_bytes += slot->compact_size();
             }
         }
         if (missing_pages == 0) return;
+        const auto limit = guest_payload_limit();
         const auto fits = [&] {
             const auto retained = allocated_bytes() - expanded_compact_bytes;
-            return retained <= payload_cap_bytes_ && missing_pages <= (payload_cap_bytes_ - retained) / kPageSize;
+            return retained <= limit && missing_pages <= (limit - retained) / kPageSize;
         };
-        if (backing_ && missing_pages <= payload_cap_bytes_ / kPageSize) {
-            const auto compact_limit = payload_cap_bytes_ - missing_pages * kPageSize +
-                                       expanded_compact_bytes;
+        if (backing_ && missing_pages <= limit / kPageSize) {
+            const auto compact_limit = limit - missing_pages * kPageSize + expanded_compact_bytes;
             while (!fits() && (evict_page(first, last, compact_limit) ||
                                spill_compact_page(compact_limit, first, last))) {}
         }
@@ -949,7 +1053,7 @@ private:
             throw BudgetExceeded(
                 "SparseRam payload budget exceeded: allocated=" + std::to_string(allocated_bytes()) +
                 ", additional=" + std::to_string(additional) +
-                ", budget=" + std::to_string(payload_cap_bytes_) + " bytes.");
+                ", budget=" + std::to_string(limit) + " bytes.");
         }
 
         const std::size_t first_table = static_cast<std::size_t>(first / kPagesPerTable);
@@ -969,9 +1073,14 @@ private:
             }
             for (std::uint64_t page = first; page <= last; ++page) {
                 const auto* slot = find_slot(page);
-                if (slot && (slot->has_compact() || slot->spilled) && expands_pattern(page)) {
+                if (slot && slot->has_dense()) continue;
+                if (replaces_page(page)) {
+                    // The caller replaces every byte after preflight succeeds.
+                    new_pages.emplace_back(page, std::unique_ptr<std::uint8_t[]>(new std::uint8_t[kPageSize]));
+                } else if (slot && (slot->has_compact() || slot->spilled) &&
+                           (include_implicit || partial_page(page))) {
                     std::unique_ptr<std::uint8_t[]> dense(new std::uint8_t[kPageSize]);
-                    if (slot->spilled) std::memcpy(dense.get(), backed_page(page).data(), kPageSize);
+                    if (slot->spilled) std::memcpy(dense.get(), backed_page(page), kPageSize);
                     else copy_compact(*slot, 0, dense.get(), kPageSize);
                     new_pages.emplace_back(page, std::move(dense));
                 } else if (include_implicit && (!slot || !slot->has_dense())) {
@@ -984,7 +1093,10 @@ private:
             for (auto& page : new_pages) {
                 PageTable& table = *tables_[static_cast<std::size_t>(page.first / kPagesPerTable)];
                 auto& slot = table.slots[static_cast<std::size_t>(page.first % kPagesPerTable)];
-                if (slot.spilled) discard_spill(page.first);
+                if (slot.spilled) {
+                    if (replaces_page(page.first)) ++backing_cache_->overwrite_pages;
+                    discard_spill(page.first);
+                }
                 else if (slot.has_compact()) erase_compact(slot);
                 else ++table.resident;
                 slot = PageSlot{};

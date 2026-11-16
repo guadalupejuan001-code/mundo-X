@@ -150,12 +150,14 @@ class MemoryFabric {
   std::size_t pattern_pages() const noexcept { return ram_.pattern_pages(); }
   bool has_page_backing() const noexcept { return ram_.has_page_backing(); }
   bool has_pinned_writes() const noexcept { return ram_.has_pinned_writes(); }
-  void attach_page_backing(std::unique_ptr<SparseRam::PageBacking> backing) {
-    ram_.attach_page_backing(std::move(backing));
+  void attach_page_backing(std::unique_ptr<SparseRam::PageBacking> backing,
+                           SparseRam::BackingCachePolicy policy = SparseRam::BackingCachePolicy::Fixed) {
+    ram_.attach_page_backing(std::move(backing), policy);
     if (code_page_versions_) code_page_versions_->clear();
   }
   [[nodiscard]] SparseRam::WritePins pin_writes() noexcept { return ram_.pin_writes(); }
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
+  std::uint64_t backing_cache_bytes() const noexcept { return ram_.backing_cache_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
   SparseRam::BudgetAdjustment adjust_payload_budget(std::uint64_t target, std::size_t reclaim_pages) {
     return ram_.adjust_payload_budget(target, reclaim_pages);
