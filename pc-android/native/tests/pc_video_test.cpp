@@ -1,6 +1,7 @@
 #include "../pc_machine.hpp"
 #include <array>
 #include <cstring>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -59,6 +60,65 @@ void run_demo(PcMachine& pc, unsigned width, unsigned height) {
   need(pc.cpu.mode_name() == std::string("protected32"), "Guest must enter protected32 itself");
   need(pc.cpu.read32(cosmic_pc::kGraphicsDemoResultAddress) == cosmic_pc::kGraphicsDemoResult,
        "Guest did not verify its own framebuffer pixels");
+}
+void vga_graphics_ports() {
+  PcMachine pc(2048ULL * MiB, 32 * MiB);
+  pc.boot_long_mode_demo();
+  auto& cpu = pc.cpu;
+  constexpr std::uint64_t entry = 0xa000;
+  constexpr std::uint16_t index = 0x3ce, data = 0x3cf;
+  // Enter the VBE mode present in the diagnostic before continuing to long64.
+  const std::uint8_t set_mode[]{0xcd, 0x10};
+  cpu.memory.write_block(entry, set_mode, sizeof(set_mode));
+  cpu.eip = entry;
+  cpu.set_reg16(Cpu::EAX, 0x4f02);
+  cpu.set_reg16(Cpu::EBX, 0x4142);
+  pc.run(1);
+  need(!cpu.fault && cpu.reg16(Cpu::EAX) == 0x004f && pc.video_info().mode == 0x142,
+       "VGA port fixture must select 1024x768 VBE mode");
+  cpu.eip = 0x7c00;
+  pc.run(4000);
+  cpu.write32(PcVideo::kFramebufferAddress, 0x11223344);
+  const auto execute = [&](std::initializer_list<std::uint8_t> op, std::uint16_t port,
+                           std::uint64_t rax = UINT64_MAX) {
+    need(cpu.is_long_mode() && !cpu.fault, "Graphics port fixture must be in long64");
+    cpu.memory.write_block(entry, op.begin(), op.size());
+    cpu.eip = entry;
+    cpu.halted = false;
+    cpu.eflags = 2 | Cpu::DF;
+    cpu.regs[Cpu::EDX] = port;
+    cpu.regs[Cpu::EAX] = rax;
+    const auto retired = cpu.instructions;
+    const auto result = cpu.step();
+    if (cpu.fault) throw std::runtime_error(cpu.fault->describe());
+    need(result == cosmic_pc::StepResult::Executed && cpu.instructions == retired + 1 &&
+         cpu.eip == entry + op.size() && cpu.eflags == (2 | Cpu::DF) && cpu.regs[Cpu::EDX] == port,
+         "Graphics port instruction did not retire with exact x86 state");
+    return cpu.regs[Cpu::EAX];
+  };
+  need(execute({0xec}, index, 0xfffff8071ff65001ULL) == 0xfffff8071ff65000ULL,
+       "IN AL,DX must read the VGA index and preserve upper RAX");
+  execute({0x66, 0xef}, index, 0xd908); // OUT DX,AX
+  need(execute({0xec}, index) == 0xffffffffffffff08ULL &&
+       execute({0xec}, data) == 0xffffffffffffffd9ULL, "Word write must update the index and data");
+  execute({0xee}, index, 0xf4);
+  execute({0xee}, data, 0xff);
+  need(execute({0x66, 0xed}, index) == 0xffffffffffff0304ULL, // IN AX,DX
+       "VGA index and read-map register must mask reserved bits");
+  execute({0x66, 0xef}, index, 0x620e);
+  need(execute({0xec}, data) == UINT64_MAX, "Reserved VGA index should read the open bus value");
+  execute({0xee}, index, 8);
+  need(execute({0xec}, data) == 0xffffffffffffffd9ULL, "VGA registers must keep independent values");
+  need(pc.video_info().graphics && pc.video_info().mode == 0x142 &&
+       cpu.read32(PcVideo::kFramebufferAddress) == 0x11223344,
+       "The legacy VGA registers must preserve the active linear VBE mode and its pixels");
+
+  pc.reset();
+  pc.run(4000);
+  need(execute({0xec}, index) == 0xffffffffffffff00ULL, "Reset must restore the VGA index");
+  execute({0xee}, index, 8);
+  need(execute({0xec}, data) == UINT64_MAX, "Reset must restore the text-mode bit mask");
+  std::cout << "VGA_GRAPHICS_PORTS_PASS long64=1 byte=1 word=1 reset=1 vbe=1\n";
 }
 void framebuffer_writes() {
   constexpr auto base = PcVideo::kFramebufferAddress;
@@ -249,6 +309,7 @@ void write_string(PcMachine& pc) {
 
 int main() {
   try {
+    vga_graphics_ports();
     framebuffer_writes();
     PcMachine pc(std::size_t(2048) * MiB);
     pc.boot_demo();
