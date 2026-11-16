@@ -1072,6 +1072,26 @@ void guard_contract() {
   require(!cpu.try_ether_arm64_block(2), "instruction tracer lost decoded x86 steps");
 }
 
+void single_register_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (auto* machine : {&native, &scalar}) {
+    emit(machine->cpu, code, {0x49,0x83,0xc0,0x01,0xf4}); // ADD R8,1; HLT
+    machine->cpu.regs[Cpu::R8] = 0x7fffffffffffffffULL;
+    machine->cpu.eflags = 2 | Cpu::DF;
+  }
+  unsigned retired = 0;
+  for (unsigned attempt = 0; attempt < 4 && !retired; ++attempt)
+    retired = native.cpu.try_ether_arm64_block(2);
+  require(scalar.cpu.step() == StepResult::Executed && retired == 1 &&
+          native.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes() &&
+          capture(native.cpu) == capture(scalar.cpu) &&
+          native.cpu.ether_arm64_stats().steps == 1,
+          "isolated register operation did not retire with exact flags and state");
+  std::cout << "PRIME_ETHER_SINGLE_REGISTER_PASS steps=1 flags=1\n";
+}
+
 void flag_contract() {
   PcMachine native, scalar;
   boot(native, true);
@@ -1145,8 +1165,12 @@ void observed_flags_contract() {
     cpu.eflags = 2;
     cpu.regs[Cpu::EAX] = 0x10;
   }
-  require(!native.cpu.try_ether_arm64_block(3) && native.cpu.step() == StepResult::Executed &&
-          scalar.cpu.step() == StepResult::Executed, "CMP before TEST must retire its own flags");
+  unsigned retired = 0;
+  for (unsigned attempt = 0; attempt < 4 && !retired; ++attempt)
+    retired = native.cpu.try_ether_arm64_block(2);
+  require(retired == 1 && scalar.cpu.step() == StepResult::Executed &&
+          capture(native.cpu) == capture(scalar.cpu) && native.cpu.flag(Cpu::AF),
+          "CMP before TEST must retire its own flags");
   warm_block(native.cpu, code + 3, 2);
   require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
           native.cpu.eip == scalar.cpu.eip && native.cpu.eflags == scalar.cpu.eflags &&
@@ -1294,6 +1318,7 @@ int main() {
     protected32_contract();
     byte_copy_contract();
     guard_contract();
+    single_register_contract();
     cache_collision_contract();
     flag_contract();
     observed_flags_contract();

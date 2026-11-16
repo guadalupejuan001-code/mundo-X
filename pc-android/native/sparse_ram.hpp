@@ -253,6 +253,17 @@ public:
         return slot_byte(*slot, inside);
     }
 
+    // Borrow a span for an immediate read. A RAM mutation can replace its backing.
+    const std::uint8_t* resident_span(std::uint64_t offset, std::size_t count) const noexcept {
+        const auto inside = static_cast<std::size_t>(offset % kPageSize);
+        if (!count || count > kPageSize - inside || offset >= logical_bytes_ ||
+            count > logical_bytes_ - offset) return nullptr;
+        const auto* slot = find_slot(offset / kPageSize);
+        if (!slot || !slot->has_dense()) return nullptr;
+        if (backing_) slot->recently_used = true;
+        return slot->payload.get() + inside;
+    }
+
     void write_byte(std::uint64_t offset, std::uint8_t value) {
         check_range(offset, 1);
         const auto inside = static_cast<std::size_t>(offset % kPageSize);
