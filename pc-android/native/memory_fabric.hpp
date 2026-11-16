@@ -277,6 +277,14 @@ class MemoryFabric {
     split_read(offset, destination, count);
   }
 
+  SparseRam::ByteScan scan_ram_until_byte(std::uint64_t offset, std::size_t count,
+                                        std::uint8_t value) const {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
+    check_range(offset, count);
+    if (overlaps_window(offset, count)) throw std::invalid_argument("Byte scan requires ordinary RAM");
+    return ram_.scan_until_byte(offset, count, value);
+  }
+
   // Mixed classical/Ether writes are atomic with respect to expected provider
   // exceptions: Ether bytes are written first with old values retained, and
   // every affected SparseRam page is preflighted before either side commits.

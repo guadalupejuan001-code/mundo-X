@@ -72,6 +72,25 @@ struct TestBacking : SparseRam::PageBacking {
 
 int main() {
     const std::vector<std::pair<std::string, std::function<void()>>> cases{
+        {"byte searches preserve the first match and final byte in sparse RAM", [] {
+             constexpr auto table_bytes = kPage * SparseRam::kPagesPerTable;
+             SparseRam ram(2 * table_bytes, 16 * kPage);
+             const auto base = table_bytes + 2 * kPage;
+             ram[base - 1] = 0xe8;
+             const std::array<std::uint8_t, 8> pattern{0x80, 0x31, 0xe8, 0x53, 0x54, 0x55, 0x56, 0x57};
+             std::uint64_t word;
+             std::memcpy(&word, pattern.data(), sizeof(word));
+             need(ram.try_fill_repeating_page(base, word), "Failed to create repeating page");
+             const auto sparse_match = ram.scan_until_byte(0, base, 0xe8);
+             need(sparse_match.examined == base && sparse_match.last == 0xe8,
+                  "An implicit table hid a match in the next table");
+             const auto first_zero = ram.scan_until_byte(0, table_bytes, 0);
+             need(first_zero.examined == 1 && first_zero.last == 0, "Implicit zero is a real match");
+             const auto wrapped = ram.scan_until_byte(base + 5, 100, 0xe8);
+             need(wrapped.examined == 6 && wrapped.last == 0xe8, "Pattern search lost the offset phase");
+             const auto limit = ram.scan_until_byte(base + 5, 4, 0xe8);
+             need(limit.examined == 4 && limit.last == pattern[0], "Short search returned a byte outside its budget");
+         }},
         {"bounded backing preserves dense pages and cache state", [] {
              SparseRam ram(17 * kPage, 2 * kPage);
              auto backing = std::make_unique<TestBacking>();
@@ -87,6 +106,9 @@ int main() {
                       metrics.spilled_pages == 10 && metrics.backing_bytes == 10 * kPage &&
                       metrics.backing_writes == 10 && metrics.backing_reads == 0,
                   "Backing did not preserve a bounded resident working set");
+             const auto spilled_match = ram.scan_until_byte(8, 1024, 0x58);
+             need(spilled_match.examined == 249 && spilled_match.last == 0x58,
+                  "A byte search must see the first match in a spilled page");
              for (std::size_t page = 0; page < 12; ++page)
                  need(ram[page * kPage] == page + 1 && ram[page * kPage + kPage - 1] == page + 15,
                       "Read-through cache changed persisted guest bytes");
@@ -157,6 +179,9 @@ int main() {
              need(ram.try_copy_compact_page(0, kPage) &&
                       read(ram, 0, kPage) == oracle && read(ram, kPage, kPage) == oracle,
                   "Compact block copy must preserve the whole zero background and exception");
+             const auto sparse_match = ram.scan_until_byte(kPage, kPage, word[1]);
+             need(sparse_match.examined == 122 && sparse_match.last == word[1],
+                  "Single-word compact search must see a match above its implicit zeros");
              need(ram[121] == word[1] && ram[127] == word[7] && ram[128] == 0 &&
                       ram[kPage + 121] == word[1], "Compact byte read differs from block read");
              expect<SparseRam::BudgetExceeded>([&] { ram[kPage + 121] = 0x4a; }, "budget exceeded");
@@ -198,6 +223,9 @@ int main() {
                       ram[0] == repeated[0] && ram[15] == repeated[15] &&
                       ram[kPage + 8] == mostly_zero[8] && ram[2 * kPage - 2] == mostly_zero[kPage - 2],
                   "Compact byte and block readers must reconstruct both backgrounds exactly");
+             const auto delta_match = ram.scan_until_byte(3, kPage, 0xcd);
+             need(delta_match.examined == 13 && delta_match.last == 0xcd,
+                  "Pattern search must honor a changed word before the next page");
              need(read(ram, kPage - 2, 4) == std::vector<std::uint8_t>{repeated[kPage - 2], 0xfe, 0, 0},
                   "An unaligned cross-page read lost the last override");
              ram[15] = repeated[15];

@@ -843,6 +843,7 @@ class Cpu {
     std::uint64_t linear_page = 0, physical_page = 0;
     std::uint64_t cr3 = 0, memory_epoch = 0;
     unsigned policy = 0;
+    unsigned page_offset_mask = 0; // Size of the original paging leaf, minus one.
   };
   struct TranslationSet {
     std::array<CachedTranslation, 2> ways{};
@@ -1094,7 +1095,7 @@ class Cpu {
     return std::uint32_t(cache.base + offset);
   }
   std::uint64_t translate(std::uint64_t address, Access access, bool* ordinary_page = nullptr,
-                          bool speculative = false);
+                          bool speculative = false, unsigned* mapping_bytes_left = nullptr);
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
     if (bytes == 0 || bytes > 8 || address > UINT64_MAX - (bytes - 1))
       fail("invalid linear read width", FaultCode::InvalidInstruction);
@@ -3267,7 +3268,7 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
 }
 
 inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* ordinary_page,
-                                    bool speculative) {
+                                    bool speculative, unsigned* mapping_bytes_left) {
   if (ordinary_page) *ordinary_page = false;
   if (!(cr0 & 0x80000000U)) return address;
   const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
@@ -3295,6 +3296,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
       set->recent = way;
       const auto physical = entry.physical_page;
       if (ordinary_page) *ordinary_page = bulk_ram_range(physical, 4096);
+      if (mapping_bytes_left)
+        *mapping_bytes_left = entry.page_offset_mask + 1 - unsigned(address & entry.page_offset_mask);
       ++page_translation_hits;
       return physical | (address & 0xfffU);
     }
@@ -3340,8 +3343,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     if (speculative && marked != entry) return UINT64_MAX;
     if (marked != entry) write64(entry_address, marked);
     if (leaf) {
-      const std::uint64_t offset_mask = large ? 0x1fffffU : 0xfffU;
-      const auto physical = (entry & address_mask & ~offset_mask) | (address & offset_mask);
+      const unsigned offset_mask = large ? 0x1fffffU : 0xfffU;
+      const auto physical = (entry & address_mask & ~std::uint64_t(offset_mask)) | (address & offset_mask);
       const bool reusable = (set || ordinary_page) && ordinary_entries &&
           bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096);
       if (ordinary_page) *ordinary_page = reusable;
@@ -3353,8 +3356,9 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
           memory.watch_page_table(table_entries[i]);
         set->recent ^= 1U;
         set->ways[set->recent] = {linear_page, physical & ~std::uint64_t{0xfff}, cr3,
-                                  memory.page_table_epoch(), policy};
+                                  memory.page_table_epoch(), policy, offset_mask};
       }
+      if (mapping_bytes_left) *mapping_bytes_left = offset_mask + 1 - unsigned(address & offset_mask);
       return physical;
     }
     table = entry & address_mask;
@@ -3649,28 +3653,38 @@ inline unsigned Cpu::try_scan_loop_batch(unsigned budget) {
 
   const auto input = regs[EDX] + 1;
   const auto output = regs[R9] + 0x2ed8;
-  const auto maximum = std::min(budget / per_iteration, 4096U - unsigned(input & 0xfffU));
-  if (maximum < 2 || (output & 0xfffU) > 4092 || input > UINT64_MAX - (maximum - 1) ||
-      !canonical(input + maximum - 1) || !canonical(output + 3) ||
+  if ((output & 0xfffU) > 4092 || !canonical(output + 3) ||
       !canonical(eip + pattern.size() - 1)) return 0;
 
   try {
     const auto code = translate(eip, Access::Execute, nullptr, true);
-    const auto from = translate(input, Access::Read, nullptr, true);
+    unsigned mapping_bytes_left = 0;
+    const auto from = translate(input, Access::Read, nullptr, true, &mapping_bytes_left);
     const auto to = translate(output, Access::Write, nullptr, true);
-    if (!bulk_ram_range(code, pattern.size()) || !bulk_ram_range(from, maximum) ||
+    if (!bulk_ram_range(code, pattern.size()) ||
         !bulk_ram_range(to, 4) || memory.may_touch_page_tables(to, 4)) return 0;
     const auto overlaps = [](auto left, auto left_bytes, auto right, auto right_bytes) {
       return left < right + right_bytes && right < left + left_bytes;
     };
-    if (overlaps(to,4,code,pattern.size()) || overlaps(to,4,from,maximum)) return 0;
+    if (overlaps(to, 4, code, pattern.size())) return 0;
+    const auto safe_input = [&](unsigned bytes) {
+      return bytes >= 2 && bulk_ram_range(from, bytes) && !overlaps(to, 4, from, bytes);
+    };
+    // Permissions, accessed bits and physical contiguity hold up to the leaf's
+    // end. The caller's IRQ/sampling budget can still require a shorter batch.
+    auto maximum = std::min(budget / per_iteration, mapping_bytes_left);
+    if (!safe_input(maximum)) {
+      // A large mapping can contain a device, an Ether window or a physical
+      // alias of the output. Keep the original first-page batch when safe.
+      const auto first_page = 4096U - unsigned(input & 0xfffU);
+      if (maximum <= first_page || !safe_input(first_page)) return 0;
+      maximum = first_page;
+    }
     std::array<std::uint8_t, pattern.size()> actual;
     memory.read_block(code, actual.data(), actual.size());
     if (actual != pattern) return 0;
-    std::array<std::uint8_t, 4096> bytes;
-    memory.read_block(from, bytes.data(), maximum);
-    const auto* match = static_cast<const std::uint8_t*>(std::memchr(bytes.data(), 0xe8, maximum));
-    const auto count = match ? unsigned(match - bytes.data()) + 1 : maximum;
+    const auto scanned = memory.scan_ram_until_byte(from, maximum, 0xe8);
+    const auto count = static_cast<unsigned>(scanned.examined);
     const auto value = std::uint32_t(regs[EAX]) + count;
     std::array<std::uint8_t, 4> saved;
     for (unsigned i = 0; i < saved.size(); ++i) saved[i] = std::uint8_t(value >> (8 * i));
@@ -3679,8 +3693,8 @@ inline unsigned Cpu::try_scan_loop_batch(unsigned budget) {
     put_reg(EAX, 4, value);
     put_reg(R8, 4, value);
     // The final CMP defines all flags touched by INC.
-    (void)alu(7, bytes[count - 1], 0xe8, 1);
-    if (match) {
+    (void)alu(7, scanned.last, 0xe8, 1);
+    if (scanned.last == 0xe8) {
       eip = cursor_;
       ip_written_ = false;
     }

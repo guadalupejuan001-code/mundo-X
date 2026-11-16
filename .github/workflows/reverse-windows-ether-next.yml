@@ -156,6 +156,8 @@ jobs:
           ctest --test-dir build/ether-next --output-on-failure -V \
             -R '^(x86_ether_arm64|x86_ether_rep_batch|x86_ether_shift_loop|sparse_ram|boot_hotspots|x86_ram_backing|x86_bit_scan|x86_invlpg|x86_long_mode|x86_long_null_ss|x86_far_transfer64|x86_system64|x86_alu64_oracle|pc_memory|pc_memory_fabric)$' \
             | tee build/ether-next/ether-boot-cycles.log
+          build/ether-next/pc-android/x86_long_mode_test --measure-scan \
+            | tee -a build/ether-next/ether-boot-cycles.log
       - uses: actions/upload-artifact@v4
         with:
           name: ether-boot-cycles-${{ matrix.architecture }}

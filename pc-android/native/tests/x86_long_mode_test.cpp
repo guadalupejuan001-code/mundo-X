@@ -1,11 +1,13 @@
-#include "../x86_cpu.hpp"
+#include "../pc_machine.hpp"
 #include "../long_mode_guest.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <initializer_list>
 #include <iostream>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using cosmic_pc::Cpu;
@@ -488,24 +490,34 @@ void instruction_page_fetch() {
         "instruction fetch on a device page must use exact byte callbacks");
 }
 
+constexpr std::array<std::uint8_t, 22> scan_program{
+    0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x41,0x8b,0xc0,
+    0x41,0x89,0x81,0xd8,0x2e,0,0,0x80,0x3a,0xe8,0x75,0xea};
+constexpr auto scan_loop = 0xa000U, scan_output = 0x100d8U;
+
+void start_scan(Cpu& cpu, std::uint64_t source, std::uint64_t loop = scan_loop) {
+  cpu.halted = false;
+  cpu.eip = loop;
+  cpu.regs[Cpu::EAX] = 0xff000000ffffff5eULL; // Exercise wrap and zero-extension.
+  cpu.regs[Cpu::EDX] = source - 1;
+  cpu.regs[Cpu::R9] = scan_output - 0x2ed8;
+  cpu.eflags = 2 | Cpu::DF;
+}
+
 void scanned_boot_loop() {
   constexpr std::uint64_t loop = 0x2a52a9a4;
   constexpr std::uint64_t physical = 0x400000 + (loop & 0x1fffff);
-  constexpr std::uint64_t source = 0xcfe0, dest = 0x100d8;
+  constexpr std::uint64_t source = 0xcfe0;
   constexpr unsigned offset = 211;
   const auto setup = [&](Cpu& cpu, bool accelerated) {
     boot(cpu);
     cpu.enable_page_translation_cache(accelerated);
     cpu.write64(0x3000 + 8 * (loop >> 21), 0x400083);
-    program(cpu, {0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x41,0x8b,0xc0,
-                  0x41,0x89,0x81,0xd8,0x2e,0,0,0x80,0x3a,0xe8,0x75,0xea,0xf4}, physical);
+    cpu.memory.write_block(physical, scan_program.data(), scan_program.size());
+    cpu.write8(physical + scan_program.size(), 0xf4);
     cpu.memory.fill(source, 0x8c, offset + 8);
     cpu.write8(source + offset, 0xe8);
-    cpu.eip = loop;
-    cpu.regs[Cpu::EAX] = 0xff000000ffffff5eULL; // Exercise wrap and zero-extension.
-    cpu.regs[Cpu::EDX] = source - 1;
-    cpu.regs[Cpu::R9] = dest - 0x2ed8;
-    cpu.set_flag(Cpu::DF, true);
+    start_scan(cpu, source, loop);
   };
   Cpu scalar(8U << 20), fast(8U << 20);
   setup(scalar, false);
@@ -523,7 +535,7 @@ void scanned_boot_loop() {
   run(scalar, 1500);
   check(accelerated_steps > 1000 && fast.halted && fast.instructions == scalar.instructions &&
         fast.regs == scalar.regs && fast.eflags == scalar.eflags && fast.eip == scalar.eip &&
-        fast.read32(dest) == scalar.read32(dest) && fast.regs[Cpu::EDX] == source + offset,
+        fast.read32(scan_output) == scalar.read32(scan_output) && fast.regs[Cpu::EDX] == source + offset,
         "scan must preserve the reported loop's byte, flags, registers and RIP");
   setup(fast, true);
   for (unsigned i = 0; i < 6; ++i) one(fast);
@@ -531,6 +543,153 @@ void scanned_boot_loop() {
   fast.write8(physical + 19, 0x42);
   check(fast.try_scan_loop_batch(96) == 0 && fast.instructions == before,
         "rewritten instruction bytes must invalidate the scan pattern");
+}
+
+void scan_large_mapping() {
+  constexpr auto linear = 0x400000U, physical = 0x600000U, source = 0x1f80U;
+  constexpr auto match = source + 0x1150U;
+  const auto setup = [&](Cpu& cpu) {
+    boot(cpu);
+    cpu.enable_page_translation_cache();
+    cpu.write64(0x3010, physical | 0x83);
+    cpu.idtr = {0, 0};
+    cpu.memory.write_block(scan_loop, scan_program.data(), scan_program.size());
+    cpu.write8(scan_loop + scan_program.size(), 0xf4);
+  };
+  const auto seed = [](Cpu& cpu, std::uint64_t input) {
+    start_scan(cpu, input);
+    for (unsigned i = 0; i < 6; ++i) one(cpu);
+  };
+  Cpu fast(8U << 20), scalar(8U << 20);
+  setup(fast);
+  setup(scalar);
+  fast.write8(physical + match, 0xe8);
+  scalar.write8(physical + match, 0xe8);
+  const auto steps = 6 * (match - source + 1);
+  seed(fast, linear + source);
+  check(fast.try_scan_loop_batch(steps) == steps - 6 && fast.flag(Cpu::ZF),
+        "one scan must traverse 4-KiB boundaries inside a 2-MiB mapping");
+  one(fast);
+  start_scan(scalar, linear + source);
+  run(scalar, steps + 1);
+  check(fast.halted && fast.instructions == scalar.instructions && fast.regs == scalar.regs &&
+        fast.eflags == scalar.eflags && fast.eip == scalar.eip &&
+        fast.read32(scan_output) == scalar.read32(scan_output), "large scan changed x86 state");
+
+  setup(fast);
+  constexpr auto end = linear + (2U << 20);
+  seed(fast, end - 128);
+  check(fast.try_scan_loop_batch(2000) == 127 * 6 && fast.regs[Cpu::EDX] == end - 1 &&
+        fast.try_scan_loop_batch(2000) == 0,
+        "the next large mapping must be verified independently");
+  for (unsigned i = 0; i < 4; ++i) one(fast);
+  expect_fault(fast, FaultCode::PageFault, "scan beyond the 2-MiB mapping");
+  check(fast.cr2 == end, "scan must fault on the original linear address");
+
+  setup(fast);
+  const auto device = physical + 0x2000U + 5;
+  fast.mmio_claim_hook = [&](std::uint64_t address) { return address == device; };
+  fast.mmio_range_claim_hook = [&](std::uint64_t address, std::size_t count) {
+    return address <= device && device - address < count;
+  };
+  unsigned reads = 0;
+  fast.mmio_read_hook = [&](std::uint64_t) -> std::optional<std::uint8_t> {
+    ++reads;
+    return 0xe8;
+  };
+  seed(fast, linear + source);
+  check(fast.try_scan_loop_batch(2000) == 127 * 6 && !reads &&
+        fast.try_scan_loop_batch(2000) == 0, "wide scan must leave MMIO to the scalar path");
+  run(fast, 40);
+  check(reads == 1 && fast.regs[Cpu::EDX] == linear + 0x2005U,
+        "MMIO must be read once and stop the original guest scan");
+}
+
+void measure_scan() {
+  using Clock = std::chrono::steady_clock;
+  constexpr auto large = 0x4000000U, length = 1'500'000U;
+  Cpu cpu(68U << 20);
+  boot(cpu);
+  cpu.enable_page_translation_cache();
+  cpu.write64(0x3000 + (large >> 21) * 8, large | 0xa3);
+  cpu.memory.write_block(scan_loop, scan_program.data(), scan_program.size());
+  cpu.write8(large + length - 1, 0xe8);
+  std::array<double, 201> times{};
+  for (auto& time : times) {
+    start_scan(cpu, large);
+    const auto before = cpu.instructions;
+    const auto start = Clock::now();
+    for (unsigned i = 0; i < 6 * length && cpu.eip != scan_loop + scan_program.size(); ++i)
+      if (!cpu.try_scan_loop_batch(6 * length)) one(cpu);
+    time = std::chrono::duration<double>(Clock::now() - start).count();
+    const auto result = std::uint32_t(0xffffff5eU + length);
+    check(cpu.eip == scan_loop + scan_program.size() &&
+          cpu.instructions - before == 6 * length && cpu.regs[Cpu::EDX] == large + length - 1 &&
+          cpu.regs[Cpu::EAX] == result && cpu.regs[Cpu::R8] == result && cpu.read32(scan_output) == result &&
+          cpu.eflags == (2 | Cpu::DF | Cpu::PF | Cpu::ZF), "isolated scan state or flags");
+  }
+  std::sort(times.begin(), times.end());
+  const auto median = times[times.size() / 2];
+  std::cout << "SCAN_ISOLATED steps=" << 6 * length << " trials=" << times.size()
+            << " median_ns=" << median * 1e9 << " equivalent_steps_per_s=" << 6 * length / median << '\n';
+
+  cosmic_pc::PcMachine pc(68U << 20);
+  pc.boot_long_mode_demo();
+  pc.run(4000);
+  check(pc.cpu.is_long_mode() && pc.cpu.halted && !pc.cpu.fault, "mixed fixture failed to boot");
+  auto& guest = pc.cpu;
+  guest.enable_page_translation_cache();
+  guest.enable_ether_arm64_blocks();
+  pc.enable_boot_acceleration();
+  pc.enable_boot_hotspots();
+  pc.enable_boot_timing();
+  guest.write64(0x3000 + (large >> 21) * 8, large | 0xa3);
+  guest.memory.write_block(scan_loop, scan_program.data(), scan_program.size());
+  const std::array<std::uint8_t, 14> rest{
+      0xfc,                         // CLD
+      0xf3,0xa5,                    // REP MOVSD
+      0x48,0x8b,0x06,               // MOV RAX,[RSI]
+      0x48,0x03,0x46,0x08,          // ADD RAX,[RSI+8]
+      0x48,0x89,0x07,               // MOV [RDI],RAX
+      0xf4};                        // HLT
+  guest.memory.write_block(scan_loop + scan_program.size(), rest.data(), rest.size());
+  std::array<std::uint8_t, 4096> data;
+  for (unsigned i = 0; i < data.size(); ++i) data[i] = std::uint8_t((i * 1123U + i / 17U) % 229U);
+  for (unsigned page = 0; page < 64; ++page)
+    guest.memory.write_block(large + page * data.size(), data.data(), data.size());
+  constexpr std::array<unsigned, 8> lengths{97,211,1537,6271,103,4099,23911,313};
+  for (unsigned i = 0; i < lengths.size(); ++i)
+    guest.write8(large + i * 32768 + lengths[i] - 1, 0xe8);
+  guest.memory.write_block(0x18000, data.data(), data.size());
+  guest.write64(0x19000, 0x634a9cb7);
+  guest.write64(0x19008, 0xa3e94b62);
+  const auto before = guest.instructions;
+  const auto started = Clock::now();
+  for (unsigned round = 0; round < 2048; ++round) {
+    const auto i = round % lengths.size();
+    const auto input = large + i * 32768;
+    start_scan(guest, input);
+    guest.regs[Cpu::ECX] = 1024;
+    guest.regs[Cpu::ESI] = 0x18000;
+    guest.regs[Cpu::EDI] = 0x1a000;
+    const auto initial = guest.instructions;
+    const auto expected = 6 * lengths[i] + 1024 + 5;
+    for (unsigned slices = 0; slices <= expected / 50000 && !guest.halted && !guest.fault; ++slices)
+      pc.run(50000);
+    check(guest.halted && !guest.fault && guest.instructions - initial == expected &&
+          guest.regs[Cpu::EDX] == input + lengths[i] - 1 && guest.regs[Cpu::ECX] == 0 &&
+          guest.read32(scan_output) == std::uint32_t(0xffffff5eU + lengths[i]) &&
+          guest.read64(0x1b000) == 0x10733e819ULL, "mixed scan, copy and arithmetic state");
+  }
+  const auto elapsed = std::chrono::duration<double>(Clock::now() - started).count();
+  std::array<std::uint8_t, 4096> copy{};
+  guest.memory.read_block(0x1a000, copy.data(), copy.size());
+  check(copy == data, "mixed workload changed REP MOVSD bytes");
+  std::cout << "SCAN_MIXED steps=" << guest.instructions - before << " wall_ms=" << elapsed * 1000
+            << " equivalent_steps_per_s=" << (guest.instructions - before) / elapsed
+            << " scan_steps=" << pc.boot_acceleration().scan_loop_steps
+            << " rep_elements=" << pc.boot_acceleration().rep_elements
+            << " native_steps=" << guest.ether_arm64_stats().steps << '\n';
 }
 
 void cached_page_translations() {
@@ -877,13 +1036,17 @@ void implicit_arithmetic64() {
 }
 }
 
-int main() {
+int main(int argc, char** argv) {
   try {
+    if (argc == 2 && std::string_view(argv[1]) == "--measure-scan") {
+      measure_scan();
+      return EXIT_SUCCESS;
+    }
     boot_and_register_tests(); expanded_physical_ram(); multibyte_nops(); addressing_stack_and_alu_tests();
     enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
-    cached_page_translations(); colliding_page_translations(); paged_rep_batch(); scanned_boot_loop();
+    cached_page_translations(); colliding_page_translations(); paged_rep_batch(); scanned_boot_loop(); scan_large_mapping();
     conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;

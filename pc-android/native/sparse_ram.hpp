@@ -289,6 +289,57 @@ public:
         }
     }
 
+    struct ByteScan {
+        std::size_t examined;
+        std::uint8_t last;
+    };
+
+    // Stop at the first matching byte, including it in the returned count.
+    ByteScan scan_until_byte(std::uint64_t start, std::size_t count, std::uint8_t value) const {
+        check_range(start, count);
+        constexpr auto table_bytes = kPageSize * kPagesPerTable;
+        std::size_t examined = 0;
+        std::uint8_t last = 0;
+        std::array<std::uint8_t, kPageSize> expanded;
+        while (examined < count) {
+            const auto address = start + examined;
+            const auto& table = tables_[static_cast<std::size_t>(address / table_bytes)];
+            if (!table) {
+                if (value == 0) return {examined + 1, 0};
+                examined += std::min(count - examined, table_bytes - std::size_t(address % table_bytes));
+                last = 0;
+                continue;
+            }
+            const auto page = address / kPageSize;
+            const auto& slot = table->slots[static_cast<std::size_t>(page % kPagesPerTable)];
+            const auto inside = static_cast<std::size_t>(address % kPageSize);
+            const auto chunk = std::min(count - examined, kPageSize - inside);
+            const std::uint8_t* bytes;
+            if (slot.has_dense()) {
+                if (backing_) slot.recently_used = true;
+                bytes = slot.payload.get() + inside;
+            } else if (slot.spilled) {
+                bytes = backed_page(page).data() + inside;
+            } else if (slot.word_index == kRepeating) {
+                const auto* pattern = reinterpret_cast<const unsigned char*>(&slot.pattern);
+                const auto probe = slot.pattern ? std::min(chunk, kPatternSize) : 1;
+                for (std::size_t i = 0; i < probe; ++i)
+                    if (pattern[(inside + i) % kPatternSize] == value) return {examined + i + 1, value};
+                last = pattern[(inside + chunk - 1) % kPatternSize];
+                examined += chunk;
+                continue;
+            } else {
+                copy_compact(slot, inside, expanded.data(), chunk);
+                bytes = expanded.data();
+            }
+            const auto* match = static_cast<const std::uint8_t*>(std::memchr(bytes, value, chunk));
+            if (match) return {examined + static_cast<std::size_t>(match - bytes) + 1, value};
+            last = bytes[chunk - 1];
+            examined += chunk;
+        }
+        return {examined, last};
+    }
+
     // Guest bytes change only after the range, budget and allocations are
     // checked. The caller's source must remain valid for the full call.
     void write_block(std::uint64_t offset, const std::uint8_t* source,
