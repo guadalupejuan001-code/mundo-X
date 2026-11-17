@@ -205,6 +205,8 @@ class Cpu {
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
     std::uint64_t repeated_loop_dispatches = 0, repeated_loop_steps = 0, rotate_steps = 0;
     std::uint64_t variable_rotate_steps = 0;
+    std::uint64_t resident_read_hits = 0, ram_read_callbacks = 0;
+    std::uint64_t private_loop_steps = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -236,6 +238,33 @@ class Cpu {
   const EtherArm64Stats& ether_arm64_stats() const noexcept { return ether_arm64_stats_; }
   bool ether_arm64_block_candidate() const noexcept;
   unsigned try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus = nullptr);
+  unsigned ether_arm64_register_loop_length() const noexcept;
+  // The owner keeps the vCPU and its native cache quiescent from prepare
+  // through retirement. The worker only reads the code and updates its frame.
+  class EtherRegisterWork {
+   public:
+    using Clock = std::chrono::steady_clock;
+    struct InstructionView {
+      std::uint64_t ip = 0;
+      const std::uint8_t* bytes = nullptr;
+      unsigned size = 0;
+    };
+    void run(Clock::time_point deadline = Clock::time_point::max()) noexcept;
+    InstructionView instruction_at(unsigned step) const noexcept;
+
+   private:
+    friend class Cpu;
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    const Cpu* owner_ = nullptr;
+    const ether_arm64::Cache::Entry* entry_ = nullptr;
+    ether_arm64::Frame frame_{};
+    std::uint64_t page_epoch_ = 0, code_version_ = 0;
+    unsigned round_limit_ = 0, rounds_ = 0, outcome_ = 0;
+#endif
+  };
+  bool prepare_ether_arm64_register_loop(unsigned budget, EtherRegisterWork& work);
+  unsigned retire_ether_arm64_register_loop(EtherRegisterWork& work);
+  unsigned try_ether_arm64_register_loop(unsigned budget, std::unique_lock<std::mutex>& bus);
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -1025,7 +1054,12 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<ether_arm64::Cache> ether_arm64_cache_;
   bool ether_arm64_enabled_ = false;
-  unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus);
+  bool ether_arm64_dispatch_ready() const noexcept;
+  const ether_arm64::Cache::Entry* cached_ether_arm64_register_loop() const noexcept;
+  unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus,
+                                    ether_arm64::ResidentReadPages& resident);
+  unsigned commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry, const ether_arm64::Frame& frame,
+                                      unsigned rounds, unsigned outcome, bool direct_regs, bool private_frame);
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
                                   unsigned width) noexcept;
   static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,

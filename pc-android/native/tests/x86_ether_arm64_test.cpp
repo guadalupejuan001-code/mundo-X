@@ -41,6 +41,13 @@ constexpr std::array<std::uint8_t, 7> byte_read_loop{
     0x44,0x8a,0x5c,0x11,0xff, // Observed MOV R11B,[RCX+RDX-1].
     0xeb,0xf9};               // Repeat within the machine's step budget.
 
+constexpr std::array<std::uint8_t, 16> moving_read_loop{
+    0x48,0x8b,0x16,         // MOV RDX,[RSI].
+    0x48,0x01,0xd0,         // ADD RAX,RDX.
+    0x48,0x83,0xc6,0x08,    // ADD RSI,8.
+    0x83,0xe9,0x01,         // SUB ECX,1.
+    0x75,0xf1,0xf4};        // JNZ; HLT.
+
 constexpr std::uint32_t protected_code = 0x459a1f, ds_base = 0x10000, ss_base = 0x20000;
 constexpr std::array<std::uint8_t, 17> protected_loop{
     0x66,0x8b,0x07,       // MOV AX,[EDI], observed earlier in the same protected32 stage.
@@ -283,6 +290,9 @@ void decoder_contract() {
   const auto moving = arm64::decode(moving_store, sizeof(moving_store), code);
   require(moving.count == 4 && moving.target == code && !moving.repeats,
           "a moving destination must remain a one-round RAM block");
+  const auto reading = arm64::decode(moving_read_loop.data(), moving_read_loop.size(), code);
+  require(reading.count == 5 && !reading.writes && reading.target == code && reading.repeats,
+          "a guarded read-only loop must repeat across moving addresses");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -916,6 +926,39 @@ void indexed_loop_benchmark() {
             << " scalar_median_ns=" << scalar_times[3] << '\n';
 }
 
+void moving_read_contract() {
+  constexpr unsigned count = 64;
+  constexpr auto page = cosmic_pc::MemoryFabric::kPageSize;
+  constexpr auto start = nodes + page - 16;
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    cpu.memory.write_block(code, moving_read_loop.data(), moving_read_loop.size());
+    for (unsigned i = 0; i < count; ++i) cpu.write64(start + i * 8, i + 1);
+    cpu.regs[Cpu::EAX] = 0;
+    cpu.regs[Cpu::ECX] = count;
+    cpu.regs[Cpu::ESI] = start;
+    machine->run(count * 5 + 1);
+    require(cpu.halted && !cpu.fault && cpu.regs[Cpu::EAX] == count * (count + 1) / 2,
+            "moving read did not sum both RAM pages");
+  }
+  auto& cpu = native.cpu;
+  require(capture(cpu) == capture(scalar.cpu) && cpu.ether_arm64_stats().repeated_loop_steps >= (count - 4) * 5,
+          "the repeated read changed the guest result or missed native execution");
+  cpu.eip = code;
+  cpu.halted = false;
+  cpu.regs[Cpu::ECX] = 2;
+  cpu.regs[Cpu::ESI] = nodes + page - 12;
+  const auto before = capture(cpu);
+  const auto fallbacks = cpu.ether_arm64_stats().data_fallbacks;
+  require(!cpu.try_ether_arm64_block(10) && capture(cpu) == before &&
+          cpu.ether_arm64_stats().data_fallbacks == fallbacks + 1,
+          "a crossing load in a later round must discard the speculative registers");
+  std::cout << "PRIME_ETHER_MOVING_READ_PASS pages=2 rollback=1\n";
+}
+
 void byte_read_benchmark() {
   constexpr unsigned steps = 40000;
   const auto run = [](bool translated) {
@@ -1484,6 +1527,7 @@ int main() {
     scan_forms_contract();
     immediate_arithmetic_contract();
     indexed_loop_benchmark();
+    moving_read_contract();
     byte_read_benchmark();
     for (bool store : {false, true}) {
       State a{}, b{};

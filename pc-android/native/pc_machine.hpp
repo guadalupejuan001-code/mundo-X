@@ -263,7 +263,8 @@ class PcMachine {
     sync_bios_font_geometry();video_.install_font_vectors(cpu);
     sync_bios_hard_disk_count();clear_screen();if(device_reset_hook)device_reset_hook();
   }
-  void run(unsigned budget, RunClock::time_point deadline=RunClock::time_point::max()) {
+  void run(unsigned budget, RunClock::time_point deadline=RunClock::time_point::max(),
+           bool preserve_ether_loop_entry=false) {
     yield_requested_=false;
     if(!reader_||!host_error.empty()||waiting_key||cpu.fault||powered_off_||
        guest_restart_!=GuestRestart::None)return;
@@ -285,6 +286,8 @@ class PcMachine {
     unsigned dispatches=0;
     for(unsigned i=0;i<budget&&!waiting_key;){
       if(timed && (dispatches++ & 63U)==0 && RunClock::now()>=deadline)break;
+      if(preserve_ether_loop_entry && i && budget-i<ether_arm64::Block::kMaxInstructions &&
+         budget-i<cpu.ether_arm64_register_loop_length())break;
       auto* sample = boot_timing_ ? boot_timing_->next_iteration() : nullptr;
       const BootTiming::Scope iteration_timing(sample, BootTimePart::Total);
       // Devices can tick and deliver an enabled IRQ between guest instructions;
@@ -364,12 +367,48 @@ class PcMachine {
       if(guest_restart_!=GuestRestart::None||powered_off_||yield_requested_)break;
       if((r==StepResult::Halted||r==StepResult::WaitingForX87)&&!device_step_hook)break;
     }
-    if(boot_acceleration_enabled_&&cpu.instructions>=next_ram_compaction_) {
-      const BootTiming::Scope compaction_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Compaction);
-      cpu.memory.compact_repeating_pages(256);
-      next_ram_compaction_=cpu.instructions+kRamCompactionInterval;
-    }
+    compact_ram_after_run();
     if(boot_scalar_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
+  }
+  // The motherboard bounds the job before dispatch and advances the device
+  // clocks after its workers return.
+  bool prepare_ether_register_loop(unsigned budget, Cpu::EtherRegisterWork& work) {
+    if (!boot_acceleration_enabled_ || !reader_ || !host_error.empty() || waiting_key ||
+        powered_off_ || guest_restart_ != GuestRestart::None) return false;
+    return cpu.prepare_ether_arm64_register_loop(budget,work);
+  }
+  unsigned retire_ether_register_loop(Cpu::EtherRegisterWork& work, RunClock::duration elapsed) {
+    const BootTiming::Scope run_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Run);
+    const auto cs=cpu.segments[Cpu::CS];
+    auto* sample=boot_timing_ ? boot_timing_->next_iteration() : nullptr;
+    if (boot_timing_) boot_timing_->record(BootTimePart::Run,elapsed);
+    unsigned completed;
+    {
+      const BootTiming::Scope iteration_timing(sample, BootTimePart::Total);
+      completed=cpu.retire_ether_arm64_register_loop(work);
+      if (sample) {
+        sample->record(BootTimePart::Total,elapsed);
+        sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,elapsed);
+        if (completed) sample->record(BootTimePart::Arm64Execute,elapsed);
+        sample->add_steps(0,completed);
+      }
+      const BootTiming::Scope profile_timing(sample,BootTimePart::Profile);
+      if (boot_hotspots_) {
+        // The decoded backedge gives the exact guest address of each sample.
+        for (unsigned offset=0; offset<completed;) {
+          const auto span=std::min(completed-offset,boot_hotspots_->steps_before_sample()+1);
+          offset+=span;
+          if (const auto hits=boot_hotspots_->advance(span)) {
+            const auto instruction=work.instruction_at(offset-1);
+            boot_hotspots_->record(cpu.mode_name(),cs,instruction.ip,instruction.bytes,instruction.size,hits);
+          }
+        }
+      }
+    }
+    boot_acceleration_.arm64_block_steps+=completed;
+    if (completed) compact_ram_after_run();
+    if (boot_scalar_hotspots_) boot_hotspots_->add_elapsed(elapsed);
+    return completed;
   }
   void key(std::uint8_t ascii, std::uint8_t scan) { key_event(ascii, scan, true); }
   void key_event(std::uint8_t ascii, unsigned scan, bool pressed) {
@@ -725,6 +764,12 @@ class PcMachine {
   std::optional<BootHotspots> boot_regions_;
   static constexpr std::uint64_t kRamCompactionInterval=32768;
   std::uint64_t next_ram_compaction_=kRamCompactionInterval;
+  void compact_ram_after_run() {
+    if (!boot_acceleration_enabled_ || cpu.instructions < next_ram_compaction_) return;
+    const BootTiming::Scope timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Compaction);
+    cpu.memory.compact_repeating_pages(256);
+    next_ram_compaction_=cpu.instructions+kRamCompactionInterval;
+  }
   unsigned run_boot_batch(unsigned limit) {
     const bool rep=cpu.rep_batch_candidate();
     const bool shift=!rep&&cpu.shift_loop_batch_candidate();

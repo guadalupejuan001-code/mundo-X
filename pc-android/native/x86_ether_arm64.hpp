@@ -141,6 +141,7 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
 inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true) {
   Block block;
   block.long_mode = long_mode;
+  unsigned carry_boundary = 0;
   const auto sign_extend = [](std::uint32_t value, unsigned width) {
     return width == 1 && (value & 0x80) ? value | 0xffffff00U : value;
   };
@@ -266,8 +267,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         if (!other.memory) break;
         op.kind = Instruction::Lea;
       } else if (opcode == 0xff) {
-        // INC/DEC preserve carry. Retire its earlier producer first.
-        if (other.memory || group > 1 || !carry_preserved) break;
+        if (other.memory || group > 1 || (!long_mode && !carry_preserved)) break;
         op.kind = group == 0 ? Instruction::Increment : Instruction::Decrement;
       } else if (group_immediate || move_immediate || test_immediate) {
         if (group_immediate) {
@@ -362,10 +362,14 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     // Commit it before a subsequent logical operation that inherits its AF.
     if (Instruction::logical(op.kind) && block.auxiliary_index != Block::kNoFlagSource &&
         block.instructions[block.auxiliary_index].writes_ram()) break;
-    if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) ||
-        op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
+    const bool inc_dec = op.kind == Instruction::Increment || op.kind == Instruction::Decrement;
+    if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) || inc_dec ||
         op.kind == Instruction::Add || op.kind == Instruction::Subtract ||
         op.kind == Instruction::SignedMultiply) {
+      // INC/DEC can stay with an earlier carry producer if a later
+      // operation in this block replaces the carry before it is observed.
+      if (!inc_dec) carry_boundary = 0;
+      else if (!carry_preserved && !carry_boundary) carry_boundary = begin;
       block.flag_width = op.width;
       block.flag_op = op.kind;
       block.flag_index = block.count;
@@ -398,8 +402,11 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply) break;
   }
+  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode);
+  // A read-only round can validate a new address with the guarded loader.
+  // Repeated stores still require fixed addresses for the pending writes.
   block.repeats = long_mode && block.target == rip && block.uses_arm_condition() &&
-      fixed_loop_addresses(block);
+      (!block.writes || fixed_loop_addresses(block));
   return block;
 }
 
@@ -461,6 +468,17 @@ struct PendingRamWrites {
   }
 };
 
+inline constexpr unsigned kResidentReadPageBytes = 4096;
+
+struct ResidentReadPage {
+  const std::uint8_t* bytes = nullptr;
+  std::uint64_t linear = 0;
+};
+
+struct ResidentReadPages {
+  ResidentReadPage recent, previous;
+};
+
 struct Frame {
   using Read = unsigned (*)(Frame*, std::uint64_t, unsigned) noexcept;
   using Write = unsigned (*)(Frame*, std::uint64_t, unsigned, std::uint64_t) noexcept;
@@ -474,15 +492,19 @@ struct Frame {
   unsigned loop_remaining = 1;
   unsigned rotate_count;
   std::uint64_t* guest_regs;
+  ResidentReadPages resident;
+  unsigned resident_read_hits = 0, ram_read_callbacks = 0;
+  bool reuse_resident_reads = false;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
-// mapped as host instructions. Address arithmetic uses guest registers,
-// and all loads go through the original CPU's guarded RAM accessor.
+// mapped as host instructions. Only the guarded RAM accessor can supply
+// a resident page, and generated loads check the address stays inside it.
 class Emitter {
  public:
   explicit Emitter(const Block& block)
-      : long_mode_(block.long_mode), register_only_(block.register_only) {
+      : long_mode_(block.long_mode), register_only_(block.register_only),
+        inline_ram_reads_(block.long_mode && !block.writes && !block.register_only) {
     code_.reserve(96);
     emit(0xd503245f); // BTI c (a hint on hosts without BTI).
     if (register_only_) {
@@ -597,7 +619,7 @@ class Emitter {
   std::vector<std::uint32_t> code_;
   std::array<std::size_t, Block::kMaxInstructions> failed_access_{};
   unsigned exits_ = 0;
-  bool long_mode_, register_only_;
+  bool long_mode_, register_only_, inline_ram_reads_;
 
   void register_alu(const Instruction& op, unsigned flag_slot) {
     read(op.lhs, op.width);
@@ -680,9 +702,11 @@ class Emitter {
     if (!long_mode_) emit(0x2a0003e0U | (reg << 16) | reg); // MOV Wd,Wd wraps the 32-bit offset.
   }
   void prepare_access(const Operand& operand, unsigned width, unsigned access = 0) {
-    emit(0xaa1303e0); // MOV X0,X19
     address(operand, 1);
-    const auto spec = width | access | (operand.stack ? kStackAccess : 0);
+    prepare_callback(width | access | (operand.stack ? kStackAccess : 0));
+  }
+  void prepare_callback(unsigned spec) {
+    emit(0xaa1303e0); // MOV X0,X19
     emit(0x52800002U | (spec << 5)); // MOV W2,#access
   }
   void call(unsigned offset) {
@@ -715,9 +739,52 @@ class Emitter {
       load(9, operand.reg * 8, width);
       return;
     }
-    prepare_access(operand, width);
+    address(operand, 1);
+    if (inline_ram_reads_) {
+      read_resident_or_callback(width, operand.stack);
+      return;
+    }
+    prepare_callback(width | (operand.stack ? kStackAccess : 0));
     call(offsetof(Frame, read));
     load(9, offsetof(Frame, loaded), width);
+  }
+
+  void read_resident_or_callback(unsigned width, bool stack) {
+    const auto guard_page = [&](unsigned slot) {
+      const auto page = offsetof(Frame, resident) + slot;
+      load(9, page + offsetof(ResidentReadPage, bytes));
+      const auto no_page = code_.size();
+      emit(0); // CBZ X9,miss
+      load(10, page + offsetof(ResidentReadPage, linear));
+      emit(0xcb0a002b); // SUB X11,X1,X10
+      emit(0xf100017fU | ((kResidentReadPageBytes - width) << 10)); // CMP X11,#last
+      const auto outside = code_.size();
+      emit(0); // B.HI miss
+      return std::array{no_page, outside};
+    };
+    const auto set_miss_target = [&](const auto& checks, std::size_t target) {
+      code_[checks[0]] = 0xb4000009U | (std::uint32_t(target - checks[0]) << 5);
+      code_[checks[1]] = 0x54000008U | (std::uint32_t(target - checks[1]) << 5);
+    };
+    const auto recent_checks = guard_page(offsetof(ResidentReadPages, recent));
+    const auto direct = code_.size();
+    const auto load_op = width == 1 ? 0x38606800U : width == 2 ? 0x78606800U :
+                         width == 4 ? 0xb8606800U : 0xf8606800U;
+    emit(load_op | (11U << 16) | (9U << 5) | 9U); // LDR{B/H/W/X} 9,[X9,X11]
+    constexpr auto hits = offsetof(Frame, resident_read_hits);
+    load(10, hits, 4);
+    emit(0x1100054a); // ADD W10,W10,#1
+    store(10, hits, 4);
+    const auto done = code_.size();
+    emit(0); // B done
+    set_miss_target(recent_checks, code_.size());
+    const auto previous_checks = guard_page(offsetof(ResidentReadPages, previous));
+    emit(0x14000000U | (std::uint32_t(direct - code_.size()) & 0x03ffffffU)); // B direct
+    set_miss_target(previous_checks, code_.size());
+    prepare_callback(width | (stack ? kStackAccess : 0));
+    call(offsetof(Frame, read));
+    load(9, offsetof(Frame, loaded), width);
+    code_[done] = 0x14000000U | std::uint32_t(code_.size() - done);
   }
 };
 
