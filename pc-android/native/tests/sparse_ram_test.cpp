@@ -3,8 +3,10 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -54,7 +56,7 @@ struct TestBacking : SparseRam::PageBacking {
     using Page = std::array<std::uint8_t, kPage>;
     std::unordered_map<std::uint64_t, Page> pages;
     bool fail_read = false, fail_write = false;
-    unsigned resets = 0;
+    unsigned resets = 0, discards = 0;
 
     void read(std::uint64_t page, std::uint8_t* bytes) override {
         if (fail_read) throw std::runtime_error("test backing read I/O error");
@@ -65,13 +67,63 @@ struct TestBacking : SparseRam::PageBacking {
         if (fail_write) throw std::runtime_error("test backing write I/O error");
         std::copy_n(bytes, kPage, pages[page].begin());
     }
+    void discard(std::uint64_t) noexcept override { ++discards; }
     // Deliberately retain old bytes. RAM reset must discard the old mapping.
     void reset() noexcept override { ++resets; }
 };
+
+void parallel_state_vectors() {
+    using namespace std::chrono_literals;
+    struct GatedBacking : TestBacking {
+        explicit GatedBacking(std::future<void> ready) : ready(std::move(ready)) {}
+        void read(std::uint64_t page, std::uint8_t* bytes) override {
+            started.set_value();
+            if (ready.wait_for(10s) != std::future_status::ready)
+                throw std::runtime_error("Backing read timed out");
+            TestBacking::read(page, bytes);
+        }
+        std::promise<void> started;
+        std::future<void> ready;
+    };
+
+    constexpr auto next_vector = SparseRam::kPagesPerTable * kPage;
+    SparseRam ram(2 * next_vector, 3 * kPage);
+    std::promise<void> release;
+    auto backing = std::make_unique<GatedBacking>(release.get_future());
+    auto started = backing->started.get_future();
+    ram.attach_page_backing(std::move(backing));
+    keep_dense(ram, 0);
+    ram[0] = 0x41;
+    using Adjustment = SparseRam::BudgetAdjustment;
+    need(ram.adjust_payload_budget(0, 1) == Adjustment::Applied &&
+             ram.adjust_payload_budget(3 * kPage, 0) == Adjustment::Applied,
+         "The fixture must leave one page on backing");
+    ram[kPage] = 0x52;
+    ram[next_vector] = 0x63;
+    need(ram.metrics().page_state_vectors == 2, "Both page ranges need a state vector");
+
+    auto cold = std::async(std::launch::async, [&] { return ram.read_byte(0); });
+    const bool reading = started.wait_for(2s) == std::future_status::ready;
+    auto shared = std::async(std::launch::async, [&] { return ram.read_byte(0); });
+    auto resident = std::async(std::launch::async, [&] {
+        return ram.read_byte(kPage) == 0x52 && ram.read_byte(next_vector) == 0x63;
+    });
+    const bool progressed = resident.wait_for(2s) == std::future_status::ready;
+    release.set_value();
+
+    need(reading && progressed && resident.get(), "Resident vectors must progress during a cold read");
+    need(cold.get() == 0x41 && shared.get() == 0x41, "Both readers must see the same recovered page");
+    need(ram.metrics().backing_reads == 1 && ram.metrics().backing_cache_hits == 1,
+         "Both reads must share one backing transfer");
+    ram.fill(0, 0, kPage);
+    need(ram.read_byte(0) == 0 && ram.metrics().page_state_vectors == 2,
+         "Discard must invalidate the decoded page while retaining its neighbor");
+}
 } // namespace
 
 int main() {
     const std::vector<std::pair<std::string, std::function<void()>>> cases{
+        {"state vectors read resident and shared backed pages concurrently", parallel_state_vectors},
         {"byte searches preserve the first match and final byte in sparse RAM", [] {
              constexpr auto table_bytes = kPage * SparseRam::kPagesPerTable;
              SparseRam ram(2 * table_bytes, 16 * kPage);
@@ -159,6 +211,142 @@ int main() {
                       ram.spilled_pages() == 0 && read(ram, 0, replacement.size()) == replacement &&
                       read(ram, 2 * kPage, kPage) == std::vector<std::uint8_t>(kPage, 0x2a),
                   "Full-page writes and fills must replace cold bytes without a backing read");
+         }},
+        {"clean promoted pages reuse backing and changed pages never expose stale bytes", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             SparseRam ram(3 * kPage, 3 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             keep_dense(ram, 0);
+             keep_dense(ram, 1);
+             ram[kPage] = 0x51;
+             const auto original = read(ram, 0, 2 * kPage);
+             need(ram.adjust_payload_budget(0, 2) == Adjustment::Applied &&
+                      ram.adjust_payload_budget(3 * kPage, 0) == Adjustment::Applied,
+                  "Clean promotion fixture must start with two stored pages");
+             const auto saved = ram.metrics();
+             {
+                 const auto pins = ram.pin_writes();
+                 ram.prepare_write(0, 2 * kPage);
+                 ram.write_byte(256, 0x58);
+                 const std::uint8_t same[]{0x51, 0};
+                 std::uint8_t previous[2]{};
+                 ram.write_block(kPage, same, sizeof same, previous);
+                 ram.fill(257, 0x58, 12);
+                 need(std::equal(std::begin(same), std::end(same), std::begin(previous)) &&
+                          ram.metrics().backing_clean_pages == 2 && ram.spilled_pages() == 0,
+                      "Write preflight and same-value stores must preserve the exact backing copies");
+             }
+             store->fail_write = true;
+             need(ram.adjust_payload_budget(0, 2) == Adjustment::Applied &&
+                      ram.metrics().backing_clean_reclaims == 2 &&
+                      ram.metrics().backing_writes == saved.backing_writes && store->discards == 0 &&
+                      read(ram, 0, 2 * kPage) == original,
+                  "Unmodified pages must reclaim resident memory without storage writes");
+             need(ram.adjust_payload_budget(3 * kPage, 0) == Adjustment::Applied,
+                  "Clean reuse fixture must make room again");
+             ram.prepare_write(0, 2 * kPage);
+             const std::uint8_t patch[]{0xb5, 0x14};
+             ram.write_block(kPage - 1, patch, sizeof patch);
+             need(ram.metrics().backing_clean_pages == 0 && store->discards == 2,
+                  "Cross-page mutation must retire every stale copy");
+             expect<std::runtime_error>([&] { ram.adjust_payload_budget(0, 2); }, "test backing write I/O error");
+             need(ram.spilled_pages() == 0 && ram[kPage - 1] == patch[0] && ram[kPage] == patch[1],
+                  "Failed rewrite must leave dirty resident data authoritative");
+             store->fail_write = false;
+             need(ram.adjust_payload_budget(0, 2) == Adjustment::Applied &&
+                      ram.metrics().backing_writes == saved.backing_writes + 2 &&
+                      ram[kPage - 1] == patch[0] && ram[kPage] == patch[1],
+                  "Successful rewrite must publish the new bytes rather than a stale decoded slot");
+         }},
+        {"backing capacity retires optional copies before failing a new spill", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             struct BoundedBacking : TestBacking {
+                 void write(std::uint64_t page, const std::uint8_t* bytes) override {
+                     if (!fail_write && pages.size() == 2 && !pages.count(page))
+                         throw CapacityExceeded("test backing capacity");
+                     TestBacking::write(page, bytes);
+                 }
+                 void discard(std::uint64_t page) noexcept override {
+                     TestBacking::discard(page);
+                     pages.erase(page);
+                 }
+             };
+             SparseRam ram(4 * kPage, 3 * kPage);
+             auto backing = std::make_unique<BoundedBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             keep_dense(ram, 0);
+             keep_dense(ram, 1);
+             need(ram.adjust_payload_budget(0, 2) == Adjustment::Applied &&
+                      ram.adjust_payload_budget(3 * kPage, 0) == Adjustment::Applied,
+                  "Bounded fixture must start with a full backing store");
+             ram.prepare_write(0, 2 * kPage);
+             keep_dense(ram, 2);
+             store->fail_write = true;
+             expect<std::runtime_error>([&] { ram.adjust_payload_budget(2 * kPage, 1); },
+                                        "test backing write I/O error");
+             need(ram.metrics().backing_clean_pages == 2 && store->discards == 0 &&
+                      ram.allocated_pages() == 3,
+                  "A general I/O failure must keep optional copies and resident bytes");
+             store->fail_write = false;
+             need(ram.adjust_payload_budget(2 * kPage, 1) == Adjustment::Applied &&
+                      ram.metrics().backing_clean_pages == 0 && store->discards == 2 &&
+                      ram.spilled_pages() == 1 && store->pages.count(2) &&
+                      ram[256] == 0x58 && ram[kPage + 256] == 0x58 && ram[2 * kPage + 256] == 0x58,
+                  "A full store must release optional copies and spill the pending page exactly once");
+         }},
+        {"paced pressure releases cold backing duplicates before writing dirty pages", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             using Clock = SparseRam::ReclaimClock;
+             constexpr std::size_t cold = 8, hot = 9, cursor = 12;
+             SparseRam ram(16 * kPage, 6 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             keep_dense(ram, cold);
+             keep_dense(ram, hot);
+             need(ram.adjust_payload_budget(0, 2) == Adjustment::Applied &&
+                      ram.adjust_payload_budget(6 * kPage, 0) == Adjustment::Applied,
+                  "Fixture must persist both pages before promoting them");
+             ram.prepare_write(cold * kPage, 2 * kPage);
+             for (unsigned pass = 0; pass < 3; ++pass) {
+                 const auto offset = cursor * kPage;
+                 std::array<std::uint8_t, kPage> page{};
+                 std::fill_n(page.begin() + 256, 512, 0x58);
+                 ram.write_block(offset, page.data(), page.size());
+                 need(ram.adjust_payload_budget(2 * kPage, 1) == Adjustment::Applied &&
+                          ram.adjust_payload_budget(6 * kPage, 0) == Adjustment::Applied,
+                      "Advancing the clock hand must age both clean copies");
+                 need(ram.read_byte(offset + 256) == 0x58, "The cursor page must seed the decoded cache");
+             }
+             need(ram.read_byte(hot * kPage + 256) == 0x58, "The second clean page must remain hot");
+             ram.fill(cursor * kPage, 0, kPage);
+             keep_dense(ram, 0);
+             const auto before = ram.metrics();
+             need(before.backing_clean_pages == 2 && before.backing_cache_bytes == 3 * kPage,
+                  "Pressure fixture needs clean copies plus an obsolete decoded buffer");
+             store->fail_write = true;
+             {
+                 const auto pins = ram.pin_writes();
+                 need(ram.adjust_payload_budget(2 * kPage, 1, Clock::now() + std::chrono::seconds(1)) ==
+                          Adjustment::Blocked && ram.metrics().backing_cache_bytes == before.backing_cache_bytes,
+                      "A live write journal must prevent any maintenance");
+             }
+             need(ram.adjust_payload_budget(2 * kPage, 1, Clock::now() + std::chrono::seconds(1)) ==
+                      Adjustment::Applied,
+                  "Reclaim should meet the target without trying the first dirty page");
+             const auto after = ram.metrics();
+             need(after.allocated_bytes == 2 * kPage && after.backing_clean_reclaims == 1 &&
+                      after.backing_writes == before.backing_writes && after.backing_cache_bytes == 2 * kPage,
+                  "Reclaim must release one resident page and its obsolete neighbor's decoded buffer");
+             need(!ram.resident_span(cold * kPage, kPage) && ram.resident_span(hot * kPage, kPage) &&
+                      ram.resident_span(0, kPage), "Reclaim must preserve the hot and dirty resident pages");
+             need(ram.read_byte(cold * kPage + 256) == 0x58 && ram.read_byte(hot * kPage + 256) == 0x58 &&
+                      ram.read_byte(256) == 0x58 && ram.read_byte(cursor * kPage + 256) == 0 &&
+                      ram.metrics().backing_reads == after.backing_reads,
+                  "Valid decoded cache entries and all original guest bytes must stay readable");
          }},
         {"backing I/O failures preserve resident and spilled bytes", [] {
              SparseRam ram(5 * kPage, 2 * kPage);
@@ -311,6 +499,48 @@ int main() {
              for (unsigned page = 0; page < 5; ++page)
                  need(ram[page * kPage] == page + 1 && ram[page * kPage + kPage - 1] == page + 31,
                       "Budget adjustment changed guest bytes");
+         }},
+        {"live reclaim yields at its deadline and keeps the read working set", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             SparseRam ram(6 * kPage, 4 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             for (unsigned page = 0; page < 4; ++page) {
+                 keep_dense(ram, page);
+                 ram[page * kPage] = page + 1;
+             }
+             need(ram.read_byte(0) == 1 && ram.read_byte(kPage) == 2, "Read working set must be hot");
+             need(ram.adjust_payload_budget(2 * kPage, 128, SparseRam::ReclaimClock::time_point::min()) ==
+                      Adjustment::Reclaiming &&
+                      store->pages.empty() && ram.budget_bytes() == 4 * kPage,
+                  "An expired maintenance request must yield without touching resident data or budget");
+             need(ram.adjust_payload_budget(2 * kPage, 2) == Adjustment::Applied &&
+                      store->pages.size() == 2 && store->pages.count(2) && store->pages.count(3),
+                  "Reclaim must select write-only pages before the read working set");
+             need(ram.adjust_payload_budget(kPage, 1) == Adjustment::Applied && store->pages.size() == 3,
+                  "Reclaim must eventually proceed when only hot pages remain");
+             for (unsigned page = 0; page < 4; ++page)
+                 need(ram.read_byte(page * kPage) == page + 1, "Reclaim changed the page payload");
+             std::cout << "PRIME_RAM_DEADLINE_HOT_SET_PASS deadline=1 write_only_evicted=2 exact=1\n";
+         }},
+        {"guest allocation protects read pages during a streaming write", [] {
+             SparseRam ram(6 * kPage, 4 * kPage);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             for (unsigned page = 0; page < 4; ++page) {
+                 keep_dense(ram, page);
+                 ram[page * kPage] = page + 1;
+             }
+             need(ram.read_byte(0) == 1 && ram.read_byte(kPage) == 2, "Read pages must be made hot");
+             keep_dense(ram, 4);
+             keep_dense(ram, 5);
+             need(store->pages.size() == 2 && store->pages.count(2) && store->pages.count(3),
+                  "Write allocation must evict prior streamed pages ahead of the read working set");
+             need(ram.read_byte(0) == 1 && ram.read_byte(kPage) == 2 &&
+                      ram.read_byte(2 * kPage) == 3 && ram.read_byte(3 * kPage) == 4,
+                  "Streaming eviction changed resident or spilled bytes");
          }},
         {"full dense write may spill a compact page while preserving its exact bytes", [] {
              SparseRam ram(4 * kPage, 2 * kPage);
@@ -650,6 +880,21 @@ int main() {
              need(ram.compact_repeating_pages(4) == 1 && ram.allocated_pages() == 1 && ram.pattern_pages() == 0,
                   "Compaction did not release the wholly zero dense page");
          }},
+        {"compaction cursor survives table release, gaps and the final partial page", [] {
+             constexpr auto stride = SparseRam::kPagesPerTable * kPage;
+             constexpr auto far = 3 * stride;
+             SparseRam ram(far + kPage + 1, 4 * kPage);
+             ram.prepare_write(0, 1);
+             ram.fill(far, 0x37, kPage);
+             ram.prepare_write(far + kPage, 1);
+             need(ram.compact_repeating_pages(2) == 2 && ram.pattern_pages() == 1 &&
+                      ram.allocated_pages() == 1 && ram[far] == 0x37,
+                  "The second slot must be visited across a released table and an empty gap");
+             ram.fill(0, 0x42, kPage);
+             need(ram.compact_repeating_pages(2) == 2 && ram.pattern_pages() == 2 &&
+                      ram.allocated_pages() == 0 && ram[0] == 0x42 && ram[far + kPage] == 0,
+                  "The scan must pass the partial last page and resume at the first slot");
+         }},
         {"completed-page compaction permits a long fill under a small cap", [] {
              constexpr std::size_t pages = 16;
              SparseRam ram(pages * kPage, kPage + pages * SparseRam::kPatternSize);
@@ -674,6 +919,44 @@ int main() {
              ram.fill(0, 0, static_cast<std::size_t>(ram.size()));
              need(ram.pattern_pages() == 0 && ram.allocated_bytes() == 0,
                   "Zeroing the volume left repeating payload behind");
+         }},
+        {"pattern checks retry after every dense mutation", [] {
+             constexpr std::uint8_t pattern = 0x63;
+             constexpr auto changed = kPage - 1;
+             for (const bool backing : {false, true}) {
+                 SparseRam ram(3 * kPage);
+                 if (backing) ram.attach_page_backing(std::make_unique<TestBacking>());
+                 ram.fill(kPage, pattern, kPage);
+                 const auto test_write = [&](const auto& repair) {
+                     ram.fill(0, pattern, kPage);
+                     ram[changed] = 0x21;
+                     need(!ram.compact_repeating_page(0) && !ram.compact_repeating_page(0),
+                          "Nonrepeating bytes must remain dense on repeated checks");
+                     repair();
+                     need(ram.compact_repeating_page(0) && ram.pattern_pages() == 1 &&
+                             read(ram, 0, kPage) == std::vector<std::uint8_t>(kPage, pattern),
+                          "Dense mutation did not invalidate the negative pattern check");
+                 };
+                 test_write([&] { ram[changed] = pattern; });
+                 test_write([&] { ram.write_block(changed, &pattern, 1); });
+                 test_write([&] {
+                     const std::array<std::uint8_t, 2> edge{pattern, pattern};
+                     ram.write_block(changed, edge.data(), edge.size());
+                 });
+                 test_write([&] { ram.fill(changed, pattern, 1); });
+                 test_write([&] {
+                     need(ram.restore_byte(changed, pattern), "Dense rollback must succeed");
+                 });
+                 test_write([&] {
+                     need(ram.try_copy_resident_block(kPage, changed, 1), "Resident copy must succeed");
+                 });
+                 ram.fill(0, pattern, kPage);
+                 ram[changed] = 0x21;
+                 need(!ram.compact_repeating_page(0), "Trim fixture must start nonrepeating");
+                 ram.fill(0, 0, kPage);
+                 need(ram.trim_zero_pages() == 1 && ram.allocated_pages() == 1,
+                      "Zero trim must recheck an overwritten dense page");
+             }
          }},
         {"compaction keeps Ether-owned byte windows independent", [] {
              cosmic_pc::MemoryFabric memory(2 * kPage, 2 * kPage);

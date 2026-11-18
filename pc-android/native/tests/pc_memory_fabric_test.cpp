@@ -26,6 +26,55 @@ constexpr std::uint64_t work_address=0xa000;
 constexpr unsigned iterations=1024;
 constexpr std::uint64_t seed=0x0123456789abcdefULL;
 
+void test_exclusive_spill_cache_reads() {
+  using cosmic_pc::MemoryFabric;
+  using cosmic_pc::SparseRam;
+  constexpr auto page_bytes = MemoryFabric::kPageSize;
+  constexpr unsigned pages = 8;
+  using Page = std::array<std::uint8_t, page_bytes>;
+  struct Backing : SparseRam::PageBacking {
+    std::array<Page, pages> data{};
+    void read(std::uint64_t page, std::uint8_t* bytes) override {
+      std::copy(data.at(page).begin(), data.at(page).end(), bytes);
+    }
+    void write(std::uint64_t page, const std::uint8_t* bytes) override {
+      std::copy_n(bytes, page_bytes, data.at(page).begin());
+    }
+    void reset() noexcept override { data = {}; }
+  };
+  MemoryFabric ram(pages * page_bytes, 2 * page_bytes);
+  ram.attach_page_backing(std::make_unique<Backing>());
+  for (unsigned page = 0; page < pages; ++page) {
+    Page data;
+    for (unsigned i = 0; i < page_bytes; ++i) data[i] = std::uint8_t(i + page);
+    ram.write_block(page * page_bytes, data.data(), data.size());
+  }
+  need(ram.metrics().spilled_pages > 0 && !ram.resident_ram_span(0, page_bytes),
+       "backing fixture must spill the first guest page");
+
+  // Both paths must read and count the same bytes, including a page boundary.
+  constexpr auto start = page_bytes - 4;
+  std::array<std::uint8_t, 8> expected{}, actual{}, shared{};
+  ram.read_block(start, expected.data(), expected.size());
+  const auto before = ram.metrics();
+  {
+    const MemoryFabric::ExclusiveRamReads exclusive(ram);
+    ram.read_block(start, actual.data(), actual.size());
+  }
+  ram.read_parallel_ram_block(start, shared.data(), shared.size());
+  const auto after = ram.metrics();
+  need(expected == actual && actual == shared && expected[0] == 252 && expected[4] == 1,
+       "exclusive spill cache changed guest bytes");
+  need(after.backing_reads == before.backing_reads &&
+       after.backing_cache_hits == before.backing_cache_hits + 4,
+       "both spill reads must hit the same decoded pages");
+
+  ram.fill(0, 7, page_bytes);
+  const MemoryFabric::ExclusiveRamReads exclusive(ram);
+  ram.read_block(start, actual.data(), actual.size());
+  need(actual[0] == 7 && actual[4] == 1, "a write left stale bytes in the spill cache");
+}
+
 void test_code_page_versions() {
   using cosmic_pc::MemoryFabric;
   constexpr auto page = MemoryFabric::kPageSize;
@@ -172,6 +221,7 @@ void test_failed_operand(){
 
 int main(){
   try{
+    test_exclusive_spill_cache_reads();
     constexpr std::size_t MiB=1024*1024;
     PcMachine pc(std::size_t(2048)*MiB,std::size_t(1024)*MiB);
     pc.cpu.a20_enabled=true;

@@ -9,7 +9,11 @@
     defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define MUNDO_X_ETHER_ARM64_BLOCKS 1
 #include <sys/mman.h>
+#include <unistd.h>
 #include <cstring>
+#include <memory>
+#include <new>
+#include <optional>
 #include <utility>
 #include <vector>
 #endif
@@ -27,7 +31,7 @@ struct Operand {
   std::uint32_t displacement = 0;
   std::uint64_t immediate_value = 0;
   unsigned index = kNoIndex, scale_shift = 0;
-  bool memory = false, immediate = false, stack = false;
+  bool memory = false, immediate = false, stack = false, high_byte = false;
 
   static Operand literal(std::uint64_t value) noexcept {
     Operand operand;
@@ -41,7 +45,7 @@ struct Instruction {
   enum Kind {
     Unsupported, Move, MoveByte, MoveZeroExtend, MoveSignExtend, Lea, Nop, Compare, Test, Increment, Decrement,
     Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic,
-    RotateLeft, RotateRight, SignedMultiply, Conditional, Jump
+    RotateLeft, RotateRight, SignedMultiply, ConditionalMove, Conditional, Jump
   };
   Kind kind = Move;
   Operand lhs, rhs;
@@ -141,6 +145,7 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
 inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true) {
   Block block;
   block.long_mode = long_mode;
+  unsigned carry_boundary = 0;
   const auto sign_extend = [](std::uint32_t value, unsigned width) {
     return width == 1 && (value & 0x80) ? value | 0xffffff00U : value;
   };
@@ -166,8 +171,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     }
     if (long_mode && word && opcode != 0x89 && opcode != 0x8b) break;
     if (opcode == 0x0f && pos < size &&
-        ((bytes[pos] & 0xfeU) == 0xb6U || bytes[pos] == 0xaf ||
-         (long_mode && (bytes[pos] & 0xfeU) == 0xbeU)))
+        ((bytes[pos] & 0xfeU) == 0xb6U || (bytes[pos] & 0xfeU) == 0xbeU ||
+         (bytes[pos] & 0xf0U) == 0x40U || bytes[pos] == 0xaf))
       opcode = 0x0f00U | bytes[pos++];
     const auto form = opcode & 7;
     const auto direct_alu = opcode <= 0x3d && form <= 5
@@ -177,6 +182,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     const bool sign_extend_move = opcode == 0x0fbe || opcode == 0x0fbf ||
         (long_mode && opcode == 0x63 && (rex & 8));
     const bool move_byte = opcode == 0x88 || opcode == 0x8a;
+    const bool conditional_move = (opcode & 0xfff0U) == 0x0f40U;
     const bool group_immediate = opcode == 0x80 || opcode == 0x81 || opcode == 0x83;
     const bool move_immediate = opcode == 0xc6 || opcode == 0xc7;
     const bool test_immediate = opcode == 0xf6 || opcode == 0xf7;
@@ -218,7 +224,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.kind = Instruction::Nop;
     } else if (opcode == 0x8b || opcode == 0x89 || opcode == 0x8d || opcode == 0x84 ||
         opcode == 0x85 || opcode == 0xff || zero_extend || sign_extend_move || move_byte || binary_alu ||
-        group_immediate || move_immediate || test_immediate || shift || multiply) {
+        group_immediate || move_immediate || test_immediate || shift || multiply || conditional_move) {
       if (pos == size) break;
       const auto modrm = bytes[pos++];
       const auto mod = modrm >> 6;
@@ -249,7 +255,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         other.displacement = sign_extend(other.displacement, disp_bytes);
       }
       const bool reg_first = opcode == 0x8b || opcode == 0x8d ||
-          zero_extend || sign_extend_move || opcode == 0x8a || multiply || (binary_alu && (opcode & 2));
+          zero_extend || sign_extend_move || opcode == 0x8a || multiply || conditional_move ||
+          (binary_alu && (opcode & 2));
       op.lhs = reg_first ? reg : other;
       op.rhs = reg_first ? other : reg;
       if (zero_extend || move_byte) {
@@ -260,14 +267,21 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
             (!other.memory && other.reg >= 4))) break;
         op.kind = move_byte ? Instruction::MoveByte : Instruction::MoveZeroExtend;
       } else if (sign_extend_move) {
-        if (opcode == 0x0fbe && !rex && !other.memory && other.reg >= 4) break;
+        if (op.width < 4) break;
+        if (opcode == 0x0fbe && !rex && !other.memory && other.reg >= 4) {
+          op.rhs.reg -= 4;
+          op.rhs.high_byte = true;
+        }
         op.kind = Instruction::MoveSignExtend;
+      } else if (conditional_move) {
+        // Memory sources must be evaluated even when the condition is false.
+        if (other.memory || op.width < 4) break;
+        op.kind = Instruction::ConditionalMove;
       } else if (opcode == 0x8d) {
         if (!other.memory) break;
         op.kind = Instruction::Lea;
       } else if (opcode == 0xff) {
-        // INC/DEC preserve carry. Retire its earlier producer first.
-        if (other.memory || group > 1 || !carry_preserved) break;
+        if (other.memory || group > 1 || (!long_mode && !carry_preserved)) break;
         op.kind = group == 0 ? Instruction::Increment : Instruction::Decrement;
       } else if (group_immediate || move_immediate || test_immediate) {
         if (group_immediate) {
@@ -362,10 +376,14 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     // Commit it before a subsequent logical operation that inherits its AF.
     if (Instruction::logical(op.kind) && block.auxiliary_index != Block::kNoFlagSource &&
         block.instructions[block.auxiliary_index].writes_ram()) break;
-    if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) ||
-        op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
+    const bool inc_dec = op.kind == Instruction::Increment || op.kind == Instruction::Decrement;
+    if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) || inc_dec ||
         op.kind == Instruction::Add || op.kind == Instruction::Subtract ||
         op.kind == Instruction::SignedMultiply) {
+      // INC/DEC can stay with an earlier carry producer if a later
+      // operation in this block replaces the carry before it is observed.
+      if (!inc_dec) carry_boundary = 0;
+      else if (!carry_preserved && !carry_boundary) carry_boundary = begin;
       block.flag_width = op.width;
       block.flag_op = op.kind;
       block.flag_index = block.count;
@@ -396,12 +414,193 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     block.size = pos;
     if (op.writes_ram() && (++block.writes == Block::kMaxWrites || !long_mode)) break;
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
-        op.kind == Instruction::SignedMultiply) break;
+        op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }
-  block.repeats = long_mode && block.target == rip && block.uses_arm_condition() &&
-      fixed_loop_addresses(block);
+  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode);
+  // A read-only round can validate a new address with the guarded loader.
+  // Repeated stores still require fixed addresses for the pending writes.
+  // Legacy execution can repeat only when no segment or memory is accessed.
+  block.repeats = (long_mode || block.register_only) && block.target == rip && block.uses_arm_condition() &&
+      (!block.writes || fixed_loop_addresses(block));
   return block;
 }
+
+// An affine register transition F has linear differences modulo its register width.
+// If its third difference is zero for the current state, every subsequent
+// difference of that order is zero too. Run the final round normally so its
+// branch and all x86 flags use the same commit path as the native loop.
+struct RegisterStateVector {
+  static constexpr unsigned kMinRounds = 32;
+  static constexpr unsigned kRegisters = 16;
+  using Registers = std::array<std::uint64_t, kRegisters>;
+
+  unsigned counter = kRegisters;
+  unsigned written_registers = 0;
+  unsigned rotate_left = 0, rotate_right = 0;
+  unsigned compare_register = kRegisters;
+
+  static RegisterStateVector build(const Block& block) noexcept {
+    if (!block.repeats || !block.register_only || block.count < 2) return {};
+    const auto& branch = block.instructions[block.count - 1];
+    const auto& last = block.instructions[block.count - 2];
+    if (block.long_mode && block.count == 4 && branch.kind == Instruction::Conditional &&
+        (branch.opcode & 15) == 15 && block.flag_index == 2) { // x86 JG
+      const auto& difference = block.instructions[0];
+      const auto& increment = block.instructions[1];
+      if (difference.kind == Instruction::Subtract && difference.width == 8 &&
+          !difference.rhs.immediate && difference.lhs.reg < kRegisters &&
+          difference.rhs.reg < kRegisters && difference.lhs.reg != difference.rhs.reg &&
+          increment.kind == Instruction::Increment && increment.width == 8 &&
+          increment.lhs.reg == difference.rhs.reg &&
+          last.kind == Instruction::Compare && last.width == 8 && !last.rhs.immediate &&
+          last.lhs.reg == difference.lhs.reg && last.rhs.reg == difference.rhs.reg)
+        return {difference.rhs.reg, 0, 0, 0, difference.lhs.reg};
+      return {};
+    }
+    if (branch.kind != Instruction::Conditional || (branch.opcode & 15) != 5 || // x86 JNZ
+        block.flag_index != block.count - 2 || last.kind != Instruction::Subtract ||
+        !last.rhs.immediate || last.rhs.immediate_value != 1 ||
+        (last.width != 4 && (!block.long_mode || last.width != 8)) ||
+        last.lhs.reg >= kRegisters)
+      return {};
+
+    const unsigned body_width = block.long_mode ? 8 : 4;
+    unsigned written = 0, read = 0, left = 0, right = 0;
+    for (unsigned i = 0; i + 2 < block.count; ++i) {
+      const auto& op = block.instructions[i];
+      if (op.kind == Instruction::Nop) continue;
+      if (op.width != body_width || op.lhs.reg >= kRegisters || op.lhs.reg == last.lhs.reg ||
+          op.rhs.memory) return {};
+      const auto destination = 1U << op.lhs.reg;
+      if (Instruction::rotate(op.kind)) {
+        // CL may change only through the loop's final DEC-equivalent SUB.
+        constexpr unsigned rcx = 1;
+        if (!block.long_mode || last.lhs.reg != rcx || op.rhs.immediate ||
+            op.rhs.reg != rcx || ((left | right) & destination)) return {};
+        (op.kind == Instruction::RotateLeft ? left : right) |= destination;
+        continue;
+      }
+      written |= destination;
+      if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement) continue;
+      if (op.kind != Instruction::Move && op.kind != Instruction::Add &&
+          op.kind != Instruction::Subtract) return {};
+      if (!op.rhs.immediate) {
+        if (op.rhs.reg >= kRegisters || op.rhs.reg == last.lhs.reg) return {};
+        read |= 1U << op.rhs.reg;
+      }
+    }
+    // A rotated value must not participate in the affine register recurrence.
+    if ((left | right) & (read | written)) return {};
+    return {last.lhs.reg, written, left, right};
+  }
+
+  unsigned project_tail(const Block& block, const std::uint64_t* initial,
+                        unsigned limit, Registers& tail) const noexcept {
+    if (counter == kRegisters || limit < kMinRounds) return 0;
+    const bool narrow = block.instructions[block.count - 2].width == 4;
+    const auto before = narrow ? std::uint64_t(std::uint32_t(initial[counter])) : initial[counter];
+    // A zero counter wraps; its next zero is beyond an unsigned run budget.
+    const auto rounds = before && before < limit ? unsigned(before) : limit;
+    if (rounds < kMinRounds) return 0;
+
+    Registers once;
+    std::copy_n(initial, kRegisters, once.begin());
+    body(block, once);
+    auto twice = once;
+    body(block, twice);
+    auto thrice = twice;
+    body(block, thrice);
+
+    const auto skipped = std::uint64_t(rounds - 1);
+    const auto pairs = skipped * (skipped - 1) / 2;
+    const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
+    for (unsigned i = 0; i < kRegisters; ++i) {
+      if (!(written_registers & (1U << i))) {
+        tail[i] = initial[i];
+        continue;
+      }
+      const auto first = once[i] - initial[i];
+      const auto second = twice[i] - once[i];
+      const auto delta = second - first;
+      if (((thrice[i] - twice[i] - second - delta) & mask) != 0) return 0;
+      tail[i] = (initial[i] + skipped * first + pairs * delta) & mask;
+    }
+    if (rotate_left || rotate_right) {
+      // The skipped CL counts form a descending sequence. Reducing the sum
+      // modulo 64 also handles wrap in ECX/RCX and masking CL to six bits.
+      const auto amount = unsigned((skipped * before - pairs) & 63U);
+      if (amount) {
+        for (unsigned i = 0; i < kRegisters; ++i) {
+          const auto bit = 1U << i;
+          const auto value = initial[i];
+          if (rotate_left & bit) tail[i] = (value << amount) | (value >> (64 - amount));
+          if (rotate_right & bit) tail[i] = (value >> amount) | (value << (64 - amount));
+        }
+      }
+    }
+    tail[counter] = before - skipped;
+    if (narrow) tail[counter] = std::uint32_t(tail[counter]);
+    return rounds;
+  }
+
+  unsigned project_compare(const std::uint64_t* initial, unsigned limit,
+                           std::uint64_t& lhs, std::uint64_t& rhs) const noexcept {
+    // This four-instruction loop can project within the 32-step SMP quantum.
+    constexpr unsigned min_rounds = 4;
+    if (limit < min_rounds) return 0;
+    const auto value = initial[compare_register], start = initial[counter];
+    if (value > INT64_MAX || start > INT64_MAX) return 0;
+    limit = unsigned(std::min<std::uint64_t>(limit, INT64_MAX - start));
+    if (limit < min_rounds) return 0;
+
+    // After n rounds, JG is taken iff value > (n+1)*start + n*(n+1)/2.
+    // Compare before multiplying by start so even large signed values fit.
+    const auto continues = [&](std::uint64_t n) {
+      const auto sum = n * (n + 1) / 2;
+      return sum < value && start <= (value - sum - 1) / (n + 1);
+    };
+    unsigned rounds = limit;
+    if (!continues(limit)) {
+      if (!continues(min_rounds - 1)) return 0;
+      unsigned first = min_rounds;
+      while (first < rounds) {
+        const auto middle = first + (rounds - first) / 2;
+        if (continues(middle)) first = middle + 1;
+        else rounds = middle;
+      }
+    }
+    const auto n = std::uint64_t(rounds);
+    // The previous comparison was true. The final subtraction cannot
+    // underflow, so both operands of the final signed CMP are nonnegative.
+    lhs = value - n * start - n * (n - 1) / 2;
+    rhs = start + n;
+    return rounds;
+  }
+
+ private:
+  static void body(const Block& block, Registers& registers) noexcept {
+    for (unsigned i = 0; i + 2 < block.count; ++i) {
+      const auto& op = block.instructions[i];
+      if (op.kind == Instruction::Nop || Instruction::rotate(op.kind)) continue;
+      auto& left = registers[op.lhs.reg];
+      if (op.kind == Instruction::Increment) {
+        ++left;
+        continue;
+      }
+      if (op.kind == Instruction::Decrement) {
+        --left;
+        continue;
+      }
+      const auto right = op.rhs.immediate ? op.rhs.immediate_value : registers[op.rhs.reg];
+      switch (op.kind) {
+        case Instruction::Move: left = right; break;
+        case Instruction::Add: left += right; break;
+        case Instruction::Subtract: left -= right; break;
+        default: break;
+      }
+    }
+  }
+};
 
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
 struct PendingRamWrites {
@@ -461,12 +660,24 @@ struct PendingRamWrites {
   }
 };
 
+inline constexpr unsigned kResidentReadPageBytes = 4096;
+
+struct ResidentReadPage {
+  const std::uint8_t* bytes = nullptr;
+  std::uint64_t linear = 0;
+};
+
+struct ResidentReadPages {
+  ResidentReadPage recent, previous;
+};
+
 struct Frame {
   using Read = unsigned (*)(Frame*, std::uint64_t, unsigned) noexcept;
   using Write = unsigned (*)(Frame*, std::uint64_t, unsigned, std::uint64_t) noexcept;
   std::array<std::uint64_t, 16> regs;
   std::uint64_t left = 0, right = 0, loaded = 0;
   std::uint64_t auxiliary_left, auxiliary_right, rotate_carry_result, rotate_overflow_result;
+  std::uint64_t conditional_source;
   Read read;
   Write write;
   void* cpu;
@@ -474,15 +685,20 @@ struct Frame {
   unsigned loop_remaining = 1;
   unsigned rotate_count;
   std::uint64_t* guest_regs;
+  ResidentReadPages resident;
+  unsigned resident_read_hits = 0, ram_read_callbacks = 0;
+  unsigned state_vector_rounds = 0;
+  bool reuse_resident_reads = false;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
-// mapped as host instructions. Address arithmetic uses guest registers,
-// and all loads go through the original CPU's guarded RAM accessor.
+// mapped as host instructions. Only the guarded RAM accessor can supply
+// a resident page, and generated loads check the address stays inside it.
 class Emitter {
  public:
   explicit Emitter(const Block& block)
-      : long_mode_(block.long_mode), register_only_(block.register_only) {
+      : long_mode_(block.long_mode), register_only_(block.register_only),
+        inline_ram_reads_(block.long_mode && !block.writes && !block.register_only) {
     code_.reserve(96);
     emit(0xd503245f); // BTI c (a hint on hosts without BTI).
     if (register_only_) {
@@ -521,6 +737,10 @@ class Emitter {
         address(op.rhs, 9);
         if (op.width == 4) emit(0x2a0903e9); // MOV W9,W9 clears the upper half.
         store(9, op.lhs.reg * 8, op.width == 2 ? 2 : 8);
+      } else if (op.kind == Instruction::ConditionalMove) {
+        // The condition is evaluated after the x86 flags have been committed.
+        read(op.rhs, op.width);
+        store(9, offsetof(Frame, conditional_source));
       } else if (op.kind == Instruction::SignedMultiply) {
         // The last operation commits through the CPU's exact signed
         // multiplication, including its partial flag update.
@@ -597,7 +817,7 @@ class Emitter {
   std::vector<std::uint32_t> code_;
   std::array<std::size_t, Block::kMaxInstructions> failed_access_{};
   unsigned exits_ = 0;
-  bool long_mode_, register_only_;
+  bool long_mode_, register_only_, inline_ram_reads_;
 
   void register_alu(const Instruction& op, unsigned flag_slot) {
     read(op.lhs, op.width);
@@ -680,9 +900,11 @@ class Emitter {
     if (!long_mode_) emit(0x2a0003e0U | (reg << 16) | reg); // MOV Wd,Wd wraps the 32-bit offset.
   }
   void prepare_access(const Operand& operand, unsigned width, unsigned access = 0) {
-    emit(0xaa1303e0); // MOV X0,X19
     address(operand, 1);
-    const auto spec = width | access | (operand.stack ? kStackAccess : 0);
+    prepare_callback(width | access | (operand.stack ? kStackAccess : 0));
+  }
+  void prepare_callback(unsigned spec) {
+    emit(0xaa1303e0); // MOV X0,X19
     emit(0x52800002U | (spec << 5)); // MOV W2,#access
   }
   void call(unsigned offset) {
@@ -712,12 +934,55 @@ class Emitter {
       return;
     }
     if (!operand.memory) {
-      load(9, operand.reg * 8, width);
+      load(9, operand.reg * 8 + unsigned(operand.high_byte), width);
       return;
     }
-    prepare_access(operand, width);
+    address(operand, 1);
+    if (inline_ram_reads_) {
+      read_resident_or_callback(width, operand.stack);
+      return;
+    }
+    prepare_callback(width | (operand.stack ? kStackAccess : 0));
     call(offsetof(Frame, read));
     load(9, offsetof(Frame, loaded), width);
+  }
+
+  void read_resident_or_callback(unsigned width, bool stack) {
+    const auto guard_page = [&](unsigned slot) {
+      const auto page = offsetof(Frame, resident) + slot;
+      load(9, page + offsetof(ResidentReadPage, bytes));
+      const auto no_page = code_.size();
+      emit(0); // CBZ X9,miss
+      load(10, page + offsetof(ResidentReadPage, linear));
+      emit(0xcb0a002b); // SUB X11,X1,X10
+      emit(0xf100017fU | ((kResidentReadPageBytes - width) << 10)); // CMP X11,#last
+      const auto outside = code_.size();
+      emit(0); // B.HI miss
+      return std::array{no_page, outside};
+    };
+    const auto set_miss_target = [&](const auto& checks, std::size_t target) {
+      code_[checks[0]] = 0xb4000009U | (std::uint32_t(target - checks[0]) << 5);
+      code_[checks[1]] = 0x54000008U | (std::uint32_t(target - checks[1]) << 5);
+    };
+    const auto recent_checks = guard_page(offsetof(ResidentReadPages, recent));
+    const auto direct = code_.size();
+    const auto load_op = width == 1 ? 0x38606800U : width == 2 ? 0x78606800U :
+                         width == 4 ? 0xb8606800U : 0xf8606800U;
+    emit(load_op | (11U << 16) | (9U << 5) | 9U); // LDR{B/H/W/X} 9,[X9,X11]
+    constexpr auto hits = offsetof(Frame, resident_read_hits);
+    load(10, hits, 4);
+    emit(0x1100054a); // ADD W10,W10,#1
+    store(10, hits, 4);
+    const auto done = code_.size();
+    emit(0); // B done
+    set_miss_target(recent_checks, code_.size());
+    const auto previous_checks = guard_page(offsetof(ResidentReadPages, previous));
+    emit(0x14000000U | (std::uint32_t(direct - code_.size()) & 0x03ffffffU)); // B direct
+    set_miss_target(previous_checks, code_.size());
+    prepare_callback(width | (stack ? kStackAccess : 0));
+    call(offsetof(Frame, read));
+    load(9, offsetof(Frame, loaded), width);
+    code_[done] = 0x14000000U | std::uint32_t(code_.size() - done);
   }
 };
 
@@ -729,7 +994,7 @@ class NativeCode {
   NativeCode& operator=(const NativeCode&) = delete;
   NativeCode& operator=(NativeCode&& other) noexcept {
     std::swap(mapping_, other.mapping_);
-    std::swap(bytes_, other.bytes_);
+    std::swap(capacity_, other.capacity_);
     return *this;
   }
   ~NativeCode() { clear(); }
@@ -738,31 +1003,45 @@ class NativeCode {
     const Emitter emitter(block);
     const auto& words = emitter.words();
     const auto bytes = words.size() * sizeof(words.front());
-    void* mapping = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    static const auto page_size = static_cast<std::size_t>(getpagesize());
+    const auto capacity = (bytes + page_size - 1) / page_size * page_size;
+    // Cache replacement owns this slot exclusively. Keep its existing
+    // allocation when it fits, with separate writable and executable phases.
+    if (mapping_ && capacity <= capacity_ &&
+        mprotect(mapping_, capacity_, PROT_READ | PROT_WRITE) == 0) {
+      if (publish(mapping_, capacity_, words.data(), bytes)) return true;
+      clear();
+    }
+    void* mapping = mmap(nullptr, capacity, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mapping == MAP_FAILED) return false;
-    std::memcpy(mapping, words.data(), bytes);
-    auto* start = static_cast<char*>(mapping);
-    __builtin___clear_cache(start, start + bytes);
-    if (mprotect(mapping, bytes, PROT_READ | PROT_EXEC) != 0) {
-      munmap(mapping, bytes);
+    if (!publish(mapping, capacity, words.data(), bytes)) {
+      munmap(mapping, capacity);
       return false;
     }
     clear();
     mapping_ = mapping;
-    bytes_ = bytes;
+    capacity_ = capacity;
     return true;
   }
   explicit operator bool() const noexcept { return mapping_ != nullptr; }
   unsigned run(Frame& frame) const { return reinterpret_cast<Run>(mapping_)(&frame); }
   void clear() noexcept {
-    if (mapping_) munmap(mapping_, bytes_);
+    if (mapping_) munmap(mapping_, capacity_);
     mapping_ = nullptr;
-    bytes_ = 0;
+    capacity_ = 0;
   }
 
  private:
+  static bool publish(void* mapping, std::size_t capacity,
+                      const std::uint32_t* code, std::size_t bytes) noexcept {
+    std::memcpy(mapping, code, bytes);
+    auto* start = static_cast<char*>(mapping);
+    __builtin___clear_cache(start, start + bytes);
+    return mprotect(mapping, capacity, PROT_READ | PROT_EXEC) == 0;
+  }
+
   void* mapping_ = nullptr;
-  std::size_t bytes_ = 0;
+  std::size_t capacity_ = 0;
 };
 
 struct Cache {
@@ -775,6 +1054,41 @@ struct Cache {
     std::array<std::uint8_t, Block::kMaxBytes> bytes{};
     Block block;
     NativeCode code;
+    RegisterStateVector state_vector;
+
+    unsigned run_state_vector(Frame& frame, unsigned limit) const noexcept {
+      auto* const registers = frame.guest_regs;
+      if (state_vector.compare_register != RegisterStateVector::kRegisters) {
+        const auto rounds = state_vector.project_compare(registers, limit, frame.left, frame.right);
+        if (!rounds) return 0;
+        // Use the final CMP operands in normal x86 retirement. This block
+        // updates only these two registers and the flags overwritten by CMP.
+        registers[state_vector.compare_register] = frame.left;
+        registers[state_vector.counter] = frame.right;
+        frame.loop_remaining = limit - rounds;
+        frame.state_vector_rounds += rounds - 1;
+        return frame.left > frame.right ? 2U : 1U;
+      }
+
+      RegisterStateVector::Registers tail;
+      const auto rounds = state_vector.project_tail(block, registers, limit, tail);
+      if (!rounds) return 0;
+
+      const auto previous_remaining = frame.loop_remaining;
+      frame.guest_regs = tail.data();
+      frame.loop_remaining = 1;
+      const auto outcome = code.run(frame);
+      frame.guest_regs = registers;
+      const auto expected = tail[state_vector.counter] ? 2U : 1U;
+      if (outcome != expected || frame.loop_remaining) {
+        frame.loop_remaining = previous_remaining;
+        return 0;
+      }
+      std::copy(tail.begin(), tail.end(), registers);
+      frame.loop_remaining = limit - rounds;
+      frame.state_vector_rounds += rounds - 1;
+      return outcome;
+    }
 
     void invalidate(std::uint64_t address) noexcept {
       clear();
@@ -790,7 +1104,8 @@ struct Cache {
       occupied = false;
     }
   };
-  static constexpr std::size_t kSets = 128;
+  static constexpr std::uint64_t kLogicalBytes = std::uint64_t{1} << 48;
+  static constexpr std::size_t kSets = 256;
   static constexpr std::size_t kWays = 4;
   struct Set {
     std::array<Entry, kWays> entries;
@@ -799,38 +1114,46 @@ struct Cache {
     std::size_t next_probe = 0;
   };
   struct Lookup { Entry& entry; bool pending; std::uint64_t reuse_distance; };
-  std::array<Set, kSets> sets;
+  explicit Cache(std::uint64_t logical_bytes) noexcept : logical_bytes_(logical_bytes) {}
   bool host_rejected = false;
 
-  static std::size_t set_index(std::uint64_t rip) noexcept {
-    return (rip ^ (rip >> 5) ^ (rip >> 12)) & (kSets - 1);
+  std::uint64_t logical_bytes() const noexcept { return logical_bytes_; }
+  unsigned allocated_sets() const noexcept {
+    return static_cast<unsigned>(std::count_if(sets_.begin(), sets_.end(),
+        [](const auto& set) { return set != nullptr; }));
   }
+  const Set* find_set(std::uint64_t rip) const noexcept { return sets_[set_index(rip)].get(); }
 
-  Lookup lookup(std::uint64_t rip) noexcept {
-    auto& set = sets[set_index(rip)];
+  std::optional<Lookup> lookup(std::uint64_t rip) noexcept {
+    auto& storage = sets_[set_index(rip)];
+    if (!storage) {
+      storage.reset(new (std::nothrow) Set{});
+      if (!storage) return std::nullopt;
+    }
+    auto& set = *storage;
     const auto now = ++set.clock;
     for (auto& item : set.entries) {
       if (item.occupied && item.rip == rip) {
         item.last_used = now;
-        return {item, false, 0};
+        return Lookup{item, false, 0};
       }
     }
     for (auto& item : set.probes) {
       if (item.occupied && item.rip == rip) {
         const auto distance = now - item.last_used;
         item.last_used = now;
-        return {item, true, distance};
+        return Lookup{item, true, distance};
       }
     }
     auto& probe = set.probes[set.next_probe];
     set.next_probe = (set.next_probe + 1) % kWays;
     probe.invalidate(rip);
     probe.last_used = now;
-    return {probe, true, 0};
+    return Lookup{probe, true, 0};
   }
 
   Entry* admission_slot(const Lookup& lookup) noexcept {
-    auto& set = sets[set_index(lookup.entry.rip)];
+    auto& set = *sets_[set_index(lookup.entry.rip)];
     auto* victim = &set.entries.front();
     for (auto& item : set.entries) {
       if (!item.code) return &item;
@@ -841,21 +1164,25 @@ struct Cache {
     return lookup.reuse_distance <= set.clock - victim->last_used ? victim : nullptr;
   }
 
-  void admit(Entry& probe, Entry& slot, std::uint64_t& compiled_evictions) noexcept {
-    auto& set = sets[set_index(probe.rip)];
-    if (slot.code) ++compiled_evictions;
+  void admit(Entry& probe, Entry& slot) noexcept {
+    auto& set = *sets_[set_index(probe.rip)];
     slot = std::move(probe);
     slot.last_used = set.clock;
     probe.clear();
   }
   void clear() noexcept {
-    for (auto& set : sets) {
-      for (auto& item : set.entries) item.clear();
-      for (auto& probe : set.probes) probe.clear();
-      set.next_probe = 0;
-      set.clock = 0;
-    }
+    for (auto& set : sets_) set.reset();
   }
+
+ private:
+  std::size_t set_index(std::uint64_t rip) const noexcept {
+    // Remove the sign extension of a canonical x86-64 linear address.
+    const auto offset = rip & (logical_bytes_ - 1);
+    return (offset ^ (offset >> 5) ^ (offset >> 12)) & (kSets - 1);
+  }
+
+  std::array<std::unique_ptr<Set>, kSets> sets_{};
+  const std::uint64_t logical_bytes_;
 };
 #endif
 

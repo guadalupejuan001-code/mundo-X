@@ -255,6 +255,44 @@ void fill_under_pressure() {
             << " available_payload_bytes=" << sizeof(std::uint64_t) << '\n';
 }
 
+void zero_fill_implicit_spans() {
+  constexpr auto page = MemoryFabric::kPageSize;
+  constexpr std::uint32_t target = 0x30000, code = 0x8000;
+  constexpr unsigned elements = 17;
+  for (const bool rep : {true, false}) {
+    Cpu scalar(2 * 1024 * 1024), batched(2 * 1024 * 1024, 3 * page);
+    const unsigned width = rep ? 4 : 1;
+    const unsigned steps_per_element = rep ? 1 : 4;
+    for (auto* cpu : {&scalar, &batched}) {
+      protected_fixture(*cpu);
+      if (!rep) emit(*cpu, code, {0xc6,0x02,0x00,0x42,0x83,0xe9,0x01,0x75,0xf7});
+      cpu->regs[Cpu::EAX] = 0x100000000ULL;
+      cpu->regs[rep ? Cpu::EDI : Cpu::EDX] = target - width;
+      cpu->regs[Cpu::ECX] = elements;
+      cpu->write8(target - width - 1, 0x5a);
+      for (unsigned i = 0; i < steps_per_element; ++i) expect_step(*cpu);
+    }
+    require(batched.memory.allocated_bytes() == batched.memory.budget_bytes(),
+            "fixture must leave no dense room for the implicit zero page");
+    batched.memory.enable_code_page_versions(true);
+    const auto version = batched.memory.watch_code_page(target);
+    const auto steps = (elements - 1) * steps_per_element;
+    const auto completed = rep ? batched.try_rep_batch(steps) : batched.try_zero_loop_batch(steps);
+    require(completed == steps && batched.memory.allocated_pages() == 3 && version &&
+                batched.memory.code_page_version(target) != version,
+            "partial zero fill must keep implicit RAM and notify code watches");
+    for (unsigned i = 0; i < steps; ++i) expect_step(scalar);
+    require(batched.regs == scalar.regs && batched.eip == scalar.eip &&
+                batched.instructions == scalar.instructions && batched.eflags == scalar.eflags,
+            "partial zero fill changed architectural state");
+    require(batched.read8(target - width - 1) == 0x5a, "zero fill changed the preceding byte");
+    for (unsigned i = 0; i <= elements * width; ++i)
+      require(batched.read8(target - width + i) == scalar.read8(target - width + i),
+              "partial zero fill changed guest bytes");
+  }
+  std::cout << "ETHER_ZERO_FILL_IMPLICIT_PASS rep_stos=1 counted_loop=1 code_watch=1 resident_cap=1\n";
+}
+
 void resident_copy() {
   constexpr std::uint64_t from = 0x1101, to = 0x2203;
   constexpr std::array<std::uint8_t, 5> input{0xf5,0x10,0x34,0x77,0x98};
@@ -378,6 +416,7 @@ int main() {
     irq_checkpoint();
     copy_under_pressure();
     fill_under_pressure();
+    zero_fill_implicit_spans();
     resident_copy();
     copy_to_implicit_pages();
     const auto scalar = measure(false), batched = measure(true);

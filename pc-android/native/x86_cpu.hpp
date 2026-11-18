@@ -36,6 +36,9 @@
 #include "x86_ext80.hpp"
 #include "x86_wide_integer.hpp"
 #include "x86_ether_arm64.hpp"
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+#include "../../native/include/mundo_x/ether_virtual/space.hpp"
+#endif
 #include "../../native/include/mundo_x/experimental/ether_memory_block.hpp"
 #include "../../native/include/mundo_x/experimental/ether_shift_loop.hpp"
 #if defined(MUNDO_X_PC_ETHER_NEXT)
@@ -205,6 +208,10 @@ class Cpu {
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
     std::uint64_t repeated_loop_dispatches = 0, repeated_loop_steps = 0, rotate_steps = 0;
     std::uint64_t variable_rotate_steps = 0;
+    std::uint64_t resident_read_hits = 0, ram_read_callbacks = 0;
+    std::uint64_t private_loop_steps = 0;
+    std::uint64_t state_vector_dispatches = 0, state_vector_steps = 0;
+    std::uint64_t protected32_state_vector_steps = 0;
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -217,7 +224,12 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     ether_arm64_enabled_ = enabled;
     if (enabled && !ether_arm64_cache_) {
-      try { ether_arm64_cache_ = std::make_unique<ether_arm64::Cache>(); }
+      try {
+        constexpr auto extent = ether_arm64::Cache::kLogicalBytes;
+        auto space = std::make_unique<mundo_x::ether_virtual::Space>(extent);
+        ether_arm64_cache_ = space->create<ether_arm64::Cache>(0, extent);
+        ether_arm64_space_ = std::move(space);
+      }
       catch (const std::bad_alloc&) { ether_arm64_enabled_ = false; }
     }
     if (ether_arm64_enabled_ || topology_.logical_processors() == 1)
@@ -234,8 +246,69 @@ class Cpu {
 #endif
   }
   const EtherArm64Stats& ether_arm64_stats() const noexcept { return ether_arm64_stats_; }
+  struct EtherVirtualStats {
+    std::uint64_t logical_bytes = 0, cache_metadata_bytes = 0;
+    unsigned allocated_sets = 0, translated_block_capacity = 0;
+  };
+  EtherVirtualStats ether_arm64_virtual_stats() const noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    if (ether_arm64_cache_) {
+      const auto sets = ether_arm64_cache_->allocated_sets();
+      return {ether_arm64_cache_->logical_bytes(),
+              sizeof(ether_arm64::Cache) + std::uint64_t(sets) * sizeof(ether_arm64::Cache::Set),
+              sets, ether_arm64::Cache::kSets * ether_arm64::Cache::kWays};
+    }
+#endif
+    return {};
+  }
   bool ether_arm64_block_candidate() const noexcept;
   unsigned try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus = nullptr);
+  enum class EtherLoopAccess { Registers, ReadOnlyRam };
+  unsigned ether_arm64_loop_length(EtherLoopAccess access) const noexcept;
+  unsigned ether_arm64_register_loop_length() const noexcept {
+    return ether_arm64_loop_length(EtherLoopAccess::Registers);
+  }
+  // The owner reserves the vCPU and its native cache from prepare through
+  // retirement and joins RAM readers before changing shared guest memory.
+  class EtherLoopWork {
+   public:
+    using Clock = std::chrono::steady_clock;
+    struct InstructionView {
+      std::uint64_t ip = 0;
+      const std::uint8_t* bytes = nullptr;
+      unsigned size = 0;
+    };
+    void run(Clock::time_point deadline = Clock::time_point::max()) noexcept;
+    InstructionView instruction_at(unsigned step) const noexcept;
+    bool reads_ram() const noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+      return entry_ && !entry_->block.register_only;
+#else
+      return false;
+#endif
+    }
+
+   private:
+    friend class Cpu;
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    const Cpu* owner_ = nullptr;
+    const ether_arm64::Cache::Entry* entry_ = nullptr;
+    ether_arm64::Frame frame_{};
+    std::uint64_t page_epoch_ = 0, code_version_ = 0;
+    unsigned round_limit_ = 0, rounds_ = 0, outcome_ = 0;
+#endif
+  };
+  using EtherRegisterWork = EtherLoopWork;
+  bool prepare_ether_arm64_loop(unsigned budget, EtherLoopWork& work, EtherLoopAccess access);
+  bool prepare_parallel_ether_arm64_register_block(unsigned budget, EtherLoopWork& work);
+  unsigned retire_ether_arm64_loop(EtherLoopWork& work);
+  bool prepare_ether_arm64_register_loop(unsigned budget, EtherRegisterWork& work) {
+    return prepare_ether_arm64_loop(budget, work, EtherLoopAccess::Registers);
+  }
+  unsigned retire_ether_arm64_register_loop(EtherRegisterWork& work) {
+    return retire_ether_arm64_loop(work);
+  }
+  unsigned try_ether_arm64_register_loop(unsigned budget, std::unique_lock<std::mutex>& bus);
   // Eight physical 80-bit x87 registers. Full x87 tags are stored in
   // physical order (R0..R7); status[13:11] records TOP. No host stack.
   using Extended80 = std::array<std::uint8_t,10>;
@@ -349,6 +422,9 @@ class Cpu {
   const std::uint64_t* set_shared_clock(const std::uint64_t* cycles) noexcept {
     return std::exchange(shared_clock_, cycles);
   }
+  // The platform can refresh its latched time without delivering an IRQ
+  // inside the timestamp instruction.
+  std::function<void()> before_timestamp_read_hook;
 
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
   void reset(std::uint16_t cs = 0, std::uint64_t ip = 0x7c00) {
@@ -380,6 +456,7 @@ class Cpu {
     last_xmm_copy_end_ip_ = 0;
     last_immediate_rotate_ip_ = UINT64_MAX;
     last_variable_rotate_ip_ = UINT64_MAX;
+    last_movntdq_end_ip_ = UINT64_MAX;
     counted_call_loop_.reset();
     affine_ram_rotate_block_.reset();
     idt_bulk_reads = 0;
@@ -445,6 +522,17 @@ class Cpu {
            !is_real_mode() && !(efer & 0x400U) && cache_[CS].big;
   }
   unsigned try_zero_loop_batch(unsigned step_budget);
+  bool movntdq_store_batch_candidate() const noexcept {
+    const bool adjacent = opcode_ == 0x0fe7 && cursor_ == eip;
+    const bool after_arithmetic = (opcode_ == 0x03 || opcode_ == 0xff) &&
+        last_movntdq_end_ip_ == start_ip_ && !ip_written_ && cursor_ == eip;
+    // The observed streaming fill returns to its first store with JNZ -47.
+    const bool backedge = opcode_ == 0x75 && ip_written_ && last_movntdq_end_ip_ == start_ip_ &&
+        decoded_.size() == 2 && decoded_[1] == 0xd1 && cursor_ > eip && cursor_ - eip == 47;
+    return (adjacent || after_arithmetic || backedge) && page_translation_cache_enabled_ &&
+        is_long_mode() && start_cs_ == segments[CS];
+  }
+  unsigned try_movntdq_store_batch(unsigned budget);
   bool rotate_xor_loop_batch_candidate() const noexcept {
     return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
         cursor_ > eip && cursor_ - eip >= 12 && cursor_ - eip <= 17 &&
@@ -858,6 +946,7 @@ class Cpu {
   std::uint64_t last_xmm_copy_end_ip_ = 0;
   std::uint64_t last_immediate_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_variable_rotate_ip_ = UINT64_MAX;
+  std::uint64_t last_movntdq_end_ip_ = UINT64_MAX;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 
   void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
@@ -1023,15 +1112,23 @@ class Cpu {
   bool page_translation_cache_enabled_ = false;
   EtherArm64Stats ether_arm64_stats_{};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
-  std::unique_ptr<ether_arm64::Cache> ether_arm64_cache_;
+  std::unique_ptr<mundo_x::ether_virtual::Space> ether_arm64_space_;
+  std::shared_ptr<ether_arm64::Cache> ether_arm64_cache_;
   bool ether_arm64_enabled_ = false;
-  unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus);
+  bool ether_arm64_dispatch_ready() const noexcept;
+  const ether_arm64::Cache::Entry* cached_ether_arm64_work(EtherLoopAccess access, bool loop_only) const noexcept;
+  unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus,
+                                    ether_arm64::ResidentReadPages& resident);
+  unsigned commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry, const ether_arm64::Frame& frame,
+                                      unsigned rounds, unsigned outcome, bool direct_regs, bool private_frame);
+  template <bool ParallelRead = false>
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
                                   unsigned width) noexcept;
   static unsigned ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t address,
                                     unsigned width, std::uint64_t value) noexcept;
   std::uint64_t ether_arm64_load_ram(const ether_arm64::Frame& frame, std::uint64_t physical, unsigned width);
   void ether_arm64_commit_word(std::uint64_t physical, unsigned width, std::uint64_t value);
+  template <bool ParallelRead = false>
   std::optional<std::uint64_t> ether_arm64_ram_address(std::uint64_t address, unsigned width,
                                                       bool stack, Access access);
 #endif
@@ -1057,7 +1154,8 @@ class Cpu {
   static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
   std::uint64_t tsc_offset_ = 0;
   std::uint64_t idle_clock_steps_ = 0;
-  std::uint64_t timestamp_counter() const noexcept {
+  std::uint64_t timestamp_counter() const {
+    if (before_timestamp_read_hook) before_timestamp_read_hook();
     return tsc_offset_ + (shared_clock_ ? *shared_clock_ : clock_cycles()) * kTscTicksPerCycle;
   }
   std::vector<std::uint8_t> decoded_;
@@ -1167,11 +1265,13 @@ class Cpu {
 #endif
     return result;
   }
+  template <bool ParallelRead = false>
   std::uint64_t read_ram_span(std::uint64_t index, unsigned bytes) const {
-    if (const auto* data = memory.resident_ram_span(index, bytes))
+    if (const auto* data = memory.resident_ram_span(index, bytes, !ParallelRead))
       return little_endian_word(data, bytes);
     std::array<std::uint8_t, 8> data;
-    memory.read_block(index, data.data(), bytes);
+    if constexpr (ParallelRead) memory.read_parallel_ram_block(index, data.data(), bytes);
+    else memory.read_block(index, data.data(), bytes);
     return little_endian_word(data.data(), bytes);
   }
   void write_ram_word(std::uint64_t index, unsigned bytes, std::uint64_t value) {
@@ -1338,9 +1438,10 @@ class Cpu {
       fail("protected-mode segment access denied", FaultCode::ProtectionFault);
     return std::uint32_t(cache.base + offset);
   }
-  template <bool Inspect = false>
+  template <bool Inspect = false, bool ParallelRead = false>
   std::uint64_t translate(std::uint64_t address, Access access, bool* ordinary_page = nullptr,
                           bool speculative = false, unsigned* mapping_bytes_left = nullptr);
+  template <bool ParallelRead = false>
   std::uint64_t translate_instruction(std::uint64_t linear, bool& ordinary, bool speculative = false) {
     const auto page = linear & ~std::uint64_t{0xfff};
     const auto& cached = instruction_page_;
@@ -1357,12 +1458,16 @@ class Cpu {
       ++instruction_page_reuses;
       return cached.physical | (linear & 0xfffU);
     }
+    // Worker walks do not watch page-table dependencies and must not install a fetch cache entry.
+    if constexpr (ParallelRead) return translate<false, true>(linear, Access::Execute, &ordinary, true);
     const auto physical = translate(linear, Access::Execute, &ordinary, speculative);
     // Only walks with dependency tracking can outlive the current instruction.
     instruction_page_ = {page, physical & ~std::uint64_t{0xfff},
                          memory.page_table_epoch(), cr3, policy, ordinary, ordinary && cacheable};
     return physical;
   }
+  template <bool ParallelRead>
+  bool prepare_ether_arm64_work(unsigned budget, EtherLoopWork& work, EtherLoopAccess access);
   std::uint64_t read_linear(std::uint64_t address, unsigned bytes, Access access = Access::Read) {
     if (bytes == 0 || bytes > 8 || address > UINT64_MAX - (bytes - 1))
       fail("invalid linear read width", FaultCode::InvalidInstruction);
@@ -3620,12 +3725,15 @@ inline void Cpu::page_fault(std::uint64_t address, Access access,
   throw trap;
 }
 
-template <bool Inspect>
+template <bool Inspect, bool ParallelRead>
 inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* ordinary_page,
                                     bool speculative, unsigned* mapping_bytes_left) {
+  if constexpr (ParallelRead) {
+    if (access == Access::Write || !is_long_mode()) return UINT64_MAX;
+  }
   if (ordinary_page) *ordinary_page = false;
   if (!(cr0 & 0x80000000U)) return address;
-  const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
+  const BootScalarTiming::Scope sample(ParallelRead ? nullptr : boot_scalar_timing_, BootTimePart::Ram);
   if (windows_x64_profile_ && !(efer & 0x400) && !(cr4 & 0x20))
     return translate_legacy<Inspect>(address, access, speculative, mapping_bytes_left);
   if (!(efer & 0x400) || !(cr4 & 0x20))
@@ -3666,8 +3774,11 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     const unsigned shift = 12 + 9 * (level - 1);
     const auto entry_address = table + (((address >> shift) & 0x1ffU) * 8);
     if (cacheable) table_entries[level - 1] = entry_address;
-    if ((Inspect || speculative) && !bulk_ram_range(entry_address, 8)) return UINT64_MAX;
-    const auto entry = read_page_entry(entry_address, ordinary_entries);
+    if ((Inspect || speculative || ParallelRead) && !bulk_ram_range(entry_address, 8)) return UINT64_MAX;
+    const auto entry = [&] {
+      if constexpr (ParallelRead) return read_ram_span<true>(bus_address(entry_address), 8);
+      else return read_page_entry(entry_address, ordinary_entries);
+    }();
     if (!(entry & 1)) page_fault(address, access, false, false, "page-table entry is not present");
     if (entry & (physical_field & ~address_mask))
       page_fault(address, access, true, true, "page-table physical address exceeds CPUID width");
@@ -3694,8 +3805,9 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
     }
     const auto marked = entry | 0x20U | (leaf && access == Access::Write ? 0x40U : 0U);
     if constexpr (!Inspect) {
-      if (speculative && marked != entry) return UINT64_MAX;
-      if (marked != entry) write64(entry_address, marked);
+      if ((speculative || ParallelRead) && marked != entry) return UINT64_MAX;
+      if constexpr (!ParallelRead)
+        if (marked != entry) write64(entry_address, marked);
     }
     if (leaf) {
       const unsigned offset_mask = large ? 0x1fffffU : 0xfffU;
@@ -3703,8 +3815,8 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
       const bool reusable = (set || ordinary_page) && ordinary_entries &&
           bulk_ram_range(physical & ~std::uint64_t{0xfff}, 4096);
       if (ordinary_page) *ordinary_page = reusable;
-      if (speculative && !reusable) return UINT64_MAX;
-      if (set && reusable) {
+      if ((speculative || ParallelRead) && !reusable) return UINT64_MAX;
+      if (!ParallelRead && set && reusable) {
         // Register every level after A/D-bit updates. All subsequent stores
         // through the MemoryFabric can then invalidate the cached result.
         for (unsigned i = level - 1; i < table_entries.size(); ++i)
@@ -3885,6 +3997,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_shift_loop.inc"
 #include "x86_counted_call_loop.inc"
 #include "x86_sse_copy_loop.inc"
+#include "x86_movntdq_store_batch.inc"
 #include "x86_wide_multiply_loop.inc"
 #include "x86_rotate_xor_loop.inc"
 #include "x86_affine_ram_rotate_loop.inc"
@@ -3993,7 +4106,7 @@ inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
   // MOV BYTE [EDX],0; INC EDX; SUB ECX,1; JNZ to MOV.
   static constexpr std::array<std::uint8_t, 9> expected{{
       0xc6, 0x02, 0x00, 0x42, 0x83, 0xe9, 0x01, 0x75, 0xf7}};
-  static constexpr std::array<std::uint8_t, MemoryFabric::kPageSize> zero{};
+  constexpr auto page_bytes = MemoryFabric::kPageSize;
   const auto remaining = std::uint32_t(regs[ECX]);
   const auto dst = std::uint32_t(regs[EDX]);
   if (!remaining) return 0;
@@ -4010,7 +4123,7 @@ inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
 
     const auto linear = segment_linear(DS, dst, 1, Access::Write);
     const auto target = bus_address(linear);
-    const auto room = unsigned(zero.size() - target % zero.size());
+    const auto room = unsigned(page_bytes - target % page_bytes);
     count = std::min(count, room);
     if (count < 2 || count - 1 > UINT32_MAX - dst) return 0;
     (void)segment_linear(DS, dst, count, Access::Write);
@@ -4019,7 +4132,7 @@ inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
 
     // Preflight one page as in the scalar store. If backing fails, the
     // interpreter still reports the exact failing guest instruction.
-    memory.write_block(target, zero.data(), count);
+    mundo_x::ether_next::repeat_ram_value(memory, target, 0, 1, count);
     if (count == room) memory.compact_repeating_page(target);
   } catch (const std::exception&) {
     return 0;
@@ -4571,6 +4684,7 @@ inline void Cpu::extended() {
       require_memory(m.rm);
       require_xmm(m.reg);
       write_xmm_operand(m.rm, xmm[m.reg], true);
+      last_movntdq_end_ip_ = cursor_;
       return;
     }
     case 0xd7: { // PMOVMSKB r32, xmm
