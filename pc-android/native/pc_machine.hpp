@@ -808,7 +808,9 @@ class PcMachine {
     const bool affine_ram=!rep&&!shift&&!scan&&!zero&&cpu.affine_ram_rotate_loop_candidate();
     const bool counter=!rep&&!shift&&!scan&&!zero&&cpu.counter_loop_batch_candidate();
     const bool arm64=!rep&&cpu.ether_arm64_block_candidate();
-    if (!rep && !shift && !scan && !zero && !movntdq && !affine_ram && !counter && !arm64) return 0;
+    const bool state_vector=!rep&&cpu.state_vector_batch_candidate();
+    if (!rep && !shift && !scan && !zero && !movntdq && !affine_ram && !counter && !arm64 &&
+        !state_vector) return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;
       limit=std::min(limit,device_batch_limit_hook(limit));
@@ -845,6 +847,11 @@ class PcMachine {
     if(!completed&&arm64) {
       completed=cpu.try_ether_arm64_block(limit);
       native_batched=completed!=0;
+    }
+    if(!completed&&state_vector) {
+      completed=cpu.try_state_vector_batch(limit);
+      if(completed&&device_step_hook)device_batch_advance_hook(completed-1);
+      return completed;
     }
     if(!completed)return 0;
     if(device_step_hook)device_batch_advance_hook(completed-1);

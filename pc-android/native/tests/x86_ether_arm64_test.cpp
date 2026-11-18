@@ -457,6 +457,105 @@ void boot_hot_instruction_contract() {
   std::cout << "PRIME_ETHER_BOOT_HOT_PASS movsx_cases=32 cmov_cases=384\n";
 }
 
+void interpreter_state_vector_contract() {
+  // SUB RAX,RDX; INC RDX; CMP RAX,RDX; JG back to SUB.
+  constexpr std::array<std::uint8_t, 11> signed_loop{
+      0x48,0x2b,0xc2, 0x48,0xff,0xc2, 0x48,0x3b,0xc2, 0x7f,0xf5};
+  // ADD RAX,RSI; ROR RBX,CL; INC RSI; SUB ECX,1; JNZ back.
+  constexpr std::array<std::uint8_t, 14> rotate_loop{
+      0x48,0x01,0xf0, 0x48,0xd3,0xcb, 0x48,0xff,0xc6, 0x83,0xe9,1, 0x75,0xf2};
+  constexpr std::array<std::uint8_t, 10> protected_loop{
+      0x01,0xf0, 0x83,0xc6,1, 0x83,0xe9,1, 0x75,0xf6};
+  constexpr std::array<std::uint8_t, 8> doubling{
+      0x48,0x01,0xc0, 0x83,0xe9,1, 0x75,0xf8};
+
+  const auto compare = [](const auto& bytes, unsigned per_round, unsigned budget,
+                          unsigned expected, bool long_mode = true) {
+    PcMachine fast, scalar;
+    for (auto* machine : {&fast, &scalar}) {
+      if (long_mode) boot(*machine, false);
+      else boot_protected(*machine, false);
+      auto& cpu = machine->cpu;
+      cpu.memory.write_block(code, bytes.data(), bytes.size());
+      cpu.eip = code;
+      cpu.regs[Cpu::EAX] = 5439;
+      cpu.regs[Cpu::EDX] = 7;
+      cpu.regs[Cpu::ESI] = UINT64_MAX - 7;
+      cpu.regs[Cpu::EBX] = 0xa735f090cd0071cdULL;
+      cpu.regs[Cpu::ECX] = 0x10000004bULL;
+      cpu.eflags = 2 | Cpu::IF | Cpu::DF | Cpu::CF;
+      for (unsigned i = 0; i < per_round; ++i)
+        require(cpu.step() == StepResult::Executed, "interpreter vector needs a real backedge");
+      require(cpu.eip == code, "interpreter fixture did not reach the loop head");
+      cpu.regs[Cpu::EAX] = 5439;
+      cpu.regs[Cpu::EDX] = 7;
+      cpu.regs[Cpu::ECX] = 0x10000004bULL;
+    }
+    require(fast.cpu.try_state_vector_batch(budget) == expected, "vector exceeded the interpreter budget");
+    for (unsigned i = 0; i < expected; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "scalar vector reference faulted");
+    require(capture(fast.cpu) == capture(scalar.cpu) &&
+                fast.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(),
+            "interpreter projection changed register state, FLAGS, RIP or decoded bytes");
+    const auto& stats = fast.cpu.state_vector_interpreter_stats();
+    require(stats.steps == expected && stats.projected_steps == (expected ? expected - per_round : 0) &&
+                !fast.cpu.ether_arm64_stats().steps,
+            "interpreter projection reported the wrong execution path or step count");
+
+    if (expected && fast.cpu.eip == code) {
+      const auto before = capture(fast.cpu);
+      fast.cpu.step_trace_hook = [](const auto&) {};
+      require(!fast.cpu.try_state_vector_batch(budget) && capture(fast.cpu) == before,
+              "an instruction trace lost scalar instructions");
+      fast.cpu.step_trace_hook = {};
+      emit(fast.cpu, code, {0xf4});
+      require(!fast.cpu.try_state_vector_batch(budget) && capture(fast.cpu) == before &&
+                  fast.cpu.step() == StepResult::Halted,
+              "the interpreter used a stale plan after a code write");
+    }
+  };
+  compare(signed_loop, 4, 35, 32);
+  compare(signed_loop, 4, 400, 388);
+  compare(rotate_loop, 5, 36, 35);
+  compare(protected_loop, 4, 400, 300, false);
+  compare(doubling, 3, 120, 0);
+
+  PcMachine routed, scalar;
+  constexpr unsigned irq_at = 37, budget = 400;
+  for (auto* machine : {&routed, &scalar}) {
+    boot(*machine, false);
+    machine->cpu.memory.write_block(code, signed_loop.data(), signed_loop.size());
+    emit(machine->cpu, code + signed_loop.size(), {0xf4});
+    machine->cpu.regs[Cpu::EAX] = 5439;
+    machine->cpu.regs[Cpu::EDX] = 7;
+    machine->cpu.eflags = 2 | Cpu::IF;
+    gate(*machine, 0x40);
+    emit(machine->cpu, irq_handler, {0x48,0xcf});  // IRETQ.
+  }
+  scalar.enable_boot_acceleration(false);
+  unsigned ticks[2]{};
+  std::uint64_t irq_steps[2]{}, irq_ips[2]{};
+  for (unsigned i = 0; i < 2; ++i) {
+    auto& machine = i == 0 ? routed : scalar;
+    machine.device_step_hook = [&machine, &ticks, &irq_steps, &irq_ips, i] {
+      if (++ticks[i] != irq_at) return;
+      irq_steps[i] = machine.cpu.instructions;
+      irq_ips[i] = machine.cpu.eip;
+      require(machine.cpu.raise_external_irq(0x40), "interpreter vector test IRQ failed");
+    };
+    machine.device_batch_limit_hook = [&ticks, i](unsigned limit) {
+      return ticks[i] < irq_at ? std::min(limit, irq_at - ticks[i]) : limit;
+    };
+    machine.device_batch_advance_hook = [&ticks, i](unsigned extra) { ticks[i] += extra; };
+    machine.run(budget);
+  }
+  require(routed.cpu.state_vector_interpreter_stats().projected_steps > 0 &&
+              irq_steps[0] == irq_steps[1] && irq_ips[0] == irq_ips[1] &&
+              ticks[0] == ticks[1] && capture(routed.cpu) == capture(scalar.cpu),
+          "the interpreter batch changed a guest IRQ boundary");
+  std::cout << "ETHER_STATE_VECTOR_INTERPRETER_PASS exact_state=1 code_write=1 irq=1\n";
+}
+
 void register_state_vector_contract() {
   // ADD RAX,RSI; INC RSI; SUB ECX,1; JNZ back.
   constexpr std::array<std::uint8_t, 11> narrow{
@@ -1901,6 +2000,7 @@ int main() {
   try {
     decoder_contract();
     register_shift_contract();
+    interpreter_state_vector_contract();
     const auto scalar = execute_loop(false, true);
     const auto native = execute_loop(true, true);
     require(native.state == scalar.state && native.ticks == scalar.ticks &&

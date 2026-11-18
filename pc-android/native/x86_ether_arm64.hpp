@@ -428,7 +428,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
 // An affine register transition F has linear differences modulo its register width.
 // If its third difference is zero for the current state, every subsequent
 // difference of that order is zero too. Run the final round normally so its
-// branch and all x86 flags use the same commit path as the native loop.
+// branch and all x86 flags can be retired by either execution path.
 struct RegisterStateVector {
   static constexpr unsigned kMinRounds = 32;
   static constexpr unsigned kRegisters = 16;
@@ -495,13 +495,14 @@ struct RegisterStateVector {
   }
 
   unsigned project_tail(const Block& block, const std::uint64_t* initial,
-                        unsigned limit, Registers& tail) const noexcept {
-    if (counter == kRegisters || limit < kMinRounds) return 0;
+                        unsigned limit, Registers& tail,
+                        unsigned minimum_rounds = kMinRounds) const noexcept {
+    if (counter == kRegisters || limit < minimum_rounds) return 0;
     const bool narrow = block.instructions[block.count - 2].width == 4;
     const auto before = narrow ? std::uint64_t(std::uint32_t(initial[counter])) : initial[counter];
     // A zero counter wraps; its next zero is beyond an unsigned run budget.
     const auto rounds = before && before < limit ? unsigned(before) : limit;
-    if (rounds < kMinRounds) return 0;
+    if (rounds < minimum_rounds) return 0;
 
     Registers once;
     std::copy_n(initial, kRegisters, once.begin());

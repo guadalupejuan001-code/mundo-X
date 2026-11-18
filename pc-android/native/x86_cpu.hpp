@@ -461,6 +461,7 @@ class Cpu {
     affine_ram_rotate_block_.reset();
     idt_bulk_reads = 0;
     ether_arm64_stats_ = {};
+    state_vector_interpreter_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
 #endif
@@ -576,6 +577,19 @@ class Cpu {
   // The machine supplies a budget up to the next device observation.
   // The returned count is the number of equivalent x86 instructions retired.
   std::uint64_t try_counter_loop_batch(std::uint64_t step_budget);
+  struct StateVectorInterpreterStats {
+    std::uint64_t steps = 0, projected_steps = 0;
+  };
+  const StateVectorInterpreterStats& state_vector_interpreter_stats() const noexcept {
+    return state_vector_interpreter_stats_;
+  }
+  bool state_vector_batch_candidate() const noexcept {
+    return ip_written_ && start_cs_ == segments[CS] && eip < start_ip_ &&
+        start_ip_ < cursor_ && cursor_ - eip <= ether_arm64::Block::kMaxBytes &&
+        (opcode_ == 0x75 || opcode_ == 0x0f85 || opcode_ == 0x7f || opcode_ == 0x0f8f);
+  }
+  // Use the same ownership as step() and stop at the caller's device boundary.
+  unsigned try_state_vector_batch(unsigned budget);
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -1111,6 +1125,7 @@ class Cpu {
   std::array<TranslationSet, 128> page_translations_{};
   bool page_translation_cache_enabled_ = false;
   EtherArm64Stats ether_arm64_stats_{};
+  StateVectorInterpreterStats state_vector_interpreter_stats_{};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<mundo_x::ether_virtual::Space> ether_arm64_space_;
   std::shared_ptr<ether_arm64::Cache> ether_arm64_cache_;
@@ -4001,6 +4016,64 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_wide_multiply_loop.inc"
 #include "x86_rotate_xor_loop.inc"
 #include "x86_affine_ram_rotate_loop.inc"
+
+inline unsigned Cpu::try_state_vector_batch(unsigned budget) {
+  constexpr unsigned minimum_rounds = 4;
+  if (budget < 2 * minimum_rounds || !state_vector_batch_candidate() ||
+      fault || halted || transaction_ || interrupt_shadow_ ||
+      (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
+      step_trace_hook || irq_trace_hook) return 0;
+  const auto long_mode = is_long_mode();
+  if (!long_mode && ((cr0 & 0x80000001U) != 1 || (efer & 0x400U) || !cache_[CS].big))
+    return 0;
+
+  const auto length = unsigned(cursor_ - eip);
+  std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code;
+  try {
+    // Validate the current executable bytes, including edits made since the backedge.
+    const auto linear = segment_linear(CS, eip, length, Access::Execute);
+    if (linear % MemoryFabric::kPageSize > MemoryFabric::kPageSize - length) return 0;
+    const auto physical = translate(linear, Access::Execute, nullptr, true);
+    if (!bulk_ram_range(physical, length)) return 0;
+    memory.read_block(bus_address(physical), code.data(), length);
+  } catch (const std::exception&) {
+    return 0;
+  }
+
+  const auto block = ether_arm64::decode(code.data(), length, eip, long_mode);
+  if (block.size != length) return 0;
+  using Vector = ether_arm64::RegisterStateVector;
+  const auto vector = Vector::build(block);
+  if (vector.counter == Vector::kRegisters) return 0;
+
+  const auto limit = budget / block.count;
+  Vector::Registers tail;
+  unsigned rounds;
+  if (vector.compare_register != Vector::kRegisters) {
+    std::uint64_t left, right;
+    rounds = vector.project_compare(regs.data(), limit, left, right);
+    if (!rounds) return 0;
+    // Undo the final SUB and INC so the interpreter can retire that round.
+    tail = regs;
+    tail[vector.counter] = right - 1;
+    tail[vector.compare_register] = left + tail[vector.counter];
+  } else {
+    rounds = vector.project_tail(block, regs.data(), limit, tail, minimum_rounds);
+    if (!rounds) return 0;
+  }
+
+  const auto before = instructions;
+  const auto projected = (rounds - 1) * block.count;
+  regs = tail;
+  instructions += projected;
+  // Use ordinary retirement for flags, the exit RIP and decoded bytes.
+  for (unsigned i = 0; i < block.count; ++i)
+    if (step() != StepResult::Executed) break;
+  const auto retired = unsigned(instructions - before);
+  state_vector_interpreter_stats_.steps += retired;
+  state_vector_interpreter_stats_.projected_steps += projected;
+  return retired;
+}
 
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   if (step_budget < 4 || !counter_loop_batch_candidate() ||
