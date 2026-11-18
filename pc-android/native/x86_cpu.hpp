@@ -1126,6 +1126,8 @@ class Cpu {
   bool page_translation_cache_enabled_ = false;
   EtherArm64Stats ether_arm64_stats_{};
   StateVectorInterpreterStats state_vector_interpreter_stats_{};
+  void retire_ether_decoded_block(const ether_arm64::Block& block, const std::uint8_t* code,
+                                  std::uint64_t origin, bool taken, unsigned retired);
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<mundo_x::ether_virtual::Space> ether_arm64_space_;
   std::shared_ptr<ether_arm64::Cache> ether_arm64_cache_;
@@ -4017,6 +4019,21 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_rotate_xor_loop.inc"
 #include "x86_affine_ram_rotate_loop.inc"
 
+inline void Cpu::retire_ether_decoded_block(const ether_arm64::Block& block, const std::uint8_t* code,
+                                            std::uint64_t origin, bool taken, unsigned retired) {
+  const auto& last = block.instructions[block.count - 1];
+  start_cs_ = segments[CS];
+  start_ip_ = origin + last.begin;
+  cursor_ = origin + last.end;
+  ip_written_ = taken;
+  eip = taken ? block.target : block.long_mode ? cursor_ : std::uint32_t(cursor_);
+  opcode_ = std::uint16_t(last.opcode);
+  repeat_ = 0;
+  decoded_.assign(code + last.begin, code + last.end);
+  instructions += retired;
+  eflags |= 2;
+}
+
 inline unsigned Cpu::try_state_vector_batch(unsigned budget) {
   constexpr unsigned minimum_rounds = 4;
   if (budget < 2 * minimum_rounds || !state_vector_batch_candidate() ||
@@ -4047,29 +4064,33 @@ inline unsigned Cpu::try_state_vector_batch(unsigned budget) {
   if (vector.counter == Vector::kRegisters) return 0;
 
   const auto limit = budget / block.count;
-  Vector::Registers tail;
-  unsigned rounds;
+  unsigned retired, projected;
   if (vector.compare_register != Vector::kRegisters) {
     std::uint64_t left, right;
-    rounds = vector.project_compare(regs.data(), limit, left, right);
+    const auto rounds = vector.project_compare(regs.data(), limit, left, right);
     if (!rounds) return 0;
-    // Undo the final SUB and INC so the interpreter can retire that round.
-    tail = regs;
-    tail[vector.counter] = right - 1;
-    tail[vector.compare_register] = left + tail[vector.counter];
+    const auto& branch = block.instructions[block.count - 1];
+    decoded_.reserve(branch.end - branch.begin);
+    regs[vector.compare_register] = left;
+    regs[vector.counter] = right;
+    // CMP overwrites the arithmetic flags from SUB and INC.
+    alu(7, left, right, block.flag_width);
+    retired = rounds * block.count;
+    projected = retired - block.count;
+    retire_ether_decoded_block(block, code.data(), eip, condition(branch.opcode & 15), retired);
   } else {
-    rounds = vector.project_tail(block, regs.data(), limit, tail, minimum_rounds);
+    Vector::Registers tail;
+    const auto rounds = vector.project_tail(block, regs.data(), limit, tail, minimum_rounds);
     if (!rounds) return 0;
+    const auto before = instructions;
+    projected = (rounds - 1) * block.count;
+    regs = tail;
+    instructions += projected;
+    // The ordinary interpreter retires the final countdown round.
+    for (unsigned i = 0; i < block.count; ++i)
+      if (step() != StepResult::Executed) break;
+    retired = unsigned(instructions - before);
   }
-
-  const auto before = instructions;
-  const auto projected = (rounds - 1) * block.count;
-  regs = tail;
-  instructions += projected;
-  // Use ordinary retirement for flags, the exit RIP and decoded bytes.
-  for (unsigned i = 0; i < block.count; ++i)
-    if (step() != StepResult::Executed) break;
-  const auto retired = unsigned(instructions - before);
   state_vector_interpreter_stats_.steps += retired;
   state_vector_interpreter_stats_.projected_steps += projected;
   return retired;

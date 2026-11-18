@@ -466,19 +466,10 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
     else if (last.width == 4 && (efer & 0x400U))
       put_reg(last.lhs.reg, last.width, get_reg(last.lhs.reg, last.width));
   }
-  start_cs_ = segments[CS];
-  start_ip_ = origin + last.begin;
-  cursor_ = origin + last.end;
   // Byte arithmetic, parity and inherited flags use the x86 condition.
-  ip_written_ = last.kind == ether_arm64::Instruction::Conditional &&
-                !block.uses_arm_condition()
+  const bool taken = last.kind == ether_arm64::Instruction::Conditional && !block.uses_arm_condition()
       ? condition(last.opcode & 15) : outcome == 2;
-  eip = ip_written_ ? block.target : long_mode ? cursor_ : std::uint32_t(cursor_);
-  opcode_ = std::uint16_t(last.opcode);
-  repeat_ = 0;
-  decoded_.assign(entry.bytes.begin() + last.begin, entry.bytes.begin() + last.end);
-  instructions += retired;
-  eflags |= 2;
+  retire_ether_decoded_block(block, entry.bytes.data(), origin, taken, retired);
   ++ether_arm64_stats_.blocks;
   ether_arm64_stats_.steps += retired;
   if (frame.state_vector_rounds) {

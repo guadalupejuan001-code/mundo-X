@@ -461,6 +461,8 @@ void interpreter_state_vector_contract() {
   // SUB RAX,RDX; INC RDX; CMP RAX,RDX; JG back to SUB.
   constexpr std::array<std::uint8_t, 11> signed_loop{
       0x48,0x2b,0xc2, 0x48,0xff,0xc2, 0x48,0x3b,0xc2, 0x7f,0xf5};
+  constexpr std::array<std::uint8_t, 15> signed_near{
+      0x48,0x2b,0xc2, 0x48,0xff,0xc2, 0x48,0x3b,0xc2, 0x0f,0x8f,0xf1,0xff,0xff,0xff};
   // ADD RAX,RSI; ROR RBX,CL; INC RSI; SUB ECX,1; JNZ back.
   constexpr std::array<std::uint8_t, 14> rotate_loop{
       0x48,0x01,0xf0, 0x48,0xd3,0xcb, 0x48,0xff,0xc6, 0x83,0xe9,1, 0x75,0xf2};
@@ -516,6 +518,8 @@ void interpreter_state_vector_contract() {
   };
   compare(signed_loop, 4, 35, 32);
   compare(signed_loop, 4, 400, 388);
+  compare(signed_near, 4, 35, 32);
+  compare(signed_near, 4, 400, 388);
   compare(rotate_loop, 5, 36, 35);
   compare(protected_loop, 4, 400, 300, false);
   compare(doubling, 3, 120, 0);
