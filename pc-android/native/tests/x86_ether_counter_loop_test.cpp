@@ -394,6 +394,119 @@ void sse_copy_loops() {
     std::cout << "ETHER_SSE_COPY_LOOP_PASS variants=2 paging=1 state=1 device_bound=1\n";
 }
 
+// A controlled streaming fill with the sampled stores and branch offsets.
+constexpr std::uint8_t kMovntdqFill[]{
+    0x66,0x0f,0xe7,0x01,      0x66,0x0f,0xe7,0x41,0x10, 0x66,0x0f,0xe7,0x41,0x20, 0x66,0x0f,0xe7,0x41,0x30,
+    0x48,0x03,0xc8,           0x66,0x0f,0xe7,0x41,0xc0, 0x66,0x0f,0xe7,0x41,0xd0,
+    0x48,0xff,0xca,           0x66,0x0f,0xe7,0x41,0xe0, 0x66,0x0f,0xe7,0x41,0xf0, 0x75,0xd1, 0xf4};
+constexpr unsigned kMovntdqRoundSteps = 11;
+constexpr std::uint64_t kMovntdqDestination = 0x2c000;
+
+void prepare_movntdq(PcMachine& pc, unsigned rounds, std::uint64_t destination) {
+    boot(pc, true);
+    auto& cpu = pc.cpu;
+    cpu.eip = entry;
+    cpu.halted = false;
+    cpu.cr4 |= 0x200U;
+    cpu.cr0 &= ~0xcU;
+    cpu.eflags = 2 | Cpu::CF | Cpu::DF;
+    cpu.regs[Cpu::ECX] = destination;
+    cpu.regs[Cpu::EAX] = 128;
+    cpu.regs[Cpu::EDX] = rounds;
+    for (unsigned i = 0; i < 16; ++i) cpu.xmm[0][i] = std::uint8_t(0xa0U + i);
+    cpu.memory.write_block(entry, kMovntdqFill, sizeof(kMovntdqFill));
+}
+
+void movntdq_store_batches() {
+    PcMachine scalar(4U << 20), fast(4U << 20);
+    for (auto* pc : {&scalar, &fast}) {
+        prepare_movntdq(*pc, 8, kMovntdqDestination);
+        for (unsigned i = 0; i < kMovntdqRoundSteps; ++i)
+            require(pc->cpu.step() == StepResult::Executed, "could not seed MOVNTDQ loop");
+        require(pc->cpu.eip == entry && pc->cpu.movntdq_store_batch_candidate(),
+                "MOVNTDQ entry missed the observed backedge");
+    }
+    fast.enable_boot_acceleration();
+    unsigned ticks = 0;
+    fast.device_step_hook = [&] { ++ticks; };
+    fast.device_batch_limit_hook = [](unsigned budget) { return std::min(budget, 3U); };
+    fast.device_batch_advance_hook = [&](unsigned extra) {
+        require(extra <= 2, "MOVNTDQ crossed a device grant");
+        ticks += extra;
+    };
+    constexpr unsigned steps = 5 * kMovntdqRoundSteps;
+    fast.run(steps);
+    scalar.run(steps);
+    const auto& expected = scalar.cpu;
+    const auto& actual = fast.cpu;
+    require(ticks == steps && fast.boot_acceleration().movntdq_store_batches == 15 &&
+            fast.boot_acceleration().movntdq_store_steps == 35 &&
+            actual.regs == expected.regs && actual.eflags == expected.eflags && actual.eip == expected.eip &&
+            actual.instructions == expected.instructions && actual.xmm == expected.xmm &&
+            actual.last_decoded_bytes() == expected.last_decoded_bytes(),
+            "MOVNTDQ changed x86 state or device accounting");
+    std::array<std::uint8_t, 6U * 128U> left, right;
+    actual.memory.read_block(kMovntdqDestination, left.data(), left.size());
+    expected.memory.read_block(kMovntdqDestination, right.data(), right.size());
+    require(left == right && left[17] == 0xa1, "MOVNTDQ changed guest RAM bytes");
+    // Ensure the unretired data remains untouched on all three guards.
+    auto& cpu = fast.cpu;
+    const auto retired = cpu.instructions, destination = cpu.regs[Cpu::ECX];
+    cpu.cr0 |= 8U;
+    require(!cpu.try_movntdq_store_batch(4), "MOVNTDQ bypassed CR0.TS");
+    cpu.cr0 &= ~8U;
+    cpu.regs[Cpu::ECX] = destination + 1;
+    require(!cpu.try_movntdq_store_batch(4), "MOVNTDQ bypassed 16-byte alignment");
+    cpu.regs[Cpu::ECX] = entry;
+    require(!cpu.try_movntdq_store_batch(4) && cpu.read32(entry) == 0x01e70f66U,
+            "MOVNTDQ speculatively changed its own instruction bytes");
+    require(cpu.instructions == retired && cpu.eip == entry && cpu.read64(destination) == 0,
+            "rejected MOVNTDQ changed RAM or retired instructions");
+
+    PcMachine boundary(4U << 20);
+    constexpr std::uint64_t end_of_mapping = 0x200000;
+    prepare_movntdq(boundary, 1, end_of_mapping - 32);
+    auto& edge = boundary.cpu;
+    edge.write64(0x3008, 0); // Missing leaf immediately after the two safe stores.
+    require(edge.step() == StepResult::Executed && edge.eip == entry + 4,
+            "could not seed the boundary store");
+    require(!edge.try_movntdq_store_batch(4) && edge.read64(end_of_mapping - 16) == 0 &&
+            edge.read64(end_of_mapping) == 0, "MOVNTDQ wrote across an unchecked mapping boundary");
+    require(edge.step() == StepResult::Executed && edge.eip == entry + 9 &&
+            edge.read64(end_of_mapping - 16) != 0, "scalar fallback lost the last valid store");
+    require(edge.step() == StepResult::Faulted && edge.fault && edge.fault->eip == entry + 9 &&
+            edge.cr2 == end_of_mapping && edge.read64(end_of_mapping) == 0,
+            "MOVNTDQ did not fault at the first inaccessible address");
+    std::cout << "ETHER_MOVNTDQ_STORE_PASS batches=15 stores=35 device_grant=3 page_fault_index=2\n";
+}
+
+void measure_movntdq() {
+    constexpr unsigned rounds = 4000, steps = rounds * kMovntdqRoundSteps;
+    std::array<long long, 7> scalar, batched;
+    for (unsigned rep = 0; rep < scalar.size(); ++rep) {
+        for (bool accelerated : {bool(rep % 2), !bool(rep % 2)}) {
+            PcMachine pc(4U << 20);
+            prepare_movntdq(pc, rounds, kMovntdqDestination);
+            pc.enable_boot_acceleration(accelerated);
+            const auto retired = pc.cpu.instructions;
+            const auto start = Clock::now();
+            pc.run(steps);
+            const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
+            require(!pc.cpu.fault && pc.cpu.instructions - retired == steps &&
+                    pc.cpu.regs[Cpu::EDX] == 0 && pc.cpu.regs[Cpu::ECX] == kMovntdqDestination + rounds * 128 &&
+                    pc.cpu.eip == entry + sizeof(kMovntdqFill) - 1,
+                    "MOVNTDQ benchmark changed execution");
+            require((pc.boot_acceleration().movntdq_store_steps != 0) == accelerated,
+                    "MOVNTDQ benchmark missed its execution path");
+            (accelerated ? batched : scalar)[rep] = elapsed;
+        }
+    }
+    std::sort(scalar.begin(), scalar.end());
+    std::sort(batched.begin(), batched.end());
+    std::cout << "ETHER_MOVNTDQ_BENCH steps=" << steps << " scalar_median_ns=" << scalar[3]
+              << " batched_median_ns=" << batched[3] << '\n';
+}
+
 constexpr std::uint8_t kMultiplyAdd[]{
         0x4b,0x8b,0x04,0x08, 0x49,0xf7,0xe2, 0x49,0x03,0xc3, 0x48,0x83,0xd2,0,
         0x4a,0x01,0x04,0x09, 0x48,0x83,0xd2,0, 0x49,0x83,0xc1,8, 0x4c,0x8b,0xda, 0x75,0xe1};
@@ -742,6 +855,10 @@ int main(int argc, char** argv) {
             measure_wide_multiply();
             return 0;
         }
+        if (argc == 2 && std::string_view(argv[1]) == "--measure-movntdq") {
+            measure_movntdq();
+            return 0;
+        }
         if (argc != 1) return 2;
         compare(false, {0x49, 0x75, 0xfd}, Cpu::ECX, 0x1122334455660021, 17, 16);
         compare(false, {0x49, 0x75, 0xfd}, Cpu::ECX, 0x1122334455660006, 20, 10);
@@ -767,6 +884,7 @@ int main(int argc, char** argv) {
         guarded_accumulator_dispatch();
         counted_calls();
         sse_copy_loops();
+        movntdq_store_batches();
         wide_multiply_loops();
         std::cout << "ETHER_COUNTER_LOOP_PASS widths=16,32,64 flags=1 paging=1 fallbacks=1\n";
         return 0;

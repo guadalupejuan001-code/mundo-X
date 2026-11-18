@@ -41,6 +41,13 @@ constexpr std::array<std::uint8_t, 7> byte_read_loop{
     0x44,0x8a,0x5c,0x11,0xff, // Observed MOV R11B,[RCX+RDX-1].
     0xeb,0xf9};               // Repeat within the machine's step budget.
 
+constexpr std::array<std::uint8_t, 16> moving_read_loop{
+    0x48,0x8b,0x16,         // MOV RDX,[RSI].
+    0x48,0x01,0xd0,         // ADD RAX,RDX.
+    0x48,0x83,0xc6,0x08,    // ADD RSI,8.
+    0x83,0xe9,0x01,         // SUB ECX,1.
+    0x75,0xf1,0xf4};        // JNZ; HLT.
+
 constexpr std::uint32_t protected_code = 0x459a1f, ds_base = 0x10000, ss_base = 0x20000;
 constexpr std::array<std::uint8_t, 17> protected_loop{
     0x66,0x8b,0x07,       // MOV AX,[EDI], observed earlier in the same protected32 stage.
@@ -264,9 +271,22 @@ void decoder_contract() {
           signed_loop.instructions[1].rhs.reg == Cpu::R9 && signed_loop.instructions[1].rhs.scale_shift == 1 &&
           signed_loop.instructions[2].kind == arm64::Instruction::MoveSignExtend &&
           signed_loop.instructions[2].width == 8, "signed boot loads formed the wrong block");
-  const std::uint8_t sign_ah[]{0x0f,0xbe,0xc4};
-  require(!arm64::decode(sign_ah, sizeof(sign_ah), code).count,
-          "MOVSX AH must retain legacy high-byte semantics");
+  const std::uint8_t sign_ch[]{0x0f,0xbe,0xcd,0x90}; // MOVSX ECX,CH; NOP.
+  const auto high_signed = arm64::decode(sign_ch, sizeof(sign_ch), code, false);
+  require(high_signed.count == 2 &&
+          high_signed.instructions[0].kind == arm64::Instruction::MoveSignExtend &&
+          high_signed.instructions[0].rhs.reg == Cpu::ECX && high_signed.instructions[0].rhs.high_byte,
+          "observed protected32 MOVSX must select the high byte");
+  const std::uint8_t cmovne[]{0x45,0x84,0xc9,0x48,0x0f,0x45,0xc8,0x90};
+  const auto conditional = arm64::decode(cmovne, sizeof(cmovne), code);
+  require(conditional.count == 2 && conditional.flag_op == arm64::Instruction::Test &&
+          conditional.instructions[1].kind == arm64::Instruction::ConditionalMove &&
+          conditional.instructions[1].lhs.reg == Cpu::ECX &&
+          conditional.instructions[1].rhs.reg == Cpu::EAX,
+          "observed CMOVNE must retire with the preceding byte test");
+  const std::uint8_t memory_cmov[]{0x90,0x48,0x0f,0x45,0x08};
+  require(arm64::decode(memory_cmov, sizeof(memory_cmov), code).count == 1,
+          "CMOVcc with a faultable source must use the interpreter");
   const auto rmw = arm64::decode(memory_subtractions.data(), memory_subtractions.size(), code);
   require(rmw.count == 4 && rmw.size == 14 && rmw.writes == 2 && rmw.stages_ram() &&
           rmw.flag_op == arm64::Instruction::Subtract &&
@@ -283,6 +303,9 @@ void decoder_contract() {
   const auto moving = arm64::decode(moving_store, sizeof(moving_store), code);
   require(moving.count == 4 && moving.target == code && !moving.repeats,
           "a moving destination must remain a one-round RAM block");
+  const auto reading = arm64::decode(moving_read_loop.data(), moving_read_loop.size(), code);
+  require(reading.count == 5 && !reading.writes && reading.target == code && reading.repeats,
+          "a guarded read-only loop must repeat across moving addresses");
 }
 
 void gate(PcMachine& machine, unsigned vector) {
@@ -369,6 +392,336 @@ void warm_block(Cpu& cpu, std::uint64_t address, unsigned steps) {
     if (cpu.try_ether_arm64_block(steps) == steps) return;
   }
   throw std::runtime_error("ARM64 block never became executable");
+}
+
+void boot_hot_instruction_contract() {
+  for (bool long_mode : {false, true}) {
+    PcMachine native, scalar;
+    if (long_mode) {
+      boot(native, true);
+      boot(scalar, false);
+    } else {
+      boot_protected(native, true);
+      boot_protected(scalar, false);
+    }
+    for (unsigned source = 0; source < 4; ++source) {
+      for (unsigned byte : {0x00U, 0x7fU, 0x80U, 0xffU}) {
+        for (auto* machine : {&native, &scalar}) {
+          auto& cpu = machine->cpu;
+          emit(cpu, code, {0x0f,0xbe,std::uint8_t(0xcc | source),0x90});
+          cpu.eip = code;
+          cpu.regs[source] = 0xfedcba987654005aULL | (byte << 8);
+          cpu.eflags = 2 | Cpu::CF | Cpu::AF | Cpu::OF | Cpu::IF;
+        }
+        warm_block(native.cpu, code, 2);
+        const auto expected = byte < 0x80 ? byte : byte | 0xffffff00U;
+        require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+                    capture(native.cpu) == capture(scalar.cpu) && native.cpu.regs[Cpu::ECX] == expected,
+                "translated MOVSX changed the legacy high byte, sign, or guest flags");
+      }
+    }
+  }
+
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (unsigned cc = 0; cc < 16; ++cc) {
+    for (const auto prefix : {0x40U, 0x48U}) {
+      for (unsigned variant = 0; variant < 3; ++variant) {
+        for (const auto value : {0ULL, 0x80ULL, 0x8000000000000000ULL, 0xffffffffffffffffULL}) {
+          for (auto* machine : {&native, &scalar}) {
+            auto& cpu = machine->cpu;
+            const auto opcode = std::uint8_t(0x40 | cc);
+            switch (variant) {
+              case 0: emit(cpu, code, {0x90,std::uint8_t(prefix),0x0f,opcode,0xc8}); break;
+              case 1: emit(cpu, code, {0x45,0x84,0xc9,std::uint8_t(prefix),0x0f,opcode,0xc8}); break;
+              case 2: emit(cpu, code, {0x48,0x3b,0xc3,std::uint8_t(prefix),0x0f,opcode,0xc8}); break;
+            }
+            cpu.eip = code;
+            cpu.eflags = 2 | Cpu::AF | Cpu::IF |
+                (value ? (Cpu::CF | Cpu::PF | Cpu::OF) : (Cpu::ZF | Cpu::SF));
+            cpu.regs[Cpu::EAX] = value;
+            cpu.regs[Cpu::EBX] = 0x80;
+            cpu.regs[Cpu::ECX] = 0xfedcba9876543210ULL;
+            cpu.regs[Cpu::R9] = value;
+          }
+          warm_block(native.cpu, code, 2);
+          require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+                      capture(native.cpu) == capture(scalar.cpu) &&
+                      native.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(),
+                  "translated register CMOVcc changed the guest condition, width, or flags");
+        }
+      }
+    }
+  }
+  std::cout << "PRIME_ETHER_BOOT_HOT_PASS movsx_cases=32 cmov_cases=384\n";
+}
+
+void register_state_vector_contract() {
+  // ADD RAX,RSI; INC RSI; SUB ECX,1; JNZ back.
+  constexpr std::array<std::uint8_t, 11> narrow{
+      0x48,0x01,0xf0, 0x48,0xff,0xc6, 0x83,0xe9,1, 0x75,0xf5};
+  // The same loop with SUB RCX,1.
+  constexpr std::array<std::uint8_t, 12> wide{
+      0x48,0x01,0xf0, 0x48,0xff,0xc6, 0x48,0x83,0xe9,1, 0x75,0xf4};
+  // ADD EAX,ESI; ADD ESI,1; SUB ECX,1; JNZ back in protected32.
+  constexpr std::array<std::uint8_t, 10> protected_loop{
+      0x01,0xf0, 0x83,0xc6,1, 0x83,0xe9,1, 0x75,0xf6};
+  constexpr std::array<std::uint8_t, 7> protected_doubling{
+      0x01,0xc0, 0x83,0xe9,1, 0x75,0xf9};
+  // ADD RAX,RAX; SUB ECX,1; JNZ back. The third difference is nonzero here.
+  constexpr std::array<std::uint8_t, 8> doubling{
+      0x48,0x01,0xc0, 0x83,0xe9,1, 0x75,0xf8};
+  constexpr std::array<std::uint8_t, 11> nonnegative{
+      0x48,0x01,0xf0, 0x48,0xff,0xc6, 0x83,0xe9,1, 0x79,0xf5}; // JNS
+  // ADD RAX,RSI; ROR RBX,CL; INC RSI; SUB ECX,1; JNZ back.
+  constexpr std::array<std::uint8_t, 14> rotate_right{
+      0x48,0x01,0xf0, 0x48,0xd3,0xcb, 0x48,0xff,0xc6, 0x83,0xe9,1, 0x75,0xf2};
+  // The same loop with ROL RBX,CL and SUB RCX,1.
+  constexpr std::array<std::uint8_t, 15> rotate_left_wide{
+      0x48,0x01,0xf0, 0x48,0xd3,0xc3, 0x48,0xff,0xc6, 0x48,0x83,0xe9,1, 0x75,0xf1};
+  // ROR RBX,CL; ADD RAX,RSI; ROL RDX,CL; INC RSI; SUB ECX,1; JNZ back.
+  constexpr std::array<std::uint8_t, 17> rotate_pair{
+      0x48,0xd3,0xcb, 0x48,0x01,0xf0, 0x48,0xd3,0xc2, 0x48,0xff,0xc6, 0x83,0xe9,1, 0x75,0xef};
+  constexpr std::array<std::uint8_t, 14> rotate_reads_accumulator{
+      0x48,0x01,0xd8, 0x48,0xd3,0xcb, 0x48,0xff,0xc6, 0x83,0xe9,1, 0x75,0xf2}; // ADD reads RBX.
+  constexpr std::array<std::uint8_t, 14> rotate_incremented{
+      0x48,0x01,0xf0, 0x48,0xd3,0xcb, 0x48,0xff,0xc3, 0x83,0xe9,1, 0x75,0xf2}; // INC writes RBX.
+  constexpr std::array<std::uint8_t, 14> rotate_other_countdown{
+      0x48,0x01,0xf0, 0x48,0xd3,0xcb, 0x48,0xff,0xc6, 0x83,0xea,1, 0x75,0xf2}; // SUB EDX,1.
+
+  const auto compare = [](const auto& bytes, unsigned count, std::uint64_t counter,
+                          unsigned budget_rounds, unsigned expected_rounds,
+                          bool worker, bool projected, bool long_mode = true) {
+    PcMachine native, scalar;
+    if (long_mode) {
+      boot(native, true);
+      boot(scalar, false);
+    } else {
+      boot_protected(native, true);
+      boot_protected(scalar, false);
+    }
+    const auto reset_loop = [&](Cpu& cpu) {
+      cpu.eip = code;
+      cpu.regs[Cpu::EAX] = UINT64_MAX - 2;
+      cpu.regs[Cpu::EBX] = 0xa735f090cd0071cdULL;
+      cpu.regs[Cpu::ESI] = UINT64_MAX - 7;
+      cpu.regs[Cpu::ECX] = counter;
+      cpu.regs[Cpu::EDX] = 0xfedcba9876543210ULL;
+      cpu.eflags = 2 | Cpu::DF | Cpu::CF;
+    };
+    for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+      cpu->memory.write_block(code, bytes.data(), bytes.size());
+      reset_loop(*cpu);
+    }
+    warm_block(native.cpu, code, count);
+    for (unsigned i = 0; i < count; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "scalar warm-up failed");
+    reset_loop(native.cpu);
+    reset_loop(scalar.cpu);
+    const auto before = native.cpu.ether_arm64_stats();
+    const auto budget = budget_rounds * count;
+    unsigned retired = 0;
+    if (worker) {
+      Cpu::EtherRegisterWork work;
+      require(native.cpu.prepare_ether_arm64_register_loop(budget, work), "vector worker was not prepared");
+      const auto state = capture(native.cpu);
+      work.run(Cpu::EtherRegisterWork::Clock::time_point::min());
+      require(native.cpu.retire_ether_arm64_register_loop(work) == 0 && capture(native.cpu) == state,
+              "expired worker changed the guest state");
+      require(native.cpu.prepare_ether_arm64_register_loop(budget, work), "vector worker was not re-prepared");
+      work.run();
+      retired = native.cpu.retire_ether_arm64_register_loop(work);
+    } else {
+      retired = native.cpu.try_ether_arm64_block(budget);
+    }
+    require(retired == expected_rounds * count, "vector retired a different number of x86 instructions");
+    for (unsigned i = 0; i < retired; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "scalar vector reference faulted");
+    require(capture(native.cpu) == capture(scalar.cpu), "vector changed the x86 registers, flags, or RIP");
+    const auto after = native.cpu.ether_arm64_stats();
+    const auto skipped = projected ? (expected_rounds - 1) * count : 0;
+    require(after.state_vector_dispatches - before.state_vector_dispatches == unsigned(projected) &&
+            after.state_vector_steps - before.state_vector_steps == skipped &&
+            after.protected32_state_vector_steps - before.protected32_state_vector_steps ==
+                (long_mode ? 0U : skipped),
+            "vector did not report the instructions replaced by projection");
+  };
+
+  compare(narrow, 4, 0x10000004bULL, 121, 75, false, true); // RCX upper half clears.
+  compare(narrow, 4, 1024, 333, 333, false, true);           // Respect a partial budget beyond 256 rounds.
+  compare(narrow, 4, 0, 47, 47, true, true);                 // ECX wraps without an early exit.
+  compare(narrow, 4, 1024, 16, 16, false, false);            // Short runs use native translation.
+  compare(wide, 4, 0x100000000ULL, 47, 47, true, true);      // RCX retains its high bits.
+  compare(wide, 4, 75, 121, 75, true, true);                  // Early exit in a prepared worker.
+  compare(doubling, 3, 65, 120, 65, false, false);            // The vector proof must reject this state.
+  compare(nonnegative, 4, 47, 55, 48, false, false);          // JNS has a different exit condition.
+  compare(rotate_right, 5, 0x10000004bULL, 121, 75, false, true);
+  compare(rotate_right, 5, 1024, 333, 333, false, true);
+  compare(rotate_right, 5, 0, 47, 47, true, true); // ECX wraps.
+  compare(rotate_left_wide, 5, 0, 47, 47, true, true); // RCX wraps.
+  compare(rotate_left_wide, 5, UINT64_MAX - 9, 47, 47, true, true);
+  compare(rotate_pair, 6, 80, 100, 80, true, true);
+  compare(rotate_reads_accumulator, 5, 65, 120, 65, false, false);
+  compare(rotate_incremented, 5, 65, 120, 65, false, false);
+  compare(rotate_other_countdown, 5, 65, 47, 47, false, false);
+  compare(protected_loop, 4, 0x10000004bULL, 121, 75, false, true, false);
+  compare(protected_loop, 4, 1024, 333, 333, false, true, false);
+  compare(protected_loop, 4, 0, 47, 47, false, true, false);
+  compare(protected_loop, 4, 1024, 16, 16, false, false, false);
+  compare(protected_doubling, 3, 65, 120, 65, false, false, false);
+
+  const auto interrupt = [&](bool translated, bool long_mode) {
+    PcMachine machine;
+    if (long_mode) boot(machine, translated);
+    else boot_protected(machine, translated);
+    auto& cpu = machine.cpu;
+    constexpr unsigned vector = 0x40;
+    const auto result_reg = long_mode ? Cpu::R13 : Cpu::EBX;
+    cpu.eip = code;
+    cpu.regs[Cpu::ESP] = stack;
+    if (long_mode) {
+      cpu.memory.write_block(code, narrow.data(), narrow.size());
+      emit(cpu, code + narrow.size(), {0xf4});
+      emit(cpu, irq_handler, {0x49,0xff,0xc5,0x48,0xcf}); // INC R13; IRETQ.
+      gate(machine, vector);
+    } else {
+      cpu.memory.write_block(code, protected_loop.data(), protected_loop.size());
+      emit(cpu, code + protected_loop.size(), {0xf4});
+      emit(cpu, irq_handler, {0x43,0xcf}); // INC EBX; IRETD.
+      cpu.idtr = {0x7ff, idt};
+      cpu.write64(idt + vector * 8, irq_handler | (0x20ULL << 16) | (0x8eULL << 40));
+    }
+    cpu.regs[Cpu::EAX] = cpu.regs[Cpu::ESI] = cpu.regs[result_reg] = 0;
+    cpu.regs[Cpu::ECX] = 1024;
+    cpu.eflags = 2 | Cpu::IF;
+    std::uint64_t ticks = 0, irq_step = 0;
+    constexpr unsigned edge = 1503; // Inside a round, beyond the native loop batching cap.
+    const auto start = cpu.instructions;
+    machine.device_step_hook = [&] {
+      if (++ticks != edge) return;
+      irq_step = cpu.instructions - start;
+      if (translated)
+        require(cpu.ether_arm64_stats().state_vector_steps >= 1024, "IRQ did not test a projected run");
+      require(cpu.raise_external_irq(vector), "state vector run lost the scheduled IRQ");
+    };
+    machine.device_batch_limit_hook = [&](unsigned budget) {
+      return ticks < edge ? std::min(budget, unsigned(edge - ticks)) : budget;
+    };
+    machine.device_batch_advance_hook = [&](unsigned completed) { ticks += completed; };
+    machine.run(4200);
+    require(!cpu.fault && cpu.halted && irq_step == edge - 1 && cpu.regs[result_reg] == 1,
+            "state vector run changed the IRQ boundary");
+    return capture(cpu);
+  };
+  for (bool long_mode : {false, true})
+    require(interrupt(true, long_mode) == interrupt(false, long_mode), "vector and scalar IRQ runs diverged");
+  std::cout << "PRIME_VCPU_STATE_VECTOR_PASS long64_cases=17 protected32_cases=5"
+               " variable_rotate_cases=9 expired_deadline=1 irq_step=1502\n";
+}
+
+void live_signed_loop_projection_contract() {
+  // Observed in the Windows boot profile at FFFFF80158FACEC0.
+  // SUB RAX,RDX; INC RDX; CMP RAX,RDX; JG back.
+  constexpr std::array<std::uint8_t, 11> loop{
+      0x48,0x2b,0xc2, 0x48,0xff,0xc2, 0x48,0x3b,0xc2, 0x7f,0xf5};
+  constexpr unsigned per_round = 4;
+  const auto compare = [&](const auto& bytes, std::uint64_t a, std::uint64_t d,
+                           unsigned budget, unsigned rounds, bool taken, bool projected, bool worker = false) {
+    PcMachine native, scalar;
+    boot(native, true);
+    boot(scalar, false);
+    const auto reset = [](Cpu& cpu, std::uint64_t acc, std::uint64_t next) {
+      cpu.eip = code;
+      cpu.regs[Cpu::EAX] = acc;
+      cpu.regs[Cpu::EDX] = next;
+      cpu.eflags = 2 | Cpu::CF | Cpu::DF;
+    };
+    for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+      cpu->memory.write_block(code, bytes.data(), bytes.size());
+      reset(*cpu, 100000, 7);
+    }
+    warm_block(native.cpu, code, per_round);
+    for (unsigned i = 0; i < per_round; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "signed loop scalar warm-up failed");
+    reset(native.cpu, a, d);
+    reset(scalar.cpu, a, d);
+
+    const auto before = native.cpu.ether_arm64_stats();
+    unsigned retired;
+    if (worker) {
+      Cpu::EtherRegisterWork work;
+      require(native.cpu.prepare_ether_arm64_register_loop(budget, work), "signed loop worker was not prepared");
+      const auto initial = capture(native.cpu);
+      work.run(Cpu::EtherRegisterWork::Clock::time_point::min());
+      require(native.cpu.retire_ether_arm64_register_loop(work) == 0 && capture(native.cpu) == initial,
+              "expired signed loop worker changed x86 state");
+      require(native.cpu.prepare_ether_arm64_register_loop(budget, work), "signed loop worker was not re-prepared");
+      work.run();
+      retired = native.cpu.retire_ether_arm64_register_loop(work);
+    } else {
+      retired = native.cpu.try_ether_arm64_block(budget);
+    }
+    require(retired == rounds * per_round, "signed loop retired a wrong number of instructions");
+    for (unsigned i = 0; i < retired; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "signed loop scalar reference faulted");
+    require(capture(native.cpu) == capture(scalar.cpu) && native.cpu.eip == code + (taken ? 0 : bytes.size()),
+            "signed loop changed the x86 registers, flags, or RIP");
+    const auto after = native.cpu.ether_arm64_stats();
+    require(after.state_vector_steps - before.state_vector_steps == (projected ? (rounds - 1) * per_round : 0) &&
+            after.state_vector_dispatches - before.state_vector_dispatches == unsigned(projected),
+            "signed loop projection counters did not match the proven rounds");
+  };
+
+  // 5439 = (97 + 1) * 7 + 97 * (97 + 1) / 2. The 97th CMP is equal.
+  compare(loop, 5439, 7, 64 * per_round + 1, 64, true, true);
+  compare(loop, 5439, 7, 97 * per_round, 97, false, true);
+  compare(loop, 5440, 7, 200 * per_round, 98, false, true, true);
+  compare(loop, 100000, 7, 8 * per_round, 8, true, true); // 32-step SMP grant.
+  compare(loop, 100000, 7, 3 * per_round, 3, true, false);
+  compare(loop, 8, 7, 200 * per_round, 1, false, false);
+  compare(loop, 0x8000000000000000ULL, 1, 64 * per_round, 64, true, false);
+  compare(loop, 0, UINT64_MAX - 99, 64 * per_round, 64, true, false);
+  compare(loop, INT64_MAX, INT64_MAX, 64 * per_round, 2, false, false);
+  auto aliased = loop;
+  aliased[5] = 0xc0; // INC RAX aliases the SUB destination; RDX is unchanged.
+  compare(aliased, 1000, 1, 64 * per_round, 64, true, false);
+
+  const auto with_irq = [&](bool translated) {
+    PcMachine machine;
+    boot(machine, translated);
+    auto& cpu = machine.cpu;
+    cpu.memory.write_block(code, loop.data(), loop.size());
+    emit(cpu, code + loop.size(), {0xf4});
+    emit(cpu, irq_handler, {0x49,0xff,0xc5,0x48,0xcf}); // INC R13; IRETQ.
+    constexpr unsigned vector = 0x40, edge = 1503;
+    gate(machine, vector);
+    cpu.eip = code;
+    cpu.regs[Cpu::ESP] = stack;
+    cpu.regs[Cpu::EAX] = 100000;
+    cpu.regs[Cpu::EDX] = 7;
+    cpu.regs[Cpu::R13] = 0;
+    cpu.eflags = 2 | Cpu::IF;
+    const auto start = cpu.instructions;
+    std::uint64_t ticks = 0, irq_step = 0;
+    machine.device_step_hook = [&] {
+      if (++ticks != edge) return;
+      irq_step = cpu.instructions - start;
+      if (translated)
+        require(cpu.ether_arm64_stats().state_vector_steps >= 1024, "signed loop IRQ missed the projected path");
+      require(cpu.raise_external_irq(vector), "signed loop lost its scheduled IRQ");
+    };
+    machine.device_batch_limit_hook = [&](unsigned budget) {
+      return ticks < edge ? std::min(budget, unsigned(edge - ticks)) : budget;
+    };
+    machine.device_batch_advance_hook = [&](unsigned completed) { ticks += completed; };
+    machine.run(2500);
+    require(!cpu.fault && cpu.halted && irq_step == edge - 1 && cpu.regs[Cpu::R13] == 1,
+            "signed loop changed the device IRQ boundary");
+    return capture(cpu);
+  };
+  require(with_irq(true) == with_irq(false), "signed projection and scalar IRQ runs diverged");
+  std::cout << "PRIME_ETHER_SIGNED_BOOT_PROJECTION_PASS cases=10 smp_grant=32 irq_step=1502 expired_deadline=1\n";
 }
 
 void signed_load_contract() {
@@ -916,6 +1269,84 @@ void indexed_loop_benchmark() {
             << " scalar_median_ns=" << scalar_times[3] << '\n';
 }
 
+void moving_read_contract() {
+  constexpr unsigned count = 64;
+  constexpr auto page = cosmic_pc::MemoryFabric::kPageSize;
+  constexpr auto start = nodes + page - 16;
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    cpu.memory.write_block(code, moving_read_loop.data(), moving_read_loop.size());
+    for (unsigned i = 0; i < count; ++i) cpu.write64(start + i * 8, i + 1);
+    cpu.regs[Cpu::EAX] = 0;
+    cpu.regs[Cpu::ECX] = count;
+    cpu.regs[Cpu::ESI] = start;
+    machine->run(count * 5 + 1);
+    require(cpu.halted && !cpu.fault && cpu.regs[Cpu::EAX] == count * (count + 1) / 2,
+            "moving read did not sum both RAM pages");
+  }
+  auto& cpu = native.cpu;
+  require(capture(cpu) == capture(scalar.cpu) && cpu.ether_arm64_stats().repeated_loop_steps >= (count - 4) * 5,
+          "the repeated read changed the guest result or missed native execution");
+  cpu.eip = code;
+  cpu.halted = false;
+  cpu.regs[Cpu::ECX] = 2;
+  cpu.regs[Cpu::ESI] = nodes + page - 12;
+  const auto before = capture(cpu);
+  const auto fallbacks = cpu.ether_arm64_stats().data_fallbacks;
+  require(!cpu.try_ether_arm64_block(10) && capture(cpu) == before &&
+          cpu.ether_arm64_stats().data_fallbacks == fallbacks + 1,
+          "a crossing load in a later round must discard the speculative registers");
+  std::cout << "PRIME_ETHER_MOVING_READ_PASS pages=2 rollback=1\n";
+}
+
+void parallel_read_walk_contract() {
+  PcMachine machine(4U << 20);
+  boot(machine, true);
+  auto& cpu = machine.cpu;
+  constexpr std::uint64_t data = 0x200000, pde = 0x3008, accessed = 0x20;
+  cpu.write64(pde, data | ready_leaf);
+  cpu.write64(data, 21);
+  cpu.write64(data + 8, 52);
+  cpu.memory.write_block(code, moving_read_loop.data(), moving_read_loop.size());
+  const auto prepare = [&] {
+    cpu.eip = code;
+    cpu.regs[Cpu::ESI] = data;
+    cpu.regs[Cpu::EAX] = 0;
+    cpu.regs[Cpu::ECX] = 2;
+  };
+  unsigned warm = 0;
+  for (unsigned attempt = 0; attempt < 4 && !warm; ++attempt) {
+    prepare();
+    warm = cpu.try_ether_arm64_block(10);
+  }
+  require(warm == 10, "The shared read test needs a warmed ARM64 loop");
+  using Access = Cpu::EtherLoopAccess;
+  Cpu::EtherLoopWork read;
+  prepare();
+  require(!cpu.prepare_ether_arm64_loop(10, read, Access::Registers) &&
+          cpu.prepare_ether_arm64_loop(10, read, Access::ReadOnlyRam) && read.reads_ram(),
+          "Only the shared read phase may prepare this loop");
+  read.run();
+  require(cpu.retire_ether_arm64_loop(read) == 10 && cpu.regs[Cpu::EAX] == 73,
+          "The RAM worker must retire the exact x86 sum");
+
+  const auto unaccessed = (data | ready_leaf) & ~accessed;
+  cpu.write64(pde, unaccessed);
+  prepare();
+  require(cpu.prepare_ether_arm64_loop(10, read, Access::ReadOnlyRam),
+          "The instruction page remains valid after remapping the data page");
+  const auto before = capture(cpu);
+  read.run();
+  require(cpu.retire_ether_arm64_loop(read) == 0 && capture(cpu) == before &&
+          cpu.read64(pde) == unaccessed, "The worker must leave A/D updates and rollback to the owner");
+  require(cpu.step() == StepResult::Executed && cpu.regs[Cpu::EDX] == 21 &&
+          cpu.read64(pde) == (unaccessed | accessed), "The scalar step must publish the accessed bit");
+  std::cout << "PRIME_ETHER_PARALLEL_RAM_GUARD_PASS\n";
+}
+
 void byte_read_benchmark() {
   constexpr unsigned steps = 40000;
   const auto run = [](bool translated) {
@@ -965,9 +1396,15 @@ void cache_collision_contract() {
   PcMachine native(4 * 1024 * 1024), scalar(4 * 1024 * 1024);
   boot(native, true);
   boot(scalar, false);
+  Cpu idle(native.cpu.memory);
+  idle.enable_ether_arm64_blocks();
+  const auto cold = native.cpu.ether_arm64_virtual_stats();
+  require(cold.logical_bytes == (std::uint64_t{1} << 48) && cold.allocated_sets == 0 &&
+          cold.translated_block_capacity == 1024 && idle.ether_arm64_virtual_stats().allocated_sets == 0,
+          "idle CPUs must reserve a virtual translation region without allocating cache sets");
   // Fill every way of one set before touching cold or unsupported RIPs.
-  constexpr std::array<std::uint64_t, 4> blocks{0xa140, 0xa350, 0xb560, 0xb770};
-  constexpr std::array<std::uint64_t, 4> probes{0xc980, 0xcb90, 0xdda0, 0xdfb0};
+  constexpr std::array<std::uint64_t, 4> blocks{0xa140, 0xa350, 0xdda0, 0xdfb0};
+  constexpr std::array<std::uint64_t, 4> probes{0x10810, 0x10a00, 0x12050, 0x12240};
   for (auto* machine : {&native, &scalar}) {
     for (const auto address : blocks)
       emit(machine->cpu, address, {0x8b, 0xc1, 0x8b, 0xd0, 0xf4}); // MOV EAX,ECX; MOV EDX,EAX.
@@ -1000,6 +1437,10 @@ void cache_collision_contract() {
   require(warm.translated == blocks.size() && result.translated == warm.translated &&
           result.hits - warm.hits == rounds && result.compiled_evictions == warm.compiled_evictions,
           "cold or unsupported addresses evicted a warm block");
+  const auto hot = native.cpu.ether_arm64_virtual_stats();
+  require(hot.allocated_sets == 1 && hot.cache_metadata_bytes > cold.cache_metadata_bytes &&
+          idle.ether_arm64_virtual_stats().allocated_sets == 0,
+          "cache allocation must stay local to the vCPU and its touched set");
   std::cout << "PRIME_C03_ARM64_CACHE_PASS translations=" << result.translated
             << " warm_hits=" << result.hits - warm.hits << '\n';
 
@@ -1007,7 +1448,7 @@ void cache_collision_contract() {
   // sooner than any of the four resident blocks. Keep those blocks warm.
   const auto candidate = probes.front();
   for (auto* machine : {&native, &scalar})
-    emit(machine->cpu, candidate, {0x8b,0xc1,0x8b,0xd0,0xf4});
+    emit(machine->cpu, candidate, {0x8b,0xd1,0x31,0xc0,0xf4}); // MOV EDX,ECX; XOR EAX,EAX.
   const auto before_pressure = native.cpu.ether_arm64_stats();
   for (unsigned round = 0; round < 256; ++round) {
     for (const auto address : blocks) {
@@ -1034,6 +1475,12 @@ void cache_collision_contract() {
           capture(native.cpu) == capture(scalar.cpu) &&
           native.cpu.ether_arm64_stats().compiled_evictions == before_pressure.compiled_evictions + 1,
           "cache failed to adapt when the candidate became hot");
+  native.cpu.reset();
+  require(native.cpu.ether_arm64_virtual_stats().allocated_sets == 0 &&
+          native.cpu.ether_arm64_virtual_stats().logical_bytes == cold.logical_bytes,
+          "CPU reset must release cache sets while retaining its virtual region");
+  std::cout << "PRIME_X86_ETHER_VIRTUAL_PASS cold_metadata_bytes=" << cold.cache_metadata_bytes
+            << " sets=1 block_capacity=" << hot.translated_block_capacity << '\n';
   std::cout << "PRIME_C03_ARM64_ADMISSION_PASS hot_hits=1024 pressure_evictions=0 phase_evictions=1\n";
 }
 
@@ -1465,6 +1912,9 @@ int main() {
       return 0;
     }
     require(native.stats.steps > 4000 && native.stats.hits > 0, "ARM64 loop did not execute");
+    boot_hot_instruction_contract();
+    register_state_vector_contract();
+    live_signed_loop_projection_contract();
     integer_execution_contract();
     rip_relative_contract();
     signed_load_contract();
@@ -1484,6 +1934,8 @@ int main() {
     scan_forms_contract();
     immediate_arithmetic_contract();
     indexed_loop_benchmark();
+    moving_read_contract();
+    parallel_read_walk_contract();
     byte_read_benchmark();
     for (bool store : {false, true}) {
       State a{}, b{};

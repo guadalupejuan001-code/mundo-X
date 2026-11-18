@@ -64,11 +64,78 @@ void verify_expanded_memory_map() {
          pc.usable_ram_bytes() == installed && cpu.memory.allocated_bytes() < MiB,
          "E820 must expose exactly 64 GiB and keep the device holes reserved");
 }
+
+void verify_adaptive_ram_compaction() {
+    constexpr unsigned base_interval = 32768;
+    constexpr auto page_size = cosmic_pc::MemoryFabric::kPageSize;
+    constexpr std::uint64_t first_page = 0x20000;
+    constexpr unsigned pages = 4;
+    PcMachine pc(2 * MiB);
+    boot(pc, {0xeb, 0xfe}); // A real guest retires a jump back to itself.
+    auto& cpu = pc.cpu;
+    cpu.memory.reset_zero();
+    cpu.write16(0x7c00, 0xfeeb);
+    for (unsigned page = 0; page < pages; ++page)
+        cpu.write8(first_page + page * page_size, std::uint8_t(page + 1));
+    cpu.memory.fill(0x30000, 0x73, page_size);
+    pc.enable_boot_acceleration();
+    const auto run_steps = [&](std::uint64_t amount) {
+        const auto target = cpu.instructions + amount;
+        while (cpu.instructions < target) {
+            const auto before = cpu.instructions;
+            const auto grant = unsigned(std::min<std::uint64_t>(target - before, PcMachine::kDefaultRunSteps));
+            pc.run(grant);
+            need(!cpu.fault && cpu.instructions == before + grant, "RAM sweep changed guest retirement");
+        }
+    };
+
+    const auto& stats = pc.ram_compaction_stats();
+    run_steps(base_interval);
+    need(stats.passes == 1 && stats.pages_compacted == 1 && stats.interval_steps == 2 * base_interval,
+         "A low-yield RAM sweep must increase the interval");
+    run_steps(2 * base_interval - 1);
+    need(stats.passes == 1, "RAM sweep did not honor the increased interval");
+    run_steps(1);
+    need(stats.passes == 2 && stats.interval_steps == 4 * base_interval,
+         "An unproductive RAM sweep must extend the interval again");
+    run_steps(4 * base_interval);
+    run_steps(8 * base_interval);
+    need(stats.passes == 4 && stats.pages_compacted == 1 && stats.interval_steps == 8 * base_interval,
+         "Several unproductive sweeps must stop increasing the interval at the bound");
+
+    using Adjustment = cosmic_pc::SparseRam::BudgetAdjustment;
+    const auto resident_budget = cpu.memory.budget_bytes();
+    const auto reclaim_target = cpu.memory.allocated_bytes() - page_size + 8;
+    need(cpu.memory.adjust_payload_budget(reclaim_target, 1) == Adjustment::Applied &&
+             cpu.memory.allocated_bytes() <= reclaim_target && stats.passes == 4 &&
+             stats.interval_steps == 8 * base_interval,
+         "Pressure reclaim must remain available during periodic compaction backoff");
+    need(cpu.memory.adjust_payload_budget(resident_budget, 0) == Adjustment::Applied,
+         "Fixture could not restore the resident memory budget");
+
+    for (unsigned page = 0; page < pages; ++page)
+        cpu.memory.fill(first_page + page * page_size, std::uint8_t(page + 2), page_size);
+    run_steps(8 * base_interval);
+    need(stats.passes == 5 && stats.pages_compacted == 1 + pages && stats.interval_steps == base_interval,
+         "A productive sweep must reconsider rewritten pages and restore the usual interval");
+    for (unsigned page = 0; page < pages; ++page) {
+        std::array<std::uint8_t, page_size> bytes{};
+        cpu.memory.read_block(first_page + page * page_size, bytes.data(), bytes.size());
+        need(std::all_of(bytes.begin(), bytes.end(), [&](auto byte) { return byte == page + 2; }),
+             "Adaptive compaction changed a rewritten page's bytes");
+    }
+    pc.reset();
+    need(stats.passes == 0 && stats.pages_compacted == 0 && stats.interval_steps == base_interval,
+         "Guest reset must restore the default compaction interval and clear its counters");
+    std::cout << "PRIME_RAM_ADAPTIVE_COMPACTION_PASS max_interval=" << 8 * base_interval
+              << " pages_reconsidered=" << pages << " pressure_independent=1 reset=1\n";
+}
 }
 
 int main() {
     try {
         verify_expanded_memory_map();
+        verify_adaptive_ram_compaction();
         PcMachine pc(std::size_t(2048) * MiB, std::size_t(1024) * MiB);
         need(pc.cpu.memory.size() == std::uint64_t(2048) * MiB, "Logical RAM must be 2 GiB");
         need(pc.cpu.memory.budget_bytes() == std::uint64_t(1024) * MiB, "Resident guest budget must be 1 GiB");

@@ -38,6 +38,20 @@ class MemoryFabric {
   static constexpr std::size_t kPagesPerTable = SparseRam::kPagesPerTable;
   static constexpr std::uint64_t kDefaultPayloadLimit = SparseRam::kDefaultPayloadLimit;
 
+  // The board uses this scope only while its executor owns all guest RAM.
+  class ExclusiveRamReads {
+   public:
+    explicit ExclusiveRamReads(MemoryFabric& memory) noexcept
+        : memory_(memory), previous_(std::exchange(memory.exclusive_ram_reads_, true)) {}
+    ~ExclusiveRamReads() { memory_.exclusive_ram_reads_ = previous_; }
+    ExclusiveRamReads(const ExclusiveRamReads&) = delete;
+    ExclusiveRamReads& operator=(const ExclusiveRamReads&) = delete;
+
+   private:
+    MemoryFabric& memory_;
+    bool previous_;
+  };
+
   // One optional consumer of writes to a range of ordinary physical RAM.
   // Offsets in pages() are relative to that range, even at a partial last page.
   class WriteWatch {
@@ -159,8 +173,10 @@ class MemoryFabric {
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
   std::uint64_t backing_cache_bytes() const noexcept { return ram_.backing_cache_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
-  SparseRam::BudgetAdjustment adjust_payload_budget(std::uint64_t target, std::size_t reclaim_pages) {
-    return ram_.adjust_payload_budget(target, reclaim_pages);
+  SparseRam::BudgetAdjustment adjust_payload_budget(
+      std::uint64_t target, std::size_t reclaim_pages,
+      SparseRam::ReclaimClock::time_point deadline = SparseRam::ReclaimClock::time_point::max()) {
+    return ram_.adjust_payload_budget(target, reclaim_pages, deadline);
   }
   std::uint64_t metadata_bytes() const noexcept {
     return ram_.metadata_bytes() + sizeof(*this) - sizeof(ram_) +
@@ -252,8 +268,9 @@ class MemoryFabric {
     return ram_.read_byte(offset);
   }
 
-  const std::uint8_t* resident_ram_span(std::uint64_t offset, unsigned bytes) const noexcept {
-    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
+  const std::uint8_t* resident_ram_span(std::uint64_t offset, unsigned bytes,
+                                       bool record_timing = true) const noexcept {
+    const BootScalarTiming::Scope sample(record_timing ? boot_scalar_timing_ : nullptr, BootTimePart::Ram);
     if (overlaps_window(offset, bytes)) return nullptr;
     return ram_.resident_span(offset, bytes);
   }
@@ -275,7 +292,8 @@ class MemoryFabric {
     if (count && !destination) throw std::invalid_argument("MemoryFabric null read destination");
     if (!count) return;
     if (!overlaps_window(offset, count)) {
-      ram_.read_block(offset, destination, count);
+      if (exclusive_ram_reads_) ram_.read_block<false>(offset, destination, count);
+      else ram_.read_block(offset, destination, count);
       return;
     }
     if (has_window_block(offset, count)) {
@@ -283,6 +301,15 @@ class MemoryFabric {
       return;
     }
     split_read(offset, destination, count);
+  }
+
+  // The motherboard holds mappings and RAM stable until its readers join.
+  // Worker reads never call an Ether window provider or the shared timer.
+  void read_parallel_ram_block(std::uint64_t offset, std::uint8_t* destination,
+                               std::size_t count) const {
+    check_range(offset, count);
+    if (overlaps_window(offset, count)) throw std::invalid_argument("Parallel read requires ordinary RAM");
+    ram_.read_block(offset, destination, count);
   }
 
   SparseRam::ByteScan scan_ram_until_byte(std::uint64_t offset, std::size_t count,
@@ -507,6 +534,7 @@ class MemoryFabric {
   };
 
   BootScalarTiming* boot_scalar_timing_ = nullptr;
+  bool exclusive_ram_reads_ = false;
   static constexpr std::size_t kPageTableBuckets = 4096;
   // A collision only discards extra translations. All writes reach this
   // fabric, including boot-media copies, device writes to RAM and rollback.

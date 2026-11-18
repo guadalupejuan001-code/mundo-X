@@ -28,6 +28,12 @@ bool copy_ram_block(Memory& memory, std::uint64_t from, std::uint64_t to,
 template <class Memory>
 void repeat_ram_value(Memory& memory, std::uint64_t to, std::uint64_t value,
                       unsigned width, std::size_t bytes) {
+  // A partial zero write to implicit RAM needs no resident payload. The
+  // ordinary fill preserves the bytes outside the requested span.
+  if (!value && bytes < Memory::kPageSize && !memory.has_pinned_writes()) {
+    memory.fill(to, 0, bytes);
+    return;
+  }
   std::array<std::uint8_t, Memory::kPageSize> block;
   for (unsigned i = 0; i < width; ++i)
     block[i] = std::uint8_t(value >> (8 * i));

@@ -98,6 +98,7 @@ class PcMachine {
     std::uint64_t paged_rep_elements=0;
     std::uint64_t shift_loop_batches=0, shift_loop_steps=0;
     std::uint64_t zero_loop_batches=0, zero_loop_steps=0;
+    std::uint64_t movntdq_store_batches=0, movntdq_store_steps=0;
     std::uint64_t scan_loop_steps=0;
     std::uint64_t arm64_block_steps=0;
     std::uint64_t counter_loop_batches=0, counter_loop_steps=0;
@@ -108,6 +109,11 @@ class PcMachine {
   void enable_boot_acceleration(bool enabled=true) noexcept { boot_acceleration_enabled_=enabled; }
   bool boot_acceleration_enabled() const noexcept { return boot_acceleration_enabled_; }
   const BootAcceleration& boot_acceleration() const noexcept { return boot_acceleration_; }
+  struct RamCompactionStats {
+    std::uint64_t passes = 0, pages_compacted = 0;
+    unsigned interval_steps = 0;
+  };
+  const RamCompactionStats& ram_compaction_stats() const noexcept { return ram_compaction_; }
   // Keep the logical sampler's batch boundaries when using a separate clock.
   void enable_boot_hotspots(bool enabled=true, bool time_scalar=true) {
     if (enabled) {
@@ -247,7 +253,8 @@ class PcMachine {
     if(boot_scalar_hotspots_)boot_scalar_hotspots_->reset();
     if(boot_timing_)boot_timing_->reset();
     if(boot_regions_)boot_regions_->reset();
-    next_ram_compaction_=kRamCompactionInterval;
+    ram_compaction_ = {0, 0, kRamCompactionMinInterval};
+    next_ram_compaction_ = kRamCompactionMinInterval;
     video_mode_=3;video_.text_mode(cpu.memory,3);pic1_=pic2_=0xff;cmos_index_=0;serial_.clear();
     kbc_.reset();  // Controller, command/data latches and A20 protocol reset together.
     if(!reader_)return;
@@ -263,10 +270,14 @@ class PcMachine {
     sync_bios_font_geometry();video_.install_font_vectors(cpu);
     sync_bios_hard_disk_count();clear_screen();if(device_reset_hook)device_reset_hook();
   }
-  void run(unsigned budget, RunClock::time_point deadline=RunClock::time_point::max()) {
+  bool guest_execution_available() const noexcept {
+    return reader_ && host_error.empty() && !waiting_key && !cpu.fault && !powered_off_ &&
+           guest_restart_ == GuestRestart::None;
+  }
+  void run(unsigned budget, RunClock::time_point deadline=RunClock::time_point::max(),
+           bool preserve_ether_loop_entry=false) {
     yield_requested_=false;
-    if(!reader_||!host_error.empty()||waiting_key||cpu.fault||powered_off_||
-       guest_restart_!=GuestRestart::None)return;
+    if(!guest_execution_available())return;
     if(cpu.halted&&!device_step_hook)return;
     const bool timed=deadline!=RunClock::time_point::max();
     if(!timed)budget=std::min(budget,kDefaultRunSteps);
@@ -285,6 +296,8 @@ class PcMachine {
     unsigned dispatches=0;
     for(unsigned i=0;i<budget&&!waiting_key;){
       if(timed && (dispatches++ & 63U)==0 && RunClock::now()>=deadline)break;
+      if(preserve_ether_loop_entry && i && budget-i<ether_arm64::Block::kMaxInstructions &&
+         budget-i<cpu.ether_arm64_loop_length(Cpu::EtherLoopAccess::ReadOnlyRam))break;
       auto* sample = boot_timing_ ? boot_timing_->next_iteration() : nullptr;
       const BootTiming::Scope iteration_timing(sample, BootTimePart::Total);
       // Devices can tick and deliver an enabled IRQ between guest instructions;
@@ -364,13 +377,56 @@ class PcMachine {
       if(guest_restart_!=GuestRestart::None||powered_off_||yield_requested_)break;
       if((r==StepResult::Halted||r==StepResult::WaitingForX87)&&!device_step_hook)break;
     }
-    if(boot_acceleration_enabled_&&cpu.instructions>=next_ram_compaction_) {
-      const BootTiming::Scope compaction_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Compaction);
-      cpu.memory.compact_repeating_pages(256);
-      next_ram_compaction_=cpu.instructions+kRamCompactionInterval;
-    }
+    compact_ram_after_run();
     if(boot_scalar_hotspots_)boot_hotspots_->add_elapsed(std::chrono::steady_clock::now()-start);
   }
+  // The motherboard bounds the job before dispatch and advances the device
+  // clocks after its workers return.
+  bool prepare_ether_loop(unsigned budget, Cpu::EtherLoopWork& work, Cpu::EtherLoopAccess access) {
+    if (!boot_acceleration_enabled_ || !guest_execution_available()) return false;
+    return cpu.prepare_ether_arm64_loop(budget, work, access);
+  }
+  bool prepare_ether_register_loop(unsigned budget, Cpu::EtherRegisterWork& work) {
+    return prepare_ether_loop(budget, work, Cpu::EtherLoopAccess::Registers);
+  }
+  unsigned retire_ether_register_loop(Cpu::EtherRegisterWork& work, RunClock::duration elapsed) {
+    return retire_ether_loop(work, elapsed);
+  }
+  unsigned retire_ether_loop(Cpu::EtherLoopWork& work, RunClock::duration elapsed,
+                             bool defer_ram_compaction = false) {
+    const BootTiming::Scope run_timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Run);
+    const auto cs=cpu.segments[Cpu::CS];
+    auto* sample=boot_timing_ ? boot_timing_->next_iteration() : nullptr;
+    if (boot_timing_) boot_timing_->record(BootTimePart::Run,elapsed);
+    unsigned completed;
+    {
+      const BootTiming::Scope iteration_timing(sample, BootTimePart::Total);
+      completed=cpu.retire_ether_arm64_loop(work);
+      if (sample) {
+        sample->record(BootTimePart::Total,elapsed);
+        sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,elapsed);
+        if (completed) sample->record(BootTimePart::Arm64Execute,elapsed);
+        sample->add_steps(0,completed);
+      }
+      const BootTiming::Scope profile_timing(sample,BootTimePart::Profile);
+      if (boot_hotspots_) {
+        // The decoded backedge gives the exact guest address of each sample.
+        for (unsigned offset=0; offset<completed;) {
+          const auto span=std::min(completed-offset,boot_hotspots_->steps_before_sample()+1);
+          offset+=span;
+          if (const auto hits=boot_hotspots_->advance(span)) {
+            const auto instruction=work.instruction_at(offset-1);
+            boot_hotspots_->record(cpu.mode_name(),cs,instruction.ip,instruction.bytes,instruction.size,hits);
+          }
+        }
+      }
+    }
+    boot_acceleration_.arm64_block_steps+=completed;
+    if (completed && !defer_ram_compaction) compact_ram_after_run();
+    if (boot_scalar_hotspots_) boot_hotspots_->add_elapsed(elapsed);
+    return completed;
+  }
+  void finish_parallel_ether_work() { compact_ram_after_run(); }
   void key(std::uint8_t ascii, std::uint8_t scan) { key_event(ascii, scan, true); }
   void key_event(std::uint8_t ascii, unsigned scan, bool pressed) {
     if (!reader_ || cpu.fault) return;
@@ -723,17 +779,36 @@ class PcMachine {
   std::optional<BootHotspots> boot_scalar_hotspots_;
   std::optional<BootTiming> boot_timing_;
   std::optional<BootHotspots> boot_regions_;
-  static constexpr std::uint64_t kRamCompactionInterval=32768;
-  std::uint64_t next_ram_compaction_=kRamCompactionInterval;
+  static constexpr unsigned kRamCompactionMinInterval = 32768;
+  static constexpr unsigned kRamCompactionMaxInterval = 8 * kRamCompactionMinInterval;
+  static constexpr unsigned kRamCompactionPagesPerPass = 256;
+  static constexpr unsigned kRamCompactionProductivePages = 4;
+  RamCompactionStats ram_compaction_{0, 0, kRamCompactionMinInterval};
+  std::uint64_t next_ram_compaction_ = kRamCompactionMinInterval;
+  void compact_ram_after_run() {
+    if (!boot_acceleration_enabled_ || cpu.instructions < next_ram_compaction_ ||
+        !cpu.memory.allocated_pages() || cpu.memory.has_pinned_writes()) return;
+    const BootTiming::Scope timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Compaction);
+    const auto compacted = cpu.memory.compact_repeating_pages(kRamCompactionPagesPerPass);
+    ++ram_compaction_.passes;
+    ram_compaction_.pages_compacted += compacted;
+    // Keep moving the cursor even if RAM is mostly dense. A bounded gap
+    // lets later writes be reconsidered and keeps pressure reclaim independent.
+    ram_compaction_.interval_steps = compacted >= kRamCompactionProductivePages
+        ? kRamCompactionMinInterval
+        : std::min(kRamCompactionMaxInterval, ram_compaction_.interval_steps * 2);
+    next_ram_compaction_ = cpu.instructions + ram_compaction_.interval_steps;
+  }
   unsigned run_boot_batch(unsigned limit) {
     const bool rep=cpu.rep_batch_candidate();
     const bool shift=!rep&&cpu.shift_loop_batch_candidate();
     const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
     const bool zero=!rep&&!shift&&!scan&&cpu.zero_loop_batch_candidate();
+    const bool movntdq=!rep&&!shift&&!scan&&!zero&&cpu.movntdq_store_batch_candidate();
     const bool affine_ram=!rep&&!shift&&!scan&&!zero&&cpu.affine_ram_rotate_loop_candidate();
     const bool counter=!rep&&!shift&&!scan&&!zero&&cpu.counter_loop_batch_candidate();
     const bool arm64=!rep&&cpu.ether_arm64_block_candidate();
-    if (!rep && !shift && !scan && !zero && !affine_ram && !counter && !arm64) return 0;
+    if (!rep && !shift && !scan && !zero && !movntdq && !affine_ram && !counter && !arm64) return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;
       limit=std::min(limit,device_batch_limit_hook(limit));
@@ -745,6 +820,7 @@ class PcMachine {
     unsigned completed=0;
     bool native_batched=false;
     bool affine_batched=false;
+    bool movntdq_batched=false;
     bool wide_multiply=false;
     bool rotate_xor=false;
     if(rep)completed=cpu.try_rep_batch(limit);
@@ -752,7 +828,11 @@ class PcMachine {
     else if(scan)completed=cpu.try_scan_loop_batch(limit);
     else if(zero)completed=cpu.try_zero_loop_batch(limit);
     else {
-      if(affine_ram) {
+      if(movntdq) {
+        completed=cpu.try_movntdq_store_batch(limit);
+        movntdq_batched=completed!=0;
+      }
+      if(!completed&&affine_ram) {
         completed=unsigned(cpu.try_affine_ram_rotate_loop(limit));
         affine_batched=completed!=0;
       }
@@ -784,6 +864,9 @@ class PcMachine {
     } else if (zero) {
       ++boot_acceleration_.zero_loop_batches;
       boot_acceleration_.zero_loop_steps+=completed;
+    } else if(movntdq_batched) {
+      ++boot_acceleration_.movntdq_store_batches;
+      boot_acceleration_.movntdq_store_steps+=completed;
     } else if(affine_batched) {
       ++boot_acceleration_.affine_ram_rotate_batches;
       boot_acceleration_.affine_ram_rotate_steps+=completed;
