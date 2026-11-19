@@ -56,18 +56,22 @@ class MemoryFabric {
   // Offsets in pages() are relative to that range, even at a partial last page.
   class WriteWatch {
    public:
+    // Half-open byte interval within a watched page.
+    struct Bounds { std::uint16_t begin = kPageSize, end = 0; };
+    static_assert(kPageSize <= UINT16_MAX);
     explicit WriteWatch(std::size_t max_bytes)
-        : marked_(max_bytes / kPageSize + (max_bytes % kPageSize != 0)) {
-      pages_.reserve(marked_.size());
+        : bounds_(max_bytes / kPageSize + (max_bytes % kPageSize != 0)) {
+      pages_.reserve(bounds_.size());
     }
     bool pending() const noexcept { return full_ || !pages_.empty(); }
     bool full() const noexcept { return full_; }
     const std::vector<std::uint32_t>& pages() const noexcept { return pages_; }
+    Bounds bounds(std::uint32_t page) const noexcept { return bounds_[page]; }
 
    private:
     friend class MemoryFabric;
     void clear() noexcept {
-      for (auto page : pages_) marked_[page] = false;
+      for (auto page : pages_) bounds_[page] = {};
       pages_.clear();
       full_ = false;
     }
@@ -82,18 +86,22 @@ class MemoryFabric {
     }
     void note(std::uint64_t offset, std::size_t bytes) noexcept {
       if (full_ || offset >= end_ || offset + bytes <= base_) return;
-      const auto first = (std::max(offset, base_) - base_) / kPageSize;
-      const auto last = (std::min(offset + bytes, end_) - 1 - base_) / kPageSize;
-      for (auto page = first; page <= last; ++page) {
-        if (marked_[page]) continue;
-        marked_[page] = true;
-        pages_.push_back(static_cast<std::uint32_t>(page));
+      const auto first_byte = std::max(offset, base_) - base_;
+      const auto end_byte = std::min(offset + bytes, end_) - base_;
+      for (auto page = first_byte / kPageSize; page <= (end_byte - 1) / kPageSize; ++page) {
+        const auto start = page * kPageSize;
+        const auto begin = static_cast<std::uint16_t>(std::max(first_byte, start) - start);
+        const auto end = static_cast<std::uint16_t>(std::min(end_byte - start, std::uint64_t(kPageSize)));
+        auto& span = bounds_[page];
+        if (!span.end) pages_.push_back(static_cast<std::uint32_t>(page));
+        span.begin = std::min(span.begin, begin);
+        span.end = std::max(span.end, end);
       }
     }
     std::uint64_t base_ = 0;
     std::uint64_t end_ = 0;
     bool full_ = true;
-    std::vector<bool> marked_;
+    std::vector<Bounds> bounds_;
     std::vector<std::uint32_t> pages_;
   };
 
@@ -188,7 +196,7 @@ class MemoryFabric {
   std::uint64_t metadata_bytes() const noexcept {
     return ram_.metadata_bytes() + sizeof(*this) - sizeof(ram_) +
         (code_page_versions_ ? sizeof(CodePageVersions) : 0) +
-        (write_watch_ ? sizeof(WriteWatch) + write_watch_->marked_.capacity() / 8 +
+        (write_watch_ ? sizeof(WriteWatch) + write_watch_->bounds_.capacity() * sizeof(WriteWatch::Bounds) +
             write_watch_->pages_.capacity() * sizeof(std::uint32_t) : 0);
   }
   Metrics metrics() const noexcept {
@@ -217,7 +225,7 @@ class MemoryFabric {
   void move_write_watch(std::uint64_t base, std::size_t bytes) {
     if (!write_watch_) return;
     if (!bytes || base > size() || bytes > size() - base ||
-        (bytes - 1) / kPageSize >= write_watch_->marked_.size() || overlaps_window(base, bytes))
+        (bytes - 1) / kPageSize >= write_watch_->bounds_.size() || overlaps_window(base, bytes))
       throw std::invalid_argument("MemoryFabric write watch range");
     write_watch_->range(base, bytes);
   }

@@ -402,7 +402,9 @@ constexpr std::uint8_t kMovntdqFill[]{
 constexpr unsigned kMovntdqRoundSteps = 11;
 constexpr std::uint64_t kMovntdqDestination = 0x2c000;
 
-void prepare_movntdq(PcMachine& pc, unsigned rounds, std::uint64_t destination) {
+constexpr std::array<unsigned, 8> kStreamSources{2,1,0,3,4,5,6,7};
+
+void prepare_movntdq(PcMachine& pc, unsigned rounds, std::uint64_t destination, bool mixed = false) {
     boot(pc, true);
     auto& cpu = pc.cpu;
     cpu.eip = entry;
@@ -415,6 +417,14 @@ void prepare_movntdq(PcMachine& pc, unsigned rounds, std::uint64_t destination) 
     cpu.regs[Cpu::EDX] = rounds;
     for (unsigned i = 0; i < 16; ++i) cpu.xmm[0][i] = std::uint8_t(0xa0U + i);
     cpu.memory.write_block(entry, kMovntdqFill, sizeof(kMovntdqFill));
+    if (mixed) {
+        constexpr std::array<unsigned, 8> operands{3,7,12,17,25,30,38,43};
+        for (unsigned n = 0; n < operands.size(); ++n) {
+            const auto source = kStreamSources[n];
+            for (unsigned i = 0; i < 16; ++i) cpu.xmm[source][i] = std::uint8_t(16 * source + i);
+            cpu.write8(entry + operands[n], kMovntdqFill[operands[n]] | (source << 3));
+        }
+    }
 }
 
 void movntdq_store_batches() {
@@ -480,13 +490,47 @@ void movntdq_store_batches() {
     std::cout << "ETHER_MOVNTDQ_STORE_PASS batches=15 stores=35 device_grant=3 page_fault_index=2\n";
 }
 
-void measure_movntdq() {
+void mixed_movntdq_registers() {
+    // The first three stores match the sampled Windows sequence. Also cover XMM8/15 and R9.
+    constexpr std::uint8_t code[]{
+        0x66,0x0f,0xe7,0x41,0xf0,
+        0x66,0x0f,0xe7,0x11,      0x66,0x0f,0xe7,0x49,0x10,
+        0x66,0x0f,0xe7,0x41,0x20, 0x66,0x44,0x0f,0xe7,0x79,0x30,
+        0x66,0x44,0x0f,0xe7,0x41,0x40, 0x66,0x0f,0xe7,0x59,0x50,
+        0x66,0x0f,0xe7,0x61,0x60, 0x66,0x0f,0xe7,0x69,0x70,
+        0x66,0x41,0x0f,0xe7,0x31, 0x66,0x45,0x0f,0xe7,0x79,0x10};
+    PcMachine fast(4U << 20), scalar(4U << 20);
+    for (auto* pc : {&fast, &scalar}) {
+        prepare_movntdq(*pc, 1, kMovntdqDestination);
+        auto& cpu = pc->cpu;
+        cpu.regs[Cpu::R9] = kMovntdqDestination + 128;
+        for (unsigned reg = 0; reg < cpu.xmm.size(); ++reg)
+            for (unsigned b = 0; b < 16; ++b) cpu.xmm[reg][b] = std::uint8_t(reg * 16 + b);
+        cpu.memory.write_block(entry, code, sizeof(code));
+        require(cpu.step() == StepResult::Executed, "mixed MOVNTDQ seed failed");
+    }
+    require(fast.cpu.try_movntdq_store_batch(9) == 8 && fast.cpu.try_movntdq_store_batch(8) == 2,
+            "streaming stores lost an independent XMM lane or crossed a base change");
+    for (unsigned i = 0; i < 10; ++i)
+        require(scalar.cpu.step() == StepResult::Executed, "mixed MOVNTDQ scalar reference failed");
+    std::array<std::uint8_t, 160> actual, expected;
+    fast.cpu.memory.read_block(kMovntdqDestination, actual.data(), actual.size());
+    scalar.cpu.memory.read_block(kMovntdqDestination, expected.data(), expected.size());
+    require(actual == expected && actual[0] == 32 && actual[16] == 16 && actual[32] == 0 &&
+            actual[48] == 240 && actual[144] == 240 && fast.cpu.instructions == scalar.cpu.instructions &&
+            fast.cpu.eip == scalar.cpu.eip && fast.cpu.eflags == scalar.cpu.eflags &&
+            fast.cpu.regs == scalar.cpu.regs && fast.cpu.xmm == scalar.cpu.xmm &&
+            fast.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(), "mixed MOVNTDQ diverged");
+    std::cout << "ETHER_MOVNTDQ_MIXED_PASS max_stores=8 xmm15=1 page_safe=1\n";
+}
+
+void measure_movntdq(bool mixed = false) {
     constexpr unsigned rounds = 4000, steps = rounds * kMovntdqRoundSteps;
     std::array<long long, 7> scalar, batched;
     for (unsigned rep = 0; rep < scalar.size(); ++rep) {
         for (bool accelerated : {bool(rep % 2), !bool(rep % 2)}) {
             PcMachine pc(4U << 20);
-            prepare_movntdq(pc, rounds, kMovntdqDestination);
+            prepare_movntdq(pc, rounds, kMovntdqDestination, mixed);
             pc.enable_boot_acceleration(accelerated);
             const auto retired = pc.cpu.instructions;
             const auto start = Clock::now();
@@ -496,14 +540,23 @@ void measure_movntdq() {
                     pc.cpu.regs[Cpu::EDX] == 0 && pc.cpu.regs[Cpu::ECX] == kMovntdqDestination + rounds * 128 &&
                     pc.cpu.eip == entry + sizeof(kMovntdqFill) - 1,
                     "MOVNTDQ benchmark changed execution");
-            require((pc.boot_acceleration().movntdq_store_steps != 0) == accelerated,
+            require(mixed || (pc.boot_acceleration().movntdq_store_steps != 0) == accelerated,
                     "MOVNTDQ benchmark missed its execution path");
+            if (mixed) {
+                std::array<std::uint8_t, 128> row;
+                for (unsigned n = 0; n < rounds; ++n) {
+                    pc.cpu.memory.read_block(kMovntdqDestination + n * row.size(), row.data(), row.size());
+                    for (unsigned i = 0; i < row.size(); ++i)
+                        require(row[i] == 16 * kStreamSources[i / 16] + i % 16, "mixed stream data changed");
+                }
+            }
             (accelerated ? batched : scalar)[rep] = elapsed;
         }
     }
     std::sort(scalar.begin(), scalar.end());
     std::sort(batched.begin(), batched.end());
-    std::cout << "ETHER_MOVNTDQ_BENCH steps=" << steps << " scalar_median_ns=" << scalar[3]
+    std::cout << (mixed ? "ETHER_MOVNTDQ_MIXED_BENCH" : "ETHER_MOVNTDQ_BENCH")
+              << " steps=" << steps << " scalar_median_ns=" << scalar[3]
               << " batched_median_ns=" << batched[3] << '\n';
 }
 
@@ -859,6 +912,10 @@ int main(int argc, char** argv) {
             measure_movntdq();
             return 0;
         }
+        if (argc == 2 && std::string_view(argv[1]) == "--measure-mixed-movntdq") {
+            measure_movntdq(true);
+            return 0;
+        }
         if (argc != 1) return 2;
         compare(false, {0x49, 0x75, 0xfd}, Cpu::ECX, 0x1122334455660021, 17, 16);
         compare(false, {0x49, 0x75, 0xfd}, Cpu::ECX, 0x1122334455660006, 20, 10);
@@ -885,6 +942,7 @@ int main(int argc, char** argv) {
         counted_calls();
         sse_copy_loops();
         movntdq_store_batches();
+        mixed_movntdq_registers();
         wide_multiply_loops();
         std::cout << "ETHER_COUNTER_LOOP_PASS widths=16,32,64 flags=1 paging=1 fallbacks=1\n";
         return 0;

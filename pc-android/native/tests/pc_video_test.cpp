@@ -176,12 +176,16 @@ void framebuffer_writes() {
   ram.fill(base + page + 8, 0x55, 12);
   need(ram.restore_byte(base + page - 1, 0), "Cannot restore the guest store");
   need(watch.pages() == std::vector<std::uint32_t>({0, 1}), "Track and coalesce cross-page writes");
+  need(watch.bounds(0).begin == page - 1 && watch.bounds(0).end == page &&
+       watch.bounds(1).begin == 0 && watch.bounds(1).end == 20, "Dirty byte intervals cross pages");
   ram.acknowledge_write_watch();
 
   need(ram.try_fill_repeating_page(base + 3 * page, 0x1234), "Compact video fill rejected");
   need(ram.try_copy_compact_page(base + 3 * page, base + 4 * page), "Compact video copy rejected");
   need(ram.try_copy_resident_block(base + page, base + 100, 8), "Resident copy rejected");
   need(watch.pages() == std::vector<std::uint32_t>({3, 4, 0}), "Fast stores must mark their destinations");
+  need(watch.bounds(0).begin == 100 && watch.bounds(0).end == 108 &&
+       watch.bounds(3).begin == 0 && watch.bounds(3).end == page, "New capture reused stale bounds");
   ram.acknowledge_write_watch();
 
   const auto stop = base + pc.video_info().byte_size;
@@ -189,6 +193,7 @@ void framebuffer_writes() {
   need(!watch.pending(), "The inactive part of VRAM must stay silent");
   ram.write_block(stop - 1, bytes, sizeof(bytes));
   need(watch.pages() == std::vector<std::uint32_t>{767}, "The final visible byte must be tracked");
+  need(watch.bounds(767).begin == page - 1 && watch.bounds(767).end == page, "Clip to visible VRAM");
   ram.acknowledge_write_watch();
   call(pc, 0x4f02, 0xc142);
   need(watch.full(), "Preserve-memory mode must republish its visible image");

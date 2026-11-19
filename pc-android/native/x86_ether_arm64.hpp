@@ -531,12 +531,20 @@ struct RegisterStateVector {
     const auto pairs = skipped * (skipped - 1) / 2;
     const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
     const auto& first_op = block.instructions[0];
-    if (block.count == 3 && (first_op.kind == Instruction::Add || first_op.kind == Instruction::Subtract) &&
-        !first_op.rhs.immediate && first_op.rhs.reg == counter) {
+    if (block.count == 3 && (first_op.kind == Instruction::Add || first_op.kind == Instruction::Subtract)) {
       std::copy_n(initial, kRegisters, tail.begin());
-      const auto sum = skipped * before - pairs;
       auto& result = tail[first_op.lhs.reg];
-      result = (first_op.kind == Instruction::Add ? result + sum : result - sum) & mask;
+      if (!first_op.rhs.immediate && first_op.rhs.reg == first_op.lhs.reg) {
+        // Self-add doubles modulo the x86 width. Self-subtract clears it.
+        result = first_op.kind == Instruction::Add && skipped < first_op.width * 8
+            ? (result << skipped) & mask : 0;
+      } else {
+        const auto& source = first_op.rhs;
+        const auto sum = !source.immediate && source.reg == counter
+            ? skipped * before - pairs
+            : skipped * (source.immediate ? source.immediate_value : initial[source.reg]);
+        result = (first_op.kind == Instruction::Add ? result + sum : result - sum) & mask;
+      }
       tail[counter] = (before - skipped) & (narrow ? UINT32_MAX : UINT64_MAX);
       return rounds;
     }
