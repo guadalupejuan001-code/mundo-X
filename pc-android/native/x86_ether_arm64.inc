@@ -38,6 +38,16 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
 #endif
 }
 
+inline unsigned Cpu::try_register_projection(unsigned budget) {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+  if (ether_arm64_dispatch_ready()) {
+    ether_arm64::ResidentReadPages resident;
+    return retire_ether_arm64_block(std::min(budget, 64U), budget, nullptr, resident, true);
+  }
+#endif
+  return try_state_vector_batch(budget);
+}
+
 inline unsigned Cpu::ether_arm64_loop_length(EtherLoopAccess access) const noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (const auto* entry = cached_ether_arm64_work(access, true)) return entry->block.count;
@@ -195,7 +205,7 @@ inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
 
 inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_budget,
                                              std::unique_lock<std::mutex>* bus,
-                                             ether_arm64::ResidentReadPages& resident) {
+                                             ether_arm64::ResidentReadPages& resident, bool projection_only) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto origin = eip;
   const bool long_mode = is_long_mode();
@@ -261,6 +271,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       entry.code_version = memory.watch_code_page(physical);
     }
     if (!entry.block.can_translate() || entry.block.count > budget) return 0;
+    if (projection_only && entry.state_vector.counter == ether_arm64::RegisterStateVector::kRegisters) return 0;
     if (!entry.code) {
       auto* slot = lookup.pending ? ether_arm64_cache_->admission_slot(lookup) : &entry;
       if (!slot) return 0;
@@ -325,6 +336,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     if (private_frame) bus->unlock();
     auto outcome = active->run_state_vector(frame, round_limit);
     if (outcome) repetitions = round_limit;
+    else if (projection_only) return 0;
     else outcome = active->code.run(frame);
     if (private_frame) bus->lock();
     ether_arm64_stats_.ram_read_callbacks += frame.ram_read_callbacks;

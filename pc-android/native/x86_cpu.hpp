@@ -591,6 +591,7 @@ class Cpu {
   }
   // Use the same ownership as step() and stop at the caller's device boundary.
   unsigned try_state_vector_batch(unsigned budget);
+  unsigned try_register_projection(unsigned budget);
   std::uint16_t reg16(unsigned r) const { check_register(r); return std::uint16_t(regs[r]); }
   void set_reg16(unsigned r, std::uint16_t value) {
     check_register(r); regs[r] = (regs[r] & ~std::uint64_t{0xffff}) | value;
@@ -1136,7 +1137,7 @@ class Cpu {
   bool ether_arm64_dispatch_ready() const noexcept;
   const ether_arm64::Cache::Entry* cached_ether_arm64_work(EtherLoopAccess access, bool loop_only) const noexcept;
   unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus,
-                                    ether_arm64::ResidentReadPages& resident);
+                                    ether_arm64::ResidentReadPages& resident, bool projection_only = false);
   unsigned commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry, const ether_arm64::Frame& frame,
                                       unsigned rounds, unsigned outcome, bool direct_regs, bool private_frame);
   template <bool ParallelRead = false>

@@ -26,6 +26,13 @@ class BootHotspots {
     return static_cast<unsigned>(until_sample_ - 1);
   }
 
+  // The engine already has an exact count for a proven register loop. Keep
+  // those steps separate from the jittered instruction sample population.
+  void observe_register_batch(unsigned steps) noexcept {
+    observed_steps_ += steps;
+    register_batch_steps_ += steps;
+  }
+
   // The caller records the decoded instruction for every crossed sample.
   // Aggregation is valid when a bulk execution finishes a single REP opcode.
   std::uint64_t advance(std::uint64_t steps) noexcept {
@@ -70,7 +77,7 @@ class BootHotspots {
   void reset() noexcept {
     random_ = kSeed;
     until_sample_ = next_interval();
-    observed_steps_ = samples_ = attributed_samples_ = sampled_ns_ = 0;
+    observed_steps_ = register_batch_steps_ = samples_ = attributed_samples_ = sampled_ns_ = 0;
     elapsed_ = {};
     std::fill(entries_.begin(), entries_.end(), Entry{});
     last_entry_ = 0;
@@ -87,6 +94,7 @@ class BootHotspots {
     const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(elapsed_).count();
     out << "{\"observed_steps\":" << observed_steps_ << ",\"samples\":" << samples_
         << ",\"attributed_samples\":" << attributed_samples_;
+    if (register_batch_steps_) out << ",\"register_batch_steps\":" << register_batch_steps_;
     if (by_code_region_) {
       out << ",\"region_bytes\":" << kRegionBytes << ",\"tracked_regions\":" << entries_.size();
       // Every unlisted key is bounded by the larger of the first omitted
@@ -246,7 +254,7 @@ class BootHotspots {
   std::size_t last_entry_ = 0;
   std::uint32_t random_ = kSeed;
   std::uint64_t until_sample_ = next_interval();
-  std::uint64_t observed_steps_ = 0, samples_ = 0, attributed_samples_ = 0;
+  std::uint64_t observed_steps_ = 0, register_batch_steps_ = 0, samples_ = 0, attributed_samples_ = 0;
   std::uint64_t sampled_ns_ = 0;
   bool weighted_by_duration_, by_code_region_;
   std::chrono::steady_clock::duration elapsed_{};

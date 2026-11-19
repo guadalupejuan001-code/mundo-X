@@ -20,6 +20,10 @@
 
 namespace cosmic_pc::ether_arm64 {
 
+// The execution budget counts retired guest steps, one active cycle per step
+// in Cpu::clock_cycles(). It is independent of the x86 timestamp counter.
+inline constexpr std::uint64_t kExecutionTargetHz = 4'500'000'000'000ULL;
+
 inline constexpr unsigned kStackAccess = 16; // Packed alongside the RAM callback's width.
 inline constexpr unsigned kSubtractAccess = 32;
 
@@ -523,6 +527,19 @@ struct RegisterStateVector {
     const auto rounds = before && before < limit ? unsigned(before) : limit;
     if (rounds < minimum_rounds) return 0;
 
+    const auto skipped = std::uint64_t(rounds - 1);
+    const auto pairs = skipped * (skipped - 1) / 2;
+    const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
+    const auto& first_op = block.instructions[0];
+    if (block.count == 3 && (first_op.kind == Instruction::Add || first_op.kind == Instruction::Subtract) &&
+        !first_op.rhs.immediate && first_op.rhs.reg == counter) {
+      std::copy_n(initial, kRegisters, tail.begin());
+      const auto sum = skipped * before - pairs;
+      auto& result = tail[first_op.lhs.reg];
+      result = (first_op.kind == Instruction::Add ? result + sum : result - sum) & mask;
+      tail[counter] = (before - skipped) & (narrow ? UINT32_MAX : UINT64_MAX);
+      return rounds;
+    }
     Registers once;
     std::copy_n(initial, kRegisters, once.begin());
     body(block, once);
@@ -531,9 +548,6 @@ struct RegisterStateVector {
     auto thrice = twice;
     body(block, thrice);
 
-    const auto skipped = std::uint64_t(rounds - 1);
-    const auto pairs = skipped * (skipped - 1) / 2;
-    const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
     for (unsigned i = 0; i < kRegisters; ++i) {
       if (!(written_registers & (1U << i))) {
         tail[i] = initial[i];

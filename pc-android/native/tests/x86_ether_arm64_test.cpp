@@ -567,6 +567,44 @@ void interpreter_state_vector_contract() {
   std::cout << "ETHER_STATE_VECTOR_INTERPRETER_PASS exact_state=1 code_write=1 irq=1\n";
 }
 
+void projection_window_contract() {
+  constexpr unsigned count = 100'000'037;
+  for (const bool wide : {false, true}) for (const bool subtract : {false, true}) {
+    PcMachine machine(4U << 20);
+    if (wide) boot(machine, true); else boot_protected(machine, true);
+    auto& cpu = machine.cpu;
+    const auto op = std::uint8_t(subtract ? 0x29 : 0x01);
+    const std::vector<std::uint8_t> program = wide
+        ? std::vector<std::uint8_t>{0x48,op,0xc8,0x48,0xff,0xc9,0x75,0xf8}
+        : std::vector<std::uint8_t>{op,0xc8,0x49,0x75,0xfb};
+    cpu.memory.write_block(code, program.data(), program.size());
+    if (Cpu::ether_arm64_host()) warm_block(cpu,code,3);
+    const auto mask = wide ? UINT64_MAX : std::uint64_t(UINT32_MAX);
+    const auto sum = std::uint64_t(count) * (count + 1) / 2;
+    const auto initial = (subtract ? sum - 1 : 0 - sum) & mask;
+    cpu.eip = code;
+    cpu.eflags = 2 | Cpu::DF;
+    cpu.regs[Cpu::ECX] = count;
+    cpu.regs[Cpu::EAX] = initial;
+    for (unsigned i=0; i<3; ++i) require(cpu.step()==StepResult::Executed, "Warm guest round");
+    const auto before = cpu.instructions;
+    const auto work = (count - 1) * 3;
+    require(cpu.try_register_projection(work) == work && cpu.instructions == before + work &&
+                cpu.regs[Cpu::ECX] == 0 && cpu.regs[Cpu::EAX] == (subtract ? mask : 0) &&
+                cpu.flag(Cpu::CF) && cpu.flag(Cpu::ZF) && cpu.flag(Cpu::DF) && cpu.eip == code + program.size(),
+            "Wide register grant changed guest state, flags or retired count");
+    // Replace the body with a store. An extended projection grant must
+    // decline before touching memory, even if the old page is still cached.
+    cpu.write8(code + (wide ? 1 : 0), 0x89);
+    cpu.write8(code + (wide ? 2 : 1), 0x08);
+    cpu.eip = code;
+    const auto saved = capture(cpu);
+    require(!cpu.try_register_projection(work) && saved == capture(cpu),
+            "A changed register loop spent a projection-only grant");
+  }
+  std::cout << "ETHER_REGISTER_WINDOW_PASS modes=2 add_sub=1 exact_flags=1 updated_code=1\n";
+}
+
 void countdown_carry_contract() {
   const auto compare = [](std::vector<std::uint8_t> bytes, unsigned body_steps, bool long_mode) {
     if (long_mode) bytes.insert(bytes.end(), {0x48,0xff,0xc9});
@@ -2085,6 +2123,7 @@ int main() {
   try {
     decoder_contract();
     countdown_carry_contract();
+    projection_window_contract();
     register_shift_contract();
     interpreter_state_vector_contract();
     const auto scalar = execute_loop(false, true);

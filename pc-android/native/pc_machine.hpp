@@ -145,6 +145,8 @@ class PcMachine {
   // After the usual poll, a device can grant a batch with no observable
   // transition. The advance callback receives only the additional steps.
   std::function<unsigned(unsigned)> device_batch_limit_hook;
+  // A live board may grant a larger, atomic, register-only projection.
+  std::function<unsigned(unsigned)> register_projection_limit_hook;
   std::function<void(unsigned)> device_batch_advance_hook;
   // Same clock budget as run(). Can skip idle cycles preceding a device edge.
   std::function<unsigned(unsigned)> device_idle_advance_hook;
@@ -321,7 +323,8 @@ class PcMachine {
       if(boot_acceleration_enabled_&&budget-i>1) {
         const auto batch_start=sample ? BootTiming::Clock::now() : BootTiming::Clock::time_point{};
         const auto native_before=sample ? boot_acceleration_.arm64_block_steps : 0;
-        const auto completed=run_boot_batch(budget-i,bus);
+        bool register_projection=false;
+        const auto completed=run_boot_batch(budget-i,bus,register_projection);
         if(sample) {
           const auto elapsed=BootTiming::Clock::now()-batch_start;
           sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,elapsed);
@@ -332,7 +335,8 @@ class PcMachine {
           if(sample)sample->add_steps(0,completed);
           {
             const BootTiming::Scope profile_timing(sample, BootTimePart::Profile);
-            sample_boot(mode,cs,ip,completed);
+            if(register_projection && boot_hotspots_) boot_hotspots_->observe_register_batch(completed);
+            else sample_boot(mode,cs,ip,completed);
           }
           i+=completed;
           continue;
@@ -800,7 +804,21 @@ class PcMachine {
         : std::min(kRamCompactionMaxInterval, ram_compaction_.interval_steps * 2);
     next_ram_compaction_ = cpu.instructions + ram_compaction_.interval_steps;
   }
-  unsigned run_boot_batch(unsigned limit, std::unique_lock<std::mutex>* bus) {
+  unsigned run_boot_batch(unsigned limit, std::unique_lock<std::mutex>* bus, bool& register_projection) {
+    constexpr unsigned min_projection=65'536;
+    if(limit>=min_projection && !bus && register_projection_limit_hook && device_batch_advance_hook &&
+       cpu.state_vector_batch_candidate()){
+      const auto grant=std::min(limit,register_projection_limit_hook(limit));
+      if(grant>=min_projection){
+        const auto native_before=cpu.ether_arm64_stats().steps;
+        if(const auto retired=cpu.try_register_projection(grant)){
+          boot_acceleration_.arm64_block_steps+=cpu.ether_arm64_stats().steps-native_before;
+          device_batch_advance_hook(retired-1);
+          register_projection=true;
+          return retired;
+        }
+      }
+    }
     const bool rep=cpu.rep_batch_candidate();
     const bool shift=!rep&&cpu.shift_loop_batch_candidate();
     const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
