@@ -526,7 +526,14 @@ void interpreter_state_vector_contract() {
   compare(signed_near, 4, 400, 388);
   compare(rotate_loop, 5, 36, 35);
   compare(protected_loop, 4, 400, 300, false);
-  compare(doubling, 3, 120, 0);
+  compare(doubling, 3, 120, 120);
+  compare(doubling, 3, 225, 225);
+  constexpr std::array<std::uint8_t, 11> dependent_doubling{
+      0x48,0x01,0xc0, 0x48,0x01,0xc3, 0x83,0xe9,1, 0x75,0xf5};
+  compare(dependent_doubling, 4, 160, 0);
+  compare(std::array<std::uint8_t,8>{0x48,0x29,0xc0, 0x83,0xe9,1, 0x75,0xf8}, 3, 96, 96);
+  compare(std::array<std::uint8_t,8>{0x48,0x01,0xf0, 0x83,0xe9,1, 0x75,0xf8}, 3, 96, 96);
+  compare(std::array<std::uint8_t,9>{0x48,0x83,0xe8,0xff, 0x83,0xe9,1, 0x75,0xf7}, 3, 96, 96);
   compare(sum32, 3, 227, 225, false);
   compare(sum64, 3, 121, 120);
   compare(mixed_width, 3, 120, 0);
@@ -755,7 +762,7 @@ void register_state_vector_contract() {
   compare(narrow, 4, 1024, 16, 16, false, false);            // Short runs use native translation.
   compare(wide, 4, 0x100000000ULL, 47, 47, true, true);      // RCX retains its high bits.
   compare(wide, 4, 75, 121, 75, true, true);                  // Early exit in a prepared worker.
-  compare(doubling, 3, 65, 120, 65, false, false);            // The vector proof must reject this state.
+  compare(doubling, 3, 65, 120, 65, false, true);             // Doubling reaches zero after 64 shifts.
   compare(nonnegative, 4, 47, 55, 48, false, false);          // JNS has a different exit condition.
   compare(rotate_right, 5, 0x10000004bULL, 121, 75, false, true);
   compare(rotate_right, 5, 1024, 333, 333, false, true);
@@ -770,7 +777,7 @@ void register_state_vector_contract() {
   compare(protected_loop, 4, 1024, 333, 333, false, true, false);
   compare(protected_loop, 4, 0, 47, 47, false, true, false);
   compare(protected_loop, 4, 1024, 16, 16, false, false, false);
-  compare(protected_doubling, 3, 65, 120, 65, false, false, false);
+  compare(protected_doubling, 3, 65, 120, 65, false, true, false);
 
   const auto interrupt = [&](bool translated, bool long_mode) {
     PcMachine machine;
