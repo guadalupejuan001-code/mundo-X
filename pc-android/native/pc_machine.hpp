@@ -806,10 +806,12 @@ class PcMachine {
   }
   unsigned run_boot_batch(unsigned limit, std::unique_lock<std::mutex>* bus, bool& register_projection) {
     constexpr unsigned min_projection=65'536;
+    bool portable_vector_tried=false;
     if(limit>=min_projection && !bus && register_projection_limit_hook && device_batch_advance_hook &&
        cpu.state_vector_batch_candidate()){
       const auto grant=std::min(limit,register_projection_limit_hook(limit));
       if(grant>=min_projection){
+        portable_vector_tried=!Cpu::ether_arm64_host();
         const auto native_before=cpu.ether_arm64_stats().steps;
         if(const auto retired=cpu.try_register_projection(grant)){
           boot_acceleration_.arm64_block_steps+=cpu.ether_arm64_stats().steps-native_before;
@@ -827,7 +829,7 @@ class PcMachine {
     const bool affine_ram=!rep&&!shift&&!scan&&!zero&&cpu.affine_ram_rotate_loop_candidate();
     const bool counter=!rep&&!shift&&!scan&&!zero&&cpu.counter_loop_batch_candidate();
     const bool arm64=!rep&&cpu.ether_arm64_block_candidate();
-    const bool state_vector=!rep&&cpu.state_vector_batch_candidate();
+    const bool state_vector=!rep&&!portable_vector_tried&&cpu.state_vector_batch_candidate();
     if (!rep && !shift && !scan && !zero && !movntdq && !affine_ram && !counter && !arm64 &&
         !state_vector) return 0;
     if(device_step_hook) {
