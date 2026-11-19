@@ -81,6 +81,7 @@ struct Block {
   std::array<Instruction, kMaxInstructions> instructions{};
   unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
   unsigned auxiliary_index = kNoFlagSource, rotate_carry_index = kNoFlagSource;
+  unsigned decrement_carry_index = kNoFlagSource;
   unsigned rotate_overflow_index = kNoFlagSource, rotates = 0;
   unsigned variable_rotates = 0;
   unsigned last_wide_rotate_offset = kMaxBytes, last_variable_rotate_offset = kMaxBytes;
@@ -97,10 +98,11 @@ struct Block {
   }
 
   bool uses_arm_condition() const noexcept {
-    if (!count || flag_width < 4 || rotate_carry_index != kNoFlagSource ||
-        (flag_op != Instruction::Compare && flag_op != Instruction::Subtract)) return false;
+    if (!count || flag_width < 4 || rotate_carry_index != kNoFlagSource) return false;
     const auto& last = instructions[count - 1];
-    return last.kind == Instruction::Conditional && last.condition < 16;
+    if (last.kind != Instruction::Conditional || last.condition >= 16) return false;
+    return flag_op == Instruction::Compare || flag_op == Instruction::Subtract ||
+        (flag_op == Instruction::Decrement && (last.opcode & 15) == 5);
   }
 };
 
@@ -202,7 +204,6 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     op.opcode = opcode;
     op.width = (rex & 8) ? 8 : word ? 2 : 4;
     if (!long_mode && opcode >= 0x40 && opcode <= 0x4f) {
-      if (!carry_preserved) break;
       op.lhs.reg = opcode & 7;
       op.kind = opcode < 0x48 ? Instruction::Increment : Instruction::Decrement;
     } else if (opcode >= 0xb0 && opcode <= 0xbf) {
@@ -281,7 +282,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         if (!other.memory) break;
         op.kind = Instruction::Lea;
       } else if (opcode == 0xff) {
-        if (other.memory || group > 1 || (!long_mode && !carry_preserved)) break;
+        if (other.memory || group > 1) break;
         op.kind = group == 0 ? Instruction::Increment : Instruction::Decrement;
       } else if (group_immediate || move_immediate || test_immediate) {
         if (group_immediate) {
@@ -383,7 +384,24 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       // INC/DEC can stay with an earlier carry producer if a later
       // operation in this block replaces the carry before it is observed.
       if (!inc_dec) carry_boundary = 0;
-      else if (!carry_preserved && !carry_boundary) carry_boundary = begin;
+      else if (!carry_preserved) {
+        // DEC sets ZF for JNZ but preserves the body's carry. Capture that
+        // carry in the final native round so the caller can observe it on exit.
+        const bool jnz = (size - pos >= 2 && bytes[pos] == 0x75) ||
+            (size - pos >= 6 && bytes[pos] == 0x0f && bytes[pos + 1] == 0x85);
+        const bool from_rotate = block.rotate_carry_index != Block::kNoFlagSource;
+        const bool can_capture = from_rotate ? block.instructions[block.rotate_carry_index].rhs.immediate
+            : Instruction::logical(block.flag_op) || block.flag_op == Instruction::Add ||
+              block.flag_op == Instruction::Subtract || block.flag_op == Instruction::Compare;
+        if (op.kind == Instruction::Decrement && op.width >= 4 && jnz &&
+            block.register_only && !carry_boundary && can_capture) {
+          block.decrement_carry_index = from_rotate ? block.rotate_carry_index : block.flag_index;
+        } else if (!long_mode) {
+          break;
+        } else if (!carry_boundary) {
+          carry_boundary = begin;
+        }
+      }
       block.flag_width = op.width;
       block.flag_op = op.kind;
       block.flag_index = block.count;
@@ -457,9 +475,10 @@ struct RegisterStateVector {
         return {difference.rhs.reg, 0, 0, 0, difference.lhs.reg};
       return {};
     }
+    const bool countdown = last.kind == Instruction::Decrement || (last.kind == Instruction::Subtract &&
+        last.rhs.immediate && last.rhs.immediate_value == 1);
     if (branch.kind != Instruction::Conditional || (branch.opcode & 15) != 5 || // x86 JNZ
-        block.flag_index != block.count - 2 || last.kind != Instruction::Subtract ||
-        !last.rhs.immediate || last.rhs.immediate_value != 1 ||
+        block.flag_index != block.count - 2 || !countdown ||
         (last.width != 4 && (!block.long_mode || last.width != 8)) ||
         last.lhs.reg >= kRegisters)
       return {};
@@ -485,7 +504,7 @@ struct RegisterStateVector {
       if (op.kind != Instruction::Move && op.kind != Instruction::Add &&
           op.kind != Instruction::Subtract) return {};
       if (!op.rhs.immediate) {
-        if (op.rhs.reg >= kRegisters || op.rhs.reg == last.lhs.reg) return {};
+        if (op.rhs.reg >= kRegisters || (op.rhs.reg == last.lhs.reg && op.width != last.width)) return {};
         read |= 1U << op.rhs.reg;
       }
     }
@@ -600,6 +619,10 @@ struct RegisterStateVector {
         default: break;
       }
     }
+    const auto& countdown = block.instructions[block.count - 2];
+    auto& count = registers[countdown.lhs.reg];
+    --count;
+    if (countdown.width == 4) count = std::uint32_t(count);
   }
 };
 
@@ -677,6 +700,7 @@ struct Frame {
   using Write = unsigned (*)(Frame*, std::uint64_t, unsigned, std::uint64_t) noexcept;
   std::array<std::uint64_t, 16> regs;
   std::uint64_t left = 0, right = 0, loaded = 0;
+  std::uint64_t carry_left, carry_right;
   std::uint64_t auxiliary_left, auxiliary_right, rotate_carry_result, rotate_overflow_result;
   std::uint64_t conditional_source;
   Read read;
@@ -716,7 +740,8 @@ class Emitter {
       const auto& op = block.instructions[i];
       const bool capture_flags = block.flag_width && i == block.flag_index;
       const unsigned flag_slot = capture_flags ? offsetof(Frame, left)
-          : i == block.auxiliary_index ? offsetof(Frame, auxiliary_left) : 0;
+          : i == block.auxiliary_index ? offsetof(Frame, auxiliary_left)
+          : i == block.decrement_carry_index && !Instruction::logical(op.kind) ? offsetof(Frame, carry_left) : 0;
       if (op.writes_ram()) {
         const auto access = op.kind == Instruction::Subtract ? kSubtractAccess : 0;
         prepare_access(op.lhs, op.width, access);
@@ -767,7 +792,8 @@ class Emitter {
           emit(extr | (9U << 16) | (right << 10) | (9U << 5) | 9U); // ROR X/W9,X/W9,#right
         }
         store(9, op.lhs.reg * 8);
-        if (i == block.rotate_carry_index) store(9, offsetof(Frame, rotate_carry_result));
+        if (i == block.decrement_carry_index) store(9, offsetof(Frame, carry_left));
+        else if (i == block.rotate_carry_index) store(9, offsetof(Frame, rotate_carry_result));
         else if (i == block.rotate_overflow_index) store(9, offsetof(Frame, rotate_overflow_result));
       } else if (op.kind == Instruction::Increment || op.kind == Instruction::Decrement ||
                  op.kind == Instruction::Add || op.kind == Instruction::Subtract || op.kind == Instruction::Xor ||
@@ -788,8 +814,12 @@ class Emitter {
     const auto& last = block.instructions[block.count - 1];
     if (block.uses_arm_condition()) {
       load(9, offsetof(Frame, left), block.flag_width);
-      load(10, offsetof(Frame, right), block.flag_width);
-      emit(block.flag_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
+      if (block.flag_op == Instruction::Decrement) {
+        emit(block.flag_width == 8 ? 0xf100053f : 0x7100053f); // CMP X/W9,#1 before DEC.
+      } else {
+        load(10, offsetof(Frame, right), block.flag_width);
+        emit(block.flag_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
+      }
       emit(0x1a9f07e0U | ((last.condition ^ 1U) << 12)); // CSET W0,cc
       if (block.repeats) {
         load(11, offsetof(Frame, loop_remaining), 4);

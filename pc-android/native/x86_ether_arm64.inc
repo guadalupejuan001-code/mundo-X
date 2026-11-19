@@ -427,7 +427,20 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
       break;
     case ether_arm64::Instruction::Increment:
     case ether_arm64::Instruction::Decrement: {
-      const auto carry = flag(CF);
+      bool carry = flag(CF);
+      if (block.decrement_carry_index != ether_arm64::Block::kNoFlagSource) {
+        const auto& source = block.instructions[block.decrement_carry_index];
+        if (ether_arm64::Instruction::logical(source.kind)) {
+          carry = false;
+        } else if (ether_arm64::Instruction::rotate(source.kind)) {
+          const auto bit = source.kind == ether_arm64::Instruction::RotateLeft ? 1 : sign_bit(source.width);
+          carry = (frame.carry_left & bit) != 0;
+        } else {
+          alu(source.kind == ether_arm64::Instruction::Add ? 0 : 5,
+              frame.carry_left, frame.carry_right, source.width);
+          carry = flag(CF);
+        }
+      }
       alu(block.flag_op == ether_arm64::Instruction::Increment ? 0 : 5,
           frame.left, 1, block.flag_width);
       set_flag(CF, carry);

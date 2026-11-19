@@ -458,6 +458,10 @@ void boot_hot_instruction_contract() {
 }
 
 void interpreter_state_vector_contract() {
+  constexpr std::array<std::uint8_t, 5> sum32{0x01,0xc8, 0x49, 0x75,0xfb};
+  constexpr std::array<std::uint8_t, 8> sum64{0x48,0x01,0xc8, 0x48,0xff,0xc9, 0x75,0xf8};
+  // A 64-bit read followed by DEC ECX cannot use a 64-bit affine countdown.
+  constexpr std::array<std::uint8_t, 7> mixed_width{0x48,0x01,0xc8, 0xff,0xc9, 0x75,0xf9};
   // SUB RAX,RDX; INC RDX; CMP RAX,RDX; JG back to SUB.
   constexpr std::array<std::uint8_t, 11> signed_loop{
       0x48,0x2b,0xc2, 0x48,0xff,0xc2, 0x48,0x3b,0xc2, 0x7f,0xf5};
@@ -523,6 +527,9 @@ void interpreter_state_vector_contract() {
   compare(rotate_loop, 5, 36, 35);
   compare(protected_loop, 4, 400, 300, false);
   compare(doubling, 3, 120, 0);
+  compare(sum32, 3, 227, 225, false);
+  compare(sum64, 3, 121, 120);
+  compare(mixed_width, 3, 120, 0);
 
   PcMachine routed, scalar;
   constexpr unsigned irq_at = 37, budget = 400;
@@ -558,6 +565,59 @@ void interpreter_state_vector_contract() {
               ticks[0] == ticks[1] && capture(routed.cpu) == capture(scalar.cpu),
           "the interpreter batch changed a guest IRQ boundary");
   std::cout << "ETHER_STATE_VECTOR_INTERPRETER_PASS exact_state=1 code_write=1 irq=1\n";
+}
+
+void countdown_carry_contract() {
+  const auto compare = [](std::vector<std::uint8_t> bytes, unsigned body_steps, bool long_mode) {
+    if (long_mode) bytes.insert(bytes.end(), {0x48,0xff,0xc9});
+    else bytes.push_back(0x49);
+    const auto displacement = 0U - unsigned(bytes.size()) - (long_mode ? 6U : 2U);
+    if (long_mode) {
+      bytes.insert(bytes.end(), {0x0f,0x85});
+      for (unsigned i = 0; i < 4; ++i) bytes.push_back(std::uint8_t(displacement >> (8*i)));
+    } else bytes.insert(bytes.end(), {0x75,std::uint8_t(displacement)});
+    const auto round = body_steps + 2;
+    const auto block = arm64::decode(bytes.data(), unsigned(bytes.size()), code, long_mode);
+    require(block.count == round && block.repeats && block.decrement_carry_index < body_steps,
+            "A register countdown must keep its carry producer in the repeated block");
+    if (!Cpu::ether_arm64_host()) return;
+    PcMachine native, scalar;
+    for (auto* machine : {&native, &scalar}) {
+      if (long_mode) boot(*machine, machine == &native);
+      else boot_protected(*machine, machine == &native);
+      machine->cpu.memory.write_block(code, bytes.data(), bytes.size());
+      machine->cpu.eip = code;
+    }
+    warm_block(native.cpu, code, round);
+    for (unsigned i = 0; i < round; ++i) scalar.cpu.step();
+    for (auto seed : {0ULL, 1ULL, 0x8000000080000000ULL, ~0ULL}) {
+      for (unsigned count : {1U, 19U, 77U}) {
+        for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+          cpu->eip = code;
+          cpu->regs[Cpu::EAX] = seed;
+          cpu->regs[Cpu::ECX] = count;
+          cpu->eflags = 2 | Cpu::DF | ((seed & 1) ? Cpu::CF : 0);
+        }
+        const auto budget = std::min(64U, count) * round;
+        require(native.cpu.try_ether_arm64_block(budget) == budget, "Incomplete countdown block");
+        for (unsigned i = 0; i < budget; ++i)
+          require(scalar.cpu.step() == StepResult::Executed, "Scalar countdown faulted");
+        require(capture(native.cpu) == capture(scalar.cpu) &&
+                native.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(),
+                "Countdown changed registers, flags, branch target or retired count");
+      }
+    }
+  };
+  for (bool wide : {false, true}) {
+    compare({0x01,0xc8}, 1, wide);  // ADD EAX,ECX
+    compare({0x29,0xc8}, 1, wide);  // SUB EAX,ECX
+    compare({0x39,0xc8}, 1, wide);  // CMP EAX,ECX
+    compare({0x31,0xc8}, 1, wide);  // XOR clears CF.
+    compare({0xc1,0xc8,1}, 1, wide); // ROR sets CF from the high result bit.
+    compare({0x01,0xc8,0x35,0xdf,0x9b,0x57,0x13,0xc1,0xc0,5}, 3, wide);
+  }
+  compare({0x48,0x01,0xc8}, 1, true);
+  compare({0x48,0xc1,0xc8,1}, 1, true);
 }
 
 void register_state_vector_contract() {
@@ -2024,6 +2084,7 @@ void benchmark() {
 int main() {
   try {
     decoder_contract();
+    countdown_carry_contract();
     register_shift_contract();
     interpreter_state_vector_contract();
     const auto scalar = execute_loop(false, true);
