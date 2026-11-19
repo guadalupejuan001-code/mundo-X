@@ -205,6 +205,7 @@ class Cpu {
     std::uint64_t invalidated = 0, data_fallbacks = 0;
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
     std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
+    std::uint64_t off_bus_register_steps = 0;
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
     std::uint64_t repeated_loop_dispatches = 0, repeated_loop_steps = 0, rotate_steps = 0;
     std::uint64_t variable_rotate_steps = 0;

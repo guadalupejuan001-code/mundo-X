@@ -328,7 +328,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     else outcome = active->code.run(frame);
     if (private_frame) bus->lock();
     ether_arm64_stats_.ram_read_callbacks += frame.ram_read_callbacks;
-    if (private_frame && (memory.code_page_version(physical) != code_version ||
+    if (private_frame && (!a20_enabled || memory.code_page_version(physical) != code_version ||
         (long_mode && memory.page_table_epoch() != mapping_epoch))) {
       ++ether_arm64_stats_.invalidated;
       active->invalidate(origin);
@@ -340,6 +340,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     }
     const auto rounds = block.repeats ? repetitions - frame.loop_remaining : 1U;
     const auto retired = rounds * block.count;
+    if (private_frame) ether_arm64_stats_.off_bus_register_steps += retired;
     if (staged) {
       // A later speculative page walk may have discovered a new page table.
       for (unsigned i = 0; i < pending.count; ++i) {

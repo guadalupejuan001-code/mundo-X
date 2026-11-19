@@ -19,6 +19,7 @@
 #include <iomanip>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -275,7 +276,7 @@ class PcMachine {
            guest_restart_ == GuestRestart::None;
   }
   void run(unsigned budget, RunClock::time_point deadline=RunClock::time_point::max(),
-           bool preserve_ether_loop_entry=false) {
+           bool preserve_ether_loop_entry=false, std::unique_lock<std::mutex>* bus=nullptr) {
     yield_requested_=false;
     if(!guest_execution_available())return;
     if(cpu.halted&&!device_step_hook)return;
@@ -320,7 +321,7 @@ class PcMachine {
       if(boot_acceleration_enabled_&&budget-i>1) {
         const auto batch_start=sample ? BootTiming::Clock::now() : BootTiming::Clock::time_point{};
         const auto native_before=sample ? boot_acceleration_.arm64_block_steps : 0;
-        const auto completed=run_boot_batch(budget-i);
+        const auto completed=run_boot_batch(budget-i,bus);
         if(sample) {
           const auto elapsed=BootTiming::Clock::now()-batch_start;
           sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,elapsed);
@@ -799,7 +800,7 @@ class PcMachine {
         : std::min(kRamCompactionMaxInterval, ram_compaction_.interval_steps * 2);
     next_ram_compaction_ = cpu.instructions + ram_compaction_.interval_steps;
   }
-  unsigned run_boot_batch(unsigned limit) {
+  unsigned run_boot_batch(unsigned limit, std::unique_lock<std::mutex>* bus) {
     const bool rep=cpu.rep_batch_candidate();
     const bool shift=!rep&&cpu.shift_loop_batch_candidate();
     const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
@@ -845,7 +846,7 @@ class PcMachine {
       }
     }
     if(!completed&&arm64) {
-      completed=cpu.try_ether_arm64_block(limit);
+      completed=cpu.try_ether_arm64_block(limit,bus);
       native_batched=completed!=0;
     }
     if(!completed&&state_vector) {
