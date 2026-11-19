@@ -212,6 +212,78 @@ int main() {
                       read(ram, 2 * kPage, kPage) == std::vector<std::uint8_t>(kPage, 0x2a),
                   "Full-page writes and fills must replace cold bytes without a backing read");
          }},
+        {"preparation compacts wider deltas and prewrites exact cold pages", [] {
+             using Clock = SparseRam::ReclaimClock;
+             using Adjustment = SparseRam::BudgetAdjustment;
+             struct PreparingBacking : TestBacking {
+                 bool decline = false;
+                 std::size_t prepare_pages(const PageWrite* writes, std::size_t count,
+                                           Clock::time_point) override {
+                     if (decline) return 0;
+                     if (fail_write) throw std::runtime_error("Prewrite I/O failed");
+                     // Exercise the committed-prefix contract.
+                     if (count) write(writes[0].page, writes[0].bytes);
+                     return std::min<std::size_t>(count, 1);
+                 }
+                 void discard(std::uint64_t page) noexcept override {
+                     TestBacking::discard(page);
+                     pages.erase(page);
+                 }
+             };
+             SparseRam ram(8 * kPage, 8 * kPage);
+             auto backing = std::make_unique<PreparingBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing));
+             TestBacking::Page middle{}, dense{};
+             for (std::uint64_t i = 0; i < kPage / sizeof(i); ++i) {
+                 const auto value = i + 1;
+                 std::memcpy(dense.data() + i * sizeof(value), &value, sizeof(value));
+             }
+             std::copy_n(dense.begin(), 260 * sizeof(std::uint64_t), middle.begin());
+             ram.write_block(0, middle.data(), kPage);
+             ram.write_block(kPage, dense.data(), kPage);
+             ram.write_block(2 * kPage, dense.data(), kPage);
+             need(ram.prepare_reclaim(2, Clock::now()).released_bytes == 0,
+                  "An expired preparation changed RAM");
+             {
+                 const auto pins = ram.pin_writes();
+                 need(ram.prepare_reclaim(2, Clock::time_point::max()).backed_pages == 0,
+                      "Preparation must leave a live write journal alone");
+             }
+             store->fail_write = true;
+             SparseRam::ReclaimPreparation failed;
+             for (unsigned pass = 0; pass < 3 && !failed.backing_failed; ++pass)
+                 failed = ram.prepare_reclaim(2, Clock::time_point::max());
+             constexpr auto compact_bytes = 8 + 260 * (sizeof(std::uint16_t) + sizeof(std::uint64_t));
+             need(failed.backing_failed && failed.compact_up_to_3k == 1 &&
+                      failed.released_bytes == kPage - compact_bytes &&
+                      ram.allocated_bytes() == 2 * kPage + compact_bytes &&
+                      ram.clean_backing_pages() == 0 && ram.spilled_pages() == 0,
+                  "Only exact compaction may release RAM after a prewrite error");
+             store->fail_write = false;
+             store->decline = true;
+             need(ram.prepare_reclaim(2, Clock::time_point::max()).backed_pages == 0 &&
+                      ram.clean_backing_pages() == 0, "A declined batch marked pages ready");
+             store->decline = false;
+             need(ram.prepare_reclaim(2, Clock::time_point::max()).backed_pages == 1 &&
+                      ram.clean_backing_pages() == 1 && ram.spilled_pages() == 0,
+                  "Only a committed prefix may enter the cold reserve");
+             const auto prepared = store->pages.begin()->first;
+             const auto changed_at = prepared * kPage;
+             ram.write_byte(changed_at, 0xa5);
+             need(ram.clean_backing_pages() == 0 && store->pages.empty(),
+                  "A write must invalidate its prepared QSSD copy");
+             for (unsigned pass = 0; pass < 6 && ram.clean_backing_pages() < 2; ++pass)
+                 ram.prepare_reclaim(2, Clock::time_point::max());
+             const auto writes = ram.metrics().backing_writes;
+             need(ram.clean_backing_pages() == 2 &&
+                      ram.adjust_payload_budget(compact_bytes, 0, Clock::time_point::max() -
+                          std::chrono::hours(1), 2) == Adjustment::Applied &&
+                      ram.metrics().backing_clean_reclaims == 2 && ram.metrics().backing_writes == writes &&
+                      ram.read_byte(changed_at) == 0xa5 &&
+                      read(ram, 0, kPage) == std::vector<std::uint8_t>(middle.begin(), middle.end()),
+                  "Pressure must reclaim ready pages without new writes or stale guest bytes");
+         }},
         {"clean promoted pages reuse backing and changed pages never expose stale bytes", [] {
              using Adjustment = SparseRam::BudgetAdjustment;
              SparseRam ram(3 * kPage, 3 * kPage);

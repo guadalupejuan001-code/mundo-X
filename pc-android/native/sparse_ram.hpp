@@ -66,6 +66,11 @@ public:
         virtual std::size_t write_pages(const PageWrite*, std::size_t, ReclaimClock::time_point) {
             throw std::logic_error("SparseRam backing does not support grouped writes.");
         }
+        // Prepare clean copies of still-resident pages. A backend can decline
+        // optional work by returning zero. On exception it publishes nothing.
+        virtual std::size_t prepare_pages(const PageWrite*, std::size_t, ReclaimClock::time_point) {
+            return 0;
+        }
         virtual void discard(std::uint64_t) noexcept {}
         virtual void reset() noexcept = 0;
     };
@@ -91,6 +96,15 @@ public:
         std::size_t page_state_vectors;
         std::size_t backing_clean_pages;
         std::uint64_t backing_clean_reclaims;
+    };
+
+    struct ReclaimPreparation {
+        std::size_t backed_pages = 0;
+        std::size_t compact_up_to_2k = 0;
+        std::size_t compact_up_to_3k = 0;
+        std::size_t dense_pages = 0;
+        std::uint64_t released_bytes = 0;
+        bool backing_failed = false;
     };
 
     class WritePins {
@@ -177,9 +191,10 @@ public:
           backing_writes_(std::exchange(other.backing_writes_, 0)),
           backing_clean_pages_(std::exchange(other.backing_clean_pages_, 0)),
           backing_clean_reclaims_(std::exchange(other.backing_clean_reclaims_, 0)),
-          clean_history_(other.clean_history_),
+          clean_history_(std::move(other.clean_history_)),
           clean_history_size_(std::exchange(other.clean_history_size_, 0)),
           clean_history_next_(std::exchange(other.clean_history_next_, 0)),
+          preparation_page_(std::exchange(other.preparation_page_, 0)),
           eviction_page_(std::exchange(other.eviction_page_, 0)),
           compact_eviction_page_(std::exchange(other.compact_eviction_page_, 0)),
           pin_epoch_(std::exchange(other.pin_epoch_, 0)) {}
@@ -201,9 +216,10 @@ public:
             backing_writes_ = std::exchange(other.backing_writes_, 0);
             backing_clean_pages_ = std::exchange(other.backing_clean_pages_, 0);
             backing_clean_reclaims_ = std::exchange(other.backing_clean_reclaims_, 0);
-            clean_history_ = other.clean_history_;
+            clean_history_ = std::move(other.clean_history_);
             clean_history_size_ = std::exchange(other.clean_history_size_, 0);
             clean_history_next_ = std::exchange(other.clean_history_next_, 0);
+            preparation_page_ = std::exchange(other.preparation_page_, 0);
             eviction_page_ = std::exchange(other.eviction_page_, 0);
             compact_eviction_page_ = std::exchange(other.compact_eviction_page_, 0);
             pin_epoch_ = std::exchange(other.pin_epoch_, 0);
@@ -220,10 +236,13 @@ public:
     bool has_page_backing() const noexcept { return bool(backing_); }
     bool has_pinned_writes() const noexcept { return pin_depth_ != 0; }
     void attach_page_backing(std::unique_ptr<PageBacking> backing,
-                             BackingCachePolicy policy = BackingCachePolicy::Fixed) {
-        if (!backing || backing_) throw std::invalid_argument("SparseRam expects one page backing.");
+                             BackingCachePolicy policy = BackingCachePolicy::Fixed,
+                             std::size_t clean_history_pages = 512) {
+        if (!backing || backing_ || !clean_history_pages)
+            throw std::invalid_argument("SparseRam expects one page backing and a clean page history.");
         auto cache = std::make_unique<BackingCache>(policy);
         cache->resize(cache->sets_for(payload_cap_bytes_, payload_cap_bytes_ - allocated_bytes()));
+        clean_history_.resize(clean_history_pages);
         backing_cache_ = std::move(cache);
         backing_ = std::move(backing);
     }
@@ -245,8 +264,71 @@ public:
     std::uint64_t backing_cache_bytes() const noexcept {
         return backing_cache_ ? backing_cache_->payload_bytes() : 0;
     }
+    std::size_t clean_backing_pages() const noexcept { return backing_clean_pages_; }
+
+    // The owner calls this between execution slices, before memory pressure.
+    // Neither a failed prewrite nor a declined batch changes a dense page.
+    ReclaimPreparation prepare_reclaim(std::size_t ready_limit, ReclaimClock::time_point deadline) {
+        ReclaimPreparation result;
+        ready_limit = std::min(ready_limit, clean_history_.size());
+        if (!backing_ || has_pinned_writes() || !allocated_pages_ ||
+            backing_clean_pages_ >= ready_limit || ReclaimClock::now() >= deadline) return result;
+
+        constexpr auto compact_limit = 3 * kPageSize / 4;
+        constexpr auto max_changes = (compact_limit - kPatternSize) / kPatchSize;
+        std::array<PageBacking::PageWrite, PageBacking::kMaxWritePages> writes;
+        const auto limit = std::min(writes.size(), ready_limit - backing_clean_pages_);
+        const auto pages = logical_bytes_ / kPageSize + (logical_bytes_ % kPageSize != 0);
+        std::size_t count = 0, candidates = 0;
+        ReclaimDeadline window{deadline};
+        auto remaining = pages;
+        for (std::size_t scanned = 0; remaining && scanned < 4 * kPagesPerTable &&
+                candidates < writes.size() && count < limit; ++scanned) {
+            if (window.expired_during_scan()) break;
+            const auto page = preparation_page_;
+            auto& table = tables_[static_cast<std::size_t>(page / kPagesPerTable)];
+            if (!table) {
+                remaining -= skip_empty_tables(preparation_page_, pages, remaining);
+                continue;
+            }
+            if (++preparation_page_ == pages) preparation_page_ = 0;
+            --remaining;
+            const auto index = static_cast<std::size_t>(page % kPagesPerTable);
+            auto& slot = table->slots[index];
+            if (!slot.has_dense() || slot.backing_current || slot.give_second_chance()) continue;
+            if (window.expired()) break;
+            ++candidates;
+            const auto before = allocated_bytes();
+            if (compact_page(table, index) || compact_changed_words<max_changes>(slot, compact_limit)) {
+                const auto released = before - allocated_bytes();
+                result.released_bytes += released;
+                if (kPageSize - released <= kPageSize / 2) ++result.compact_up_to_2k;
+                else ++result.compact_up_to_3k;
+            } else {
+                ++result.dense_pages;
+                writes[count++] = {page, slot.payload.get()};
+            }
+        }
+        if (!count || window.expired()) return result;
+        try {
+            count = backing_->prepare_pages(writes.data(), count, deadline);
+        } catch (const std::exception&) {
+            result.backing_failed = true;
+            return result;
+        }
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto page = writes[i].page;
+            backing_cache_->invalidate(page);
+            retain_clean_backing(page, *find_slot(page));
+        }
+        backing_writes_ += count;
+        result.backed_pages = count;
+        return result;
+    }
+
     BudgetAdjustment adjust_payload_budget(std::uint64_t target, std::size_t reclaim_pages,
-                                           ReclaimClock::time_point deadline = ReclaimClock::time_point::max()) {
+                                           ReclaimClock::time_point deadline = ReclaimClock::time_point::max(),
+                                           std::size_t clean_reclaim_pages = 0) {
         if (has_pinned_writes()) return BudgetAdjustment::Blocked;
         const auto cache_sets = backing_cache_ ? backing_cache_->sets_for(target, target) : 0;
         const auto guest_target = target - (backing_cache_ ? backing_cache_->reserved_bytes(cache_sets) : 0);
@@ -263,9 +345,10 @@ public:
             } scope(paced ? backing_.get() : nullptr);
             const bool grouped = backing_ && backing_->supports_grouped_writes();
             std::size_t reclaimed_pages = 0;
-            if (paced && reclaim_pages && !paced->expired()) {
+            const auto clean_limit = std::max(reclaim_pages, clean_reclaim_pages);
+            if (paced && clean_limit && !paced->expired()) {
                 if (backing_cache_) backing_cache_->release_unused(deadline);
-                reclaimed_pages = reclaim_cold_backed_pages(guest_target, reclaim_pages, *paced);
+                reclaimed_pages = reclaim_cold_backed_pages(guest_target, clean_limit, *paced);
             }
             for (auto i = reclaimed_pages; i < reclaim_pages && allocated_bytes() > guest_target;) {
                 if (paced && paced->expired()) break;
@@ -312,6 +395,7 @@ public:
             static_cast<std::uint64_t>(pattern_pages_ + sparse_word_pages_ + pattern_delta_pages_) * kPatternSize;
         return sizeof(*this) +
                static_cast<std::uint64_t>(tables_.capacity()) * sizeof(std::unique_ptr<PageTable>) +
+               static_cast<std::uint64_t>(clean_history_.capacity()) * sizeof(std::uint64_t) +
                static_cast<std::uint64_t>(allocated_tables_) * sizeof(PageTable) - inline_payload +
                (backing_cache_ ? backing_cache_->storage_bytes() : 0);
     }
@@ -623,6 +707,7 @@ public:
         spilled_pages_ = backing_writes_ = eviction_page_ = compact_eviction_page_ = 0;
         backing_clean_pages_ = backing_clean_reclaims_ = 0;
         clean_history_size_ = clean_history_next_ = 0;
+        preparation_page_ = 0;
         if (backing_) {
             backing_cache_->clear();
             backing_cache_->reads.store(0, std::memory_order_relaxed);
@@ -897,8 +982,9 @@ private:
     std::size_t backing_clean_pages_ = 0;
     std::uint64_t backing_clean_reclaims_ = 0;
     // Bound optional copies and the work of dropping them at backing capacity.
-    std::array<std::uint64_t, 512> clean_history_{};
+    std::vector<std::uint64_t> clean_history_;
     std::size_t clean_history_size_ = 0, clean_history_next_ = 0;
+    std::uint64_t preparation_page_ = 0;
     std::uint64_t eviction_page_ = 0;
     std::uint64_t compact_eviction_page_ = 0;
     std::uint32_t pin_epoch_ = 0;
@@ -1293,27 +1379,33 @@ private:
 
     // Only reclaim cold pages this way. A CPU write still gets a dense
     // destination for its rollback journal.
+    template <std::size_t MaxChangedWords = kMaxChangedWords>
     bool compact_changed_words(PageSlot& slot, std::uint64_t compact_room) noexcept {
         const auto* bytes = slot.payload.get();
-        // If a page has at most kMaxChangedWords exceptions, its background
-        // is the majority even in this short prefix. Verify against all words.
+        // Small deltas have a majority even in a short prefix. A wider pass
+        // can also use zero when it covers enough words to fit the envelope.
+        constexpr auto prefix = std::min<std::size_t>(kRepeating, 2 * MaxChangedWords + 1);
         std::uint64_t pattern = 0;
-        unsigned votes = 0;
-        for (std::size_t word = 0; word < 2 * kMaxChangedWords + 1; ++word) {
+        unsigned votes = 0, zeros = 0;
+        for (std::size_t word = 0; word < prefix; ++word) {
             const auto value = load_word(bytes + word * kPatternSize);
+            if constexpr (prefix == kRepeating) zeros += value == 0;
             if (votes == 0) {
                 pattern = value;
                 votes = 1;
             } else if (value == pattern) ++votes;
             else --votes;
         }
+        if constexpr (prefix == kRepeating) {
+            if (zeros >= kRepeating - MaxChangedWords) pattern = 0;
+        }
 
-        std::array<std::uint8_t, kMaxChangedWords * kPatchSize> patches;
+        std::array<std::uint8_t, MaxChangedWords * kPatchSize> patches;
         std::size_t changed = 0;
         for (std::uint16_t word = 0; word < kRepeating; ++word) {
             const auto value = load_word(bytes + word * kPatternSize);
             if (value == pattern) continue;
-            if (changed == kMaxChangedWords) return false;
+            if (changed == MaxChangedWords) return false;
             auto* patch = patches.data() + changed * kPatchSize;
             std::memcpy(patch, &word, kPatchIndexSize);
             std::memcpy(patch + kPatchIndexSize, &value, kPatternSize);

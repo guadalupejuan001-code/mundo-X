@@ -165,18 +165,25 @@ class MemoryFabric {
   bool has_page_backing() const noexcept { return ram_.has_page_backing(); }
   bool has_pinned_writes() const noexcept { return ram_.has_pinned_writes(); }
   void attach_page_backing(std::unique_ptr<SparseRam::PageBacking> backing,
-                           SparseRam::BackingCachePolicy policy = SparseRam::BackingCachePolicy::Fixed) {
-    ram_.attach_page_backing(std::move(backing), policy);
+                           SparseRam::BackingCachePolicy policy = SparseRam::BackingCachePolicy::Fixed,
+                           std::size_t clean_history_pages = 512) {
+    ram_.attach_page_backing(std::move(backing), policy, clean_history_pages);
     if (code_page_versions_) code_page_versions_->clear();
   }
   [[nodiscard]] SparseRam::WritePins pin_writes() noexcept { return ram_.pin_writes(); }
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
   std::uint64_t backing_cache_bytes() const noexcept { return ram_.backing_cache_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
+  std::size_t clean_backing_pages() const noexcept { return ram_.clean_backing_pages(); }
+  SparseRam::ReclaimPreparation prepare_reclaim(
+      std::size_t ready_limit, SparseRam::ReclaimClock::time_point deadline) {
+    return ram_.prepare_reclaim(ready_limit, deadline);
+  }
   SparseRam::BudgetAdjustment adjust_payload_budget(
       std::uint64_t target, std::size_t reclaim_pages,
-      SparseRam::ReclaimClock::time_point deadline = SparseRam::ReclaimClock::time_point::max()) {
-    return ram_.adjust_payload_budget(target, reclaim_pages, deadline);
+      SparseRam::ReclaimClock::time_point deadline = SparseRam::ReclaimClock::time_point::max(),
+      std::size_t clean_reclaim_pages = 0) {
+    return ram_.adjust_payload_budget(target, reclaim_pages, deadline, clean_reclaim_pages);
   }
   std::uint64_t metadata_bytes() const noexcept {
     return ram_.metadata_bytes() + sizeof(*this) - sizeof(ram_) +
