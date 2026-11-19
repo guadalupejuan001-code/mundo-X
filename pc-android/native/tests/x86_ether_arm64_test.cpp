@@ -22,6 +22,11 @@ constexpr std::uint64_t stack = 0x19000, output = 0x80000;
 constexpr unsigned ready_entry = 0x23;
 constexpr unsigned ready_leaf = 0xe3;
 
+// Long-mode dword writes clear the upper half of the destination register.
+constexpr std::array<std::uint8_t, 6> sum_dword_counter{0x01,0xc8, 0xff,0xc9, 0x75,0xfa};
+constexpr std::array<std::uint8_t, 6> sub_dword_source{0x29,0xf0, 0xff,0xc9, 0x75,0xfa};
+constexpr std::array<std::uint8_t, 8> dword_add_wide_counter{0x83,0xc0,0xfd, 0x48,0xff,0xc9, 0x75,0xf8};
+
 // Recreates the observed MOV RSI,[RSI], CMP R15,[RSI+10h], CMP RSI,R14
 // and conditional branches with controlled RAM and explicit exit paths.
 constexpr std::array<std::uint8_t, 24> pointer_loop{
@@ -536,6 +541,10 @@ void interpreter_state_vector_contract() {
   compare(std::array<std::uint8_t,9>{0x48,0x83,0xe8,0xff, 0x83,0xe9,1, 0x75,0xf7}, 3, 96, 96);
   compare(sum32, 3, 227, 225, false);
   compare(sum64, 3, 121, 120);
+  compare(sum_dword_counter, 3, 227, 225);
+  compare(sub_dword_source, 3, 121, 120);
+  compare(dword_add_wide_counter, 3, 121, 120);
+  compare(std::array<std::uint8_t,6>{0x01,0xc0, 0xff,0xc9, 0x75,0xfa}, 3, 120, 120);
   compare(mixed_width, 3, 120, 0);
 
   PcMachine routed, scalar;
@@ -778,6 +787,9 @@ void register_state_vector_contract() {
   compare(protected_loop, 4, 0, 47, 47, false, true, false);
   compare(protected_loop, 4, 1024, 16, 16, false, false, false);
   compare(protected_doubling, 3, 65, 120, 65, false, true, false);
+  compare(sum_dword_counter, 3, 0x10000004bULL, 121, 75, true, true);
+  compare(sub_dword_source, 3, 0, 63, 63, false, true);
+  compare(dword_add_wide_counter, 3, 0x100000000ULL, 47, 47, true, true);
 
   const auto interrupt = [&](bool translated, bool long_mode) {
     PcMachine machine;

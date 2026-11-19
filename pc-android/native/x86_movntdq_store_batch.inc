@@ -1,5 +1,5 @@
 inline unsigned Cpu::try_movntdq_store_batch(unsigned budget) {
-  constexpr unsigned vector_bytes = 16, max_stores = 8, max_instruction_bytes = 6;
+  constexpr unsigned vector_bytes = 16, max_stores = 8, max_instruction_bytes = 9;
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   if (budget < 2 || !movntdq_store_batch_candidate() || !can_cache_translations() ||
       !(cr0 & 0x80000000U) || fault || halted || transaction_ || interrupt_shadow_ ||
@@ -25,9 +25,17 @@ inline unsigned Cpu::try_movntdq_store_batch(unsigned budget) {
       next += 3;
       const unsigned mode = operand >> 6;
       const unsigned rm = operand & 7U;
-      if (mode > 1 || rm == ESP || (!mode && rm == EBP) || (mode && next == code_bytes)) break;
+      if (mode == 3 || rm == ESP || (!mode && rm == EBP)) break;
       const unsigned address_reg = rm | ((rex & 1U) << 3);
-      const auto displacement = mode ? signed_value(signature[next++], 1) : 0;
+      std::int64_t displacement = 0;
+      if (mode == 1) {
+        if (next == code_bytes) break;
+        displacement = signed_value(signature[next++], 1);
+      } else if (mode == 2) {
+        if (code_bytes - next < 4) break;
+        displacement = signed_value(little_endian_word(signature.data() + next, 4), 4);
+        next += 4;
+      }
       if (!stores) {
         base = address_reg;
         first_displacement = displacement;

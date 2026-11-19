@@ -487,7 +487,10 @@ struct RegisterStateVector {
         last.lhs.reg >= kRegisters)
       return {};
 
-    const unsigned body_width = block.long_mode ? 8 : 4;
+    // A single dword ADD/SUB has a closed form modulo 2^32 in either mode.
+    // Mixed-width bodies still need every individual x86 write to zero-extend.
+    const bool dword_sum = single_add_sub(block) && block.instructions[0].width == 4;
+    const unsigned body_width = block.long_mode && !dword_sum ? 8 : 4;
     unsigned written = 0, read = 0, left = 0, right = 0;
     for (unsigned i = 0; i + 2 < block.count; ++i) {
       const auto& op = block.instructions[i];
@@ -529,9 +532,9 @@ struct RegisterStateVector {
 
     const auto skipped = std::uint64_t(rounds - 1);
     const auto pairs = skipped * (skipped - 1) / 2;
-    const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
     const auto& first_op = block.instructions[0];
-    if (block.count == 3 && (first_op.kind == Instruction::Add || first_op.kind == Instruction::Subtract)) {
+    if (single_add_sub(block)) {
+      const std::uint64_t mask = first_op.width == 4 ? UINT32_MAX : UINT64_MAX;
       std::copy_n(initial, kRegisters, tail.begin());
       auto& result = tail[first_op.lhs.reg];
       if (!first_op.rhs.immediate && first_op.rhs.reg == first_op.lhs.reg) {
@@ -548,6 +551,7 @@ struct RegisterStateVector {
       tail[counter] = (before - skipped) & (narrow ? UINT32_MAX : UINT64_MAX);
       return rounds;
     }
+    const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
     Registers once;
     std::copy_n(initial, kRegisters, once.begin());
     body(block, once);
@@ -620,6 +624,11 @@ struct RegisterStateVector {
   }
 
  private:
+  static bool single_add_sub(const Block& block) noexcept {
+    const auto kind = block.instructions[0].kind;
+    return block.count == 3 && (kind == Instruction::Add || kind == Instruction::Subtract);
+  }
+
   static void body(const Block& block, Registers& registers) noexcept {
     for (unsigned i = 0; i + 2 < block.count; ++i) {
       const auto& op = block.instructions[i];

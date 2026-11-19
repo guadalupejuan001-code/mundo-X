@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 namespace {
 using cosmic_pc::Cpu;
@@ -524,30 +525,106 @@ void mixed_movntdq_registers() {
     std::cout << "ETHER_MOVNTDQ_MIXED_PASS max_stores=8 xmm15=1 page_safe=1\n";
 }
 
-void measure_movntdq(bool mixed = false) {
+constexpr std::array<unsigned, 8> kDisp32Sources{2,1,8,15,4,9,6,7};
+
+std::uint64_t prepare_disp32_movntdq(PcMachine& pc, unsigned rounds, std::uint64_t destination,
+                                     std::int32_t displacement, std::uint64_t ip = entry) {
+    prepare_movntdq(pc, rounds, destination - std::uint64_t(displacement));
+    std::vector<std::uint8_t> program;
+    for (unsigned i = 0; i < kDisp32Sources.size(); ++i) {
+        const unsigned reg = kDisp32Sources[i];
+        for (unsigned j = 0; j < 16; ++j) pc.cpu.xmm[reg][j] = std::uint8_t(reg * 16 + j);
+        program.push_back(0x66);
+        if (reg >= 8) program.push_back(0x44);
+        program.insert(program.end(), {0x0f, 0xe7, std::uint8_t(0x81 | ((reg & 7) << 3))});
+        const auto offset = std::uint32_t(displacement) + i * 16;
+        for (unsigned shift = 0; shift < 32; shift += 8)
+            program.push_back(std::uint8_t(offset >> shift));
+    }
+    program.insert(program.end(), {0x48,0x03,0xc8, 0x48,0xff,0xca, 0x75});
+    program.push_back(std::uint8_t(-(int(program.size()) + 1)));
+    program.push_back(0xf4);
+    pc.cpu.memory.write_block(ip, program.data(), program.size());
+    pc.cpu.eip = ip;
+    return ip + program.size() - 1;
+}
+
+void disp32_movntdq_registers() {
+    for (const std::int32_t displacement : {-0x12340, 0x13450}) {
+        PcMachine fast(4U << 20), scalar(4U << 20);
+        for (auto* pc : {&fast, &scalar}) {
+            prepare_disp32_movntdq(*pc, 1, kMovntdqDestination, displacement);
+            require(pc->cpu.step() == StepResult::Executed, "disp32 seed failed");
+        }
+        require(!fast.cpu.try_movntdq_store_batch(1), "disp32 exceeded its single-step grant");
+        for (unsigned grant : {2U, 5U}) {
+            require(fast.cpu.try_movntdq_store_batch(grant) == grant, "disp32 batch missed its grant");
+            for (unsigned n = 0; n < grant; ++n)
+                require(scalar.cpu.step() == StepResult::Executed, "disp32 scalar reference failed");
+            std::array<std::uint8_t, 160> actual, expected;
+            fast.cpu.memory.read_block(kMovntdqDestination - 16, actual.data(), actual.size());
+            scalar.cpu.memory.read_block(kMovntdqDestination - 16, expected.data(), expected.size());
+            require(actual == expected && fast.cpu.regs == scalar.cpu.regs && fast.cpu.xmm == scalar.cpu.xmm &&
+                    fast.cpu.eip == scalar.cpu.eip && fast.cpu.instructions == scalar.cpu.instructions &&
+                    fast.cpu.eflags == scalar.cpu.eflags &&
+                    fast.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(), "disp32 state diverged");
+        }
+    }
+
+    PcMachine code_edge(4U << 20);
+    prepare_disp32_movntdq(code_edge, 1, kMovntdqDestination, -0x800, entry + 4096 - 22);
+    require(code_edge.cpu.step() == StepResult::Executed && !code_edge.cpu.try_movntdq_store_batch(7) &&
+            code_edge.cpu.read64(kMovntdqDestination + 16) == 0,
+            "disp32 consumed an incomplete displacement at a code-page boundary");
+
+    PcMachine data_edge(4U << 20);
+    constexpr std::uint64_t end = 0x200000;
+    prepare_disp32_movntdq(data_edge, 1, end - 32, 0x1000);
+    auto& cpu = data_edge.cpu;
+    cpu.write64(0x3008, 0);
+    require(cpu.step() == StepResult::Executed && !cpu.try_movntdq_store_batch(7) &&
+            cpu.read64(end - 16) == 0 && cpu.step() == StepResult::Executed &&
+            cpu.step() == StepResult::Faulted && cpu.fault && cpu.fault->eip == entry + 16 && cpu.cr2 == end,
+            "disp32 lost the scalar fault boundary");
+    std::cout << "ETHER_MOVNTDQ_DISP32_PASS signed=1 grants=2,5 code_page=1 data_fault=1\n";
+}
+
+enum class StorePattern { Repeated, Mixed, Disp32 };
+
+void measure_movntdq(StorePattern pattern = StorePattern::Repeated) {
     constexpr unsigned rounds = 4000, steps = rounds * kMovntdqRoundSteps;
     std::array<long long, 7> scalar, batched;
+    std::uint64_t grouped_stores = 0;
     for (unsigned rep = 0; rep < scalar.size(); ++rep) {
         for (bool accelerated : {bool(rep % 2), !bool(rep % 2)}) {
             PcMachine pc(4U << 20);
-            prepare_movntdq(pc, rounds, kMovntdqDestination, mixed);
+            constexpr std::int32_t displacement = 0x300;
+            auto end_ip = entry + sizeof(kMovntdqFill) - 1;
+            auto final_base = kMovntdqDestination + rounds * 128;
+            if (pattern == StorePattern::Disp32) {
+                end_ip = prepare_disp32_movntdq(pc, rounds, kMovntdqDestination, displacement);
+                final_base -= displacement;
+            } else {
+                prepare_movntdq(pc, rounds, kMovntdqDestination, pattern == StorePattern::Mixed);
+            }
             pc.enable_boot_acceleration(accelerated);
             const auto retired = pc.cpu.instructions;
             const auto start = Clock::now();
             pc.run(steps);
             const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
             require(!pc.cpu.fault && pc.cpu.instructions - retired == steps &&
-                    pc.cpu.regs[Cpu::EDX] == 0 && pc.cpu.regs[Cpu::ECX] == kMovntdqDestination + rounds * 128 &&
-                    pc.cpu.eip == entry + sizeof(kMovntdqFill) - 1,
+                    pc.cpu.regs[Cpu::EDX] == 0 && pc.cpu.regs[Cpu::ECX] == final_base && pc.cpu.eip == end_ip,
                     "MOVNTDQ benchmark changed execution");
-            require(mixed || (pc.boot_acceleration().movntdq_store_steps != 0) == accelerated,
+            require(pattern != StorePattern::Repeated || (pc.boot_acceleration().movntdq_store_steps != 0) == accelerated,
                     "MOVNTDQ benchmark missed its execution path");
-            if (mixed) {
+            if (accelerated) grouped_stores = pc.boot_acceleration().movntdq_store_steps;
+            if (pattern != StorePattern::Repeated) {
+                const auto& sources = pattern == StorePattern::Disp32 ? kDisp32Sources : kStreamSources;
                 std::array<std::uint8_t, 128> row;
                 for (unsigned n = 0; n < rounds; ++n) {
                     pc.cpu.memory.read_block(kMovntdqDestination + n * row.size(), row.data(), row.size());
                     for (unsigned i = 0; i < row.size(); ++i)
-                        require(row[i] == 16 * kStreamSources[i / 16] + i % 16, "mixed stream data changed");
+                        require(row[i] == 16 * sources[i / 16] + i % 16, "mixed stream data changed");
                 }
             }
             (accelerated ? batched : scalar)[rep] = elapsed;
@@ -555,9 +632,13 @@ void measure_movntdq(bool mixed = false) {
     }
     std::sort(scalar.begin(), scalar.end());
     std::sort(batched.begin(), batched.end());
-    std::cout << (mixed ? "ETHER_MOVNTDQ_MIXED_BENCH" : "ETHER_MOVNTDQ_BENCH")
+    const auto label = pattern == StorePattern::Disp32 ? "ETHER_MOVNTDQ_DISP32_BENCH" :
+                       pattern == StorePattern::Mixed ? "ETHER_MOVNTDQ_MIXED_BENCH" : "ETHER_MOVNTDQ_BENCH";
+    std::cout << label
               << " steps=" << steps << " scalar_median_ns=" << scalar[3]
-              << " batched_median_ns=" << batched[3] << '\n';
+              << " batched_median_ns=" << batched[3];
+    if (pattern == StorePattern::Disp32) std::cout << " grouped_stores=" << grouped_stores;
+    std::cout << '\n';
 }
 
 constexpr std::uint8_t kMultiplyAdd[]{
@@ -913,7 +994,11 @@ int main(int argc, char** argv) {
             return 0;
         }
         if (argc == 2 && std::string_view(argv[1]) == "--measure-mixed-movntdq") {
-            measure_movntdq(true);
+            measure_movntdq(StorePattern::Mixed);
+            return 0;
+        }
+        if (argc == 2 && std::string_view(argv[1]) == "--measure-disp32-movntdq") {
+            measure_movntdq(StorePattern::Disp32);
             return 0;
         }
         if (argc != 1) return 2;
@@ -943,6 +1028,7 @@ int main(int argc, char** argv) {
         sse_copy_loops();
         movntdq_store_batches();
         mixed_movntdq_registers();
+        disp32_movntdq_registers();
         wide_multiply_loops();
         std::cout << "ETHER_COUNTER_LOOP_PASS widths=16,32,64 flags=1 paging=1 fallbacks=1\n";
         return 0;
