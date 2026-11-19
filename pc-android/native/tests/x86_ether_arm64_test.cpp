@@ -695,9 +695,20 @@ void register_state_vector_contract() {
       cpu.idtr = {0x7ff, idt};
       cpu.write64(idt + vector * 8, irq_handler | (0x20ULL << 16) | (0x8eULL << 40));
     }
-    cpu.regs[Cpu::EAX] = cpu.regs[Cpu::ESI] = cpu.regs[result_reg] = 0;
-    cpu.regs[Cpu::ECX] = 1024;
-    cpu.eflags = 2 | Cpu::IF;
+    const auto reset = [&] {
+      cpu.eip = code;
+      cpu.regs[Cpu::EAX] = cpu.regs[Cpu::ESI] = cpu.regs[result_reg] = 0;
+      cpu.regs[Cpu::ECX] = 1024;
+      cpu.eflags = 2 | Cpu::IF;
+    };
+    reset();
+    // A cold backedge can now be projected by the interpreter. Admit the
+    // native block explicitly for this native IRQ test and retire the same
+    // warm-up round in the scalar oracle.
+    if (translated) warm_block(cpu, code, 4);
+    else for (unsigned step = 0; step < 4; ++step)
+      require(cpu.step() == StepResult::Executed, "scalar IRQ warm-up failed");
+    reset();
     std::uint64_t ticks = 0, irq_step = 0;
     constexpr unsigned edge = 1503; // Inside a round, beyond the native loop batching cap.
     const auto start = cpu.instructions;
