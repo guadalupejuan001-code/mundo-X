@@ -217,6 +217,8 @@ int main() {
              using Adjustment = SparseRam::BudgetAdjustment;
              struct PreparingBacking : TestBacking {
                  bool decline = false;
+                 unsigned reclaim_scopes = 0;
+                 void begin_paced_reclaim() noexcept override { ++reclaim_scopes; }
                  std::size_t prepare_pages(const PageWrite* writes, std::size_t count,
                                            Clock::time_point) override {
                      if (decline) return 0;
@@ -277,12 +279,13 @@ int main() {
                  ram.prepare_reclaim(2, Clock::time_point::max());
              const auto writes = ram.metrics().backing_writes;
              need(ram.clean_backing_pages() == 2 &&
-                      ram.adjust_payload_budget(compact_bytes, 0, Clock::time_point::max() -
+                      ram.adjust_payload_budget(compact_bytes, 2, Clock::time_point::max() -
                           std::chrono::hours(1), 2) == Adjustment::Applied &&
                       ram.metrics().backing_clean_reclaims == 2 && ram.metrics().backing_writes == writes &&
+                      !store->reclaim_scopes &&
                       ram.read_byte(changed_at) == 0xa5 &&
                       read(ram, 0, kPage) == std::vector<std::uint8_t>(middle.begin(), middle.end()),
-                  "Pressure must reclaim ready pages without new writes or stale guest bytes");
+                  "Ready pages must satisfy pressure before entering the backing write scope");
          }},
         {"clean promoted pages reuse backing and changed pages never expose stale bytes", [] {
              using Adjustment = SparseRam::BudgetAdjustment;

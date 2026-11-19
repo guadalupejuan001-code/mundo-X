@@ -336,20 +336,24 @@ public:
         if (guest_target < before) {
             ReclaimDeadline limit{deadline};
             auto* paced = deadline == ReclaimClock::time_point::max() ? nullptr : &limit;
+            std::size_t reclaimed_pages = 0;
+            const auto clean_limit = std::max(reclaim_pages, clean_reclaim_pages);
+            if (paced && clean_limit && !paced->expired()) {
+                // Ready copies release resident bytes before cache maintenance
+                // or entering the backend's paced write scope.
+                reclaimed_pages = reclaim_cold_backed_pages(guest_target, clean_limit, *paced);
+                if (backing_cache_ && (allocated_bytes() > guest_target ||
+                    cache_sets == backing_cache_->active_sets)) backing_cache_->release_unused(deadline);
+            }
             struct ReclaimScope {
                 PageBacking* backing;
                 explicit ReclaimScope(PageBacking* backing) noexcept : backing(backing) {
                     if (backing) backing->begin_paced_reclaim();
                 }
                 ~ReclaimScope() { if (backing) backing->end_paced_reclaim(); }
-            } scope(paced ? backing_.get() : nullptr);
+            } scope(paced && reclaimed_pages < reclaim_pages && allocated_bytes() > guest_target
+                    ? backing_.get() : nullptr);
             const bool grouped = backing_ && backing_->supports_grouped_writes();
-            std::size_t reclaimed_pages = 0;
-            const auto clean_limit = std::max(reclaim_pages, clean_reclaim_pages);
-            if (paced && clean_limit && !paced->expired()) {
-                if (backing_cache_) backing_cache_->release_unused(deadline);
-                reclaimed_pages = reclaim_cold_backed_pages(guest_target, clean_limit, *paced);
-            }
             for (auto i = reclaimed_pages; i < reclaim_pages && allocated_bytes() > guest_target;) {
                 if (paced && paced->expired()) break;
                 const auto reclaimed = grouped
@@ -1071,13 +1075,24 @@ private:
 
     bool try_reclaim_clean_backing(PageSlot& slot) noexcept {
         if (!slot.backing_current) return false;
-        slot.clear();
-        slot.spilled = true;
-        --backing_clean_pages_;
-        --allocated_pages_;
-        ++spilled_pages_;
-        ++backing_clean_reclaims_;
+        make_clean_page_spilled(slot);
+        record_clean_reclaims(1);
         return true;
+    }
+
+    static void make_clean_page_spilled(PageSlot& slot) noexcept {
+        // This is already a dense page with a valid backing copy. As with
+        // ordinary spill, later promotion initializes the dense slot anew.
+        slot.payload.reset();
+        slot.backing_current = false;
+        slot.spilled = true;
+    }
+
+    void record_clean_reclaims(std::size_t count) noexcept {
+        backing_clean_pages_ -= count;
+        allocated_pages_ -= count;
+        spilled_pages_ += count;
+        backing_clean_reclaims_ += count;
     }
 
     struct ReclaimDeadline {
@@ -1093,18 +1108,23 @@ private:
                                           ReclaimDeadline& deadline) noexcept {
         // Promotion history is bounded. It can avoid walking the address
         // space or writing dirty pages when cold resident copies suffice.
-        if (!backing_clean_pages_ || deadline.expired()) return 0;
-        const auto oldest = (clean_history_next_ + clean_history_.size() - clean_history_size_) %
-                            clean_history_.size();
+        const auto used = allocated_bytes();
+        if (!backing_clean_pages_ || used <= target || deadline.expired()) return 0;
+        const auto entries = clean_history_.size();
+        auto index = (clean_history_next_ + entries - clean_history_size_) % entries;
+        const auto pages_needed = std::min<std::uint64_t>(
+            {limit, backing_clean_pages_, (used - target - 1) / kPageSize + 1});
         std::size_t reclaimed = 0;
-        for (std::size_t i = 0; i < clean_history_size_ && backing_clean_pages_ &&
-             reclaimed < limit && allocated_bytes() > target; ++i) {
+        for (std::size_t i = 0; i < clean_history_size_ && reclaimed < pages_needed; ++i) {
             if (deadline.expired_during_scan()) break;
-            auto* slot = find_slot(clean_history_[(oldest + i) % clean_history_.size()]);
+            auto* slot = find_slot(clean_history_[index]);
+            if (++index == entries) index = 0;
             // Let the normal clock hand age live reads and writes.
-            if (slot && slot->backing_current && !slot->recency.load(std::memory_order_relaxed) &&
-                try_reclaim_clean_backing(*slot)) ++reclaimed;
+            if (!slot || !slot->backing_current || slot->recency.load(std::memory_order_relaxed)) continue;
+            make_clean_page_spilled(*slot);
+            ++reclaimed;
         }
+        record_clean_reclaims(reclaimed);
         return reclaimed;
     }
 
