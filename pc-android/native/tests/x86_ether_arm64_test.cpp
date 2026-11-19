@@ -810,12 +810,22 @@ void live_signed_loop_projection_contract() {
     emit(cpu, irq_handler, {0x49,0xff,0xc5,0x48,0xcf}); // INC R13; IRETQ.
     constexpr unsigned vector = 0x40, edge = 1503;
     gate(machine, vector);
-    cpu.eip = code;
-    cpu.regs[Cpu::ESP] = stack;
-    cpu.regs[Cpu::EAX] = 100000;
-    cpu.regs[Cpu::EDX] = 7;
-    cpu.regs[Cpu::R13] = 0;
-    cpu.eflags = 2 | Cpu::IF;
+    const auto reset = [&] {
+      cpu.eip = code;
+      cpu.regs[Cpu::ESP] = stack;
+      cpu.regs[Cpu::EAX] = 100000;
+      cpu.regs[Cpu::EDX] = 7;
+      cpu.regs[Cpu::R13] = 0;
+      cpu.eflags = 2 | Cpu::IF;
+    };
+    reset();
+    if (translated) {
+      warm_block(cpu, code, per_round);
+    } else {
+      for (unsigned step = 0; step < per_round; ++step)
+        require(cpu.step() == StepResult::Executed, "signed IRQ scalar warm-up failed");
+    }
+    reset();
     const auto start = cpu.instructions;
     std::uint64_t ticks = 0, irq_step = 0;
     machine.device_step_hook = [&] {
