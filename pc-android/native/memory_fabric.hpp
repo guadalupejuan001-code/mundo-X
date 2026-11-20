@@ -34,6 +34,7 @@ class MemoryFabric {
   using WriteWindowBlock = std::function<void(std::uint64_t, const std::uint8_t*, std::size_t)>;
   using BudgetExceeded = SparseRam::BudgetExceeded;
   using Metrics = SparseRam::Metrics;
+  using PressureMetrics = SparseRam::PressureMetrics;
   static constexpr std::size_t kPageSize = SparseRam::kPageSize;
   static constexpr std::size_t kPagesPerTable = SparseRam::kPagesPerTable;
   static constexpr std::uint64_t kDefaultPayloadLimit = SparseRam::kDefaultPayloadLimit;
@@ -183,6 +184,11 @@ class MemoryFabric {
   std::uint64_t backing_cache_bytes() const noexcept { return ram_.backing_cache_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
   std::size_t clean_backing_pages() const noexcept { return ram_.clean_backing_pages(); }
+  // The owner must join parallel readers before changing instrumentation.
+  void set_backing_read_timing_enabled(bool enabled) noexcept {
+    ram_.set_backing_read_timing_enabled(enabled);
+  }
+  PressureMetrics pressure_metrics() const noexcept { return ram_.pressure_metrics(); }
   SparseRam::ReclaimPreparation prepare_reclaim(
       std::size_t ready_limit, SparseRam::ReclaimClock::time_point deadline) {
     return ram_.prepare_reclaim(ready_limit, deadline);

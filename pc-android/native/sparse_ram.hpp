@@ -98,6 +98,46 @@ public:
         std::uint64_t backing_clean_reclaims;
     };
 
+    // Cumulative counts and wall-clock timings since reset_zero(), sampled by
+    // the owner after readers join. Failed attempts retain their elapsed time.
+    // Forced reclaim is only the space-making portion of a guest write, not
+    // scheduled maintenance. selection_ns includes compact_ns; selection_ns
+    // and spill_ns are portions of forced_reclaim_ns, not additional costs.
+    // Backing read counts always include all misses (inspection/promotion too).
+    // Their detailed timers are opt-in: durations and timed_attempts accumulate
+    // only while enabled, and toggling does not erase previous observations.
+    // Read time excludes lock wait; durations can overlap other readers' time.
+    struct PressureMetrics {
+        std::uint64_t forced_reclaims = 0;
+        // Failure to obtain space; a later allocation/read can fail separately.
+        std::uint64_t forced_failures = 0;
+        // New dense representations needed by pressured preflights, not all
+        // touched pages and not necessarily pages successfully allocated.
+        std::uint64_t requested_pages = 0;
+        std::uint64_t reclaimed_bytes = 0;
+        std::uint64_t forced_reclaim_ns = 0;
+        std::uint64_t forced_reclaim_max_ns = 0;
+        std::uint64_t selection_ns = 0;
+        std::uint64_t compact_attempts = 0;
+        std::uint64_t compacted_pages = 0;
+        std::uint64_t compact_ns = 0;
+        std::uint64_t spilled_pages = 0;
+        std::uint64_t spill_ns = 0;
+        std::uint64_t clean_reclaims = 0;
+        std::uint64_t write_promotion_attempts = 0;
+        // Published promotions only. Recovery timing includes cache/lock work,
+        // overlaps backing_read_ns when it misses, and excludes allocation.
+        std::uint64_t write_promotions = 0;
+        std::uint64_t write_promotion_ns = 0;
+        bool backing_timing_enabled = false;
+        std::uint64_t backing_timed_attempts = 0;
+        std::uint64_t backing_read_attempts = 0;
+        std::uint64_t backing_read_failures = 0;
+        std::uint64_t backing_read_ns = 0;
+        std::uint64_t backing_read_max_ns = 0;
+        std::uint64_t backing_lock_wait_ns = 0;
+    };
+
     struct ReclaimPreparation {
         std::size_t backed_pages = 0;
         std::size_t compact_up_to_2k = 0;
@@ -197,7 +237,9 @@ public:
           preparation_page_(std::exchange(other.preparation_page_, 0)),
           eviction_page_(std::exchange(other.eviction_page_, 0)),
           compact_eviction_page_(std::exchange(other.compact_eviction_page_, 0)),
-          pin_epoch_(std::exchange(other.pin_epoch_, 0)) {}
+          pin_epoch_(std::exchange(other.pin_epoch_, 0)),
+          pressure_(std::exchange(other.pressure_, PressureMetrics{})),
+          backing_read_timing_enabled_(std::exchange(other.backing_read_timing_enabled_, false)) {}
     SparseRam& operator=(SparseRam&& other) noexcept {
         if (this != &other) {
             tables_ = std::move(other.tables_);
@@ -223,6 +265,8 @@ public:
             eviction_page_ = std::exchange(other.eviction_page_, 0);
             compact_eviction_page_ = std::exchange(other.compact_eviction_page_, 0);
             pin_epoch_ = std::exchange(other.pin_epoch_, 0);
+            pressure_ = std::exchange(other.pressure_, PressureMetrics{});
+            backing_read_timing_enabled_ = std::exchange(other.backing_read_timing_enabled_, false);
         }
         return *this;
     }
@@ -241,6 +285,7 @@ public:
         if (!backing || backing_ || !clean_history_pages)
             throw std::invalid_argument("SparseRam expects one page backing and a clean page history.");
         auto cache = std::make_unique<BackingCache>(policy);
+        cache->read_timing_enabled = backing_read_timing_enabled_;
         cache->resize(cache->sets_for(payload_cap_bytes_, payload_cap_bytes_ - allocated_bytes()));
         clean_history_.resize(clean_history_pages);
         backing_cache_ = std::move(cache);
@@ -265,6 +310,15 @@ public:
         return backing_cache_ ? backing_cache_->payload_bytes() : 0;
     }
     std::size_t clean_backing_pages() const noexcept { return backing_clean_pages_; }
+
+    // Owner only, after joining readers, just like backing attachment/reset.
+    // Reset clears observations but preserves this per-instance configuration.
+    // Enabling can be deferred until investigation so ordinary misses do not
+    // read the host clock. Switching modes keeps all accumulated observations.
+    void set_backing_read_timing_enabled(bool enabled) noexcept {
+        backing_read_timing_enabled_ = enabled;
+        if (backing_cache_) backing_cache_->read_timing_enabled = enabled;
+    }
 
     // The owner calls this between execution slices, before memory pressure.
     // Neither a failed prewrite nor a declined batch changes a dense page.
@@ -412,6 +466,22 @@ public:
                 backing_cache_ ? backing_cache_->active_sets * BackingCache::kBytesPerSet : 0,
                 backing_cache_ ? backing_cache_->overwrite_pages : 0, allocated_tables_,
                 backing_clean_pages_, backing_clean_reclaims_};
+    }
+
+    PressureMetrics pressure_metrics() const noexcept {
+        auto snapshot = pressure_;
+        snapshot.backing_timing_enabled = backing_read_timing_enabled_;
+        if (backing_cache_) {
+            const auto& cache = *backing_cache_;
+            snapshot.backing_read_failures = cache.read_failures.load(std::memory_order_relaxed);
+            snapshot.backing_read_attempts = cache.reads.load(std::memory_order_relaxed) +
+                                             snapshot.backing_read_failures;
+            snapshot.backing_timed_attempts = cache.timed_attempts.load(std::memory_order_relaxed);
+            snapshot.backing_read_ns = cache.read_ns.load(std::memory_order_relaxed);
+            snapshot.backing_read_max_ns = cache.read_max_ns.load(std::memory_order_relaxed);
+            snapshot.backing_lock_wait_ns = cache.lock_wait_ns.load(std::memory_order_relaxed);
+        }
+        return snapshot;
     }
 
     ByteProxy operator[](std::uint64_t offset) {
@@ -712,10 +782,16 @@ public:
         backing_clean_pages_ = backing_clean_reclaims_ = 0;
         clean_history_size_ = clean_history_next_ = 0;
         preparation_page_ = 0;
+        pressure_ = {};
         if (backing_) {
             backing_cache_->clear();
             backing_cache_->reads.store(0, std::memory_order_relaxed);
             backing_cache_->hits.store(0, std::memory_order_relaxed);
+            backing_cache_->timed_attempts.store(0, std::memory_order_relaxed);
+            backing_cache_->read_failures.store(0, std::memory_order_relaxed);
+            backing_cache_->read_ns.store(0, std::memory_order_relaxed);
+            backing_cache_->read_max_ns.store(0, std::memory_order_relaxed);
+            backing_cache_->lock_wait_ns.store(0, std::memory_order_relaxed);
             backing_cache_->overwrite_pages = 0;
             backing_->reset();
         }
@@ -845,9 +921,33 @@ private:
         std::array<PageSlot, kPagesPerTable> slots{};
         std::size_t resident = 0;
     };
+    static std::uint64_t elapsed_ns(ReclaimClock::time_point start) noexcept {
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            ReclaimClock::now() - start).count());
+    }
+
+    // An inactive timer does not read the clock. Only pressure/miss paths
+    // create active timers; ordinary resident accesses keep their fast path.
+    struct PressureTimer {
+        explicit PressureTimer(std::uint64_t* total) noexcept : total(total) {
+            if (total) start = ReclaimClock::now();
+        }
+        ~PressureTimer() { finish(); }
+        PressureTimer(const PressureTimer&) = delete;
+        PressureTimer& operator=(const PressureTimer&) = delete;
+        void finish() noexcept {
+            if (!total) return;
+            *total += elapsed_ns(start);
+            total = nullptr;
+        }
+        std::uint64_t* total;
+        ReclaimClock::time_point start;
+    };
+
     struct BackingCache {
         static constexpr std::uint64_t kUnused = UINT64_MAX;
         static constexpr std::size_t kBytesPerSet = 2 * kPageSize;
+        static constexpr std::size_t kAdaptiveSets = 256;
         struct Entry {
             std::uint64_t page = kUnused;
             std::unique_ptr<std::uint8_t[]> bytes;
@@ -859,7 +959,7 @@ private:
         };
 
         explicit BackingCache(BackingCachePolicy policy)
-            : adaptive(policy == BackingCachePolicy::Adaptive), sets(adaptive ? 256 : 8) {}
+            : adaptive(policy == BackingCachePolicy::Adaptive), sets(adaptive ? kAdaptiveSets : 8) {}
 
         std::size_t sets_for(std::uint64_t budget, std::uint64_t unused) const noexcept {
             if (!adaptive) return sets.size();
@@ -898,8 +998,38 @@ private:
         }
         void resize(std::size_t count) noexcept {
             if (count == active_sets) return;
-            clear();
+            if (!count || !active_sets) {
+                clear();
+                active_sets = count;
+                return;
+            }
+            // The owner has joined readers before changing the budget. Move
+            // decoded pages, not their bytes, so rehashing never allocates a
+            // second payload. Invalidated buffers are not cache entries.
+            std::array<Entry, 2 * kAdaptiveSets> previous{};
+            const auto old_sets = active_sets;
+            for (std::size_t i = 0; i < old_sets; ++i) {
+                auto& set = sets[i];
+                previous[i] = std::move(set.entries[1 - set.newest]);
+                previous[old_sets + i] = std::move(set.entries[set.newest]);
+                set.entries = {};
+                set.newest = 0;
+            }
             active_sets = count;
+            std::size_t retained = 0;
+            // Insert each old set's newer entry last. Collisions may still
+            // evict pages, but shrinking favors those recently reused.
+            for (std::size_t i = 0; i < 2 * old_sets; ++i) {
+                auto& entry = previous[i];
+                if (entry.page == kUnused || !entry.bytes) continue;
+                auto& set = set_for(entry.page);
+                unsigned index = 1 - set.newest;
+                if (set.entries[set.newest].page == kUnused) index = set.newest;
+                if (!set.entries[index].bytes) ++retained;
+                set.entries[index] = std::move(entry);
+                set.newest = index;
+            }
+            allocated.store(retained, std::memory_order_relaxed);
         }
         Set& set_for(std::uint64_t page) noexcept {
             return sets[(page ^ (page >> 9) ^ (page >> 18)) % active_sets];
@@ -954,11 +1084,47 @@ private:
             read_storage(page, backing, buffer.data());
             std::memcpy(destination, buffer.data() + inside, count);
         }
-        void read_storage(std::uint64_t page, PageBacking& backing, std::uint8_t* buffer) {
-            // A PageBacking can share mutable I/O or codec state.
+        void read_timed_storage(std::uint64_t page, PageBacking& backing, std::uint8_t* buffer) {
+            const auto waiting = ReclaimClock::now();
             std::lock_guard<std::mutex> lock(storage_mutex);
-            backing.read(page, buffer);
-            reads.fetch_add(1, std::memory_order_relaxed);
+            const auto acquired = ReclaimClock::now();
+            add_serialized(lock_wait_ns, static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(acquired - waiting).count()));
+            add_serialized(timed_attempts, 1);
+            const auto record_time = [&] {
+                const auto elapsed = elapsed_ns(acquired);
+                add_serialized(read_ns, elapsed);
+                // storage_mutex also serializes updates to this maximum.
+                read_max_ns.store(std::max(read_max_ns.load(std::memory_order_relaxed), elapsed),
+                                  std::memory_order_relaxed);
+            };
+            try {
+                backing.read(page, buffer);
+            } catch (...) {
+                record_time();
+                add_serialized(read_failures, 1);
+                throw;
+            }
+            record_time();
+            add_serialized(reads, 1);
+        }
+        void read_storage(std::uint64_t page, PageBacking& backing, std::uint8_t* buffer) {
+            if (read_timing_enabled) return read_timed_storage(page, backing, buffer);
+            // A PageBacking can share mutable I/O or codec state. The mutex
+            // serializes counter writers too: no clock or atomic RMW is needed
+            // for an ordinary untimed cache miss. Snapshot reads stay atomic.
+            std::lock_guard<std::mutex> lock(storage_mutex);
+            try {
+                backing.read(page, buffer);
+            } catch (...) {
+                add_serialized(read_failures, 1);
+                throw;
+            }
+            add_serialized(reads, 1);
+        }
+        static void add_serialized(std::atomic<std::uint64_t>& counter, std::uint64_t value) noexcept {
+            // All callers hold storage_mutex; reset requires joined readers.
+            counter.store(counter.load(std::memory_order_relaxed) + value, std::memory_order_relaxed);
         }
         const bool adaptive;
         std::vector<Set> sets;
@@ -966,6 +1132,9 @@ private:
         std::size_t active_sets = 0;
         std::atomic<std::size_t> allocated{0};
         std::atomic<std::uint64_t> reads{0}, hits{0};
+        std::atomic<std::uint64_t> timed_attempts{0}, read_failures{0}, read_ns{0};
+        std::atomic<std::uint64_t> read_max_ns{0}, lock_wait_ns{0};
+        bool read_timing_enabled = false;
         std::uint64_t overwrite_pages = 0;
     };
 
@@ -993,6 +1162,8 @@ private:
     std::uint64_t compact_eviction_page_ = 0;
     std::uint32_t pin_epoch_ = 0;
     unsigned pin_depth_ = 0;
+    PressureMetrics pressure_;
+    bool backing_read_timing_enabled_ = false;
 
     std::uint64_t compact_bytes() const noexcept {
         return static_cast<std::uint64_t>(pattern_pages_ + sparse_word_pages_) * kPatternSize +
@@ -1030,7 +1201,8 @@ private:
         if (pin_depth_) slot.write_epoch = pin_epoch_;
     }
 
-    void write_back(std::uint64_t page, const std::uint8_t* bytes) {
+    void write_back(std::uint64_t page, const std::uint8_t* bytes, PressureMetrics* pressure = nullptr) {
+        const PressureTimer timing(pressure ? &pressure->spill_ns : nullptr);
         try {
             backing_->write(page, bytes);
         } catch (const PageBacking::CapacityExceeded&) {
@@ -1043,6 +1215,7 @@ private:
         backing_cache_->invalidate(page);
         ++spilled_pages_;
         ++backing_writes_;
+        if (pressure) ++pressure->spilled_pages;
     }
 
     void discard_spill(std::uint64_t page) noexcept {
@@ -1144,7 +1317,9 @@ private:
     }
 
     bool spill_compact_page(std::uint64_t compact_limit, std::uint64_t first = UINT64_MAX,
-                            std::uint64_t last = UINT64_MAX, ReclaimDeadline* deadline = nullptr) {
+                            std::uint64_t last = UINT64_MAX, ReclaimDeadline* deadline = nullptr,
+                            PressureMetrics* pressure = nullptr) {
+        PressureTimer selection(pressure ? &pressure->selection_ns : nullptr);
         if (!backing_ || compact_bytes() <= compact_limit) return false;
         const auto pages = logical_bytes_ / kPageSize + (logical_bytes_ % kPageSize != 0);
         for (auto remaining = pages; remaining;) {
@@ -1161,7 +1336,8 @@ private:
             if (!slot->has_compact() || (page >= first && page <= last)) continue;
             Page bytes;
             copy_compact(*slot, 0, bytes.data(), bytes.size());
-            write_back(page, bytes.data());
+            selection.finish();
+            write_back(page, bytes.data(), pressure);
             erase_compact(*slot);
             slot->clear();
             slot->spilled = true;
@@ -1171,10 +1347,14 @@ private:
     }
 
     bool evict_page(std::uint64_t first, std::uint64_t last, std::uint64_t compact_limit,
-                    ReclaimDeadline* deadline = nullptr) {
+                    ReclaimDeadline* deadline = nullptr, PressureMetrics* pressure = nullptr) {
         PageBacking::PageWrite write{};
-        if (!select_reclaim_page(write, first, last, compact_limit, deadline)) return false;
-        if (write.bytes) spill_dense_page(write);
+        {
+            const PressureTimer selection(pressure ? &pressure->selection_ns : nullptr);
+            if (!select_reclaim_page(write, first, last, compact_limit, deadline, UINT64_MAX, pressure))
+                return false;
+        }
+        if (write.bytes) spill_dense_page(write, pressure);
         return true;
     }
 
@@ -1223,8 +1403,8 @@ private:
         return reclaimed - (count - committed);
     }
 
-    void spill_dense_page(const PageBacking::PageWrite& write) {
-        write_back(write.page, write.bytes);
+    void spill_dense_page(const PageBacking::PageWrite& write, PressureMetrics* pressure = nullptr) {
+        write_back(write.page, write.bytes, pressure);
         mark_dense_spilled(write.page);
     }
 
@@ -1237,7 +1417,8 @@ private:
 
     bool select_reclaim_page(PageBacking::PageWrite& write, std::uint64_t first, std::uint64_t last,
                              std::uint64_t compact_limit, ReclaimDeadline* deadline,
-                             std::uint64_t first_pending = UINT64_MAX) {
+                             std::uint64_t first_pending = UINT64_MAX,
+                             PressureMetrics* pressure = nullptr) {
         if (!allocated_pages_) return false;
         const auto pages = logical_bytes_ / kPageSize + (logical_bytes_ % kPageSize != 0);
         // Repeated writes get one chance; reads get two. This protects the
@@ -1259,13 +1440,26 @@ private:
             if (!slot.has_dense() || (page >= first && page <= last) ||
                 (pin_depth_ && slot.write_epoch == pin_epoch_)) continue;
             if (slot.give_second_chance()) continue;
-            if (try_reclaim_clean_backing(slot)) return true;
-            const auto compact_room = compact_limit - std::min(compact_limit, compact_bytes());
-            if (!slot.nonrepeating && (compact_room >= kPatternSize ||
-                 std::all_of(slot.payload.get(), slot.payload.get() + kPageSize,
-                             [](auto byte) { return byte == 0; })) &&
-                compact_page(table, index)) return true;
-            if (compact_room >= kPatternSize && compact_changed_words(slot, compact_room)) return true;
+            if (try_reclaim_clean_backing(slot)) {
+                if (pressure) ++pressure->clean_reclaims;
+                return true;
+            }
+            const auto try_compact = [&] {
+                const auto compact_room = compact_limit - std::min(compact_limit, compact_bytes());
+                if (!slot.nonrepeating && (compact_room >= kPatternSize ||
+                     std::all_of(slot.payload.get(), slot.payload.get() + kPageSize,
+                                 [](auto byte) { return byte == 0; })) &&
+                    compact_page(table, index)) return true;
+                return compact_room >= kPatternSize && compact_changed_words(slot, compact_room);
+            };
+            {
+                const PressureTimer compact(pressure ? &pressure->compact_ns : nullptr);
+                if (pressure) ++pressure->compact_attempts;
+                if (try_compact()) {
+                    if (pressure) ++pressure->compacted_pages;
+                    return true;
+                }
+            }
             if (!backing_) continue;
             write = {page, slot.payload.get()};
             return true;
@@ -1510,10 +1704,31 @@ private:
             const auto retained = allocated_bytes() - expanded_compact_bytes;
             return retained <= limit && missing_pages <= (limit - retained) / kPageSize;
         };
-        if (backing_ && missing_pages <= limit / kPageSize) {
-            const auto compact_limit = limit - missing_pages * kPageSize + expanded_compact_bytes;
-            while (!fits() && (evict_page(first, last, compact_limit) ||
-                               spill_compact_page(compact_limit, first, last))) {}
+        if (!fits()) {
+            ++pressure_.forced_reclaims;
+            // These are pages that need a new dense representation, including
+            // compact expansion and write promotion, not total pages touched.
+            pressure_.requested_pages += missing_pages;
+            const auto before = allocated_bytes();
+            const auto started = ReclaimClock::now();
+            const auto finish = [&](bool admitted) {
+                const auto elapsed = elapsed_ns(started);
+                pressure_.forced_reclaim_ns += elapsed;
+                pressure_.forced_reclaim_max_ns = std::max(pressure_.forced_reclaim_max_ns, elapsed);
+                pressure_.reclaimed_bytes += before - std::min(before, allocated_bytes());
+                if (!admitted) ++pressure_.forced_failures;
+            };
+            try {
+                if (backing_ && missing_pages <= limit / kPageSize) {
+                    const auto compact_limit = limit - missing_pages * kPageSize + expanded_compact_bytes;
+                    while (!fits() && (evict_page(first, last, compact_limit, nullptr, &pressure_) ||
+                                       spill_compact_page(compact_limit, first, last, nullptr, &pressure_))) {}
+                }
+            } catch (...) {
+                finish(false);
+                throw;
+            }
+            finish(fits());
         }
         if (!fits()) {
             const auto max_extra = std::numeric_limits<std::uint64_t>::max() / kPageSize;
@@ -1548,8 +1763,11 @@ private:
                 } else if (slot && (slot->has_compact() || slot->spilled) &&
                            (include_implicit || partial_page(page))) {
                     std::unique_ptr<std::uint8_t[]> dense(new std::uint8_t[kPageSize]);
-                    if (slot->spilled) read_backed_page(page, 0, dense.get(), kPageSize);
-                    else copy_compact(*slot, 0, dense.get(), kPageSize);
+                    if (slot->spilled) {
+                        ++pressure_.write_promotion_attempts;
+                        const PressureTimer promotion(&pressure_.write_promotion_ns);
+                        read_backed_page(page, 0, dense.get(), kPageSize);
+                    } else copy_compact(*slot, 0, dense.get(), kPageSize);
                     new_pages.emplace_back(page, std::move(dense));
                 } else if (include_implicit && (!slot || !slot->has_dense())) {
                     new_pages.emplace_back(page, std::make_unique<std::uint8_t[]>(kPageSize));
@@ -1564,7 +1782,10 @@ private:
                 const bool reused = !replaces_page(page.first) && (slot.spilled || slot.has_compact());
                 const bool clean_backing = slot.spilled && !replaces_page(page.first);
                 if (slot.spilled) {
-                    if (clean_backing) --spilled_pages_;
+                    if (clean_backing) {
+                        --spilled_pages_;
+                        ++pressure_.write_promotions;
+                    }
                     else {
                         ++backing_cache_->overwrite_pages;
                         discard_spill(page.first);
