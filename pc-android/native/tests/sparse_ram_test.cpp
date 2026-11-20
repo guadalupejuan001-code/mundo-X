@@ -124,6 +124,153 @@ void parallel_state_vectors() {
 int main() {
     const std::vector<std::pair<std::string, std::function<void()>>> cases{
         {"state vectors read resident and shared backed pages concurrently", parallel_state_vectors},
+        {"adaptive cache keeps decoded pages through growth and a fitting shrink", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             constexpr auto MiB = std::uint64_t{1} << 20;
+             const std::array<std::uint64_t, 8> pages{0, 1, 2, 3, 8, 9, 10, 11};
+             SparseRam ram(16 * kPage, 8 * MiB);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing), SparseRam::BackingCachePolicy::Adaptive);
+             for (const auto page : pages) {
+                 keep_dense(ram, page);
+                 ram[page * kPage] = static_cast<std::uint8_t>(page + 1);
+             }
+             need(ram.adjust_payload_budget(0, pages.size()) == Adjustment::Applied &&
+                      ram.adjust_payload_budget(8 * MiB, 0) == Adjustment::Applied,
+                  "Adaptive cache fixture must leave all pages on backing");
+             for (const auto page : pages)
+                 need(ram.read_byte(page * kPage) == page + 1, "Initial backing read changed data");
+             const auto before = ram.metrics();
+             need(before.backing_reads == pages.size() && before.backing_cache_bytes == pages.size() * kPage,
+                  "The adaptive cache must contain all fixture pages");
+             store->fail_read = true;
+             for (const auto budget : {16 * MiB, 4 * MiB}) {
+                 need(ram.adjust_payload_budget(budget, 0) == Adjustment::Applied,
+                      "Changing cache capacity must apply without new guest allocations");
+                 for (const auto page : pages) {
+                     const auto bytes = read(ram, page * kPage, kPage);
+                     need(std::equal(bytes.begin(), bytes.end(), store->pages.at(page).begin()),
+                          "Rehashing the adaptive cache changed decoded bytes");
+                 }
+                 const auto after = ram.metrics();
+                 need(after.backing_reads == before.backing_reads &&
+                          after.backing_cache_bytes == before.backing_cache_bytes &&
+                          after.backing_cache_bytes <= after.backing_cache_capacity_bytes &&
+                          after.allocated_bytes + after.backing_cache_capacity_bytes <= after.budget_bytes,
+                      "A fitting resize must retain decoded data within the resident budget");
+             }
+             need(ram.metrics().backing_cache_hits == before.backing_cache_hits + 2 * pages.size(),
+                  "Reads after both resizes must hit the retained decoded pages");
+             need(ram.adjust_payload_budget(MiB / 2, 0) == Adjustment::Applied &&
+                      ram.metrics().backing_cache_capacity_bytes == 0 && ram.backing_cache_bytes() == 0,
+                  "Shrinking below one cache set must release every cache buffer");
+             store->fail_read = false;
+             need(ram.read_byte(8 * kPage) == 9 && ram.metrics().backing_reads == before.backing_reads + 1,
+                  "Disabling the cache must preserve readable guest data in backing");
+         }},
+        {"adaptive cache shrink favors recent entries when old sets collide", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             constexpr auto MiB = std::uint64_t{1} << 20;
+             SparseRam ram(8 * kPage, 4 * MiB);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing), SparseRam::BackingCachePolicy::Adaptive);
+             for (std::uint64_t page = 0; page < 8; ++page) {
+                 keep_dense(ram, page);
+                 ram[page * kPage] = static_cast<std::uint8_t>(page + 1);
+             }
+             need(ram.adjust_payload_budget(0, 8) == Adjustment::Applied &&
+                      ram.adjust_payload_budget(4 * MiB, 0) == Adjustment::Applied,
+                  "Collision fixture must leave all pages on backing");
+             for (std::uint64_t page = 0; page < 8; ++page)
+                 need(ram.read_byte(page * kPage) == page + 1, "Initial collision read changed data");
+             need(ram.read_byte(0) == 1, "Reused page must remain readable");
+             const auto before = ram.metrics();
+             need(ram.adjust_payload_budget(2 * MiB, 0) == Adjustment::Applied &&
+                      ram.backing_cache_bytes() == 4 * kPage &&
+                      ram.metrics().backing_cache_capacity_bytes == 4 * kPage,
+                  "A colliding shrink must retain only the buffers that fit its new sets");
+             store->fail_read = true;
+             for (const auto page : {0, 5, 6, 7})
+                 need(ram.read_byte(page * kPage) == page + 1,
+                      "A recently used entry was unnecessarily discarded during a colliding shrink");
+             need(ram.metrics().backing_reads == before.backing_reads,
+                  "Retained recent entries must not be recovered from backing again");
+             store->fail_read = false;
+             for (const auto page : {1, 2, 3, 4}) {
+                 const auto bytes = read(ram, page * kPage, kPage);
+                 need(std::equal(bytes.begin(), bytes.end(), store->pages.at(page).begin()),
+                      "An entry displaced by rehash must still have exact bytes in backing");
+             }
+         }},
+        {"adaptive cache rehash never revives invalidated or discarded bytes", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             constexpr auto MiB = std::uint64_t{1} << 20;
+             SparseRam ram(4 * kPage, 2 * MiB);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing), SparseRam::BackingCachePolicy::Adaptive);
+             for (std::uint64_t page = 0; page < 2; ++page) {
+                 keep_dense(ram, page);
+                 ram[page * kPage] = static_cast<std::uint8_t>(page + 1);
+             }
+             need(ram.adjust_payload_budget(0, 2) == Adjustment::Applied &&
+                      ram.adjust_payload_budget(2 * MiB, 0) == Adjustment::Applied &&
+                      ram.read_byte(0) == 1 && ram.read_byte(kPage) == 2,
+                  "Invalidation fixture must cache both spilled pages");
+             ram[0] = 0xe3;
+             const auto reads = ram.metrics().backing_reads;
+             need(ram.adjust_payload_budget(3 * MiB, 0) == Adjustment::Applied &&
+                      ram.backing_cache_bytes() == kPage,
+                  "Rehash must release an invalidated buffer while retaining the other valid page");
+             store->fail_read = true;
+             need(ram.read_byte(0) == 0xe3 && ram.read_byte(kPage) == 2 &&
+                      ram.metrics().backing_reads == reads,
+                  "Dirty resident data and an unchanged cached page must survive rehash");
+             ram.fill(kPage, 0, kPage);
+             need(ram.adjust_payload_budget(MiB, 0) == Adjustment::Applied &&
+                      ram.backing_cache_bytes() == 0 && ram.read_byte(kPage) == 0,
+                  "A discarded page must never return from an old cache buffer");
+             store->fail_read = false;
+             need(ram.adjust_payload_budget(0, 2) == Adjustment::Applied &&
+                      ram.adjust_payload_budget(2 * MiB, 0) == Adjustment::Applied &&
+                      ram.read_byte(0) == 0xe3 && ram.read_byte(256) == 0x58 && ram.read_byte(kPage) == 0,
+                  "A dirty page must preserve updated and untouched bytes after another spill");
+         }},
+        {"adaptive cache growth and shrink retain data at a full resident budget", [] {
+             using Adjustment = SparseRam::BudgetAdjustment;
+             constexpr auto MiB = std::uint64_t{1} << 20;
+             SparseRam ram(512 * kPage, MiB);
+             auto backing = std::make_unique<TestBacking>();
+             auto* store = backing.get();
+             ram.attach_page_backing(std::move(backing), SparseRam::BackingCachePolicy::Adaptive);
+             for (std::uint64_t page = 0; page < 256; ++page) {
+                 keep_dense(ram, page);
+                 ram[page * kPage] = static_cast<std::uint8_t>(page);
+             }
+             need(ram.allocated_pages() == 254 && ram.spilled_pages() == 2,
+                  "Adaptive cache capacity must be reserved from the same payload budget");
+             for (const auto& saved : store->pages)
+                 need(ram.read_byte(saved.first * kPage) == static_cast<std::uint8_t>(saved.first),
+                      "A page displaced by the cache reserve lost data");
+             auto metrics = ram.metrics();
+             need(metrics.allocated_bytes + metrics.backing_cache_bytes == MiB,
+                  "Resident guest pages and decoded pages must share the exact budget");
+             const auto reads = metrics.backing_reads;
+             store->fail_read = true;
+             for (const auto budget : {2 * MiB, MiB}) {
+                 need(ram.adjust_payload_budget(budget, 0) == Adjustment::Applied,
+                      "Budget resize should not need to evict additional guest pages");
+                 for (const auto& saved : store->pages)
+                     need(ram.read_byte(saved.first * kPage) == static_cast<std::uint8_t>(saved.first),
+                          "A valid page was discarded while the resident allocation stayed unchanged");
+                 metrics = ram.metrics();
+                 need(metrics.backing_reads == reads &&
+                          metrics.allocated_bytes + metrics.backing_cache_capacity_bytes <= budget,
+                      "Retained cache buffers must not overcommit the global payload budget");
+             }
+         }},
         {"byte searches preserve the first match and final byte in sparse RAM", [] {
              constexpr auto table_bytes = kPage * SparseRam::kPagesPerTable;
              SparseRam ram(2 * table_bytes, 16 * kPage);
