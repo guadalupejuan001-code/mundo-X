@@ -2,6 +2,7 @@
 
 #include "boot_timing.hpp"
 #include "sparse_ram.hpp"
+#include "ether_state_ram.hpp"
 
 #include <algorithm>
 #include <array>
@@ -19,15 +20,19 @@
 
 namespace cosmic_pc {
 
-// MemoryFabric keeps ordinary x86 RAM in SparseRam and can reserve one exact
-// byte-addressed window whose values are provided by another state authority.
-// Mundo X uses that window to expose Ether Memory directly to x86 loads/stores.
-//
-// The callbacks carry classical bytes only. A provider may reject a read/write
-// when its underlying state is not a deterministic byte. The physical RAM and
-// the Ether-backed window therefore keep distinct resource budgets.
+// Every ordinary CPU, DMA, block and journal access uses one selected RAM
+// authority. State-RAM builds own EtherStateRam; no SparseRam object exists in
+// that profile. A separate reserved device window remains available for the
+// board's legacy command device and is not the general RAM authority.
 class MemoryFabric {
  public:
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+  using RamAuthority = EtherStateRam;
+  static constexpr bool kUsesStateRam = true;
+#else
+  using RamAuthority = SparseRam;
+  static constexpr bool kUsesStateRam = false;
+#endif
   using ReadByte = std::function<std::uint8_t(std::uint64_t)>;
   using WriteByte = std::function<void(std::uint64_t, std::uint8_t)>;
   using ReadWindowBlock = std::function<void(std::uint64_t, std::uint8_t*, std::size_t)>;
@@ -155,6 +160,10 @@ class MemoryFabric {
     if (!read || !write) throw std::invalid_argument("Ether memory window requires read/write callbacks");
     if (bool(read_block) != bool(write_block))
       throw std::invalid_argument("Ether block access requires paired callbacks");
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    if (ram_.quantum_authority() && ram_.quantum_authority()->intersects(base, bytes))
+      throw std::invalid_argument("Device window overlaps bound quantum RAM cells");
+#endif
     if (write_watch_ && base < write_watch_->end_ && base + bytes > write_watch_->base_)
       throw std::invalid_argument("Ether memory window overlaps a physical write watch");
     invalidate_page_tables();
@@ -165,6 +174,69 @@ class MemoryFabric {
     write_ = std::move(write);
     read_window_block_ = std::move(read_block);
     write_window_block_ = std::move(write_block);
+  }
+
+  const char* backend_name() const noexcept {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    return ram_.backend_name();
+#else
+    return "sparse-ram";
+#endif
+  }
+  std::size_t quantum_state_bytes() const noexcept {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    return ram_.quantum_state_bytes();
+#else
+    return 0;
+#endif
+  }
+  std::uint64_t quantum_revision() const noexcept {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    return ram_.quantum_revision();
+#else
+    return 0;
+#endif
+  }
+  void attach_quantum_authority(std::shared_ptr<EtherStateRam::QuantumAuthority> authority) {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    if (authority && bytes_ && authority->intersects(base_, bytes_))
+      throw std::invalid_argument("Quantum authority overlaps the device window");
+    ram_.attach_quantum_authority(std::move(authority));
+    notify_quantum_state_changed();
+#else
+    (void)authority;
+    throw std::logic_error("This build does not select EtherStateRam");
+#endif
+  }
+  template <class Binder>
+  void bind_quantum_byte(std::uint64_t address, Binder&& binder) {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    if (in_window(address)) throw std::invalid_argument("Quantum binding overlaps a device window");
+    ram_.bind_quantum_byte(address, std::forward<Binder>(binder));
+    notify_quantum_state_changed();
+#else
+    (void)address; (void)binder;
+    throw std::logic_error("This build does not select EtherStateRam");
+#endif
+  }
+  template <class Unbinder>
+  void unbind_quantum_byte(std::uint64_t address, Unbinder&& unbinder) {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    ram_.unbind_quantum_byte(address, std::forward<Unbinder>(unbinder));
+    notify_quantum_state_changed();
+#else
+    (void)address; (void)unbinder;
+    throw std::logic_error("This build does not select EtherStateRam");
+#endif
+  }
+  // Owner-only, after a gate/measurement/binding/restore outside a CPU store.
+  // Cache readers also compare revisions so forgetting this hook cannot use
+  // stale instructions or page translations. The hook invalidates the display.
+  void notify_quantum_state_changed() noexcept {
+    observed_quantum_revision_ = quantum_revision();
+    invalidate_page_tables();
+    if (code_page_versions_) code_page_versions_->clear();
+    invalidate_write_watch();
   }
 
   std::uint64_t size() const noexcept { return ram_.size(); }
@@ -179,7 +251,12 @@ class MemoryFabric {
     ram_.attach_page_backing(std::move(backing), policy, clean_history_pages);
     if (code_page_versions_) code_page_versions_->clear();
   }
-  [[nodiscard]] SparseRam::WritePins pin_writes() noexcept { return ram_.pin_writes(); }
+  [[nodiscard]] RamAuthority::WritePins pin_writes() noexcept { return ram_.pin_writes(); }
+  void commit_write_scope() noexcept {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    ram_.commit_write_scope();
+#endif
+  }
   std::uint64_t allocated_bytes() const noexcept { return ram_.allocated_bytes(); }
   std::uint64_t backing_cache_bytes() const noexcept { return ram_.backing_cache_bytes(); }
   std::uint64_t budget_bytes() const noexcept { return ram_.budget_bytes(); }
@@ -227,7 +304,10 @@ class MemoryFabric {
     write_watch_ = std::make_unique<WriteWatch>(capacity);
     write_watch_->range(base, bytes);
   }
-  const WriteWatch* write_watch() const noexcept { return write_watch_.get(); }
+  const WriteWatch* write_watch() const noexcept {
+    if (write_watch_ && observed_quantum_revision_ != quantum_revision()) write_watch_->invalidate();
+    return write_watch_.get();
+  }
   void move_write_watch(std::uint64_t base, std::size_t bytes) {
     if (!write_watch_) return;
     if (!bytes || base > size() || bytes > size() - base ||
@@ -239,6 +319,7 @@ class MemoryFabric {
     if (write_watch_) write_watch_->invalidate();
   }
   void acknowledge_write_watch() noexcept {
+    if (observed_quantum_revision_ != quantum_revision()) notify_quantum_state_changed();
     if (write_watch_) write_watch_->clear();
   }
 
@@ -248,14 +329,19 @@ class MemoryFabric {
       code_page_versions_.reset(new (std::nothrow) CodePageVersions{});
   }
   std::uint64_t code_page_version(std::uint64_t offset) const noexcept {
+    if (observed_quantum_revision_ != quantum_revision()) return 0;
     return code_page_versions_ ? code_page_versions_->get(offset / kPageSize) : 0;
   }
   std::uint64_t watch_code_page(std::uint64_t offset) noexcept {
+    if (observed_quantum_revision_ != quantum_revision()) notify_quantum_state_changed();
     return code_page_versions_ ? code_page_versions_->watch(offset / kPageSize) : 0;
   }
 
-  std::uint64_t page_table_epoch() const noexcept { return page_table_epoch_; }
+  std::uint64_t page_table_epoch() const noexcept {
+    return observed_quantum_revision_ == quantum_revision() ? page_table_epoch_ : 0;
+  }
   void watch_page_table(std::uint64_t offset) noexcept {
+    if (observed_quantum_revision_ != quantum_revision()) notify_quantum_state_changed();
     if (!page_table_epoch_)
       page_table_epoch_ = next_page_table_epoch_.fetch_add(1, std::memory_order_relaxed);
     page_table_buckets_[page_table_bucket(offset / kPageSize)] = true;
@@ -570,7 +656,8 @@ class MemoryFabric {
     if (write_watch_ && count) write_watch_->note(offset, count);
     if (code_page_versions_ && count) code_page_versions_->note(offset, count);
   }
-  SparseRam ram_;
+  RamAuthority ram_;
+  std::uint64_t observed_quantum_revision_ = 0;
   std::unique_ptr<WriteWatch> write_watch_;
   std::unique_ptr<CodePageVersions> code_page_versions_;
   std::uint64_t base_ = 0;

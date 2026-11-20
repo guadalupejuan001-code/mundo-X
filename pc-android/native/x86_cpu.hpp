@@ -1214,6 +1214,10 @@ class Cpu {
     journal_.clear();
     block_journal_.clear();
     block_journal_bytes_.clear();
+    // A retired instruction remains committed when a subsequent trap frame
+    // fails. Start the quantum undo baseline at the same boundary as the
+    // classical journal; exception-delivery retries also begin here.
+    memory.commit_write_scope();
   }
   void rollback(const Snapshot& s) {
     // Only our architectural state and write* calls are transactional. Host

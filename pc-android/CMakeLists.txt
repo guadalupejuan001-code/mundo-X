@@ -22,7 +22,7 @@ if (BUILD_TESTING)
         target_link_libraries(x86_ether_next_guest_test PRIVATE mundo_x_ether_next Threads::Threads)
         add_test(NAME ether_next_pc_guest COMMAND x86_ether_next_guest_test)
     endif()
-    foreach(name sparse_ram sparse_ram_pressure boot_hotspots x86_ether_rep_batch x86_ether_shift_loop x86_ether_counter_loop x86_ram_backing
+    foreach(name ether_state_ram sparse_ram sparse_ram_pressure boot_hotspots x86_ether_rep_batch x86_ether_shift_loop x86_ether_counter_loop x86_ram_backing
             x86_bit_scan x86_invlpg
             x86_cpu x86_cpu_profile x86_protected_real_transition x86_lock_rmw
             x86_sse2_packed_oracle x86_c09r1_stage5_cvt_fxsr x86_sse_fp32 x86_sse_legacy_forms
@@ -37,7 +37,7 @@ if (BUILD_TESTING)
         elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             target_compile_options(${name}_test PRIVATE -Wall -Wextra -Wpedantic -frounding-math)
         endif()
-        if(name STREQUAL "pc_autonomous" OR name STREQUAL "sparse_ram" OR name STREQUAL "sparse_ram_pressure")
+        if(name STREQUAL "pc_autonomous" OR name STREQUAL "ether_state_ram" OR name STREQUAL "sparse_ram" OR name STREQUAL "sparse_ram_pressure")
             target_link_libraries(${name}_test PRIVATE Threads::Threads)
         endif()
         add_test(NAME ${name} COMMAND ${name}_test)
