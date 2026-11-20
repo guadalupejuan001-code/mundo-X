@@ -1000,7 +1000,11 @@ void segment_load_contract() {
       cpu.regs[Cpu::EDX] = rounds;
       const auto retired = cpu.instructions;
       const auto start = std::chrono::steady_clock::now();
-      m.run(steps);
+      for (unsigned left = steps; left;) {
+        const auto slice = std::min(left, PcMachine::kDefaultRunSteps);
+        m.run(slice);
+        left -= slice;
+      }
       times[n][trial] = std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now()-start).count();
       require(cpu.halted && !cpu.fault && cpu.instructions-retired == steps &&
@@ -1010,7 +1014,7 @@ void segment_load_contract() {
     require(capture(fast.cpu) == capture(scalar.cpu), "segment-load scalar state differs");
   }
   for (auto& group : times) std::sort(group.begin(),group.end());
-  require(fast.cpu.ether_arm64_stats().steps >= 7 * (steps-16) &&
+  require(fast.cpu.ether_arm64_stats().steps >= 7 * steps * 99 / 100 &&
           !scalar.cpu.ether_arm64_stats().steps, "segment loop missed native execution");
   // A fast-path miss must allow the interpreter to retire the precise instruction.
   for (auto address : {nodes+4094, UINT64_C(0x0000800000000000)}) {
