@@ -192,7 +192,7 @@ void test_failures_pins_and_clean_reclaim() {
 
 void test_compact_budget_and_fill_preflight() {
   Ram edges(4 * page_size, page_size);
-  rejects([&] { edges.fill(page_size - 1, 0, page_size + 2); },
+  rejects([&] { edges.fill(page_size - 1, 0x5a, page_size + 2); },
           "separate fill edges lost their prepared pins under pressure");
   need(edges.read_byte(page_size - 1) == 0 && edges.read_byte(2 * page_size) == 0,
        "failed fill preflight changed guest bytes");
@@ -222,6 +222,118 @@ void test_compact_budget_and_fill_preflight() {
     need(first == 0x12120000U + i && last == 0xaabbcc00U + i,
          "packed state changed during backing transfer");
   }
+}
+
+void test_implicit_zero_fill_inside_journal() {
+  constexpr std::uint64_t image_bytes = 7680ULL * 4320 * 4;
+  Ram ram(2 * image_bytes, 2 * page_size);
+  auto backing = std::make_unique<Backing>(); ram.attach_page_backing(std::move(backing));
+  ram.write_byte(0, 41);
+  {
+    const auto pins = ram.pin_writes();
+    ram.prepare_write(0, 1);
+    const auto before = ram.allocated_bytes();
+    ram.fill(0, 0, image_bytes);
+    need(ram.allocated_bytes() == before && ram.read_byte(image_bytes - 1) == 0,
+         "pinned zero fill materialized the untouched 8K image");
+    need(ram.restore_byte(0, 41) && ram.read_byte(0) == 41,
+         "implicit zero fill released a journal's resident rollback page");
+    ram.prepare_write(page_size, 1);
+    bool contextual = false;
+    try { ram.write_byte(2 * page_size, 99); }
+    catch (const Ram::BudgetExceeded& error) {
+      contextual = std::string(error.what()).find("budget exceeded") != std::string::npos &&
+          std::string(error.what()).find("unpinned") != std::string::npos;
+    }
+    need(contextual, "budget failure lost its recognizable context or pin cause");
+  }
+}
+
+void test_full_overwrite_and_lazy_shared_cache() {
+  constexpr std::size_t rows = 96, rounds = 12;
+  constexpr std::uint64_t mib = 1024 * 1024;
+  for (auto policy : {Ram::BackingCachePolicy::Fixed, Ram::BackingCachePolicy::Adaptive}) {
+    Ram ram(128 * page_size, 64 * mib);
+    auto backing = std::make_unique<Backing>(); auto* host = backing.get();
+    ram.attach_page_backing(std::move(backing), policy);
+    need(ram.backing_cache_bytes() == 0, "cache eagerly allocated unused decoded payload");
+    for (unsigned row = 0; row < rows; ++row) {
+      const auto data = varied(row);
+      ram.write_block(row * page_size, data.data(), data.size());
+    }
+    need(ram.adjust_payload_budget(0, rows) == Ram::BudgetAdjustment::Applied &&
+         ram.adjust_payload_budget(64 * mib, 0) == Ram::BudgetAdjustment::Applied,
+         "shared-cache fixture did not spill and restore the resident budget");
+    Page result;
+    for (unsigned round = 0; round < rounds; ++round)
+      for (unsigned pass = 0; pass < 3; ++pass)
+        for (unsigned row = 0; row < rows; ++row) {
+          ram.read_block(row * page_size, result.data(), pass == 1 ? page_size : 4);
+          need(result[0] == varied(row)[0], "shared-cache read changed guest bytes");
+        }
+    const auto before = ram.metrics();
+    if (policy == Ram::BackingCachePolicy::Adaptive) {
+      need(before.backing_reads == rows && before.backing_cache_hits == 3 * rows * rounds - rows &&
+           before.backing_cache_bytes == rows * page_size &&
+           before.backing_cache_capacity_bytes == 128 * page_size,
+           "adaptive cache did not distinguish used payload from reserved capacity");
+      need(ram.adjust_payload_budget(16 * mib, 0) == Ram::BudgetAdjustment::Applied &&
+           ram.backing_cache_bytes() > 0 && ram.backing_cache_bytes() <= 128 * 1024 &&
+           ram.metrics().backing_cache_capacity_bytes == 128 * 1024,
+           "cache shrink did not retain valid pages within its reserved capacity");
+    } else need(before.backing_reads == 3 * rows * rounds, "fixed cache did not exercise misses");
+    auto replacement = varied(129);
+    host->fail_read = true;
+    ram.write_block(0, replacement.data(), replacement.size());
+    host->fail_read = false;
+    need(ram.metrics().backing_reads == before.backing_reads &&
+         ram.metrics().backing_overwrite_pages == 1 && !host->pages.count(0),
+         "full overwrite recovered or retained the obsolete backed page");
+    ram.read_block(0, result.data(), result.size());
+    need(result == replacement, "full overwrite did not publish its replacement");
+  }
+
+  // Recovering a partial suffix can fail after a complete prefix is staged.
+  // The complete old page must stay authoritative until all preflight succeeds.
+  Ram ram(3 * page_size, 3 * page_size);
+  auto backing = std::make_unique<Backing>(); auto* host = backing.get();
+  ram.attach_page_backing(std::move(backing));
+  const auto first = varied(1), second = varied(2);
+  ram.write_block(0, first.data(), first.size());
+  ram.write_block(page_size, second.data(), second.size());
+  need(ram.adjust_payload_budget(0, 2) == Ram::BudgetAdjustment::Applied &&
+       ram.adjust_payload_budget(3 * page_size, 0) == Ram::BudgetAdjustment::Applied,
+       "overwrite failure fixture");
+  std::vector<std::uint8_t> replacement(2 * page_size - 1, 0xa7);
+  host->fail_read = true;
+  rejects([&] { ram.write_block(0, replacement.data(), replacement.size()); },
+          "partial recovery failure did not reject a mixed overwrite");
+  host->fail_read = false;
+  Page recovered;
+  ram.read_block(0, recovered.data(), recovered.size());
+  need(recovered == first && ram.metrics().backing_overwrite_pages == 0 && host->pages.count(0),
+       "failed preflight discarded or published its full-page candidate");
+  ram.read_block(page_size, recovered.data(), recovered.size());
+  need(recovered == second, "failed preflight altered its partial suffix");
+
+  // Quantum rejection must retain the complete old page even when the caller
+  // offers a full replacement and requests no classical undo operand.
+  Ram coherent(2 * page_size, 2 * page_size);
+  auto quantum_backing = std::make_unique<Backing>(); auto* quantum_host = quantum_backing.get();
+  coherent.attach_page_backing(std::move(quantum_backing));
+  auto cells = std::make_shared<Cells>(); coherent.attach_quantum_authority(cells);
+  coherent.write_block(0, first.data(), first.size());
+  coherent.bind_quantum_byte(cells->base, [&](std::uint8_t value) { cells->bind(cells->base, value); });
+  need(coherent.adjust_payload_budget(0, 2) == Ram::BudgetAdjustment::Applied &&
+       coherent.adjust_payload_budget(2 * page_size, 0) == Ram::BudgetAdjustment::Applied,
+       "coherent full overwrite fixture");
+  cells->fail_store = true;
+  rejects([&] { coherent.write_block(0, second.data(), second.size()); },
+          "full replacement bypassed quantum rejection");
+  cells->fail_store = false;
+  coherent.read_block(0, recovered.data(), recovered.size());
+  need(recovered == first && coherent.metrics().backing_overwrite_pages == 0 && quantum_host->pages.count(0),
+       "quantum failure discarded the previous full-page authority");
 }
 
 void test_quantum_routes_and_rollback() {
@@ -280,6 +392,8 @@ int main() {
     test_pressure_and_reference();
     test_failures_pins_and_clean_reclaim();
     test_compact_budget_and_fill_preflight();
+    test_implicit_zero_fill_inside_journal();
+    test_full_overwrite_and_lazy_shared_cache();
     test_quantum_routes_and_rollback();
     std::cout << "ETHER_STATE_RAM_PASS checks=" << checks << " logical_bytes=" << (64ULL << 30) << '\n';
     return 0;

@@ -45,7 +45,13 @@ class EtherStateRam {
 
   class QuantumAuthority {
    public:
+    class LocalCheckpoint {
+     public:
+      virtual ~LocalCheckpoint() = default;
+      virtual void restore() noexcept = 0;
+    };
     virtual ~QuantumAuthority() = default;
+    virtual std::unique_ptr<LocalCheckpoint> checkpoint() { return {}; }
     virtual bool contains(std::uint64_t address) const noexcept = 0;
     virtual bool intersects(std::uint64_t first, std::size_t count) const noexcept {
       for (std::size_t i = 0; i < count; ++i) if (contains(first + i)) return true;
@@ -107,7 +113,7 @@ class EtherStateRam {
   struct CacheLine {
     std::uint64_t page = UINT64_MAX;
     std::uint64_t age = 0;
-    Bytes bytes{};
+    std::unique_ptr<Bytes> bytes;
   };
   struct Storage {
     explicit Storage(std::uint64_t logical, std::uint64_t budget)
@@ -119,11 +125,11 @@ class EtherStateRam {
     std::unique_ptr<PageBacking> backing;
     mutable std::mutex read_mutex;
     mutable std::vector<CacheLine> cache;
-    mutable std::uint64_t cache_age = 0, cache_hits = 0, cache_overwrites = 0;
+    mutable std::uint64_t cache_age = 0, cache_hits = 0;
     mutable std::uint64_t backing_reads = 0, backing_read_failures = 0;
     mutable std::uint64_t backing_timed_attempts = 0, backing_read_ns = 0;
     mutable std::uint64_t backing_read_max_ns = 0, backing_lock_wait_ns = 0;
-    std::uint64_t backing_writes = 0, clean_reclaims = 0;
+    std::uint64_t backing_writes = 0, backing_overwrites = 0, clean_reclaims = 0;
     std::uint64_t payload = 0;
     std::size_t dense_pages = 0, rule_pages = 0, spilled_pages = 0, clean_pages = 0;
     std::size_t pin_depth = 0, clean_history_pages = 512;
@@ -170,7 +176,11 @@ class EtherStateRam {
   std::size_t spilled_pages() const noexcept { return state().spilled_pages; }
   std::uint64_t allocated_bytes() const noexcept { return state().payload; }
   std::uint64_t budget_bytes() const noexcept { return state().payload_cap; }
-  std::uint64_t backing_cache_bytes() const noexcept { return state().cache.size() * kPageSize; }
+  std::uint64_t backing_cache_bytes() const noexcept {
+    std::size_t allocated = 0;
+    for (const auto& line : state().cache) allocated += bool(line.bytes);
+    return allocated * kPageSize;
+  }
   std::size_t clean_backing_pages() const noexcept { return state().clean_pages; }
   bool has_page_backing() const noexcept { return bool(state().backing); }
   bool has_pinned_writes() const noexcept { return state().pin_depth != 0; }
@@ -196,6 +206,9 @@ class EtherStateRam {
     }
   }
   const std::shared_ptr<QuantumAuthority>& quantum_authority() const noexcept { return state().quantum; }
+  std::unique_ptr<QuantumAuthority::LocalCheckpoint> checkpoint_quantum() {
+    return state().quantum ? state().quantum->checkpoint() : nullptr;
+  }
 
   // The callback publishes the corresponding binding in the provider. All
   // fallible basis preparation precedes it, so there is no second byte owner
@@ -261,7 +274,7 @@ class EtherStateRam {
     // std::map's three links/color are conservatively charged separately.
     return sizeof(*this) + sizeof(Storage) + state().pages.size() *
         (sizeof(std::pair<const std::uint64_t, BasisPage>) + 4 * sizeof(void*)) +
-        state().cache.capacity() * (sizeof(CacheLine) - kPageSize);
+        state().cache.capacity() * sizeof(CacheLine);
   }
   Metrics metrics() const noexcept {
     auto result = Metrics{};
@@ -277,8 +290,8 @@ class EtherStateRam {
     result.backing_writes = state().backing_writes;
     result.backing_cache_hits = state().cache_hits;
     result.backing_cache_bytes = backing_cache_bytes();
-    result.backing_cache_capacity_bytes = backing_cache_bytes();
-    result.backing_overwrite_pages = state().cache_overwrites;
+    result.backing_cache_capacity_bytes = state().cache.size() * kPageSize;
+    result.backing_overwrite_pages = state().backing_overwrites;
     result.page_state_vectors = state().pages.size();
     result.backing_clean_pages = state().clean_pages;
     result.backing_clean_reclaims = state().clean_reclaims;
@@ -386,10 +399,20 @@ class EtherStateRam {
   // Materialization is transactional with respect to values. Eviction may
   // change residency, but every target remains unchanged on any exception.
   void prepare_write(std::uint64_t address, std::size_t count) {
+    prepare_dense_pages(address, count, false);
+  }
+
+ private:
+  void prepare_dense_pages(std::uint64_t address, std::size_t count, bool replace_full_pages) {
     check_range(address, count);
     if (!count) return;
     const auto first = address / kPageSize;
     const auto last = (address + count - 1) / kPageSize;
+    const auto end = address + count;
+    const auto replaces_page = [&](std::uint64_t index) {
+      return replace_full_pages && !(index == first && address % kPageSize) &&
+          !(index == last && end % kPageSize);
+    };
     std::uint64_t additional = 0;
     std::size_t missing = 0;
     for (auto index = first; index <= last; ++index) {
@@ -409,7 +432,7 @@ class EtherStateRam {
       auto* page = find_page(index);
       if (page && page->packed) continue;
       auto bytes = std::make_unique<Bytes>();
-      if (!page) bytes->fill(0);
+      if (!page || replaces_page(index)) bytes->fill(0);
       else if (page->spilled) {
         ++state().pressure.write_promotion_attempts;
         const auto start = ReclaimClock::now();
@@ -426,20 +449,29 @@ class EtherStateRam {
     }
     for (auto& item : prepared) {
       auto& page = *find_page(item.index);
-      const bool promoted = page.spilled;
+      const bool replaced = replaces_page(item.index);
+      const bool promoted = page.spilled && !replaced;
+      if (page.spilled && replaced) {
+        // Every allocation and partial-page recovery has succeeded. This path
+        // is used only when no undo operand or quantum batch can still fail.
+        state().backing->discard(item.index);
+        invalidate_cache(item.index);
+        ++state().backing_overwrites;
+      }
       remove_accounting(page);
       page.packed = std::move(item.bytes);
       std::vector<Patch>{}.swap(page.changes);
       page.background = 0;
       page.spilled = false;
       // A promoted backing copy remains clean until the actual write.
-      page.clean = page.clean || promoted;
+      page.clean = !replaced && (page.clean || promoted);
       if (promoted) ++state().pressure.write_promotions;
       add_accounting(page);
     }
     for (auto index = first; index <= last; ++index) mark_pin(*find_page(index));
   }
 
+ public:
   void write_block(std::uint64_t address, const std::uint8_t* source, std::size_t count,
                    std::uint8_t* previous = nullptr) {
     check_range(address, count);
@@ -451,7 +483,9 @@ class EtherStateRam {
     for (auto cell : bindings) updates.emplace_back(cell, source[cell - address]);
     // Read the complete old operand before materialization or either commit.
     if (previous) read_block(address, previous, count);
-    prepare_write(address, count);
+    // Full ordinary pages need no old data when the caller requests no undo.
+    // A coherent batch retains the old basis state until its provider commits.
+    prepare_dense_pages(address, count, previous == nullptr && bindings.empty());
     if (!updates.empty()) state().quantum->write(updates);
     commit_bytes(address, source, count, bindings);
   }
@@ -463,6 +497,10 @@ class EtherStateRam {
     std::vector<std::pair<std::uint64_t, std::uint8_t>> updates;
     updates.reserve(bindings.size());
     for (auto cell : bindings) updates.emplace_back(cell, value);
+    if (value == 0) {
+      fill_zero(address, count, updates);
+      return;
+    }
     // Zeroing large untouched regions is a rule operation, not a dense 64 GiB
     // allocation. Pins retain dense pages needed for an instruction rollback.
     if (!has_pinned_writes()) {
@@ -686,7 +724,10 @@ class EtherStateRam {
       resized.reserve(desired_cache);
       // Favor recently read pages when the cache must shrink.
       std::sort(state().cache.begin(), state().cache.end(),
-          [](const CacheLine& a, const CacheLine& b) { return a.age > b.age; });
+          [](const CacheLine& a, const CacheLine& b) {
+            if ((a.page == UINT64_MAX) != (b.page == UINT64_MAX)) return a.page != UINT64_MAX;
+            return a.age > b.age;
+          });
       for (std::size_t i = 0; i < desired_cache; ++i) resized.push_back(std::move(state().cache[i]));
       state().cache.swap(resized);
     } else state().cache.resize(desired_cache);
@@ -700,10 +741,10 @@ class EtherStateRam {
     state().dense_pages = state().rule_pages = state().spilled_pages = state().clean_pages = 0;
     state().backing_reads = state().backing_writes = state().backing_read_failures = 0;
     state().backing_timed_attempts = state().backing_read_ns = state().backing_read_max_ns = 0;
-    state().backing_lock_wait_ns = state().cache_hits = state().cache_overwrites = 0;
+    state().backing_lock_wait_ns = state().cache_hits = state().backing_overwrites = 0;
     state().cache_age = state().clean_reclaims = state().reclaim_cursor = state().compact_cursor = 0;
     state().pressure = {};
-    for (auto& line : state().cache) line.page = UINT64_MAX;
+    for (auto& line : state().cache) { line.page = UINT64_MAX; line.age = 0; line.bytes.reset(); }
     if (state().backing) state().backing->reset();
     if (state().quantum) state().quantum->reset();
   }
@@ -713,6 +754,45 @@ class EtherStateRam {
   std::unique_ptr<Storage> storage_;
   Storage& state() noexcept { return *storage_; }
   const Storage& state() const noexcept { return *storage_; }
+  void fill_zero(std::uint64_t address, std::size_t count,
+                  const std::vector<std::pair<std::uint64_t, std::uint8_t>>& updates) {
+    const bool retain_dense = has_pinned_writes();
+    const auto pins = pin_writes();
+    const auto first = address / kPageSize, last = (address + count - 1) / kPageSize;
+    const auto end = address + count;
+    std::vector<std::uint64_t> affected;
+    for (auto it = state().pages.lower_bound(first); it != state().pages.end() && it->first <= last; ++it) {
+      affected.push_back(it->first);
+      // A previous journal may need the current dense representation. Keep
+      // all resident targets stable while partial edge pages are prepared.
+      if (it->second.packed) mark_pin(it->second);
+    }
+    for (auto index : affected) {
+      auto* page = find_page(index);
+      if (!page || page->packed) continue;
+      const auto begin = std::max(address, index * kPageSize);
+      const auto finish = begin + std::min<std::uint64_t>(end - begin, kPageSize - begin % kPageSize);
+      const bool full_page = finish - begin == kPageSize;
+      // Untouched zeros remain implicit, even inside a CPU pin scope. A full
+      // unpinned compact/backed page can be discarded after quantum commit;
+      // only a partial nonzero state needs its previous bytes recovered.
+      if ((full_page && !pinned(*page)) || (!page->spilled && is_zero(*page))) continue;
+      prepare_write(begin, static_cast<std::size_t>(finish - begin));
+    }
+    if (!updates.empty()) state().quantum->write(updates);
+    for (auto index : affected) {
+      auto* page = find_page(index);
+      if (!page) continue;
+      const auto begin = std::max(address, index * kPageSize);
+      const auto finish = begin + std::min<std::uint64_t>(end - begin, kPageSize - begin % kPageSize);
+      const bool full_page = finish - begin == kPageSize;
+      if (full_page && (!page->packed || !retain_dense)) erase_page(index);
+      else if (page->packed) {
+        mark_write(index, *page);
+        std::memset(page->packed->data() + begin % kPageSize, 0, static_cast<std::size_t>(finish - begin));
+      }
+    }
+  }
   static std::uint64_t elapsed(ReclaimClock::time_point start) noexcept {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
         ReclaimClock::now() - start).count());
@@ -869,13 +949,17 @@ class EtherStateRam {
     if (s.backing_timing) s.backing_lock_wait_ns += elapsed(lock_start);
     for (auto& line : s.cache) if (line.page == index) {
       ++s.cache_hits; line.age = ++s.cache_age;
-      std::memcpy(destination, line.bytes.data() + inside, count);
+      std::memcpy(destination, line.bytes->data() + inside, count);
       return;
     }
     Bytes scratch;
     CacheLine* selected = nullptr;
     if (!s.cache.empty()) selected = &*std::min_element(s.cache.begin(), s.cache.end(),
-        [](const CacheLine& a, const CacheLine& b) { return a.age < b.age; });
+        [](const CacheLine& a, const CacheLine& b) {
+          if ((a.page == UINT64_MAX) != (b.page == UINT64_MAX)) return a.page == UINT64_MAX;
+          return a.age < b.age;
+        });
+    auto allocation = selected && !selected->bytes ? std::make_unique<Bytes>() : nullptr;
     // Read into a temporary: a failing backend must not corrupt a valid cache
     // line or publish a partial page under a different address.
     const auto start = s.backing_timing ? ReclaimClock::now() : ReclaimClock::time_point{};
@@ -887,8 +971,8 @@ class EtherStateRam {
     }
     if (s.backing_timing) record_backing_time(start);
     if (selected) {
-      if (selected->page != UINT64_MAX) ++s.cache_overwrites;
-      selected->bytes = scratch; selected->page = index; selected->age = ++s.cache_age;
+      if (allocation) selected->bytes = std::move(allocation);
+      *selected->bytes = scratch; selected->page = index; selected->age = ++s.cache_age;
     }
     std::memcpy(destination, scratch.data() + inside, count);
   }
@@ -993,19 +1077,22 @@ class EtherStateRam {
   }
   void ensure_space(std::uint64_t additional, std::uint64_t excluded_first,
                       std::uint64_t excluded_last, std::size_t requested) {
-    const auto cache = state().cache_policy == BackingCachePolicy::Adaptive ? backing_cache_bytes() : 0;
+    const auto cache = state().cache_policy == BackingCachePolicy::Adaptive ?
+        state().cache.size() * kPageSize : 0;
     const auto available = state().payload_cap >= cache ? state().payload_cap - cache : 0;
     if (additional <= available && allocated_bytes() <= available - additional) return;
     const auto start = ReclaimClock::now();
     ++state().pressure.forced_reclaims;
     state().pressure.requested_pages += requested;
     try {
-      if (additional > available) throw BudgetExceeded("EtherStateRam write set exceeds the resident budget");
+      if (additional > available)
+        throw BudgetExceeded("EtherStateRam payload budget exceeded: write set exceeds the resident limit");
       std::size_t declined = 0;
       while (allocated_bytes() > available - additional) {
         const auto selection = ReclaimClock::now();
         const auto index = reclaim_candidate(excluded_first, excluded_last, true);
-        if (index == UINT64_MAX) throw BudgetExceeded("EtherStateRam has no reclaimable unpinned states");
+        if (index == UINT64_MAX)
+          throw BudgetExceeded("EtherStateRam payload budget exceeded: no reclaimable unpinned states");
         ++state().pressure.compact_attempts;
         const auto compact_start = ReclaimClock::now();
         const auto before = allocated_bytes();
@@ -1018,9 +1105,9 @@ class EtherStateRam {
           state().pressure.reclaimed_bytes += before - allocated_bytes();
         } else if (!state().backing) {
           if (++declined >= state().pages.size())
-            throw BudgetExceeded("EtherStateRam needs additional backing capacity for this write");
+            throw BudgetExceeded("EtherStateRam payload budget exceeded: additional backing capacity is required");
         } else if (!spill_page(index, ReclaimClock::time_point::max()))
-          throw BudgetExceeded("EtherStateRam backing declined the page write");
+          throw BudgetExceeded("EtherStateRam payload budget exceeded: backing declined the page write");
       }
     } catch (...) {
       ++state().pressure.forced_failures;

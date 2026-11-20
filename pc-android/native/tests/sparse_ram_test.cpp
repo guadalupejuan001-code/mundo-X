@@ -1185,6 +1185,9 @@ int main() {
              std::uint8_t ether_byte = 0xba;
              unsigned ether_reads = 0, ether_writes = 0;
              memory.fill(0, 0x27, kPage);
+             // State RAM can encode fill directly as a compact rule. Make
+             // this fixture dense so the following call exercises compaction.
+             memory.prepare_write(0, kPage);
              memory.attach_window(kPage - 1, 1,
                  [&](std::uint64_t) { ++ether_reads; return ether_byte; },
                  [&](std::uint64_t, std::uint8_t value) { ++ether_writes; ether_byte = value; });

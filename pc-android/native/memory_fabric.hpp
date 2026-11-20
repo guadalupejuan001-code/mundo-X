@@ -427,9 +427,10 @@ class MemoryFabric {
     return ram_.scan_until_byte(offset, count, value);
   }
 
-  // Mixed classical/Ether writes are atomic with respect to expected provider
-  // exceptions: Ether bytes are written first with old values retained, and
-  // every affected SparseRam page is preflighted before either side commits.
+  // Mixed RAM/window writes reserve their complete undo data before changing
+  // values. Each RAM part can include quantum cells, so a later part may fail
+  // after an earlier part committed. Its local checkpoint must not rewind an
+  // enclosing CPU transaction or discard stores preceding this method.
   void write_block(std::uint64_t offset, const std::uint8_t* source, std::size_t count) {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, count);
@@ -446,12 +447,9 @@ class MemoryFabric {
     }
     const auto pins = pin_writes();
     prepare_write(offset, count);
-    std::vector<std::pair<std::uint64_t, std::uint8_t>> old;
-    old.reserve(std::min<std::size_t>(count, bytes_));
-    for (std::size_t i = 0; i < count; ++i) {
-      const auto address = offset + i;
-      if (in_window(address)) old.emplace_back(address, read_(address - base_));
-    }
+    std::vector<std::uint8_t> old(count);
+    split_read(offset, old.data(), count);
+    auto checkpoint = checkpoint_mixed_quantum(offset, count);
     std::size_t committed = 0;
     try {
       for (std::size_t i = 0; i < count; ++i) {
@@ -463,11 +461,7 @@ class MemoryFabric {
       }
       write_classical_parts(offset, source, count);
     } catch (...) {
-      while (committed) {
-        --committed;
-        const auto& item = old[committed];
-        try { write_(item.first - base_, item.second); } catch (...) {}
-      }
+      restore_mixed_write(offset, old, committed, checkpoint);
       throw;
     }
   }
@@ -495,24 +489,20 @@ class MemoryFabric {
     }
     const auto pins = pin_writes();
     prepare_write(offset, count);
-    std::vector<std::pair<std::uint64_t, std::uint8_t>> old;
-    old.reserve(std::min<std::size_t>(count, bytes_));
-    for (std::size_t i = 0; i < count; ++i) {
-      const auto address = offset + i;
-      if (in_window(address)) old.emplace_back(address, read_(address - base_));
-    }
+    std::vector<std::uint8_t> old(count);
+    split_read(offset, old.data(), count);
+    auto checkpoint = checkpoint_mixed_quantum(offset, count);
     std::size_t committed = 0;
     try {
-      for (const auto& item : old) {
-        write_(item.first - base_, value);
+      const auto first = std::max(offset, base_);
+      const auto end = std::min(offset + static_cast<std::uint64_t>(count), base_ + bytes_);
+      for (auto address = first; address < end; ++address) {
+        write_(address - base_, value);
         ++committed;
       }
       fill_classical_parts(offset, value, count);
     } catch (...) {
-      while (committed) {
-        --committed;
-        try { write_(old[committed].first - base_, old[committed].second); } catch (...) {}
-      }
+      restore_mixed_write(offset, old, committed, checkpoint);
       throw;
     }
   }
@@ -691,6 +681,44 @@ class MemoryFabric {
         ram_.read_block(offset, destination, n);
         offset += n; destination += n; count -= n;
       }
+    }
+  }
+  using QuantumCheckpoint = EtherStateRam::QuantumAuthority::LocalCheckpoint;
+  std::unique_ptr<QuantumCheckpoint> checkpoint_mixed_quantum(std::uint64_t offset,
+                                                            std::size_t count) {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    const auto& authority = ram_.quantum_authority();
+    if (authority && authority->intersects(offset, count)) {
+      auto checkpoint = ram_.checkpoint_quantum();
+      if (!checkpoint)
+        throw std::logic_error("Mixed quantum/window writes require a local rollback checkpoint");
+      return checkpoint;
+    }
+#else
+    (void)offset; (void)count;
+#endif
+    return {};
+  }
+  void restore_mixed_write(std::uint64_t offset, const std::vector<std::uint8_t>& previous,
+                           std::size_t window_committed,
+                           const std::unique_ptr<QuantumCheckpoint>& checkpoint) noexcept {
+    if (checkpoint) checkpoint->restore();
+    // prepare_write and the live pin keep every ordinary destination dense.
+    // The local checkpoint already restored quantum cells; using restore_byte
+    // on them here would incorrectly invoke the outer CPU undo checkpoint.
+    for (std::size_t i = previous.size(); i != 0;) {
+      --i;
+      const auto address = offset + i;
+      if (in_window(address)) continue;
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+      if (checkpoint && ram_.quantum_authority()->contains(address)) continue;
+#endif
+      (void)ram_.restore_byte(address, previous[i]);
+    }
+    const auto first = std::max(offset, base_);
+    while (window_committed) {
+      const auto address = first + --window_committed;
+      try { write_(address - base_, previous[address - offset]); } catch (...) {}
     }
   }
   void write_classical_parts(std::uint64_t offset, const std::uint8_t* source, std::size_t count) {
