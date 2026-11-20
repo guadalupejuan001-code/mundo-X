@@ -2204,8 +2204,34 @@ void benchmark() {
 }
 }  // namespace
 
+static void ram_view_contract() {
+  using namespace cosmic_pc::ether_arm64;
+  constexpr std::uint8_t code[]{0x03,0x07, 0x89,0x47,4, 0xff,0xc9, 0x75,0xf7};
+  const auto block = decode(code, sizeof(code), 0x7000);
+  require(block.repeats && block.count == 4 && block.writes == 1 && block.decrement_carry_index == 0,
+          "RAM ADD/store/countdown lost its backedge or its x86 carry source");
+
+  std::array<std::uint8_t, 8> bytes{1,2,3,4,5,6,7,8};
+  auto read = [&](std::uint64_t p, unsigned width) {
+    std::uint64_t value = 0;
+    for (unsigned i = 0; i < width; ++i) value |= std::uint64_t(bytes.at(p + i)) << (8 * i);
+    return value;
+  };
+  RamView view;
+  view.add({0x1000, 0, read(0,4), 4, 4, true});
+  view.add({0x1004, 4, 0, 68, 4, false});
+  require(view.find(0x1000,4) && !view.find(0x1000,68), "view must preserve access permissions");
+  ++bytes[4];
+  require(view.inputs_unchanged(read), "a neighboring output on the same page caused a false conflict");
+  ++bytes[2];
+  require(!view.inputs_unchanged(read), "partial physical alias must invalidate a captured input");
+  --bytes[2];
+  require(view.inputs_unchanged(read), "restored inputs must permit a serial publication");
+}
+
 int main() {
   try {
+    ram_view_contract();
     decoder_contract();
     segment_load_contract();
     countdown_carry_contract();

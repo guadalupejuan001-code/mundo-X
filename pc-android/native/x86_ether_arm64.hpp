@@ -409,8 +409,13 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         const bool can_capture = from_rotate ? block.instructions[block.rotate_carry_index].rhs.immediate
             : Instruction::logical(block.flag_op) || block.flag_op == Instruction::Add ||
               block.flag_op == Instruction::Subtract || block.flag_op == Instruction::Compare;
+        // A register ADD with a RAM source uses the same saved carry operands
+        // as its register form. A later MOV to RAM cannot change those flags.
+        const auto& producer = block.instructions[block.flag_index];
+        const bool saved_carry = block.register_only ||
+            (producer.kind == Instruction::Add && !producer.lhs.memory && producer.rhs.memory && !from_rotate);
         if (op.kind == Instruction::Decrement && op.width >= 4 && jnz &&
-            block.register_only && !carry_boundary && can_capture) {
+            saved_carry && !carry_boundary && can_capture) {
           block.decrement_carry_index = from_rotate ? block.rotate_carry_index : block.flag_index;
         } else if (!long_mode) {
           break;
@@ -667,6 +672,37 @@ struct RegisterStateVector {
     auto& count = registers[countdown.lhs.reg];
     --count;
     if (countdown.width == 4) count = std::uint32_t(count);
+  }
+};
+
+// A worker keeps a bounded view of the ordinary bytes used by one x86 loop.
+// Distinct words in the same guest page are independent. Publication runs
+// under the board bus and rechecks every original input at byte precision.
+struct RamView {
+  struct Word {
+    std::uint64_t linear, physical, original;
+    unsigned spec, width;
+    bool input;
+  };
+  std::array<Word, Block::kMaxInstructions * 2> words;
+  unsigned count = 0;
+
+  const Word* find(std::uint64_t linear, unsigned spec) const noexcept {
+    for (unsigned i = 0; i < count; ++i)
+      if (words[i].linear == linear && words[i].spec == spec) return &words[i];
+    return nullptr;
+  }
+  const Word* add(Word word) noexcept {
+    if (count == words.size()) return nullptr;
+    words[count] = word;
+    return &words[count++];
+  }
+  template <class Read> bool inputs_unchanged(Read read) const {
+    for (unsigned i = 0; i < count; ++i) {
+      const auto& word = words[i];
+      if (word.input && read(word.physical, word.width) != word.original) return false;
+    }
+    return true;
   }
 };
 
