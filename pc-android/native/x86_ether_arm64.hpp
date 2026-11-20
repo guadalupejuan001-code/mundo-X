@@ -37,6 +37,8 @@ struct Operand {
   unsigned index = kNoIndex, scale_shift = 0;
   bool memory = false, immediate = false, stack = false, high_byte = false;
 
+  std::uint8_t segment_prefix = 0;
+
   static Operand literal(std::uint64_t value) noexcept {
     Operand operand;
     operand.immediate = true;
@@ -91,7 +93,7 @@ struct Block {
   unsigned last_wide_rotate_offset = kMaxBytes, last_variable_rotate_offset = kMaxBytes;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
-  bool long_mode = true, repeats = false, register_only = true;
+  bool long_mode = true, repeats = false, register_only = true, reads_segment = false;
 
   // A single interpreted instruction costs less than replacing a warm block
   // and setting up an executable mapping for the same amount of guest work.
@@ -148,7 +150,8 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
     Instruction::Add, Instruction::Or, Instruction::Unsupported, Instruction::Unsupported,
     Instruction::And, Instruction::Subtract, Instruction::Xor, Instruction::Compare};
 
-inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true) {
+inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true,
+                    bool allow_segment_loads = false) {
   Block block;
   block.long_mode = long_mode;
   unsigned carry_boundary = 0;
@@ -165,6 +168,12 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     unsigned pos = block.size;
     const unsigned begin = pos;
     unsigned opcode = bytes[pos++], rex = 0;
+    unsigned segment = 0;
+    if (allow_segment_loads && long_mode && (opcode == 0x64 || opcode == 0x65)) {
+      if (pos == size) break;
+      segment = opcode;
+      opcode = bytes[pos++];
+    }
     const bool word = opcode == 0x66;
     if (word) {
       if (pos == size) break;
@@ -175,6 +184,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       rex = opcode;
       opcode = bytes[pos++];
     }
+    if (segment && opcode != 0x8b && opcode != 0x8a) break;
     if (long_mode && word && opcode != 0x89 && opcode != 0x8b) break;
     if (opcode == 0x0f && pos < size &&
         ((bytes[pos] & 0xfeU) == 0xb6U || (bytes[pos] & 0xfeU) == 0xbeU ||
@@ -237,6 +247,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       const Operand reg{group + ((rex & 4) ? 8U : 0U)};
       Operand other{rm + ((rex & 1) ? 8U : 0U)};
       other.memory = mod != 3;
+      if (segment && !other.memory) break;
+      other.segment_prefix = static_cast<std::uint8_t>(segment);
       if (other.memory) {
         unsigned base = rm;
         if (rm == 4) {
@@ -397,8 +409,13 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         const bool can_capture = from_rotate ? block.instructions[block.rotate_carry_index].rhs.immediate
             : Instruction::logical(block.flag_op) || block.flag_op == Instruction::Add ||
               block.flag_op == Instruction::Subtract || block.flag_op == Instruction::Compare;
+        // A register ADD with a RAM source uses the same saved carry operands
+        // as its register form. A later MOV to RAM cannot change those flags.
+        const auto& producer = block.instructions[block.flag_index];
+        const bool saved_carry = block.register_only ||
+            (producer.kind == Instruction::Add && !producer.lhs.memory && producer.rhs.memory && !from_rotate);
         if (op.kind == Instruction::Decrement && op.width >= 4 && jnz &&
-            block.register_only && !carry_boundary && can_capture) {
+            saved_carry && !carry_boundary && can_capture) {
           block.decrement_carry_index = from_rotate ? block.rotate_carry_index : block.flag_index;
         } else if (!long_mode) {
           break;
@@ -431,6 +448,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.rhs.immediate_value = rip + pos + signed_offset(op.rhs.displacement);
     op.end = pos;
     block.instructions[block.count++] = op;
+    block.reads_segment |= op.rhs.segment_prefix != 0;
     block.register_only = block.register_only && !op.lhs.memory &&
         (!op.rhs.memory || op.kind == Instruction::Lea);
     block.size = pos;
@@ -438,7 +456,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }
-  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode);
+  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode, allow_segment_loads);
   // A read-only round can validate a new address with the guarded loader.
   // Repeated stores still require fixed addresses for the pending writes.
   // Legacy execution can repeat only when no segment or memory is accessed.
@@ -487,7 +505,10 @@ struct RegisterStateVector {
         last.lhs.reg >= kRegisters)
       return {};
 
-    const unsigned body_width = block.long_mode ? 8 : 4;
+    // A single dword ADD/SUB has a closed form modulo 2^32 in either mode.
+    // Mixed-width bodies still need every individual x86 write to zero-extend.
+    const bool dword_sum = single_add_sub(block) && block.instructions[0].width == 4;
+    const unsigned body_width = block.long_mode && !dword_sum ? 8 : 4;
     unsigned written = 0, read = 0, left = 0, right = 0;
     for (unsigned i = 0; i + 2 < block.count; ++i) {
       const auto& op = block.instructions[i];
@@ -529,9 +550,9 @@ struct RegisterStateVector {
 
     const auto skipped = std::uint64_t(rounds - 1);
     const auto pairs = skipped * (skipped - 1) / 2;
-    const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
     const auto& first_op = block.instructions[0];
-    if (block.count == 3 && (first_op.kind == Instruction::Add || first_op.kind == Instruction::Subtract)) {
+    if (single_add_sub(block)) {
+      const std::uint64_t mask = first_op.width == 4 ? UINT32_MAX : UINT64_MAX;
       std::copy_n(initial, kRegisters, tail.begin());
       auto& result = tail[first_op.lhs.reg];
       if (!first_op.rhs.immediate && first_op.rhs.reg == first_op.lhs.reg) {
@@ -548,6 +569,7 @@ struct RegisterStateVector {
       tail[counter] = (before - skipped) & (narrow ? UINT32_MAX : UINT64_MAX);
       return rounds;
     }
+    const std::uint64_t mask = block.long_mode ? UINT64_MAX : UINT32_MAX;
     Registers once;
     std::copy_n(initial, kRegisters, once.begin());
     body(block, once);
@@ -620,6 +642,11 @@ struct RegisterStateVector {
   }
 
  private:
+  static bool single_add_sub(const Block& block) noexcept {
+    const auto kind = block.instructions[0].kind;
+    return block.count == 3 && (kind == Instruction::Add || kind == Instruction::Subtract);
+  }
+
   static void body(const Block& block, Registers& registers) noexcept {
     for (unsigned i = 0; i + 2 < block.count; ++i) {
       const auto& op = block.instructions[i];
@@ -645,6 +672,37 @@ struct RegisterStateVector {
     auto& count = registers[countdown.lhs.reg];
     --count;
     if (countdown.width == 4) count = std::uint32_t(count);
+  }
+};
+
+// A worker keeps a bounded view of the ordinary bytes used by one x86 loop.
+// Distinct words in the same guest page are independent. Publication runs
+// under the board bus and rechecks every original input at byte precision.
+struct RamView {
+  struct Word {
+    std::uint64_t linear, physical, original;
+    unsigned spec, width;
+    bool input;
+  };
+  std::array<Word, Block::kMaxInstructions * 2> words;
+  unsigned count = 0;
+
+  const Word* find(std::uint64_t linear, unsigned spec) const noexcept {
+    for (unsigned i = 0; i < count; ++i)
+      if (words[i].linear == linear && words[i].spec == spec) return &words[i];
+    return nullptr;
+  }
+  const Word* add(Word word) noexcept {
+    if (count == words.size()) return nullptr;
+    words[count] = word;
+    return &words[count++];
+  }
+  template <class Read> bool inputs_unchanged(Read read) const {
+    for (unsigned i = 0; i < count; ++i) {
+      const auto& word = words[i];
+      if (word.input && read(word.physical, word.width) != word.original) return false;
+    }
+    return true;
   }
 };
 
@@ -736,6 +794,7 @@ struct Frame {
   unsigned resident_read_hits = 0, ram_read_callbacks = 0;
   unsigned state_vector_rounds = 0;
   bool reuse_resident_reads = false;
+  std::uint64_t fs_base, gs_base;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
@@ -991,6 +1050,12 @@ class Emitter {
       return;
     }
     address(operand, 1);
+    // Both the resident-page tag and the guarded callback use the final
+    // linear address. A later WRMSR or SWAPGS can reuse the same native code.
+    if (operand.segment_prefix) {
+      load(10, operand.segment_prefix == 0x64 ? offsetof(Frame, fs_base) : offsetof(Frame, gs_base));
+      emit(0x8b0a0021U); // ADD X1,X1,X10
+    }
     if (inline_ram_reads_) {
       read_resident_or_callback(width, operand.stack);
       return;

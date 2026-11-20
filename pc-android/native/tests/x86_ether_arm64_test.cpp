@@ -22,6 +22,11 @@ constexpr std::uint64_t stack = 0x19000, output = 0x80000;
 constexpr unsigned ready_entry = 0x23;
 constexpr unsigned ready_leaf = 0xe3;
 
+// Long-mode dword writes clear the upper half of the destination register.
+constexpr std::array<std::uint8_t, 6> sum_dword_counter{0x01,0xc8, 0xff,0xc9, 0x75,0xfa};
+constexpr std::array<std::uint8_t, 6> sub_dword_source{0x29,0xf0, 0xff,0xc9, 0x75,0xfa};
+constexpr std::array<std::uint8_t, 8> dword_add_wide_counter{0x83,0xc0,0xfd, 0x48,0xff,0xc9, 0x75,0xf8};
+
 // Recreates the observed MOV RSI,[RSI], CMP R15,[RSI+10h], CMP RSI,R14
 // and conditional branches with controlled RAM and explicit exit paths.
 constexpr std::array<std::uint8_t, 24> pointer_loop{
@@ -536,6 +541,10 @@ void interpreter_state_vector_contract() {
   compare(std::array<std::uint8_t,9>{0x48,0x83,0xe8,0xff, 0x83,0xe9,1, 0x75,0xf7}, 3, 96, 96);
   compare(sum32, 3, 227, 225, false);
   compare(sum64, 3, 121, 120);
+  compare(sum_dword_counter, 3, 227, 225);
+  compare(sub_dword_source, 3, 121, 120);
+  compare(dword_add_wide_counter, 3, 121, 120);
+  compare(std::array<std::uint8_t,6>{0x01,0xc0, 0xff,0xc9, 0x75,0xfa}, 3, 120, 120);
   compare(mixed_width, 3, 120, 0);
 
   PcMachine routed, scalar;
@@ -778,6 +787,9 @@ void register_state_vector_contract() {
   compare(protected_loop, 4, 0, 47, 47, false, true, false);
   compare(protected_loop, 4, 1024, 16, 16, false, false, false);
   compare(protected_doubling, 3, 65, 120, 65, false, true, false);
+  compare(sum_dword_counter, 3, 0x10000004bULL, 121, 75, true, true);
+  compare(sub_dword_source, 3, 0, 63, 63, false, true);
+  compare(dword_add_wide_counter, 3, 0x100000000ULL, 47, 47, true, true);
 
   const auto interrupt = [&](bool translated, bool long_mode) {
     PcMachine machine;
@@ -951,6 +963,72 @@ void live_signed_loop_projection_contract() {
   };
   require(with_irq(true) == with_irq(false), "signed projection and scalar IRQ runs diverged");
   std::cout << "PRIME_ETHER_SIGNED_BOOT_PROJECTION_PASS cases=10 smp_grant=32 irq_step=1502 expired_deadline=1\n";
+}
+
+// The two GS encodings below occurred in the Windows boot scalar profile.
+void segment_load_contract() {
+  constexpr std::uint8_t loop[] = {
+      0x65,0x8b,0x0c,0x25,0xa4,1,0,0,       // MOV ECX,GS:[1a4h]
+      0x65,0x48,0x8b,0x0c,0x25,0x20,0,0,0, // MOV RCX,GS:[20h]
+      0x64,0x48,0x8b,0x43,0xf8,            // MOV RAX,FS:[RBX-8]
+      0x48,0x8d,0x04,0x08,0xff,0xca,0x75,0xe2,0xf4};
+  auto decoded = arm64::decode(loop, sizeof(loop), code, true, true);
+  require(decoded.reads_segment && decoded.count == 6 && decoded.repeats &&
+          !arm64::decode(loop, sizeof(loop), code).count &&
+          !arm64::decode(loop, sizeof(loop), code, false, true).count,
+          "segment loads escaped the opted-in long-mode decoder");
+  if (!Cpu::ether_arm64_host()) return;
+  PcMachine fast, scalar;
+  boot(fast, true);
+  boot(scalar, false);
+  for (auto* m : {&fast,&scalar}) {
+    m->cpu.memory.write_block(code, loop, sizeof(loop));
+    m->cpu.write64(nodes+0x20, 123);
+    m->cpu.write64(nodes+0x1020, 456);
+  }
+  constexpr unsigned rounds = 20000, steps = 6 * rounds + 1;
+  std::array<std::int64_t,7> times[2];
+  for (unsigned trial = 0; trial < 7; ++trial) {
+    for (unsigned j = 0; j < 2; ++j) {
+      const auto n = (j+trial)%2;
+      auto& m = n ? scalar : fast;
+      auto& cpu = m.cpu;
+      cpu.eip = code; cpu.halted = false;
+      cpu.gs_base = nodes + (trial%2)*4096;
+      cpu.fs_base = nodes + (1-trial%2)*4096;
+      cpu.regs[Cpu::EBX] = 0x28;
+      cpu.regs[Cpu::EDX] = rounds;
+      const auto retired = cpu.instructions;
+      const auto start = std::chrono::steady_clock::now();
+      for (unsigned left = steps; left;) {
+        const auto slice = std::min(left, PcMachine::kDefaultRunSteps);
+        m.run(slice);
+        left -= slice;
+      }
+      times[n][trial] = std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now()-start).count();
+      require(cpu.halted && !cpu.fault && cpu.instructions-retired == steps &&
+              cpu.regs[Cpu::ECX] == (trial%2 ? 456U : 123U) && cpu.regs[Cpu::EAX] == 579,
+              "segment load selected the wrong linear page or lost work");
+    }
+    require(capture(fast.cpu) == capture(scalar.cpu), "segment-load scalar state differs");
+  }
+  for (auto& group : times) std::sort(group.begin(),group.end());
+  require(fast.cpu.ether_arm64_stats().steps >= 7 * steps * 99 / 100 &&
+          !scalar.cpu.ether_arm64_stats().steps, "segment loop missed native execution");
+  // A fast-path miss must allow the interpreter to retire the precise instruction.
+  for (auto address : {nodes+4094, UINT64_C(0x0000800000000000)}) {
+    for (auto* m : {&fast,&scalar}) {
+      m->cpu.eip = code; m->cpu.halted = false; m->cpu.gs_base = address-0x1a4;
+    }
+    const auto before=capture(fast.cpu);
+    require(!fast.cpu.try_ether_arm64_block(6) && capture(fast.cpu)==before,
+            "failed segment guard committed a partial block");
+    require(fast.cpu.step()==scalar.cpu.step() && capture(fast.cpu)==capture(scalar.cpu),
+            "segment fallback changed guest state");
+  }
+  std::cout << "PRIME_SEGMENT_LOAD_PASS steps=" << steps << " trials=7 native_median_ns="
+            << times[0][3] << " scalar_median_ns=" << times[1][3] << '\n';
 }
 
 void signed_load_contract() {
@@ -2126,9 +2204,36 @@ void benchmark() {
 }
 }  // namespace
 
+static void ram_view_contract() {
+  using namespace cosmic_pc::ether_arm64;
+  constexpr std::uint8_t code[]{0x03,0x07, 0x89,0x47,4, 0xff,0xc9, 0x75,0xf7};
+  const auto block = decode(code, sizeof(code), 0x7000);
+  require(block.repeats && block.count == 4 && block.writes == 1 && block.decrement_carry_index == 0,
+          "RAM ADD/store/countdown lost its backedge or its x86 carry source");
+
+  std::array<std::uint8_t, 8> bytes{1,2,3,4,5,6,7,8};
+  auto read = [&](std::uint64_t p, unsigned width) {
+    std::uint64_t value = 0;
+    for (unsigned i = 0; i < width; ++i) value |= std::uint64_t(bytes.at(p + i)) << (8 * i);
+    return value;
+  };
+  RamView view;
+  view.add({0x1000, 0, read(0,4), 4, 4, true});
+  view.add({0x1004, 4, 0, 68, 4, false});
+  require(view.find(0x1000,4) && !view.find(0x1000,68), "view must preserve access permissions");
+  ++bytes[4];
+  require(view.inputs_unchanged(read), "a neighboring output on the same page caused a false conflict");
+  ++bytes[2];
+  require(!view.inputs_unchanged(read), "partial physical alias must invalidate a captured input");
+  --bytes[2];
+  require(view.inputs_unchanged(read), "restored inputs must permit a serial publication");
+}
+
 int main() {
   try {
+    ram_view_contract();
     decoder_contract();
+    segment_load_contract();
     countdown_carry_contract();
     projection_window_contract();
     register_shift_contract();
