@@ -206,6 +206,7 @@ class Cpu {
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
     std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
     std::uint64_t off_bus_register_steps = 0;
+    std::uint64_t off_bus_ram_blocks = 0, off_bus_ram_steps = 0, ram_view_conflicts = 0;
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
     std::uint64_t repeated_loop_dispatches = 0, repeated_loop_steps = 0, rotate_steps = 0;
     std::uint64_t variable_rotate_steps = 0;
@@ -1138,6 +1139,9 @@ class Cpu {
   const ether_arm64::Cache::Entry* cached_ether_arm64_work(EtherLoopAccess access, bool loop_only) const noexcept;
   unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus,
                                     ether_arm64::ResidentReadPages& resident, bool projection_only = false);
+  struct EtherRamView;
+  unsigned run_ether_ram_view(const ether_arm64::Cache::Entry& entry, ether_arm64::Frame& frame,
+                              unsigned rounds, std::unique_lock<std::mutex>& bus, unsigned& off_bus_steps);
   unsigned commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry, const ether_arm64::Frame& frame,
                                       unsigned rounds, unsigned outcome, bool direct_regs, bool private_frame);
   template <bool ParallelRead = false>

@@ -207,6 +207,80 @@ inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
          !step_trace_hook && !irq_trace_hook;
 }
 
+// The first round resolves permissions, addresses and original values under
+// the motherboard bus. Subsequent rounds may only use this private view.
+struct Cpu::EtherRamView {
+  Cpu* capture;
+  ether_arm64::RamView words;
+  static constexpr unsigned kWrite = 64;
+
+  const ether_arm64::RamView::Word* operand(std::uint64_t linear, unsigned spec) {
+    if (const auto* cached = words.find(linear, spec)) return cached;
+    if (!capture) return nullptr;
+    const auto width = spec & (ether_arm64::kStackAccess - 1);
+    const bool write = (spec & kWrite) != 0;
+    const auto physical = capture->ether_arm64_ram_address(linear, width, spec & ether_arm64::kStackAccess,
+                                                           write ? Access::Write : Access::Read);
+    if (!physical || (write && capture->memory.may_touch_page_tables(*physical, width))) return nullptr;
+    const bool input = !write || (spec & ether_arm64::kSubtractAccess);
+    const auto original = input ? capture->read_ram_span(*physical, width) : 0;
+    return words.add({linear, *physical, original, spec, width, input});
+  }
+  static unsigned read(ether_arm64::Frame* frame, std::uint64_t linear, unsigned spec) noexcept {
+    try {
+      auto& view = *static_cast<EtherRamView*>(frame->cpu);
+      const auto* word = view.operand(linear, spec);
+      if (!word) return 0;
+      frame->loaded = frame->pending->load(word->physical, word->width, [&] { return word->original; });
+      return 1;
+    } catch (const std::exception&) { return 0; }
+  }
+  static unsigned write(ether_arm64::Frame* frame, std::uint64_t linear, unsigned spec,
+                        std::uint64_t value) noexcept {
+    try {
+      auto& view = *static_cast<EtherRamView*>(frame->cpu);
+      const auto* word = view.operand(linear, spec | kWrite);
+      if (!word) return 0;
+      if (spec & ether_arm64::kSubtractAccess) {
+        frame->left = frame->pending->load(word->physical, word->width, [&] { return word->original; });
+        frame->right = value;
+        value = frame->left - value;
+      }
+      return frame->pending->stage(word->physical, word->width, value);
+    } catch (const std::exception&) { return 0; }
+  }
+};
+
+inline unsigned Cpu::run_ether_ram_view(const ether_arm64::Cache::Entry& entry, ether_arm64::Frame& frame,
+                                        unsigned rounds, std::unique_lock<std::mutex>& bus, unsigned& off_bus_steps) {
+  EtherRamView view;
+  view.capture = this;
+  frame.cpu = &view;
+  frame.read = &EtherRamView::read;
+  frame.write = &EtherRamView::write;
+  frame.reuse_resident_reads = false;
+  frame.resident = {}; // Generated loads must enter the private callbacks.
+  frame.loop_remaining = 1;
+  const auto first = entry.code.run(frame);
+  frame.loop_remaining = rounds - 1;
+  if (first != 2) return first;
+  const auto epoch = memory.page_table_epoch();
+  const auto version = entry.code_version;
+  if (!epoch || !version) return 0;
+  view.capture = nullptr;
+  bus.unlock();
+  const auto outcome = entry.code.run(frame);
+  bus.lock();
+  if (!outcome) return 0;
+  if (!a20_enabled || memory.page_table_epoch() != epoch || memory.code_page_version(entry.physical) != version ||
+      !view.words.inputs_unchanged([&](auto address, unsigned width) { return read_ram_span(address, width); })) {
+    ++ether_arm64_stats_.ram_view_conflicts;
+    return 0;
+  }
+  off_bus_steps = (rounds - 1 - frame.loop_remaining) * entry.block.count;
+  return outcome;
+}
+
 inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_budget,
                                              std::unique_lock<std::mutex>* bus,
                                              ether_arm64::ResidentReadPages& resident, bool projection_only) {
@@ -304,14 +378,19 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
 
     const auto& block = active->block;
     const auto& last = block.instructions[block.count - 1];
-    // Only read-only blocks can repeat during a secondary CPU's turn.
-    const auto round_limit = block.repeats && (!bus || (!block.writes && !flag(IF)))
-        ? loop_budget / block.count : 1U;
+    // Reuse the caller's IRQ/device grant. A private RAM slice additionally
+    // has a 64-instruction ceiling even for callers offering a larger budget.
+    const unsigned view_rounds = std::min(64U, loop_budget) / block.count;
+    const bool private_ram = bus && long_mode && block.repeats && !block.register_only &&
+        view_rounds >= 4 && active->code_version && memory.page_table_epoch() &&
+        ether_arm64::fixed_loop_addresses(block);
+    const auto round_limit = private_ram ? view_rounds :
+        block.repeats && (!bus || (!block.writes && !flag(IF))) ? loop_budget / block.count : 1U;
     auto repetitions = std::min(256U, round_limit);
     decoded_.reserve(last.end - last.begin);
     ether_arm64::PendingRamWrites pending;
     const bool staged = block.stages_ram();
-    if (staged) {
+    if (staged || private_ram) {
       pending.code_first = physical;
       pending.code_end = physical + block.size;
       pending.count = 0;
@@ -329,7 +408,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       frame.fs_base = fs_base;
       frame.gs_base = gs_base;
     }
-    frame.pending = staged ? &pending : nullptr;
+    frame.pending = (staged || private_ram) ? &pending : nullptr;
     frame.loop_remaining = repetitions;
     frame.guest_regs = direct_regs ? regs.data() : frame.regs.data();
     frame.reuse_resident_reads = long_mode && !block.writes && !block.register_only;
@@ -341,10 +420,12 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     const auto mapping_epoch = bus && block.register_only && long_mode ? memory.page_table_epoch() : 0;
     const bool private_frame = bus && block.register_only && code_version &&
                                (!long_mode || mapping_epoch);
+    unsigned off_bus_ram_steps = 0;
     if (private_frame) bus->unlock();
     auto outcome = active->run_state_vector(frame, round_limit);
     if (outcome) repetitions = round_limit;
     else if (projection_only) return 0;
+    else if (private_ram) outcome = run_ether_ram_view(*active, frame, repetitions, *bus, off_bus_ram_steps);
     else outcome = active->code.run(frame);
     if (private_frame) bus->lock();
     ether_arm64_stats_.ram_read_callbacks += frame.ram_read_callbacks;
@@ -393,6 +474,10 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       ether_arm64_stats_.coalesced_ram_writes += block.writes * rounds - pending.count;
     }
     const auto completed = commit_ether_arm64_result(*active, frame, rounds, outcome, direct_regs, private_frame);
+    if (off_bus_ram_steps) {
+      ++ether_arm64_stats_.off_bus_ram_blocks;
+      ether_arm64_stats_.off_bus_ram_steps += off_bus_ram_steps;
+    }
     if (frame.reuse_resident_reads && !bus) resident = frame.resident;
     return completed;
   } catch (const std::exception&) {
