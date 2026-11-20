@@ -37,6 +37,8 @@ struct Operand {
   unsigned index = kNoIndex, scale_shift = 0;
   bool memory = false, immediate = false, stack = false, high_byte = false;
 
+  std::uint8_t segment_prefix = 0;
+
   static Operand literal(std::uint64_t value) noexcept {
     Operand operand;
     operand.immediate = true;
@@ -91,7 +93,7 @@ struct Block {
   unsigned last_wide_rotate_offset = kMaxBytes, last_variable_rotate_offset = kMaxBytes;
   Instruction::Kind flag_op = Instruction::Move;
   std::uint64_t target = 0;
-  bool long_mode = true, repeats = false, register_only = true;
+  bool long_mode = true, repeats = false, register_only = true, reads_segment = false;
 
   // A single interpreted instruction costs less than replacing a warm block
   // and setting up an executable mapping for the same amount of guest work.
@@ -148,7 +150,8 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
     Instruction::Add, Instruction::Or, Instruction::Unsupported, Instruction::Unsupported,
     Instruction::And, Instruction::Subtract, Instruction::Xor, Instruction::Compare};
 
-inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true) {
+inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true,
+                    bool allow_segment_loads = false) {
   Block block;
   block.long_mode = long_mode;
   unsigned carry_boundary = 0;
@@ -165,6 +168,12 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     unsigned pos = block.size;
     const unsigned begin = pos;
     unsigned opcode = bytes[pos++], rex = 0;
+    unsigned segment = 0;
+    if (allow_segment_loads && long_mode && (opcode == 0x64 || opcode == 0x65)) {
+      if (pos == size) break;
+      segment = opcode;
+      opcode = bytes[pos++];
+    }
     const bool word = opcode == 0x66;
     if (word) {
       if (pos == size) break;
@@ -175,6 +184,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       rex = opcode;
       opcode = bytes[pos++];
     }
+    if (segment && opcode != 0x8b && opcode != 0x8a) break;
     if (long_mode && word && opcode != 0x89 && opcode != 0x8b) break;
     if (opcode == 0x0f && pos < size &&
         ((bytes[pos] & 0xfeU) == 0xb6U || (bytes[pos] & 0xfeU) == 0xbeU ||
@@ -237,6 +247,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       const Operand reg{group + ((rex & 4) ? 8U : 0U)};
       Operand other{rm + ((rex & 1) ? 8U : 0U)};
       other.memory = mod != 3;
+      if (segment && !other.memory) break;
+      other.segment_prefix = static_cast<std::uint8_t>(segment);
       if (other.memory) {
         unsigned base = rm;
         if (rm == 4) {
@@ -431,6 +443,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       op.rhs.immediate_value = rip + pos + signed_offset(op.rhs.displacement);
     op.end = pos;
     block.instructions[block.count++] = op;
+    block.reads_segment |= op.rhs.segment_prefix != 0;
     block.register_only = block.register_only && !op.lhs.memory &&
         (!op.rhs.memory || op.kind == Instruction::Lea);
     block.size = pos;
@@ -438,7 +451,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }
-  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode);
+  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode, allow_segment_loads);
   // A read-only round can validate a new address with the guarded loader.
   // Repeated stores still require fixed addresses for the pending writes.
   // Legacy execution can repeat only when no segment or memory is accessed.
@@ -745,6 +758,7 @@ struct Frame {
   unsigned resident_read_hits = 0, ram_read_callbacks = 0;
   unsigned state_vector_rounds = 0;
   bool reuse_resident_reads = false;
+  std::uint64_t fs_base, gs_base;
 };
 
 // The emitter is bounded by decoded instructions. Guest bytes are never
@@ -1000,6 +1014,12 @@ class Emitter {
       return;
     }
     address(operand, 1);
+    // Both the resident-page tag and the guarded callback use the final
+    // linear address. A later WRMSR or SWAPGS can reuse the same native code.
+    if (operand.segment_prefix) {
+      load(10, operand.segment_prefix == 0x64 ? offsetof(Frame, fs_base) : offsetof(Frame, gs_base));
+      emit(0x8b0a0021U); // ADD X1,X1,X10
+    }
     if (inline_ram_reads_) {
       read_resident_or_callback(width, operand.stack);
       return;

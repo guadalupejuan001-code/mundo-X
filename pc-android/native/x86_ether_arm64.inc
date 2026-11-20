@@ -126,6 +126,10 @@ inline bool Cpu::prepare_ether_arm64_work(unsigned budget, EtherLoopWork& work, 
     decoded_.reserve(last.end - last.begin);
     work.frame_.regs = regs;
     work.frame_.cpu = this;
+    if (entry->block.reads_segment) {
+      work.frame_.fs_base = fs_base;
+      work.frame_.gs_base = gs_base;
+    }
     work.frame_.read = &Cpu::ether_arm64_read<true>;
     work.frame_.reuse_resident_reads = !entry->block.register_only;
     work.frame_.resident = {};
@@ -260,7 +264,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
           memory.read_block(physical + length, actual.data() + length, width - length);
           ether_arm64_stats_.code_bytes_read += width - length;
         }
-        entry.block = ether_arm64::decode(actual.data(), width, eip, long_mode);
+        entry.block = ether_arm64::decode(actual.data(), width, eip, long_mode, true);
         entry.state_vector = ether_arm64::RegisterStateVector::build(entry.block);
         entry.checked_bytes = entry.block.can_translate() ? entry.block.size : width;
         entry.physical = physical;
@@ -321,6 +325,10 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     frame.read = &Cpu::ether_arm64_read<false>;
     frame.write = &Cpu::ether_arm64_write;
     frame.cpu = this;
+    if (block.reads_segment) {
+      frame.fs_base = fs_base;
+      frame.gs_base = gs_base;
+    }
     frame.pending = staged ? &pending : nullptr;
     frame.loop_remaining = repetitions;
     frame.guest_regs = direct_regs ? regs.data() : frame.regs.data();
