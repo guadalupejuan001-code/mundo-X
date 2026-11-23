@@ -53,6 +53,15 @@ constexpr std::array<std::uint8_t, 16> moving_read_loop{
     0x83,0xe9,0x01,         // SUB ECX,1.
     0x75,0xf1,0xf4};        // JNZ; HLT.
 
+// Place the recorded XOR/ROL/ADD encodings at the same relative offsets.
+// The unsampled bytes are represented here by flag-preserving self-moves.
+constexpr std::array<std::uint8_t, 26> add_rotate_zero_loop{
+    0x4d,0x33,0x02,                     // XOR R8,[R10].
+    0x48,0x89,0xc0, 0x48,0x89,0xc0,    // MOV RAX,RAX twice for the first unsampled span.
+    0x49,0xd3,0xc0, 0x4d,0x33,0x02,    // ROL R8,CL; XOR R8,[R10].
+    0x4c,0x03,0xd6, 0x49,0xd3,0xc0,    // ADD R10,RSI; ROL R8,CL.
+    0x48,0x89,0xc0, 0x75,0xe6};        // MOV RAX,RAX for the second span; JNE to XOR.
+
 constexpr std::uint32_t protected_code = 0x459a1f, ds_base = 0x10000, ss_base = 0x20000;
 constexpr std::array<std::uint8_t, 17> protected_loop{
     0x66,0x8b,0x07,       // MOV AX,[EDI], observed earlier in the same protected32 stage.
@@ -202,6 +211,18 @@ void decoder_contract() {
   require(runtime.count == 2 && runtime.variable_rotates == 1 &&
           runtime.instructions.front().rhs.reg == Cpu::ECX &&
           runtime.instructions[1].rhs.memory, "observed ROL R8,CL and XOR R8,[R10] must share a block");
+  auto add_rotate = add_rotate_zero_loop;
+  for (auto branch : {0x74, 0x75}) {
+    add_rotate[24] = static_cast<std::uint8_t>(branch);
+    const auto result = arm64::decode(add_rotate.data(), add_rotate.size(), code);
+    require(result.count == 9 && result.target == code && result.repeats && !result.writes &&
+            result.flag_op == arm64::Instruction::Add && result.rotate_carry_index == 6,
+            "JE/JNE must reuse the preceding ADD's zero flag across a trailing rotation");
+  }
+  add_rotate[24] = 0x72; // JC needs carry from the rotate, not the ADD.
+  const auto carry_branch = arm64::decode(add_rotate.data(), add_rotate.size(), code);
+  require(!carry_branch.uses_arm_condition() && !carry_branch.repeats,
+          "an ADD/rotate carry test must keep the interpreter's condition");
   const std::uint8_t scan_prefix[]{0x44,0x8d,0x40,0x01,0x48,0xff,0xc2,0x80,0x3a,0xe8,0x75,0xf4};
   const auto scan = arm64::decode(scan_prefix, sizeof(scan_prefix), code);
   require(scan.count == 4 && scan.target == code &&
@@ -2241,6 +2262,91 @@ void variable_rotation_contract() {
   std::cout << "PRIME_ETHER_VARIABLE_ROTATION_PASS cases=" << cases << " flags=1 ram=1\n";
 }
 
+void add_rotate_zero_loop_contract() {
+  constexpr unsigned round = 9;
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  const auto initial_stats = native.cpu.ether_arm64_stats();
+  const auto install = [&](bool equal, bool right, unsigned count, std::uint64_t address,
+                           std::uint64_t stride) {
+    auto bytes = add_rotate_zero_loop;
+    bytes[20] = right ? 0xc8 : 0xc0;
+    bytes[24] = equal ? 0x74 : 0x75;
+    for (auto* machine : {&native, &scalar}) {
+      auto& cpu = machine->cpu;
+      cpu.memory.write_block(code, bytes.data(), bytes.size());
+      cpu.eip = code;
+      cpu.regs[Cpu::R8] = 0xfedcba9876543210ULL;
+      cpu.regs[Cpu::R10] = address;
+      cpu.regs[Cpu::ECX] = count;
+      cpu.regs[Cpu::ESI] = stride;
+      cpu.eflags = 2 | Cpu::CF | Cpu::OF | Cpu::DF;
+      for (unsigned slot = 0; slot <= 12; ++slot)
+        cpu.write64(slot * 8, 0x9e3779b97f4a7c15ULL * (slot + 1));
+    }
+  };
+  const auto compare_steps = [&](unsigned steps) {
+    for (unsigned i = 0; i < steps; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "scalar ADD/rotate loop faulted");
+    require(capture(native.cpu) == capture(scalar.cpu) &&
+            native.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(),
+            "repeated ADD/rotate changed registers, x86 flags, branch or actual steps");
+  };
+
+  unsigned cases = 0;
+  for (const bool right : {false, true}) {
+    for (const unsigned count : {0U, 1U, 17U, 63U, 64U, 255U}) {
+      install(false, right, count, 12 * 8, std::uint64_t(-8));
+      warm_block(native.cpu, code, round);
+      compare_steps(round);
+      require(native.cpu.try_ether_arm64_block(4 * round + 2) == 4 * round &&
+              native.cpu.eip == code, "native ADD/rotate exceeded the partial grant");
+      compare_steps(4 * round);
+      require(native.cpu.try_ether_arm64_block(9 * round) == 7 * round &&
+              native.cpu.eip == code + add_rotate_zero_loop.size(),
+              "native JNE did not stop exactly when the ADD reached zero");
+      compare_steps(7 * round);
+      ++cases;
+    }
+  }
+
+  install(true, false, 1, 0, 0);
+  warm_block(native.cpu, code, round);
+  compare_steps(round);
+  require(native.cpu.try_ether_arm64_block(5 * round) == 5 * round && native.cpu.eip == code,
+          "native JE did not take the backedge with the ADD's zero flag");
+  compare_steps(5 * round);
+  require(native.cpu.ether_arm64_loop_length(Cpu::EtherLoopAccess::ReadOnlyRam) == 0,
+          "the serial-only repetition became eligible for a parallel grant");
+  std::mutex bus;
+  std::unique_lock<std::mutex> lease(bus);
+  require(native.cpu.try_ether_arm64_block(5 * round, &lease) == round,
+          "a shared-bus grant changed its one-round service");
+  compare_steps(round);
+
+  install(false, false, 1, 24, std::uint64_t(-8));
+  unsigned device_reads = 0;
+  native.cpu.mmio_claim_hook = [](auto address) { return address == 8; };
+  native.cpu.mmio_range_claim_hook = [](auto first, auto bytes) { return first <= 8 && 8 - first < bytes; };
+  native.cpu.mmio_read_hook = [&](auto) -> std::optional<std::uint8_t> { ++device_reads; return 0; };
+  warm_block(native.cpu, code, round);
+  compare_steps(round);
+  const auto before = native.cpu.ether_arm64_stats();
+  require(!native.cpu.try_ether_arm64_block(2 * round) && !device_reads &&
+          native.cpu.ether_arm64_stats().data_fallbacks == before.data_fallbacks + 1,
+          "a later MMIO guard must discard the repeated native block");
+  compare_steps(0);
+  const auto stats = native.cpu.ether_arm64_stats();
+  const auto dispatches = stats.repeated_loop_dispatches - initial_stats.repeated_loop_dispatches;
+  const auto repeated_steps = stats.repeated_loop_steps - initial_stats.repeated_loop_steps;
+  require(dispatches == 2 * cases + 1 && repeated_steps == (11 * cases + 5) * round,
+          "repetition telemetry must match the completed native rounds");
+  std::cout << "PRIME_ETHER_ADD_ROTATE_ZERO_PASS cases=" << cases
+            << " repeated_dispatches=" << dispatches << " repeated_steps=" << repeated_steps
+            << " je=1 grant=1 shared_bus=1 late_mmio=1\n";
+}
+
 void scan_forms_contract() {
   // Use the byte comparison and addressing forms seen in the boot traces,
   // with a distinct loop body to exercise general translation.
@@ -2423,6 +2529,7 @@ int main() {
     observed_flags_contract();
     rotation_contract();
     variable_rotation_contract();
+    add_rotate_zero_loop_contract();
     scan_forms_contract();
     immediate_arithmetic_contract();
     indexed_loop_benchmark();

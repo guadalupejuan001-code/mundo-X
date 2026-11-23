@@ -107,8 +107,17 @@ struct Block {
     return writes && (writes > 1 || !instructions[count - 1].writes_ram());
   }
 
+  bool uses_add_rotate_zero_condition() const noexcept {
+    if (flag_op != Instruction::Add || !long_mode || writes || register_only || !count ||
+        flag_width != 8 || rotate_carry_index == kNoFlagSource) return false;
+    const auto& last = instructions[count - 1];
+    // ROL/ROR leave ZF unchanged, so equality tests still observe the ADD.
+    return last.kind == Instruction::Conditional && (last.opcode & 0x0eU) == 4;
+  }
+
   bool uses_arm_condition() const noexcept {
-    if (!count || flag_width < 4 || rotate_carry_index != kNoFlagSource) return false;
+    if (!count || flag_width < 4) return false;
+    if (rotate_carry_index != kNoFlagSource) return uses_add_rotate_zero_condition();
     const auto& last = instructions[count - 1];
     if (last.kind != Instruction::Conditional || last.condition >= 16) return false;
     return flag_op == Instruction::Compare || flag_op == Instruction::Subtract ||
@@ -913,7 +922,8 @@ class Emitter {
         emit(block.flag_width == 8 ? 0xf100053f : 0x7100053f); // CMP X/W9,#1 before DEC.
       } else {
         load(10, offsetof(Frame, right), block.flag_width);
-        emit(block.flag_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
+        if (block.flag_op == Instruction::Add) emit(0xab0a013f); // CMN X9,X10
+        else emit(block.flag_width == 8 ? 0xeb0a013f : 0x6b0a013f); // CMP X/W9,X/W10
       }
       emit(0x1a9f07e0U | ((last.condition ^ 1U) << 12)); // CSET W0,cc
       if (block.repeats) {

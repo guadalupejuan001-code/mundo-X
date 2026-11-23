@@ -197,7 +197,8 @@ inline const ether_arm64::Cache::Entry* Cpu::cached_ether_arm64_work(EtherLoopAc
   if (!set) return nullptr;
   for (const auto& entry : set->entries)
     if (entry.occupied && entry.rip == eip && entry.code &&
-        (!loop_only || entry.block.repeats) && (entry.block.register_only ||
+        (!loop_only || (entry.block.repeats && !entry.block.uses_add_rotate_zero_condition())) &&
+        (entry.block.register_only ||
            (access == EtherLoopAccess::ReadOnlyRam && !entry.block.writes))) return &entry;
   return nullptr;
 }
@@ -381,12 +382,14 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     const auto& last = block.instructions[block.count - 1];
     // Reuse the caller's IRQ/device grant. A private RAM slice additionally
     // has a 64-instruction ceiling even for callers offering a larger budget.
+    // ADD/rotate repetition is restricted to the serialized CPU path.
+    const bool can_repeat = block.repeats && (!bus || !block.uses_add_rotate_zero_condition());
     const unsigned view_rounds = std::min(64U, loop_budget) / block.count;
-    const bool private_ram = bus && long_mode && block.repeats && !block.register_only &&
+    const bool private_ram = bus && long_mode && can_repeat && !block.register_only &&
         view_rounds >= 4 && active->code_version && memory.page_table_epoch() &&
         ether_arm64::fixed_loop_addresses(block);
     const auto round_limit = private_ram ? view_rounds :
-        block.repeats && (!bus || (!block.writes && !flag(IF))) ? loop_budget / block.count : 1U;
+        can_repeat && (!bus || (!block.writes && !flag(IF))) ? loop_budget / block.count : 1U;
     auto repetitions = std::min(256U, round_limit);
     decoded_.reserve(last.end - last.begin);
     ether_arm64::PendingRamWrites pending;
