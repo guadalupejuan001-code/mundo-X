@@ -27,8 +27,9 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
     const auto retired = retire_ether_arm64_block(limit - completed, budget - completed, bus, resident);
     if (!retired) break;
     completed += retired;
-    if (bus || scan_loop_batch_candidate() || wide_multiply_loop_batch_candidate() ||
-        rotate_xor_loop_batch_candidate() || affine_ram_rotate_loop_candidate()) break;
+    if (bus || scan_loop_batch_candidate() || forward_copy_loop_batch_candidate() ||
+        wide_multiply_loop_batch_candidate() || rotate_xor_loop_batch_candidate() ||
+        affine_ram_rotate_loop_candidate()) break;
   }
   return completed;
 #else

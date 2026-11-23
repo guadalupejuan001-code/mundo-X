@@ -345,6 +345,30 @@ class EtherStateRam {
     return page && page->packed ? page->packed->data() + address % kPageSize : nullptr;
   }
 
+  // Copy ordinary bytes already in memory. An absent or unresolved operand
+  // stays on the caller's precise byte-by-byte path, with no backing I/O here.
+  template <bool Synchronized = true>
+  bool try_read_present_block(std::uint64_t address, std::uint8_t* destination,
+                             std::size_t count) const {
+    const auto inside = static_cast<std::size_t>(address % kPageSize);
+    if (!destination || !count || address >= size() || count > size() - address ||
+        count > kPageSize - inside || quantum_intersects(address, count)) return false;
+    const auto index = address / kPageSize;
+    const auto* page = find_page(index);
+    if (!page) return false;
+    if (page->packed) {
+      std::memcpy(destination, page->packed->data() + inside, count);
+      return true;
+    }
+    if (!page->spilled) return false;
+    const auto& s = state();
+    std::unique_lock<std::mutex> lock(s.read_mutex, std::defer_lock);
+    const auto lock_start = s.backing_timing ? ReclaimClock::now() : ReclaimClock::time_point{};
+    if constexpr (Synchronized) lock.lock();
+    if (s.backing_timing) s.backing_lock_wait_ns += elapsed(lock_start);
+    return copy_cached_line(s, index, inside, destination, count);
+  }
+
   template <bool Synchronized = true>
   void read_block(std::uint64_t address, std::uint8_t* destination, std::size_t count) const {
     check_range(address, count);
@@ -989,6 +1013,15 @@ class EtherStateRam {
     }
     return nullptr;
   }
+  static bool copy_cached_line(const Storage& s, std::uint64_t index, std::size_t inside,
+                               std::uint8_t* destination, std::size_t count) noexcept {
+    auto* line = find_cache_line(s, index);
+    if (!line) return false;
+    ++s.cache_hits;
+    line->age = ++s.cache_age;
+    std::memcpy(destination, line->bytes->data() + inside, count);
+    return true;
+  }
   void invalidate_cache(std::uint64_t index) noexcept {
     if (auto* line = find_cache_line(state(), index)) {
       line->page = UINT64_MAX;
@@ -1060,11 +1093,7 @@ class EtherStateRam {
     const auto lock_start = s.backing_timing ? ReclaimClock::now() : ReclaimClock::time_point{};
     if constexpr (Synchronized) lock.lock();
     if (s.backing_timing) s.backing_lock_wait_ns += elapsed(lock_start);
-    if (auto* line = find_cache_line(s, index)) {
-      ++s.cache_hits; line->age = ++s.cache_age;
-      std::memcpy(destination, line->bytes->data() + inside, count);
-      return;
-    }
+    if (copy_cached_line(s, index, inside, destination, count)) return;
     Bytes scratch;
     CacheLine* selected = nullptr;
     if (!s.cache.empty()) selected = &*std::min_element(s.cache.begin(), s.cache.end(),

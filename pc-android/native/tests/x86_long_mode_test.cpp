@@ -623,6 +623,106 @@ void scan_large_mapping() {
         "MMIO must be read once and stop the original guest scan");
 }
 
+constexpr std::array<std::uint8_t, 17> protected_scan_program{
+    0x8d,0x70,0x01,0x42,0x8b,0xc6,0x89,0x81,0xc8,0x2e,0,0,0x80,0x3a,0xe8,0x75,0xef};
+
+void start_protected_scan(Cpu& cpu, std::uint32_t source, std::uint32_t output,
+                          std::uint32_t data_base = 0) {
+  constexpr auto table = 0x3000U, stub = 0x7000U;
+  constexpr std::array<std::uint8_t, 6> load_data{0x66,0xb8,0x10,0,0x8e,0xd8};
+  cpu.reset(0, stub);
+  cpu.memory.reset_zero();
+  cpu.a20_enabled = true;
+  cpu.gdtr = {0x17, table};
+  cpu.write64(table + 8, 0x00cf9a000000ffffULL);
+  cpu.write64(table + 16, 0x00cf92000000ffffULL |
+      (std::uint64_t(data_base & 0xffffffU) << 16) | (std::uint64_t(data_base & 0xff000000U) << 32));
+  cpu.cr0 |= 1;
+  program(cpu, {0x66,0xea,0,0x80,0,0,0x08,0}, stub);
+  cpu.memory.write_block(0x8000, load_data.data(), load_data.size());
+  one(cpu);
+  one(cpu);
+  one(cpu);
+  check(std::string_view(cpu.mode_name()) == "protected32", "scanner fixture must enter protected32");
+  cpu.enable_page_translation_cache();
+  cpu.eip = scan_loop;
+  cpu.memory.write_block(scan_loop, protected_scan_program.data(), protected_scan_program.size());
+  cpu.write8(scan_loop + protected_scan_program.size(), 0xf4);
+  cpu.regs[Cpu::EAX] = 0xff000000ffffff5eULL;
+  cpu.regs[Cpu::EDX] = source - 1;
+  cpu.regs[Cpu::ECX] = 0xab00000000000000ULL | (output - 0x2ec8U);
+  cpu.eflags = 2 | Cpu::DF;
+}
+
+void scan_protected32() {
+  constexpr auto source = 0xcf80U, sentinel = source + 0x117eU;
+  constexpr auto output = 0x100d8U, data_base = 0x3017U;
+  const auto setup = [&](Cpu& cpu) {
+    start_protected_scan(cpu, source, output, data_base);
+    cpu.memory.fill(source + data_base, 0x42, sentinel - source);
+    cpu.write8(sentinel + data_base, 0xe8);
+    for (unsigned i = 0; i < 6; ++i) one(cpu);
+  };
+  const auto same_state = [](const Cpu& fast, const Cpu& scalar, std::uint32_t store) {
+    return fast.regs == scalar.regs && fast.eflags == scalar.eflags && fast.eip == scalar.eip &&
+        fast.instructions == scalar.instructions && fast.read32(store) == scalar.read32(store);
+  };
+  Cpu fast(2U << 20), scalar(2U << 20);
+  setup(fast);
+  setup(scalar);
+  const auto partial = fast.try_scan_loop_batch(103);
+  for (unsigned i = 0; i < partial; ++i) one(scalar);
+  check(partial == 102 && same_state(fast, scalar, output + data_base),
+        "protected32 scanner changed a partial batch or exceeded its grant");
+  const auto remaining = (sentinel - source - partial / 6) * 6;
+  check(fast.try_scan_loop_batch(remaining + 24) == remaining && fast.flag(Cpu::ZF),
+        "protected32 scanner did not stop at the first match across pages");
+  run(fast, 1);
+  run(scalar, remaining + 1);
+  check(same_state(fast, scalar, output + data_base) && fast.regs[Cpu::EDX] == sentinel &&
+        fast.regs[Cpu::EAX] == fast.regs[Cpu::ESI],
+        "protected32 scanner changed final flags, registers, EIP, memory or retirement count");
+
+  setup(fast);
+  const auto before = fast.instructions;
+  fast.a20_enabled = false;
+  check(fast.try_scan_loop_batch(96) == 0 && fast.instructions == before,
+        "protected32 scanner admitted the A20 alias mode");
+  fast.a20_enabled = true;
+  fast.write8(scan_loop + 14, 0x42);
+  check(fast.try_scan_loop_batch(96) == 0 && fast.instructions == before,
+        "protected32 scanner used bytes replaced after the backedge");
+
+  start_protected_scan(fast, output - 2, output);
+  for (unsigned i = 0; i < 6; ++i) one(fast);
+  check(fast.try_scan_loop_batch(96) == 0 && fast.eip == scan_loop,
+        "protected32 scanner coalesced a store that changes later comparisons");
+
+  constexpr std::uint32_t wrap_base = 0xffff0000U, wrap_source = 0xfffcU, wrap_output = 0x11010U;
+  Cpu wrapping(1ULL << 32, 1U << 20), wrapping_scalar(1ULL << 32, 1U << 20);
+  for (auto* cpu : {&wrapping, &wrapping_scalar}) {
+    start_protected_scan(*cpu, wrap_source, wrap_output, wrap_base);
+    cpu->write8(0, 0xe8);
+    for (unsigned i = 0; i < 6; ++i) one(*cpu);
+  }
+  check(wrapping.try_scan_loop_batch(96) == 18 && wrapping.regs[Cpu::EDX] == 0xffffU,
+        "protected32 scanner crossed a physical wrap instead of honoring the segment base");
+  check(wrapping.try_scan_loop_batch(96) == 6 && wrapping.regs[Cpu::EDX] == 0x10000U &&
+        wrapping.flag(Cpu::ZF), "protected32 scanner did not revalidate the wrapped address");
+  run(wrapping, 1);
+  run(wrapping_scalar, 25);
+  check(same_state(wrapping, wrapping_scalar, wrap_base + wrap_output),
+        "protected32 scanner changed execution around the 4-GiB wrap");
+
+  cosmic_pc::PcMachine machine(2U << 20);
+  machine.boot_demo();
+  machine.enable_boot_acceleration();
+  setup(machine.cpu);
+  machine.run((sentinel - source) * 6 + 1);
+  check(machine.cpu.halted && machine.boot_acceleration().scan_loop_steps == (sentinel - source) * 6,
+        "the boot dispatcher did not record the protected32 scanner's real retired steps");
+}
+
 void measure_scan() {
   using Clock = std::chrono::steady_clock;
   constexpr auto large = 0x4000000U, length = 1'500'000U;
@@ -1127,7 +1227,7 @@ int main(int argc, char** argv) {
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
     cached_page_translations(); retained_instruction_mapping(); colliding_page_translations();
-    paged_rep_batch(); scanned_boot_loop(); scan_large_mapping();
+    paged_rep_batch(); scanned_boot_loop(); scan_large_mapping(); scan_protected32();
     conditional_moves(); implicit_arithmetic64();
     std::cout << "PASS x86 long-mode: " << checks << " assertions; real guest transition, high64 arithmetic, paging and explicit faults\n";
     return EXIT_SUCCESS;

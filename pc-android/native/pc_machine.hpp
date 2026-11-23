@@ -99,6 +99,7 @@ class PcMachine {
     std::uint64_t paged_rep_elements=0;
     std::uint64_t shift_loop_batches=0, shift_loop_steps=0;
     std::uint64_t zero_loop_batches=0, zero_loop_steps=0;
+    std::uint64_t forward_copy_loop_steps=0;
     std::uint64_t movntdq_store_batches=0, movntdq_store_steps=0;
     std::uint64_t scan_loop_steps=0;
     std::uint64_t arm64_block_steps=0;
@@ -832,12 +833,13 @@ class PcMachine {
     const bool shift=!rep&&cpu.shift_loop_batch_candidate();
     const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
     const bool zero=!rep&&!shift&&!scan&&cpu.zero_loop_batch_candidate();
+    const bool forward_copy=!rep&&!shift&&!scan&&!zero&&cpu.forward_copy_loop_batch_candidate();
     const bool movntdq=!rep&&!shift&&!scan&&!zero&&cpu.movntdq_store_batch_candidate();
     const bool affine_ram=!rep&&!shift&&!scan&&!zero&&cpu.affine_ram_rotate_loop_candidate();
     const bool counter=!rep&&!shift&&!scan&&!zero&&cpu.counter_loop_batch_candidate();
     const bool arm64=!rep&&cpu.ether_arm64_block_candidate();
     const bool state_vector=!rep&&!portable_vector_tried&&cpu.state_vector_batch_candidate();
-    if (!rep && !shift && !scan && !zero && !movntdq && !affine_ram && !counter && !arm64 &&
+    if (!rep && !shift && !scan && !zero && !forward_copy && !movntdq && !affine_ram && !counter && !arm64 &&
         !state_vector) return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;
@@ -857,6 +859,7 @@ class PcMachine {
     else if(shift)completed=cpu.try_shift_loop_batch(limit);
     else if(scan)completed=cpu.try_scan_loop_batch(limit);
     else if(zero)completed=cpu.try_zero_loop_batch(limit);
+    else if(forward_copy)completed=cpu.try_forward_copy_loop_batch(limit);
     else {
       if(movntdq) {
         completed=cpu.try_movntdq_store_batch(limit);
@@ -899,6 +902,8 @@ class PcMachine {
     } else if (zero) {
       ++boot_acceleration_.zero_loop_batches;
       boot_acceleration_.zero_loop_steps+=completed;
+    } else if (forward_copy) {
+      boot_acceleration_.forward_copy_loop_steps+=completed;
     } else if(movntdq_batched) {
       ++boot_acceleration_.movntdq_store_batches;
       boot_acceleration_.movntdq_store_steps+=completed;

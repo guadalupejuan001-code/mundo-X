@@ -502,9 +502,13 @@ class Cpu {
            decoded_.size() >= 2;
   }
   bool scan_loop_batch_candidate() const noexcept {
-    return page_translation_cache_enabled_ && opcode_ == 0x75 && ip_written_ &&
-        start_cs_ == segments[CS] && is_long_mode() && decoded_.size() == 2 &&
-        decoded_[0] == 0x75 && decoded_[1] == 0xea && start_ip_ == eip + 20 && cursor_ == eip + 22;
+    if (!page_translation_cache_enabled_ || opcode_ != 0x75 || !ip_written_ ||
+        start_cs_ != segments[CS] || decoded_.size() != 2 || decoded_[0] != 0x75) return false;
+    const auto long_mode = is_long_mode();
+    if (!long_mode && ((cr0 & 0x80000001U) != 1 || (efer & 0x400U) || !cache_[CS].big))
+      return false;
+    const auto length = long_mode ? 22U : 17U;
+    return decoded_[1] == 0x100U - length && start_ip_ == eip + length - 2 && cursor_ == eip + length;
   }
   unsigned try_scan_loop_batch(unsigned budget);
   // The machine must bound this budget by the next device observation. Zero
@@ -525,6 +529,13 @@ class Cpu {
            !is_real_mode() && !(efer & 0x400U) && cache_[CS].big;
   }
   unsigned try_zero_loop_batch(unsigned step_budget);
+  bool forward_copy_loop_batch_candidate() const noexcept {
+    return opcode_ == 0x7f && ip_written_ && start_cs_ == segments[CS] &&
+           decoded_.size() == 2 && decoded_[0] == 0x7f && decoded_[1] == 0xf4 &&
+           eip <= UINT32_MAX - 11 && start_ip_ == eip + 10 && cursor_ == eip + 12 &&
+           (cr0 & 0x80000001U) == 1 && !(efer & 0x400U) && cache_[CS].big;
+  }
+  unsigned try_forward_copy_loop_batch(unsigned step_budget);
   bool movntdq_store_batch_candidate() const noexcept {
     const bool adjacent = opcode_ == 0x0fe7 && cursor_ == eip;
     const bool after_arithmetic = (opcode_ == 0x03 || opcode_ == 0xff) &&
@@ -1587,6 +1598,13 @@ class Cpu {
         instruction_page_.memory_epoch == memory.page_table_epoch() &&
         (cr0 & 0x80000000U) && is_long_mode();
   }
+  bool can_fetch_flat_unpaged_immediate(unsigned bytes) const {
+    const auto& code = cache_[CS];
+    return (cr0 & 0x80000001U) == 1 && !(efer & 0x400U) && a20_enabled &&
+        code.valid && code.code && code.big && !code.expand_down && !code.base &&
+        cursor_ <= code.limit && bytes - 1 <= code.limit - cursor_ &&
+        bytes <= 0x1000U - unsigned(cursor_ & 0xfffU) && bulk_ram_range(cursor_, bytes);
+  }
 
   std::uint8_t fetch8() {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
@@ -1617,9 +1635,14 @@ class Cpu {
     ++cursor_; decoded_.push_back(value);
     return value;
   }
+  std::uint64_t consume_immediate(const std::uint8_t* data, unsigned bytes) {
+    decoded_.insert(decoded_.end(), data, data + bytes);
+    cursor_ += bytes;
+    return little_endian_word(data, bytes);
+  }
   std::uint64_t immediate(unsigned bytes) {
-    if (bytes >= 2 && bytes <= 8 && decoded_.size() + bytes <= 15 &&
-        can_reuse_long_code_page(bytes)) {
+    const bool can_fetch_block = bytes >= 2 && bytes <= 8 && decoded_.size() + bytes <= 15;
+    if (can_fetch_block && can_reuse_long_code_page(bytes)) {
       // The opcode already established a readable executable RAM page.
       // Page crossings and overlength encodings keep byte-precise fetches.
       const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
@@ -1630,10 +1653,14 @@ class Cpu {
         memory.read_block(physical, buffer.data(), bytes);
         data = buffer.data();
       }
-      decoded_.insert(decoded_.end(), data, data + bytes);
-      cursor_ += bytes;
       instruction_page_hits += bytes;
-      return little_endian_word(data, bytes);
+      return consume_immediate(data, bytes);
+    }
+    if (can_fetch_block && can_fetch_flat_unpaged_immediate(bytes)) {
+      const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Decode);
+      std::array<std::uint8_t, 8> buffer;
+      if (memory.try_read_present_ram_block(cursor_, buffer.data(), bytes))
+        return consume_immediate(buffer.data(), bytes);
     }
     std::uint64_t value = 0;
     for (unsigned i = 0; i < bytes; ++i) value |= std::uint64_t(fetch8()) << (8 * i);
@@ -4256,38 +4283,63 @@ inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
 }
 
 inline unsigned Cpu::try_scan_loop_batch(unsigned budget) {
-  static constexpr std::array<std::uint8_t, 22> pattern{
+  static constexpr std::array<std::uint8_t, 22> pattern64{
       0x44,0x8d,0x40,0x01,              // LEA R8D,[RAX+1]
       0x48,0xff,0xc2,                   // INC RDX
       0x41,0x8b,0xc0,                   // MOV EAX,R8D
       0x41,0x89,0x81,0xd8,0x2e,0,0,    // MOV [R9+2ED8h],EAX
       0x80,0x3a,0xe8,                   // CMP BYTE [RDX],E8h
       0x75,0xea};                       // JNE to LEA
+  static constexpr std::array<std::uint8_t, 17> pattern32{
+      0x8d,0x70,0x01,                   // LEA ESI,[EAX+1]
+      0x42,                             // INC EDX
+      0x8b,0xc6,                        // MOV EAX,ESI
+      0x89,0x81,0xc8,0x2e,0,0,         // MOV [ECX+2EC8h],EAX
+      0x80,0x3a,0xe8,                   // CMP BYTE [EDX],E8h
+      0x75,0xef};                       // JNE to LEA
   constexpr unsigned per_iteration = 6;
   if (budget < 2 * per_iteration || !scan_loop_batch_candidate() ||
       fault || halted || transaction_ || interrupt_shadow_ || !a20_enabled ||
-      !(cr0 & 0x80000000U) || !(cr4 & 0x20U) || (eflags & (TF | 0x20000U)) ||
-      (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook ||
-      eip > UINT64_MAX - pattern.size() || (eip & 0xfffU) > 4096 - pattern.size() ||
-      regs[EDX] == UINT64_MAX || regs[R9] > UINT64_MAX - 0x2edbU)
+      (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook)
     return 0;
 
-  const auto input = regs[EDX] + 1;
-  const auto output = regs[R9] + 0x2ed8;
-  if ((output & 0xfffU) > 4092 || !canonical(output + 3) ||
-      !canonical(eip + pattern.size() - 1)) return 0;
+  const auto long_mode = is_long_mode();
+  const unsigned length = long_mode ? pattern64.size() : pattern32.size();
+  const auto* pattern = long_mode ? pattern64.data() : pattern32.data();
+  const std::uint64_t address_limit = long_mode ? UINT64_MAX : UINT32_MAX;
+  const auto position = long_mode ? regs[EDX] : std::uint32_t(regs[EDX]);
+  const auto object = long_mode ? regs[R9] : std::uint32_t(regs[ECX]);
+  const unsigned field = long_mode ? 0x2ed8U : 0x2ec8U;
+  if (eip > address_limit - length || position == address_limit || object > address_limit - field - 3)
+    return 0;
+  const auto input = position + 1;
+  const auto output = object + field;
+  if (long_mode && (!(cr0 & 0x80000000U) || !(cr4 & 0x20U) || (eip & 0xfffU) > 4096 - length ||
+                    (output & 0xfffU) > 4092 || !canonical(output + 3) || !canonical(eip + length - 1)))
+    return 0;
 
   try {
-    const auto code = translate(eip, Access::Execute, nullptr, true);
     unsigned mapping_bytes_left = 0;
-    const auto from = translate(input, Access::Read, nullptr, true, &mapping_bytes_left);
-    const auto to = translate(output, Access::Write, nullptr, true);
-    if (!bulk_ram_range(code, pattern.size()) ||
+    const auto code = long_mode ? translate(eip, Access::Execute, nullptr, true) :
+                                  segment_linear(CS, eip, length, Access::Execute);
+    const auto from = long_mode ? translate(input, Access::Read, nullptr, true, &mapping_bytes_left) :
+                                  segment_linear(DS, input, 1, Access::Read);
+    const auto to = long_mode ? translate(output, Access::Write, nullptr, true) :
+                                segment_linear(DS, output, 4, Access::Write);
+    if (!long_mode) {
+      if (code > UINT32_MAX - (length - 1) || (to & 0xfffU) > 4092 ||
+          !memory.resident_ram_span(to, 4, false)) return 0;
+      const auto& segment = cache_[DS];
+      const auto upper = segment.expand_down ? (segment.big ? UINT32_MAX : 0xffffU) : segment.limit;
+      mapping_bytes_left = static_cast<unsigned>(std::min<std::uint64_t>(
+          {budget / per_iteration, std::uint64_t(upper) - input + 1, UINT32_MAX - from + 1}));
+    }
+    if (!bulk_ram_range(code, length) ||
         !bulk_ram_range(to, 4) || memory.may_touch_page_tables(to, 4)) return 0;
     const auto overlaps = [](auto left, auto left_bytes, auto right, auto right_bytes) {
       return left < right + right_bytes && right < left + left_bytes;
     };
-    if (overlaps(to, 4, code, pattern.size())) return 0;
+    if (overlaps(to, 4, code, length)) return 0;
     const auto safe_input = [&](unsigned bytes) {
       return bytes >= 2 && bulk_ram_range(from, bytes) && !overlaps(to, 4, from, bytes);
     };
@@ -4297,22 +4349,23 @@ inline unsigned Cpu::try_scan_loop_batch(unsigned budget) {
     if (!safe_input(maximum)) {
       // A large mapping can contain a device, an Ether window or a physical
       // alias of the output. Keep the original first-page batch when safe.
-      const auto first_page = 4096U - unsigned(input & 0xfffU);
+      const auto first_page = 4096U - unsigned((long_mode ? input : from) & 0xfffU);
       if (maximum <= first_page || !safe_input(first_page)) return 0;
       maximum = first_page;
     }
-    std::array<std::uint8_t, pattern.size()> actual;
-    memory.read_block(code, actual.data(), actual.size());
-    if (actual != pattern) return 0;
+    std::array<std::uint8_t, pattern64.size()> actual;
+    memory.read_block(code, actual.data(), length);
+    if (!std::equal(pattern, pattern + length, actual.begin())) return 0;
     const auto scanned = memory.scan_ram_until_byte(from, maximum, 0xe8);
     const auto count = static_cast<unsigned>(scanned.examined);
     const auto value = std::uint32_t(regs[EAX]) + count;
     std::array<std::uint8_t, 4> saved;
     for (unsigned i = 0; i < saved.size(); ++i) saved[i] = std::uint8_t(value >> (8 * i));
     memory.write_block(to, saved.data(), saved.size());
-    regs[EDX] += count;
+    if (long_mode) regs[EDX] += count;
+    else put_reg(EDX, 4, position + count);
     put_reg(EAX, 4, value);
-    put_reg(R8, 4, value);
+    put_reg(long_mode ? R8 : ESI, 4, value);
     // The final CMP defines all flags touched by INC.
     (void)alu(7, scanned.last, 0xe8, 1);
     if (scanned.last == 0xe8) {
@@ -4324,6 +4377,69 @@ inline unsigned Cpu::try_scan_loop_batch(unsigned budget) {
   } catch (const std::exception&) {
     return 0; // Faults or A/D updates remain the responsibility of scalar execution.
   }
+}
+
+inline unsigned Cpu::try_forward_copy_loop_batch(unsigned step_budget) {
+  // MOV AL,[ECX]; MOV [EDX+EBX],AL; INC EBX; INC ECX; DEC EDI; TEST EDI,EDI; JG.
+  static constexpr std::array<std::uint8_t, 12> pattern{
+      0x8a,0x01,0x88,0x04,0x1a,0x43,0x41,0x4f,0x85,0xff,0x7f,0xf4};
+  constexpr unsigned steps_per_iteration = 7;
+  constexpr auto page_size = MemoryFabric::kPageSize;
+  const auto remaining = std::uint32_t(regs[EDI]);
+  if (step_budget < 2 * steps_per_iteration || remaining < 2 || remaining > INT32_MAX ||
+      !forward_copy_loop_batch_candidate() || fault || halted || transaction_ || interrupt_shadow_ ||
+      !a20_enabled || (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
+      step_trace_hook || irq_trace_hook) return 0;
+
+  const auto source_offset = std::uint32_t(regs[ECX]);
+  const auto target_offset = std::uint32_t(regs[EDX] + regs[EBX]);
+  auto count = std::min(remaining, step_budget / steps_per_iteration);
+  std::array<std::uint8_t, page_size> bytes;
+  try {
+    const auto code = segment_linear(CS, eip, pattern.size(), Access::Execute);
+    std::array<std::uint8_t, pattern.size()> actual;
+    if (pattern.size() - 1 > UINT32_MAX - code || !bulk_ram_range(code, pattern.size()) ||
+        !memory.try_read_present_ram_block(code, actual.data(), actual.size()) || actual != pattern)
+      return 0;
+    const auto source = segment_linear(DS, source_offset, 1, Access::Read);
+    const auto target = segment_linear(DS, target_offset, 1, Access::Write);
+    count = std::min({count, unsigned(page_size - source % page_size),
+                      unsigned(page_size - target % page_size)});
+    if (count < 2 || count - 1 > UINT32_MAX - source_offset ||
+        count - 1 > UINT32_MAX - target_offset || !bulk_ram_range(source, count) ||
+        !bulk_ram_range(target, count) || memory.may_touch_page_tables(target, count) ||
+        (target < code + pattern.size() && code < target + count)) return 0;
+    (void)segment_linear(DS, source_offset, count, Access::Read);
+    (void)segment_linear(DS, target_offset, count, Access::Write);
+    if (!memory.resident_ram_span(target, count)) return 0;
+
+    // If a store reaches an upcoming input byte, the scalar loop reads
+    // that new value. Repeat the original prefix to reproduce this case.
+    const auto seed = target > source && target < source + count
+        ? unsigned(target - source) : count;
+    if (!memory.try_read_present_ram_block(source, bytes.data(), seed)) return 0;
+    for (unsigned copied = seed; copied < count;) {
+      const auto chunk = std::min(copied, count - copied);
+      std::copy_n(bytes.data(), chunk, bytes.data() + copied);
+      copied += chunk;
+    }
+    memory.write_block(target, bytes.data(), count);
+  } catch (const std::exception&) {
+    return 0;
+  }
+
+  set_reg8(EAX, bytes[count - 1]);
+  put_reg(EBX, 4, std::uint32_t(regs[EBX]) + count);
+  put_reg(ECX, 4, source_offset + count);
+  const auto left = remaining - count;
+  put_reg(EDI, 4, left);
+  (void)alu(4, left, left, 4);
+  ip_written_ = left != 0;
+  if (!ip_written_) eip = cursor_ & code_mask();
+  eflags |= 2;
+  const auto steps = count * steps_per_iteration;
+  instructions += steps;
+  return steps;
 }
 
 inline void Cpu::string_operation(std::uint8_t op) {

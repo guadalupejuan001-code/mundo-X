@@ -10,6 +10,7 @@
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <new>
@@ -383,6 +384,22 @@ class MemoryFabric {
     const BootScalarTiming::Scope sample(record_timing ? boot_scalar_timing_ : nullptr, BootTimePart::Ram);
     if (overlaps_window(offset, bytes)) return nullptr;
     return ram_.resident_span(offset, bytes);
+  }
+
+  bool try_read_present_ram_block(std::uint64_t offset, std::uint8_t* destination,
+                                  unsigned bytes) const {
+    const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
+    if (!destination || !bytes || offset >= size() || bytes > size() - offset ||
+        overlaps_window(offset, bytes)) return false;
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    if (exclusive_ram_reads_) return ram_.try_read_present_block<false>(offset, destination, bytes);
+    return ram_.try_read_present_block(offset, destination, bytes);
+#else
+    const auto* data = ram_.resident_span(offset, bytes);
+    if (!data) return false;
+    std::memcpy(destination, data, bytes);
+    return true;
+#endif
   }
 
   void write_byte(std::uint64_t offset, std::uint8_t value) {
