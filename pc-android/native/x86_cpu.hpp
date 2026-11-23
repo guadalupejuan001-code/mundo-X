@@ -1181,7 +1181,7 @@ class Cpu {
   bool page_translation_cache_enabled_ = false;
   EtherArm64Stats ether_arm64_stats_{};
   StateVectorInterpreterStats state_vector_interpreter_stats_{};
-  static constexpr unsigned kPauseRepeatGap = 8, kMinPauseRepeats = 4;
+  static constexpr unsigned kPauseRepeatGap = 24, kMinPauseRepeats = 4;
   struct PauseWaitObservation {
     std::uint64_t ip = 0, cr3 = 0, step = 0;
     std::uint16_t cs = 0;
