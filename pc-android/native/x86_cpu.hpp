@@ -471,6 +471,7 @@ class Cpu {
     last_movntdq_end_ip_ = UINT64_MAX;
     counted_call_loop_.reset();
     affine_ram_rotate_block_.reset();
+    pause_wait_ = {};
     idt_bulk_reads = 0;
     irq64_bulk_frames = 0;
     ether_arm64_stats_ = {};
@@ -515,6 +516,13 @@ class Cpu {
   std::uint64_t clock_cycles() const noexcept { return instructions + idle_clock_steps_; }
   static constexpr std::uint64_t kTscTicksPerCycle = 64;
   const std::vector<std::uint8_t>& last_decoded_bytes() const noexcept { return decoded_; }
+  // This is an observation for the motherboard scheduler. A PAUSE burst
+  // does not halt the CPU or bypass any shared-memory or IRQ work.
+  bool pause_wait_hint() const noexcept {
+    return !halted && !fault && pause_wait_.repeats >= kMinPauseRepeats &&
+        pause_wait_.cr3 == cr3 && pause_wait_.cs == segments[CS] &&
+        instructions - pause_wait_.step <= kPauseRepeatGap;
+  }
   unsigned last_rep_batch_bytes() const noexcept { return last_rep_batch_bytes_; }
   unsigned last_rep_direct_page_copy_bytes() const noexcept { return last_rep_direct_page_copy_bytes_; }
   bool rep_batch_candidate() const noexcept {
@@ -819,6 +827,14 @@ class Cpu {
       if (!ip_written_) eip = cursor_ & code_mask();
       eflags |= 2;
       ++instructions;
+      if (opcode_ == 0x90 && repeat_ == 0xf3 && !(rex_ & 1U)) {
+        const bool same = pause_wait_.ip == start_ip_ && pause_wait_.cs == start_cs_ &&
+            pause_wait_.cr3 == cr3 && instructions - pause_wait_.step <= kPauseRepeatGap;
+        pause_wait_ = {start_ip_, cr3, instructions, start_cs_,
+                       same ? std::min(pause_wait_.repeats + 1, kMinPauseRepeats) : 1U};
+      } else if (opcode_ == 0x0f31 || halted) {
+        pause_wait_.repeats = 0;
+      }
       transaction_ = false; clear_write_journal();
       if (pending_io_debug_) {
         dr6_ |= pending_io_debug_;
@@ -828,10 +844,12 @@ class Cpu {
       }
       return halted ? StepResult::Halted : StepResult::Executed;
     } catch (const WaitingForX87&) {
+      pause_wait_.repeats = 0;
       rollback(before);
       waiting_for_x87=true;
       return StepResult::WaitingForX87;
     } catch (const Trap& t) {
+      pause_wait_.repeats = 0;
       // I/O data breakpoints are traps: the completed instruction and its
       // device effects precede delivery of #DB, even if the gate fails.
       const auto retired = t.after_instruction ? std::optional<Snapshot>{snapshot()} : std::nullopt;
@@ -962,6 +980,7 @@ class Cpu {
         dispatch_idt(vector,eip,IdtSource::HardwareInterrupt,false,0);
       }
       halted=false;
+      pause_wait_.repeats = 0;
       transaction_=false;clear_write_journal();
       if(irq_trace_hook) {
         try {
@@ -1162,6 +1181,12 @@ class Cpu {
   bool page_translation_cache_enabled_ = false;
   EtherArm64Stats ether_arm64_stats_{};
   StateVectorInterpreterStats state_vector_interpreter_stats_{};
+  static constexpr unsigned kPauseRepeatGap = 8, kMinPauseRepeats = 4;
+  struct PauseWaitObservation {
+    std::uint64_t ip = 0, cr3 = 0, step = 0;
+    std::uint16_t cs = 0;
+    unsigned repeats = 0;
+  } pause_wait_;
   void retire_ether_decoded_block(const ether_arm64::Block& block, const std::uint8_t* code,
                                   std::uint64_t origin, bool taken, unsigned retired);
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
