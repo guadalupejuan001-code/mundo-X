@@ -447,7 +447,8 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       // A later speculative page walk may have discovered a new page table.
       for (unsigned i = 0; i < pending.count; ++i) {
         const auto& store = pending.stores[i];
-        if (memory.may_touch_page_tables(store.physical, store.width)) {
+        if (memory.may_touch_page_tables(store.physical, store.width) ||
+            (!long_mode && !memory.resident_ram_span(store.physical, store.width, false))) {
           ++ether_arm64_stats_.data_fallbacks;
           return 0;
         }
@@ -636,6 +637,14 @@ inline unsigned Cpu::ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t a
     const auto physical = cpu.ether_arm64_ram_address<ParallelRead>(
         address, width, spec & ether_arm64::kStackAccess, Access::Read);
     if (!physical) return 0;
+    if (frame->pending && !cpu.is_long_mode()) {
+      // A failed protected32 chain must not resolve a cold backing read or
+      // touch the quantum authority after an earlier speculative store.
+      const auto* data = cpu.memory.resident_ram_span(*physical, width, false);
+      if (!data) return 0;
+      frame->loaded = frame->pending->load(*physical, width, [&] { return little_endian_word(data, width); });
+      return 1;
+    }
     if (frame->reuse_resident_reads) {
       constexpr auto page_bytes = MemoryFabric::kPageSize;
       static_assert(page_bytes == ether_arm64::kResidentReadPageBytes);

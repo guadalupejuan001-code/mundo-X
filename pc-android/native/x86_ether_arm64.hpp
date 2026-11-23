@@ -74,6 +74,10 @@ struct Instruction {
   bool writes_ram() const noexcept {
     return lhs.memory && (kind == Move || kind == MoveByte || kind == Subtract);
   }
+  bool writes_esp_dword() const noexcept {
+    return opcode == 0x89 && width == 4 && lhs.memory && lhs.stack &&
+        lhs.reg == 4 && lhs.index == Operand::kNoIndex;
+  }
   bool writes_register() const noexcept {
     return !lhs.memory && kind != Nop && kind != Compare && kind != Test &&
         kind != Conditional && kind != Jump;
@@ -164,6 +168,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
   const auto canonical = [](std::uint64_t address) {
     return address >> 47 == 0 || address >> 47 == 0x1ffff;
   };
+  bool fixed_stack_base = true;
   while (block.count < Block::kMaxInstructions && block.size < size) {
     unsigned pos = block.size;
     const unsigned begin = pos;
@@ -389,6 +394,14 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       if (long_mode && !canonical(target)) break;
       block.target = long_mode ? target : std::uint32_t(target);
     }
+    // Keep legacy stores terminal except for ordinary DWORD MOVs to a fixed
+    // ESP offset. Never extend their staged chain through a stack-base change
+    // or another kind of write.
+    const bool changes_stack_base = !long_mode && op.writes_register() && op.lhs.reg == 4;
+    const bool legacy_store = !long_mode && op.writes_ram();
+    const bool chain_stack_store = legacy_store && fixed_stack_base && op.writes_esp_dword();
+    if (!long_mode && block.writes && (changes_stack_base || (legacy_store && !chain_stack_store))) break;
+    fixed_stack_base &= !changes_stack_base;
     // A guarded memory SUB uses the primary flag slots in its write callback.
     // Commit it before a subsequent logical operation that inherits its AF.
     if (Instruction::logical(op.kind) && block.auxiliary_index != Block::kNoFlagSource &&
@@ -452,7 +465,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     block.register_only = block.register_only && !op.lhs.memory &&
         (!op.rhs.memory || op.kind == Instruction::Lea);
     block.size = pos;
-    if (op.writes_ram() && (++block.writes == Block::kMaxWrites || !long_mode)) break;
+    if (op.writes_ram() && (++block.writes == Block::kMaxWrites ||
+        (legacy_store && !chain_stack_store))) break;
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }

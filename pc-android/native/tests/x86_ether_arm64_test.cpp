@@ -61,6 +61,16 @@ constexpr std::array<std::uint8_t, 17> protected_loop{
     0x83,0xc7,0x02,0x49, // ADD EDI,2; DEC ECX.
     0x75,0xf0,0xf4};      // JNZ; HLT.
 
+constexpr std::array<std::uint8_t, 25> fixed_stack_chain{
+    0x89,0x44,0x24,0x08, // MOV [ESP+8],EAX.
+    0xc1,0xc8,0x0b,      // ROR EAX,11.
+    0x03,0xc3,           // ADD EAX,EBX.
+    0x89,0x44,0x24,0x0c, // MOV [ESP+12],EAX.
+    0x8b,0x54,0x24,0x08, // MOV EDX,[ESP+8].
+    0x31,0xc2,           // XOR EDX,EAX.
+    0x89,0x54,0x24,0x08, // MOV [ESP+8],EDX.
+    0x90,0xf4};          // NOP; HLT.
+
 constexpr std::array<std::uint8_t, 25> byte_copy_loop{
     0x42,0x8a,0x0c,0x1a,0x44,0x03,0xf3,0x43,0x88,0x0c,0x1f, // Observed byte load, ADD and byte store.
     0x03,0xd3,0x4c,0x03,0xfb,0x44,0x2b,0xd3,0x45,0x85,0xd2, // Observed pointer/counter updates.
@@ -243,6 +253,19 @@ void decoder_contract() {
   require(protected_block.count == 2 && protected_block.instructions[0].width == 2 &&
           !protected_block.instructions[0].rhs.stack && protected_block.instructions[1].lhs.stack,
           "protected32 MOV AX and stack store lost their original widths or segments");
+  const auto stack_chain = arm64::decode(
+      fixed_stack_chain.data(), fixed_stack_chain.size(), protected_code, false);
+  require(stack_chain.count == 8 && stack_chain.writes == 3 && stack_chain.stages_ram(),
+          "fixed DWORD stores to ESP must extend the protected32 chain");
+  const std::uint8_t changes_stack[]{0x89,0x44,0x24,0x08,0x83,0xc4,0x04,0x89,0x44,0x24,0x08,0x90};
+  const std::uint8_t changes_stack_first[]{0x83,0xc4,0x04,0x89,0x44,0x24,0x08,0x90};
+  const std::uint8_t indexed_store[]{0x89,0x44,0x24,0x08,0x89,0x04,0x0c,0x90};
+  const std::uint8_t word_store[]{0x66,0x89,0x44,0x24,0x08,0x90};
+  require(arm64::decode(changes_stack, sizeof(changes_stack), code, false).count == 1 &&
+          arm64::decode(changes_stack_first, sizeof(changes_stack_first), code, false).count == 2 &&
+          arm64::decode(indexed_store, sizeof(indexed_store), code, false).count == 1 &&
+          arm64::decode(word_store, sizeof(word_store), code, false).count == 1,
+          "a protected32 store chain continued across a mutable stack or a different write");
   const std::uint8_t legacy_back[]{0x49,0x75,0xfd};
   const auto legacy = arm64::decode(legacy_back, sizeof(legacy_back), code, false);
   require(legacy.count == 2 && legacy.target == code &&
@@ -1474,6 +1497,120 @@ void protected32_contract() {
             << " scalar_median_ns=" << scalar_ns[2] << '\n';
 }
 
+void protected32_stack_chain_contract() {
+  PcMachine native, scalar;
+  boot_protected(native, true);
+  boot_protected(scalar, false);
+  constexpr auto entry = protected_code + 0x200;
+  constexpr std::uint32_t boundary = ss_base + 0x80000;
+  constexpr std::uint32_t initial = 0x12345678, addend = 0xdeadbeef;
+  const auto install = [&](Cpu& cpu, std::uint32_t pointer) {
+    cpu.memory.write_block(entry, fixed_stack_chain.data(), fixed_stack_chain.size());
+    cpu.eip = entry;
+    cpu.regs[Cpu::ESP] = pointer;
+    cpu.regs[Cpu::EAX] = initial;
+    cpu.regs[Cpu::EBX] = addend;
+    cpu.eflags = 2 | Cpu::AF | Cpu::OF;
+  };
+  for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+    install(*cpu, boundary - ss_base - 48);
+    cpu->write32(boundary - 40, 0x8c719a32);
+    cpu->write32(boundary - 36, 0x2583b57f);
+  }
+  const auto& stats = native.cpu.ether_arm64_stats();
+  const auto initial_staged = stats.staged_ram_steps;
+  const auto initial_coalesced = stats.coalesced_ram_writes;
+  warm_block(native.cpu, entry, 8);
+  for (unsigned i = 0; i < 8; ++i)
+    require(scalar.cpu.step() == StepResult::Executed, "scalar ESP chain failed");
+  constexpr auto rolled = (initial >> 11) | (initial << 21);
+  constexpr auto result = std::uint32_t(rolled + addend);
+  require(capture(native.cpu) == capture(scalar.cpu) && stats.staged_ram_steps == initial_staged + 8 &&
+          stats.coalesced_ram_writes == initial_coalesced + 1 &&
+          native.cpu.read32(boundary - 36) == result &&
+          native.cpu.read32(boundary - 40) == (initial ^ result) &&
+          scalar.cpu.read64(boundary - 40) == native.cpu.read64(boundary - 40),
+          "extended ESP chain changed flags, registers, segment addressing, or pending-store forwarding");
+
+  // The first store is resident but the second page is still implicit.
+  for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+    install(*cpu, boundary - ss_base - 12);
+    cpu->write32(boundary - 4, 0x29b28353);
+  }
+  require(!native.cpu.memory.resident_ram_span(boundary, 4), "guard fixture unexpectedly materialized RAM");
+  const auto guard_state = capture(native.cpu);
+  const auto fallback_count = stats.data_fallbacks;
+  require(!native.cpu.try_ether_arm64_block(8) && stats.data_fallbacks == fallback_count + 1 &&
+          capture(native.cpu) == guard_state && native.cpu.read32(boundary - 4) == 0x29b28353 &&
+          !native.cpu.memory.resident_ram_span(boundary, 4),
+          "a missing second stack page changed the first store or materialized its target");
+  for (auto* cpu : {&native.cpu, &scalar.cpu})
+    for (unsigned i = 0; i < 8; ++i)
+      require(cpu->step() == StepResult::Executed, "scalar ESP fallback failed");
+  require(capture(native.cpu) == capture(scalar.cpu) &&
+          native.cpu.read64(boundary - 4) == scalar.cpu.read64(boundary - 4),
+          "ESP spill guard changed the scalar result");
+
+  // A valid first store must also wait if the next store straddles pages.
+  install(native.cpu, boundary - ss_base - 14);
+  const auto crossing_state = capture(native.cpu);
+  const auto boundary_bytes = native.cpu.read64(boundary - 6);
+  require(!native.cpu.try_ether_arm64_block(8) && capture(native.cpu) == crossing_state &&
+          native.cpu.read64(boundary - 6) == boundary_bytes,
+          "a cross-page stack destination committed an earlier store");
+
+  install(native.cpu, boundary - ss_base - 12);
+  native.cpu.write32(boundary - 4, 0x7e455031);
+  unsigned device_writes = 0;
+  native.cpu.mmio_claim_hook = [&](auto address) { return address >= boundary && address < boundary + 4; };
+  native.cpu.mmio_range_claim_hook = [&](auto first, auto bytes) {
+    return first < boundary + 4 && boundary < first + bytes;
+  };
+  native.cpu.mmio_write_hook = [&](auto, auto) { ++device_writes; return true; };
+  const auto mmio_state = capture(native.cpu);
+  require(!native.cpu.try_ether_arm64_block(8) && capture(native.cpu) == mmio_state &&
+          native.cpu.read32(boundary - 4) == 0x7e455031 && !device_writes,
+          "a stack store to MMIO committed guest bytes or touched the device speculatively");
+  for (unsigned i = 0; i < 4; ++i)
+    require(native.cpu.step() == StepResult::Executed, "scalar MMIO stack store failed");
+  require(device_writes == 4 && native.cpu.read32(boundary - 4) == initial,
+          "scalar path did not execute the RAM and MMIO stores in order");
+  native.cpu.mmio_claim_hook = {};
+  native.cpu.mmio_range_claim_hook = {};
+  native.cpu.mmio_write_hook = {};
+
+  PcMachine limited;
+  boot_protected(limited, true);
+  auto& restricted = limited.cpu;
+  restricted.write64(0x3030, 0x0040920200007fffULL); // SS base 20000h, byte limit 7fffh.
+  emit(restricted, protected_code, {0x66,0xb8,0x30,0,0x8e,0xd0,0x90}); // Reload SS; leave its IRQ shadow.
+  restricted.eip = protected_code;
+  for (unsigned i = 0; i < 3; ++i)
+    require(restricted.step() == StepResult::Executed, "could not install a limited SS");
+  install(restricted, 0x7ff4);
+  restricted.write32(ss_base + 0x7ffc, 0x9384c231);
+  const auto limit_state = capture(restricted);
+  for (unsigned i = 0; i < 4; ++i)
+    require(!restricted.try_ether_arm64_block(8) && capture(restricted) == limit_state &&
+            restricted.read32(ss_base + 0x7ffc) == 0x9384c231,
+            "a stack limit violation committed staged stores or arithmetic");
+  for (unsigned i = 0; i < 3; ++i)
+    require(restricted.step() == StepResult::Executed, "scalar prefix before the SS fault failed");
+  require(restricted.step() == StepResult::Faulted && restricted.fault &&
+          restricted.fault->code == cosmic_pc::FaultCode::SegmentLimit && restricted.eip == entry + 9 &&
+          restricted.read32(ss_base + 0x7ffc) == initial, "ESP fallback changed the precise SS fault");
+
+  install(native.cpu, entry + 4 - ss_base - 8);
+  native.cpu.regs[Cpu::EAX] = 0xf4;
+  const auto modifying_state = capture(native.cpu);
+  require(!native.cpu.try_ether_arm64_block(8) && capture(native.cpu) == modifying_state &&
+          native.cpu.read8(entry + 4) == 0xc1 && native.cpu.step() == StepResult::Executed &&
+          native.cpu.step() == StepResult::Halted,
+          "a staged ESP store crossed a modification to the next instruction");
+  std::cout << "ETHER_PROTECTED32_FIXED_STACK_PASS steps=8 stores=3 coalesced=1"
+               " absent=1 cross_page=1 mmio=1 ss_limit=1 code_guard=1\n";
+}
+
 void byte_copy_contract() {
   PcMachine native, scalar;
   boot(native, true);
@@ -2259,6 +2396,7 @@ int main() {
     staged_ram_contract();
     repeated_loop_contract();
     protected32_contract();
+    protected32_stack_chain_contract();
     byte_copy_contract();
     guard_contract();
     single_register_contract();
