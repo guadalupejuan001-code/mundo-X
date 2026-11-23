@@ -133,7 +133,7 @@ class EtherStateRam {
     std::uint64_t payload = 0;
     std::size_t dense_pages = 0, rule_pages = 0, spilled_pages = 0, clean_pages = 0;
     std::size_t pin_depth = 0, clean_history_pages = 512;
-    std::uint64_t pin_epoch = 0, reclaim_cursor = 0, compact_cursor = 0;
+    std::uint64_t pin_epoch = 0, reclaim_cursor = 0, compact_cursor = 0, preparation_cursor = 0;
     bool backing_timing = false;
     BackingCachePolicy cache_policy = BackingCachePolicy::Fixed;
     PressureMetrics pressure;
@@ -607,21 +607,31 @@ class EtherStateRam {
   bool try_copy_resident_block(std::uint64_t source, std::uint64_t target, std::size_t count) {
     check_range(source, count); check_range(target, count);
     if (!count || count > kPageSize - source % kPageSize || count > kPageSize - target % kPageSize ||
+        (source < target + count && target < source + count) ||
         quantum_intersects(source, count) || quantum_intersects(target, count)) return false;
     const auto* from = find_page(source / kPageSize);
     auto* to = find_page(target / kPageSize);
     if (!from || !from->packed || !to || !to->packed) return false;
     mark_write(target / kPageSize, *to);
-    std::memmove(to->packed->data() + target % kPageSize, from->packed->data() + source % kPageSize, count);
+    std::memcpy(to->packed->data() + target % kPageSize, from->packed->data() + source % kPageSize, count);
     return true;
   }
   bool try_copy_to_implicit_page(std::uint64_t source, std::uint64_t target) {
     check_range(source, kPageSize); check_range(target, kPageSize);
-    if (source % kPageSize || target % kPageSize || find_page(target / kPageSize) ||
+    if (source % kPageSize || target % kPageSize || has_pinned_writes() ||
         quantum_intersects(source, kPageSize) || quantum_intersects(target, kPageSize)) return false;
-    Bytes bytes;
-    read_block(source, bytes.data(), bytes.size());
-    write_block(target, bytes.data(), bytes.size());
+    const auto* from = find_page(source / kPageSize);
+    const auto index = target / kPageSize;
+    if (!from || !from->packed || find_page(index)) return false;
+
+    // Direct copies require space for both pages. The ordinary copy path
+    // can stage source bytes and reclaim payload before writing its target.
+    const auto limit = resident_payload_limit();
+    if (limit < kPageSize || allocated_bytes() > limit - kPageSize) return false;
+    auto payload = std::make_unique<Bytes>(*from->packed);
+    auto& page = state().pages.try_emplace(index).first->second;
+    page.packed = std::move(payload);
+    add_accounting(page);
     return true;
   }
 
@@ -629,19 +639,26 @@ class EtherStateRam {
     if (address >= size()) return false;
     return compact_page(address / kPageSize);
   }
-  std::size_t compact_repeating_pages(std::size_t max_pages) noexcept {
-    if (!max_pages || state().pages.empty()) return 0;
+  bool compact_exact_repeating_page(std::uint64_t address) noexcept {
+    return address < size() && compact_page(address / kPageSize, 0);
+  }
+  std::size_t compact_repeating_pages(std::size_t max_pages,
+                                      std::size_t* visited_pages = nullptr) noexcept {
+    if (visited_pages) *visited_pages = 0;
+    if (!max_pages || !allocated_pages() || has_pinned_writes()) return 0;
     std::size_t compacted = 0, scanned = 0;
     auto it = state().pages.lower_bound(state().compact_cursor);
     if (it == state().pages.end()) it = state().pages.begin();
-    const auto available = state().pages.size();
-    while (scanned++ < available && compacted < max_pages && it != state().pages.end()) {
-      const auto index = it->first;
-      ++it;
+    const auto visit_limit = std::min(max_pages, state().pages.size());
+    while (scanned < visit_limit && allocated_pages()) {
+      const auto index = (it++)->first;
+      ++scanned;
       state().compact_cursor = index + 1;
-      if (compact_page(index)) ++compacted;
+      // Periodic work packs repeating pages. Pressure reclaim also considers deltas.
+      if (compact_page(index, 0)) ++compacted;
       if (it == state().pages.end()) it = state().pages.begin();
     }
+    if (visited_pages) *visited_pages = scanned;
     return compacted;
   }
   std::size_t trim_zero_pages() noexcept {
@@ -659,14 +676,22 @@ class EtherStateRam {
   ReclaimPreparation prepare_reclaim(std::size_t ready_limit, ReclaimClock::time_point deadline) {
     ReclaimPreparation result;
     ready_limit = std::min(ready_limit, state().clean_history_pages);
-    if (!state().backing || has_pinned_writes() || state().clean_pages >= ready_limit) return result;
+    if (!state().backing || has_pinned_writes() || state().dense_pages == state().clean_pages ||
+        state().clean_pages >= ready_limit || ReclaimClock::now() >= deadline) return result;
     std::array<PageBacking::PageWrite, PageBacking::kMaxWritePages> writes{};
-    std::size_t count = 0;
-    for (auto it = state().pages.begin(); it != state().pages.end() && count < writes.size() &&
-         state().clean_pages + count < ready_limit && ReclaimClock::now() < deadline;) {
-      const auto index = it++->first;
-      auto* page = find_page(index);
-      if (!page || !page->packed || page->clean) continue;
+    const auto selection_limit = std::min(writes.size(), ready_limit - state().clean_pages);
+    const auto visit_limit = std::min(state().pages.size(), 4 * kPagesPerTable);
+    std::size_t count = 0, candidates = 0;
+    auto it = state().pages.lower_bound(state().preparation_cursor);
+    for (std::size_t visited = 0; visited < visit_limit && candidates < selection_limit &&
+         state().dense_pages > state().clean_pages && ReclaimClock::now() < deadline; ++visited) {
+      if (it == state().pages.end()) it = state().pages.begin();
+      const auto current = it++;
+      const auto index = current->first;
+      auto& page = current->second;
+      state().preparation_cursor = index + 1;
+      if (!page.packed || page.clean) continue;
+      ++candidates;
       const auto before = allocated_bytes();
       if (compact_page(index, (3 * kPageSize / 4 - kPatternSize) / sizeof(Patch))) {
         const auto released = before - allocated_bytes();
@@ -675,10 +700,14 @@ class EtherStateRam {
         else ++result.compact_up_to_3k;
       } else {
         ++result.dense_pages;
-        writes[count++] = {index, page->packed->data()};
+        writes[count++] = {index, page.packed->data()};
       }
     }
-    if (!count || ReclaimClock::now() >= deadline) return result;
+    if (!count) return result;
+    if (ReclaimClock::now() >= deadline) {
+      state().preparation_cursor = writes[0].page;
+      return result;
+    }
     try {
       const auto committed = state().backing->prepare_pages(writes.data(), count, deadline);
       if (committed > count) throw std::logic_error("Backing returned an invalid committed prefix");
@@ -689,7 +718,11 @@ class EtherStateRam {
       }
       result.backed_pages = committed;
       state().backing_writes += committed;
-    } catch (...) { result.backing_failed = true; }
+      if (committed < count) state().preparation_cursor = writes[committed].page;
+    } catch (...) {
+      state().preparation_cursor = writes[0].page;
+      result.backing_failed = true;
+    }
     return result;
   }
 
@@ -743,6 +776,7 @@ class EtherStateRam {
     state().backing_timed_attempts = state().backing_read_ns = state().backing_read_max_ns = 0;
     state().backing_lock_wait_ns = state().cache_hits = state().backing_overwrites = 0;
     state().cache_age = state().clean_reclaims = state().reclaim_cursor = state().compact_cursor = 0;
+    state().preparation_cursor = 0;
     state().pressure = {};
     for (auto& line : state().cache) { line.page = UINT64_MAX; line.age = 0; line.bytes.reset(); }
     if (state().backing) state().backing->reset();
@@ -992,6 +1026,12 @@ class EtherStateRam {
     if (!page || !page->packed || pinned(*page)) return false;
     std::uint64_t background;
     std::memcpy(&background, page->packed->data(), kPatternSize);
+    if (!max_changes) {
+      const auto* bytes = page->packed->data();
+      if (std::memcmp(bytes, bytes + kPatternSize, kPageSize - kPatternSize) != 0) return false;
+      set_rule(index, background);
+      return true;
+    }
     std::size_t changes = 0, nonzero = 0;
     for (std::size_t word = 0; word < kPageSize / kPatternSize; ++word) {
       std::uint64_t bits;
@@ -1075,11 +1115,14 @@ class EtherStateRam {
     if (clean) { ++state().clean_reclaims; ++state().pressure.clean_reclaims; }
     return true;
   }
-  void ensure_space(std::uint64_t additional, std::uint64_t excluded_first,
-                      std::uint64_t excluded_last, std::size_t requested) {
+  std::uint64_t resident_payload_limit() const noexcept {
     const auto cache = state().cache_policy == BackingCachePolicy::Adaptive ?
         state().cache.size() * kPageSize : 0;
-    const auto available = state().payload_cap >= cache ? state().payload_cap - cache : 0;
+    return state().payload_cap >= cache ? state().payload_cap - cache : 0;
+  }
+  void ensure_space(std::uint64_t additional, std::uint64_t excluded_first,
+                      std::uint64_t excluded_last, std::size_t requested) {
+    const auto available = resident_payload_limit();
     if (additional <= available && allocated_bytes() <= available - additional) return;
     const auto start = ReclaimClock::now();
     ++state().pressure.forced_reclaims;
@@ -1096,7 +1139,10 @@ class EtherStateRam {
         ++state().pressure.compact_attempts;
         const auto compact_start = ReclaimClock::now();
         const auto before = allocated_bytes();
-        const bool compacted = compact_page(index);
+        // At a hard unbacked limit, only release exact repeating/zero pages
+        // during the guest write. Maintenance can compact sparse deltas
+        // separately, without changing admission at an instruction boundary.
+        const bool compacted = state().backing ? compact_page(index) : compact_page(index, 0);
         state().pressure.compact_ns += elapsed(compact_start);
         state().pressure.selection_ns += elapsed(selection);
         if (compacted) {

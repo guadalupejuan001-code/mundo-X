@@ -822,7 +822,9 @@ public:
 
     // Call between CPU transactions. Walk at most max_pages resident page
     // slots, resuming from the last address, and skip unallocated tables.
-    std::size_t compact_repeating_pages(std::size_t max_pages) noexcept {
+    std::size_t compact_repeating_pages(std::size_t max_pages,
+                                        std::size_t* visited_pages = nullptr) noexcept {
+        if (visited_pages) *visited_pages = 0;
         if (!max_pages || !allocated_pages_ || has_pinned_writes()) return 0;
         const auto pages = logical_bytes_ / kPageSize + (logical_bytes_ % kPageSize != 0);
         auto remaining = pages;
@@ -842,6 +844,7 @@ public:
                     ++visited;
                 }
                 max_pages -= static_cast<std::size_t>(visited);
+                if (visited_pages) *visited_pages += static_cast<std::size_t>(visited);
             }
             compaction_page_ += visited;
             if (compaction_page_ == pages) compaction_page_ = 0;

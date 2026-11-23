@@ -77,7 +77,14 @@ void verify_adaptive_ram_compaction() {
     cpu.write16(0x7c00, 0xfeeb);
     for (unsigned page = 0; page < pages; ++page)
         cpu.write8(first_page + page * page_size, std::uint8_t(page + 1));
-    cpu.memory.fill(0x30000, 0x73, page_size);
+    const auto write_dense_pattern = [&](std::uint64_t address, std::uint8_t value) {
+        // A full-page fill can encode a rule immediately. Exercise the sweep
+        // with retired stores whose page data still resides in a dense buffer.
+        std::array<std::uint8_t, page_size> bytes;
+        bytes.fill(value);
+        cpu.memory.write_block(address, bytes.data(), bytes.size());
+    };
+    write_dense_pattern(0x30000, 0x73);
     pc.enable_boot_acceleration();
     const auto run_steps = [&](std::uint64_t amount) {
         const auto target = cpu.instructions + amount;
@@ -93,6 +100,8 @@ void verify_adaptive_ram_compaction() {
     run_steps(base_interval);
     need(stats.passes == 1 && stats.pages_compacted == 1 && stats.interval_steps == 2 * base_interval,
          "A low-yield RAM sweep must increase the interval");
+    need(stats.pages_scanned > stats.pages_compacted && stats.pages_scanned <= 256,
+         "A RAM sweep must account for visited slots within its work budget");
     run_steps(2 * base_interval - 1);
     need(stats.passes == 1, "RAM sweep did not honor the increased interval");
     run_steps(1);
@@ -103,6 +112,9 @@ void verify_adaptive_ram_compaction() {
     need(stats.passes == 4 && stats.pages_compacted == 1 && stats.interval_steps == 8 * base_interval,
          "Several unproductive sweeps must stop increasing the interval at the bound");
 
+    // Put an exactly repeating page ahead of the code/data deltas. The
+    // pressure budget here assumes an eight-byte rule on either backend.
+    write_dense_pattern(0x1000, 0x2e);
     using Adjustment = cosmic_pc::SparseRam::BudgetAdjustment;
     const auto resident_budget = cpu.memory.budget_bytes();
     const auto reclaim_target = cpu.memory.allocated_bytes() - page_size + 8;
@@ -114,7 +126,7 @@ void verify_adaptive_ram_compaction() {
          "Fixture could not restore the resident memory budget");
 
     for (unsigned page = 0; page < pages; ++page)
-        cpu.memory.fill(first_page + page * page_size, std::uint8_t(page + 2), page_size);
+        write_dense_pattern(first_page + page * page_size, std::uint8_t(page + 2));
     run_steps(8 * base_interval);
     need(stats.passes == 5 && stats.pages_compacted == 1 + pages && stats.interval_steps == base_interval,
          "A productive sweep must reconsider rewritten pages and restore the usual interval");
@@ -124,11 +136,14 @@ void verify_adaptive_ram_compaction() {
         need(std::all_of(bytes.begin(), bytes.end(), [&](auto byte) { return byte == page + 2; }),
              "Adaptive compaction changed a rewritten page's bytes");
     }
+    const auto scanned = stats.pages_scanned;
     pc.reset();
     need(stats.passes == 0 && stats.pages_compacted == 0 && stats.interval_steps == base_interval,
          "Guest reset must restore the default compaction interval and clear its counters");
+    need(stats.pages_scanned == 0, "Guest reset retained the previous sweep's scanned slots");
     std::cout << "PRIME_RAM_ADAPTIVE_COMPACTION_PASS max_interval=" << 8 * base_interval
-              << " pages_reconsidered=" << pages << " pressure_independent=1 reset=1\n";
+              << " pages_reconsidered=" << pages << " pages_scanned=" << scanned
+              << " pressure_independent=1 reset=1\n";
 }
 }
 

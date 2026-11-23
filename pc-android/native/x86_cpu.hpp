@@ -4004,7 +4004,9 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
       if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
       mundo_x::ether_next::repeat_ram_value(memory, target, get_reg(EAX, width_bytes), width_bytes, bytes);
     }
-    if (completes_page&&(!pio||input)) memory.compact_repeating_page(target);
+    // Keep sparse deltas for RAM maintenance. At the end of a hot REP
+    // span, only compact exact zero or repeating pages.
+    if (completes_page && (!pio || input)) memory.compact_exact_repeating_page(target);
     if(!pio||input)put_index(EDI, dst + (backward ? -std::uint64_t(bytes) : bytes));
     put_index(ECX, remaining - elements);
     if (remaining == elements) eip = cursor_ & code_mask();
@@ -4237,7 +4239,7 @@ inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
     // Preflight one page as in the scalar store. If backing fails, the
     // interpreter still reports the exact failing guest instruction.
     mundo_x::ether_next::repeat_ram_value(memory, target, 0, 1, count);
-    if (count == room) memory.compact_repeating_page(target);
+    if (count == room) memory.compact_exact_repeating_page(target);
   } catch (const std::exception&) {
     return 0;
   }

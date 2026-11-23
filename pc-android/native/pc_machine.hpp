@@ -113,6 +113,7 @@ class PcMachine {
   struct RamCompactionStats {
     std::uint64_t passes = 0, pages_compacted = 0;
     unsigned interval_steps = 0;
+    std::uint64_t pages_scanned = 0;
   };
   const RamCompactionStats& ram_compaction_stats() const noexcept { return ram_compaction_; }
   // Keep the logical sampler's batch boundaries when using a separate clock.
@@ -638,6 +639,10 @@ class PcMachine {
      <<",\"video_aperture_bytes\":"<<(PcVideo::available(cpu.memory)?PcVideo::kApertureBytes:0)
      <<",\"ram_policy\":\"zero-pages-on-demand+ether-window\""
      <<",\"ram_repeating_compaction\":"<<(boot_acceleration_enabled_?"true":"false")
+     <<",\"ram_compaction_passes\":"<<ram_compaction_.passes
+     <<",\"ram_compaction_pages_scanned\":"<<ram_compaction_.pages_scanned
+     <<",\"ram_compaction_pages_compacted\":"<<ram_compaction_.pages_compacted
+     <<",\"ram_compaction_interval_steps\":"<<ram_compaction_.interval_steps
      <<",\"engine\":\"cosmic-pc-own-x86\""
      <<",\"cpuid_vendor\":"<<quote(cpu.cpuid_vendor())
      <<",\"page_walks\":"<<cpu.page_walks<<",\"instruction_page_hits\":"<<cpu.instruction_page_hits
@@ -794,9 +799,11 @@ class PcMachine {
     if (!boot_acceleration_enabled_ || cpu.instructions < next_ram_compaction_ ||
         !cpu.memory.allocated_pages() || cpu.memory.has_pinned_writes()) return;
     const BootTiming::Scope timing(boot_timing_ ? &*boot_timing_ : nullptr, BootTimePart::Compaction);
-    const auto compacted = cpu.memory.compact_repeating_pages(kRamCompactionPagesPerPass);
+    std::size_t scanned = 0;
+    const auto compacted = cpu.memory.compact_repeating_pages(kRamCompactionPagesPerPass, &scanned);
     ++ram_compaction_.passes;
     ram_compaction_.pages_compacted += compacted;
+    ram_compaction_.pages_scanned += scanned;
     // Keep moving the cursor even if RAM is mostly dense. A bounded gap
     // lets later writes be reconsidered and keeps pressure reclaim independent.
     ram_compaction_.interval_steps = compacted >= kRamCompactionProductivePages

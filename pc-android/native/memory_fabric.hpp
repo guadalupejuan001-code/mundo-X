@@ -578,11 +578,19 @@ class MemoryFabric {
   }
   void clear() noexcept { reset_zero(); }
   std::size_t trim_zero_pages() noexcept { return ram_.trim_zero_pages(); }
-  std::size_t compact_repeating_pages(std::size_t max_pages) noexcept {
-    return ram_.compact_repeating_pages(max_pages);
+  std::size_t compact_repeating_pages(std::size_t max_pages,
+                                      std::size_t* visited_pages = nullptr) noexcept {
+    return ram_.compact_repeating_pages(max_pages, visited_pages);
   }
   bool compact_repeating_page(std::uint64_t offset) noexcept {
     return ram_.compact_repeating_page(offset);
+  }
+  bool compact_exact_repeating_page(std::uint64_t offset) noexcept {
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    return ram_.compact_exact_repeating_page(offset);
+#else
+    return ram_.compact_repeating_page(offset);
+#endif
   }
 
  private:

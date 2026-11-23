@@ -29,6 +29,7 @@ struct Backing final : Ram::PageBacking {
   std::map<std::uint64_t, Page> pages;
   bool fail_write = false, fail_read = false;
   unsigned writes = 0;
+  std::size_t prepare_limit = kMaxWritePages;
   void read(std::uint64_t page, std::uint8_t* bytes) override {
     if (fail_read) throw std::runtime_error("injected read failure");
     std::memcpy(bytes, pages.at(page).data(), page_size);
@@ -40,6 +41,7 @@ struct Backing final : Ram::PageBacking {
   std::size_t prepare_pages(const PageWrite* input, std::size_t count,
                             Ram::ReclaimClock::time_point) override {
     if (fail_write) throw std::runtime_error("injected prepare failure");
+    count = std::min(count, prepare_limit);
     auto candidate = pages;
     for (std::size_t i = 0; i < count; ++i)
       std::memcpy(candidate[input[i].page].data(), input[i].bytes, page_size);
@@ -161,6 +163,40 @@ void test_pressure_and_reference() {
        "reset lost instrumentation configuration or retained backing");
 }
 
+void test_periodic_compaction_budget() {
+  Ram ram(8 * page_size, 8 * page_size);
+  ram.write_byte(0, 0xc1);
+  ram.write_byte(page_size, 0x92);
+  std::array<std::uint8_t, page_size> contents{};
+  ram.write_block(2 * page_size, contents.data(), contents.size());
+  contents.fill(0x7b);
+  ram.write_block(3 * page_size, contents.data(), contents.size());
+  ram.fill(4 * page_size, 0x5f, page_size);
+  need(ram.allocated_pages() == 4 && ram.pattern_pages() == 1,
+       "full-page fill must remain immediately compact");
+
+  std::size_t visited = 0;
+  need(ram.compact_repeating_pages(2, &visited) == 0 && visited == 2,
+       "periodic compaction exceeded its visit budget or compressed deltas");
+  {
+    const auto pins = ram.pin_writes();
+    need(ram.compact_repeating_pages(2, &visited) == 0 && visited == 0,
+         "periodic compaction ran inside a write journal");
+  }
+  need(ram.compact_repeating_pages(2, &visited) == 2 && visited == 2 &&
+           ram.allocated_pages() == 2 && ram.pattern_pages() == 2,
+       "periodic compaction did not resume from the first unvisited slot");
+  std::array<std::uint8_t, 3 * page_size> actual{};
+  ram.read_block(2 * page_size, actual.data(), actual.size());
+  need(std::equal(contents.begin(), contents.end(), actual.begin() + page_size) &&
+           actual.front() == 0 && actual.back() == 0x5f,
+       "compacting a repeating or all-zero page changed guest contents");
+  ram.write_block(0, contents.data(), contents.size());
+  need(ram.compact_repeating_pages(2, &visited) == 1 && visited == 2 &&
+           ram.read_byte(0) == 0x7b && ram.read_byte(page_size) == 0x92,
+       "sweep failed to wrap its cursor and revisit a rewritten page");
+}
+
 void test_failures_pins_and_clean_reclaim() {
   Ram ram(4 * page_size, 2 * page_size);
   auto backing = std::make_unique<Backing>();
@@ -188,6 +224,35 @@ void test_failures_pins_and_clean_reclaim() {
   need(ram.adjust_payload_budget(page_size, 0, Ram::ReclaimClock::time_point::max(), 1) ==
        Ram::BudgetAdjustment::Applied, "clean reclaim did not apply lower budget");
   need(host->writes == writes && ram.read_byte(0) == data[0], "clean reclaim rewrote backing or lost data");
+}
+
+void test_incremental_reclaim_preparation() {
+  constexpr auto compact_prefix = 4 * cosmic_pc::SparseRam::kPagesPerTable;
+  constexpr auto first_dense = compact_prefix + 8;
+  Ram ram((first_dense + 2) * page_size, 8 * page_size);
+  auto backing = std::make_unique<Backing>();
+  auto* host = backing.get();
+  ram.attach_page_backing(std::move(backing));
+  host->prepare_limit = 1;
+  ram.fill(0, 0x65, compact_prefix * page_size);
+  const auto first = varied(19), second = varied(39);
+  ram.write_block(first_dense * page_size, first.data(), first.size());
+  ram.write_block((first_dense + 1) * page_size, second.data(), second.size());
+
+  const auto no_deadline = Ram::ReclaimClock::time_point::max();
+  const auto skipped = ram.prepare_reclaim(2, no_deadline);
+  need(!skipped.dense_pages && !skipped.backed_pages && host->pages.empty(),
+       "preparation exceeded its bound when walking compact states");
+  const auto partial = ram.prepare_reclaim(2, no_deadline);
+  need(partial.dense_pages == 2 && partial.backed_pages == 1 && host->pages.at(first_dense) == first,
+       "preparation did not resume at high RAM or honor the committed prefix");
+  const auto resumed = ram.prepare_reclaim(2, no_deadline);
+  need(resumed.dense_pages == 1 && resumed.backed_pages == 1 && host->pages.at(first_dense + 1) == second &&
+           ram.clean_backing_pages() == 2,
+       "partial prewrite did not resume with the uncommitted page");
+  need(ram.read_byte(0) == 0x65 && ram.read_byte(first_dense * page_size) == first[0] &&
+           ram.read_byte((first_dense + 1) * page_size) == second[0],
+       "backing preparation changed ordinary RAM");
 }
 
 void test_compact_budget_and_fill_preflight() {
@@ -389,8 +454,10 @@ void test_quantum_routes_and_rollback() {
 int main() {
   try {
     test_capacity_and_rules();
+    test_periodic_compaction_budget();
     test_pressure_and_reference();
     test_failures_pins_and_clean_reclaim();
+    test_incremental_reclaim_preparation();
     test_compact_budget_and_fill_preflight();
     test_implicit_zero_fill_inside_journal();
     test_full_overwrite_and_lazy_shared_cache();
