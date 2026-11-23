@@ -440,6 +440,70 @@ void windows_profile_trap_flag() {
   }
   std::cout << "WINDOWS_X64_TRAP_FLAG_PASS\n";
 }
+
+void windows_profile_crc32c() {
+  using cosmic_pc::FaultCode;
+  constexpr std::uint64_t guest = 0xa000, seed = 0xabcdef11a5c37f32ULL;
+  constexpr std::uint64_t input = 0x8877665544332211ULL;
+  constexpr auto flags = 2U | Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::DF | Cpu::OF;
+  Cpu cpu(4U << 20);
+  cpu.use_windows_x64_profile();
+  boot64(cpu);
+  cpu.idtr = {0, 0}; // Observe the original exception in negative cases.
+
+  const auto verify = [&](std::initializer_list<std::uint8_t> code, std::uint32_t expected) {
+    program(cpu, guest, code);
+    cpu.regs[Cpu::EAX] = seed;
+    cpu.regs[Cpu::ECX] = cpu.regs[Cpu::R8] = input;
+    cpu.eflags = flags;
+    const auto steps = cpu.instructions;
+    const auto crc_steps = cpu.crc32c_retired;
+    const auto status = cpu.step();
+    if (cpu.fault) throw std::runtime_error(cpu.fault->describe());
+    check(status == StepResult::Executed && cpu.regs[Cpu::EAX] == expected &&
+          cpu.regs[Cpu::ECX] == input && cpu.regs[Cpu::R8] == input && cpu.eflags == flags &&
+          cpu.eip == guest + code.size() && cpu.instructions == steps + 1 &&
+          cpu.crc32c_retired == crc_steps + 1,
+          "CRC32C must retire once, write the zero-extended hardware result, and preserve flags/sources");
+  };
+
+  // Hard-coded results from a hardware SSE4.2 oracle, including source/destination aliasing.
+  verify({0xf2,0x0f,0x38,0xf0,0xc4}, 0xfef69210U); // EAX, AH
+  verify({0xf2,0x49,0x0f,0x38,0xf0,0xc0}, 0x3348be55U); // RAX, R8B
+  verify({0x66,0xf2,0x0f,0x38,0xf1,0xc1}, 0xa5617858U); // EAX, CX
+  verify({0xf2,0x0f,0x38,0xf1,0xc1}, 0x54cf6d27U); // EAX, ECX
+  verify({0xf2,0x49,0x0f,0x38,0xf1,0xc0}, 0x40f622dfU); // RAX, R8
+  verify({0x66,0xf2,0x49,0x0f,0x38,0xf1,0xc0}, 0x40f622dfU); // REX.W overrides 66
+  cpu.write64(0xbfff, input);
+  verify({0xf2,0x48,0x0f,0x38,0xf1,0x05,0xf5,0x1f,0x00,0x00}, 0x40f622dfU); // [RIP+0x1ff5]
+  check(cpu.read64(0xbfff) == input, "CRC32C must not write its unaligned memory source");
+
+  cpu.regs[Cpu::EAX] = seed;
+  cpu.regs[Cpu::EBX] = 0x1ffffc; // First four bytes mapped, last four bytes past the 2-MiB page.
+  const auto steps = cpu.instructions;
+  const auto crc_steps = cpu.crc32c_retired;
+  program(cpu, guest, {0xf0,0xf2,0x48,0x0f,0x38,0xf1,0x03}); // Illegal LOCK CRC32 RAX,[RBX].
+  check(cpu.step() == StepResult::Faulted && cpu.fault && cpu.fault->code == FaultCode::InvalidInstruction &&
+        cpu.regs[Cpu::EAX] == seed && cpu.eflags == flags && cpu.eip == guest &&
+        cpu.instructions == steps && cpu.crc32c_retired == crc_steps,
+        "LOCK CRC32C must raise #UD before accessing its faulting memory operand");
+  program(cpu, guest, {0xf2,0x48,0x0f,0x38,0xf1,0x03}); // CRC32 RAX,[RBX].
+  check(cpu.step() == StepResult::Faulted && cpu.fault && cpu.fault->code == FaultCode::PageFault &&
+        cpu.fault->linear_address == 0x200000 && cpu.cr2 == 0x200000 && cpu.regs[Cpu::EAX] == seed &&
+        cpu.eflags == flags && cpu.eip == guest && cpu.instructions == steps &&
+        cpu.crc32c_retired == crc_steps,
+        "a split CRC32C read must report the first unmapped byte and preserve guest state");
+
+  program(cpu, guest, {0x0f,0xa2}); // CPUID(1).
+  cpu.regs[Cpu::EAX] = 1;
+  check(cpu.step() == StepResult::Executed && !(cpu.regs[Cpu::ECX] & (1U << 20)),
+        "implementing CRC32C alone must not advertise the complete SSE4.2 instruction set");
+  cpu.reset_for_startup_ipi(0, guest);
+  check(cpu.crc32c_retired == crc_steps, "INIT/SIPI must preserve cumulative CRC32C telemetry");
+  cpu.reset();
+  check(cpu.crc32c_retired == 0, "full reset must clear CRC32C telemetry");
+  std::cout << "WINDOWS_X64_CRC32C_PASS widths=4 flags=1 rex=1 memory=1 page_fault=1 lock=1\n";
+}
 }
 int main(){
  try {
@@ -449,6 +513,7 @@ int main(){
    windows_profile_legacy_pages();
    windows_profile_io_debug();
    windows_profile_trap_flag();
+   windows_profile_crc32c();
    std::cout<<"REVERSE_WINDOWS_C09R_CPU_READINESS_PASS checks="<<checks
             <<" Windows10_ready=false windows_iso_tested=false\n";
    return 0;

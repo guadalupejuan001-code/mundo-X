@@ -329,6 +329,7 @@ class Cpu {
   std::optional<Fault> fault;
   std::uint64_t instructions = 0;
   std::uint64_t wbinvd_retired = 0;
+  std::uint64_t crc32c_retired = 0;
   // Diagnostic counter: one increment per actual IA-32e page-table walk.
   // Used to prove that multi-byte accesses do not repeat the same walk.
   std::uint64_t page_walks = 0;
@@ -481,6 +482,7 @@ class Cpu {
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
 #endif
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0; wbinvd_retired = 0;
+    crc32c_retired = 0;
     instruction_page_ = {};
     instruction_page_hits = 0;
     instruction_page_reuses = 0;
@@ -494,10 +496,12 @@ class Cpu {
     const auto offset = tsc_offset_;
     const auto base = tsc_local_base_cycles_ + (shared_clock_ ? 0 : clock_cycles());
     const auto accesses = tsc_access_stats_;
+    const auto crc32c_steps = crc32c_retired;
     reset(cs, ip);
     tsc_offset_ = offset;
     tsc_local_base_cycles_ = base;
     tsc_access_stats_ = accesses;
+    crc32c_retired = crc32c_steps;
   }
   // This CPU asserts FERR# as soon as the unmasked condition is pending.
   // An asserted IGNNE# allows a waiting instruction to execute while the
@@ -4908,6 +4912,33 @@ inline void Cpu::extended() {
     return;
   }
   switch (op) {
+    case 0x38: { // F2 0F 38 F0/F1 CRC32C. Other SSE4.2 instructions are not advertised.
+      if (repeat_ != 0xf2) fail("two-byte opcode is not implemented", FaultCode::UnsupportedOpcode);
+      const auto subopcode = fetch8();
+      if (subopcode != 0xf0 && subopcode != 0xf1)
+        fail("F2 0F 38 opcode is not implemented", FaultCode::UnsupportedOpcode);
+      const auto m = modrm();
+      const unsigned source_size = subopcode == 0xf0 ? 1 : bytes;
+      auto source = get(m.rm, source_size);
+      auto crc = std::uint32_t(get_reg(m.reg, 4));
+      static constexpr auto table = [] {
+        std::array<std::uint32_t, 256> entries{};
+        for (unsigned i = 0; i < entries.size(); ++i) {
+          auto remainder = std::uint32_t(i);
+          for (unsigned bit = 0; bit < 8; ++bit)
+            remainder = (remainder >> 1) ^ ((remainder & 1U) ? 0x82f63b78U : 0U);
+          entries[i] = remainder;
+        }
+        return entries;
+      }();
+      for (unsigned i = 0; i < source_size; ++i) {
+        crc = (crc >> 8) ^ table[(crc ^ source) & 0xffU];
+        source >>= 8;
+      }
+      put_reg(m.reg, 4, crc);
+      ++crc32c_retired;
+      return;
+    }
     case 0x5a: sse2_convert_precision();return;
     case 0x5b: sse2_convert_dword();return;
     case 0x52: case 0x53: sse_approximate(op);return;
