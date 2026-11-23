@@ -395,6 +395,87 @@ void sse_copy_loops() {
     std::cout << "ETHER_SSE_COPY_LOOP_PASS variants=2 paging=1 state=1 device_bound=1\n";
 }
 
+void sse_fill_loop() {
+    constexpr std::uint8_t code[]{
+        0x0f,0x29,0x01, 0x0f,0x29,0x41,0x10, 0x48,0x81,0xc1,0x80,0x00,0x00,0x00,
+        0x0f,0x29,0x41,0xa0, 0x0f,0x29,0x41,0xb0, 0x49,0xff,0xc9,
+        0x0f,0x29,0x41,0xc0, 0x0f,0x29,0x41,0xd0, 0x0f,0x29,0x41,0xe0,
+        0x0f,0x29,0x41,0xf0, 0x75,0xd5};
+    constexpr unsigned rounds = 9, steps_per_round = 11, vector_bytes = 16, round_bytes = 128;
+    constexpr std::uint64_t destination = 0x2ce80, page_boundary = 0x2d000;
+    PcMachine scalar(4U << 20), fast(4U << 20);
+    for (auto* pc : {&scalar, &fast}) {
+        boot(*pc, true);
+        auto& cpu = pc->cpu;
+        cpu.write8(destination - 1, 0x32);
+        cpu.write8(destination + rounds * round_bytes, 0x25);
+        cpu.memory.write_block(entry, code, sizeof(code));
+        cpu.cr0 &= ~0xcU;
+        cpu.cr4 |= 0x200U;
+        cpu.eip = entry;
+        cpu.halted = false;
+        cpu.eflags = 2 | Cpu::CF | Cpu::DF | Cpu::OF;
+        cpu.regs[Cpu::ECX] = destination;
+        cpu.regs[Cpu::R9] = rounds;
+        for (unsigned i = 0; i < vector_bytes; ++i) cpu.xmm[0][i] = std::uint8_t(0xd0 + i);
+        for (unsigned i = 0; i < steps_per_round; ++i)
+            require(cpu.step() == StepResult::Executed, "could not seed the SSE fill loop");
+        require(cpu.eip == entry, "SSE fill backedge did not return to its entry");
+    }
+
+    auto& cpu = fast.cpu;
+    const auto retired = cpu.instructions;
+    const auto original_destination = cpu.regs[Cpu::ECX];
+    const auto denied = [&] {
+        const auto regs = cpu.regs;
+        const auto flags = cpu.eflags;
+        require(cpu.try_counter_loop_batch(3 * steps_per_round) == 0 && cpu.instructions == retired &&
+                    cpu.regs == regs && cpu.eflags == flags && cpu.eip == entry && !cpu.fault &&
+                    cpu.read64(original_destination) == 0,
+                "rejected SSE fill changed guest state");
+    };
+    cpu.cr0 |= 8U;
+    denied();
+    cpu.cr0 &= ~8U;
+    cpu.regs[Cpu::ECX] = original_destination + 1;
+    denied();
+    cpu.regs[Cpu::ECX] = page_boundary - round_bytes;
+    denied();
+    cpu.regs[Cpu::ECX] = entry;
+    denied();
+    require(cpu.read8(entry) == code[0], "SSE fill overwrote its executable bytes");
+    cpu.regs[Cpu::ECX] = original_destination;
+    cpu.write8(entry + 2, 0x09); // The edited first MOVAPS would use XMM1.
+    denied();
+    cpu.write8(entry + 2, code[2]);
+    require(!cpu.try_counter_loop_batch(2 * steps_per_round - 1), "SSE fill exceeded its grant");
+
+    fast.enable_boot_acceleration();
+    constexpr unsigned device_limit = 3 * steps_per_round;
+    unsigned ticks = 0;
+    fast.device_step_hook = [&] { ++ticks; };
+    fast.device_batch_limit_hook = [device_limit](unsigned budget) { return std::min(budget, device_limit); };
+    fast.device_batch_advance_hook = [&](unsigned extra) {
+        require(extra < device_limit, "SSE fill crossed a device observation boundary");
+        ticks += extra;
+    };
+    constexpr unsigned steps = (rounds - 1) * steps_per_round;
+    fast.run(steps);
+    scalar.run(steps);
+    const auto& expected = scalar.cpu;
+    require(ticks == steps && cpu.eip == entry + sizeof(code) && cpu.regs == expected.regs &&
+                cpu.eflags == expected.eflags && cpu.xmm == expected.xmm && !cpu.fault &&
+                cpu.clock_cycles() == expected.clock_cycles() && cpu.last_decoded_bytes() == expected.last_decoded_bytes() &&
+                fast.boot_acceleration().counter_loop_steps == steps,
+            "SSE fill changed architectural state or device accounting");
+    for (unsigned i = 0; i < rounds * round_bytes; ++i)
+        require(cpu.read8(destination + i) == cpu.xmm[0][i % vector_bytes] &&
+                    cpu.read8(destination + i) == expected.read8(destination + i), "SSE fill changed RAM");
+    require(cpu.read8(destination - 1) == 0x32 && cpu.read8(destination + rounds * round_bytes) == 0x25,
+            "SSE fill overwrote memory outside its destination");
+    std::cout << "ETHER_SSE_FILL_LOOP_PASS architectural_state=1 page_boundary=1 edited_code=1 device_bound=1\n";
+}
+
 // A controlled streaming fill with the sampled stores and branch offsets.
 constexpr std::uint8_t kMovntdqFill[]{
     0x66,0x0f,0xe7,0x01,      0x66,0x0f,0xe7,0x41,0x10, 0x66,0x0f,0xe7,0x41,0x20, 0x66,0x0f,0xe7,0x41,0x30,
@@ -1026,6 +1107,7 @@ int main(int argc, char** argv) {
         guarded_accumulator_dispatch();
         counted_calls();
         sse_copy_loops();
+        sse_fill_loop();
         movntdq_store_batches();
         mixed_movntdq_registers();
         disp32_movntdq_registers();

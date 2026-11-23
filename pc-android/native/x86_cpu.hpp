@@ -465,7 +465,7 @@ class Cpu {
     last_idt_load_.reset();
     near_calls_written_ = near_calls_count_ = 0;
     last_relative_call_return_ip_ = 0;
-    last_xmm_copy_end_ip_ = 0;
+    last_xmm_memory_loop_end_ip_ = 0;
     last_immediate_rotate_ip_ = UINT64_MAX;
     last_variable_rotate_ip_ = UINT64_MAX;
     last_movntdq_end_ip_ = UINT64_MAX;
@@ -597,7 +597,7 @@ class Cpu {
     if (length >= 12 && length <= 17 && rotate_xor_loop_batch_candidate()) return true;
     if (length >= 17) {
       if (!is_long_mode()) return false;
-      if (sse_copy_loop_tail(length, branch_bytes) ||
+      if (sse_memory_loop_tail(length, branch_bytes) ||
           (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())) return true;
       if (length > ether_arm64::Block::kMaxBytes ||
           last_relative_call_return_ip_ <= eip || last_relative_call_return_ip_ >= start_ip_) return false;
@@ -993,7 +993,7 @@ class Cpu {
   std::optional<IdtLoad> last_idt_load_;
   std::array<NearCall, InterruptFaultOrigin::kRecentCalls> recent_near_calls_{};
   std::uint64_t last_relative_call_return_ip_ = 0;
-  std::uint64_t last_xmm_copy_end_ip_ = 0;
+  std::uint64_t last_xmm_memory_loop_end_ip_ = 0;
   std::uint64_t last_immediate_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_variable_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_movntdq_end_ip_ = UINT64_MAX;
@@ -1084,12 +1084,12 @@ class Cpu {
   std::optional<CountedCallLoop> counted_call_loop_;
   std::optional<CountedCallLoop> decode_counted_call_loop(const std::uint8_t* code, unsigned length);
   std::uint64_t try_counted_call_loop_batch(std::uint64_t step_budget);
-  static constexpr unsigned kSseCopyLoopBytes = 47, kStreamingSseCopyLoopBytes = 52;
-  bool sse_copy_loop_tail(std::uint64_t length, unsigned branch_bytes) const noexcept {
-    return (length == kSseCopyLoopBytes || length == kStreamingSseCopyLoopBytes) &&
-        branch_bytes == 2 && last_xmm_copy_end_ip_ == start_ip_;
+  static constexpr unsigned kSseFillLoopBytes = 43, kSseCopyLoopBytes = 47, kStreamingSseCopyLoopBytes = 52;
+  bool sse_memory_loop_tail(std::uint64_t length, unsigned branch_bytes) const noexcept {
+    return (length == kSseFillLoopBytes || length == kSseCopyLoopBytes || length == kStreamingSseCopyLoopBytes) &&
+        branch_bytes == 2 && last_xmm_memory_loop_end_ip_ == start_ip_;
   }
-  std::uint64_t try_sse_copy_loop_batch(std::uint64_t step_budget, unsigned length);
+  std::uint64_t try_sse_memory_loop_batch(std::uint64_t step_budget, unsigned length);
   static constexpr unsigned kWideMultiplyLoopBytes = 31;
   std::uint64_t try_wide_multiply_loop_batch(std::uint64_t step_budget);
   std::uint64_t try_rotate_xor_loop_batch(std::uint64_t step_budget);
@@ -4126,7 +4126,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_ether_arm64.inc"
 #include "x86_shift_loop.inc"
 #include "x86_counted_call_loop.inc"
-#include "x86_sse_copy_loop.inc"
+#include "x86_sse_memory_loop.inc"
 #include "x86_movntdq_store_batch.inc"
 #include "x86_wide_multiply_loop.inc"
 #include "x86_rotate_xor_loop.inc"
@@ -4218,8 +4218,8 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   const auto length = unsigned(cursor_ - eip);
   if (length >= 12 && length <= 17 && rotate_xor_loop_batch_candidate())
     return try_rotate_xor_loop_batch(step_budget);
-  if (sse_copy_loop_tail(length, unsigned(decoded_.size())))
-    return try_sse_copy_loop_batch(step_budget, length);
+  if (sse_memory_loop_tail(length, unsigned(decoded_.size())))
+    return try_sse_memory_loop_batch(step_budget, length);
   if (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())
     return try_wide_multiply_loop_batch(step_budget);
   if (length >= 17) return try_counted_call_loop_batch(step_budget);
@@ -5060,7 +5060,10 @@ inline void Cpu::extended() {
       const bool aligned=op==0x28||op==0x29;
       if(op==0x10||op==0x28)xmm[m.reg]=read_xmm_operand(m.rm,aligned);
       else write_xmm_operand(m.rm,xmm[m.reg],aligned);
-      if(op==0x28 && decoded_.size()==3 && decoded_[2]==0xc4) last_xmm_copy_end_ip_=cursor_;
+      // The full SSE memory loop is revalidated at the following backedge.
+      if ((op == 0x28 && decoded_.size() == 3 && decoded_[2] == 0xc4) ||
+          (op == 0x29 && decoded_.size() == 4 && decoded_[2] == 0x41 && decoded_[3] == 0xf0))
+        last_xmm_memory_loop_end_ip_ = cursor_;
       return;
     }
     case 0x6f: case 0x7f: { // 66 MOVDQA / F3 MOVDQU

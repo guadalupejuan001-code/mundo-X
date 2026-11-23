@@ -1,4 +1,10 @@
-inline std::uint64_t Cpu::try_sse_copy_loop_batch(std::uint64_t step_budget, unsigned length) {
+inline std::uint64_t Cpu::try_sse_memory_loop_batch(std::uint64_t step_budget, unsigned length) {
+  // Eight aligned stores repeat XMM0 without changing any vector register.
+  static constexpr std::array<std::uint8_t, kSseFillLoopBytes> cached_fill{
+      0x0f,0x29,0x01, 0x0f,0x29,0x41,0x10, 0x48,0x81,0xc1,0x80,0x00,0x00,0x00,
+      0x0f,0x29,0x41,0xa0, 0x0f,0x29,0x41,0xb0, 0x49,0xff,0xc9,
+      0x0f,0x29,0x41,0xc0, 0x0f,0x29,0x41,0xd0, 0x0f,0x29,0x41,0xe0,
+      0x0f,0x29,0x41,0xf0, 0x75,0xd5};
   // Copies four vectors per iteration. XMM0 carries the last vector across
   // iterations. The streaming form uses MOVNTPS and an advisory prefetch.
   static constexpr std::array<std::uint8_t, kSseCopyLoopBytes> cached_copy{
@@ -13,17 +19,20 @@ inline std::uint64_t Cpu::try_sse_copy_loop_batch(std::uint64_t step_budget, uns
       0x0f,0x2b,0x41,0xf0, 0x48,0x83,0xc1,0x40, 0x0f,0x18,0x44,0x11,0x40, 0x49,0xff,0xc9,
       0x0f,0x2b,0x49,0xc0, 0x0f,0x2b,0x51,0xd0, 0x0f,0x2b,0x59,0xe0,
       0x0f,0x28,0xc4, 0x75,0xcc};
+  const bool fill = length == cached_fill.size();
   const bool streaming = length == streaming_copy.size();
-  const unsigned steps_per_round = streaming ? 13 : 12;
-  constexpr unsigned vector_bytes = 16, round_bytes = 4 * vector_bytes;
+  const unsigned steps_per_round = fill ? 11 : streaming ? 13 : 12;
+  constexpr unsigned vector_bytes = 16;
+  const unsigned round_bytes = (fill ? 8 : 4) * vector_bytes;
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto cursor = regs[ECX], remaining = regs[R9];
-  if (!can_cache_translations() || !(cr0 & 0x80000000U) || cursor < vector_bytes || cursor % vector_bytes)
+  if (!can_cache_translations() || !(cr0 & 0x80000000U) || (!fill && cursor < vector_bytes) || cursor % vector_bytes)
     return 0;
-  const auto source = cursor + regs[EDX], destination = cursor - vector_bytes;
-  const auto rounds = std::min({remaining, step_budget / steps_per_round,
-      (page_bytes - source % page_bytes) / round_bytes,
+  const auto destination = fill ? cursor : cursor - vector_bytes;
+  const auto source = cursor + regs[EDX];
+  auto rounds = std::min({remaining, step_budget / steps_per_round,
       (page_bytes - destination % page_bytes) / round_bytes});
+  if (!fill) rounds = std::min(rounds, (page_bytes - source % page_bytes) / round_bytes);
   const auto bytes = unsigned(rounds) * round_bytes;
   if (rounds < 2 || cursor > UINT64_MAX - bytes) return 0;
 
@@ -33,27 +42,36 @@ inline std::uint64_t Cpu::try_sse_copy_loop_batch(std::uint64_t step_budget, uns
     if (!code) return 0;
     std::array<std::uint8_t, streaming_copy.size()> signature;
     memory.read_block(*code, signature.data(), length);
-    const auto* expected = streaming ? streaming_copy.data() : cached_copy.data();
+    const auto* expected = fill ? cached_fill.data() : streaming ? streaming_copy.data() : cached_copy.data();
     if (std::memcmp(signature.data(), expected, length) != 0) return 0;
 
-    const auto from = counted_loop_ram_address(DS, source, bytes, Access::Read);
+    const auto from = fill ? std::optional<std::uint64_t>{}
+                           : counted_loop_ram_address(DS, source, bytes, Access::Read);
+    if (!fill && !from) return 0;
     const auto to = counted_loop_ram_address(DS, destination, bytes, Access::Write);
-    if (!from || !to || (*to < *from + bytes && *from < *to + bytes) ||
+    if (!to || (from && *to < *from + bytes && *from < *to + bytes) ||
         (*to < *code + length && *code < *to + bytes) || memory.may_touch_page_tables(*to, bytes)) return 0;
 
-    // The final source vector remains in XMM0 and is stored by the guest's next iteration or tail.
     std::array<std::uint8_t, page_bytes + vector_bytes> data;
     std::copy(xmm[0].begin(), xmm[0].end(), data.begin());
-    memory.read_block(*from, data.data() + vector_bytes, bytes);
+    if (fill) {
+      for (unsigned copied = vector_bytes; copied < bytes; copied *= 2)
+        std::copy_n(data.begin(), std::min(copied, bytes - copied), data.begin() + copied);
+    } else {
+      memory.read_block(*from, data.data() + vector_bytes, bytes);
+    }
     const auto pins = memory.pin_writes();
     memory.prepare_write(*to, bytes);
     memory.write_block(*to, data.data(), bytes);
-    const auto* last = data.data() + vector_bytes + bytes - round_bytes;
-    for (unsigned i = 0; i < 4; ++i) std::copy_n(last + i * vector_bytes, vector_bytes, xmm[i + 1].begin());
-    xmm[0] = xmm[4];
+    if (!fill) {
+      // The guest's next copy round or tail stores the final source vector.
+      const auto* last = data.data() + vector_bytes + bytes - round_bytes;
+      for (unsigned i = 0; i < 4; ++i) std::copy_n(last + i * vector_bytes, vector_bytes, xmm[i + 1].begin());
+      xmm[0] = xmm[4];
+    }
     regs[ECX] = cursor + bytes;
     regs[R9] = alu(5, remaining - rounds + 1, 1, 8);
-    set_flag(CF, false); // The final ADD RCX,64 cannot carry; DEC R9 preserves CF.
+    set_flag(CF, false); // The final ADD RCX,64/128 cannot carry; DEC R9 preserves CF.
     ip_written_ = remaining != rounds;
     if (!ip_written_) eip = cursor_;
     const auto steps = rounds * steps_per_round;
