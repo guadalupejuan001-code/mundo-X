@@ -272,6 +272,72 @@ void test_incremental_reclaim_preparation() {
        "backing preparation changed ordinary RAM");
 }
 
+void test_indexed_clean_reclamation() {
+  constexpr auto compact_prefix = 4 * cosmic_pc::SparseRam::kPagesPerTable;
+  constexpr auto first = compact_prefix + 4;
+  Ram ram((first + 10) * page_size, compact_prefix * Ram::kPatternSize + 5 * page_size);
+  auto backing = std::make_unique<Backing>();
+  auto* host = backing.get();
+  ram.attach_page_backing(std::move(backing));
+  ram.fill(0, 0x65, compact_prefix * page_size);
+  for (unsigned index = 0; index < 5; ++index) {
+    const auto bytes = varied(index);
+    ram.write_block((first + 2 * index) * page_size, bytes.data(), bytes.size());
+  }
+  const auto deadline = Ram::ReclaimClock::time_point::max();
+  for (unsigned batch = 0; batch < 4 && ram.clean_backing_pages() < 5; ++batch)
+    ram.prepare_reclaim(5, deadline);
+  need(ram.clean_backing_pages() == 5 && host->writes == 5,
+       "clean index must track sparse high pages prepared after a compact prefix");
+
+  constexpr auto pinned = first * page_size;
+  constexpr auto excluded = (first + 2) * page_size;
+  const std::array<std::uint8_t, 8> crossing{{0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98}};
+  {
+    const auto pins = ram.pin_writes();
+    ram.prepare_write(pinned, page_size);
+    ram.write_block(excluded + page_size - 4, crossing.data(), crossing.size());
+    need(ram.resident_span(pinned, page_size) && ram.resident_span(excluded, page_size),
+         "indexed clean victim selection displaced pinned or excluded pages");
+  }
+  std::array<std::uint8_t, crossing.size()> restored_crossing{};
+  ram.read_block(excluded + page_size - 4, restored_crossing.data(), restored_crossing.size());
+  const auto metrics = ram.metrics();
+  need(restored_crossing == crossing && metrics.backing_clean_pages == 3 &&
+           metrics.backing_clean_reclaims == 1 && metrics.spilled_pages == 1 && host->writes == 5,
+       "clean index did not reduce forced reclaim without writing or preserve the cross-page store");
+
+  auto expected_excluded = varied(1);
+  std::copy_n(crossing.begin(), 4, expected_excluded.end() - 4);
+  for (unsigned index = 0; index < 5; ++index) {
+    auto expected = index == 1 ? expected_excluded : varied(index);
+    Page restored{};
+    ram.read_block((first + 2 * index) * page_size, restored.data(), restored.size());
+    need(restored == expected, "clean victim selection restored a stale guest value");
+  }
+
+  ram.fill(pinned, 0, page_size);
+  need(ram.clean_backing_pages() == 2 && !host->pages.count(first),
+       "erasing a clean page left its backing or its index entry live");
+  const auto target = ram.allocated_bytes() - page_size;
+  need(ram.adjust_payload_budget(target, 0, deadline, 1) == Ram::BudgetAdjustment::Applied &&
+           ram.clean_backing_pages() == 1 && host->writes == 5,
+       "paced maintenance did not reuse one remaining indexed clean page");
+  ram.reset_zero();
+  need(ram.clean_backing_pages() == 0 && ram.allocated_bytes() == 0 && host->pages.empty(),
+       "reset retained indexed clean pages or backing copies");
+
+  constexpr std::uint64_t pattern = 0x2222222222222222ULL;
+  need(ram.try_fill_repeating_page(pinned, pattern) &&
+           ram.adjust_payload_budget(0, 1) == Ram::BudgetAdjustment::Applied &&
+           ram.adjust_payload_budget(2 * page_size, 0) == Ram::BudgetAdjustment::Applied,
+       "could not create a backed compact page for promotion");
+  ram.prepare_write(pinned, page_size);
+  need(ram.clean_backing_pages() == 1 && ram.compact_exact_repeating_page(pinned) &&
+           ram.clean_backing_pages() == 0 && !host->pages.count(first) && ram.read_byte(pinned) == 0x22,
+       "compacting a promoted clean page retained stale indexing or altered data");
+}
+
 void test_staged_group_reclaim() {
   Ram ram(32 * page_size, 16 * page_size);
   auto backing = std::make_unique<Backing>();
@@ -516,6 +582,7 @@ int main() {
     test_pressure_and_reference();
     test_failures_pins_and_clean_reclaim();
     test_incremental_reclaim_preparation();
+    test_indexed_clean_reclamation();
     test_staged_group_reclaim();
     test_compact_budget_and_fill_preflight();
     test_implicit_zero_fill_inside_journal();

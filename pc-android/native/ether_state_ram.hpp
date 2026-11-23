@@ -98,13 +98,15 @@ class EtherStateRam {
     }
   };
   static_assert(sizeof(Patch) == 10);
+  static constexpr std::uint32_t kNoCleanSlot = UINT32_MAX;
   struct BasisPage {
     std::unique_ptr<Bytes> packed;
     std::uint64_t background = 0;
     std::vector<Patch> changes;
     std::uint64_t write_epoch = 0;
+    std::uint32_t clean_slot = kNoCleanSlot;
     bool spilled = false;
-    bool clean = false;
+    bool clean() const noexcept { return clean_slot != kNoCleanSlot; }
     std::uint64_t payload() const noexcept {
       return packed ? kPageSize : spilled || (!background && changes.empty()) ? 0 :
           kPatternSize + changes.capacity() * sizeof(Patch);
@@ -115,12 +117,16 @@ class EtherStateRam {
     std::uint64_t age = 0;
     std::unique_ptr<Bytes> bytes;
   };
+  using PageMap = std::map<std::uint64_t, BasisPage>;
   struct Storage {
     explicit Storage(std::uint64_t logical, std::uint64_t budget)
         : logical_bytes(logical), payload_cap(budget) {}
     std::uint64_t logical_bytes;
     std::uint64_t payload_cap;
-    std::map<std::uint64_t, BasisPage> pages;
+    PageMap pages;
+    // Map entries stay stable until explicitly erased. Clean eviction visits
+    // this compact index instead of walking spilled and dirty guest pages.
+    std::vector<PageMap::value_type*> clean_pages;
     std::shared_ptr<QuantumAuthority> quantum;
     std::unique_ptr<PageBacking> backing;
     mutable std::mutex read_mutex;
@@ -131,7 +137,7 @@ class EtherStateRam {
     mutable std::uint64_t backing_read_max_ns = 0, backing_lock_wait_ns = 0;
     std::uint64_t backing_writes = 0, backing_overwrites = 0, clean_reclaims = 0;
     std::uint64_t payload = 0;
-    std::size_t dense_pages = 0, rule_pages = 0, spilled_pages = 0, clean_pages = 0;
+    std::size_t dense_pages = 0, rule_pages = 0, spilled_pages = 0;
     std::size_t pin_depth = 0, clean_history_pages = 512;
     std::uint64_t pin_epoch = 0, reclaim_cursor = 0, compact_cursor = 0, preparation_cursor = 0;
     bool backing_timing = false;
@@ -181,7 +187,7 @@ class EtherStateRam {
     for (const auto& line : state().cache) allocated += bool(line.bytes);
     return allocated * kPageSize;
   }
-  std::size_t clean_backing_pages() const noexcept { return state().clean_pages; }
+  std::size_t clean_backing_pages() const noexcept { return state().clean_pages.size(); }
   bool has_page_backing() const noexcept { return bool(state().backing); }
   bool has_pinned_writes() const noexcept { return state().pin_depth != 0; }
   std::uint64_t quantum_revision() const noexcept {
@@ -274,7 +280,8 @@ class EtherStateRam {
     // std::map's three links/color are conservatively charged separately.
     return sizeof(*this) + sizeof(Storage) + state().pages.size() *
         (sizeof(std::pair<const std::uint64_t, BasisPage>) + 4 * sizeof(void*)) +
-        state().cache.capacity() * sizeof(CacheLine);
+        state().cache.capacity() * sizeof(CacheLine) +
+        state().clean_pages.capacity() * sizeof(PageMap::value_type*);
   }
   Metrics metrics() const noexcept {
     auto result = Metrics{};
@@ -293,7 +300,7 @@ class EtherStateRam {
     result.backing_cache_capacity_bytes = state().cache.size() * kPageSize;
     result.backing_overwrite_pages = state().backing_overwrites;
     result.page_state_vectors = state().pages.size();
-    result.backing_clean_pages = state().clean_pages;
+    result.backing_clean_pages = clean_backing_pages();
     result.backing_clean_reclaims = state().clean_reclaims;
     for (const auto& item : state().pages) if (!item.second.changes.empty()) {
       ++result.pattern_delta_pages;
@@ -426,6 +433,7 @@ class EtherStateRam {
     struct Prepared { std::uint64_t index; std::unique_ptr<Bytes> bytes; };
     std::vector<Prepared> prepared;
     prepared.reserve(missing);
+    std::size_t promotions = 0;
     // Allocate nodes before publishing any new representation. Empty nodes
     // represent zero exactly and are safe even if a later allocation fails.
     for (auto index = first; index <= last; ++index) {
@@ -434,6 +442,7 @@ class EtherStateRam {
       auto bytes = std::make_unique<Bytes>();
       if (!page || replaces_page(index)) bytes->fill(0);
       else if (page->spilled) {
+        ++promotions;
         ++state().pressure.write_promotion_attempts;
         const auto start = ReclaimClock::now();
         read_backing<true>(index, 0, bytes->data(), kPageSize);
@@ -441,6 +450,7 @@ class EtherStateRam {
       } else copy_rule(*page, 0, bytes->data(), kPageSize);
       prepared.push_back({index, std::move(bytes)});
     }
+    reserve_clean_slots(promotions);
     for (const auto& item : prepared) {
       if (!find_page(item.index)) {
         auto result = state().pages.try_emplace(item.index);
@@ -448,7 +458,8 @@ class EtherStateRam {
       }
     }
     for (auto& item : prepared) {
-      auto& page = *find_page(item.index);
+      auto& entry = *state().pages.find(item.index);
+      auto& page = entry.second;
       const bool replaced = replaces_page(item.index);
       const bool promoted = page.spilled && !replaced;
       if (page.spilled && replaced) {
@@ -464,8 +475,10 @@ class EtherStateRam {
       page.background = 0;
       page.spilled = false;
       // A promoted backing copy remains clean until the actual write.
-      page.clean = !replaced && (page.clean || promoted);
-      if (promoted) ++state().pressure.write_promotions;
+      if (promoted) {
+        mark_clean(entry);
+        ++state().pressure.write_promotions;
+      }
       add_accounting(page);
     }
     for (auto index = first; index <= last; ++index) mark_pin(*find_page(index));
@@ -676,21 +689,21 @@ class EtherStateRam {
   ReclaimPreparation prepare_reclaim(std::size_t ready_limit, ReclaimClock::time_point deadline) {
     ReclaimPreparation result;
     ready_limit = std::min(ready_limit, state().clean_history_pages);
-    if (!state().backing || has_pinned_writes() || state().dense_pages == state().clean_pages ||
-        state().clean_pages >= ready_limit || ReclaimClock::now() >= deadline) return result;
+    if (!state().backing || has_pinned_writes() || state().dense_pages == clean_backing_pages() ||
+        clean_backing_pages() >= ready_limit || ReclaimClock::now() >= deadline) return result;
     std::array<PageBacking::PageWrite, PageBacking::kMaxWritePages> writes{};
-    const auto selection_limit = std::min(writes.size(), ready_limit - state().clean_pages);
+    const auto selection_limit = std::min(writes.size(), ready_limit - clean_backing_pages());
     const auto visit_limit = std::min(state().pages.size(), 4 * kPagesPerTable);
     std::size_t count = 0, candidates = 0;
     auto it = state().pages.lower_bound(state().preparation_cursor);
     for (std::size_t visited = 0; visited < visit_limit && candidates < selection_limit &&
-         state().dense_pages > state().clean_pages && ReclaimClock::now() < deadline; ++visited) {
+         state().dense_pages > clean_backing_pages() && ReclaimClock::now() < deadline; ++visited) {
       if (it == state().pages.end()) it = state().pages.begin();
       const auto current = it++;
       const auto index = current->first;
       auto& page = current->second;
       state().preparation_cursor = index + 1;
-      if (!page.packed || page.clean) continue;
+      if (!page.packed || page.clean()) continue;
       ++candidates;
       const auto before = allocated_bytes();
       if (compact_page(index, (3 * kPageSize / 4 - kPatternSize) / sizeof(Patch))) {
@@ -709,11 +722,11 @@ class EtherStateRam {
       return result;
     }
     try {
+      reserve_clean_slots(count);
       const auto committed = state().backing->prepare_pages(writes.data(), count, deadline);
       if (committed > count) throw std::logic_error("Backing returned an invalid committed prefix");
       for (std::size_t i = 0; i < committed; ++i) {
-        auto& page = *find_page(writes[i].page);
-        page.clean = true; ++state().clean_pages;
+        mark_clean(*state().pages.find(writes[i].page));
         invalidate_cache(writes[i].page);
       }
       result.backed_pages = committed;
@@ -778,9 +791,10 @@ class EtherStateRam {
   }
 
   void reset_zero() noexcept {
+    std::vector<PageMap::value_type*>{}.swap(state().clean_pages);
     state().pages.clear();
     state().payload = 0;
-    state().dense_pages = state().rule_pages = state().spilled_pages = state().clean_pages = 0;
+    state().dense_pages = state().rule_pages = state().spilled_pages = 0;
     state().backing_reads = state().backing_writes = state().backing_read_failures = 0;
     state().backing_timed_attempts = state().backing_read_ns = state().backing_read_max_ns = 0;
     state().backing_lock_wait_ns = state().cache_hits = state().backing_overwrites = 0;
@@ -910,14 +924,38 @@ class EtherStateRam {
     if (page.packed) ++state().dense_pages;
     else if (page.spilled) ++state().spilled_pages;
     else if (page.payload()) ++state().rule_pages;
-    if (page.clean) ++state().clean_pages;
   }
   void remove_accounting(const BasisPage& page) noexcept {
     state().payload -= page.payload();
     if (page.packed) --state().dense_pages;
     else if (page.spilled) --state().spilled_pages;
     else if (page.payload()) --state().rule_pages;
-    if (page.clean) --state().clean_pages;
+  }
+  void reserve_clean_slots(std::size_t count) {
+    if (!count) return;
+    auto& clean = state().clean_pages;
+    const auto limit = std::min<std::size_t>(kNoCleanSlot, clean.max_size());
+    if (count > limit - clean.size()) throw std::length_error("EtherStateRam clean page index is full");
+    const auto required = clean.size() + count;
+    if (required > clean.capacity()) {
+      const auto growth = std::min(clean.capacity(), limit - clean.capacity());
+      clean.reserve(std::max(required, clean.capacity() + growth));
+    }
+  }
+  // Preparation and promotion reserve capacity before publishing page state.
+  void mark_clean(PageMap::value_type& entry) noexcept {
+    auto& clean = state().clean_pages;
+    entry.second.clean_slot = static_cast<std::uint32_t>(clean.size());
+    clean.push_back(&entry);
+  }
+  void forget_clean(BasisPage& page) noexcept {
+    if (!page.clean()) return;
+    auto& clean = state().clean_pages;
+    auto* last = clean.back();
+    clean[page.clean_slot] = last;
+    last->second.clean_slot = page.clean_slot;
+    clean.pop_back();
+    page.clean_slot = kNoCleanSlot;
   }
   bool pinned(const BasisPage& page) const noexcept {
     return state().pin_depth && page.write_epoch == state().pin_epoch;
@@ -928,8 +966,8 @@ class EtherStateRam {
   }
   void mark_write(std::uint64_t index, BasisPage& page) noexcept {
     mark_pin(page);
-    if (page.clean) {
-      page.clean = false; --state().clean_pages;
+    if (page.clean()) {
+      forget_clean(page);
       state().backing->discard(index);
     }
     invalidate_cache(index);
@@ -937,7 +975,8 @@ class EtherStateRam {
   void erase_page(std::uint64_t index) noexcept {
     const auto it = state().pages.find(index);
     if (it == state().pages.end()) return;
-    if (state().backing && (it->second.clean || it->second.spilled)) state().backing->discard(index);
+    if (state().backing && (it->second.clean() || it->second.spilled)) state().backing->discard(index);
+    forget_clean(it->second);
     invalidate_cache(index);
     remove_accounting(it->second);
     state().pages.erase(it);
@@ -1068,17 +1107,11 @@ class EtherStateRam {
   }
   void reclaim_clean_pages(std::uint64_t target, std::size_t limit,
                            ReclaimClock::time_point deadline) noexcept {
-    if (!limit || !state().clean_pages) return;
-    const auto count = state().pages.size();
-    auto it = state().pages.lower_bound(state().reclaim_cursor);
-    for (std::size_t visited = 0; visited < count && limit && state().clean_pages &&
-         allocated_bytes() > target && ReclaimClock::now() < deadline; ++visited) {
-      if (it == state().pages.end()) it = state().pages.begin();
-      const auto current = it++;
-      state().reclaim_cursor = current->first + 1;
-      if (!current->second.clean) continue;
-      mark_spilled(current->first, current->second);
-      --limit;
+    auto& clean = state().clean_pages;
+    for (; limit && !clean.empty() && allocated_bytes() > target && ReclaimClock::now() < deadline; --limit) {
+      auto& entry = *clean.back();
+      state().reclaim_cursor = entry.first + 1;
+      mark_spilled(entry.first, entry.second);
     }
   }
   std::uint64_t reclaim_candidate(std::uint64_t excluded_first, std::uint64_t excluded_last,
@@ -1089,8 +1122,10 @@ class EtherStateRam {
       return !item.second.spilled && (item.second.packed || state().backing) && !pinned(item.second) &&
           !(item.first >= excluded_first && item.first <= excluded_last);
     };
-    if (prefer_clean && state().clean_pages) for (const auto& item : state().pages)
-      if (eligible(item) && item.second.clean) return item.first;
+    if (prefer_clean) {
+      for (const auto* entry : state().clean_pages)
+        if (eligible(*entry)) return entry->first;
+    }
     const auto count = state().pages.size();
     // Retain compact basis rules while a dense state can free a full page.
     // In particular, shrinking sparse writes must compact the remaining dense
@@ -1125,7 +1160,7 @@ class EtherStateRam {
                                                  count ? writes.front().page : UINT64_MAX);
       if (candidate == UINT64_MAX) break;
       auto& page = *find_page(candidate);
-      if (page.clean) mark_spilled(candidate, page);
+      if (page.clean()) mark_spilled(candidate, page);
       else if (!compact_page(candidate)) {
         if (!state().backing) break;
         if (grouped && page.packed) {
@@ -1178,7 +1213,7 @@ class EtherStateRam {
   bool spill_page(std::uint64_t index, ReclaimClock::time_point deadline) {
     auto& page = *find_page(index);
     if (!state().backing || page.spilled || pinned(page)) return false;
-    const bool clean = page.clean;
+    const bool clean = page.clean();
     if (!clean) {
       Bytes expanded;
       const auto* bytes = page.packed ? page.packed->data() : expanded.data();
@@ -1197,11 +1232,12 @@ class EtherStateRam {
     return true;
   }
   void mark_spilled(std::uint64_t index, BasisPage& page) noexcept {
-    const bool clean = page.clean;
+    const bool clean = page.clean();
     const auto released = page.payload();
     remove_accounting(page);
     page.packed.reset(); std::vector<Patch>{}.swap(page.changes); page.background = 0;
-    page.spilled = true; page.clean = false;
+    page.spilled = true;
+    forget_clean(page);
     add_accounting(page);
     invalidate_cache(index);
     ++state().pressure.spilled_pages;
