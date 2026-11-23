@@ -428,6 +428,129 @@ void hardware_irq64_frames() {
   std::cout << "PRIME_IRQ64_FRAME_PASS bulk=" << frames << " ist=1 traced=1 mmio=1 cross_page_fault=1\n";
 }
 
+void hardware_irq64_aligned_store_batches() {
+  using Batch = Cpu::XmmStoreBatch;
+  constexpr unsigned vector = 0xd1;
+  constexpr std::uint64_t resume = 0xa000, handler = 0xa100, idt = 0x6000, buffer = 0xe100;
+  constexpr unsigned loads_and_saves = 8;
+  constexpr auto flags = 2U | Cpu::IF | Cpu::CF | Cpu::DF;
+  constexpr std::uint32_t old_mxcsr = 0x9f80, new_mxcsr = 0x1f80;
+  constexpr std::size_t buffer_bytes = 6 * 16;
+  const auto prepare = [&](Cpu& cpu, std::uint64_t rbp) {
+    cpu.enable_page_translation_cache();
+    cpu.cr4 |= (1U << 9);
+    program(cpu, {0x0f,0x30}, 0xa300); // WRMSR IA32_GS_BASE.
+    cpu.regs[Cpu::ECX] = 0xc0000101;
+    cpu.regs[Cpu::EAX] = 0x9000;
+    cpu.regs[Cpu::EDX] = 0;
+    one(cpu);
+    cpu.write32(0x9180, new_mxcsr);
+    // Both Windows prologues have this exact MXCSR/XMM instruction sequence.
+    program(cpu, {0x0f,0xae,0x5d,0xac,
+        0x65,0x0f,0xae,0x14,0x25,0x80,0x01,0,0,
+        0x0f,0x29,0x45,0xf0, 0x0f,0x29,0x4d,0x00, 0x0f,0x29,0x55,0x10,
+        0x0f,0x29,0x5d,0x20, 0x0f,0x29,0x65,0x30, 0x0f,0x29,0x6d,0x40,
+        0x48,0xcf}, handler);
+    for (unsigned i = 0; i < cpu.xmm.size(); ++i)
+      for (unsigned byte = 0; byte < cpu.xmm[i].size(); ++byte)
+        cpu.xmm[i][byte] = std::uint8_t(i * 21 + byte);
+    for (std::size_t i = 0; i < buffer_bytes + 2; ++i) cpu.write8(rbp - 17 + i, 0xff);
+    cpu.mxcsr = old_mxcsr;
+    cpu.idtr = {0xfff, idt};
+    cpu.write64(idt + 16 * vector, handler | (std::uint64_t(cpu.segments[Cpu::CS]) << 16) | (0x8eULL << 40));
+    cpu.write64(idt + 16 * vector + 8, 0);
+    cpu.eip = resume;
+    cpu.regs[Cpu::ESP] = 0x7f00;
+    cpu.regs[Cpu::EBP] = rbp;
+    cpu.eflags = flags;
+  };
+
+  for (const unsigned grant : {2, 6}) {
+    cosmic_pc::PcMachine slow, fast;
+    for (auto* machine : {&slow, &fast}) {
+      machine->boot_long_mode_demo();
+      machine->run(10000);
+      check(machine->cpu.is_long_mode() && machine->cpu.halted, "real demo entered long64");
+      prepare(machine->cpu, buffer);
+    }
+    const auto regs = fast.cpu.regs;
+    const auto xmm = fast.cpu.xmm;
+    const auto retired = fast.cpu.instructions;
+    check(slow.cpu.raise_external_irq(vector) && fast.cpu.raise_external_irq(vector) &&
+        !fast.cpu.flag(Cpu::IF), "hardware interrupt gate clears IF");
+    fast.enable_boot_acceleration();
+    unsigned device_steps = 0;
+    fast.device_step_hook = [&] { ++device_steps; };
+    fast.device_batch_limit_hook = [&](unsigned requested) { return std::min(requested, grant); };
+    fast.device_batch_advance_hook = [&](unsigned extra) { device_steps += extra; };
+    fast.run(loads_and_saves);
+    slow.run(loads_and_saves);
+    check(fast.boot_acceleration().movaps_store_batches == 1 &&
+        fast.boot_acceleration().movaps_store_steps == grant &&
+        fast.boot_acceleration().movntdq_store_steps == 0,
+        "the boot executor respects the exact device grant without charging MOVNTDQ");
+    check(fast.cpu.last_decoded_bytes() == slow.cpu.last_decoded_bytes() &&
+        fast.cpu.eip == slow.cpu.eip && fast.cpu.eflags == slow.cpu.eflags &&
+        !fast.cpu.raise_external_irq(vector), "masked IRQ and retired instruction match scalar execution");
+    fast.run(1);
+    slow.run(1);
+    check(fast.cpu.eip == resume && fast.cpu.eip == slow.cpu.eip && fast.cpu.regs == regs &&
+        fast.cpu.regs == slow.cpu.regs && fast.cpu.eflags == flags && fast.cpu.eflags == slow.cpu.eflags &&
+        fast.cpu.xmm == xmm && fast.cpu.xmm == slow.cpu.xmm && fast.cpu.mxcsr == new_mxcsr &&
+        fast.cpu.mxcsr == slow.cpu.mxcsr && fast.cpu.read32(buffer - 84) == old_mxcsr &&
+        fast.cpu.instructions == retired + 9 && fast.cpu.instructions == slow.cpu.instructions &&
+        device_steps == 9, "IRETQ, flags, MXCSR, XMM and retirement match the scalar IRQ");
+    for (unsigned i = 0; i < buffer_bytes; ++i)
+      check(fast.cpu.read8(buffer - 16 + i) == xmm[i / 16][i % 16] &&
+          fast.cpu.read8(buffer - 16 + i) == slow.cpu.read8(buffer - 16 + i), "saved XMM byte");
+    check(fast.cpu.read8(buffer - 17) == 0xff && fast.cpu.read8(buffer + 80) == 0xff,
+        "only six XMM slots changed");
+  }
+
+  Cpu cpu;
+  boot(cpu);
+  prepare(cpu, buffer);
+  cpu.eflags &= ~Cpu::IF;
+  cpu.eip = handler + 4;
+  one(cpu);
+  check(cpu.xmm_store_batch_candidate() == Batch::None, "isolated GS LDMXCSR must not trigger lookahead");
+  one(cpu);
+  check(cpu.xmm_store_batch_candidate() == Batch::None, "ordinary MOVAPS must not trigger lookahead");
+
+  const auto anchor = [&](std::uint64_t rbp) {
+    prepare(cpu, rbp);
+    for (unsigned i = 0; i < 512; ++i)
+      cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 0x63);
+    cpu.write64(0x3000, 0x4063);
+    check(cpu.raise_external_irq(vector), "hardware IRQ for page-boundary test");
+    one(cpu);
+    one(cpu);
+    check(cpu.xmm_store_batch_candidate() == Batch::Aligned, "exact retired MXCSR pair recognized");
+  };
+  anchor(buffer);
+  cpu.eflags |= Cpu::IF;
+  check(cpu.xmm_store_batch_candidate() == Batch::None, "an interruptible guest cannot enter the fast path");
+  cpu.eflags &= ~Cpu::IF;
+  cpu.idtr = {0, 0};
+  cpu.write64(0x4000 + 14 * 8, 0xe061); // Supervisor write denied by CR0.WP.
+  check(!cpu.try_xmm_store_batch(6, Batch::Aligned) && cpu.read8(buffer - 16) == 0xff,
+        "read-only PTE falls back before modifying memory");
+  expect_fault(cpu, FaultCode::PageFault, "scalar MOVAPS cannot write read-only RAM");
+  check(cpu.cr2 == buffer - 16 && cpu.fault->error_code == 3, "MOVAPS protection fault stays precise");
+
+  boot(cpu);
+  anchor(0xf000);
+  cpu.idtr = {0, 0};
+  cpu.write64(0x4000 + 15 * 8, 0);
+  check(!cpu.try_xmm_store_batch(6, Batch::Aligned) && cpu.read8(0xeff0) == 0xff,
+        "page split falls back before modifying memory");
+  one(cpu);
+  expect_fault(cpu, FaultCode::PageFault, "first unmapped MOVAPS faults after the preceding store");
+  check(cpu.cr2 == 0xf000 && cpu.fault->error_code == 2 && cpu.read8(0xeff0) == cpu.xmm[0][0],
+        "split page preserves the precise first committed store");
+  std::cout << "PRIME_IRQ64_XMM_STORE_PASS full=6 grant=2 bytes=96 flags=1 permission=1 page_fault=1\n";
+}
+
 void double_shift_long_mode_tests() {
   Cpu cpu; boot(cpu);
   constexpr std::uint32_t status = Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::OF;
@@ -1324,6 +1447,7 @@ int main(int argc, char** argv) {
     }
     boot_and_register_tests(); expanded_physical_ram(); multibyte_nops(); addressing_stack_and_alu_tests();
     enter_leave_long_mode_tests(); enter_leave_paging_fault_tests(); hardware_irq64_frames();
+    hardware_irq64_aligned_store_batches();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
     cached_page_translations(); retained_instruction_mapping(); colliding_page_translations();

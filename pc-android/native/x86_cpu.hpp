@@ -469,6 +469,7 @@ class Cpu {
     last_immediate_rotate_ip_ = UINT64_MAX;
     last_variable_rotate_ip_ = UINT64_MAX;
     last_movntdq_end_ip_ = UINT64_MAX;
+    last_mxcsr_save_end_ip_ = UINT64_MAX;
     counted_call_loop_.reset();
     affine_ram_rotate_block_.reset();
     pause_wait_ = {};
@@ -579,7 +580,15 @@ class Cpu {
     return ((adjacent || after_arithmetic) && page_translation_cache_enabled_ &&
         is_long_mode() && start_cs_ == segments[CS]) || streaming_sse_fill_loop_batch_candidate();
   }
-  unsigned try_movntdq_store_batch(unsigned budget);
+  enum class XmmStoreBatch { None, Streaming, Aligned };
+  XmmStoreBatch xmm_store_batch_candidate() const noexcept {
+    if (aligned_xmm_store_batch_candidate()) return XmmStoreBatch::Aligned;
+    return movntdq_store_batch_candidate() ? XmmStoreBatch::Streaming : XmmStoreBatch::None;
+  }
+  unsigned try_xmm_store_batch(unsigned budget, XmmStoreBatch kind);
+  unsigned try_movntdq_store_batch(unsigned budget) {
+    return try_xmm_store_batch(budget, XmmStoreBatch::Streaming);
+  }
   bool rotate_xor_loop_batch_candidate() const noexcept {
     return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
         cursor_ > eip && cursor_ - eip >= 12 && cursor_ - eip <= 17 &&
@@ -1019,7 +1028,17 @@ class Cpu {
   std::uint64_t last_immediate_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_variable_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_movntdq_end_ip_ = UINT64_MAX;
+  std::uint64_t last_mxcsr_save_end_ip_ = UINT64_MAX;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
+
+  bool aligned_xmm_store_batch_candidate() const noexcept {
+    // Interrupt prologues save MXCSR and load a per-CPU value immediately
+    // before writing the XMM state. Ordinary SIMD instructions skip the probe.
+    return opcode_ == 0x0fae && override_ == GS && last_mxcsr_save_end_ip_ == start_ip_ &&
+        !flag(IF) && !ip_written_ && cursor_ == eip && page_translation_cache_enabled_ &&
+        is_long_mode() && start_cs_ == segments[CS] && decoded_.size() == 9 &&
+        decoded_[0] == 0x65 && decoded_[3] == 0x14 && decoded_[4] == 0x25;
+  }
 
   void remember_idt_failure(IdtAttempt& attempt, const char* message) noexcept {
     if (failed_idt_count_ == failed_idt_attempts_.size()) return;
@@ -5147,7 +5166,10 @@ inline void Cpu::extended() {
         if(candidate&~kMxcsrMask)
           fail("LDMXCSR reserved bits",FaultCode::ProtectionFault);
         mxcsr=candidate;
-      }else write_linear(address,4,mxcsr);
+      }else{
+        write_linear(address,4,mxcsr);
+        last_mxcsr_save_end_ip_=cursor_;
+      }
       return;
     }
     case 0x1f: { // Multi-byte NOP (0F 1F /0).

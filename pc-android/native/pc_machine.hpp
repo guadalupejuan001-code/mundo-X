@@ -101,6 +101,7 @@ class PcMachine {
     std::uint64_t zero_loop_batches=0, zero_loop_steps=0;
     std::uint64_t forward_copy_loop_steps=0;
     std::uint64_t movntdq_store_batches=0, movntdq_store_steps=0;
+    std::uint64_t movaps_store_batches=0, movaps_store_steps=0;
     std::uint64_t scan_loop_steps=0;
     std::uint64_t arm64_block_steps=0;
     std::uint64_t counter_loop_batches=0, counter_loop_steps=0, streaming_sse_fill_loop_steps=0;
@@ -834,13 +835,15 @@ class PcMachine {
     const bool scan=!rep&&!shift&&cpu.scan_loop_batch_candidate();
     const bool zero=!rep&&!shift&&!scan&&cpu.zero_loop_batch_candidate();
     const bool forward_copy=!rep&&!shift&&!scan&&!zero&&cpu.forward_copy_loop_batch_candidate();
-    const bool movntdq=!rep&&!shift&&!scan&&!zero&&cpu.movntdq_store_batch_candidate();
-    const bool streaming_fill=movntdq&&cpu.streaming_sse_fill_loop_batch_candidate();
+    const auto stores=!rep&&!shift&&!scan&&!zero ? cpu.xmm_store_batch_candidate() : Cpu::XmmStoreBatch::None;
+    const bool streaming_fill = stores == Cpu::XmmStoreBatch::Streaming &&
+                                cpu.streaming_sse_fill_loop_batch_candidate();
     const bool affine_ram=!rep&&!shift&&!scan&&!zero&&cpu.affine_ram_rotate_loop_candidate();
     const bool counter=!rep&&!shift&&!scan&&!zero&&cpu.counter_loop_batch_candidate();
     const bool arm64=!rep&&cpu.ether_arm64_block_candidate();
     const bool state_vector=!rep&&!portable_vector_tried&&cpu.state_vector_batch_candidate();
-    if (!rep && !shift && !scan && !zero && !forward_copy && !movntdq && !affine_ram && !counter && !arm64 &&
+    if (!rep && !shift && !scan && !zero && !forward_copy && stores == Cpu::XmmStoreBatch::None &&
+        !affine_ram && !counter && !arm64 &&
         !state_vector) return 0;
     if(device_step_hook) {
       if(!device_batch_limit_hook||!device_batch_advance_hook)return 0;
@@ -853,7 +856,7 @@ class PcMachine {
     unsigned completed=0;
     bool native_batched=false;
     bool affine_batched=false;
-    bool movntdq_batched=false;
+    bool stores_batched=false;
     bool streaming_fill_batched=false;
     bool wide_multiply=false;
     bool rotate_xor=false;
@@ -867,9 +870,9 @@ class PcMachine {
         completed=unsigned(cpu.try_counter_loop_batch(limit));
         streaming_fill_batched=completed!=0;
       }
-      if(!completed&&movntdq) {
-        completed=cpu.try_movntdq_store_batch(limit);
-        movntdq_batched=completed!=0;
+      if(!completed && stores != Cpu::XmmStoreBatch::None) {
+        completed=cpu.try_xmm_store_batch(limit, stores);
+        stores_batched=completed!=0;
       }
       if(!completed&&affine_ram) {
         completed=unsigned(cpu.try_affine_ram_rotate_loop(limit));
@@ -910,7 +913,10 @@ class PcMachine {
       boot_acceleration_.zero_loop_steps+=completed;
     } else if (forward_copy) {
       boot_acceleration_.forward_copy_loop_steps+=completed;
-    } else if(movntdq_batched) {
+    } else if(stores_batched && stores == Cpu::XmmStoreBatch::Aligned) {
+      ++boot_acceleration_.movaps_store_batches;
+      boot_acceleration_.movaps_store_steps+=completed;
+    } else if(stores_batched) {
       ++boot_acceleration_.movntdq_store_batches;
       boot_acceleration_.movntdq_store_steps+=completed;
     } else if(affine_batched) {
