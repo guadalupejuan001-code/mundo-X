@@ -1152,7 +1152,8 @@ class Cpu {
   bool ether_arm64_dispatch_ready() const noexcept;
   const ether_arm64::Cache::Entry* cached_ether_arm64_work(EtherLoopAccess access, bool loop_only) const noexcept;
   unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus,
-                                    ether_arm64::ResidentReadPages& resident, bool projection_only = false);
+                                    ether_arm64::ResidentReadPages& resident,
+                                    bool* continue_on_bus = nullptr, bool projection_only = false);
   struct EtherRamView;
   unsigned run_ether_ram_view(const ether_arm64::Cache::Entry& entry, ether_arm64::Frame& frame,
                               unsigned rounds, std::unique_lock<std::mutex>& bus, unsigned& off_bus_steps);

@@ -24,10 +24,12 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
   ether_arm64::ResidentReadPages resident;
   unsigned completed = 0;
   while (completed + 2 <= limit) {
-    const auto retired = retire_ether_arm64_block(limit - completed, budget - completed, bus, resident);
+    bool continue_on_bus = false;
+    const auto retired = retire_ether_arm64_block(limit - completed, budget - completed, bus, resident,
+                                                  bus ? &continue_on_bus : nullptr);
     if (!retired) break;
     completed += retired;
-    if (bus || scan_loop_batch_candidate() || forward_copy_loop_batch_candidate() ||
+    if ((bus && !continue_on_bus) || scan_loop_batch_candidate() || forward_copy_loop_batch_candidate() ||
         wide_multiply_loop_batch_candidate() || rotate_xor_loop_batch_candidate() ||
         affine_ram_rotate_loop_candidate()) break;
   }
@@ -43,7 +45,7 @@ inline unsigned Cpu::try_register_projection(unsigned budget) {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (ether_arm64_dispatch_ready()) {
     ether_arm64::ResidentReadPages resident;
-    return retire_ether_arm64_block(std::min(budget, 64U), budget, nullptr, resident, true);
+    return retire_ether_arm64_block(std::min(budget, 64U), budget, nullptr, resident, nullptr, true);
   }
 #endif
   return try_state_vector_batch(budget);
@@ -285,7 +287,8 @@ inline unsigned Cpu::run_ether_ram_view(const ether_arm64::Cache::Entry& entry, 
 
 inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_budget,
                                              std::unique_lock<std::mutex>* bus,
-                                             ether_arm64::ResidentReadPages& resident, bool projection_only) {
+                                             ether_arm64::ResidentReadPages& resident,
+                                             bool* continue_on_bus, bool projection_only) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto origin = eip;
   const bool long_mode = is_long_mode();
@@ -495,6 +498,9 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       ether_arm64_stats_.coalesced_ram_writes += block.writes * rounds - pending.count;
     }
     const auto completed = commit_ether_arm64_result(*active, frame, rounds, outcome, direct_regs, private_frame);
+    // The caller already bounded the device grant. Continue through short
+    // forward register blocks only. A backward edge still returns for polling.
+    if (continue_on_bus) *continue_on_bus = direct_regs && eip > origin;
     if (off_bus_ram_steps) {
       ++ether_arm64_stats_.off_bus_ram_blocks;
       ether_arm64_stats_.off_bus_ram_steps += off_bus_ram_steps;

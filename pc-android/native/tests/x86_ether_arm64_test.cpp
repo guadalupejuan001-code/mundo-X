@@ -1577,6 +1577,47 @@ void register_bus_grant_contract() {
   std::cout << "PRIME_ETHER_REGISTER_BUS_PASS modes=2 held_steps=35 released_steps=57 irq_round=3\n";
 }
 
+void register_bus_chain_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+    emit(*cpu, code, {0x89,0xc8,0xeb,0x00,         // MOV EAX, ECX; JMP.
+                      0x83,0xc0,0x03,0xeb,0x00,    // ADD EAX, 3; JMP.
+                      0x89,0x07,0xeb,0x00,         // MOV [RDI], EAX; JMP.
+                      0x89,0xc2,0x83,0xc2,0x01,0xf4}); // MOV EDX, EAX; ADD EDX, 1; HLT.
+    cpu->regs[Cpu::ECX] = 42;
+    cpu->regs[Cpu::EDI] = output;
+    cpu->eflags = 2 | Cpu::IF | Cpu::DF;
+  }
+  const auto advance_scalar = [&](unsigned steps) {
+    for (unsigned i = 0; i < steps; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "scalar register bus chain failed");
+    require(capture(native.cpu) == capture(scalar.cpu), "register bus chain changed the guest state");
+  };
+  for (const auto offset : {0U,4U,9U,13U}) warm_block(native.cpu, code + offset, 2);
+  scalar.cpu.eip = code;
+  advance_scalar(8);
+  auto& cpu = native.cpu;
+  cpu.eip = scalar.cpu.eip = code;
+  std::mutex bus;
+  std::unique_lock<std::mutex> lease(bus);
+  require(cpu.try_ether_arm64_block(4, &lease) == 4 && lease.owns_lock() && cpu.eip == code + 9,
+          "chained register blocks must honor the device grant");
+  advance_scalar(4);
+  require(cpu.try_ether_arm64_block(64, &lease) == 2 && lease.owns_lock() && cpu.eip == code + 13,
+          "shared RAM must end the native chain");
+  advance_scalar(2);
+  cpu.eip = scalar.cpu.eip = code;
+  require(cpu.try_ether_arm64_block(64, &lease) == 6 && lease.owns_lock() && cpu.eip == code + 13 &&
+          cpu.read32(output) == 45, "a complete register chain must stop after the RAM block");
+  advance_scalar(6);
+  const auto& stats = cpu.ether_arm64_stats();
+  require(stats.on_bus_register_steps == 8 && !stats.register_bus_reacquisitions,
+          "forward register chains unexpectedly released the bus");
+  std::cout << "PRIME_ETHER_REGISTER_BUS_CHAIN_PASS granted_steps=4 store_boundary=6\n";
+}
+
 void protected32_contract() {
   PcMachine native, scalar;
   boot_protected(native, true);
@@ -2655,6 +2696,7 @@ int main() {
     integer_execution_contract();
     rip_relative_contract();
     register_bus_grant_contract();
+    register_bus_chain_contract();
     signed_load_contract();
     memory_subtraction_contract();
     memory_addition_contract();
