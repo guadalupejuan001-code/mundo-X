@@ -86,7 +86,12 @@ struct Instruction {
 };
 
 struct Block {
-  static constexpr unsigned kMaxBytes = 64, kMaxInstructions = 16;
+  static constexpr unsigned kPortableMaxBytes = 64, kPortableMaxInstructions = 16;
+#if defined(MUNDO_X_ETHER_ARM64_WIDE_BLOCK_EXPERIMENT)
+  static constexpr unsigned kMaxBytes = 128, kMaxInstructions = 32;
+#else
+  static constexpr unsigned kMaxBytes = kPortableMaxBytes, kMaxInstructions = kPortableMaxInstructions;
+#endif
   static constexpr unsigned kMaxWrites = 4;
   static constexpr unsigned kNoFlagSource = kMaxInstructions;
   std::array<Instruction, kMaxInstructions> instructions{};
@@ -165,7 +170,7 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
     Instruction::And, Instruction::Subtract, Instruction::Xor, Instruction::Compare};
 
 inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true,
-                    bool allow_segment_loads = false) {
+                    bool allow_segment_loads = false, unsigned instruction_limit = Block::kPortableMaxInstructions) {
   Block block;
   block.long_mode = long_mode;
   unsigned carry_boundary = 0;
@@ -179,7 +184,8 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     return address >> 47 == 0 || address >> 47 == 0x1ffff;
   };
   bool fixed_stack_base = true;
-  while (block.count < Block::kMaxInstructions && block.size < size) {
+  instruction_limit = std::min(instruction_limit, Block::kMaxInstructions);
+  while (block.count < instruction_limit && block.size < size) {
     unsigned pos = block.size;
     const unsigned begin = pos;
     unsigned opcode = bytes[pos++], rex = 0;
@@ -483,7 +489,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }
-  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode, allow_segment_loads);
+  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode, allow_segment_loads, instruction_limit);
   // A read-only round can validate a new address with the guarded loader.
   // Repeated stores still require fixed addresses for the pending writes.
   // Legacy execution can repeat only when no segment or memory is accessed.

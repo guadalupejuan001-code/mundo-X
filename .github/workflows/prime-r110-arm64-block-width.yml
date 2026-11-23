@@ -1,0 +1,108 @@
+name: Prime R110 ARM64 block width
+
+on:
+  push:
+    branches:
+      - experiment/r110-arm64-32-instruction-blocks
+    paths:
+      - .github/workflows/prime-r110-arm64-block-width.yml
+      - pc-android/native/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build both widths from the same source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p out/control out/wide evidence
+          {
+            git rev-parse HEAD
+            uname -a
+            c++ --version
+            lscpu
+          } > evidence/runner.txt
+          flags=(-O2 -DNDEBUG -DMUNDO_X_PC_STATE_RAM=1 -std=c++17 -frounding-math -pthread -I native/include)
+          test_source=pc-android/native/tests/x86_ether_arm64_test.cpp
+          c++ "${flags[@]}" "$test_source" -o out/control/ether-width
+          c++ "${flags[@]}" -DMUNDO_X_ETHER_ARM64_WIDE_BLOCK_EXPERIMENT=1 "$test_source" -o out/wide/ether-width
+          sha256sum "$test_source" out/control/ether-width out/wide/ether-width > evidence/sha256.txt
+          file out/control/ether-width out/wide/ether-width > evidence/binaries.txt
+      - name: Compare both widths on the same ARM64 CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          cpu="$(python3 -c 'import os; print(min(os.sched_getaffinity(0)))')"
+          printf 'pinned_cpu=%s\n' "$cpu" >> evidence/runner.txt
+          for pair in 1 2 3 4; do
+            if ((pair % 2)); then
+              widths=(control wide)
+            else
+              widths=(wide control)
+            fi
+            for width in "${widths[@]}"; do
+              log="evidence/$pair-$width"
+              /usr/bin/time -v -o "$log.time" taskset -c "$cpu" "out/$width/ether-width" | tee "$log.log"
+              grep -q '^PRIME_C03_ARM64_PASS ' "$log.log"
+            done
+          done
+      - name: Verify equivalent guest work
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from statistics import median
+
+          evidence = Path("evidence")
+          tag = "PRIME_ETHER_FORWARD_WIDTH_BENCH "
+
+          def rows(pair, variant):
+              lines = (evidence / f"{pair}-{variant}.log").read_text().splitlines()
+              values = [json.loads(line.removeprefix(tag)) for line in lines if line.startswith(tag)]
+              assert len(values) == 2
+              return {value["body_instructions"]: value for value in values}
+
+          summaries = {}
+          for body in (4, 27):
+              control_times, wide_times, results = [], [], []
+              for pair in range(1, 5):
+                  control, wide = (rows(pair, variant)[body] for variant in ("control", "wide"))
+                  assert (control["max_instructions"], control["max_bytes"]) == (16, 64)
+                  assert (wide["max_instructions"], wide["max_bytes"]) == (32, 128)
+                  assert all(control[k] == wide[k] for k in ("steps_per_trial", "checksum", "flags"))
+                  assert (control["native_blocks_per_body"], wide["native_blocks_per_body"]) == (
+                      1 if body == 4 else 2, 1
+                  )
+                  control_times.append(control["native_median_ns"])
+                  wide_times.append(wide["native_median_ns"])
+                  results.append({"pair": pair, "control": control, "wide": wide})
+              summaries[str(body)] = {
+                  "control_median_ns": median(control_times),
+                  "wide_median_ns": median(wide_times),
+                  "paired_time_change_pct": median(
+                      100 * (wide / control - 1) for control, wide in zip(control_times, wide_times)
+                  ),
+                  "pairs": results,
+              }
+          result = json.dumps(summaries, indent=2)
+          (evidence / "summary.json").write_text(result + "\n")
+          print(result)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prime-r110-arm64-block-width
+          path: evidence
+          if-no-files-found: error

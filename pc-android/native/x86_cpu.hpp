@@ -601,7 +601,7 @@ class Cpu {
   }
   bool affine_ram_rotate_loop_candidate() const noexcept {
     return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
-        cursor_ > eip && cursor_ - eip >= 13 && cursor_ - eip <= ether_arm64::Block::kMaxBytes &&
+        cursor_ > eip && cursor_ - eip >= 13 && cursor_ - eip <= ether_arm64::Block::kPortableMaxBytes &&
         start_ip_ == cursor_ - 2 && decoded_.size() == 2 && cursor_ - eip == 0x100U - decoded_[1] &&
         eip <= last_variable_rotate_ip_ && last_variable_rotate_ip_ < start_ip_ && is_long_mode();
   }
@@ -623,7 +623,7 @@ class Cpu {
       if (!is_long_mode()) return false;
       if (sse_memory_loop_tail(length, branch_bytes) ||
           (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())) return true;
-      if (length > ether_arm64::Block::kMaxBytes ||
+      if (length > ether_arm64::Block::kPortableMaxBytes ||
           last_relative_call_return_ip_ <= eip || last_relative_call_return_ip_ >= start_ip_) return false;
       const auto counter_bytes = start_ip_ - last_relative_call_return_ip_;
       return counter_bytes >= 3 && counter_bytes <= 7;
@@ -644,7 +644,7 @@ class Cpu {
   }
   bool state_vector_batch_candidate() const noexcept {
     return ip_written_ && start_cs_ == segments[CS] && eip < start_ip_ &&
-        start_ip_ < cursor_ && cursor_ - eip <= ether_arm64::Block::kMaxBytes &&
+        start_ip_ < cursor_ && cursor_ - eip <= ether_arm64::Block::kPortableMaxBytes &&
         (opcode_ == 0x75 || opcode_ == 0x0f85 || opcode_ == 0x7f || opcode_ == 0x0f8f);
   }
   // Use the same ownership as step() and stop at the caller's device boundary.
@@ -1136,7 +1136,7 @@ class Cpu {
     bool rip_relative = false;
   };
   struct CountedCallLoop {
-    std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code{};
+    std::array<std::uint8_t, ether_arm64::Block::kPortableMaxBytes> code{};
     std::array<std::uint8_t, 12> callee{};
     std::array<ether_arm64::Instruction, 4> stores{};
     std::uint64_t entry, target, delta, multiplier;
@@ -4227,7 +4227,7 @@ inline unsigned Cpu::try_state_vector_batch(unsigned budget) {
     return 0;
 
   const auto length = unsigned(cursor_ - eip);
-  std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code;
+  std::array<std::uint8_t, ether_arm64::Block::kPortableMaxBytes> code;
   try {
     // Validate the current executable bytes, including edits made since the backedge.
     const auto linear = segment_linear(CS, eip, length, Access::Execute);

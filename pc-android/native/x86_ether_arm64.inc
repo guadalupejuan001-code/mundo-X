@@ -343,7 +343,8 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
           memory.read_block(physical + length, actual.data() + length, width - length);
           ether_arm64_stats_.code_bytes_read += width - length;
         }
-        entry.block = ether_arm64::decode(actual.data(), width, eip, long_mode, true);
+        entry.block = ether_arm64::decode(actual.data(), width, eip, long_mode, true,
+                                          ether_arm64::Block::kMaxInstructions);
         entry.state_vector = ether_arm64::RegisterStateVector::build(entry.block);
         entry.checked_bytes = entry.block.can_translate() ? entry.block.size : width;
         entry.physical = physical;
@@ -404,7 +405,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     }
     // A short register block cannot recover the cost of yielding and
     // revalidating the shared bus. Keep the current device grant for it.
-    constexpr auto min_private_register_steps = 2 * ether_arm64::Block::kMaxInstructions;
+    constexpr unsigned min_private_register_steps = 32;
     const bool release_registers = bus && block.register_only &&
                                   repetitions * block.count >= min_private_register_steps;
     const auto code_version = active->code_version;

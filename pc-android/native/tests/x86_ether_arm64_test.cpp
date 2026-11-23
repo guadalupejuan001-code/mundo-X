@@ -2643,6 +2643,97 @@ void benchmark() {
             << ",\"translated_blocks\":" << first.stats.translated
             << ",\"native_steps\":" << first.stats.steps << "}\n";
 }
+
+void forward_block_width_benchmark() {
+  constexpr unsigned repetitions = 20'000;
+  constexpr std::array<std::uint8_t, 4> add{0x48,0x83,0xc0,0x71}; // ADD RAX, 113.
+  for (unsigned additions : {3, 26}) {
+    std::vector<std::uint8_t> program;
+    for (unsigned i = 0; i < additions; ++i)
+      program.insert(program.end(), add.begin(), add.end());
+    program.insert(program.end(), {0xeb,0x01,0xcc,0xf4}); // JMP over INT3; HLT.
+    const unsigned native_steps = additions + 1, steps = native_steps + 1;
+    const auto expected_blocks = native_steps <= arm64::Block::kMaxInstructions ? 1U : 2U;
+    const auto portable = arm64::decode(program.data(), static_cast<unsigned>(program.size()), code);
+    require(portable.count == std::min(native_steps, arm64::Block::kPortableMaxInstructions),
+            "portable decode unexpectedly adopted the native experiment");
+
+    PcMachine native, scalar;
+    boot(native, true);
+    boot(scalar, false);
+    for (auto* machine : {&native, &scalar}) {
+      auto& cpu = machine->cpu;
+      cpu.memory.write_block(code, program.data(), program.size());
+      cpu.regs[Cpu::EAX] = UINT64_MAX - 50;
+      cpu.eflags = 2 | Cpu::IF | Cpu::DF;
+    }
+    std::mutex bus;
+    std::unique_lock<std::mutex> lease(bus);
+    const auto run = [&](PcMachine& machine, unsigned count) {
+      auto& cpu = machine.cpu;
+      const auto before = cpu.instructions;
+      const auto start = PcMachine::RunClock::now();
+      for (unsigned i = 0; i < count; ++i) {
+        cpu.eip = code;
+        cpu.halted = false;
+        machine.run(steps, PcMachine::RunClock::time_point::max(), false, &lease);
+      }
+      const auto elapsed = PcMachine::RunClock::now() - start;
+      require(cpu.halted && !cpu.fault && cpu.eip == code + program.size() &&
+                  cpu.instructions - before == std::uint64_t(count) * steps && lease.owns_lock(),
+              "forward block changed the guest exit or exceeded its grant");
+      return std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+    };
+    run(native, 4);
+    run(scalar, 4);
+    require(capture(native.cpu) == capture(scalar.cpu), "forward block diverged during warm-up");
+    std::array<std::int64_t, 7> native_times{}, scalar_times{};
+    const auto warm = native.cpu.ether_arm64_stats();
+    for (unsigned trial = 0; trial < native_times.size(); ++trial) {
+      if (trial % 2) {
+        native_times[trial] = run(native, repetitions);
+        scalar_times[trial] = run(scalar, repetitions);
+      } else {
+        scalar_times[trial] = run(scalar, repetitions);
+        native_times[trial] = run(native, repetitions);
+      }
+      require(capture(native.cpu) == capture(scalar.cpu), "forward block retired different guest state");
+    }
+    const auto stats = native.cpu.ether_arm64_stats();
+    const auto cache = native.cpu.ether_arm64_virtual_stats();
+    const auto runs = std::uint64_t(repetitions) * native_times.size();
+    require(stats.steps - warm.steps == runs * native_steps &&
+                stats.blocks - warm.blocks == runs * expected_blocks &&
+                stats.translated == warm.translated &&
+                stats.register_bus_reacquisitions == warm.register_bus_reacquisitions,
+            "forward block benchmark missed the warm native path or changed bus ownership");
+    std::sort(native_times.begin(), native_times.end());
+    std::sort(scalar_times.begin(), scalar_times.end());
+    std::cout << "PRIME_ETHER_FORWARD_WIDTH_BENCH {\"max_instructions\":" << arm64::Block::kMaxInstructions
+              << ",\"max_bytes\":" << arm64::Block::kMaxBytes << ",\"body_instructions\":" << native_steps
+              << ",\"steps_per_trial\":" << std::uint64_t(repetitions) * steps
+              << ",\"native_blocks_per_body\":" << expected_blocks
+              << ",\"native_median_ns\":" << native_times[3] << ",\"scalar_median_ns\":" << scalar_times[3]
+              << ",\"native_min_ns\":" << native_times.front() << ",\"native_max_ns\":" << native_times.back()
+              << ",\"cache_sets\":" << cache.allocated_sets << ",\"cache_metadata_bytes\":" << cache.cache_metadata_bytes
+              << ",\"checksum\":" << native.cpu.regs[Cpu::EAX] << ",\"flags\":" << native.cpu.eflags << "}\n";
+
+    if (native_steps > arm64::Block::kPortableMaxInstructions) {
+      for (auto* machine : {&native, &scalar}) {
+        auto& cpu = machine->cpu;
+        cpu.eip = code;
+        cpu.halted = false;
+        const auto before = cpu.instructions;
+        machine->run(arm64::Block::kPortableMaxInstructions, PcMachine::RunClock::time_point::max(),
+                     false, &lease);
+        require(cpu.instructions - before == arm64::Block::kPortableMaxInstructions &&
+                    !cpu.halted && !cpu.fault && lease.owns_lock(),
+                "forward block exceeded a 16-instruction grant");
+      }
+      require(capture(native.cpu) == capture(scalar.cpu), "short grant changed the guest result");
+    }
+  }
+}
 }  // namespace
 
 static void ram_view_contract() {
@@ -2729,6 +2820,7 @@ int main() {
               "translated path changed the page fault or skipped the fallback");
     }
     benchmark();
+    forward_block_width_benchmark();
     std::cout << "PRIME_C03_ARM64_PASS flags=1 ram=1 aliases=1 remap=1 page_faults=2 irq=1\n";
     return 0;
   } catch (const std::exception& error) {
