@@ -32,6 +32,21 @@ inline constexpr unsigned kSubtractAccess = 64;
 // implements. The interpreter owns all other prefixes, operands and opcodes.
 struct Operand {
   static constexpr unsigned kNoIndex = 16, kRipBase = 17;
+#if defined(MUNDO_X_ETHER_ARM64_COMPACT_BLOCK_EXPERIMENT)
+  static constexpr unsigned kRegisterBits = 5;
+  static_assert(kNoIndex < (1U << kRegisterBits) && kRipBase < (1U << kRegisterBits));
+  constexpr Operand() noexcept : Operand(0) {}
+  constexpr explicit Operand(unsigned guest_register) noexcept
+      : reg(guest_register), index(kNoIndex), scale_shift(0), memory(false), immediate(false),
+        stack(false), high_byte(false), segment_prefix(0) {}
+
+  std::uint64_t immediate_value = 0;
+  std::uint32_t displacement = 0;
+  std::uint32_t reg : kRegisterBits, index : kRegisterBits;
+  // The x86 SIB scale is two bits. This decoder only accepts FS and GS overrides.
+  std::uint32_t scale_shift : 2, memory : 1, immediate : 1, stack : 1, high_byte : 1;
+  std::uint32_t segment_prefix : 7;
+#else
   unsigned reg = 0;
   std::uint32_t displacement = 0;
   std::uint64_t immediate_value = 0;
@@ -39,6 +54,7 @@ struct Operand {
   bool memory = false, immediate = false, stack = false, high_byte = false;
 
   std::uint8_t segment_prefix = 0;
+#endif
 
   static Operand literal(std::uint64_t value) noexcept {
     Operand operand;
@@ -49,15 +65,27 @@ struct Operand {
 };
 
 struct Instruction {
-  enum Kind {
+  enum Kind
+#if defined(MUNDO_X_ETHER_ARM64_COMPACT_BLOCK_EXPERIMENT)
+      : std::uint8_t
+#endif
+  {
     Unsupported, Move, MoveByte, MoveZeroExtend, MoveSignExtend, Lea, Nop, Compare, Test, Increment, Decrement,
     Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic,
     RotateLeft, RotateRight, SignedMultiply, ConditionalMove, Conditional, Jump
   };
+#if defined(MUNDO_X_ETHER_ARM64_COMPACT_BLOCK_EXPERIMENT)
+  Operand lhs, rhs;
+  std::uint64_t multiplier = 0;
+  std::uint16_t opcode = 0; // One-byte and 0F-prefixed opcodes.
+  Kind kind = Move;
+  std::uint8_t width = 0, begin = 0, end = 0, condition = 0;
+#else
   Kind kind = Move;
   Operand lhs, rhs;
   std::uint64_t multiplier = 0;
   unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
+#endif
 
   static bool logical(Kind kind) noexcept {
     return kind == Test || kind == And || kind == Or || kind == Xor;
@@ -131,6 +159,11 @@ struct Block {
   }
 };
 
+#if defined(MUNDO_X_ETHER_ARM64_COMPACT_BLOCK_EXPERIMENT)
+static_assert(sizeof(Operand) == 16 && sizeof(Instruction) == 48);
+static_assert(Block::kMaxBytes <= UINT8_MAX, "Guest instruction offsets must fit their compact fields");
+#endif
+
 inline bool fixed_loop_addresses(const Block& block) noexcept {
   unsigned fixed = 0xffffU;
   for (unsigned i = 0; i < block.count; ++i) {
@@ -171,6 +204,9 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
 
 inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true,
                     bool allow_segment_loads = false, unsigned instruction_limit = Block::kPortableMaxInstructions) {
+#if defined(MUNDO_X_ETHER_ARM64_COMPACT_BLOCK_EXPERIMENT)
+  size = std::min(size, Block::kMaxBytes);
+#endif
   Block block;
   block.long_mode = long_mode;
   unsigned carry_boundary = 0;

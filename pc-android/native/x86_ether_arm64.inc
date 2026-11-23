@@ -94,7 +94,7 @@ inline Cpu::EtherLoopWork::InstructionView Cpu::EtherLoopWork::instruction_at(un
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (entry_ && rounds_) {
     const auto& op = entry_->block.instructions[step % entry_->block.count];
-    return {entry_->rip + op.begin, entry_->bytes.data() + op.begin, op.end - op.begin};
+    return {entry_->rip + op.begin, entry_->bytes.data() + op.begin, unsigned(op.end) - op.begin};
   }
 #else
   (void)step;

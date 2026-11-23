@@ -164,6 +164,19 @@ void initialize_loop(Cpu& cpu) {
 }
 
 void decoder_contract() {
+  std::array<std::uint8_t, 132> full_width{};
+  constexpr std::array<std::uint8_t, 4> add_r15{0x49,0x83,0xc7,0x01};
+  for (auto instruction = full_width.begin(); instruction != full_width.end(); instruction += add_r15.size())
+    std::copy(add_r15.begin(), add_r15.end(), instruction);
+  const auto maximum = arm64::decode(full_width.data(), full_width.size(), code, true, true,
+                                     arm64::Block::kMaxInstructions);
+  const auto& last = maximum.instructions.back();
+  require(maximum.count == arm64::Block::kMaxInstructions &&
+              maximum.size == arm64::Block::kMaxBytes && last.end == maximum.size &&
+              last.begin == maximum.size - add_r15.size() && last.lhs.reg == Cpu::R15 &&
+              last.width == 8 && last.opcode == 0x83,
+          "full-width native decode changed the last offset, opcode or high register");
+
   const auto kernel = arm64::decode(kernel_add_tail.data(), kernel_add_tail.size(), code);
   const auto& add = kernel.instructions.front();
   require(kernel.count == 5 && kernel.size == kernel_add_tail.size() && kernel.stages_ram() && kernel.ram_adds == 1 &&
