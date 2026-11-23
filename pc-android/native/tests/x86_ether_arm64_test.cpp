@@ -1532,6 +1532,23 @@ void protected32_stack_chain_contract() {
           scalar.cpu.read64(boundary - 40) == native.cpu.read64(boundary - 40),
           "extended ESP chain changed flags, registers, segment addressing, or pending-store forwarding");
 
+  // An untouched input page supplies exact zero bytes without materializing it.
+  constexpr auto read_entry = entry + 0x80;
+  constexpr auto input_offset = 0x110000U;
+  for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+    install(*cpu, boundary - ss_base - 48);
+    emit(*cpu, read_entry, {0x89,0x44,0x24,0x08, 0x03,0x01, 0x89,0x44,0x24,0x0c, 0x90,0xf4});
+    cpu->eip = read_entry;
+    cpu->regs[Cpu::ECX] = input_offset;
+  }
+  warm_block(native.cpu, read_entry, 4);
+  for (unsigned i = 0; i < 4; ++i)
+    require(scalar.cpu.step() == StepResult::Executed, "scalar implicit-source chain failed");
+  require(capture(native.cpu) == capture(scalar.cpu) &&
+          native.cpu.read32(boundary - 36) == initial &&
+          !native.cpu.memory.resident_ram_span(ds_base + input_offset, 4),
+          "ESP chain changed an implicit input page or its guest result");
+
   // The first store is resident but the second page is still implicit.
   for (auto* cpu : {&native.cpu, &scalar.cpu}) {
     install(*cpu, boundary - ss_base - 12);

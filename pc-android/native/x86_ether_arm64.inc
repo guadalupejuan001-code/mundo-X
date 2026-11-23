@@ -640,10 +640,13 @@ inline unsigned Cpu::ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t a
     if (frame->pending && !cpu.is_long_mode()) {
       // A failed protected32 chain must not resolve a cold backing read or
       // touch the quantum authority after an earlier speculative store.
-      const auto* data = cpu.memory.resident_ram_span(*physical, width, false);
-      if (!data) return 0;
-      frame->loaded = frame->pending->load(*physical, width, [&] { return little_endian_word(data, width); });
-      return 1;
+      bool available = true;
+      frame->loaded = frame->pending->load(*physical, width, [&]() -> std::uint64_t {
+        std::array<std::uint8_t, 8> data;
+        available = cpu.memory.try_read_present_ram_block(*physical, data.data(), width);
+        return available ? little_endian_word(data.data(), width) : 0;
+      });
+      return available;
     }
     if (frame->reuse_resident_reads) {
       constexpr auto page_bytes = MemoryFabric::kPageSize;

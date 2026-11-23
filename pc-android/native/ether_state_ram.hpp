@@ -345,8 +345,8 @@ class EtherStateRam {
     return page && page->packed ? page->packed->data() + address % kPageSize : nullptr;
   }
 
-  // Copy ordinary bytes already in memory. An absent or unresolved operand
-  // stays on the caller's precise byte-by-byte path, with no backing I/O here.
+  // Copy ordinary bytes that can be resolved without backing I/O. Untouched
+  // pages and compact rules have exact values without allocating memory.
   template <bool Synchronized = true>
   bool try_read_present_block(std::uint64_t address, std::uint8_t* destination,
                              std::size_t count) const {
@@ -355,12 +355,18 @@ class EtherStateRam {
         count > kPageSize - inside || quantum_intersects(address, count)) return false;
     const auto index = address / kPageSize;
     const auto* page = find_page(index);
-    if (!page) return false;
+    if (!page) {
+      std::memset(destination, 0, count);
+      return true;
+    }
     if (page->packed) {
       std::memcpy(destination, page->packed->data() + inside, count);
       return true;
     }
-    if (!page->spilled) return false;
+    if (!page->spilled) {
+      copy_rule(*page, inside, destination, count);
+      return true;
+    }
     const auto& s = state();
     std::unique_lock<std::mutex> lock(s.read_mutex, std::defer_lock);
     const auto lock_start = s.backing_timing ? ReclaimClock::now() : ReclaimClock::time_point{};
