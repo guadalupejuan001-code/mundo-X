@@ -567,20 +567,48 @@ void test_decoded_cache_hints() {
   need(ram.read_byte(colliding) == collision_data.front() && ram.metrics().backing_reads == reads,
        "a failed backing read published an invalid cache replacement");
 
-  Ram dirty(2 * page_size, page_size);
-  dirty.attach_page_backing(std::make_unique<Backing>());
+  Ram dirty(colliding + page_size, 3 * page_size);
+  auto dirty_backing = std::make_unique<Backing>();
+  auto* dirty_host = dirty_backing.get();
+  dirty.attach_page_backing(std::move(dirty_backing));
   const auto previous = varied(3), current = varied(99);
   dirty.write_block(0, previous.data(), previous.size());
-  need(dirty.adjust_payload_budget(0, 1) == Ram::BudgetAdjustment::Applied &&
+  dirty.write_block(colliding, collision_data.data(), collision_data.size());
+  need(dirty.adjust_payload_budget(0, 2) == Ram::BudgetAdjustment::Applied &&
            dirty.read_byte(0) == previous.front() && dirty.read_byte(0) == previous.front() &&
-           dirty.adjust_payload_budget(page_size, 0) == Ram::BudgetAdjustment::Applied,
-       "could not warm the cache for a fully overwritten page");
-  dirty.write_block(0, current.data(), current.size());
-  need(dirty.adjust_payload_budget(0, 1) == Ram::BudgetAdjustment::Applied,
+           dirty.read_byte(colliding) == collision_data.front() &&
+           dirty.adjust_payload_budget(3 * page_size, 0) == Ram::BudgetAdjustment::Applied,
+       "could not warm colliding decoded lines before writing");
+  dirty_host->fail_read = true;
+  for (unsigned offset = 0; offset < current.size(); offset += 4)
+    dirty.write_block(page_size + offset, current.data() + offset, 4);
+  need(dirty.read_byte(0) == previous.front() && dirty.read_byte(colliding) == collision_data.front(),
+       "ordinary dirty writes displaced an unrelated decoded cache line");
+  dirty.write_block(1, current.data() + 1, current.size() - 1);
+  auto changed = current;
+  changed[0] = previous.front();
+  dirty.read_block(0, restored.data(), restored.size());
+  need(restored == changed && !dirty_host->pages.count(0),
+       "the first write after promotion left a stale clean copy or damaged unwritten bytes");
+  dirty_host->fail_read = false;
+  need(dirty.adjust_payload_budget(0, 2) == Ram::BudgetAdjustment::Applied,
        "could not write back the replacement page");
   dirty.read_block(0, restored.data(), restored.size());
-  need(restored == current && dirty.metrics().backing_reads == 2,
+  need(restored == changed && dirty.read_byte(colliding) == collision_data.front() &&
+           dirty.metrics().backing_reads == 3,
+       "a stale decoded cache line survived promotion, mutation, and eviction");
+  need(dirty.adjust_payload_budget(3 * page_size, 0) == Ram::BudgetAdjustment::Applied,
+       "could not restore the budget for a fully overwritten page");
+  dirty.write_block(0, current.data(), current.size());
+  need(dirty.adjust_payload_budget(0, 1) == Ram::BudgetAdjustment::Applied,
+       "could not write back the fully replaced page");
+  dirty.read_block(0, restored.data(), restored.size());
+  need(restored == current && dirty.metrics().backing_reads == 4,
        "a stale decoded-cache hint survived a full write and eviction");
+  need(dirty.adjust_payload_budget(3 * page_size, 0) == Ram::BudgetAdjustment::Applied &&
+           dirty.try_fill_repeating_page(colliding, 0x8181818181818181ULL) &&
+           dirty.read_byte(colliding) == 0x81 && !dirty_host->pages.count(colliding_page),
+       "replacing a spilled page with a repeating rule retained obsolete backing bytes");
   dirty.reset_zero();
   need(dirty.read_byte(0) == 0 && dirty.backing_cache_bytes() == 0,
        "reset retained cached data or an address hint");

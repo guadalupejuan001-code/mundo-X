@@ -1039,7 +1039,9 @@ class EtherStateRam {
     if (page.clean()) {
       forget_clean(page);
       state().backing->discard(index);
-    }
+    } else if (!page.spilled) return;
+    // Decoded bytes originate from a spilled page. A promotion carrying
+    // those bytes remains clean until its first mutation.
     invalidate_cache(index);
   }
   void erase_page(std::uint64_t index) noexcept {
