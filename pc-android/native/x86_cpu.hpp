@@ -330,6 +330,7 @@ class Cpu {
   std::uint64_t instructions = 0;
   std::uint64_t wbinvd_retired = 0;
   std::uint64_t crc32c_retired = 0;
+  std::uint64_t lsl_retired = 0;
   // Diagnostic counter: one increment per actual IA-32e page-table walk.
   // Used to prove that multi-byte accesses do not repeat the same walk.
   std::uint64_t page_walks = 0;
@@ -484,6 +485,7 @@ class Cpu {
 #endif
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0; wbinvd_retired = 0;
     crc32c_retired = 0;
+    lsl_retired = 0;
     instruction_page_ = {};
     instruction_page_hits = 0;
     instruction_page_reuses = 0;
@@ -498,11 +500,13 @@ class Cpu {
     const auto base = tsc_local_base_cycles_ + (shared_clock_ ? 0 : clock_cycles());
     const auto accesses = tsc_access_stats_;
     const auto crc32c_steps = crc32c_retired;
+    const auto lsl_steps = lsl_retired;
     reset(cs, ip);
     tsc_offset_ = offset;
     tsc_local_base_cycles_ = base;
     tsc_access_stats_ = accesses;
     crc32c_retired = crc32c_steps;
+    lsl_retired = lsl_steps;
   }
   // This CPU asserts FERR# as soon as the unmasked condition is pending.
   // An asserted IGNNE# allows a waiting instruction to execute while the
@@ -3449,6 +3453,9 @@ class Cpu {
     bool stack;
   };
   static SegmentCache decode_descriptor(std::uint16_t selector, std::uint64_t raw) noexcept;
+  std::optional<std::uint64_t> descriptor_query_address(std::uint16_t selector,
+                                                        unsigned bytes) const noexcept;
+  std::optional<std::uint32_t> query_segment_limit(std::uint16_t selector);
   TransferDescriptor descriptor_for_transfer(std::uint16_t selector, bool stack = false,
                                                bool allow_system = false);
   void check_transfer_descriptor_present(const TransferDescriptor& descriptor) const;
@@ -3487,6 +3494,47 @@ inline Cpu::SegmentCache Cpu::decode_descriptor(std::uint16_t selector, std::uin
   result.big = (attributes & 4) != 0;
   result.long_code = result.code && (attributes & 2);
   return result;
+}
+
+inline std::optional<std::uint64_t> Cpu::descriptor_query_address(std::uint16_t selector,
+                                                                 unsigned bytes) const noexcept {
+  if ((selector & 0xfffcU) == 0) return std::nullopt;
+  const bool local = (selector & 4U) != 0;
+  if (local && !ldtr.valid) return std::nullopt;
+  const auto base = local ? ldtr.base : gdtr.base;
+  const auto limit = local ? ldtr.limit : gdtr.limit;
+  const auto offset = std::uint32_t(selector & 0xfff8U);
+  if (offset + bytes - 1 > limit || base > UINT64_MAX - offset - (bytes - 1))
+    return std::nullopt;
+  return base + offset;
+}
+
+inline std::optional<std::uint32_t> Cpu::query_segment_limit(std::uint16_t selector) {
+  const auto address = descriptor_query_address(selector, 8);
+  if (!address) return std::nullopt;
+  SupervisorAccess system(*this);
+  const auto raw = read_linear(*address, 8);
+  const auto access = unsigned((raw >> 40) & 0xffU);
+  const bool code_or_data = (access & 0x10U) != 0;
+  if (!code_or_data) {
+    const auto type = access & 15U;
+    const bool ia32e = (efer & 0x400U) != 0;
+    const bool ldt_or_tss = type == 2 || type == 9 || type == 11 ||
+                            (!ia32e && (type == 1 || type == 3));
+    if (!ldt_or_tss) return std::nullopt;
+    if (ia32e) {
+      // LDT and TSS descriptors occupy two slots. LSL checks only bits
+      // 12:8 of the last dword in addition to the low descriptor.
+      constexpr auto reserved_type_bits = std::uint64_t{0x1f00} << 32;
+      if (!descriptor_query_address(selector, 16) ||
+          (read_linear(*address + 8, 8) & reserved_type_bits)) return std::nullopt;
+    }
+  }
+  const auto segment = decode_descriptor(selector, raw);
+  const bool conforming_code = code_or_data && segment.conforming;
+  if (!conforming_code && segment.dpl < std::max<unsigned>(cpl(), selector & 3U))
+    return std::nullopt;
+  return segment.limit;
 }
 
 inline Cpu::SegmentCache Cpu::descriptor(std::uint16_t selector) {
@@ -5358,6 +5406,15 @@ inline void Cpu::extended() {
       set_flag(ZF,equal);
       return;
     }
+    case 0x03: { // LSL r16/32/64, r/m16 selector.
+      const auto m = modrm();
+      if (is_real_mode()) fail("LSL requires protected mode", FaultCode::InvalidInstruction);
+      const auto limit = query_segment_limit(std::uint16_t(get(m.rm, 2)));
+      if (limit) put_reg(m.reg, bytes, *limit);
+      set_flag(ZF, limit.has_value());
+      ++lsl_retired;
+      return;
+    }
     case 0x00: { // Group 6: SLDT, STR, LLDT, LTR, VERR, VERW
       const auto m = modrm(); // Always decode ModRM before any unsupported fault.
       if (is_real_mode())
@@ -5377,27 +5434,18 @@ inline void Cpu::extended() {
         // VERR/VERW never fault merely because a selector is invalid; only
         // invalid memory addressing of the *operand* may fault.
         bool permitted = false;
-        if ((selector & 0xfffcu) != 0) {
-          const bool local = (selector & 4u) != 0;
-          const auto table_base = local ? ldtr.base : gdtr.base;
-          const auto table_limit = local ? ldtr.limit : std::uint32_t(gdtr.limit);
-          const auto offset = std::uint32_t(selector & 0xfff8u);
-          if ((!local || ldtr.valid) &&
-              offset <= table_limit && table_limit - offset >= 7u &&
-              table_base <= UINT64_MAX - offset - 7u) {
-            const auto descriptor_value = read_linear(table_base + offset, 8);
-            const unsigned access = unsigned(descriptor_value >> 40) & 0xffu;
-            const bool segment = (access & 0x10u) != 0;
-            const bool present = (access & 0x80u) != 0;
-            const bool code = (access & 8u) != 0;
-            const bool conforming = code && (access & 4u);
-            const bool accessible = ((access >> 5) & 3u) >= std::max<unsigned>(cpl(),selector & 3u);
-            const bool privilege_ok = conforming || accessible;
-            const bool read_ok = !code || (access & 2u);
-            const bool write_ok = !code && (access & 2u);
-            permitted = segment && present && privilege_ok &&
-                        (m.group == 4 ? read_ok : write_ok);
-          }
+        if (const auto address = descriptor_query_address(selector, 8)) {
+          const auto descriptor_value = read_linear(*address, 8);
+          const unsigned access = unsigned(descriptor_value >> 40) & 0xffu;
+          const bool segment = (access & 0x10u) != 0;
+          const bool present = (access & 0x80u) != 0;
+          const bool code = (access & 8u) != 0;
+          const bool conforming = code && (access & 4u);
+          const bool accessible = ((access >> 5) & 3u) >= std::max<unsigned>(cpl(),selector & 3u);
+          const bool privilege_ok = conforming || accessible;
+          const bool read_ok = !code || (access & 2u);
+          const bool write_ok = !code && (access & 2u);
+          permitted = segment && present && privilege_ok && (m.group == 4 ? read_ok : write_ok);
         }
         set_flag(ZF, permitted);
         return;

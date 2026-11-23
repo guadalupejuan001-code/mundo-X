@@ -513,6 +513,103 @@ void nonmaskable_interrupts() {
   check(cpu.can_accept_nmi(), "INIT clears NMI blocking");
   std::cout << "X86_NMI_PASS mov_ss=1 wake_if_clear=1 nested_block=1 iret=1 iret_fault=1 gate_fault=1 init=1\n";
 }
+
+void load_segment_limit() {
+  Cpu cpu(4U << 20);
+  configure(cpu);
+  constexpr std::uint64_t gdt = 0x1c000, ldt = 0x1d000;
+  constexpr std::uint32_t limit = 0xabcde;
+  constexpr std::uint64_t marker = 0x123456789abcdef0ULL;
+  constexpr auto flags = Cpu::IF | Cpu::DF | 2U;
+  const auto descriptor = [](std::uint32_t size, unsigned access, bool granular = false) {
+    return std::uint64_t(size & 0xffffU) | (std::uint64_t(size & 0xf0000U) << 32) |
+           (std::uint64_t(access) << 40) | (std::uint64_t(granular) << 55);
+  };
+  constexpr std::uint16_t gdt_limit = 0x67;
+  cpu.gdtr = {gdt_limit, gdt};
+  cpu.write64(gdt + 0x08, descriptor(limit, 0x92));
+  cpu.write64(gdt + 0x10, descriptor(limit, 0xf2, true));
+  cpu.write64(gdt + 0x18, descriptor(limit, 0x12)); // Not-present data descriptor.
+  cpu.write64(gdt + 0x20, descriptor(7, 0x82) | (ldt << 16));
+  cpu.write64(gdt + 0x28, 0);
+  cpu.write64(gdt + 0x30, descriptor(0x123, 0x8b)); // Busy 64-bit TSS.
+  cpu.write64(gdt + 0x38, 0);
+  cpu.write64(gdt + 0x40, descriptor(0, 0x8c)); // Call gate.
+  cpu.write64(gdt + 0x50, descriptor(limit, 0x9c)); // Conforming code with DPL 0.
+  cpu.write64(gdt + 0x58, descriptor(0x2b, 0x81)); // Legacy available 16-bit TSS.
+  cpu.write64(gdt + 0x60, 0);
+  cpu.write64(ldt, descriptor(0x345, 0x92));
+
+  const auto reg_limit = [&](std::initializer_list<std::uint8_t> code, unsigned selector,
+                             std::uint64_t expected, bool accepted, std::uint64_t address = kKernel) {
+    program(cpu, code, address);
+    const auto source = (marker & ~std::uint64_t{0xffff}) | selector;
+    cpu.regs[Cpu::EAX] = source;
+    cpu.regs[Cpu::ECX] = marker;
+    cpu.eflags = flags | (accepted ? 0U : Cpu::ZF);
+    const auto before = cpu.lsl_retired;
+    step(cpu);
+    check(cpu.regs[Cpu::ECX] == expected && cpu.regs[Cpu::EAX] == source &&
+              (cpu.eflags & (flags | Cpu::ZF)) == (flags | (accepted ? Cpu::ZF : 0U)) &&
+              cpu.lsl_retired == before + 1 && cpu.eip == address + code.size(),
+          "LSL must leave the selector intact, report acceptance through ZF and retire exactly once");
+  };
+  reg_limit({0x66, 0x0f, 0x03, 0xc8}, 0x08, (marker & ~std::uint64_t{0xffff}) | 0xbcde, true);
+  reg_limit({0x0f, 0x03, 0xc8}, 0x10, 0xabcdefff, true);
+  reg_limit({0x48, 0x0f, 0x03, 0xc8}, 0x18, limit, true);
+  reg_limit({0x0f, 0x03, 0xc8}, 0x30, 0x123, true);
+  reg_limit({0x0f, 0x03, 0xc8}, 0x20, 7, true);
+  for (const auto selector : {0x00, 0x04, 0x0b, 0x40, 0x58, 0x68})
+    reg_limit({0x0f, 0x03, 0xc8}, selector, marker, false);
+  cpu.gdtr.limit = 0x37; // The 64-bit TSS is missing the second half within the GDT limit.
+  reg_limit({0x0f, 0x03, 0xc8}, 0x30, marker, false);
+  cpu.gdtr.limit = gdt_limit;
+  cpu.write64(gdt + 0x38, std::uint64_t{1} << 40); // Last descriptor DWORD bit 8 is reserved.
+  reg_limit({0x0f, 0x03, 0xc8}, 0x30, marker, false);
+  cpu.write64(gdt + 0x38, 0);
+
+  program(cpu, {0x0f, 0x00, 0xd0}); // LLDT AX.
+  cpu.regs[Cpu::EAX] = 0x20;
+  step(cpu);
+  reg_limit({0x0f, 0x03, 0xc8}, 0x04, 0x345, true);
+  reg_limit({0x0f, 0x03, 0xc8}, 0x0c, marker, false);
+
+  // Only the selector's two bytes belong to the operand. The next page is unmapped.
+  constexpr std::uint64_t end_of_page = 0x1ffffe;
+  cpu.write16(end_of_page, 0x10);
+  cpu.regs[Cpu::EBX] = end_of_page;
+  program(cpu, {0x48, 0x0f, 0x03, 0x0b}); // LSL RCX, [RBX].
+  cpu.regs[Cpu::ECX] = marker;
+  step(cpu);
+  check(cpu.regs[Cpu::ECX] == 0xabcdefff && cpu.flag(Cpu::ZF) && cpu.read16(end_of_page) == 0x10,
+        "LSL with a 64-bit destination must still read only a 16-bit selector");
+
+  const auto retired = cpu.lsl_retired;
+  cpu.regs[Cpu::EBX] = end_of_page + 1;
+  program(cpu, {0x48, 0x0f, 0x03, 0x0b});
+  fault(cpu, FaultCode::PageFault, "LSL must fault on an unmapped byte of its selector operand");
+  program(cpu, {0xf0, 0x48, 0x0f, 0x03, 0x0b});
+  fault(cpu, FaultCode::InvalidInstruction, "LOCK LSL must raise #UD before reading the selector operand");
+  check(cpu.lsl_retired == retired, "faulting LSL must not count as retired");
+
+  program(cpu, {0x48, 0x0f, 0x07}); // SYSRETQ to CPL3.
+  cpu.regs[Cpu::ECX] = kUser;
+  cpu.regs[Cpu::R11] = 2;
+  step(cpu);
+  check(cpu.cpl() == 3, "LSL privilege fixture must reach CPL3");
+  reg_limit({0x0f, 0x03, 0xc8}, 0x08, marker, false, kUser);
+  reg_limit({0x0f, 0x03, 0xc8}, 0x13, 0xabcdefff, true, kUser);
+  reg_limit({0x0f, 0x03, 0xc8}, 0x53, limit, true, kUser);
+
+  const auto before_init = cpu.lsl_retired;
+  cpu.reset_for_startup_ipi(0, 0);
+  check(cpu.lsl_retired == before_init, "INIT must preserve cumulative LSL retirement telemetry");
+  program(cpu, {0x0f, 0x03, 0xc8});
+  fault(cpu, FaultCode::InvalidInstruction, "real-mode LSL must raise #UD");
+  cpu.reset();
+  check(cpu.lsl_retired == 0, "RESET must clear LSL retirement telemetry");
+  std::cout << "X86_LSL_PASS widths=3 gdt=1 ldt=1 cpl=1 memory=1 faults=1 init=1\n";
+}
 } // namespace
 
 int main() {
@@ -526,6 +623,7 @@ int main() {
     tsc_adjust_register();
     cache_writeback();
     nonmaskable_interrupts();
+    load_segment_limit();
     Cpu debug_cpu(4U << 20);
     boot(debug_cpu);
     program(debug_cpu, {0x41,0x0f,0x23,0xc0, 0x41,0x0f,0x21,0xc1, 0x0f,0x21,0xfa});
