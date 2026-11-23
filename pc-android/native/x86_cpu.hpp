@@ -431,6 +431,10 @@ class Cpu {
   // The platform can refresh its latched time without delivering an IRQ
   // inside the timestamp instruction.
   std::function<void()> before_timestamp_read_hook;
+  struct TscAccessStats {
+    std::uint64_t rdtsc = 0, read_tsc = 0, write_tsc = 0, read_adjust = 0, write_adjust = 0;
+  };
+  const TscAccessStats& tsc_access_stats() const noexcept { return tsc_access_stats_; }
 
   // Reset architectural state; deliberately preserve loaded RAM and hooks.
   void reset(std::uint16_t cs = 0, std::uint64_t ip = 0x7c00) {
@@ -442,6 +446,8 @@ class Cpu {
     system_call_msrs_ = {};
     platform_msrs_ = {};
     tsc_offset_ = 0;
+    tsc_local_base_cycles_ = 0;
+    tsc_access_stats_ = {};
     idle_clock_steps_ = 0;
     apic_task_priority_ = 0;
     apic_base_ = kLocalApicAddress | kApicEnable | (apic_id_ == 0 ? kApicBsp : 0);
@@ -479,6 +485,17 @@ class Cpu {
     page_translation_hits = 0;
     memory.invalidate_page_tables();
     transaction_ = false; clear_write_journal(); decoded_.clear();
+  }
+  void reset_for_startup_ipi(std::uint16_t cs, std::uint64_t ip) {
+    // INIT and SIPI leave the TSC and IA32_TSC_ADJUST intact. A standalone
+    // CPU also preserves the unadjusted time accumulated before this reset.
+    const auto offset = tsc_offset_;
+    const auto base = tsc_local_base_cycles_ + (shared_clock_ ? 0 : clock_cycles());
+    const auto accesses = tsc_access_stats_;
+    reset(cs, ip);
+    tsc_offset_ = offset;
+    tsc_local_base_cycles_ = base;
+    tsc_access_stats_ = accesses;
   }
   // This CPU asserts FERR# as soon as the unmasked condition is pending.
   // An asserted IGNNE# allows a waiting instruction to execute while the
@@ -1191,12 +1208,15 @@ class Cpu {
     return unsigned(access) | (unsigned(cpl() == 3 && !supervisor_internal_) << 2) |
         (unsigned((efer & 0x800U) != 0) << 3) | (unsigned((cr0 & 0x10000U) != 0) << 4);
   }
-  static constexpr std::uint32_t kTscMsr = 0x10U, kCr4Tsd = 1U << 2;
+  static constexpr std::uint32_t kTscMsr = 0x10U, kTscAdjustMsr = 0x3bU, kCr4Tsd = 1U << 2;
   std::uint64_t tsc_offset_ = 0;
+  std::uint64_t tsc_local_base_cycles_ = 0;
   std::uint64_t idle_clock_steps_ = 0;
+  TscAccessStats tsc_access_stats_;
   std::uint64_t timestamp_counter() const {
     if (before_timestamp_read_hook) before_timestamp_read_hook();
-    return tsc_offset_ + (shared_clock_ ? *shared_clock_ : clock_cycles()) * kTscTicksPerCycle;
+    const auto cycles = shared_clock_ ? *shared_clock_ : tsc_local_base_cycles_ + clock_cycles();
+    return tsc_offset_ + cycles * kTscTicksPerCycle;
   }
   std::vector<std::uint8_t> decoded_;
   struct WordUndo {
@@ -3680,7 +3700,15 @@ inline void Cpu::write_cr4(std::uint64_t value) {
 }
 
 inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
-  if (number == kTscMsr) return timestamp_counter();
+  if (number == kTscMsr) {
+    const auto value = timestamp_counter();
+    ++tsc_access_stats_.read_tsc;
+    return value;
+  }
+  if (windows_x64_profile_ && number == kTscAdjustMsr) {
+    ++tsc_access_stats_.read_adjust;
+    return tsc_offset_;
+  }
   if (number == 0x1bU) return apic_base_;
   if (number == 0xc0000080U) return efer;
   if (number == 0xc0000081U) return system_call_msrs_.star;
@@ -3700,6 +3728,14 @@ inline std::uint64_t Cpu::read_msr(std::uint32_t number) {
 inline void Cpu::write_msr(std::uint32_t number, std::uint64_t value) {
   if (number == kTscMsr) {
     tsc_offset_ += value - timestamp_counter();
+    ++tsc_access_stats_.write_tsc;
+    return;
+  }
+  if (windows_x64_profile_ && number == kTscAdjustMsr) {
+    // Replacing the per-CPU offset applies its delta to the running counter
+    // without sampling or changing the shared time source.
+    tsc_offset_ = value;
+    ++tsc_access_stats_.write_adjust;
     return;
   }
   if (number == 0x1bU) {
@@ -5452,6 +5488,7 @@ inline void Cpu::extended() {
       if ((cr4 & kCr4Tsd) && cpl() != 0)
         fail("CR4.TSD restricts RDTSC to CPL0", FaultCode::ProtectionFault);
       const auto ticks = timestamp_counter();
+      ++tsc_access_stats_.rdtsc;
       put_reg(EAX, 4, ticks); put_reg(EDX, 4, ticks >> 32);
       return;
     }
@@ -5494,7 +5531,7 @@ inline void Cpu::extended() {
           ecx |= (subleaf + 1) << 8;
         }
       }else if(leaf==7 && subleaf==0){
-        // Extended feature bits remain zero: no SMEP/AVX2/etc.
+        if (windows_x64_profile_) ebx = 1U << 1; // IA32_TSC_ADJUST.
       }else if(leaf==0x80000000U){
         eax=0x80000008U;
       }else if(leaf==0x80000001U){

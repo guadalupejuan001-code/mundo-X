@@ -319,6 +319,108 @@ void sysenter_registers() {
         "CPU reset must clear SYSENTER MSRs");
 }
 
+void tsc_adjust_register() {
+  constexpr std::uint32_t tsc = 0x10, adjust = 0x3b;
+  constexpr auto ticks_per_cycle = Cpu::kTscTicksPerCycle;
+  constexpr auto negative_adjust = std::uint64_t{0} - 327;
+  Cpu cpu(4U << 20);
+  cpu.reset();
+  const auto leaf7 = [&](unsigned subleaf) {
+    program(cpu, {0x0f, 0xa2});
+    cpu.regs[Cpu::EAX] = 7;
+    cpu.regs[Cpu::ECX] = subleaf;
+    step(cpu);
+    return cpu.regs[Cpu::EBX];
+  };
+  check(leaf7(0) == 0, "generic CPU does not advertise IA32_TSC_ADJUST");
+  program(cpu, {0x0f, 0x32});
+  cpu.regs[Cpu::ECX] = adjust;
+  fault(cpu, FaultCode::UnsupportedState, "generic CPU rejects the unsupported MSR");
+
+  cpu.use_windows_x64_profile();
+  cpu.reset();
+  Cpu peer(cpu.memory);
+  peer.use_windows_x64_profile();
+  peer.reset();
+  std::uint64_t cycles = 100'000;
+  const auto raw_tsc = [&] { return cycles * ticks_per_cycle; };
+  cpu.set_shared_clock(&cycles);
+  peer.set_shared_clock(&cycles);
+  unsigned clock_samples = 0;
+  cpu.before_timestamp_read_hook = [&] { ++clock_samples; };
+  const auto combined = [](const Cpu& value) { return value.regs[Cpu::EDX] << 32 | value.regs[Cpu::EAX]; };
+  const auto rdtsc = [&](Cpu& value) {
+    program(value, {0x0f, 0x31});
+    step(value);
+    return combined(value);
+  };
+
+  check(leaf7(0) == 2 && leaf7(1) == 0, "CPUID.07H.0 enables exactly the implemented TSC adjust bit");
+  check(read_msr(cpu, adjust) == 0 && read_msr(peer, adjust) == 0, "Power-on TSC adjustment is zero on both CPUs");
+  write_msr(cpu, adjust, negative_adjust);
+  check(read_msr(cpu, adjust) == negative_adjust && clock_samples == 0,
+        "TSC adjustment reads and writes retain all bits without sampling the raw clock");
+  check(rdtsc(cpu) == raw_tsc() + negative_adjust && rdtsc(peer) == raw_tsc(),
+        "Negative adjustment modifies the caller's TSC and leaves its peer unchanged");
+  const auto absolute = raw_tsc() + 0x123456789ULL;
+  write_msr(cpu, tsc, absolute);
+  check(read_msr(cpu, adjust) == absolute - raw_tsc() && read_msr(cpu, tsc) == absolute && clock_samples == 3,
+        "Writing the absolute TSC also changes the adjustment by the same delta");
+  cycles += 80;
+  write_msr(cpu, adjust, 73);
+  check(rdtsc(cpu) == raw_tsc() + 73 && rdtsc(peer) == raw_tsc() && cycles == 100'080,
+        "Replacing the adjustment applies its delta to the running counter without moving shared time");
+  const auto before_startup = cpu.tsc_access_stats();
+  check(before_startup.rdtsc == 2 && before_startup.read_tsc == 1 && before_startup.write_tsc == 1 &&
+        before_startup.read_adjust == 3 && before_startup.write_adjust == 2, "Committed TSC operation counters");
+
+  cpu.reset_for_startup_ipi(0, 0);
+  cpu.reset_for_startup_ipi(0xa00, 0);
+  write(cpu, kKernel, {0x0f, 0x32, 0x0f, 0x31});
+  cpu.regs[Cpu::ECX] = adjust;
+  step(cpu);
+  check(combined(cpu) == 73, "INIT and SIPI preserve the relative TSC offset");
+  step(cpu);
+  check(combined(cpu) == raw_tsc() + 73 && cpu.tsc_access_stats().write_adjust == 2,
+        "INIT and SIPI preserve shared clock, local offset and per-boot observation");
+  cpu.reset();
+  check(cpu.tsc_access_stats().rdtsc == 0 && cpu.tsc_access_stats().write_adjust == 0 &&
+        read_msr(cpu, adjust) == 0 && rdtsc(cpu) == raw_tsc(),
+        "CPU RESET clears adjustment and observations and leaves board-owned raw time to the board");
+
+  Cpu local(4U << 20);
+  local.use_windows_x64_profile();
+  local.reset();
+  write_msr(local, adjust, 311);
+  local.advance_idle_clock(127);
+  const auto local_tsc = local.clock_cycles() * ticks_per_cycle + 311;
+  local.reset_for_startup_ipi(0, 0);
+  check(rdtsc(local) == local_tsc && read_msr(local, adjust) == 311,
+        "A standalone INIT preserves the raw clock without folding it into IA32_TSC_ADJUST");
+  local.reset();
+  check(rdtsc(local) == 0 && read_msr(local, adjust) == 0, "Standalone RESET clears raw TSC and adjustment");
+
+  configure(cpu);
+  write_msr(cpu, adjust, 137);
+  program(cpu, {0x48, 0x0f, 0x07}); // SYSRETQ to CPL3.
+  cpu.regs[Cpu::ECX] = kUser;
+  cpu.regs[Cpu::R11] = 2;
+  step(cpu);
+  program(cpu, {0x0f, 0x30}, kUser);
+  cpu.regs[Cpu::ECX] = adjust;
+  cpu.regs[Cpu::EAX] = 3;
+  cpu.regs[Cpu::EDX] = 0;
+  fault(cpu, FaultCode::ProtectionFault, "Unprivileged WRMSR cannot change the TSC adjustment");
+  program(cpu, {0x0f, 0x32}, kUser);
+  cpu.regs[Cpu::ECX] = adjust;
+  fault(cpu, FaultCode::ProtectionFault, "Unprivileged RDMSR cannot read the TSC adjustment");
+  program(cpu, {0x0f, 0x31}, kUser);
+  step(cpu);
+  check(combined(cpu) == raw_tsc() + 137 && cpu.tsc_access_stats().write_adjust == 1 &&
+        cpu.tsc_access_stats().read_adjust == 0, "Faulting MSR operations leave offset and counters intact");
+  std::cout << "PRIME_TSC_ADJUST_PASS cpuid=1 shared_clock=1 signed=1 absolute=1 init=1 reset=1 privilege=1\n";
+}
+
 void cache_writeback() {
   Cpu cpu(4U << 20);
   constexpr auto data = 0x10000;
@@ -361,6 +463,7 @@ int main() {
     privilege_canonical_reset();
     apic_msr();
     sysenter_registers();
+    tsc_adjust_register();
     cache_writeback();
     Cpu debug_cpu(4U << 20);
     boot(debug_cpu);
