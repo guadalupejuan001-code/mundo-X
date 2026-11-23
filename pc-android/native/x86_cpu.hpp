@@ -793,8 +793,8 @@ class Cpu {
     try {
       if (!is_real_mode() && cpl() != 0 && cpl() != 3)
         fail("only CPL0/CPL3 are modeled", FaultCode::UnsupportedState);
-      if (eflags & (TF | 0x20000U))
-        fail("single-step trap / virtual-8086 state is not implemented", FaultCode::UnsupportedState);
+      if (eflags & 0x20000U)
+        fail("virtual-8086 state is not implemented", FaultCode::UnsupportedState);
       std::uint8_t op;
       for (;;) {
         op = fetch8();
@@ -820,6 +820,14 @@ class Cpu {
           : (cache_[CS].big != address_override_);
       execute(op);
       if (fault) fail(fault->reason, fault->code);
+      // POPF and IRET can enable stepping for the next instruction only.
+      bool single_step = (before.eflags & TF) != 0;
+      if (single_step || (eflags & TF)) {
+        if (opcode_ == 0x0f05) single_step = flag(TF);  // SYSCALL applies FMASK.
+        if (opcode_ == 0x0f07) single_step |= flag(TF); // SYSRET traps before its target.
+        // A successful MOV/POP SS inhibits this boundary; STI does not.
+        if (interrupt_shadow_ && (op == 0x17 || op == 0x8e)) single_step = false;
+      }
       // Only the first instruction in a consecutive blocking sequence
       // inhibits IRQ delivery. A bounded REP step consumes the shadow at
       // the first interruptible element boundary.
@@ -836,9 +844,16 @@ class Cpu {
         pause_wait_.repeats = 0;
       }
       transaction_ = false; clear_write_journal();
-      if (pending_io_debug_) {
-        dr6_ |= pending_io_debug_;
-        Trap debug{FaultCode::DebugException, "I/O breakpoint"};
+      unsigned debug_status = pending_io_debug_;
+      if (single_step) {
+        const bool software_interrupt = op == 0xcc || op == 0xcd ||
+            (op == 0xce && (before.eflags & OF));
+        if (!software_interrupt) debug_status |= 1U << 14; // DR6.BS
+      }
+      if (debug_status) {
+        dr6_ |= debug_status;
+        Trap debug{FaultCode::DebugException,
+                   debug_status == pending_io_debug_ ? "I/O breakpoint" : "single-step debug trap"};
         debug.after_instruction = true;
         throw debug;
       }
@@ -850,8 +865,8 @@ class Cpu {
       return StepResult::WaitingForX87;
     } catch (const Trap& t) {
       pause_wait_.repeats = 0;
-      // I/O data breakpoints are traps: the completed instruction and its
-      // device effects precede delivery of #DB, even if the gate fails.
+      // The completed instruction and its device effects precede delivery
+      // of a debug trap, even if the gate fails.
       const auto retired = t.after_instruction ? std::optional<Snapshot>{snapshot()} : std::nullopt;
       const auto& saved = retired ? *retired : before;
       const auto resume_ip = retired ? saved.eip : start_ip_;
@@ -874,6 +889,7 @@ class Cpu {
           const auto target = real_ivt_target(std::uint8_t(vector));
           if (target.cs || target.ip) {
             dispatch_real_interrupt(target, resume_ip);
+            halted = false;
             transaction_ = false; clear_write_journal();
             if (!retired) ++instructions;
             delivered_vector = vector;
@@ -903,6 +919,7 @@ class Cpu {
             transaction_ = true;
             const bool with_error = vector == 8 || (vector >= 11 && vector <= 14);
             dispatch_idt(std::uint8_t(vector), resume_ip, IdtSource::CpuException, with_error, error);
+            halted = false;
             transaction_ = false; clear_write_journal();
             if (!retired) ++instructions; // Ordinary faults count as a bounded interpreter step.
             delivered_vector = vector;
@@ -3126,7 +3143,6 @@ class Cpu {
     pending_io_debug_ |= io_breakpoint_mask(port, bytes);
   }
   void restore_flags(std::uint32_t value, unsigned bytes) {
-    if (value & TF) fail("trap flag requires an unimplemented debug exception", FaultCode::UnsupportedState);
     // POPFD cannot change VM/RF; accepted bits exclude reserved flags.
     std::uint32_t writable = 0x00247fd5U;
     // POPF at CPL3 cannot change IOPL; IF is preserved unless CPL<=IOPL.

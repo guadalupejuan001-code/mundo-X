@@ -155,6 +155,28 @@ void call_and_return() {
   check(cpu.eip == kUser + 3, "caller must execute its next instruction");
 }
 
+void single_step_system_calls() {
+  Cpu cpu(4U << 20);
+  configure(cpu);
+  write_msr(cpu, kFmask, Cpu::TF);
+  program(cpu, {0x48, 0x0f, 0x07}); // SYSRETQ.
+  write(cpu, kUser, {0x9d, 0x0f, 0x05, 0x90}); // POPFQ; SYSCALL; NOP.
+  cpu.write64(kStack, Cpu::TF | 2U);
+  cpu.regs[Cpu::ECX] = kUser;
+  cpu.regs[Cpu::ESP] = kStack;
+  cpu.regs[Cpu::R11] = 2;
+  step(cpu);
+  step(cpu);
+  check(cpu.flag(Cpu::TF) && cpu.eip == kUser + 1, "POPFQ must arm the following instruction");
+  step(cpu);
+  check(cpu.cpl() == 0 && !cpu.flag(Cpu::TF) && cpu.eip == kKernel &&
+            cpu.regs[Cpu::R11] == (Cpu::TF | 2U), "SYSCALL must apply FMASK before debug delivery");
+  const auto retired = cpu.instructions;
+  check(cpu.step() == StepResult::Faulted && cpu.fault && cpu.fault->code == FaultCode::DebugException &&
+            cpu.cpl() == 3 && cpu.eip == kUser + 3 && cpu.instructions == retired + 1,
+        "SYSRETQ restoring TF must trap before executing its target");
+}
+
 void compatibility_and_invalid_modes() {
   Cpu cpu(4U << 20);
   configure(cpu);
@@ -459,6 +481,7 @@ void cache_writeback() {
 int main() {
   try {
     call_and_return();
+    single_step_system_calls();
     compatibility_and_invalid_modes();
     privilege_canonical_reset();
     apic_msr();
