@@ -461,6 +461,7 @@ class Cpu {
     ldtr = {}; tr = {};
     x87_ignne_ = false;
     interrupt_shadow_ = false;
+    nmi_shadow_ = nmi_blocked_ = false;
     last_rep_batch_bytes_ = 0;
     last_rep_direct_page_copy_bytes_ = 0;
     last_idt_load_.reset();
@@ -764,6 +765,7 @@ class Cpu {
     const auto before = snapshot();
     const bool was_shadowed=interrupt_shadow_;
     interrupt_shadow_=false;
+    nmi_shadow_=false;
     const auto trace_mode_before=step_trace_hook?std::string(mode_name()):std::string{};
     const auto trace_walks_before=page_walks;
     int delivered_vector=-1;
@@ -847,7 +849,7 @@ class Cpu {
       // Only the first instruction in a consecutive blocking sequence
       // inhibits IRQ delivery. A bounded REP step consumes the shadow at
       // the first interruptible element boundary.
-      if(was_shadowed)interrupt_shadow_=false;
+      if(was_shadowed)interrupt_shadow_=nmi_shadow_=false;
       if (!ip_written_) eip = cursor_ & code_mask();
       eflags |= 2;
       ++instructions;
@@ -999,12 +1001,24 @@ class Cpu {
   // Pending IRQs remain with the originating device/controller.
   bool raise_external_irq(std::uint8_t vector) {
     if (!flag(IF) || interrupt_shadow_ || fault) return false;
+    return deliver_hardware_interrupt(vector, false);
+  }
+  bool can_accept_nmi() const noexcept {
+    return !fault && !nmi_blocked_ && !nmi_shadow_;
+  }
+  bool raise_nmi() {
+    if (!can_accept_nmi()) return false;
+    // Blocking begins before IDT delivery, including a fault on the gate.
+    nmi_blocked_ = true;
+    return deliver_hardware_interrupt(2, true);
+  }
+
+ private:
+  bool deliver_hardware_interrupt(std::uint8_t vector, bool nmi) {
+    const auto* description = nmi ? "hardware NMI delivery: " : "hardware IRQ delivery: ";
     failed_idt_count_ = 0;
     const auto memory_writes = memory.pin_writes();
-    const Snapshot before{regs,segments,cache_,eip,eflags,cr0,cr4,
-                          cr2,cr3,efer,fs_base,gs_base,system_call_msrs_,gdtr,idtr,ldtr,tr,a20_enabled,halted,
-                          xmm,mxcsr,x87,fpu_control,fpu_status,fpu_tags,
-                          fpu_opcode,fpu_cs,fpu_ds,fpu_ip,fpu_dp,tsc_offset_,apic_base_,apic_task_priority_};
+    const auto before = snapshot();
     start_ip_=eip;start_cs_=segments[CS];clear_write_journal();transaction_=true;
     try {
       if (is_real_mode()) {
@@ -1024,20 +1038,21 @@ class Cpu {
       return true;
     } catch (const Trap& t) {
       rollback(before);
-      fault=Fault{t.code,start_cs_,start_ip_,0,{},"hardware IRQ delivery: "+t.reason,t.address,t.error};
+      fault=Fault{t.code,start_cs_,start_ip_,0,{},description+t.reason,t.address,t.error};
       if(t.code==FaultCode::PageFault)cr2=t.address;
     } catch(const std::exception& e) {
       rollback(before);
-      fault=Fault{FaultCode::HostError,start_cs_,start_ip_,0,{},std::string("hardware IRQ delivery: ")+e.what()};
+      fault=Fault{FaultCode::HostError,start_cs_,start_ip_,0,{},std::string(description)+e.what()};
     }
     attach_idt_attempts();
     return false;
   }
 
- private:
   struct WaitingForX87 {};
   bool x87_ignne_ = false;
   bool interrupt_shadow_ = false;
+  bool nmi_shadow_ = false;
+  bool nmi_blocked_ = false;
   unsigned last_rep_batch_bytes_ = 0;
   unsigned last_rep_direct_page_copy_bytes_ = 0;
   std::array<IdtAttempt, Fault::kMaxIdtAttempts> failed_idt_attempts_{};
@@ -5757,7 +5772,7 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0x16: push(segments[SS], bytes); return;
     case 0x17:
       load_segment(SS, std::uint16_t(pop(bytes)));
-      interrupt_shadow_=true;
+      interrupt_shadow_=nmi_shadow_=true;
       return;
     case 0x1e: push(segments[DS], bytes); return;
     case 0x1f: load_segment(DS, std::uint16_t(pop(bytes))); return;
@@ -5814,7 +5829,7 @@ inline void Cpu::execute(std::uint8_t op) {
       if (op == 0x8c) put(m.rm, m.rm.is_register ? bytes : 2, segments[m.group]);
       else {
         load_segment(m.group, std::uint16_t(get(m.rm, 2)));
-        if(m.group==SS)interrupt_shadow_=true;
+        if(m.group==SS)interrupt_shadow_=nmi_shadow_=true;
       }
       return;
     }
@@ -5899,6 +5914,8 @@ inline void Cpu::execute(std::uint8_t op) {
     case 0xcd: { const auto vector = fetch8(); interrupt(vector); return; }
     case 0xce: if (flag(OF)) interrupt(4); return;
     case 0xcf: {
+      // IRET unblocks NMIs even if the instruction faults before returning.
+      nmi_blocked_ = false;
       if (is_real_mode()) {
         const auto target = pop(bytes); const auto cs = std::uint16_t(pop(bytes)); const auto flags = pop(bytes);
         if (flags & 0x20000U) fail("IRET virtual-8086 transition is not implemented", FaultCode::UnsupportedState);

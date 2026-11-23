@@ -476,6 +476,43 @@ void cache_writeback() {
   fault(cpu, FaultCode::ProtectionFault, "ring-three WBINVD must raise #GP(0)");
   check(cpu.fault->error_code == 0, "WBINVD #GP must have error code zero");
 }
+
+void nonmaskable_interrupts() {
+  Cpu cpu(4U << 20);
+  boot(cpu);
+  constexpr std::uint64_t idt = 0x1b000, handler = 0xb000;
+  cpu.idtr = {0x7ff, idt};
+  cpu.write64(idt + 32, handler | (std::uint64_t(cpu.segments[Cpu::CS]) << 16) | (0x8eULL << 40));
+  cpu.write64(idt + 40, 0);
+  write(cpu, handler, {0x48, 0xcf}); // IRETQ.
+  program(cpu, {0x8e, 0xd0, 0x90, 0xfa, 0xf4}); // MOV SS, AX; NOP; CLI; HLT.
+  cpu.regs[Cpu::EAX] = 0x10;
+  cpu.regs[Cpu::ESP] = kStack;
+  step(cpu);
+  check(!cpu.can_accept_nmi() && !cpu.raise_nmi(), "MOV SS must inhibit NMI at the next boundary");
+  step(cpu);
+  check(cpu.can_accept_nmi(), "NMI shadow ends after the next instruction");
+  step(cpu);
+  check(cpu.step() == StepResult::Halted && !cpu.flag(Cpu::IF), "guest must be halted with IF clear");
+  check(cpu.raise_nmi() && !cpu.halted && cpu.eip == handler && !cpu.flag(Cpu::IF),
+        "hardware NMI must enter vector 2 and wake HLT even with IF clear");
+  check(!cpu.can_accept_nmi() && !cpu.raise_nmi(), "NMI remains blocked while vector 2 is active");
+  step(cpu);
+  check(cpu.can_accept_nmi() && cpu.eip == kKernel + 5 && cpu.regs[Cpu::ESP] == kStack,
+        "IRETQ restores the post-HLT address, stack and NMI acceptance");
+  check(cpu.raise_nmi(), "NMI can be delivered again after IRETQ");
+  cpu.write64(cpu.regs[Cpu::ESP], kNoncanonical);
+  cpu.idtr = {0, 0}; // Keep the original IRETQ #GP as the terminal fault.
+  fault(cpu, FaultCode::ProtectionFault, "noncanonical IRETQ return RIP must fault");
+  cpu.fault.reset();
+  check(cpu.can_accept_nmi(), "faulting IRETQ still unblocks NMI");
+  check(!cpu.raise_nmi() && cpu.fault, "an invalid NMI gate must fault");
+  cpu.fault.reset();
+  check(!cpu.can_accept_nmi(), "faulting NMI gate delivery still blocks NMI");
+  cpu.reset_for_startup_ipi(0, 0);
+  check(cpu.can_accept_nmi(), "INIT clears NMI blocking");
+  std::cout << "X86_NMI_PASS mov_ss=1 wake_if_clear=1 nested_block=1 iret=1 iret_fault=1 gate_fault=1 init=1\n";
+}
 } // namespace
 
 int main() {
@@ -488,6 +525,7 @@ int main() {
     sysenter_registers();
     tsc_adjust_register();
     cache_writeback();
+    nonmaskable_interrupts();
     Cpu debug_cpu(4U << 20);
     boot(debug_cpu);
     program(debug_cpu, {0x41,0x0f,0x23,0xc0, 0x41,0x0f,0x21,0xc1, 0x0f,0x21,0xfa});
