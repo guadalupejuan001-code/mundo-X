@@ -25,7 +25,8 @@ namespace cosmic_pc::ether_arm64 {
 inline constexpr std::uint64_t kExecutionTargetHz = 4'500'000'000'000ULL;
 
 inline constexpr unsigned kStackAccess = 16; // Packed alongside the RAM callback's width.
-inline constexpr unsigned kSubtractAccess = 32;
+inline constexpr unsigned kMemoryAluAccess = 32;
+inline constexpr unsigned kSubtractAccess = 64;
 
 // Decode only the register and ordinary-memory forms the ARM64 backend
 // implements. The interpreter owns all other prefixes, operands and opcodes.
@@ -72,7 +73,7 @@ struct Instruction {
         kind == Increment || kind == Decrement;
   }
   bool writes_ram() const noexcept {
-    return lhs.memory && (kind == Move || kind == MoveByte || kind == Subtract);
+    return lhs.memory && (kind == Move || kind == MoveByte || kind == Add || kind == Subtract);
   }
   bool writes_esp_dword() const noexcept {
     return opcode == 0x89 && width == 4 && lhs.memory && lhs.stack &&
@@ -89,7 +90,7 @@ struct Block {
   static constexpr unsigned kMaxWrites = 4;
   static constexpr unsigned kNoFlagSource = kMaxInstructions;
   std::array<Instruction, kMaxInstructions> instructions{};
-  unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0;
+  unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0, ram_adds = 0;
   unsigned auxiliary_index = kNoFlagSource, rotate_carry_index = kNoFlagSource;
   unsigned decrement_carry_index = kNoFlagSource;
   unsigned rotate_overflow_index = kNoFlagSource, rotates = 0;
@@ -367,9 +368,10 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         }
         op.kind = Instruction::Test;
       } else if (binary_alu) {
-        // Only the observed 64-bit SUB r/m64,r64 variant has a guarded write.
+        // Read-modify-write uses the guarded RAM callback, never LOCK forms.
         const bool subtract_memory = opcode == 0x29 && op.width == 8;
-        if (op.lhs.memory && direct_alu != Instruction::Compare && !subtract_memory) break;
+        const bool add_memory = long_mode && opcode == 0x01 && op.width >= 4;
+        if (op.lhs.memory && direct_alu != Instruction::Compare && !subtract_memory && !add_memory) break;
         if (!(opcode & 1)) {
           op.width = 1;
           if (!rex && (reg.reg >= 4 || (!other.memory && other.reg >= 4))) break;
@@ -411,7 +413,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     const bool chain_stack_store = legacy_store && fixed_stack_base && op.writes_esp_dword();
     if (!long_mode && block.writes && (changes_stack_base || (legacy_store && !chain_stack_store))) break;
     fixed_stack_base &= !changes_stack_base;
-    // A guarded memory SUB uses the primary flag slots in its write callback.
+    // A guarded RAM arithmetic operation uses the primary flag slots in its callback.
     // Commit it before a subsequent logical operation that inherits its AF.
     if (Instruction::logical(op.kind) && block.auxiliary_index != Block::kNoFlagSource &&
         block.instructions[block.auxiliary_index].writes_ram()) break;
@@ -474,8 +476,10 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     block.register_only = block.register_only && !op.lhs.memory &&
         (!op.rhs.memory || op.kind == Instruction::Lea);
     block.size = pos;
-    if (op.writes_ram() && (++block.writes == Block::kMaxWrites ||
-        (legacy_store && !chain_stack_store))) break;
+    if (op.writes_ram()) {
+      block.ram_adds += op.kind == Instruction::Add;
+      if (++block.writes == Block::kMaxWrites || (legacy_store && !chain_stack_store)) break;
+    }
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }
@@ -847,7 +851,8 @@ class Emitter {
           : i == block.auxiliary_index ? offsetof(Frame, auxiliary_left)
           : i == block.decrement_carry_index && !Instruction::logical(op.kind) ? offsetof(Frame, carry_left) : 0;
       if (op.writes_ram()) {
-        const auto access = op.kind == Instruction::Subtract ? kSubtractAccess : 0;
+        const auto access = op.kind == Instruction::Subtract ? kMemoryAluAccess | kSubtractAccess
+            : op.kind == Instruction::Add ? kMemoryAluAccess : 0;
         prepare_access(op.lhs, op.width, access);
         if (op.rhs.immediate) literal(3, op.rhs.immediate_value, op.width);
         else load(3, op.rhs.reg * 8, op.width);

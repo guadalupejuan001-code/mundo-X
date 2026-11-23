@@ -214,7 +214,7 @@ inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
 struct Cpu::EtherRamView {
   Cpu* capture;
   ether_arm64::RamView words;
-  static constexpr unsigned kWrite = 64;
+  static constexpr unsigned kWrite = 128;
 
   const ether_arm64::RamView::Word* operand(std::uint64_t linear, unsigned spec) {
     if (const auto* cached = words.find(linear, spec)) return cached;
@@ -224,7 +224,7 @@ struct Cpu::EtherRamView {
     const auto physical = capture->ether_arm64_ram_address(linear, width, spec & ether_arm64::kStackAccess,
                                                            write ? Access::Write : Access::Read);
     if (!physical || (write && capture->memory.may_touch_page_tables(*physical, width))) return nullptr;
-    const bool input = !write || (spec & ether_arm64::kSubtractAccess);
+    const bool input = !write || (spec & ether_arm64::kMemoryAluAccess);
     const auto original = input ? capture->read_ram_span(*physical, width) : 0;
     return words.add({linear, *physical, original, spec, width, input});
   }
@@ -243,10 +243,10 @@ struct Cpu::EtherRamView {
       auto& view = *static_cast<EtherRamView*>(frame->cpu);
       const auto* word = view.operand(linear, spec | kWrite);
       if (!word) return 0;
-      if (spec & ether_arm64::kSubtractAccess) {
+      if (spec & ether_arm64::kMemoryAluAccess) {
         frame->left = frame->pending->load(word->physical, word->width, [&] { return word->original; });
         frame->right = value;
-        value = frame->left - value;
+        value = spec & ether_arm64::kSubtractAccess ? frame->left - value : frame->left + value;
       }
       return frame->pending->stage(word->physical, word->width, value);
     } catch (const std::exception&) { return 0; }
@@ -596,6 +596,7 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
   retire_ether_decoded_block(block, entry.bytes.data(), origin, taken, retired);
   ++ether_arm64_stats_.blocks;
   ether_arm64_stats_.steps += retired;
+  if (block.ram_adds) ether_arm64_stats_.ram_add_steps += std::uint64_t(rounds) * block.ram_adds;
   if (frame.state_vector_rounds) {
     ++ether_arm64_stats_.state_vector_dispatches;
     const auto projected = std::uint64_t(frame.state_vector_rounds) * block.count;
@@ -693,11 +694,11 @@ inline unsigned Cpu::ether_arm64_write(ether_arm64::Frame* frame, std::uint64_t 
     const auto physical = cpu.ether_arm64_ram_address(
         address, width, spec & ether_arm64::kStackAccess, Access::Write);
     if (!physical || cpu.memory.may_touch_page_tables(*physical, width)) return 0;
-    if (spec & ether_arm64::kSubtractAccess) {
-      // This x64 RAM form has no separate read permission from its validated write.
+    if (spec & ether_arm64::kMemoryAluAccess) {
+      // This x64 RAM operand has no separate read permission from its validated write.
       frame->left = cpu.ether_arm64_load_ram(*frame, *physical, width);
       frame->right = value;
-      value = frame->left - value;
+      value = spec & ether_arm64::kSubtractAccess ? frame->left - value : frame->left + value;
     }
     if (frame->pending) return frame->pending->stage(*physical, width, value);
     cpu.ether_arm64_commit_word(*physical, width, value);

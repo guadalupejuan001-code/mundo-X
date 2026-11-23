@@ -208,6 +208,7 @@ class Cpu {
     std::uint64_t off_bus_register_steps = 0;
     std::uint64_t off_bus_ram_blocks = 0, off_bus_ram_steps = 0, ram_view_conflicts = 0;
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
+    std::uint64_t ram_add_steps = 0;
     std::uint64_t repeated_loop_dispatches = 0, repeated_loop_steps = 0, rotate_steps = 0;
     std::uint64_t variable_rotate_steps = 0;
     std::uint64_t resident_read_hits = 0, ram_read_callbacks = 0;

@@ -96,6 +96,11 @@ constexpr std::array<std::uint8_t, 15> memory_subtractions{
     0x4c,0x89,0xca,0x4a,0x29,0x04,0xc9,    // MOV RDX,R9; observed SUB [RCX+R9*8],RAX
     0xf4};
 
+// The indexed RAM ADD and adjoining instructions observed in the x64 kernel.
+constexpr std::array<std::uint8_t, 16> kernel_add_tail{
+    0x44,0x01,0x4c,0x95,0x00, 0x41,0xff,0xc0, 0x48,0xff,0xc2,
+    0x48,0x3b,0xd3, 0x7c,0xc6};
+
 constexpr std::array<std::uint8_t, 16> repeated_alias_loop{
     0x4c,0x29,0x1f,       // SUB [RDI],R11
     0x88,0x4f,0x03,       // MOV [RDI+3],CL (overlaps the subtraction)
@@ -159,6 +164,18 @@ void initialize_loop(Cpu& cpu) {
 }
 
 void decoder_contract() {
+  const auto kernel = arm64::decode(kernel_add_tail.data(), kernel_add_tail.size(), code);
+  const auto& add = kernel.instructions.front();
+  require(kernel.count == 5 && kernel.size == kernel_add_tail.size() && kernel.stages_ram() && kernel.ram_adds == 1 &&
+          kernel.target == code - 42 && kernel.flag_op == arm64::Instruction::Compare &&
+          add.kind == arm64::Instruction::Add && add.width == 4 && add.writes_ram() &&
+          add.lhs.reg == Cpu::EBP && add.lhs.index == Cpu::EDX && add.lhs.scale_shift == 2 &&
+          add.rhs.reg == Cpu::R9, "kernel ADD/INC/INC/CMP/JL must share one guarded block");
+  constexpr std::uint8_t locked_add[]{0xf0,0x44,0x01,0x0f,0x90};
+  constexpr std::uint8_t protected_add[]{0x01,0x07,0x90};
+  require(!arm64::decode(locked_add, sizeof(locked_add), code).count &&
+          !arm64::decode(protected_add, sizeof(protected_add), code, false).count,
+          "LOCK or legacy RAM ADD must remain on the interpreter path");
   const auto first = arm64::decode(pointer_loop.data(), pointer_loop.size(), code);
   require(first.count == 3 && first.size == 9 && first.flag_width == 8 &&
           first.instructions[0].rhs.memory && first.instructions[0].rhs.reg == Cpu::ESI &&
@@ -1180,6 +1197,69 @@ void memory_subtraction_contract() {
             machine->cpu.read64(boundary) == high - 1, "scalar cross-page subtraction failed");
   require(capture(native.cpu) == capture(scalar.cpu), "subtraction fallback changed guest state");
   std::cout << "PRIME_ETHER_RMW_BOOT_PASS variants=2 cross_page=1\n";
+}
+
+void memory_addition_contract() {
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  constexpr auto flags_code = code + 0x80;
+  constexpr auto cross_page = output + 0xffe;
+  for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+    cpu->memory.write_block(code, kernel_add_tail.data(), kernel_add_tail.size());
+    emit(*cpu, flags_code, {0x4c,0x01,0x0f,0x48,0x8b,0x17,0xf4}); // ADD [RDI],R9; MOV RDX,[RDI].
+    cpu->regs[Cpu::EBP] = output;
+    cpu->regs[Cpu::EDX] = 2;
+    cpu->regs[Cpu::EBX] = 4;
+    cpu->regs[Cpu::R9] = 3;
+    cpu->write64(output + 8, 0x12345678fffffffeULL);
+  }
+  warm_block(native.cpu, code, 5);
+  for (unsigned i = 0; i < 5; ++i)
+    require(scalar.cpu.step() == StepResult::Executed, "scalar kernel ADD fixture failed");
+  auto& cpu = native.cpu;
+  const auto& stats = cpu.ether_arm64_stats();
+  require(stats.blocks == 1 && stats.staged_ram_steps == 5 && stats.ram_add_steps == 1 &&
+          cpu.eip == code - 42 && capture(cpu) == capture(scalar.cpu) &&
+          cpu.read64(output + 8) == 0x1234567800000001ULL &&
+          cpu.read64(output + 8) == scalar.cpu.read64(output + 8),
+          "indexed DWORD ADD changed branch, registers, flags, or neighboring RAM");
+
+  for (auto address : {cross_page, code}) {
+    for (auto* guest : {&cpu, &scalar.cpu}) {
+      guest->eip = code;
+      guest->regs[Cpu::EBP] = address;
+      guest->regs[Cpu::EDX] = 0;
+      if (address == cross_page) guest->write32(address, 11);
+    }
+    const auto before = capture(cpu);
+    const auto value = cpu.read32(address);
+    const auto fallbacks = stats.data_fallbacks;
+    require(!cpu.try_ether_arm64_block(5) && stats.data_fallbacks == fallbacks + 1 && stats.ram_add_steps == 1 &&
+            capture(cpu) == before && cpu.read32(address) == value,
+            "cross-page or executing-code ADD committed before fallback");
+    for (auto* guest : {&cpu, &scalar.cpu})
+      require(guest->step() == StepResult::Executed && guest->read32(address) == value + 3,
+              "scalar ADD failed to replay the rejected native operation");
+    require(capture(cpu) == capture(scalar.cpu), "ADD fallback changed the guest state");
+  }
+
+  for (auto initial : {UINT64_C(0x7fffffffffffffff), UINT64_MAX}) {
+    for (auto* guest : {&cpu, &scalar.cpu}) {
+      guest->eip = flags_code;
+      guest->regs[Cpu::EDI] = output;
+      guest->regs[Cpu::R9] = 1;
+      guest->write64(output, initial);
+    }
+    warm_block(cpu, flags_code, 2);
+    require(scalar.cpu.step() == StepResult::Executed && scalar.cpu.step() == StepResult::Executed &&
+            capture(cpu) == capture(scalar.cpu) && cpu.regs[Cpu::EDX] == initial + 1 &&
+            cpu.flag(Cpu::CF) == (initial == UINT64_MAX) &&
+            cpu.flag(Cpu::OF) == (initial != UINT64_MAX),
+            "QWORD ADD did not preserve carry, overflow, or staged load forwarding");
+  }
+  require(stats.ram_add_steps == 3, "native RAM ADD counter must count only committed operations");
+  std::cout << "PRIME_ETHER_RAM_ADD_PASS kernel_steps=5 kernel_blocks=1 cross_page=1 code_guard=1 qword_flags=1\n";
 }
 
 void staged_ram_contract() {
@@ -2516,6 +2596,7 @@ int main() {
     rip_relative_contract();
     signed_load_contract();
     memory_subtraction_contract();
+    memory_addition_contract();
     staged_ram_contract();
     repeated_loop_contract();
     protected32_contract();
