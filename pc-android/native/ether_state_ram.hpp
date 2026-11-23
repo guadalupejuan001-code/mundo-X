@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -119,14 +120,22 @@ class EtherStateRam {
   };
   static constexpr std::size_t kMaxCacheLines = 512;
   static constexpr std::size_t kCacheHintSlots = 2048;
+  static constexpr std::size_t kPageLookupSlots = 1024;
   static_assert(kMaxCacheLines <= UINT16_MAX);
   using PageMap = std::map<std::uint64_t, BasisPage>;
+  using PageEntry = PageMap::value_type;
+  struct PageLookupSlot {
+    std::atomic<const PageEntry*> entry{nullptr};
+  };
   struct Storage {
     explicit Storage(std::uint64_t logical, std::uint64_t budget)
         : logical_bytes(logical), payload_cap(budget) {}
     std::uint64_t logical_bytes;
     std::uint64_t payload_cap;
     PageMap pages;
+    // Parallel readers may replace a hint. The owner joins them before
+    // changing the page map, so a loaded entry remains valid for the read.
+    mutable std::array<PageLookupSlot, kPageLookupSlots> page_lookup;
     // Map entries stay stable until explicitly erased. Clean eviction visits
     // this compact index instead of walking spilled and dirty guest pages.
     std::vector<PageMap::value_type*> clean_pages;
@@ -526,6 +535,20 @@ class EtherStateRam {
     check_range(address, count);
     if (count && !source) throw std::invalid_argument("EtherStateRam null write source");
     if (!count) return;
+    const auto inside = static_cast<std::size_t>(address % kPageSize);
+    if (count <= kPageSize - inside) {
+      const auto index = address / kPageSize;
+      if (auto* page = find_page(index); page && page->packed &&
+          allocated_bytes() <= resident_payload_limit() && !quantum_intersects(address, count)) {
+        // A dense ordinary page needs no materialization. Capture the undo
+        // bytes before dirtying its backing and keep it pinned as usual.
+        auto* data = page->packed->data() + inside;
+        if (previous) std::memmove(previous, data, count);
+        mark_write(index, *page);
+        std::memmove(data, source, count);
+        return;
+      }
+    }
     const auto bindings = quantum_addresses(address, count);
     std::vector<std::pair<std::uint64_t, std::uint8_t>> updates;
     updates.reserve(bindings.size());
@@ -831,6 +854,7 @@ class EtherStateRam {
 
   void reset_zero() noexcept {
     std::vector<PageMap::value_type*>{}.swap(state().clean_pages);
+    for (auto& slot : state().page_lookup) slot.entry.store(nullptr, std::memory_order_relaxed);
     state().pages.clear();
     state().payload = 0;
     state().dense_pages = state().rule_pages = state().spilled_pages = 0;
@@ -904,13 +928,21 @@ class EtherStateRam {
     if (address > size() || static_cast<std::uint64_t>(count) > size() - address)
       throw std::out_of_range("EtherStateRam address outside logical RAM");
   }
+  static std::size_t page_lookup_slot(std::uint64_t index) noexcept {
+    return (index ^ (index >> 10) ^ (index >> 20)) & (kPageLookupSlots - 1);
+  }
   BasisPage* find_page(std::uint64_t index) noexcept {
-    const auto it = state().pages.find(index);
-    return it == state().pages.end() ? nullptr : &it->second;
+    return const_cast<BasisPage*>(std::as_const(*this).find_page(index));
   }
   const BasisPage* find_page(std::uint64_t index) const noexcept {
-    const auto it = state().pages.find(index);
-    return it == state().pages.end() ? nullptr : &it->second;
+    const auto& data = state();
+    auto& slot = data.page_lookup[page_lookup_slot(index)].entry;
+    if (const auto* entry = slot.load(std::memory_order_relaxed))
+      if (entry->first == index) return &entry->second;
+    const auto it = data.pages.find(index);
+    if (it == data.pages.end()) return nullptr;
+    slot.store(&*it, std::memory_order_relaxed);
+    return &it->second;
   }
   bool is_quantum(std::uint64_t address) const noexcept {
     return state().quantum && state().quantum->contains(address);
@@ -1051,6 +1083,9 @@ class EtherStateRam {
     forget_clean(it->second);
     invalidate_cache(index);
     remove_accounting(it->second);
+    auto& slot = state().page_lookup[page_lookup_slot(index)].entry;
+    if (slot.load(std::memory_order_relaxed) == &*it)
+      slot.store(nullptr, std::memory_order_relaxed);
     state().pages.erase(it);
   }
   void set_rule(std::uint64_t index, std::uint64_t pattern) noexcept {

@@ -614,6 +614,65 @@ void test_decoded_cache_hints() {
        "reset retained cached data or an address hint");
 }
 
+void test_resident_point_lookup() {
+  Fabric ram(64ULL << 30, 4 * page_size);
+  // These guest page numbers collide in the point-lookup table.
+  constexpr auto alias = 1025ULL * page_size;
+  constexpr auto high = (64ULL << 30) - page_size;
+  const auto low_data = varied(6), alias_data = varied(91), high_data = varied(122);
+  ram.write_block(0, low_data.data(), page_size);
+  ram.write_block(alias, alias_data.data(), page_size);
+  ram.write_block(high, high_data.data(), page_size);
+
+  std::array<bool, 2> valid{};
+  std::array<std::thread, 2> readers;
+  for (unsigned i = 0; i < readers.size(); ++i) {
+    readers[i] = std::thread([&, i] {
+      const auto address = i == 0 ? 0 : alias;
+      const auto& expected = i == 0 ? low_data : alias_data;
+      Page restored{};
+      valid[i] = true;
+      for (unsigned pass = 0; pass < 256; ++pass) {
+        ram.read_parallel_ram_block(address, restored.data(), restored.size());
+        valid[i] = valid[i] && restored == expected;
+      }
+    });
+  }
+  for (auto& reader : readers) reader.join();
+  need(valid[0] && valid[1], "parallel point hints redirected a colliding guest page");
+  need(ram.read_byte(high + 19) == high_data[19], "the highest logical page has the wrong tag");
+
+  constexpr std::size_t offset = 93;
+  const std::array<std::uint8_t, 4> source{0x13, 0x14, 0x15, 0x16};
+  std::array<std::uint8_t, 4> previous{};
+  {
+    const auto pins = ram.pin_writes();
+    ram.write_ram_block_with_previous(high + offset, source.data(), previous.data(), source.size());
+    need(std::equal(previous.begin(), previous.end(), high_data.begin() + offset) &&
+             ram.read_byte(high + offset) == source.front(),
+         "dense write did not capture old bytes and publish the new word");
+    for (unsigned i = 0; i < previous.size(); ++i)
+      need(ram.restore_byte(high + offset + i, previous[i]), "ordinary rollback rejected the dense page");
+  }
+  Page restored{};
+  ram.read_block(high, restored.data(), restored.size());
+  need(restored == high_data, "ordinary rollback missed a byte of the dense operand");
+
+  need(ram.read_byte(alias + 19) == alias_data[19], "wrong value immediately before erasing a hinted page");
+  ram.fill(alias, 0, page_size);
+  need(ram.read_byte(alias + 19) == 0 && ram.read_byte(19) == low_data[19],
+       "erasing a hinted page changed a colliding page or kept freed bytes");
+  ram.write_block(alias, high_data.data(), high_data.size());
+  need(ram.read_byte(alias + 19) == high_data[19] && ram.read_byte(19) == low_data[19],
+       "recreating an erased page reused its previous identity or bytes");
+  ram.fill(high, 0x72, page_size);
+  need(ram.read_byte(high + offset) == 0x72 && !ram.resident_ram_span(high, 1),
+       "a compacted hinted page returned its old resident state");
+  ram.reset_zero();
+  need(ram.read_byte(19) == 0 && ram.read_byte(alias + 19) == 0 && ram.read_byte(high + offset) == 0,
+       "RAM reset left entries in the point lookup table");
+}
+
 void test_quantum_routes_and_rollback() {
   Fabric ram(3 * page_size, 3 * page_size);
   need(std::string(ram.backend_name()) == "ether-state-ram", "fabric selected old RAM");
@@ -677,6 +736,7 @@ int main() {
     test_implicit_zero_fill_inside_journal();
     test_full_overwrite_and_lazy_shared_cache();
     test_decoded_cache_hints();
+    test_resident_point_lookup();
     test_quantum_routes_and_rollback();
     std::cout << "ETHER_STATE_RAM_PASS checks=" << checks << " logical_bytes=" << (64ULL << 30) << '\n';
     return 0;
