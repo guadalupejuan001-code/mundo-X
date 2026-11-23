@@ -328,6 +328,106 @@ void enter_leave_paging_fault_tests() {
         cpu.read64(0xe008) == 0xabcdef1234567890ULL, "ENTER finishes decoding before performing any stack access");
 }
 
+void hardware_irq64_frames() {
+  constexpr unsigned vector = 0xd1;
+  constexpr std::uint64_t resume = 0xa000, handler = 0xa100, idt = 0x6000;
+  constexpr std::uint64_t sentinel = 0xabcdef1234567890ULL;
+  constexpr auto flags = 2U | Cpu::IF | Cpu::CF | Cpu::DF;
+  Cpu cpu;
+  boot(cpu);
+  cpu.enable_page_translation_cache();
+  program(cpu, {0x48, 0xcf}, handler); // IRETQ.
+  const auto cs = cpu.segments[Cpu::CS], ss = cpu.segments[Cpu::SS];
+  cpu.idtr = {0xfff, idt};
+  const auto gate = [&](unsigned ist) {
+    cpu.write64(idt + 16 * vector, handler | (std::uint64_t(cs) << 16) |
+        (std::uint64_t(ist) << 32) | (0x8eULL << 40));
+    cpu.write64(idt + 16 * vector + 8, 0);
+  };
+  const auto start = [&](std::uint64_t rsp) {
+    cpu.eip = resume;
+    cpu.regs[Cpu::ESP] = rsp;
+    cpu.eflags = flags;
+  };
+  const auto round_trip = [&](std::uint64_t rsp, std::uint64_t top, bool bulk) {
+    const auto frame = top - 40;
+    for (unsigned i = 0; i < 5; ++i) cpu.write64(frame + i * 8, sentinel);
+    cpu.write64(frame - 8, sentinel);
+    cpu.write64(top, sentinel);
+    start(rsp);
+    const auto before = cpu.regs;
+    const auto retired = cpu.instructions;
+    const auto frames = cpu.irq64_bulk_frames;
+    check(cpu.raise_external_irq(vector) && cpu.eip == handler && !cpu.flag(Cpu::IF) && !cpu.halted,
+          "64-bit IRQ delivery enters the interrupt gate and wakes a halted guest");
+    check(cpu.regs[Cpu::ESP] == frame && cpu.instructions == retired &&
+          cpu.irq64_bulk_frames == frames + bulk, "64-bit IRQ applies the exact five-word frame path");
+    const std::array<std::uint64_t, 5> expected{resume, cs, flags, rsp, ss};
+    for (unsigned i = 0; i < expected.size(); ++i)
+      check(cpu.read64(frame + i * 8) == expected[i], "64-bit IRQ frame has exact saved bytes");
+    check(cpu.read64(frame - 8) == sentinel && cpu.read64(top) == sentinel,
+          "64-bit IRQ frame writes only its five slots");
+    one(cpu);
+    check(cpu.eip == resume && cpu.regs == before && cpu.eflags == flags &&
+          cpu.segments[Cpu::CS] == cs && cpu.segments[Cpu::SS] == ss && cpu.instructions == retired + 1,
+          "IRETQ restores registers, selectors, flags and stack even after IST");
+  };
+
+  gate(0);
+  round_trip(0x7f05, 0x7f00, true);
+  round_trip(0xd012, 0xd010, false); // The frame straddles two pages.
+  unsigned traced = 0;
+  cpu.irq_trace_hook = [&](const Cpu::IrqTrace&) { ++traced; };
+  round_trip(0x7f05, 0x7f00, false);
+  check(traced == 1, "An observed hardware IRQ retains the scalar delivery path");
+  cpu.irq_trace_hook = {};
+
+  std::vector<std::uint64_t> mmio_stores;
+  cpu.mmio_claim_hook = [](std::uint64_t address) { return address >= 0x7ed8 && address < 0x7f00; };
+  cpu.mmio_range_claim_hook = [](std::uint64_t address, std::size_t count) {
+    return address < 0x7f00 && address + count > 0x7ed8;
+  };
+  cpu.mmio_write_hook = [&](std::uint64_t address, std::uint8_t) { mmio_stores.push_back(address); return true; };
+  start(0x7f05);
+  const auto before_mmio = cpu.irq64_bulk_frames;
+  check(cpu.raise_external_irq(vector) && cpu.irq64_bulk_frames == before_mmio && mmio_stores.size() == 40,
+        "MMIO stack retains the original five hardware pushes");
+  for (unsigned i = 0; i < mmio_stores.size(); ++i)
+    check(mmio_stores[i] == 0x7ef8 - (i / 8) * 8 + i % 8, "MMIO stack push order is unchanged");
+  cpu.mmio_claim_hook = {};
+  cpu.mmio_range_claim_hook = {};
+  cpu.mmio_write_hook = {};
+  cpu.memory.invalidate_page_tables();
+
+  constexpr std::uint64_t tss = 0x9000;
+  cpu.tr = {0x28, tss, 0x67, true, false};
+  cpu.write64(tss + 36, 0xff05);
+  gate(1);
+  round_trip(0x7f05, 0xff00, true);
+  gate(0);
+
+  for (unsigned i = 0; i < 512; ++i) cpu.write64(0x4000 + i * 8, std::uint64_t(i) * 4096 | 3);
+  cpu.write64(0x3000, 0x4003);
+  round_trip(0x7f05, 0x7f00, false); // Exact scalar order sets the missing PTE A/D bits.
+  check((cpu.read64(0x4000 + 7 * 8) & 0x60) == 0x60, "The IRQ fallback must preserve the x86 PTE A/D bits");
+  round_trip(0x7f05, 0x7f00, true);
+
+  cpu.write64(0x4000 + 12 * 8, 0); // The third push faults after two stores to D000.
+  cpu.write64(0xd000, sentinel);
+  cpu.write64(0xd008, sentinel);
+  start(0xd010);
+  const auto retired = cpu.instructions;
+  const auto frames = cpu.irq64_bulk_frames;
+  check(!cpu.raise_external_irq(vector) && cpu.fault && cpu.fault->code == FaultCode::PageFault &&
+        cpu.cr2 == 0xcff8 && cpu.fault->linear_address == 0xcff8 && cpu.fault->error_code == 2,
+        "Cross-page IRQ still faults on the first inaccessible scalar slot");
+  check(cpu.eip == resume && cpu.regs[Cpu::ESP] == 0xd010 && cpu.eflags == flags &&
+        cpu.read64(0xd000) == sentinel && cpu.read64(0xd008) == sentinel &&
+        cpu.instructions == retired && cpu.irq64_bulk_frames == frames,
+        "Failed IRQ entry rolls back the earlier stores, registers and retirement counters");
+  std::cout << "PRIME_IRQ64_FRAME_PASS bulk=" << frames << " ist=1 traced=1 mmio=1 cross_page_fault=1\n";
+}
+
 void double_shift_long_mode_tests() {
   Cpu cpu; boot(cpu);
   constexpr std::uint32_t status = Cpu::CF | Cpu::PF | Cpu::AF | Cpu::ZF | Cpu::SF | Cpu::OF;
@@ -1223,7 +1323,7 @@ int main(int argc, char** argv) {
       return EXIT_SUCCESS;
     }
     boot_and_register_tests(); expanded_physical_ram(); multibyte_nops(); addressing_stack_and_alu_tests();
-    enter_leave_long_mode_tests(); enter_leave_paging_fault_tests();
+    enter_leave_long_mode_tests(); enter_leave_paging_fault_tests(); hardware_irq64_frames();
     double_shift_long_mode_tests();
     signed_multiply_boundaries(); instruction_page_fetch(); paging_and_fault_tests();
     cached_page_translations(); retained_instruction_mapping(); colliding_page_translations();

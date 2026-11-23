@@ -336,6 +336,7 @@ class Cpu {
   std::uint64_t instruction_page_reuses = 0;
   std::uint64_t page_translation_hits = 0;
   std::uint64_t idt_bulk_reads = 0;
+  std::uint64_t irq64_bulk_frames = 0;
 
   // When CPUs share this fabric, the machine serializes RAM and device access.
   // A caller that changes its bus map must invalidate cached translations.
@@ -465,6 +466,7 @@ class Cpu {
     counted_call_loop_.reset();
     affine_ram_rotate_block_.reset();
     idt_bulk_reads = 0;
+    irq64_bulk_frames = 0;
     ether_arm64_stats_ = {};
     state_vector_interpreter_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -3261,18 +3263,50 @@ class Cpu {
     segments[CS] = std::uint16_t((selector & ~3U) | target_cpl);
     cache_[CS] = target_cache;
     cache_[CS].selector = segments[CS];
-    if (long_gate) {
-      regs[ESP] &= ~std::uint64_t{15};
-      // 64-bit gate pushes SS:RSP even for a same-CPL interrupt.
-      push(original_ss,8); push(original_rsp,8);
-    } else if (switch_cpl) {
-      push(original_ss,width); push(original_rsp,width);
+    if (long_gate) regs[ESP] &= ~std::uint64_t{15};
+    const bool bulk_frame = long_gate && attempt.source == IdtSource::HardwareInterrupt && !attempt.has_error &&
+        try_push_irq64_frame(resume_ip, original_cs, original_flags, original_rsp, original_ss);
+    if (!bulk_frame) {
+      // 64-bit gates push SS:RSP even for a same-CPL interrupt.
+      if (long_gate || switch_cpl) {
+        push(original_ss,width); push(original_rsp,width);
+      }
+      push(original_flags,width);push(original_cs,width);push(resume_ip,width);
+      if (attempt.has_error) push(attempt.stacked_error,width);
     }
-    push(original_flags,width);push(original_cs,width);push(resume_ip,width);
-    if (attempt.has_error) push(attempt.stacked_error,width);
     jump(target_ip,width);
     if (type == 6 || type == 0xe) eflags &= ~IF;
     eflags &= ~(TF | 0x34000U); // Clear NT/RF/VM after saving their image.
+  }
+  bool try_push_irq64_frame(std::uint64_t resume_ip, std::uint16_t cs, std::uint32_t flags,
+                            std::uint64_t rsp, std::uint16_t ss) {
+    constexpr unsigned bytes = 5 * sizeof(std::uint64_t);
+    if (!can_cache_translations() || regs[ESP] < bytes) return false;
+    const auto target = regs[ESP] - bytes;
+    std::optional<std::uint64_t> physical;
+    try {
+      // Check SS, the entire page and write permissions without setting A/D bits.
+      physical = counted_loop_ram_address(SS, target, bytes, Access::Write);
+    } catch (const Trap&) {
+      return false; // The individual pushes report the first actual fault.
+    }
+    if (!physical || memory.may_touch_page_tables(*physical, bytes) ||
+        !memory.resident_ram_span(*physical, bytes, false)) return false;
+
+    // A resident span excludes quantum cells. The host bus stays owned until
+    // delivery completes and the one journal entry covers all five words.
+    const std::array<std::uint64_t, 5> words{resume_ip, cs, flags, rsp, ss};
+    std::array<std::uint8_t, bytes> frame;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    std::memcpy(frame.data(), words.data(), frame.size());
+#else
+    for (unsigned i = 0; i < frame.size(); ++i)
+      frame[i] = std::uint8_t(words[i / 8] >> (8 * (i % 8)));
+#endif
+    if (!try_write_ram_block(*physical, frame.data(), bytes)) return false;
+    regs[ESP] = target;
+    ++irq64_bulk_frames;
+    return true;
   }
   bool try_read_idt_gate(IdtAttempt& attempt, std::uint64_t address) {
     if (!page_translation_cache_enabled_ || !a20_enabled || step_trace_hook || irq_trace_hook ||
