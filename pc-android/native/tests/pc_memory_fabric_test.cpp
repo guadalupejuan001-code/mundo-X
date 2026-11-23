@@ -57,22 +57,32 @@ void test_exclusive_spill_cache_reads() {
   std::array<std::uint8_t, 8> expected{}, actual{}, shared{};
   ram.read_block(start, expected.data(), expected.size());
   const auto before = ram.metrics();
+  need(ram.read_byte(start) == expected[0] && ram.read_byte(page_bytes) == expected[4],
+       "synchronized scalar read changed the backed bytes");
   {
     const MemoryFabric::ExclusiveRamReads exclusive(ram);
     ram.read_block(start, actual.data(), actual.size());
+    need(ram.read_byte(start) == expected[0] && ram.read_byte(page_bytes) == expected[4],
+         "exclusive scalar read changed the backed bytes");
   }
   ram.read_parallel_ram_block(start, shared.data(), shared.size());
   const auto after = ram.metrics();
   need(expected == actual && actual == shared && expected[0] == 252 && expected[4] == 1,
        "exclusive spill cache changed guest bytes");
   need(after.backing_reads == before.backing_reads &&
-       after.backing_cache_hits == before.backing_cache_hits + 4,
-       "both spill reads must hit the same decoded pages");
+       after.backing_cache_hits == before.backing_cache_hits + 8,
+       "scalar and block spill reads must hit the same decoded pages");
 
   ram.fill(0, 7, page_bytes);
+  constexpr auto window = (pages - 1) * page_bytes;
+  ram.attach_window(window, 1, [](std::uint64_t) { return 0x5a; }, [](std::uint64_t, std::uint8_t) {});
   const MemoryFabric::ExclusiveRamReads exclusive(ram);
   ram.read_block(start, actual.data(), actual.size());
   need(actual[0] == 7 && actual[4] == 1, "a write left stale bytes in the spill cache");
+  need(ram.read_byte(start) == 7 && ram.read_byte(page_bytes) == 1,
+       "exclusive scalar read exposed stale or changed bytes after a write");
+  need(ram.read_byte(window) == 0x5a, "exclusive scalar read bypassed the device window");
+  rejected([&] { (void)ram.read_byte(ram.size()); }, "exclusive scalar read accepted an invalid address");
 }
 
 void test_code_page_versions() {

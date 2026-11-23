@@ -525,6 +525,67 @@ void test_full_overwrite_and_lazy_shared_cache() {
        "quantum failure discarded the previous full-page authority");
 }
 
+void test_decoded_cache_hints() {
+  constexpr std::size_t mib = 1024 * 1024;
+  // Pages 0 and 2056 share the current decoded-cache hint bucket.
+  constexpr std::uint64_t colliding_page = 2056;
+  constexpr auto colliding = colliding_page * page_size;
+  constexpr unsigned regular = 39;
+  Ram ram(colliding + page_size, 32 * mib);
+  auto backing = std::make_unique<Backing>();
+  auto* host = backing.get();
+  ram.attach_page_backing(std::move(backing), Ram::BackingCachePolicy::Adaptive);
+  for (unsigned index = 0; index < regular; ++index) {
+    const auto data = varied(index);
+    ram.write_block(index * page_size, data.data(), data.size());
+  }
+  const auto collision_data = varied(0xa7);
+  ram.write_block(colliding, collision_data.data(), collision_data.size());
+  need(ram.adjust_payload_budget(0, regular + 1) == Ram::BudgetAdjustment::Applied &&
+           ram.adjust_payload_budget(32 * mib, 0) == Ram::BudgetAdjustment::Applied,
+       "decoded cache collision fixture did not spill its pages");
+  for (unsigned index = 0; index < regular; ++index)
+    need(ram.read_byte(index * page_size) == varied(index).front(), "warm cache read returned a different tag");
+
+  Page restored{};
+  ram.read_block(colliding, restored.data(), restored.size());
+  need(restored == collision_data, "cache missed the colliding tag's contents");
+  const auto reads = ram.metrics().backing_reads;
+  for (unsigned iteration = 0; iteration < 8; ++iteration) {
+    need(ram.read_byte(0) == varied(0).front(), "colliding hint redirected the first page");
+    ram.read_block(colliding, restored.data(), restored.size());
+    need(restored == collision_data, "colliding hint redirected a later cache hit");
+  }
+  need(ram.metrics().backing_reads == reads && ram.metrics().backing_cache_hits == 16,
+       "tag collisions must keep both decoded pages as cache hits");
+  need(ram.adjust_payload_budget(16 * mib, 0) == Ram::BudgetAdjustment::Applied &&
+           ram.read_byte(0) == varied(0).front() && ram.read_byte(colliding) == collision_data.front() &&
+           ram.metrics().backing_reads == reads,
+       "shrinking and reordering decoded cache entries lost a hot tag or its contents");
+  host->fail_read = true;
+  rejects([&] { (void)ram.read_byte(page_size); }, "decoded cache resize kept a cold page ahead of hotter tags");
+  need(ram.read_byte(colliding) == collision_data.front() && ram.metrics().backing_reads == reads,
+       "a failed backing read published an invalid cache replacement");
+
+  Ram dirty(2 * page_size, page_size);
+  dirty.attach_page_backing(std::make_unique<Backing>());
+  const auto previous = varied(3), current = varied(99);
+  dirty.write_block(0, previous.data(), previous.size());
+  need(dirty.adjust_payload_budget(0, 1) == Ram::BudgetAdjustment::Applied &&
+           dirty.read_byte(0) == previous.front() && dirty.read_byte(0) == previous.front() &&
+           dirty.adjust_payload_budget(page_size, 0) == Ram::BudgetAdjustment::Applied,
+       "could not warm the cache for a fully overwritten page");
+  dirty.write_block(0, current.data(), current.size());
+  need(dirty.adjust_payload_budget(0, 1) == Ram::BudgetAdjustment::Applied,
+       "could not write back the replacement page");
+  dirty.read_block(0, restored.data(), restored.size());
+  need(restored == current && dirty.metrics().backing_reads == 2,
+       "a stale decoded-cache hint survived a full write and eviction");
+  dirty.reset_zero();
+  need(dirty.read_byte(0) == 0 && dirty.backing_cache_bytes() == 0,
+       "reset retained cached data or an address hint");
+}
+
 void test_quantum_routes_and_rollback() {
   Fabric ram(3 * page_size, 3 * page_size);
   need(std::string(ram.backend_name()) == "ether-state-ram", "fabric selected old RAM");
@@ -587,6 +648,7 @@ int main() {
     test_compact_budget_and_fill_preflight();
     test_implicit_zero_fill_inside_journal();
     test_full_overwrite_and_lazy_shared_cache();
+    test_decoded_cache_hints();
     test_quantum_routes_and_rollback();
     std::cout << "ETHER_STATE_RAM_PASS checks=" << checks << " logical_bytes=" << (64ULL << 30) << '\n';
     return 0;

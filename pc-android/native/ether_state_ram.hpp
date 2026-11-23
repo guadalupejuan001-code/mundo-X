@@ -117,6 +117,9 @@ class EtherStateRam {
     std::uint64_t age = 0;
     std::unique_ptr<Bytes> bytes;
   };
+  static constexpr std::size_t kMaxCacheLines = 512;
+  static constexpr std::size_t kCacheHintSlots = 2048;
+  static_assert(kMaxCacheLines <= UINT16_MAX);
   using PageMap = std::map<std::uint64_t, BasisPage>;
   struct Storage {
     explicit Storage(std::uint64_t logical, std::uint64_t budget)
@@ -131,6 +134,8 @@ class EtherStateRam {
     std::unique_ptr<PageBacking> backing;
     mutable std::mutex read_mutex;
     mutable std::vector<CacheLine> cache;
+    // A hint stores a one-based cache slot. Hits still require the exact tag.
+    mutable std::array<std::uint16_t, kCacheHintSlots> cache_hints{};
     mutable std::uint64_t cache_age = 0, cache_hits = 0;
     mutable std::uint64_t backing_reads = 0, backing_read_failures = 0;
     mutable std::uint64_t backing_timed_attempts = 0, backing_read_ns = 0;
@@ -320,6 +325,7 @@ class EtherStateRam {
     return result;
   }
 
+  template <bool Synchronized = true>
   std::uint8_t read_byte(std::uint64_t address) const {
     check_range(address, 1);
     if (is_quantum(address)) return state().quantum->read(address);
@@ -329,7 +335,7 @@ class EtherStateRam {
     if (page->packed) return (*page->packed)[inside];
     if (!page->spilled) return rule_byte(*page, inside);
     std::uint8_t value;
-    read_backing<true>(address / kPageSize, inside, &value, 1);
+    read_backing<Synchronized>(address / kPageSize, inside, &value, 1);
     return value;
   }
   const std::uint8_t* resident_span(std::uint64_t address, std::size_t count) const noexcept {
@@ -785,6 +791,9 @@ class EtherStateRam {
           });
       for (std::size_t i = 0; i < desired_cache; ++i) resized.push_back(std::move(state().cache[i]));
       state().cache.swap(resized);
+      state().cache_hints.fill(0);
+      for (const auto& line : state().cache)
+        if (line.page != UINT64_MAX) remember_cache_line(state(), line);
     } else state().cache.resize(desired_cache);
     state().payload_cap = target;
     return BudgetAdjustment::Applied;
@@ -801,6 +810,7 @@ class EtherStateRam {
     state().cache_age = state().clean_reclaims = state().reclaim_cursor = state().compact_cursor = 0;
     state().preparation_cursor = 0;
     state().pressure = {};
+    state().cache_hints.fill(0);
     for (auto& line : state().cache) { line.page = UINT64_MAX; line.age = 0; line.bytes.reset(); }
     if (state().backing) state().backing->reset();
     if (state().quantum) state().quantum->reset();
@@ -858,7 +868,7 @@ class EtherStateRam {
     // Fixed cache is the legacy host-side auxiliary allowance. Adaptive cache
     // is charged inside the resident limit and reserves at most 1/128 of it.
     if (policy == BackingCachePolicy::Fixed) return 16;
-    return static_cast<std::size_t>(std::min<std::uint64_t>(512, budget / (128 * kPageSize)));
+    return static_cast<std::size_t>(std::min<std::uint64_t>(kMaxCacheLines, budget / (128 * kPageSize)));
   }
   void check_range(std::uint64_t address, std::size_t count) const {
     if (address > size() || static_cast<std::uint64_t>(count) > size() - address)
@@ -961,8 +971,29 @@ class EtherStateRam {
     return state().pin_depth && page.write_epoch == state().pin_epoch;
   }
   void mark_pin(BasisPage& page) noexcept { if (state().pin_depth) page.write_epoch = state().pin_epoch; }
+  static std::size_t cache_hint_index(std::uint64_t page) noexcept {
+    return (page ^ (page >> 8) ^ (page >> 16)) & (kCacheHintSlots - 1);
+  }
+  static void remember_cache_line(const Storage& s, const CacheLine& line) noexcept {
+    s.cache_hints[cache_hint_index(line.page)] = static_cast<std::uint16_t>(&line - s.cache.data() + 1);
+  }
+  static CacheLine* find_cache_line(const Storage& s, std::uint64_t index) noexcept {
+    const auto slot = s.cache_hints[cache_hint_index(index)];
+    if (slot && slot <= s.cache.size()) {
+      auto& line = s.cache[slot - 1];
+      if (line.page == index) return &line;
+    }
+    for (auto& line : s.cache) if (line.page == index) {
+      remember_cache_line(s, line);
+      return &line;
+    }
+    return nullptr;
+  }
   void invalidate_cache(std::uint64_t index) noexcept {
-    for (auto& line : state().cache) if (line.page == index) line.page = UINT64_MAX;
+    if (auto* line = find_cache_line(state(), index)) {
+      line->page = UINT64_MAX;
+      state().cache_hints[cache_hint_index(index)] = 0;
+    }
   }
   void mark_write(std::uint64_t index, BasisPage& page) noexcept {
     mark_pin(page);
@@ -1029,9 +1060,9 @@ class EtherStateRam {
     const auto lock_start = s.backing_timing ? ReclaimClock::now() : ReclaimClock::time_point{};
     if constexpr (Synchronized) lock.lock();
     if (s.backing_timing) s.backing_lock_wait_ns += elapsed(lock_start);
-    for (auto& line : s.cache) if (line.page == index) {
-      ++s.cache_hits; line.age = ++s.cache_age;
-      std::memcpy(destination, line.bytes->data() + inside, count);
+    if (auto* line = find_cache_line(s, index)) {
+      ++s.cache_hits; line->age = ++s.cache_age;
+      std::memcpy(destination, line->bytes->data() + inside, count);
       return;
     }
     Bytes scratch;
@@ -1055,6 +1086,7 @@ class EtherStateRam {
     if (selected) {
       if (allocation) selected->bytes = std::move(allocation);
       *selected->bytes = scratch; selected->page = index; selected->age = ++s.cache_age;
+      remember_cache_line(s, *selected);
     }
     std::memcpy(destination, scratch.data() + inside, count);
   }

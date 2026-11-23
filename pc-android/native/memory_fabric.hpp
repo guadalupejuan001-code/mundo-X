@@ -372,6 +372,9 @@ class MemoryFabric {
     const BootScalarTiming::Scope sample(boot_scalar_timing_, BootTimePart::Ram);
     check_range(offset, 1);
     if (in_window(offset)) return read_(offset - base_);
+#if defined(MUNDO_X_PC_STATE_RAM) && MUNDO_X_PC_STATE_RAM
+    if (exclusive_ram_reads_) return ram_.read_byte<false>(offset);
+#endif
     return ram_.read_byte(offset);
   }
 
