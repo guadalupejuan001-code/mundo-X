@@ -377,10 +377,7 @@ class EtherStateRam {
       return true;
     }
     const auto& s = state();
-    std::unique_lock<std::mutex> lock(s.read_mutex, std::defer_lock);
-    const auto lock_start = s.backing_timing ? ReclaimClock::now() : ReclaimClock::time_point{};
-    if constexpr (Synchronized) lock.lock();
-    if (s.backing_timing) s.backing_lock_wait_ns += elapsed(lock_start);
+    const auto lock = lock_backing_cache<Synchronized>(s);
     return copy_cached_line(s, index, inside, destination, count);
   }
 
@@ -1129,13 +1126,24 @@ class EtherStateRam {
   }
 
   template <bool Synchronized>
+  static std::unique_lock<std::mutex> lock_backing_cache(const Storage& s) {
+    if constexpr (!Synchronized) return {}; // The guest bus already owns RAM.
+    std::unique_lock<std::mutex> lock(s.read_mutex, std::defer_lock);
+    if (!s.backing_timing) lock.lock();
+    else if (!lock.try_lock()) {
+      // Measure time spent waiting after an unsuccessful immediate acquisition.
+      const auto start = ReclaimClock::now();
+      lock.lock();
+      s.backing_lock_wait_ns += elapsed(start);
+    }
+    return lock;
+  }
+
+  template <bool Synchronized>
   void read_backing(std::uint64_t index, std::size_t inside,
                      std::uint8_t* destination, std::size_t count) const {
     auto& s = state();
-    std::unique_lock<std::mutex> lock(s.read_mutex, std::defer_lock);
-    const auto lock_start = s.backing_timing ? ReclaimClock::now() : ReclaimClock::time_point{};
-    if constexpr (Synchronized) lock.lock();
-    if (s.backing_timing) s.backing_lock_wait_ns += elapsed(lock_start);
+    const auto lock = lock_backing_cache<Synchronized>(s);
     if (copy_cached_line(s, index, inside, destination, count)) return;
     Bytes scratch;
     CacheLine* selected = nullptr;

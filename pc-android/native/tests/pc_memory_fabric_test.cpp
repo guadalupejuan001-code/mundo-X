@@ -57,6 +57,7 @@ void test_exclusive_spill_cache_reads() {
   std::array<std::uint8_t, 8> expected{}, actual{}, shared{};
   ram.read_block(start, expected.data(), expected.size());
   const auto before = ram.metrics();
+  if constexpr (MemoryFabric::kUsesStateRam) ram.set_backing_read_timing_enabled(true);
   need(ram.read_byte(start) == expected[0] && ram.read_byte(page_bytes) == expected[4],
        "synchronized scalar read changed the backed bytes");
   {
@@ -72,6 +73,22 @@ void test_exclusive_spill_cache_reads() {
   need(after.backing_reads == before.backing_reads &&
        after.backing_cache_hits == before.backing_cache_hits + 8,
        "scalar and block spill reads must hit the same decoded pages");
+  if constexpr (MemoryFabric::kUsesStateRam) {
+    {
+      const MemoryFabric::ExclusiveRamReads exclusive(ram);
+      need(ram.try_read_present_ram_block(start, actual.data(), 4) &&
+           std::equal(actual.begin(), actual.begin() + 4, expected.begin()),
+           "exclusive present-block lookup changed the cached bytes");
+    }
+    const auto cached = ram.pressure_metrics();
+    need(cached.backing_timing_enabled && cached.backing_timed_attempts == 0 &&
+         cached.backing_read_ns == 0 && cached.backing_lock_wait_ns == 0,
+         "warm uncontended reads must not record backing I/O or lock waiting");
+    need(ram.read_byte(2 * page_bytes) == 2, "cold backing read changed the guest bytes");
+    const auto cold = ram.pressure_metrics();
+    need(cold.backing_timed_attempts == 1 && cold.backing_read_ns > 0 && cold.backing_lock_wait_ns == 0,
+         "an uncontended cache miss must still measure its backing read");
+  }
 
   ram.fill(0, 7, page_bytes);
   constexpr auto window = (pages - 1) * page_bytes;
