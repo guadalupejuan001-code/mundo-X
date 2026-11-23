@@ -1517,6 +1517,66 @@ void rip_relative_contract() {
   std::cout << "PRIME_ETHER_RIP_RELATIVE_PASS\n";
 }
 
+void register_bus_grant_contract() {
+  for (bool long_mode : {false, true}) {
+    PcMachine native, scalar;
+    if (long_mode) {
+      boot(native, true);
+      boot(scalar, false);
+    } else {
+      boot_protected(native, true);
+      boot_protected(scalar, false);
+    }
+    constexpr auto short_code = code + 0x80;
+    for (auto* cpu : {&native.cpu, &scalar.cpu}) {
+      emit(*cpu, short_code, {0x89,0xc8,0x83,0xc0,0x03,0xf4});  // MOV EAX,ECX; ADD EAX,3; HLT.
+      emit(*cpu, code, {0x01,0xc8,0x83,0xe9,0x01,0x75,0xf9}); // ADD EAX,ECX; SUB ECX,1; JNZ.
+      cpu->regs[Cpu::ECX] = 255;
+      cpu->eflags = 2 | Cpu::DF;
+    }
+    auto& cpu = native.cpu;
+    const auto advance_scalar = [&](unsigned steps) {
+      for (unsigned i = 0; i < steps; ++i)
+        require(scalar.cpu.step() == StepResult::Executed, "scalar register bus fixture failed");
+      require(capture(cpu) == capture(scalar.cpu), "bus grant changed the guest register state");
+    };
+
+    warm_block(cpu, short_code, 2);
+    scalar.cpu.eip = short_code;
+    advance_scalar(2);
+    std::mutex bus;
+    std::unique_lock<std::mutex> lease(bus);
+    cpu.eip = scalar.cpu.eip = short_code;
+    require(cpu.try_ether_arm64_block(64, &lease) == 2 && lease.owns_lock(),
+            "a short native register block did not keep its bus grant");
+    advance_scalar(2);
+    warm_block(cpu, code, 3);
+    scalar.cpu.eip = code;
+    advance_scalar(3);
+    require(cpu.try_ether_arm64_block(30, &lease) == 30 && lease.owns_lock(),
+            "the short backedge exceeded its grant");
+    advance_scalar(30);
+    const auto& stats = cpu.ether_arm64_stats();
+    require(stats.on_bus_register_steps == 32 && !stats.off_bus_register_steps &&
+            !stats.register_bus_reacquisitions, "short register blocks unexpectedly released the bus");
+
+    require(cpu.try_ether_arm64_block(57, &lease) == 57 && lease.owns_lock(),
+            "the larger backedge exceeded its grant");
+    advance_scalar(57);
+    require(stats.on_bus_register_steps == 32 && stats.off_bus_register_steps == 57 &&
+            stats.register_bus_reacquisitions == 1 && stats.register_bus_reacquire_samples == 1 &&
+            stats.register_bus_reacquire_contentions <= 1, "larger register loop did not yield and reacquire the bus");
+    cpu.eflags |= Cpu::IF;
+    scalar.cpu.eflags |= Cpu::IF;
+    require(cpu.try_ether_arm64_block(57, &lease) == 3 && lease.owns_lock(),
+            "an interruptible loop failed to return after one round");
+    advance_scalar(3);
+    require(stats.on_bus_register_steps == 35 && stats.off_bus_register_steps == 57 &&
+            stats.register_bus_reacquisitions == 1, "the interruptible round unexpectedly released the bus");
+  }
+  std::cout << "PRIME_ETHER_REGISTER_BUS_PASS modes=2 held_steps=35 released_steps=57 irq_round=3\n";
+}
+
 void protected32_contract() {
   PcMachine native, scalar;
   boot_protected(native, true);
@@ -2594,6 +2654,7 @@ int main() {
     live_signed_loop_projection_contract();
     integer_execution_contract();
     rip_relative_contract();
+    register_bus_grant_contract();
     signed_load_contract();
     memory_subtraction_contract();
     memory_addition_contract();

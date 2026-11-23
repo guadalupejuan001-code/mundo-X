@@ -205,7 +205,9 @@ class Cpu {
     std::uint64_t invalidated = 0, data_fallbacks = 0;
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
     std::uint64_t code_version_hits = 0, code_byte_checks = 0, code_bytes_read = 0;
-    std::uint64_t off_bus_register_steps = 0;
+    std::uint64_t on_bus_register_steps = 0, off_bus_register_steps = 0;
+    std::uint64_t register_bus_reacquisitions = 0, register_bus_reacquire_samples = 0;
+    std::uint64_t register_bus_reacquire_contentions = 0, register_bus_reacquire_wait_ns = 0;
     std::uint64_t off_bus_ram_blocks = 0, off_bus_ram_steps = 0, ram_view_conflicts = 0;
     std::uint64_t staged_ram_blocks = 0, staged_ram_steps = 0, coalesced_ram_writes = 0;
     std::uint64_t ram_add_steps = 0;

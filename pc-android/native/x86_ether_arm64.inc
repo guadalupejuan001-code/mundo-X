@@ -399,10 +399,17 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       pending.code_end = physical + block.size;
       pending.count = 0;
     }
-    // A register-only block on the serialized CPU cannot fail a memory
-    // guard. It can update the guest register file directly. Blocks that
-    // may fall back or release the bus keep a private working copy.
-    const bool direct_regs = block.register_only && !bus;
+    // A short register block cannot recover the cost of yielding and
+    // revalidating the shared bus. Keep the current device grant for it.
+    constexpr auto min_private_register_steps = 2 * ether_arm64::Block::kMaxInstructions;
+    const bool release_registers = bus && block.register_only &&
+                                  repetitions * block.count >= min_private_register_steps;
+    const auto code_version = active->code_version;
+    const auto mapping_epoch = release_registers && long_mode ? memory.page_table_epoch() : 0;
+    const bool private_frame = release_registers && code_version && (!long_mode || mapping_epoch);
+    // Register-only blocks that keep the bus can write directly. Work that
+    // releases it or uses guarded memory must keep an uncommitted state.
+    const bool direct_regs = block.register_only && !private_frame;
     ether_arm64::Frame frame;
     if (!direct_regs) frame.regs = regs;
     frame.read = &Cpu::ether_arm64_read<false>;
@@ -418,12 +425,6 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     frame.reuse_resident_reads = long_mode && !block.writes && !block.register_only;
     if (frame.reuse_resident_reads) frame.resident = resident;
     if (block.writes || !long_mode || bus) resident = {};
-    // Register-only code touches only the private frame. Validate its
-    // instruction bytes and mapping again before publishing the result.
-    const auto code_version = active->code_version;
-    const auto mapping_epoch = bus && block.register_only && long_mode ? memory.page_table_epoch() : 0;
-    const bool private_frame = bus && block.register_only && code_version &&
-                               (!long_mode || mapping_epoch);
     unsigned off_bus_ram_steps = 0;
     if (private_frame) bus->unlock();
     auto outcome = active->run_state_vector(frame, round_limit);
@@ -431,8 +432,22 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     else if (projection_only) return 0;
     else if (private_ram) outcome = run_ether_ram_view(*active, frame, repetitions, *bus, off_bus_ram_steps);
     else outcome = active->code.run(frame);
-    if (private_frame) bus->lock();
+    if (private_frame) {
+      auto& stats = ether_arm64_stats_;
+      if ((stats.register_bus_reacquisitions++ & 63U) != 0) bus->lock();
+      else {
+        ++stats.register_bus_reacquire_samples;
+        if (!bus->try_lock()) {
+          const auto start = std::chrono::steady_clock::now();
+          bus->lock();
+          ++stats.register_bus_reacquire_contentions;
+          stats.register_bus_reacquire_wait_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - start).count();
+        }
+      }
+    }
     ether_arm64_stats_.ram_read_callbacks += frame.ram_read_callbacks;
+    // Publish off-bus work only after checking for remaps and code changes.
     if (private_frame && (!a20_enabled || memory.code_page_version(physical) != code_version ||
         (long_mode && memory.page_table_epoch() != mapping_epoch))) {
       ++ether_arm64_stats_.invalidated;
@@ -446,6 +461,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     const auto rounds = block.repeats ? repetitions - frame.loop_remaining : 1U;
     const auto retired = rounds * block.count;
     if (private_frame) ether_arm64_stats_.off_bus_register_steps += retired;
+    else if (bus && block.register_only) ether_arm64_stats_.on_bus_register_steps += retired;
     if (staged) {
       // A later speculative page walk may have discovered a new page table.
       for (unsigned i = 0; i < pending.count; ++i) {
