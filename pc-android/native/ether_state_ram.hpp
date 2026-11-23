@@ -385,17 +385,25 @@ class EtherStateRam {
   void read_block(std::uint64_t address, std::uint8_t* destination, std::size_t count) const {
     check_range(address, count);
     if (count && !destination) throw std::invalid_argument("EtherStateRam null read destination");
+    if (!count) return;
+    const auto inside = static_cast<std::size_t>(address % kPageSize);
+    if (count <= kPageSize - inside && !quantum_intersects(address, count)) {
+      const auto page = address / kPageSize;
+      if constexpr (!Synchronized) {
+        // The bus gives exclusive cache access. Decoded lines hold exact bytes;
+        // writes invalidate them, including the first write after promotion.
+        if (copy_cached_line<true>(state(), page, inside, destination, count)) return;
+      }
+      copy_page_bytes<Synchronized>(page, inside, destination, count);
+      return;
+    }
     const auto cells = quantum_values(address, count); // Reject before exposing a partial operand.
     const auto first = address;
     auto* const output = destination;
     while (count) {
       const auto inside = static_cast<std::size_t>(address % kPageSize);
       const auto chunk = std::min(count, kPageSize - inside);
-      const auto* page = find_page(address / kPageSize);
-      if (!page) std::memset(destination, 0, chunk);
-      else if (page->packed) std::memcpy(destination, page->packed->data() + inside, chunk);
-      else if (page->spilled) read_backing<Synchronized>(address / kPageSize, inside, destination, chunk);
-      else copy_rule(*page, inside, destination, chunk);
+      copy_page_bytes<Synchronized>(address / kPageSize, inside, destination, chunk);
       address += chunk; destination += chunk; count -= chunk;
     }
     for (const auto& cell : cells) output[cell.first - first] = cell.second;
@@ -1036,21 +1044,26 @@ class EtherStateRam {
   static void remember_cache_line(const Storage& s, const CacheLine& line) noexcept {
     s.cache_hints[cache_hint_index(line.page)] = static_cast<std::uint16_t>(&line - s.cache.data() + 1);
   }
-  static CacheLine* find_cache_line(const Storage& s, std::uint64_t index) noexcept {
+  static CacheLine* hinted_cache_line(const Storage& s, std::uint64_t index) noexcept {
     const auto slot = s.cache_hints[cache_hint_index(index)];
     if (slot && slot <= s.cache.size()) {
       auto& line = s.cache[slot - 1];
       if (line.page == index) return &line;
     }
+    return nullptr;
+  }
+  static CacheLine* find_cache_line(const Storage& s, std::uint64_t index) noexcept {
+    if (auto* line = hinted_cache_line(s, index)) return line;
     for (auto& line : s.cache) if (line.page == index) {
       remember_cache_line(s, line);
       return &line;
     }
     return nullptr;
   }
+  template <bool HintOnly = false>
   static bool copy_cached_line(const Storage& s, std::uint64_t index, std::size_t inside,
                                std::uint8_t* destination, std::size_t count) noexcept {
-    auto* line = find_cache_line(s, index);
+    auto* line = HintOnly ? hinted_cache_line(s, index) : find_cache_line(s, index);
     if (!line) return false;
     ++s.cache_hits;
     line->age = ++s.cache_age;
@@ -1123,6 +1136,16 @@ class EtherStateRam {
       if (state().quantum) for (std::size_t i = inside; i < inside + chunk; ++i)
         if (is_quantum(index * kPageSize + i)) (*page.packed)[i] = 0;
     });
+  }
+
+  template <bool Synchronized>
+  void copy_page_bytes(std::uint64_t index, std::size_t inside,
+                       std::uint8_t* destination, std::size_t count) const {
+    const auto* page = find_page(index);
+    if (!page) std::memset(destination, 0, count);
+    else if (page->packed) std::memcpy(destination, page->packed->data() + inside, count);
+    else if (page->spilled) read_backing<Synchronized>(index, inside, destination, count);
+    else copy_rule(*page, inside, destination, count);
   }
 
   template <bool Synchronized>

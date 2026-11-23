@@ -79,6 +79,9 @@ void test_exclusive_spill_cache_reads() {
       need(ram.try_read_present_ram_block(start, actual.data(), 4) &&
            std::equal(actual.begin(), actual.begin() + 4, expected.begin()),
            "exclusive present-block lookup changed the cached bytes");
+      ram.read_block(start, actual.data(), 4);
+      need(std::equal(actual.begin(), actual.begin() + 4, expected.begin()),
+           "exclusive same-page read changed the cached bytes");
     }
     const auto cached = ram.pressure_metrics();
     need(cached.backing_timing_enabled && cached.backing_timed_attempts == 0 &&
@@ -88,6 +91,12 @@ void test_exclusive_spill_cache_reads() {
     const auto cold = ram.pressure_metrics();
     need(cold.backing_timed_attempts == 1 && cold.backing_read_ns > 0 && cold.backing_lock_wait_ns == 0,
          "an uncontended cache miss must still measure its backing read");
+    ram.prepare_write(start, 4);
+    ram.write_byte(start, 0xa7);
+    const MemoryFabric::ExclusiveRamReads exclusive(ram);
+    ram.read_block(start, actual.data(), 4);
+    need(actual[0] == 0xa7 && std::equal(actual.begin() + 1, actual.begin() + 4, expected.begin() + 1),
+         "exclusive same-page read returned stale bytes after a promoted write");
   }
 
   ram.fill(0, 7, page_bytes);
