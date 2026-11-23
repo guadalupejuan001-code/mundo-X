@@ -733,24 +733,33 @@ class EtherStateRam {
     const auto desired_cache = state().backing ? cache_capacity(target, state().cache_policy) : 0;
     const auto guest_target = target -
         (state().cache_policy == BackingCachePolicy::Adaptive ? desired_cache * kPageSize : 0);
-    std::size_t reclaimed = 0, clean = 0;
-    while (allocated_bytes() > guest_target && ReclaimClock::now() < deadline) {
-      const auto candidate = reclaim_candidate(UINT64_MAX, 0, clean < clean_reclaim_pages);
-      if (candidate == UINT64_MAX) break;
-      auto* page = find_page(candidate);
-      if (page && page->clean && clean < clean_reclaim_pages) {
-        spill_page(candidate, deadline); ++clean;
-      } else {
-        if (reclaimed >= reclaim_pages) break;
-        if (!compact_page(candidate)) {
-          if (!state().backing) break;
-          try { if (!spill_page(candidate, deadline)) break; } catch (...) { return BudgetAdjustment::Blocked; }
-        }
-        ++reclaimed;
+    const auto before = allocated_bytes();
+    if (before > guest_target) {
+      reclaim_clean_pages(guest_target, clean_reclaim_pages, deadline);
+      const SparseRam::PacedReclaimScope scope(
+          deadline != ReclaimClock::time_point::max() && reclaim_pages &&
+          allocated_bytes() > guest_target ? state().backing.get() : nullptr);
+      bool yielded = false;
+      for (std::size_t reclaimed = 0; reclaimed < reclaim_pages &&
+           allocated_bytes() > guest_target && !yielded && ReclaimClock::now() < deadline;) {
+        const auto released = reclaim_budget_group(guest_target, reclaim_pages - reclaimed, deadline, yielded);
+        if (!released) break;
+        reclaimed += released;
       }
     }
-    if (allocated_bytes() > guest_target)
-      return state().backing || has_compactable_pages() ? BudgetAdjustment::Reclaiming : BudgetAdjustment::Blocked;
+    if (allocated_bytes() > guest_target) {
+      const auto used = allocated_bytes();
+      if (state().backing && used < before) {
+        // Keep a small write reserve while Android schedules the next slice.
+        // The old cap would let the guest refill the entire reclaimed region.
+        const auto limit = resident_payload_limit();
+        const auto old_headroom = limit - std::min(limit, used);
+        const auto reserve = std::min<std::uint64_t>(std::max<std::size_t>(1, reclaim_pages / 2),
+                                                     old_headroom / kPageSize) * kPageSize;
+        state().payload_cap -= old_headroom - reserve;
+      }
+      return state().backing || allocated_pages() ? BudgetAdjustment::Reclaiming : BudgetAdjustment::Blocked;
+    }
     // Preserve retained cache entries across resizing, including growth.
     if (desired_cache < state().cache.size()) {
       std::vector<CacheLine> resized;
@@ -1057,17 +1066,30 @@ class EtherStateRam {
       return true;
     } catch (...) { return false; }
   }
-  bool has_compactable_pages() const noexcept {
-    for (const auto& item : state().pages) if (item.second.packed && !pinned(item.second)) return true;
-    return false;
+  void reclaim_clean_pages(std::uint64_t target, std::size_t limit,
+                           ReclaimClock::time_point deadline) noexcept {
+    if (!limit || !state().clean_pages) return;
+    const auto count = state().pages.size();
+    auto it = state().pages.lower_bound(state().reclaim_cursor);
+    for (std::size_t visited = 0; visited < count && limit && state().clean_pages &&
+         allocated_bytes() > target && ReclaimClock::now() < deadline; ++visited) {
+      if (it == state().pages.end()) it = state().pages.begin();
+      const auto current = it++;
+      state().reclaim_cursor = current->first + 1;
+      if (!current->second.clean) continue;
+      mark_spilled(current->first, current->second);
+      --limit;
+    }
   }
   std::uint64_t reclaim_candidate(std::uint64_t excluded_first, std::uint64_t excluded_last,
-                                   bool prefer_clean = false) noexcept {
+                                   bool prefer_clean = false,
+                                   ReclaimClock::time_point deadline = ReclaimClock::time_point::max(),
+                                   std::uint64_t first_pending = UINT64_MAX) noexcept {
     auto eligible = [&](const auto& item) {
       return !item.second.spilled && (item.second.packed || state().backing) && !pinned(item.second) &&
           !(item.first >= excluded_first && item.first <= excluded_last);
     };
-    if (prefer_clean) for (const auto& item : state().pages)
+    if (prefer_clean && state().clean_pages) for (const auto& item : state().pages)
       if (eligible(item) && item.second.clean) return item.first;
     const auto count = state().pages.size();
     // Retain compact basis rules while a dense state can free a full page.
@@ -1078,13 +1100,80 @@ class EtherStateRam {
       for (std::size_t scanned = 0; scanned < count; ++scanned) {
         if (it == state().pages.end()) it = state().pages.begin();
         if (it == state().pages.end()) break;
+        if ((scanned % 64) == 0 && deadline != ReclaimClock::time_point::max() &&
+            ReclaimClock::now() >= deadline) {
+          state().reclaim_cursor = it->first;
+          return UINT64_MAX;
+        }
         const auto current = it++;
+        if (current->first == first_pending) return UINT64_MAX;
         if (eligible(*current) && (pass != 0 || current->second.packed)) {
           state().reclaim_cursor = current->first + 1; return current->first;
         }
       }
     }
     return UINT64_MAX;
+  }
+  std::size_t reclaim_budget_group(std::uint64_t target, std::size_t limit,
+                                   ReclaimClock::time_point deadline, bool& yielded) {
+    const bool grouped = state().backing && state().backing->supports_grouped_writes();
+    std::array<PageBacking::PageWrite, PageBacking::kMaxWritePages> writes{};
+    std::size_t count = 0, released = 0;
+    while (count < writes.size() && released + count < limit &&
+           allocated_bytes() - count * kPageSize > target && ReclaimClock::now() < deadline) {
+      const auto candidate = reclaim_candidate(UINT64_MAX, 0, false, deadline,
+                                                 count ? writes.front().page : UINT64_MAX);
+      if (candidate == UINT64_MAX) break;
+      auto& page = *find_page(candidate);
+      if (page.clean) mark_spilled(candidate, page);
+      else if (!compact_page(candidate)) {
+        if (!state().backing) break;
+        if (grouped && page.packed) {
+          writes[count++] = {candidate, page.packed->data()};
+          continue;
+        }
+        if (!spill_page(candidate, deadline)) {
+          state().reclaim_cursor = candidate;
+          yielded = true;
+          break;
+        }
+      }
+      ++released;
+    }
+    if (!count) return released;
+    if (ReclaimClock::now() >= deadline) {
+      state().reclaim_cursor = writes.front().page;
+      yielded = true;
+      return released;
+    }
+    const auto start = ReclaimClock::now();
+    std::size_t committed;
+    try {
+      committed = state().backing->write_pages(writes.data(), count, deadline);
+    } catch (const std::exception&) {
+      state().pressure.spill_ns += elapsed(start);
+      // A group may exceed the remaining file capacity with a viable prefix.
+      // Keep each successful prefix page before reporting a single-page error.
+      for (committed = 0; committed < count && ReclaimClock::now() < deadline; ++committed) {
+        state().reclaim_cursor = writes[committed].page;
+        if (!spill_page(writes[committed].page, deadline)) break;
+        state().reclaim_cursor = writes[committed].page + 1;
+      }
+      yielded = committed < count;
+      if (yielded) state().reclaim_cursor = writes[committed].page;
+      if (!committed) throw;
+      return released + committed;
+    }
+    if (committed > count) throw std::logic_error("Backing returned an invalid committed prefix");
+    state().pressure.spill_ns += elapsed(start);
+    state().backing_writes += committed;
+    for (std::size_t i = 0; i < committed; ++i)
+      mark_spilled(writes[i].page, *find_page(writes[i].page));
+    if (committed < count) {
+      state().reclaim_cursor = writes[committed].page;
+      yielded = true;
+    }
+    return released + committed;
   }
   bool spill_page(std::uint64_t index, ReclaimClock::time_point deadline) {
     auto& page = *find_page(index);
@@ -1104,6 +1193,11 @@ class EtherStateRam {
       state().pressure.spill_ns += elapsed(start);
       ++state().backing_writes;
     }
+    mark_spilled(index, page);
+    return true;
+  }
+  void mark_spilled(std::uint64_t index, BasisPage& page) noexcept {
+    const bool clean = page.clean;
     const auto released = page.payload();
     remove_accounting(page);
     page.packed.reset(); std::vector<Patch>{}.swap(page.changes); page.background = 0;
@@ -1113,7 +1207,6 @@ class EtherStateRam {
     ++state().pressure.spilled_pages;
     state().pressure.reclaimed_bytes += released;
     if (clean) { ++state().clean_reclaims; ++state().pressure.clean_reclaims; }
-    return true;
   }
   std::uint64_t resident_payload_limit() const noexcept {
     const auto cache = state().cache_policy == BackingCachePolicy::Adaptive ?

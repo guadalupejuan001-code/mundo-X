@@ -28,7 +28,11 @@ template <class Function> void rejects(Function&& fn, const char* message) {
 struct Backing final : Ram::PageBacking {
   std::map<std::uint64_t, Page> pages;
   bool fail_write = false, fail_read = false;
+  bool grouped = false, paced = false;
   unsigned writes = 0;
+  unsigned paced_starts = 0, paced_ends = 0;
+  std::vector<std::size_t> group_sizes;
+  std::size_t group_limit = kMaxWritePages;
   std::size_t prepare_limit = kMaxWritePages;
   void read(std::uint64_t page, std::uint8_t* bytes) override {
     if (fail_read) throw std::runtime_error("injected read failure");
@@ -37,6 +41,19 @@ struct Backing final : Ram::PageBacking {
   void write(std::uint64_t page, const std::uint8_t* bytes) override {
     if (fail_write) throw std::runtime_error("injected write failure");
     std::memcpy(pages[page].data(), bytes, page_size); ++writes;
+  }
+  bool supports_grouped_writes() const noexcept override { return grouped; }
+  void begin_paced_reclaim() noexcept override { paced = true; ++paced_starts; }
+  void end_paced_reclaim() noexcept override { paced = false; ++paced_ends; }
+  std::size_t write_pages(const PageWrite* input, std::size_t count,
+                          Ram::ReclaimClock::time_point deadline) override {
+    if (deadline != Ram::ReclaimClock::time_point::max() && !paced)
+      throw std::logic_error("pressure group outside paced scope");
+    group_sizes.push_back(count);
+    if (fail_write) throw std::runtime_error("injected group write failure");
+    count = std::min(count, group_limit);
+    for (std::size_t i = 0; i < count; ++i) write(input[i].page, input[i].bytes);
+    return count;
   }
   std::size_t prepare_pages(const PageWrite* input, std::size_t count,
                             Ram::ReclaimClock::time_point) override {
@@ -255,6 +272,47 @@ void test_incremental_reclaim_preparation() {
        "backing preparation changed ordinary RAM");
 }
 
+void test_staged_group_reclaim() {
+  Ram ram(32 * page_size, 16 * page_size);
+  auto backing = std::make_unique<Backing>();
+  auto* host = backing.get();
+  host->grouped = true;
+  host->group_limit = 2;
+  ram.attach_page_backing(std::move(backing));
+  for (unsigned page = 0; page < 8; ++page) {
+    const auto bytes = varied(page);
+    ram.write_block(page * page_size, bytes.data(), bytes.size());
+  }
+  const auto prepare = ram.prepare_reclaim(1, Ram::ReclaimClock::time_point::max());
+  need(prepare.backed_pages == 1 && host->writes == 1, "clean reclaim fixture failed to prewrite a page");
+  const auto deadline = [] { return Ram::ReclaimClock::now() + std::chrono::seconds(1); };
+  const auto first = ram.adjust_payload_budget(0, 4, deadline(), 1);
+  need(first == Ram::BudgetAdjustment::Reclaiming && host->group_sizes == std::vector<std::size_t>{4} &&
+           host->writes == 3 && ram.spilled_pages() == 3 && ram.clean_backing_pages() == 0,
+       "paced reclaim did not release clean backing and the dirty group's committed prefix");
+  need(ram.allocated_bytes() == 5 * page_size && ram.budget_bytes() == 7 * page_size &&
+           host->paced_starts == 1 && host->paced_ends == 1 && !host->paced,
+       "partial progress did not restrict paused admission or close the paced scope");
+
+  host->fail_write = true;
+  bool reported = false;
+  try { (void)ram.adjust_payload_budget(0, 4, deadline()); }
+  catch (const std::runtime_error& error) { reported = std::string(error.what()) == "injected group write failure"; }
+  need(reported && ram.allocated_bytes() == 5 * page_size && ram.spilled_pages() == 3 &&
+           host->paced_starts == 2 && host->paced_ends == 2 && !host->paced,
+       "failed pressure write hid its error, dropped resident data or leaked the paced scope");
+  host->fail_write = false;
+  host->group_limit = Backing::kMaxWritePages;
+  need(ram.adjust_payload_budget(0, 8, deadline()) == Ram::BudgetAdjustment::Applied &&
+           ram.allocated_bytes() == 0 && ram.budget_bytes() == 0 && ram.spilled_pages() == 8,
+       "staged pressure did not resume and publish the exact final cap");
+  for (unsigned page = 0; page < 8; ++page) {
+    Page restored{};
+    ram.read_block(page * page_size, restored.data(), restored.size());
+    need(restored == varied(page), "pressure writes changed guest bytes");
+  }
+}
+
 void test_compact_budget_and_fill_preflight() {
   Ram edges(4 * page_size, page_size);
   rejects([&] { edges.fill(page_size - 1, 0x5a, page_size + 2); },
@@ -458,6 +516,7 @@ int main() {
     test_pressure_and_reference();
     test_failures_pins_and_clean_reclaim();
     test_incremental_reclaim_preparation();
+    test_staged_group_reclaim();
     test_compact_budget_and_fill_preflight();
     test_implicit_zero_fill_inside_journal();
     test_full_overwrite_and_lazy_shared_cache();

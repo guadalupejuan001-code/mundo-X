@@ -75,6 +75,19 @@ public:
         virtual void reset() noexcept = 0;
     };
 
+    class PacedReclaimScope {
+    public:
+        explicit PacedReclaimScope(PageBacking* backing) noexcept : backing_(backing) {
+            if (backing_) backing_->begin_paced_reclaim();
+        }
+        ~PacedReclaimScope() { if (backing_) backing_->end_paced_reclaim(); }
+        PacedReclaimScope(const PacedReclaimScope&) = delete;
+        PacedReclaimScope& operator=(const PacedReclaimScope&) = delete;
+
+    private:
+        PageBacking* backing_;
+    };
+
     struct Metrics {
         std::uint64_t logical_bytes;
         std::uint64_t allocated_bytes;
@@ -399,14 +412,8 @@ public:
                 if (backing_cache_ && (allocated_bytes() > guest_target ||
                     cache_sets == backing_cache_->active_sets)) backing_cache_->release_unused(deadline);
             }
-            struct ReclaimScope {
-                PageBacking* backing;
-                explicit ReclaimScope(PageBacking* backing) noexcept : backing(backing) {
-                    if (backing) backing->begin_paced_reclaim();
-                }
-                ~ReclaimScope() { if (backing) backing->end_paced_reclaim(); }
-            } scope(paced && reclaimed_pages < reclaim_pages && allocated_bytes() > guest_target
-                    ? backing_.get() : nullptr);
+            const PacedReclaimScope scope(paced && reclaimed_pages < reclaim_pages &&
+                allocated_bytes() > guest_target ? backing_.get() : nullptr);
             const bool grouped = backing_ && backing_->supports_grouped_writes();
             for (auto i = reclaimed_pages; i < reclaim_pages && allocated_bytes() > guest_target;) {
                 if (paced && paced->expired()) break;
