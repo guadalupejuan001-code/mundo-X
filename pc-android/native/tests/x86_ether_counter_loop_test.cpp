@@ -509,6 +509,122 @@ void prepare_movntdq(PcMachine& pc, unsigned rounds, std::uint64_t destination, 
     }
 }
 
+void streaming_sse_fill_rounds() {
+    constexpr unsigned rounds = 9, round_bytes = 128;
+    constexpr std::uint64_t destination = 0x2ce80, page_boundary = 0x2d000;
+    constexpr unsigned body_bytes = sizeof(kMovntdqFill) - 1;
+    constexpr std::uint8_t tail[]{0x0f,0xae,0xf8,0xf4}; // SFENCE; HLT
+    const auto seed = [&](PcMachine& pc, unsigned count, std::uint64_t start) {
+        prepare_movntdq(pc, count, start);
+        auto& cpu = pc.cpu;
+        cpu.memory.write_block(entry + body_bytes, tail, sizeof(tail));
+        for (unsigned i = 0; i < kMovntdqRoundSteps; ++i)
+            require(cpu.step() == StepResult::Executed, "could not seed streaming SSE fill loop");
+        require(cpu.eip == entry && cpu.streaming_sse_fill_loop_batch_candidate(),
+                "streaming SSE fill did not observe exact backedge");
+    };
+
+    PcMachine scalar(4U << 20), fast(4U << 20);
+    for (auto* machine : {&scalar, &fast}) {
+        seed(*machine, rounds, destination);
+        machine->cpu.write8(destination - 1, 0x23);
+        machine->cpu.write8(destination + rounds * round_bytes, 0x86);
+    }
+    auto& cpu = fast.cpu;
+    const auto& expected = scalar.cpu;
+    const auto retired = cpu.instructions;
+    const auto cursor = cpu.regs[Cpu::ECX];
+    const auto denied = [&] {
+        const auto registers = cpu.regs;
+        const auto flags = cpu.eflags;
+        const auto xmm = cpu.xmm;
+        require(cpu.try_counter_loop_batch(4 * kMovntdqRoundSteps) == 0 &&
+                    cpu.instructions == retired && cpu.regs == registers && cpu.xmm == xmm &&
+                    cpu.eflags == flags && cpu.eip == entry && !cpu.fault && cpu.read64(cursor) == 0,
+                "rejected streaming SSE fill changed CPU or memory");
+    };
+    cpu.regs[Cpu::EAX] = 0x100000080ULL;
+    denied();
+    cpu.regs[Cpu::EAX] = round_bytes;
+    cpu.cr0 |= 8U;
+    denied();
+    cpu.cr0 &= ~8U;
+    cpu.regs[Cpu::ECX] = cursor + 1;
+    denied();
+    cpu.regs[Cpu::ECX] = page_boundary - round_bytes;
+    denied();
+    cpu.regs[Cpu::ECX] = entry;
+    denied();
+    require(cpu.read8(entry) == kMovntdqFill[0], "streaming SSE fill overwrote its code");
+    cpu.regs[Cpu::ECX] = cursor;
+    cpu.write8(entry + 3, 0x09); // First MOVNTDQ now uses XMM1.
+    denied();
+    cpu.write8(entry + 3, kMovntdqFill[3]);
+
+    unsigned ticks = 0, device_limit = 4 * kMovntdqRoundSteps;
+    fast.enable_boot_acceleration();
+    fast.device_step_hook = [&] { ++ticks; };
+    fast.device_batch_limit_hook = [&](unsigned grant) { return std::min(grant, device_limit); };
+    fast.device_batch_advance_hook = [&](unsigned extra) {
+        require(extra < device_limit, "streaming SSE fill crossed its device boundary");
+        ticks += extra;
+    };
+    const auto compare = [&] {
+        require(cpu.regs == expected.regs && cpu.eflags == expected.eflags && cpu.xmm == expected.xmm &&
+                    cpu.eip == expected.eip && cpu.clock_cycles() == expected.clock_cycles() &&
+                    cpu.last_decoded_bytes() == expected.last_decoded_bytes() && !cpu.fault,
+                "streaming SSE fill changed x86 state");
+        std::array<std::uint8_t, rounds * round_bytes + 2> actual, reference;
+        cpu.memory.read_block(destination - 1, actual.data(), actual.size());
+        expected.memory.read_block(destination - 1, reference.data(), reference.size());
+        require(actual == reference && actual.front() == 0x23 && actual.back() == 0x86,
+                "streaming SSE fill changed RAM or outside guard bytes");
+    };
+    const auto run = [&](unsigned steps) {
+        auto before = cpu.instructions;
+        const auto previous_ticks = ticks;
+        fast.run(steps);
+        scalar.run(steps);
+        require(cpu.instructions - before == steps && ticks - previous_ticks == steps,
+                "streaming SSE fill changed device ticks or retirement");
+        compare();
+    };
+    run(2 * kMovntdqRoundSteps);
+    require(cpu.regs[Cpu::ECX] == page_boundary && fast.boot_acceleration().streaming_sse_fill_loop_steps == 22,
+            "streaming SSE fill missed the first page grant");
+    device_limit = 19;
+    run(19);
+    require(cpu.eip != entry && fast.boot_acceleration().streaming_sse_fill_loop_steps == 22,
+            "streaming SSE fill did not fall back inside a device grant");
+    run(3);
+    require(cpu.eip == entry, "streaming SSE fill did not resume at its backedge");
+    device_limit = 4 * kMovntdqRoundSteps;
+    run(4 * kMovntdqRoundSteps);
+    require(cpu.eip == entry + body_bytes && cpu.regs[Cpu::EDX] == 0 &&
+                fast.boot_acceleration().streaming_sse_fill_loop_steps == 66,
+            "streaming SSE fill skipped its SFENCE or retired the wrong number of rounds");
+    run(1); // SFENCE is the ordinary next instruction, after the loop stores.
+    require(cpu.eip == entry + body_bytes + 3 && cpu.last_decoded_bytes()[2] == 0xf8,
+            "streaming SSE fill changed the final SFENCE");
+
+    PcMachine boundary(4U << 20);
+    constexpr std::uint64_t end = 0x200000;
+    seed(boundary, 6, end - 160);
+    auto& edge = boundary.cpu;
+    edge.write64(0x3008, 0); // Next writable page is absent.
+    const auto edge_retired = edge.instructions;
+    require(edge.try_counter_loop_batch(44) == 0 && edge.instructions == edge_retired &&
+                edge.eip == entry && edge.read64(end - 32) == 0,
+            "streaming SSE fill bypassed a page fault or partially wrote a rejected round");
+    require(edge.step() == StepResult::Executed && edge.step() == StepResult::Executed &&
+                edge.read64(end - 32) != 0 && edge.read64(end - 16) != 0,
+            "scalar streaming fill lost the valid stores before the page fault");
+    require(edge.step() == StepResult::Faulted && edge.fault && edge.fault->eip == entry + 9 &&
+                edge.cr2 == end && edge.read64(end) == 0,
+            "streaming SSE fill faulted at the wrong instruction or address");
+    std::cout << "ETHER_STREAMING_SSE_FILL_PASS full_batch_steps=66 mid_grant=1 partial_page_fault=1 sfence=1\n";
+}
+
 void movntdq_store_batches() {
     PcMachine scalar(4U << 20), fast(4U << 20);
     for (auto* pc : {&scalar, &fast}) {
@@ -1108,6 +1224,7 @@ int main(int argc, char** argv) {
         counted_calls();
         sse_copy_loops();
         sse_fill_loop();
+        streaming_sse_fill_rounds();
         movntdq_store_batches();
         mixed_movntdq_registers();
         disp32_movntdq_registers();

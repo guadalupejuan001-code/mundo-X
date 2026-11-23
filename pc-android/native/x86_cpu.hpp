@@ -566,15 +566,18 @@ class Cpu {
            (cr0 & 0x80000001U) == 1 && !(efer & 0x400U) && cache_[CS].big;
   }
   unsigned try_forward_copy_loop_batch(unsigned step_budget);
+  bool streaming_sse_fill_loop_batch_candidate() const noexcept {
+    return opcode_ == 0x75 && ip_written_ && last_movntdq_end_ip_ == start_ip_ &&
+        decoded_.size() == 2 && decoded_[1] == 0xd1 && cursor_ > eip &&
+        cursor_ - eip == kStreamingSseFillLoopBytes && page_translation_cache_enabled_ &&
+        is_long_mode() && start_cs_ == segments[CS];
+  }
   bool movntdq_store_batch_candidate() const noexcept {
     const bool adjacent = opcode_ == 0x0fe7 && cursor_ == eip;
     const bool after_arithmetic = (opcode_ == 0x03 || opcode_ == 0xff) &&
         last_movntdq_end_ip_ == start_ip_ && !ip_written_ && cursor_ == eip;
-    // The observed streaming fill returns to its first store with JNZ -47.
-    const bool backedge = opcode_ == 0x75 && ip_written_ && last_movntdq_end_ip_ == start_ip_ &&
-        decoded_.size() == 2 && decoded_[1] == 0xd1 && cursor_ > eip && cursor_ - eip == 47;
-    return (adjacent || after_arithmetic || backedge) && page_translation_cache_enabled_ &&
-        is_long_mode() && start_cs_ == segments[CS];
+    return ((adjacent || after_arithmetic) && page_translation_cache_enabled_ &&
+        is_long_mode() && start_cs_ == segments[CS]) || streaming_sse_fill_loop_batch_candidate();
   }
   unsigned try_movntdq_store_batch(unsigned budget);
   bool rotate_xor_loop_batch_candidate() const noexcept {
@@ -1103,10 +1106,12 @@ class Cpu {
   std::optional<CountedCallLoop> counted_call_loop_;
   std::optional<CountedCallLoop> decode_counted_call_loop(const std::uint8_t* code, unsigned length);
   std::uint64_t try_counted_call_loop_batch(std::uint64_t step_budget);
-  static constexpr unsigned kSseFillLoopBytes = 43, kSseCopyLoopBytes = 47, kStreamingSseCopyLoopBytes = 52;
+  static constexpr unsigned kSseFillLoopBytes = 43, kStreamingSseFillLoopBytes = 47;
+  static constexpr unsigned kSseCopyLoopBytes = 47, kStreamingSseCopyLoopBytes = 52;
   bool sse_memory_loop_tail(std::uint64_t length, unsigned branch_bytes) const noexcept {
-    return (length == kSseFillLoopBytes || length == kSseCopyLoopBytes || length == kStreamingSseCopyLoopBytes) &&
-        branch_bytes == 2 && last_xmm_memory_loop_end_ip_ == start_ip_;
+    return branch_bytes == 2 &&
+        (((length == kSseFillLoopBytes || length == kSseCopyLoopBytes || length == kStreamingSseCopyLoopBytes) &&
+          last_xmm_memory_loop_end_ip_ == start_ip_) || streaming_sse_fill_loop_batch_candidate());
   }
   std::uint64_t try_sse_memory_loop_batch(std::uint64_t step_budget, unsigned length);
   static constexpr unsigned kWideMultiplyLoopBytes = 31;
