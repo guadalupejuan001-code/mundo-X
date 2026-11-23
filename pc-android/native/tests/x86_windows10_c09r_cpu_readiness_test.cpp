@@ -312,6 +312,134 @@ void windows_profile_io_debug() {
         "IRETQ must resume after the I/O without repeating it");
   std::cout << "WINDOWS_X64_IO_DEBUG_PASS\n";
 }
+
+void windows_profile_trap_flag() {
+  constexpr std::uint64_t guest = 0xa000, idt = 0x15000;
+  constexpr std::uint16_t debug_handler = 0xb000, invalid_opcode_handler = 0xc000;
+  constexpr unsigned dr6_single_step = 1U << 14;
+  const auto boot_with_gate = [&](Cpu& cpu, unsigned vector, std::uint16_t handler) {
+    cpu.use_windows_x64_profile();
+    boot64(cpu);
+    cpu.idtr = {4095, idt};
+    const auto entry = idt + vector * 16U;
+    cpu.write64(entry, (0x8eULL << 40) | (std::uint64_t(cpu.segments[Cpu::CS]) << 16) | handler);
+    cpu.write64(entry + 8, 0);
+  };
+
+  {
+    Cpu cpu(4U << 20);
+    boot_with_gate(cpu, 1, debug_handler);
+    program(cpu, debug_handler, {0x0f,0x21,0xf0, 0x48,0xcf}); // MOV RAX,DR6; IRETQ
+    program(cpu, guest, {0x9d, 0x48,0xff,0xc3, 0x48,0xff,0xc3, 0x90}); // POPFQ; INC RBX twice; NOP
+    cpu.regs[Cpu::EBX] = 0;
+    const auto stack = cpu.regs[Cpu::ESP];
+    cpu.write64(stack, cpu.eflags | Cpu::TF);
+    const auto steps = cpu.instructions;
+    check(!cpu.flag(Cpu::TF) && cpu.step() == StepResult::Executed && !cpu.fault &&
+          cpu.eip == guest + 1 && cpu.regs[Cpu::ESP] == stack + 8 && cpu.flag(Cpu::TF) &&
+          cpu.instructions == steps + 1,
+          "POPFQ must retire and enable TF without trapping immediately");
+
+    check(cpu.step() == StepResult::Executed && !cpu.fault && cpu.eip == debug_handler &&
+          cpu.regs[Cpu::EBX] == 1 && cpu.instructions == steps + 2 && !cpu.flag(Cpu::TF) &&
+          cpu.read64(cpu.regs[Cpu::ESP]) == guest + 4 &&
+          (cpu.read64(cpu.regs[Cpu::ESP] + 16) & Cpu::TF),
+          "the stepped INC must retire once and #DB must stack the following RIP and TF");
+    check(cpu.step() == StepResult::Executed && (cpu.regs[Cpu::EAX] & dr6_single_step),
+          "single-step #DB must set DR6.BS");
+    check(cpu.step() == StepResult::Executed && cpu.eip == guest + 4 && cpu.flag(Cpu::TF),
+          "IRETQ must restore stacked TF without stepping itself");
+    check(cpu.step() == StepResult::Executed && cpu.eip == debug_handler &&
+          cpu.regs[Cpu::EBX] == 2 && cpu.read64(cpu.regs[Cpu::ESP]) == guest + 7 && !cpu.flag(Cpu::TF),
+          "restored TF must single-step the next guest instruction");
+
+    program(cpu, debug_handler, {0x48,0x81,0x64,0x24,0x10,0xff,0xfe,0xff,0xff, 0x48,0xcf});
+    // AND QWORD PTR [RSP+16],~TF; IRETQ
+    check(cpu.step() == StepResult::Executed && !(cpu.read64(cpu.regs[Cpu::ESP] + 16) & Cpu::TF) &&
+          cpu.step() == StepResult::Executed && cpu.eip == guest + 7 && !cpu.flag(Cpu::TF) &&
+          cpu.step() == StepResult::Executed && cpu.eip == guest + 8 && !cpu.fault,
+          "the guest handler must be able to clear stacked TF and resume without another #DB");
+  }
+
+  {
+    Cpu cpu(4U << 20);
+    boot_with_gate(cpu, 6, invalid_opcode_handler);
+    program(cpu, invalid_opcode_handler, {0x0f,0x21,0xf0}); // MOV RAX,DR6
+    program(cpu, guest, {0x9d, 0x0f,0x0b}); // POPFQ; UD2
+    cpu.write64(cpu.regs[Cpu::ESP], cpu.eflags | Cpu::TF);
+    check(cpu.step() == StepResult::Executed && cpu.eip == guest + 1 && cpu.flag(Cpu::TF),
+          "POPFQ must arm TF before the faulting instruction");
+    check(cpu.step() == StepResult::Executed && cpu.eip == invalid_opcode_handler && !cpu.fault &&
+          cpu.read64(cpu.regs[Cpu::ESP]) == guest + 1 &&
+          (cpu.read64(cpu.regs[Cpu::ESP] + 16) & Cpu::TF) && !cpu.flag(Cpu::TF),
+          "faulting UD2 must deliver #UD with its faulting RIP and saved TF");
+    check(cpu.step() == StepResult::Executed && !(cpu.regs[Cpu::EAX] & dr6_single_step),
+          "a faulting instruction must not set DR6.BS");
+  }
+
+  {
+    Cpu cpu(4U << 20);
+    boot_with_gate(cpu, 1, debug_handler);
+    program(cpu, debug_handler, {0x90});
+    program(cpu, guest, {0x9d,0xf4}); // POPFQ; HLT
+    cpu.write64(cpu.regs[Cpu::ESP], cpu.eflags | Cpu::TF);
+    const auto steps = cpu.instructions;
+    check(cpu.step() == StepResult::Executed && cpu.step() == StepResult::Executed &&
+          cpu.eip == debug_handler && !cpu.halted && !cpu.fault &&
+          cpu.read64(cpu.regs[Cpu::ESP]) == guest + 2 && cpu.instructions == steps + 2,
+          "the debug trap after HLT must leave its handler runnable and stack the next RIP");
+    check(cpu.step() == StepResult::Executed && cpu.eip == debug_handler + 1,
+          "the #DB handler must execute after the stepped HLT");
+  }
+
+  {
+    Cpu cpu(4U << 20);
+    boot_with_gate(cpu, 1, debug_handler);
+    program(cpu, guest, {0x9d, 0x8e,0xd0, 0x90}); // POPFQ; MOV SS,AX; NOP
+    cpu.regs[Cpu::EAX] = cpu.segments[Cpu::SS];
+    cpu.write64(cpu.regs[Cpu::ESP], cpu.eflags | Cpu::TF);
+    check(cpu.step() == StepResult::Executed && cpu.step() == StepResult::Executed &&
+          cpu.eip == guest + 3 && cpu.flag(Cpu::TF) && !cpu.fault,
+          "MOV SS must defer its debug boundary while preserving TF");
+    check(cpu.step() == StepResult::Executed && cpu.eip == debug_handler &&
+          cpu.read64(cpu.regs[Cpu::ESP]) == guest + 4 && !cpu.flag(Cpu::TF) && !cpu.fault,
+          "single-step #DB must fire after the instruction following MOV SS");
+  }
+
+  {
+    Cpu cpu(4U << 20);
+    boot_with_gate(cpu, 1, debug_handler);
+    cpu.enable_page_translation_cache();
+    constexpr std::uint64_t source = 0x30000, destination = 0x31000;
+    const auto seed_repeat = [&] {
+      program(cpu, guest, {0xf3,0xa4}); // REP MOVSB
+      cpu.set_flag(Cpu::DF, false);
+      cpu.write32(source, 0x44332211U);
+      cpu.write32(destination, 0);
+      cpu.regs[Cpu::ESI] = source;
+      cpu.regs[Cpu::EDI] = destination;
+      cpu.regs[Cpu::ECX] = 4;
+      check(cpu.step() == StepResult::Executed && cpu.eip == guest && cpu.rep_batch_candidate(),
+            "the scalar REP iteration must seed an otherwise batchable repetition");
+    };
+
+    seed_repeat();
+    check(cpu.try_rep_batch(2) == 2 && cpu.read32(destination) == 0x00332211U,
+          "the REP control without TF must admit a batch in the same setting");
+    seed_repeat();
+    cpu.set_flag(Cpu::TF, true); // Arm TF at the already seeded REP boundary.
+    const auto steps = cpu.instructions;
+    check(cpu.try_rep_batch(2) == 0 && cpu.read32(destination) == 0x11 &&
+          cpu.regs[Cpu::ECX] == 3 && cpu.instructions == steps,
+          "TF must prevent a decoded REP batch before it changes guest state");
+    check(cpu.step() == StepResult::Executed && cpu.eip == debug_handler && !cpu.fault &&
+          cpu.read64(cpu.regs[Cpu::ESP]) == guest && cpu.regs[Cpu::ECX] == 2 &&
+          cpu.regs[Cpu::ESI] == source + 2 && cpu.regs[Cpu::EDI] == destination + 2 &&
+          cpu.read32(destination) == 0x2211 && cpu.instructions == steps + 1,
+          "#DB must follow one REP element and preserve the restart RIP and remaining count");
+  }
+  std::cout << "WINDOWS_X64_TRAP_FLAG_PASS\n";
+}
 }
 int main(){
  try {
@@ -320,6 +448,7 @@ int main(){
    windows_x64_platform_registers();
    windows_profile_legacy_pages();
    windows_profile_io_debug();
+   windows_profile_trap_flag();
    std::cout<<"REVERSE_WINDOWS_C09R_CPU_READINESS_PASS checks="<<checks
             <<" Windows10_ready=false windows_iso_tested=false\n";
    return 0;
