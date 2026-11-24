@@ -481,6 +481,7 @@ class Cpu {
     last_variable_rotate_ip_ = UINT64_MAX;
     last_movntdq_end_ip_ = UINT64_MAX;
     streaming_sse_triplet_steps_ = 0;
+    sse_zero_fill_bytes_ = 0;
     last_mxcsr_save_end_ip_ = UINT64_MAX;
     counted_call_loop_.reset();
     affine_ram_rotate_block_.reset();
@@ -596,6 +597,7 @@ class Cpu {
          last_movntdq_end_ip_ == start_ip_ - 7);
   }
   std::uint64_t streaming_sse_triplet_steps() const noexcept { return streaming_sse_triplet_steps_; }
+  std::uint64_t sse_zero_fill_bytes() const noexcept { return sse_zero_fill_bytes_; }
   bool movntdq_store_batch_candidate() const noexcept {
     const bool adjacent = opcode_ == 0x0fe7 && cursor_ == eip;
     const bool after_arithmetic = (opcode_ == 0x03 || opcode_ == 0xff) &&
@@ -1090,6 +1092,7 @@ class Cpu {
   std::uint64_t last_variable_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_movntdq_end_ip_ = UINT64_MAX;
   std::uint64_t streaming_sse_triplet_steps_ = 0;
+  std::uint64_t sse_zero_fill_bytes_ = 0;
   std::uint64_t last_mxcsr_save_end_ip_ = UINT64_MAX;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 

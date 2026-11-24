@@ -109,22 +109,31 @@ inline std::uint64_t Cpu::try_sse_memory_loop_batch(std::uint64_t step_budget, u
     if (!to || (from && *to < *from + bytes && *from < *to + bytes) ||
         (*to < *code + length && *code < *to + bytes) || memory.may_touch_page_tables(*to, bytes)) return 0;
 
-    std::array<std::uint8_t, page_bytes + vector_bytes> data;
-    std::copy(xmm[0].begin(), xmm[0].end(), data.begin());
-    if (fill) {
-      for (unsigned copied = vector_bytes; copied < bytes; copied *= 2)
-        std::copy_n(data.begin(), std::min(copied, bytes - copied), data.begin() + copied);
+    const bool zero_fill = fill && std::all_of(xmm[0].begin(), xmm[0].end(),
+                                             [](std::uint8_t value) { return value == 0; });
+    if (zero_fill) {
+      // The state backend can keep untouched bytes implicitly zero, even
+      // when the IRQ or page guard limits this batch to part of a page.
+      memory.fill(*to, 0, bytes);
+      sse_zero_fill_bytes_ += bytes;
     } else {
-      memory.read_block(*from, data.data() + vector_bytes, bytes);
-    }
-    const auto pins = memory.pin_writes();
-    memory.prepare_write(*to, bytes);
-    memory.write_block(*to, data.data(), bytes);
-    if (!fill) {
-      // The guest's next copy round or tail stores the final source vector.
-      const auto* last = data.data() + vector_bytes + bytes - round_bytes;
-      for (unsigned i = 0; i < 4; ++i) std::copy_n(last + i * vector_bytes, vector_bytes, xmm[i + 1].begin());
-      xmm[0] = xmm[4];
+      std::array<std::uint8_t, page_bytes + vector_bytes> data;
+      std::copy(xmm[0].begin(), xmm[0].end(), data.begin());
+      if (fill) {
+        for (unsigned copied = vector_bytes; copied < bytes; copied *= 2)
+          std::copy_n(data.begin(), std::min(copied, bytes - copied), data.begin() + copied);
+      } else {
+        memory.read_block(*from, data.data() + vector_bytes, bytes);
+      }
+      const auto pins = memory.pin_writes();
+      memory.prepare_write(*to, bytes);
+      memory.write_block(*to, data.data(), bytes);
+      if (!fill) {
+        // The guest's next copy round or tail stores the final source vector.
+        const auto* last = data.data() + vector_bytes + bytes - round_bytes;
+        for (unsigned i = 0; i < 4; ++i) std::copy_n(last + i * vector_bytes, vector_bytes, xmm[i + 1].begin());
+        xmm[0] = xmm[4];
+      }
     }
     regs[ECX] = cursor + bytes;
     regs[counter] = alu(5, remaining - rounds + 1, 1, 8);

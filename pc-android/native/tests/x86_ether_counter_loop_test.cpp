@@ -395,12 +395,14 @@ void sse_copy_loops() {
     std::cout << "ETHER_SSE_COPY_LOOP_PASS variants=2 paging=1 state=1 device_bound=1\n";
 }
 
-void sse_fill_loop() {
-    constexpr std::uint8_t code[]{
+constexpr std::uint8_t kCachedSseFill[]{
         0x0f,0x29,0x01, 0x0f,0x29,0x41,0x10, 0x48,0x81,0xc1,0x80,0x00,0x00,0x00,
         0x0f,0x29,0x41,0xa0, 0x0f,0x29,0x41,0xb0, 0x49,0xff,0xc9,
         0x0f,0x29,0x41,0xc0, 0x0f,0x29,0x41,0xd0, 0x0f,0x29,0x41,0xe0,
         0x0f,0x29,0x41,0xf0, 0x75,0xd5};
+
+void sse_fill_loop() {
+    const auto& code = kCachedSseFill;
     constexpr unsigned rounds = 9, steps_per_round = 11, vector_bytes = 16, round_bytes = 128;
     constexpr std::uint64_t destination = 0x2ce80, page_boundary = 0x2d000;
     PcMachine scalar(4U << 20), fast(4U << 20);
@@ -507,6 +509,82 @@ void prepare_movntdq(PcMachine& pc, unsigned rounds, std::uint64_t destination, 
             cpu.write8(entry + operands[n], kMovntdqFill[operands[n]] | (source << 3));
         }
     }
+}
+
+void sse_zero_fill_pages() {
+    constexpr auto page_size = cosmic_pc::MemoryFabric::kPageSize;
+    constexpr std::uint64_t page = 0x2d000;
+    constexpr unsigned round_bytes = 128, rounds = 3, steps = rounds * kMovntdqRoundSteps;
+    constexpr std::uint8_t zero_xmm[]{0x66,0x0f,0xef,0xc0}; // PXOR XMM0,XMM0.
+    std::array<std::uint8_t, page_size> prior;
+    for (unsigned i = 0; i < prior.size(); ++i) prior[i] = std::uint8_t(1 + i % 251);
+
+    for (const bool streaming : {false, true}) {
+        for (const bool materialized : {false, true}) {
+            PcMachine fast(4U << 20), scalar(4U << 20);
+            const auto destination = materialized ? page + 2 * round_bytes : page;
+            for (auto* machine : {&fast, &scalar}) {
+                prepare_movntdq(*machine, rounds + 1, destination - round_bytes);
+                auto& cpu = machine->cpu;
+                if (!streaming) {
+                    cpu.memory.write_block(entry, kCachedSseFill, sizeof(kCachedSseFill));
+                    cpu.regs[Cpu::R9] = rounds + 1;
+                }
+                cpu.memory.write_block(entry - sizeof(zero_xmm), zero_xmm, sizeof(zero_xmm));
+                cpu.eip = entry - sizeof(zero_xmm);
+                require(cpu.step() == StepResult::Executed && cpu.eip == entry &&
+                            std::all_of(cpu.xmm[0].begin(), cpu.xmm[0].end(), [](auto byte) { return byte == 0; }),
+                        "the SSE zero fill did not execute PXOR");
+                for (unsigned i = 0; i < kMovntdqRoundSteps; ++i)
+                    require(cpu.step() == StepResult::Executed, "could not seed the SSE zero fill backedge");
+                require(cpu.eip == entry && cpu.regs[Cpu::ECX] == destination &&
+                            cpu.counter_loop_batch_candidate(),
+                        "the SSE zero fill did not reach its measured destination");
+                if (materialized) cpu.memory.write_block(page, prior.data(), prior.size());
+                require(bool(cpu.memory.resident_ram_span(page, page_size)) == materialized,
+                        "the SSE zero fill fixture started in the wrong RAM state");
+            }
+
+            auto& cpu = fast.cpu;
+            const auto& expected = scalar.cpu;
+            const auto prior_memory = cpu.memory.metrics();
+            unsigned ticks = 0;
+            fast.enable_boot_acceleration();
+            fast.device_step_hook = [&] { ++ticks; };
+            fast.device_batch_limit_hook = [steps](unsigned budget) { return std::min(budget, steps); };
+            fast.device_batch_advance_hook = [&](unsigned extra) {
+                require(extra < steps, "SSE zero fill crossed the device grant");
+                ticks += extra;
+            };
+            fast.run(steps);
+            scalar.run(steps);
+            require(ticks == steps && fast.boot_acceleration().counter_loop_steps == steps &&
+                        fast.boot_acceleration().streaming_sse_fill_loop_steps == (streaming ? steps : 0) &&
+                        cpu.sse_zero_fill_bytes() == rounds * round_bytes && !expected.sse_zero_fill_bytes(),
+                    "the SSE zero fill did not retire through its expected batch path");
+            require(cpu.regs == expected.regs && cpu.eflags == expected.eflags && cpu.xmm == expected.xmm &&
+                        cpu.eip == expected.eip && cpu.clock_cycles() == expected.clock_cycles() &&
+                        cpu.last_decoded_bytes() == expected.last_decoded_bytes() && !cpu.fault && !expected.fault,
+                    "the SSE zero fill changed x86 state");
+            const auto following_memory = cpu.memory.metrics();
+            require(following_memory.allocated_pages == prior_memory.allocated_pages &&
+                        following_memory.page_state_vectors == prior_memory.page_state_vectors &&
+                        bool(cpu.memory.resident_ram_span(page, page_size)) == materialized,
+                    "the SSE zero fill changed page allocation or materialized an untouched page");
+
+            std::array<std::uint8_t, page_size> actual, reference;
+            cpu.memory.read_block(page, actual.data(), actual.size());
+            expected.memory.read_block(page, reference.data(), reference.size());
+            require(actual == reference, "the SSE zero fill disagreed with the scalar page");
+            for (unsigned i = 0; i < actual.size(); ++i) {
+                const auto address = page + i;
+                const bool cleared = address >= destination && address < destination + rounds * round_bytes;
+                require(actual[i] == (materialized && !cleared ? prior[i] : 0),
+                        "the SSE zero fill left data in range or modified a neighbor");
+            }
+        }
+    }
+    std::cout << "ETHER_SSE_ZERO_FILL_PASS streaming=1 cached=1 untouched=1 neighbors=1 flags=1\n";
 }
 
 void streaming_sse_fill_rounds() {
@@ -1383,6 +1461,7 @@ int main(int argc, char** argv) {
         counted_calls();
         sse_copy_loops();
         sse_fill_loop();
+        sse_zero_fill_pages();
         streaming_sse_fill_rounds();
         streaming_sse_triplet_rounds();
         movntdq_store_batches();
