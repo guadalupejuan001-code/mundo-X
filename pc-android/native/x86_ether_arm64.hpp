@@ -92,12 +92,24 @@ struct Instruction {
   }
 };
 
-struct Block {
-  static constexpr unsigned kNarrowMaxBytes = 64, kNarrowMaxInstructions = 16;
-  static constexpr unsigned kMaxBytes = 128, kMaxInstructions = 32;
+struct LongInstruction : Instruction {
+  unsigned begin = 0, end = 0;
+};
+
+inline bool straight_register_instruction(const Instruction& op) noexcept {
+  return !op.lhs.memory && !op.rhs.memory &&
+      (op.kind == Instruction::Move || op.kind == Instruction::Nop ||
+       op.kind == Instruction::Xor || op.kind == Instruction::Add ||
+       op.kind == Instruction::Subtract);
+}
+
+template<class InstructionType, unsigned MaxBytes, unsigned MaxInstructions>
+struct DecodedBlock {
+  using DecodedInstruction = InstructionType;
+  static constexpr unsigned kMaxBytes = MaxBytes, kMaxInstructions = MaxInstructions;
   static constexpr unsigned kMaxWrites = 4;
   static constexpr unsigned kNoFlagSource = kMaxInstructions;
-  std::array<Instruction, kMaxInstructions> instructions{};
+  std::array<DecodedInstruction, kMaxInstructions> instructions{};
   unsigned count = 0, size = 0, flag_width = 0, flag_index = 0, writes = 0, ram_adds = 0;
   unsigned auxiliary_index = kNoFlagSource, rotate_carry_index = kNoFlagSource;
   unsigned decrement_carry_index = kNoFlagSource;
@@ -133,6 +145,13 @@ struct Block {
         (flag_op == Instruction::Decrement && (last.opcode & 15) == 5);
   }
 };
+
+struct Block : DecodedBlock<Instruction, 128, 32> {
+  static constexpr unsigned kNarrowMaxBytes = 64, kNarrowMaxInstructions = 16;
+};
+
+inline constexpr unsigned kMaxX86InstructionBytes = 15;
+using LongBlock = DecodedBlock<LongInstruction, 8192 * kMaxX86InstructionBytes, 8192>;
 
 static_assert(sizeof(Operand) == 16 && sizeof(Instruction) == 48);
 static_assert(Block::kMaxBytes <= UINT8_MAX);
@@ -175,11 +194,12 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
     Instruction::Add, Instruction::Or, Instruction::Unsupported, Instruction::Unsupported,
     Instruction::And, Instruction::Subtract, Instruction::Xor, Instruction::Compare};
 
-inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true,
-                    bool allow_segment_loads = false, unsigned instruction_limit = Block::kNarrowMaxInstructions) {
-  size = std::min(size, Block::kMaxBytes);
-  instruction_limit = std::min(instruction_limit, Block::kMaxInstructions);
-  Block block;
+template<class BlockType, bool StraightRegisters = false>
+inline void decode_block(BlockType& block, const std::uint8_t* bytes, unsigned size,
+                         std::uint64_t rip, bool long_mode, bool allow_segment_loads,
+                         unsigned instruction_limit) {
+  size = std::min(size, BlockType::kMaxBytes);
+  instruction_limit = std::min(instruction_limit, BlockType::kMaxInstructions);
   block.long_mode = long_mode;
   unsigned carry_boundary = 0;
   const auto sign_extend = [](std::uint32_t value, unsigned width) {
@@ -233,7 +253,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     const bool multiply_immediate = opcode == 0x69 || opcode == 0x6b;
     const bool multiply = opcode == 0x0faf || multiply_immediate;
     const bool shift = opcode == 0xc1 || opcode == 0xd1 || opcode == 0xd3;
-    const bool carry_preserved = block.rotate_carry_index == Block::kNoFlagSource &&
+    const bool carry_preserved = block.rotate_carry_index == BlockType::kNoFlagSource &&
         (!block.flag_width || block.flag_op == Instruction::Increment || block.flag_op == Instruction::Decrement);
     const auto immediate = [&](unsigned width, bool sign) {
       std::uint64_t value = 0;
@@ -241,7 +261,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       if (sign && width < 8 && (value >> (8 * width - 1))) value |= UINT64_MAX << (8 * width);
       return Operand::literal(value);
     };
-    Instruction op;
+    typename BlockType::DecodedInstruction op;
     op.begin = begin;
     op.opcode = opcode;
     op.width = (rex & 8) ? 8 : word ? 2 : 4;
@@ -359,7 +379,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         if (group <= 1) {
           // A runtime zero count inherits CF and OF. Keep any earlier
           // outstanding rotate flags in the preceding block.
-          if (opcode == 0xd3 && block.rotate_carry_index != Block::kNoFlagSource) break;
+          if (opcode == 0xd3 && block.rotate_carry_index != BlockType::kNoFlagSource) break;
           op.kind = group == 0 ? Instruction::RotateLeft : Instruction::RotateRight;
           if (opcode == 0xd3) op.rhs = Operand{1}; // CL
           else {
@@ -368,7 +388,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
           }
         } else {
           // Shifts can keep incoming OF, and variable zero counts can keep all flags.
-          if (group < 4 || block.flag_width || block.rotate_carry_index != Block::kNoFlagSource) break;
+          if (group < 4 || block.flag_width || block.rotate_carry_index != BlockType::kNoFlagSource) break;
           op.kind = group == 5 ? Instruction::ShiftRight
               : group == 7 ? Instruction::ShiftArithmetic : Instruction::ShiftLeft;
           op.rhs = opcode == 0xd3 ? Operand{1} : Operand::literal(opcode == 0xd1 ? 1 : bytes[pos++]);
@@ -418,6 +438,9 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       if (long_mode && !canonical(target)) break;
       block.target = long_mode ? target : std::uint32_t(target);
     }
+    if constexpr (StraightRegisters) {
+      if (!straight_register_instruction(op)) break;
+    }
     // Keep legacy stores terminal except for ordinary DWORD MOVs to a fixed
     // ESP offset. Never extend their staged chain through a stack-base change
     // or another kind of write.
@@ -428,7 +451,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     fixed_stack_base &= !changes_stack_base;
     // A guarded RAM arithmetic operation uses the primary flag slots in its callback.
     // Commit it before a subsequent logical operation that inherits its AF.
-    if (Instruction::logical(op.kind) && block.auxiliary_index != Block::kNoFlagSource &&
+    if (Instruction::logical(op.kind) && block.auxiliary_index != BlockType::kNoFlagSource &&
         block.instructions[block.auxiliary_index].writes_ram()) break;
     const bool inc_dec = op.kind == Instruction::Increment || op.kind == Instruction::Decrement;
     if (op.kind == Instruction::Compare || Instruction::logical(op.kind) || Instruction::shift(op.kind) || inc_dec ||
@@ -442,7 +465,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
         // carry in the final native round so the caller can observe it on exit.
         const bool jnz = (size - pos >= 2 && bytes[pos] == 0x75) ||
             (size - pos >= 6 && bytes[pos] == 0x0f && bytes[pos + 1] == 0x85);
-        const bool from_rotate = block.rotate_carry_index != Block::kNoFlagSource;
+        const bool from_rotate = block.rotate_carry_index != BlockType::kNoFlagSource;
         const bool can_capture = from_rotate ? block.instructions[block.rotate_carry_index].rhs.immediate
             : Instruction::logical(block.flag_op) || block.flag_op == Instruction::Add ||
               block.flag_op == Instruction::Subtract || block.flag_op == Instruction::Compare;
@@ -463,7 +486,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
       block.flag_width = op.width;
       block.flag_op = op.kind;
       block.flag_index = block.count;
-      block.rotate_carry_index = block.rotate_overflow_index = Block::kNoFlagSource;
+      block.rotate_carry_index = block.rotate_overflow_index = BlockType::kNoFlagSource;
       if (Instruction::sets_auxiliary(op.kind)) block.auxiliary_index = block.count;
     } else if (Instruction::rotate(op.kind)) {
       ++block.rotates;
@@ -491,18 +514,39 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     block.size = pos;
     if (op.writes_ram()) {
       block.ram_adds += op.kind == Instruction::Add;
-      if (++block.writes == Block::kMaxWrites || (legacy_store && !chain_stack_store)) break;
+      if (++block.writes == BlockType::kMaxWrites || (legacy_store && !chain_stack_store)) break;
     }
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }
-  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode, allow_segment_loads, instruction_limit);
-  // A read-only round can validate a new address with the guarded loader.
-  // Repeated stores still require fixed addresses for the pending writes.
-  // Legacy execution can repeat only when no segment or memory is accessed.
-  block.repeats = (long_mode || block.register_only) && block.target == rip && block.uses_arm_condition() &&
-      (!block.writes || fixed_loop_addresses(block));
+  if constexpr (!StraightRegisters) {
+    if (carry_boundary) {
+      block = {};
+      decode_block(block, bytes, carry_boundary, rip, long_mode, allow_segment_loads, instruction_limit);
+      return;
+    }
+    // A read-only round can validate a new address with the guarded loader.
+    // Repeated stores still require fixed addresses for the pending writes.
+    // Legacy execution can repeat only when no segment or memory is accessed.
+    block.repeats = (long_mode || block.register_only) && block.target == rip && block.uses_arm_condition() &&
+        (!block.writes || fixed_loop_addresses(block));
+  }
+}
+
+inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true,
+                    bool allow_segment_loads = false, unsigned instruction_limit = Block::kNarrowMaxInstructions) {
+  Block block;
+  decode_block(block, bytes, size, rip, long_mode, allow_segment_loads, instruction_limit);
   return block;
+}
+
+// Append instructions as the caller validates more executable code pages.
+// A shorter prefix stays on the existing block path.
+inline bool decode_long_register_block(LongBlock& block, const std::uint8_t* bytes, unsigned size,
+                                       std::uint64_t rip) {
+  if (size <= block.size || size > LongBlock::kMaxBytes) return false;
+  decode_block<LongBlock, true>(block, bytes, size, rip, true, false, LongBlock::kMaxInstructions);
+  return block.count == LongBlock::kMaxInstructions;
 }
 
 // An affine register transition F has linear differences modulo its register width.
@@ -842,7 +886,8 @@ struct Frame {
 // a resident page, and generated loads check the address stays inside it.
 class Emitter {
  public:
-  explicit Emitter(const Block& block)
+  template<class BlockType>
+  explicit Emitter(const BlockType& block)
       : long_mode_(block.long_mode), register_only_(block.register_only),
         inline_ram_reads_(block.long_mode && !block.writes && !block.register_only) {
     code_.reserve(96);
@@ -1160,6 +1205,27 @@ class NativeCode {
   ~NativeCode() { clear(); }
 
   bool build(const Block& block) {
+    return emit_block(block);
+  }
+  bool build(const LongBlock& block) {
+    // Only ordinary blocks may branch to the shared RAM callback exit.
+    if (!block.long_mode || !block.register_only || block.writes || block.repeats ||
+        block.count != LongBlock::kMaxInstructions ||
+        !std::all_of(block.instructions.begin(), block.instructions.end(), straight_register_instruction))
+      return false;
+    return emit_block(block);
+  }
+  explicit operator bool() const noexcept { return mapping_ != nullptr; }
+  unsigned run(Frame& frame) const { return reinterpret_cast<Run>(mapping_)(&frame); }
+  void clear() noexcept {
+    if (mapping_) munmap(mapping_, capacity_);
+    mapping_ = nullptr;
+    capacity_ = 0;
+  }
+
+ private:
+  template<class BlockType>
+  bool emit_block(const BlockType& block) {
     const Emitter emitter(block);
     const auto& words = emitter.words();
     const auto bytes = words.size() * sizeof(words.front());
@@ -1183,15 +1249,6 @@ class NativeCode {
     capacity_ = capacity;
     return true;
   }
-  explicit operator bool() const noexcept { return mapping_ != nullptr; }
-  unsigned run(Frame& frame) const { return reinterpret_cast<Run>(mapping_)(&frame); }
-  void clear() noexcept {
-    if (mapping_) munmap(mapping_, capacity_);
-    mapping_ = nullptr;
-    capacity_ = 0;
-  }
-
- private:
   static bool publish(void* mapping, std::size_t capacity,
                       const std::uint32_t* code, std::size_t bytes) noexcept {
     std::memcpy(mapping, code, bytes);

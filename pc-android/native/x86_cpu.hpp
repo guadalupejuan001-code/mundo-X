@@ -203,6 +203,9 @@ class Cpu {
     std::uint64_t translated = 0, hits = 0, blocks = 0, steps = 0;
     std::uint64_t expanded_blocks = 0;
     unsigned largest_block_instructions = 0;
+    std::uint64_t long_blocks_executed = 0, long_block_steps = 0;
+    std::uint64_t long_block_compile_attempts = 0, long_block_rejections = 0;
+    unsigned largest_long_block_instructions = 0;
     std::uint64_t protected32_steps = 0;
     std::uint64_t invalidated = 0, data_fallbacks = 0;
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
@@ -269,6 +272,8 @@ class Cpu {
     return {};
   }
   bool ether_arm64_block_candidate() const noexcept;
+  bool ether_arm64_long_block_candidate(unsigned budget) const noexcept;
+  unsigned try_ether_arm64_long_block(unsigned budget);
   unsigned try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus = nullptr);
   enum class EtherLoopAccess { Registers, ReadOnlyRam };
   unsigned ether_arm64_loop_length(EtherLoopAccess access) const noexcept;
@@ -484,6 +489,8 @@ class Cpu {
     state_vector_interpreter_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
+    ether_arm64_long_.reset();
+    next_ether_arm64_long_probe_ = 0;
 #endif
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0; wbinvd_retired = 0;
     crc32c_retired = 0;
@@ -1260,7 +1267,8 @@ class Cpu {
     std::uint16_t cs = 0;
     unsigned repeats = 0;
   } pause_wait_;
-  void retire_ether_decoded_block(const ether_arm64::Block& block, const std::uint8_t* code,
+  template<class Block>
+  void retire_ether_decoded_block(const Block& block, const std::uint8_t* code,
                                   std::uint64_t origin, bool taken, unsigned retired);
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<mundo_x::ether_virtual::Space> ether_arm64_space_;
@@ -1277,6 +1285,30 @@ class Cpu {
                               unsigned rounds, std::unique_lock<std::mutex>& bus, unsigned& off_bus_steps);
   unsigned commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry, const ether_arm64::Frame& frame,
                                       unsigned rounds, unsigned outcome, bool direct_regs, bool private_frame);
+  template<class Block>
+  unsigned commit_ether_arm64_result(const Block& block, const std::uint8_t* code, std::uint64_t origin,
+                                    const ether_arm64::Frame& frame, unsigned rounds, unsigned outcome,
+                                    bool direct_regs, bool private_frame);
+  struct EtherLongEntry {
+    struct Page {
+      std::uint64_t physical, version;
+      unsigned offset;
+    };
+    ether_arm64::LongBlock block;
+    std::array<std::uint8_t, ether_arm64::LongBlock::kMaxBytes> bytes;
+    std::array<Page, ether_arm64::LongBlock::kMaxBytes / MemoryFabric::kPageSize + 2> pages;
+    ether_arm64::NativeCode native;
+    std::uint64_t rip = 0, cr3 = 0;
+    unsigned cpl = 0, page_count = 0;
+    bool matches(std::uint64_t ip, std::uint64_t root, unsigned privilege) const noexcept {
+      return rip == ip && cr3 == root && cpl == privilege;
+    }
+  };
+  std::unique_ptr<EtherLongEntry> ether_arm64_long_;
+  std::uint64_t next_ether_arm64_long_probe_ = 0;
+  bool ether_arm64_long_grant(unsigned budget) const noexcept;
+  bool ether_arm64_long_pages_current(const EtherLongEntry& entry);
+  std::unique_ptr<EtherLongEntry> compile_ether_arm64_long_block();
   template <bool ParallelRead = false>
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
                                   unsigned width) noexcept;
@@ -4292,7 +4324,8 @@ inline unsigned Cpu::try_rep_page_batch(unsigned budget) {
 #include "x86_rotate_xor_loop.inc"
 #include "x86_affine_ram_rotate_loop.inc"
 
-inline void Cpu::retire_ether_decoded_block(const ether_arm64::Block& block, const std::uint8_t* code,
+template<class Block>
+inline void Cpu::retire_ether_decoded_block(const Block& block, const std::uint8_t* code,
                                             std::uint64_t origin, bool taken, unsigned retired) {
   const auto& last = block.instructions[block.count - 1];
   start_cs_ = segments[CS];

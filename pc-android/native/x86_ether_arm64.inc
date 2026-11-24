@@ -14,6 +14,66 @@ inline bool Cpu::ether_arm64_block_candidate() const noexcept {
 #endif
 }
 
+inline bool Cpu::ether_arm64_long_block_candidate(unsigned budget) const noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+  return ether_arm64_long_grant(budget) && (instructions >= next_ether_arm64_long_probe_ ||
+      (ether_arm64_long_ && ether_arm64_long_->matches(eip, cr3, cpl())));
+#else
+  (void)budget;
+  return false;
+#endif
+}
+
+inline unsigned Cpu::try_ether_arm64_long_block(unsigned budget) {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+  if (!ether_arm64_long_grant(budget)) return 0;
+  auto& stats = ether_arm64_stats_;
+  try {
+    const bool same_site = ether_arm64_long_ && ether_arm64_long_->matches(eip, cr3, cpl());
+    if (same_site && ether_arm64_long_pages_current(*ether_arm64_long_)) {
+      ++stats.hits;
+      ++stats.code_version_hits;
+    } else {
+      if (same_site) {
+        ether_arm64_long_.reset();
+        ++stats.invalidated;
+      }
+      // A failed probe cannot scan the next sequential RIP immediately.
+      next_ether_arm64_long_probe_ = instructions + 4 * ether_arm64::LongBlock::kMaxInstructions;
+      auto candidate = compile_ether_arm64_long_block();
+      if (!candidate) {
+        ++stats.long_block_rejections;
+        return 0;
+      }
+      if (ether_arm64_long_) ++stats.compiled_evictions;
+      ether_arm64_long_ = std::move(candidate);
+    }
+
+    const auto& entry = *ether_arm64_long_;
+    const auto& last = entry.block.instructions[entry.block.count - 1];
+    decoded_.reserve(last.end - last.begin);
+    ether_arm64::Frame frame{};
+    frame.regs = regs;
+    frame.guest_regs = frame.regs.data();
+    const auto outcome = entry.native.run(frame);
+    if (outcome == 1) {
+      const auto retired = commit_ether_arm64_result(entry.block, entry.bytes.data(), entry.rip, frame,
+                                                      1, outcome, false, false);
+      ++stats.long_blocks_executed;
+      stats.long_block_steps += retired;
+      stats.largest_long_block_instructions = std::max(stats.largest_long_block_instructions, retired);
+      return retired;
+    }
+  } catch (const std::exception&) {
+    // A speculative mapping or allocation failure leaves guest state untouched.
+  }
+  ++stats.long_block_rejections;
+#else
+  (void)budget;
+#endif
+  return 0;
+}
+
 inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (budget < 2 || !ether_arm64_dispatch_ready()) return 0;
@@ -210,6 +270,83 @@ inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
   return ether_arm64_block_candidate() && !fault && !halted && !transaction_ && !interrupt_shadow_ &&
          !(eflags & kScalarExecutionFlags) && (cpl() == 0 || cpl() == 3) &&
          !step_trace_hook && !irq_trace_hook;
+}
+
+inline bool Cpu::ether_arm64_long_grant(unsigned budget) const noexcept {
+  return budget >= ether_arm64::LongBlock::kMaxInstructions && is_long_mode() && !flag(IF) &&
+      !nmi_shadow_ && !(dr7_ & 0xffU) && ether_arm64_dispatch_ready() && !memory.has_pinned_writes();
+}
+
+inline bool Cpu::ether_arm64_long_pages_current(const EtherLongEntry& entry) {
+  try {
+    for (unsigned i = 0; i < entry.page_count; ++i) {
+      const auto& page = entry.pages[i];
+      bool ordinary = false;
+      const auto physical = translate_instruction(entry.rip + page.offset, ordinary, true);
+      if (!ordinary || physical != page.physical || memory.code_page_version(physical) != page.version)
+        return false;
+    }
+    return true;
+  } catch (const Trap&) {
+    return false;
+  }
+}
+
+inline std::unique_ptr<Cpu::EtherLongEntry> Cpu::compile_ether_arm64_long_block() {
+  constexpr auto limit = ether_arm64::LongBlock::kMaxBytes;
+  constexpr unsigned page_bytes = MemoryFabric::kPageSize;
+  const auto origin = eip;
+  if (origin > UINT64_MAX - limit || !canonical(origin) || !canonical(origin + limit - 1)) return {};
+
+  // Most sites end in a branch or use memory within the first few
+  // instructions. Screen those sites before allocating the long body.
+  auto& stats = ether_arm64_stats_;
+  constexpr unsigned prefix_bytes = ether_arm64::Block::kNarrowMaxBytes;
+  if (page_bytes - unsigned(origin % page_bytes) >= prefix_bytes) {
+    bool ordinary = false;
+    const auto physical = translate_instruction(origin, ordinary, true);
+    std::array<std::uint8_t, prefix_bytes> prefix;
+    if (!ordinary || !memory.try_read_present_ram_block(physical, prefix.data(), prefix.size())) return {};
+    ++stats.code_byte_checks;
+    stats.code_bytes_read += prefix.size();
+    const auto decoded = ether_arm64::decode(prefix.data(), prefix.size(), origin);
+    if (!decoded.can_translate() ||
+        (decoded.count < ether_arm64::Block::kNarrowMaxInstructions &&
+         decoded.size + ether_arm64::kMaxX86InstructionBytes <= prefix.size()) ||
+        !std::all_of(decoded.instructions.begin(), decoded.instructions.begin() + decoded.count,
+                     ether_arm64::straight_register_instruction)) return {};
+  }
+
+  auto entry = std::make_unique<EtherLongEntry>();
+  entry->rip = origin;
+  entry->cr3 = cr3;
+  entry->cpl = cpl();
+  unsigned bytes = 0;
+  bool complete = false;
+  while (bytes < limit) {
+    const auto linear = origin + bytes;
+    const auto length = std::min(limit - bytes, page_bytes - unsigned(linear % page_bytes));
+    bool ordinary = false;
+    const auto physical = translate_instruction(linear, ordinary, true);
+    if (!ordinary) return {};
+    const auto version = memory.watch_code_page(physical);
+    if (!version || !memory.try_read_present_ram_block(physical, entry->bytes.data() + bytes, length)) return {};
+    entry->pages[entry->page_count++] = {physical, version, bytes};
+    bytes += length;
+    ++stats.code_byte_checks;
+    stats.code_bytes_read += length;
+    complete = ether_arm64::decode_long_register_block(entry->block, entry->bytes.data(), bytes, origin);
+    if (complete || bytes - entry->block.size >= ether_arm64::kMaxX86InstructionBytes) break;
+  }
+  if (!complete || !ether_arm64_long_pages_current(*entry)) return {};
+  const auto start = std::chrono::steady_clock::now();
+  ++stats.long_block_compile_attempts;
+  const bool built = entry->native.build(entry->block);
+  stats.native_compile_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::steady_clock::now() - start).count();
+  if (!built) return {};
+  ++stats.translated;
+  return entry;
 }
 
 // The first round resolves permissions, addresses and original values under
@@ -551,9 +688,16 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
 inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry,
                                              const ether_arm64::Frame& frame, unsigned rounds,
                                              unsigned outcome, bool direct_regs, bool private_frame) {
-  const auto& block = entry.block;
+  return commit_ether_arm64_result(entry.block, entry.bytes.data(), entry.rip, frame,
+                                   rounds, outcome, direct_regs, private_frame);
+}
+
+template<class Block>
+inline unsigned Cpu::commit_ether_arm64_result(const Block& block, const std::uint8_t* code,
+                                             std::uint64_t origin, const ether_arm64::Frame& frame,
+                                             unsigned rounds, unsigned outcome,
+                                             bool direct_regs, bool private_frame) {
   const auto& last = block.instructions[block.count - 1];
-  const auto origin = entry.rip;
   const auto long_mode = block.long_mode;
   const auto retired = rounds * block.count;
   if (!direct_regs) regs = frame.regs;
@@ -590,7 +734,7 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
     case ether_arm64::Instruction::Increment:
     case ether_arm64::Instruction::Decrement: {
       bool carry = flag(CF);
-      if (block.decrement_carry_index != ether_arm64::Block::kNoFlagSource) {
+      if (block.decrement_carry_index != Block::kNoFlagSource) {
         const auto& source = block.instructions[block.decrement_carry_index];
         if (ether_arm64::Instruction::logical(source.kind)) {
           carry = false;
@@ -610,7 +754,7 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
     }
     default: break;
   }
-  if (block.auxiliary_index != ether_arm64::Block::kNoFlagSource &&
+  if (block.auxiliary_index != Block::kNoFlagSource &&
       block.auxiliary_index != block.flag_index) {
     const auto kind = block.instructions[block.auxiliary_index].kind;
     const auto left = frame.auxiliary_left;
@@ -620,14 +764,14 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
         kind == ether_arm64::Instruction::Increment ? left + right : left - right;
     set_flag(AF, ((left ^ right ^ result) & 0x10U) != 0);
   }
-  if (block.rotate_carry_index != ether_arm64::Block::kNoFlagSource) {
+  if (block.rotate_carry_index != Block::kNoFlagSource) {
     const auto& op = block.instructions[block.rotate_carry_index];
     if (op.rhs.immediate || (frame.rotate_count & (op.width * 8 - 1))) {
       const auto carry = op.kind == ether_arm64::Instruction::RotateLeft ? 1 : sign_bit(op.width);
       set_flag(CF, (frame.rotate_carry_result & carry) != 0);
     }
   }
-  if (block.rotate_overflow_index != ether_arm64::Block::kNoFlagSource) {
+  if (block.rotate_overflow_index != Block::kNoFlagSource) {
     const auto& op = block.instructions[block.rotate_overflow_index];
     if (op.rhs.immediate || (frame.rotate_count & (op.width * 8 - 1)) == 1) {
       const auto value = block.rotate_overflow_index == block.rotate_carry_index
@@ -645,7 +789,7 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
   // Byte arithmetic, parity and inherited flags use the x86 condition.
   const bool taken = last.kind == ether_arm64::Instruction::Conditional && !block.uses_arm_condition()
       ? condition(last.opcode & 15) : outcome == 2;
-  retire_ether_decoded_block(block, entry.bytes.data(), origin, taken, retired);
+  retire_ether_decoded_block(block, code, origin, taken, retired);
   ++ether_arm64_stats_.blocks;
   ether_arm64_stats_.steps += retired;
   ether_arm64_stats_.largest_block_instructions = std::max(ether_arm64_stats_.largest_block_instructions, block.count);
@@ -660,9 +804,9 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
   }
   if (block.rotates) ether_arm64_stats_.rotate_steps += rounds * block.rotates;
   if (block.variable_rotates) ether_arm64_stats_.variable_rotate_steps += rounds * block.variable_rotates;
-  if (block.last_wide_rotate_offset != ether_arm64::Block::kMaxBytes)
+  if (block.last_wide_rotate_offset != Block::kMaxBytes)
     last_immediate_rotate_ip_ = origin + block.last_wide_rotate_offset;
-  if (block.last_variable_rotate_offset != ether_arm64::Block::kMaxBytes)
+  if (block.last_variable_rotate_offset != Block::kMaxBytes)
     last_variable_rotate_ip_ = origin + block.last_variable_rotate_offset;
   if (!long_mode) ether_arm64_stats_.protected32_steps += retired;
   ether_arm64_stats_.resident_read_hits += frame.resident_read_hits;

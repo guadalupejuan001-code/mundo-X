@@ -150,6 +150,8 @@ class PcMachine {
   std::function<unsigned(unsigned)> device_batch_limit_hook;
   // A live board may grant a larger, atomic, register-only projection.
   std::function<unsigned(unsigned)> register_projection_limit_hook;
+  // Large straight-line translation also needs an exclusive device grant.
+  std::function<bool()> ether_long_block_grant_hook;
   std::function<void(unsigned)> device_batch_advance_hook;
   // Same clock budget as run(). Can skip idle cycles preceding a device edge.
   std::function<unsigned(unsigned)> device_idle_advance_hook;
@@ -327,7 +329,7 @@ class PcMachine {
         const auto batch_start=sample ? BootTiming::Clock::now() : BootTiming::Clock::time_point{};
         const auto native_before=sample ? boot_acceleration_.arm64_block_steps : 0;
         bool register_projection=false;
-        const auto completed=run_boot_batch(budget-i,bus,register_projection);
+        const auto completed=run_boot_batch(budget-i,bus,register_projection,deadline);
         if(sample) {
           const auto elapsed=BootTiming::Clock::now()-batch_start;
           sample->record(completed ? BootTimePart::BatchExecute : BootTimePart::BatchDispatch,elapsed);
@@ -813,7 +815,22 @@ class PcMachine {
         : std::min(kRamCompactionMaxInterval, ram_compaction_.interval_steps * 2);
     next_ram_compaction_ = cpu.instructions + ram_compaction_.interval_steps;
   }
-  unsigned run_boot_batch(unsigned limit, std::unique_lock<std::mutex>* bus, bool& register_projection) {
+  unsigned run_boot_batch(unsigned limit, std::unique_lock<std::mutex>* bus, bool& register_projection,
+                          RunClock::time_point deadline) {
+    // Leave room in the host slice for native compilation. The guest budget
+    // and the board's exclusive grant still bound retirement independently.
+    if (!bus && cpu.ether_arm64_long_block_candidate(limit) &&
+        (!device_step_hook || (ether_long_block_grant_hook && device_batch_advance_hook &&
+                               ether_long_block_grant_hook())) &&
+        (deadline == RunClock::time_point::max() ||
+         deadline - RunClock::now() >= std::chrono::milliseconds(4))) {
+      if (const auto retired = cpu.try_ether_arm64_long_block(limit)) {
+        boot_acceleration_.arm64_block_steps += retired;
+        if (device_step_hook) device_batch_advance_hook(retired - 1);
+        register_projection = true;  // Count the full register batch without guessing sampled opcodes.
+        return retired;
+      }
+    }
     constexpr unsigned min_projection=65'536;
     bool portable_vector_tried=false;
     if(limit>=min_projection && !bus && register_projection_limit_hook && device_batch_advance_hook &&
