@@ -817,14 +817,11 @@ class PcMachine {
   }
   unsigned run_boot_batch(unsigned limit, std::unique_lock<std::mutex>* bus, bool& register_projection,
                           RunClock::time_point deadline) {
-    // Leave room in the host slice for native compilation. The guest budget
-    // and the board's exclusive grant still bound retirement independently.
-    if (!bus && cpu.ether_arm64_long_block_candidate(limit) &&
+    // Check the host slice before asking the board for an exclusive grant.
+    if (!bus && cpu.ether_arm64_long_block_candidate(limit, deadline) &&
         (!device_step_hook || (ether_long_block_grant_hook && device_batch_advance_hook &&
-                               ether_long_block_grant_hook())) &&
-        (deadline == RunClock::time_point::max() ||
-         deadline - RunClock::now() >= std::chrono::milliseconds(4))) {
-      if (const auto retired = cpu.try_ether_arm64_long_block(limit)) {
+                               ether_long_block_grant_hook()))) {
+      if (const auto retired = cpu.try_ether_arm64_long_block(limit, deadline)) {
         boot_acceleration_.arm64_block_steps += retired;
         if (device_step_hook) device_batch_advance_hook(retired - 1);
         register_projection = true;  // Count the full register batch without guessing sampled opcodes.

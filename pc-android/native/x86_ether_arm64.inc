@@ -14,29 +14,38 @@ inline bool Cpu::ether_arm64_block_candidate() const noexcept {
 #endif
 }
 
-inline bool Cpu::ether_arm64_long_block_candidate(unsigned budget) const noexcept {
+inline bool Cpu::ether_arm64_long_block_candidate(
+    unsigned budget, std::chrono::steady_clock::time_point deadline) const noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
-  return ether_arm64_long_grant(budget) && (instructions >= next_ether_arm64_long_probe_ ||
-      (ether_arm64_long_ && ether_arm64_long_->matches(eip, cr3, cpl())));
+  if (!ether_arm64_long_grant(budget)) return false;
+  const bool cache_candidate = ether_arm64_long_ && ether_arm64_long_->matches(eip, cr3, cpl());
+  return (cache_candidate || instructions >= next_ether_arm64_long_probe_) &&
+      ether_arm64_long_time_remaining(deadline, !cache_candidate);
 #else
   (void)budget;
+  (void)deadline;
   return false;
 #endif
 }
 
-inline unsigned Cpu::try_ether_arm64_long_block(unsigned budget) {
+inline unsigned Cpu::try_ether_arm64_long_block(unsigned budget, std::chrono::steady_clock::time_point deadline) {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (!ether_arm64_long_grant(budget)) return 0;
   auto& stats = ether_arm64_stats_;
   try {
     const bool same_site = ether_arm64_long_ && ether_arm64_long_->matches(eip, cr3, cpl());
-    if (same_site && ether_arm64_long_pages_current(*ether_arm64_long_)) {
-      ++stats.hits;
+    const bool cache_hit = same_site && ether_arm64_long_pages_current(*ether_arm64_long_);
+    if (cache_hit) {
       ++stats.code_version_hits;
     } else {
       if (same_site) {
         ether_arm64_long_.reset();
         ++stats.invalidated;
+      }
+      // A stale cached block needs the full cold-start margin again.
+      if (!ether_arm64_long_time_remaining(deadline, true)) {
+        ++stats.long_block_deadline_deferrals;
+        return 0;
       }
       // A failed probe cannot scan the next sequential RIP immediately.
       next_ether_arm64_long_probe_ = instructions + 4 * ether_arm64::LongBlock::kMaxInstructions;
@@ -47,6 +56,8 @@ inline unsigned Cpu::try_ether_arm64_long_block(unsigned budget) {
       }
       if (ether_arm64_long_) ++stats.compiled_evictions;
       ether_arm64_long_ = std::move(candidate);
+      // A successful translation does not suppress the next eligible block.
+      next_ether_arm64_long_probe_ = 0;
     }
 
     const auto& entry = *ether_arm64_long_;
@@ -55,11 +66,21 @@ inline unsigned Cpu::try_ether_arm64_long_block(unsigned budget) {
     ether_arm64::Frame frame{};
     frame.regs = regs;
     frame.guest_regs = frame.regs.data();
+    // Keep the compiled body for a future visit if validation or JIT used
+    // its execution margin. No guest instruction has retired here.
+    if (!ether_arm64_long_time_remaining(deadline, false)) {
+      ++stats.long_block_deadline_deferrals;
+      return 0;
+    }
     const auto outcome = entry.native.run(frame);
     if (outcome == 1) {
       const auto retired = commit_ether_arm64_result(entry.block, entry.bytes.data(), entry.rip, frame,
                                                       1, outcome, false, false);
       ++stats.long_blocks_executed;
+      if (cache_hit) {
+        ++stats.hits;
+        ++stats.long_block_cache_hits;
+      }
       stats.long_block_steps += retired;
       stats.largest_long_block_instructions = std::max(stats.largest_long_block_instructions, retired);
       return retired;
@@ -70,6 +91,7 @@ inline unsigned Cpu::try_ether_arm64_long_block(unsigned budget) {
   ++stats.long_block_rejections;
 #else
   (void)budget;
+  (void)deadline;
 #endif
   return 0;
 }
@@ -270,6 +292,13 @@ inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
   return ether_arm64_block_candidate() && !fault && !halted && !transaction_ && !interrupt_shadow_ &&
          !(eflags & kScalarExecutionFlags) && (cpl() == 0 || cpl() == 3) &&
          !step_trace_hook && !irq_trace_hook;
+}
+
+inline bool Cpu::ether_arm64_long_time_remaining(std::chrono::steady_clock::time_point deadline,
+                                                 bool needs_compile) noexcept {
+  using Clock = std::chrono::steady_clock;
+  const auto margin = needs_compile ? std::chrono::milliseconds(4) : std::chrono::milliseconds(1);
+  return deadline == Clock::time_point::max() || deadline - Clock::now() >= margin;
 }
 
 inline bool Cpu::ether_arm64_long_grant(unsigned budget) const noexcept {

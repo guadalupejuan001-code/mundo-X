@@ -890,7 +890,12 @@ class Emitter {
   explicit Emitter(const BlockType& block)
       : long_mode_(block.long_mode), register_only_(block.register_only),
         inline_ram_reads_(block.long_mode && !block.writes && !block.register_only) {
-    code_.reserve(96);
+    if constexpr (BlockType::kMaxInstructions > Block::kMaxInstructions) {
+      // Budget four words per guest ALU instruction, plus entry and exit code.
+      code_.reserve(4U * block.count + 16U);
+    } else {
+      code_.reserve(96);
+    }
     emit(0xd503245f); // BTI c (a hint on hosts without BTI).
     if (register_only_) {
       // Leaf blocks never call a memory helper. X12 holds the frame and X13

@@ -205,6 +205,7 @@ class Cpu {
     unsigned largest_block_instructions = 0;
     std::uint64_t long_blocks_executed = 0, long_block_steps = 0;
     std::uint64_t long_block_compile_attempts = 0, long_block_rejections = 0;
+    std::uint64_t long_block_cache_hits = 0, long_block_deadline_deferrals = 0;
     unsigned largest_long_block_instructions = 0;
     std::uint64_t protected32_steps = 0;
     std::uint64_t invalidated = 0, data_fallbacks = 0;
@@ -272,8 +273,8 @@ class Cpu {
     return {};
   }
   bool ether_arm64_block_candidate() const noexcept;
-  bool ether_arm64_long_block_candidate(unsigned budget) const noexcept;
-  unsigned try_ether_arm64_long_block(unsigned budget);
+  bool ether_arm64_long_block_candidate(unsigned budget, std::chrono::steady_clock::time_point deadline) const noexcept;
+  unsigned try_ether_arm64_long_block(unsigned budget, std::chrono::steady_clock::time_point deadline);
   unsigned try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus = nullptr);
   enum class EtherLoopAccess { Registers, ReadOnlyRam };
   unsigned ether_arm64_loop_length(EtherLoopAccess access) const noexcept;
@@ -1306,6 +1307,8 @@ class Cpu {
   };
   std::unique_ptr<EtherLongEntry> ether_arm64_long_;
   std::uint64_t next_ether_arm64_long_probe_ = 0;
+  static bool ether_arm64_long_time_remaining(std::chrono::steady_clock::time_point deadline,
+                                              bool needs_compile) noexcept;
   bool ether_arm64_long_grant(unsigned budget) const noexcept;
   bool ether_arm64_long_pages_current(const EtherLongEntry& entry);
   std::unique_ptr<EtherLongEntry> compile_ether_arm64_long_block();
