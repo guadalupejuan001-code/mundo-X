@@ -207,7 +207,7 @@ inline const ether_arm64::Cache::Entry* Cpu::cached_ether_arm64_work(EtherLoopAc
 
 inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
   return ether_arm64_block_candidate() && !fault && !halted && !transaction_ && !interrupt_shadow_ &&
-         !(eflags & (TF | 0x20000U)) && (cpl() == 0 || cpl() == 3) &&
+         !(eflags & kScalarExecutionFlags) && (cpl() == 0 || cpl() == 3) &&
          !step_trace_hook && !irq_trace_hook;
 }
 

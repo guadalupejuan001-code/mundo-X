@@ -103,9 +103,15 @@ void long_pf_resume() {
   need(cpu.read64(frame)==0,"#PF error must indicate not-present read at CPL0");
   need(cpu.read64(frame+8)==0xa000,"#PF restart RIP mismatch");
   need(cpu.read64(frame+16)==0x18,"#PF saved CS mismatch");
-  need(cpu.read64(frame+24)==(2|Cpu::IF),"#PF saved RFLAGS mismatch");
+  need(cpu.read64(frame+24)==(2|Cpu::IF|Cpu::RF),"#PF must set RF in saved RFLAGS");
   need(cpu.read64(frame+32)==0x190000,"#PF saved RSP mismatch");
-  need(!cpu.flag(Cpu::IF),"interrupt gate must clear IF on entry");
+  need(!cpu.flag(Cpu::IF) && !cpu.flag(Cpu::RF),"interrupt gate must clear live IF and RF");
+  for (unsigned i=0; i<4; ++i)
+    need(cpu.step()==StepResult::Executed,"#PF handler must repair PTE and execute IRETQ");
+  need(cpu.eip==0xa000 && cpu.flag(Cpu::IF) && cpu.flag(Cpu::RF),
+       "IRETQ must restore the interrupted RIP, IF and saved RF");
+  need(cpu.step()==StepResult::Executed && !cpu.flag(Cpu::RF),
+       "The resumed instruction must consume RF");
   run(cpu,20);
   need(cpu.regs[Cpu::EAX]==0x1122334455667788ULL,"guest handler failed to repair PTE/retry MOV");
   need(cpu.eip==0xa009 && cpu.regs[Cpu::ESP]==0x190000,"IRETQ did not restore RIP/RSP");

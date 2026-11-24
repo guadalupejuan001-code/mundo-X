@@ -1,6 +1,6 @@
 inline std::uint64_t Cpu::try_affine_ram_rotate_loop(std::uint64_t step_budget) {
   if (!affine_ram_rotate_loop_candidate() || !can_cache_translations() ||
-      fault || halted || transaction_ || interrupt_shadow_ || (eflags & (TF | 0x20000U)) ||
+      fault || halted || transaction_ || interrupt_shadow_ || (eflags & kScalarExecutionFlags) ||
       (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook) return 0;
 
   using Instruction = ether_arm64::Instruction;

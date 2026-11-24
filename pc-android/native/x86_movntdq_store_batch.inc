@@ -5,7 +5,7 @@ inline unsigned Cpu::try_xmm_store_batch(unsigned budget, XmmStoreBatch kind) {
   if (budget < 2 || !(streaming ? movntdq_store_batch_candidate() :
       kind == XmmStoreBatch::Aligned && aligned_xmm_store_batch_candidate()) || !can_cache_translations() ||
       !(cr0 & 0x80000000U) || fault || halted || transaction_ || interrupt_shadow_ ||
-      (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3)) return 0;
+      (eflags & kScalarExecutionFlags) || (cpl() != 0 && cpl() != 3)) return 0;
 
   try {
     require_sse_state();

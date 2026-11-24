@@ -145,7 +145,7 @@ class Cpu {
   enum Segment : unsigned { ES, CS, SS, DS, FS, GS };
   static constexpr std::uint32_t CF = 0x0001, PF = 0x0004, AF = 0x0010,
       ZF = 0x0040, SF = 0x0080, TF = 0x0100, IF = 0x0200, DF = 0x0400,
-      OF = 0x0800;
+      OF = 0x0800, RF = 0x10000;
   struct DescriptorTable { std::uint16_t limit; std::uint64_t base; };
   // LDTR/TR have visible selectors AND hidden descriptor caches. The
   // emulator does not claim hardware task switching or a full TSS engine.
@@ -840,6 +840,9 @@ class Cpu {
       op32_ = (is_long_mode() || cache_[CS].big) != operand_override_;
       addr32_ = is_long_mode() ? address_override_
           : (cache_[CS].big != address_override_);
+      // Once decoded, consume RF before execution effects. Fault rollback
+      // restores the old flags and IRET can load a new RF value.
+      eflags &= ~RF;
       execute(op);
       if (fault) fail(fault->reason, fault->code);
       // POPF and IRET can enable stepping for the next instruction only.
@@ -1018,6 +1021,9 @@ class Cpu {
   }
 
  private:
+  // These states require the scalar decoder at the next instruction boundary.
+  static constexpr auto kScalarExecutionFlags = TF | RF | 0x20000U;
+
   bool deliver_hardware_interrupt(std::uint8_t vector, bool nmi) {
     const auto* description = nmi ? "hardware NMI delivery: " : "hardware IRQ delivery: ";
     failed_idt_count_ = 0;
@@ -3332,7 +3338,10 @@ class Cpu {
     const bool switch_cpl = target_cpl < old_cpl;
     const auto original_cs = segments[CS], original_ss = segments[SS];
     const auto original_rsp = regs[ESP];
-    const auto original_flags = eflags;
+    // A delivered page fault returns to the faulting instruction with RF set.
+    // Keep this flag in the saved image, independent of the handler's flags.
+    const auto original_flags = eflags |
+        (attempt.source == IdtSource::CpuException && attempt.vector == 14 ? RF : 0U);
     const unsigned width = long_gate ? 8U : gate16 ? 2U : 4U;
     if (switch_cpl || (long_gate && ist)) {
       if (!tr.valid) fail("interrupt stack switch needs a loaded TSS", FaultCode::ProtectionFault);
@@ -4129,7 +4138,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
   last_rep_batch_bytes_ = 0;
   last_rep_direct_page_copy_bytes_ = 0;
   if (budget < 2 || !rep_batch_candidate() || fault || halted || transaction_ ||
-      interrupt_shadow_ || (eflags & (TF | 0x20000U)) ||
+      interrupt_shadow_ || (eflags & kScalarExecutionFlags) ||
       (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook || lock_prefix_)
     return 0;
   const bool paged = (cr0 & 0x80000000U) != 0;
@@ -4283,7 +4292,7 @@ inline unsigned Cpu::try_state_vector_batch(unsigned budget) {
   constexpr unsigned minimum_rounds = 4;
   if (budget < 2 * minimum_rounds || !state_vector_batch_candidate() ||
       fault || halted || transaction_ || interrupt_shadow_ ||
-      (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
+      (eflags & kScalarExecutionFlags) || (cpl() != 0 && cpl() != 3) ||
       step_trace_hook || irq_trace_hook) return 0;
   const auto long_mode = is_long_mode();
   if (!long_mode && ((cr0 & 0x80000001U) != 1 || (efer & 0x400U) || !cache_[CS].big))
@@ -4344,7 +4353,7 @@ inline unsigned Cpu::try_state_vector_batch(unsigned budget) {
 inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   if (step_budget < 4 || !counter_loop_batch_candidate() ||
       fault || halted || transaction_ || interrupt_shadow_ ||
-      (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
+      (eflags & kScalarExecutionFlags) || (cpl() != 0 && cpl() != 3) ||
       step_trace_hook || irq_trace_hook) return 0;
 
   const auto length = unsigned(cursor_ - eip);
@@ -4438,7 +4447,7 @@ inline unsigned Cpu::try_zero_loop_batch(unsigned step_budget) {
   constexpr unsigned steps_per_iteration = 4;
   if (step_budget < steps_per_iteration || !zero_loop_batch_candidate() ||
       fault || halted || transaction_ || interrupt_shadow_ ||
-      (eflags & (TF | 0x20000U)) || (cr0 & 0x80000000U) ||
+      (eflags & kScalarExecutionFlags) || (cr0 & 0x80000000U) ||
       (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook)
     return 0;
 
@@ -4506,7 +4515,7 @@ inline unsigned Cpu::try_scan_loop_batch(unsigned budget) {
   constexpr unsigned per_iteration = 6;
   if (budget < 2 * per_iteration || !scan_loop_batch_candidate() ||
       fault || halted || transaction_ || interrupt_shadow_ || !a20_enabled ||
-      (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook)
+      (eflags & kScalarExecutionFlags) || (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook)
     return 0;
 
   const auto long_mode = is_long_mode();
@@ -4594,7 +4603,7 @@ inline unsigned Cpu::try_forward_copy_loop_batch(unsigned step_budget) {
   const auto remaining = std::uint32_t(regs[EDI]);
   if (step_budget < 2 * steps_per_iteration || remaining < 2 || remaining > INT32_MAX ||
       !forward_copy_loop_batch_candidate() || fault || halted || transaction_ || interrupt_shadow_ ||
-      !a20_enabled || (eflags & (TF | 0x20000U)) || (cpl() != 0 && cpl() != 3) ||
+      !a20_enabled || (eflags & kScalarExecutionFlags) || (cpl() != 0 && cpl() != 3) ||
       step_trace_hook || irq_trace_hook) return 0;
 
   const auto source_offset = std::uint32_t(regs[ECX]);

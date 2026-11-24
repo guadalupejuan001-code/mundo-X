@@ -1,6 +1,6 @@
 inline unsigned Cpu::try_shift_loop_batch(unsigned step_budget) {
   if (step_budget < 3 || !shift_loop_batch_candidate() || fault || halted || transaction_ ||
-      interrupt_shadow_ || (eflags & (TF | 0x20000U)) || (cr0 & 0x80000000U) ||
+      interrupt_shadow_ || (eflags & kScalarExecutionFlags) || (cr0 & 0x80000000U) ||
       (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook)
     return 0;
 
