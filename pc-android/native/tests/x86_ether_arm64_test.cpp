@@ -5,6 +5,7 @@
 #include <chrono>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -2913,7 +2914,11 @@ void wide8192_native_block_contract() {
     return normalized(native.cpu, before);
   };
 
+  const auto wide_cold_before = native.cpu.ether_arm64_stats();
   const auto original = run_wide();
+  const auto wide_cold_after = native.cpu.ether_arm64_stats();
+  require(wide_cold_after.translated - wide_cold_before.translated == 1,
+          "cold wide dispatch did not compile exactly one native entry");
   require(original == run_scalar(instructions), "8192-op guest state differs from the interpreter");
   const auto translated = native.cpu.ether_arm64_stats().translated;
   require(run_wide() == original && native.cpu.ether_arm64_stats().translated == translated,
@@ -3000,16 +3005,43 @@ void wide8192_native_block_contract() {
                " code_edit=1 absent_page=1 nx_page=1 scalar_state=1 machine_run=1 noncontiguous=1 interrupt_flag=1"
             << " late_fault_retired=" << before_fault << '\n';
 
-  // Prime only the actual ordinary block starts so neither timed path recompiles.
+  // Restore the identical bytes used by the initial cold wide build, then prime both paths.
+  for (auto* machine : {&native, &scalar})
+    machine->cpu.write8(physical[last_page] + edit, program[last_page * page + edit]);
+  const auto restored = run_wide();
+  require(restored.regs == original.regs && restored.flags == original.flags && restored.rip == original.rip,
+          "restoring the cold wide body changed its result");
   scalar.cpu.enable_ether_arm64_blocks(true);
   constexpr auto ordinary_width = arm64::Block::kMaxInstructions;
+  constexpr auto ordinary_blocks = instructions / ordinary_width;
   static_assert((page / 4) % ordinary_width == 0);
   initialize(scalar.cpu);
+  const auto ordinary_cold_before = scalar.cpu.ether_arm64_stats();
   for (unsigned i = 0; i < body_pages; ++i) {
     const auto stride = ordinary_width * (i < 3 ? 2U : 4U);
     for (unsigned offset = 0; offset < page; offset += stride)
       warm_block(scalar.cpu, entry + i * page + offset, ordinary_width);
   }
+  const auto ordinary_cold_after = scalar.cpu.ether_arm64_stats();
+  require(ordinary_cold_after.translated - ordinary_cold_before.translated == ordinary_blocks &&
+              ordinary_cold_after.blocks - ordinary_cold_before.blocks == ordinary_blocks &&
+              ordinary_cold_after.steps - ordinary_cold_before.steps == instructions &&
+              normalized(scalar.cpu, scalar.cpu.instructions - instructions) == restored,
+          "cold ordinary preparation did not compile one entry per block and match guest work");
+
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+  // The counters time NativeCode::build. Inspect emitted bytes separately from both timed paths.
+  const auto decoded = std::make_unique<arm64::Wide8192Block>();
+  require(arm64::decode_wide8192(*decoded, program.data(), program.size(), entry) && decoded->size == body_bytes,
+          "emitted size did not describe the complete 8192-op body");
+  const auto wide_arm64_bytes = arm64::Emitter(*decoded).words().size() * sizeof(std::uint32_t);
+  std::cout << "PRIME_ETHER_ARM64_WIDE8192_COLD {\"guest_steps\":" << instructions
+            << ",\"ordinary_compiled_entries\":" << ordinary_cold_after.translated - ordinary_cold_before.translated
+            << ",\"wide_compiled_entries\":" << wide_cold_after.translated - wide_cold_before.translated
+            << ",\"ordinary_native_compile_ns\":" << ordinary_cold_after.native_compile_ns - ordinary_cold_before.native_compile_ns
+            << ",\"wide_native_compile_ns\":" << wide_cold_after.native_compile_ns - wide_cold_before.native_compile_ns
+            << ",\"wide_arm64_bytes\":" << wide_arm64_bytes << "}\n";
+#endif
   constexpr unsigned bodies = 16;
   constexpr auto work = bodies * instructions;
   struct Measurement { std::int64_t elapsed_ns; std::uint64_t entries; };

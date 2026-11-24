@@ -76,19 +76,23 @@ jobs:
           from statistics import median
 
           evidence = Path("evidence")
+          lines = (evidence / "wide8192.log").read_text().splitlines()
           tag = "PRIME_ETHER_ARM64_WIDE8192_AB "
-          pairs = [json.loads(line.removeprefix(tag))
-                   for line in (evidence / "wide8192.log").read_text().splitlines()
-                   if line.startswith(tag)]
+          pairs = [json.loads(line.removeprefix(tag)) for line in lines if line.startswith(tag)]
           assert [pair["trial"] for pair in pairs] == list(range(1, 6))
           assert all(pair["ordinary_ns"] > 0 and pair["wide_ns"] > 0 and
                      pair["guest_steps"] == 131072 and pair["ordinary_entries"] == 8192 and
                      pair["wide_entries"] == 16 for pair in pairs)
+          cold_tag = "PRIME_ETHER_ARM64_WIDE8192_COLD "
+          [cold] = [json.loads(line.removeprefix(cold_tag)) for line in lines if line.startswith(cold_tag)]
+          assert (cold["guest_steps"], cold["ordinary_compiled_entries"], cold["wide_compiled_entries"]) == (8192, 512, 1)
+          assert all(cold[key] > 0 for key in ("ordinary_native_compile_ns", "wide_native_compile_ns", "wide_arm64_bytes"))
           result = {
               "scope": "equal-work synthetic x86 register body on native Linux ARM64",
               "ordinary_median_ns": median(pair["ordinary_ns"] for pair in pairs),
               "wide_median_ns": median(pair["wide_ns"] for pair in pairs),
               "paired_wide_vs_ordinary": median(pair["ordinary_ns"] / pair["wide_ns"] for pair in pairs),
+              "cold_native_code_build": cold,
               "pairs": pairs,
           }
           output = json.dumps(result, indent=2) + "\n"
