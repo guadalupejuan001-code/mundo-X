@@ -719,7 +719,53 @@ void mixed_movntdq_registers() {
             fast.cpu.eip == scalar.cpu.eip && fast.cpu.eflags == scalar.cpu.eflags &&
             fast.cpu.regs == scalar.cpu.regs && fast.cpu.xmm == scalar.cpu.xmm &&
             fast.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(), "mixed MOVNTDQ diverged");
-    std::cout << "ETHER_MOVNTDQ_MIXED_PASS max_stores=8 xmm15=1 page_safe=1\n";
+    std::cout << "ETHER_MOVNTDQ_MIXED_PASS contiguous_stores=8 xmm15=1 page_safe=1\n";
+}
+
+void wide_movntdq_batch() {
+    constexpr unsigned stores = 35, encoding_bytes = 8, vector_bytes = 16;
+    constexpr std::uint64_t mapping_end = 0x200000;
+    std::array<std::uint8_t, stores * encoding_bytes + 1> code{};
+    for (unsigned i = 0; i < stores; ++i) {
+        const auto displacement = i * vector_bytes;
+        const std::array<std::uint8_t, encoding_bytes> instruction{
+            0x66, 0x0f, 0xe7, std::uint8_t(0x81 | ((i % 8) << 3)),
+            std::uint8_t(displacement), std::uint8_t(displacement >> 8), 0, 0};
+        std::copy(instruction.begin(), instruction.end(), code.begin() + i * encoding_bytes);
+    }
+    code.back() = 0xf4;
+    for (const auto destination : {kMovntdqDestination, mapping_end - 17 * vector_bytes}) {
+        PcMachine fast(4U << 20), scalar(4U << 20);
+        const bool fault_after_batch = destination != kMovntdqDestination;
+        for (auto* pc : {&fast, &scalar}) {
+            prepare_movntdq(*pc, 1, destination);
+            auto& cpu = pc->cpu;
+            for (unsigned reg = 0; reg < 8; ++reg)
+                for (unsigned b = 0; b < vector_bytes; ++b)
+                    cpu.xmm[reg][b] = std::uint8_t(reg * vector_bytes + b);
+            cpu.memory.write_block(entry, code.data(), code.size());
+            if (fault_after_batch) cpu.write64(0x3008, 0);
+            require(cpu.step() == StepResult::Executed, "wide MOVNTDQ seed failed");
+        }
+        const unsigned expected_stores = fault_after_batch ? 16 : 32;
+        require(fast.cpu.try_movntdq_store_batch(stores - 1) == expected_stores,
+                "wide MOVNTDQ batch must stop at the store limit or destination page");
+        for (unsigned n = 0; n < expected_stores; ++n)
+            require(scalar.cpu.step() == StepResult::Executed, "wide MOVNTDQ scalar reference failed");
+        const auto copied_bytes = (expected_stores + 1) * vector_bytes;
+        std::array<std::uint8_t, stores * vector_bytes> actual{}, expected{};
+        fast.cpu.memory.read_block(destination, actual.data(), copied_bytes);
+        scalar.cpu.memory.read_block(destination, expected.data(), copied_bytes);
+        require(actual == expected && fast.cpu.regs == scalar.cpu.regs && fast.cpu.xmm == scalar.cpu.xmm &&
+                fast.cpu.eip == scalar.cpu.eip && fast.cpu.instructions == scalar.cpu.instructions &&
+                fast.cpu.eflags == scalar.cpu.eflags &&
+                fast.cpu.last_decoded_bytes() == scalar.cpu.last_decoded_bytes(), "wide MOVNTDQ state diverged");
+        if (fault_after_batch)
+            require(!fast.cpu.try_movntdq_store_batch(stores) && fast.cpu.step() == StepResult::Faulted &&
+                    fast.cpu.cr2 == mapping_end && fast.cpu.fault && fast.cpu.fault->eip == entry + 17 * encoding_bytes,
+                    "wide MOVNTDQ did not preserve the exact first fault beyond the committed page");
+    }
+    std::cout << "ETHER_MOVNTDQ_WIDE_PASS max_stores=32 checked_page=1\n";
 }
 
 constexpr std::array<unsigned, 8> kDisp32Sources{2,1,8,15,4,9,6,7};
@@ -1227,6 +1273,7 @@ int main(int argc, char** argv) {
         streaming_sse_fill_rounds();
         movntdq_store_batches();
         mixed_movntdq_registers();
+        wide_movntdq_batch();
         disp32_movntdq_registers();
         wide_multiply_loops();
         std::cout << "ETHER_COUNTER_LOOP_PASS widths=16,32,64 flags=1 paging=1 fallbacks=1\n";

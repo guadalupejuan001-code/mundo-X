@@ -32,13 +32,19 @@ inline constexpr unsigned kSubtractAccess = 64;
 // implements. The interpreter owns all other prefixes, operands and opcodes.
 struct Operand {
   static constexpr unsigned kNoIndex = 16, kRipBase = 17;
-  unsigned reg = 0;
-  std::uint32_t displacement = 0;
-  std::uint64_t immediate_value = 0;
-  unsigned index = kNoIndex, scale_shift = 0;
-  bool memory = false, immediate = false, stack = false, high_byte = false;
+  static constexpr unsigned kRegisterBits = 5;
+  static_assert(kNoIndex < (1U << kRegisterBits) && kRipBase < (1U << kRegisterBits));
+  constexpr Operand() noexcept : Operand(0) {}
+  constexpr explicit Operand(unsigned guest_register) noexcept
+      : reg(guest_register), index(kNoIndex), scale_shift(0), memory(false), immediate(false),
+        stack(false), high_byte(false), segment_prefix(0) {}
 
-  std::uint8_t segment_prefix = 0;
+  std::uint64_t immediate_value = 0;
+  std::uint32_t displacement = 0;
+  std::uint32_t reg : kRegisterBits, index : kRegisterBits;
+  // The x86 SIB scale is two bits. The decoder accepts only FS/GS overrides.
+  std::uint32_t scale_shift : 2, memory : 1, immediate : 1, stack : 1, high_byte : 1;
+  std::uint32_t segment_prefix : 7;
 
   static Operand literal(std::uint64_t value) noexcept {
     Operand operand;
@@ -49,15 +55,16 @@ struct Operand {
 };
 
 struct Instruction {
-  enum Kind {
+  enum Kind : std::uint8_t {
     Unsupported, Move, MoveByte, MoveZeroExtend, MoveSignExtend, Lea, Nop, Compare, Test, Increment, Decrement,
     Add, Subtract, And, Or, Xor, ShiftLeft, ShiftRight, ShiftArithmetic,
     RotateLeft, RotateRight, SignedMultiply, ConditionalMove, Conditional, Jump
   };
-  Kind kind = Move;
   Operand lhs, rhs;
   std::uint64_t multiplier = 0;
-  unsigned width = 0, begin = 0, end = 0, opcode = 0, condition = 0;
+  std::uint16_t opcode = 0;
+  Kind kind = Move;
+  std::uint8_t width = 0, begin = 0, end = 0, condition = 0;
 
   static bool logical(Kind kind) noexcept {
     return kind == Test || kind == And || kind == Or || kind == Xor;
@@ -86,7 +93,8 @@ struct Instruction {
 };
 
 struct Block {
-  static constexpr unsigned kMaxBytes = 64, kMaxInstructions = 16;
+  static constexpr unsigned kNarrowMaxBytes = 64, kNarrowMaxInstructions = 16;
+  static constexpr unsigned kMaxBytes = 128, kMaxInstructions = 32;
   static constexpr unsigned kMaxWrites = 4;
   static constexpr unsigned kNoFlagSource = kMaxInstructions;
   std::array<Instruction, kMaxInstructions> instructions{};
@@ -125,6 +133,9 @@ struct Block {
         (flag_op == Instruction::Decrement && (last.opcode & 15) == 5);
   }
 };
+
+static_assert(sizeof(Operand) == 16 && sizeof(Instruction) == 48);
+static_assert(Block::kMaxBytes <= UINT8_MAX);
 
 inline bool fixed_loop_addresses(const Block& block) noexcept {
   unsigned fixed = 0xffffU;
@@ -165,7 +176,9 @@ inline constexpr std::array<Instruction::Kind, 8> kGroupOne{
     Instruction::And, Instruction::Subtract, Instruction::Xor, Instruction::Compare};
 
 inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip, bool long_mode = true,
-                    bool allow_segment_loads = false) {
+                    bool allow_segment_loads = false, unsigned instruction_limit = Block::kNarrowMaxInstructions) {
+  size = std::min(size, Block::kMaxBytes);
+  instruction_limit = std::min(instruction_limit, Block::kMaxInstructions);
   Block block;
   block.long_mode = long_mode;
   unsigned carry_boundary = 0;
@@ -179,7 +192,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     return address >> 47 == 0 || address >> 47 == 0x1ffff;
   };
   bool fixed_stack_base = true;
-  while (block.count < Block::kMaxInstructions && block.size < size) {
+  while (block.count < instruction_limit && block.size < size) {
     unsigned pos = block.size;
     const unsigned begin = pos;
     unsigned opcode = bytes[pos++], rex = 0;
@@ -483,7 +496,7 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
     if (op.kind == Instruction::Conditional || op.kind == Instruction::Jump ||
         op.kind == Instruction::SignedMultiply || op.kind == Instruction::ConditionalMove) break;
   }
-  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode, allow_segment_loads);
+  if (carry_boundary) return decode(bytes, carry_boundary, rip, long_mode, allow_segment_loads, instruction_limit);
   // A read-only round can validate a new address with the guarded loader.
   // Repeated stores still require fixed addresses for the pending writes.
   // Legacy execution can repeat only when no segment or memory is accessed.
@@ -1198,6 +1211,7 @@ struct Cache {
     std::uint64_t code_version = 0;
     unsigned cpl = 0, checked_bytes = 0, visits = 0;
     bool occupied = false;
+    bool short_variant = false;
     std::array<std::uint8_t, Block::kMaxBytes> bytes{};
     Block block;
     NativeCode code;
@@ -1237,10 +1251,11 @@ struct Cache {
       return outcome;
     }
 
-    void invalidate(std::uint64_t address) noexcept {
+    void invalidate(std::uint64_t address, bool short_decode = false) noexcept {
       clear();
       rip = address;
       occupied = true;
+      short_variant = short_decode;
     }
 
     void clear() noexcept {
@@ -1271,7 +1286,7 @@ struct Cache {
   }
   const Set* find_set(std::uint64_t rip) const noexcept { return sets_[set_index(rip)].get(); }
 
-  std::optional<Lookup> lookup(std::uint64_t rip) noexcept {
+  std::optional<Lookup> lookup(std::uint64_t rip, bool short_variant = false) noexcept {
     auto& storage = sets_[set_index(rip)];
     if (!storage) {
       storage.reset(new (std::nothrow) Set{});
@@ -1280,13 +1295,13 @@ struct Cache {
     auto& set = *storage;
     const auto now = ++set.clock;
     for (auto& item : set.entries) {
-      if (item.occupied && item.rip == rip) {
+      if (item.occupied && item.rip == rip && item.short_variant == short_variant) {
         item.last_used = now;
         return Lookup{item, false, 0};
       }
     }
     for (auto& item : set.probes) {
-      if (item.occupied && item.rip == rip) {
+      if (item.occupied && item.rip == rip && item.short_variant == short_variant) {
         const auto distance = now - item.last_used;
         item.last_used = now;
         return Lookup{item, true, distance};
@@ -1294,7 +1309,7 @@ struct Cache {
     }
     auto& probe = set.probes[set.next_probe];
     set.next_probe = (set.next_probe + 1) % kWays;
-    probe.invalidate(rip);
+    probe.invalidate(rip, short_variant);
     probe.last_used = now;
     return Lookup{probe, true, 0};
   }

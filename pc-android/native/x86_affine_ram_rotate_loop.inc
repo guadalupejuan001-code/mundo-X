@@ -14,7 +14,7 @@ inline std::uint64_t Cpu::try_affine_ram_rotate_loop(std::uint64_t step_budget) 
     const auto& cache = affine_ram_rotate_block_;
     if (!cache || !version || cache->version != version || cache->ip != eip ||
         cache->physical != *physical || cache->length != length) {
-      std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code;
+      std::array<std::uint8_t, ether_arm64::Block::kNarrowMaxBytes> code;
       memory.read_block(*physical, code.data(), length);
       affine_ram_rotate_block_ = AffineRamRotateBlock{eip, *physical, memory.watch_code_page(*physical),
           length, ether_arm64::decode(code.data(), length, eip)};
@@ -57,7 +57,7 @@ inline std::uint64_t Cpu::try_affine_ram_rotate_loop(std::uint64_t step_budget) 
   const auto rotate = [](std::uint64_t value, unsigned left) {
     return left ? (value << left) | (value >> (64 - left)) : value;
   };
-  std::array<Term, ether_arm64::Block::kMaxInstructions> masks;
+  std::array<Term, ether_arm64::Block::kNarrowMaxInstructions> masks;
   unsigned mask_count = 0, rotation = 0;
   std::uint64_t stride = 0, constant_mask = 0;
   for (unsigned i = 0; i < body; ++i) {

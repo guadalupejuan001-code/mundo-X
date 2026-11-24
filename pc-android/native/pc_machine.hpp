@@ -302,7 +302,7 @@ class PcMachine {
     unsigned dispatches=0;
     for(unsigned i=0;i<budget&&!waiting_key;){
       if(timed && (dispatches++ & 63U)==0 && RunClock::now()>=deadline)break;
-      if(preserve_ether_loop_entry && i && budget-i<ether_arm64::Block::kMaxInstructions &&
+      if(preserve_ether_loop_entry && i && budget-i<ether_arm64::Block::kNarrowMaxInstructions &&
          budget-i<cpu.ether_arm64_loop_length(Cpu::EtherLoopAccess::ReadOnlyRam))break;
       auto* sample = boot_timing_ ? boot_timing_->next_iteration() : nullptr;
       const BootTiming::Scope iteration_timing(sample, BootTimePart::Total);

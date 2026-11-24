@@ -121,7 +121,7 @@ inline std::uint64_t Cpu::try_counted_call_loop_batch(std::uint64_t step_budget)
     const auto length = unsigned(cursor_ - eip);
     const auto code_address = counted_loop_ram_address(CS, eip, length, Access::Execute);
     if (!code_address) return 0;
-    std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code;
+    std::array<std::uint8_t, ether_arm64::Block::kNarrowMaxBytes> code;
     memory.read_block(*code_address, code.data(), length);
     auto& cached = counted_call_loop_;
     std::optional<std::uint64_t> callee_address;

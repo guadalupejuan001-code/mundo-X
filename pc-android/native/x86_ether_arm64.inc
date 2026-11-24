@@ -20,7 +20,7 @@ inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std
 
   // Keep short chains for different RIPs. A guarded backedge can use more
   // of the caller's budget without looking up a second block.
-  const auto limit = std::min(budget, 64U);
+  const auto limit = std::min(budget, !bus && !flag(IF) ? 128U : 64U);
   ether_arm64::ResidentReadPages resident;
   unsigned completed = 0;
   while (completed + 2 <= limit) {
@@ -198,7 +198,7 @@ inline const ether_arm64::Cache::Entry* Cpu::cached_ether_arm64_work(EtherLoopAc
   const auto* set = ether_arm64_cache_->find_set(eip);
   if (!set) return nullptr;
   for (const auto& entry : set->entries)
-    if (entry.occupied && entry.rip == eip && entry.code &&
+    if (entry.occupied && !entry.short_variant && entry.rip == eip && entry.code &&
         (!loop_only || (entry.block.repeats && !entry.block.uses_add_rotate_zero_condition())) &&
         (entry.block.register_only ||
            (access == EtherLoopAccess::ReadOnlyRam && !entry.block.writes))) return &entry;
@@ -288,15 +288,18 @@ inline unsigned Cpu::run_ether_ram_view(const ether_arm64::Cache::Entry& entry, 
 inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_budget,
                                              std::unique_lock<std::mutex>* bus,
                                              ether_arm64::ResidentReadPages& resident,
-                                             bool* continue_on_bus, bool projection_only) {
+                                             bool* continue_on_bus, bool projection_only, bool short_variant) {
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const auto origin = eip;
   const bool long_mode = is_long_mode();
-  const auto width = std::min(ether_arm64::Block::kMaxBytes, page_bytes - unsigned(eip % page_bytes));
+  using Block = ether_arm64::Block;
+  const auto width = std::min(short_variant || !long_mode ? Block::kNarrowMaxBytes : Block::kMaxBytes,
+                              page_bytes - unsigned(eip % page_bytes));
+  const auto narrow_width = std::min(width, Block::kNarrowMaxBytes);
   if (width < 2 || (long_mode
           ? eip > UINT64_MAX - width || !canonical(eip) || !canonical(eip + width - 1)
           : eip > UINT32_MAX)) return 0;
-  const auto found = ether_arm64_cache_->lookup(eip);
+  const auto found = ether_arm64_cache_->lookup(eip, short_variant);
   if (!found) return 0;
   const auto& lookup = *found;
   auto& entry = lookup.entry;
@@ -319,7 +322,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     if (!ordinary_page && !bulk_ram_range(physical, width)) {
       if (entry.code) {
         ++ether_arm64_stats_.invalidated;
-        entry.invalidate(eip);
+        entry.invalidate(eip, short_variant);
       }
       return 0;
     }
@@ -332,20 +335,40 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       ++ether_arm64_stats_.code_version_hits;
     } else {
       ++ether_arm64_stats_.code_byte_checks;
-      std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> actual;
-      const auto length = same_mapping ? entry.checked_bytes : width;
+      std::array<std::uint8_t, Block::kMaxBytes> actual;
+      auto length = same_mapping ? entry.checked_bytes : narrow_width;
       memory.read_block(physical, actual.data(), length);
       ether_arm64_stats_.code_bytes_read += length;
       if (!same_mapping || std::memcmp(actual.data(), entry.bytes.data(), length) != 0) {
         if (entry.code) ++ether_arm64_stats_.invalidated;
-        entry.invalidate(eip);
-        if (length < width) {
-          memory.read_block(physical + length, actual.data() + length, width - length);
-          ether_arm64_stats_.code_bytes_read += width - length;
+        entry.invalidate(eip, short_variant);
+        if (length < narrow_width) {
+          memory.read_block(physical + length, actual.data() + length, narrow_width - length);
+          ether_arm64_stats_.code_bytes_read += narrow_width - length;
+          length = narrow_width;
         }
-        entry.block = ether_arm64::decode(actual.data(), width, eip, long_mode, true);
+        entry.block = ether_arm64::decode(actual.data(), narrow_width, eip, long_mode, true);
+        // Keep fetching the ordinary 64-byte window on short hot paths.
+        // Extend only a sequence that reached its decode boundary without a
+        // control-flow or staged-flags terminator, and stay on one code page.
+        if (width > narrow_width && entry.block.can_translate()) {
+          const auto kind = entry.block.instructions[entry.block.count - 1].kind;
+          using Instruction = ether_arm64::Instruction;
+          const bool stops = kind == Instruction::Jump || kind == Instruction::Conditional ||
+              kind == Instruction::ConditionalMove || kind == Instruction::SignedMultiply;
+          constexpr unsigned max_instruction_bytes = 15;
+          if (!stops && (entry.block.count == Block::kNarrowMaxInstructions ||
+                         entry.block.size + max_instruction_bytes > narrow_width)) {
+            if (length < width) {
+              memory.read_block(physical + length, actual.data() + length, width - length);
+              ether_arm64_stats_.code_bytes_read += width - length;
+            }
+            auto expanded = ether_arm64::decode(actual.data(), width, eip, long_mode, true, Block::kMaxInstructions);
+            if (expanded.count > entry.block.count) entry.block = std::move(expanded);
+          }
+        }
         entry.state_vector = ether_arm64::RegisterStateVector::build(entry.block);
-        entry.checked_bytes = entry.block.can_translate() ? entry.block.size : width;
+        entry.checked_bytes = entry.block.can_translate() ? entry.block.size : narrow_width;
         entry.physical = physical;
         entry.cr3 = cr3;
         entry.cpl = privilege;
@@ -353,7 +376,13 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
       }
       entry.code_version = memory.watch_code_page(physical);
     }
-    if (!entry.block.can_translate() || entry.block.count > budget) return 0;
+    if (!entry.block.can_translate()) return 0;
+    if (entry.block.count > budget) {
+      if (!short_variant && (entry.block.count > Block::kNarrowMaxInstructions ||
+                             entry.block.size > Block::kNarrowMaxBytes))
+        return retire_ether_arm64_block(budget, loop_budget, bus, resident, continue_on_bus, projection_only, true);
+      return 0;
+    }
     if (projection_only && entry.state_vector.counter == ether_arm64::RegisterStateVector::kRegisters) return 0;
     if (!entry.code) {
       auto* slot = lookup.pending ? ether_arm64_cache_->admission_slot(lookup) : &entry;
@@ -404,8 +433,8 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     }
     // A short register block cannot recover the cost of yielding and
     // revalidating the shared bus. Keep the current device grant for it.
-    constexpr auto min_private_register_steps = 2 * ether_arm64::Block::kMaxInstructions;
-    const bool release_registers = bus && block.register_only &&
+    constexpr auto min_private_register_steps = 2 * Block::kNarrowMaxInstructions;
+    const bool release_registers = bus && block.register_only && repetitions > 1 &&
                                   repetitions * block.count >= min_private_register_steps;
     const auto code_version = active->code_version;
     const auto mapping_epoch = release_registers && long_mode ? memory.page_table_epoch() : 0;
@@ -454,7 +483,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     if (private_frame && (!a20_enabled || memory.code_page_version(physical) != code_version ||
         (long_mode && memory.page_table_epoch() != mapping_epoch))) {
       ++ether_arm64_stats_.invalidated;
-      active->invalidate(origin);
+      active->invalidate(origin, short_variant);
       return 0;
     }
     if (!outcome) {
@@ -512,7 +541,7 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
     // Preserve the original scalar path for the first architectural fault.
     if (active->code) {
       ++ether_arm64_stats_.invalidated;
-      active->invalidate(origin);
+      active->invalidate(origin, short_variant);
     }
     return 0;
   }
@@ -618,6 +647,9 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
   retire_ether_decoded_block(block, entry.bytes.data(), origin, taken, retired);
   ++ether_arm64_stats_.blocks;
   ether_arm64_stats_.steps += retired;
+  ether_arm64_stats_.largest_block_instructions = std::max(ether_arm64_stats_.largest_block_instructions, block.count);
+  if (block.count > ether_arm64::Block::kNarrowMaxInstructions ||
+      block.size > ether_arm64::Block::kNarrowMaxBytes) ++ether_arm64_stats_.expanded_blocks;
   if (block.ram_adds) ether_arm64_stats_.ram_add_steps += std::uint64_t(rounds) * block.ram_adds;
   if (frame.state_vector_rounds) {
     ++ether_arm64_stats_.state_vector_dispatches;

@@ -65,7 +65,7 @@ void real_copy() {
     require(first == 7 && batched.instructions == 8 && batched.eip == 0x7c00 &&
             batched.reg16(Cpu::ECX) == 72 && batched.last_rep_batch_bytes() == 14,
             "partial REP must preserve restart IP and count exact steps");
-    require(run_rep(batched, 31) > 0, "copy must use more than one page-local batch");
+    require(run_rep(batched, 31) > 0, "copy must continue with bounded REP batches");
     run_rep(scalar, 1);
     require(scalar.instructions == batched.instructions && scalar.regs == batched.regs &&
             scalar.eflags == batched.eflags && scalar.eip == batched.eip &&
@@ -198,14 +198,14 @@ void copy_under_pressure() {
   expect_step(cpu);
   require(cpu.memory.budget_bytes() - cpu.memory.allocated_bytes() == 2 * pattern.size(),
           "fixture must leave less than one dense page for REP");
-  require(cpu.try_rep_batch(count) == page / 4 - 1 && cpu.memory.pattern_pages() == 2,
+  require(cpu.try_rep_batch(page / 4 - 1) == page / 4 - 1 && cpu.memory.pattern_pages() == 2,
           "finishing the first copied page must compact its exact bytes");
   // Consume the dense headroom before copying the compact and zero pages.
   cpu.memory.write_byte(0x15000, 1);
   require(cpu.memory.budget_bytes() - cpu.memory.allocated_bytes() == pattern.size(),
           "the next page must fit in its exact pattern backing");
   const auto resident = cpu.memory.allocated_pages();
-  require(cpu.try_rep_batch(count) == page / 4 && cpu.memory.pattern_pages() == 3 &&
+  require(cpu.try_rep_batch(page / 4) == page / 4 && cpu.memory.pattern_pages() == 3 &&
               cpu.memory.allocated_pages() == resident &&
               cpu.memory.allocated_bytes() == cpu.memory.budget_bytes(),
           "copy of a repeated page must use only its stored pattern");
@@ -240,7 +240,7 @@ void fill_under_pressure() {
   cpu.regs[Cpu::ECX] = 2 * page / sizeof(word);
   cpu.regs[Cpu::EDI] = address;
   expect_step(cpu);
-  require(cpu.try_rep_batch(page) == page / sizeof(word) - 1 &&
+  require(cpu.try_rep_batch(page / sizeof(word) - 1) == page / sizeof(word) - 1 &&
               cpu.memory.pattern_pages() == 1, "REP must compact the first, partially-filled page");
   cpu.memory.write_byte(0x15000, 1); // Consume the space the first dense page will free.
   const auto resident = cpu.memory.allocated_pages();
@@ -334,9 +334,14 @@ void copy_to_implicit_pages() {
   batched.memory.enable_code_page_versions(true);
   const auto watch = batched.memory.watch_code_page(to + page);
   expect_step(batched);
-  std::uint64_t direct_bytes = 0;
+  constexpr unsigned grant = 2 * page / sizeof(std::uint32_t);
+  require(batched.try_rep_batch(grant - 1) == grant - 1 &&
+              batched.last_rep_batch_bytes() == 2 * page - sizeof(std::uint32_t) &&
+              batched.last_rep_direct_page_copy_bytes() == page && batched.eip == copy_ip,
+          "One REP grant must include more than one validated span without exceeding its budget");
+  std::uint64_t direct_bytes = batched.last_rep_direct_page_copy_bytes();
   while (batched.eip == copy_ip) {
-    require(batched.try_rep_batch(page / sizeof(std::uint32_t)) > 0, "REP MOVSD batch did not advance");
+    require(batched.try_rep_batch(grant) > 0, "REP MOVSD batch did not advance");
     direct_bytes += batched.last_rep_direct_page_copy_bytes();
   }
   while (scalar.eip == copy_ip) expect_step(scalar);

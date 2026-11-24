@@ -2226,6 +2226,38 @@ void guard_contract() {
   require(!cpu.try_ether_arm64_block(2), "instruction tracer lost decoded x86 steps");
 }
 
+void expanded_block_grant_contract() {
+  PcMachine machine;
+  boot(machine, true);
+  auto& cpu = machine.cpu;
+  constexpr auto count = arm64::Block::kMaxInstructions;
+  constexpr std::array<std::uint8_t, 4> add{0x48, 0x83, 0xc0, 0x01};
+  std::array<std::uint8_t, count * add.size() + 1> program{};
+  for (unsigned i = 0; i < count; ++i)
+    std::copy(add.begin(), add.end(), program.begin() + i * add.size());
+  program.back() = 0xf4;
+  cpu.memory.write_block(code, program.data(), program.size());
+  const auto expanded_before = cpu.ether_arm64_stats().expanded_blocks;
+  warm_block(cpu, code, count);
+  require(cpu.ether_arm64_stats().largest_block_instructions == count &&
+              cpu.ether_arm64_stats().expanded_blocks == expanded_before + 1,
+          "32 guest instructions did not execute in one AArch64 block");
+
+  constexpr auto short_grant = arm64::Block::kNarrowMaxInstructions;
+  warm_block(cpu, code, short_grant);
+  cpu.eip = code;
+  cpu.regs[Cpu::EAX] = 41;
+  const auto retired_before = cpu.instructions;
+  require(cpu.try_ether_arm64_block(short_grant) == short_grant &&
+              cpu.instructions == retired_before + short_grant &&
+              cpu.eip == code + short_grant * add.size() && cpu.regs[Cpu::EAX] == 41 + short_grant,
+          "The short device grant did not keep its own validated native block");
+  cpu.eip = code;
+  require(cpu.try_ether_arm64_block(count) == count &&
+              cpu.ether_arm64_stats().expanded_blocks == expanded_before + 2,
+          "The short grant displaced the full block");
+}
+
 void single_register_contract() {
   PcMachine native, scalar;
   boot(native, true);
@@ -2706,6 +2738,7 @@ int main() {
     protected32_stack_chain_contract();
     byte_copy_contract();
     guard_contract();
+    expanded_block_grant_contract();
     single_register_contract();
     signed_multiply_contract();
     cache_collision_contract();

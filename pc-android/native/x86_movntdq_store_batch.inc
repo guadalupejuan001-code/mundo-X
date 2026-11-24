@@ -1,5 +1,5 @@
 inline unsigned Cpu::try_xmm_store_batch(unsigned budget, XmmStoreBatch kind) {
-  constexpr unsigned vector_bytes = 16, max_stores = 8, max_instruction_bytes = 9;
+  constexpr unsigned vector_bytes = 16, max_stores = 32, max_instruction_bytes = 9;
   constexpr unsigned page_bytes = MemoryFabric::kPageSize;
   const bool streaming = kind == XmmStoreBatch::Streaming;
   if (budget < 2 || !(streaming ? movntdq_store_batch_candidate() :
@@ -9,7 +9,7 @@ inline unsigned Cpu::try_xmm_store_batch(unsigned budget, XmmStoreBatch kind) {
 
   try {
     require_sse_state();
-    const auto limit = std::min(budget, max_stores);
+    auto limit = std::min(budget, max_stores);
     const auto code_bytes = std::min(limit * max_instruction_bytes, page_bytes - unsigned(eip % page_bytes));
     if (code_bytes < (streaming ? 8U : 7U) || eip > UINT64_MAX - code_bytes) return 0;
     const auto code = counted_loop_ram_address(CS, eip, code_bytes, Access::Execute);
@@ -19,6 +19,7 @@ inline unsigned Cpu::try_xmm_store_batch(unsigned budget, XmmStoreBatch kind) {
     std::array<unsigned, max_stores> sources;
     unsigned pos = 0, last = 0, stores = 0, base = 0, memory_loop_end = 0;
     std::int64_t first_displacement = 0;
+    std::uint64_t linear = 0;
     while (stores < limit && code_bytes - pos >= (streaming ? 4U : 3U)) {
       if (streaming && signature[pos] != 0x66) break;
       auto next = pos + unsigned(streaming);
@@ -43,6 +44,10 @@ inline unsigned Cpu::try_xmm_store_batch(unsigned budget, XmmStoreBatch kind) {
       if (!stores) {
         base = address_reg;
         first_displacement = displacement;
+        linear = regs[base] + std::uint64_t(first_displacement);
+        if (linear % vector_bytes) return 0;
+        const auto vectors_in_page = (page_bytes - unsigned(linear % page_bytes)) / vector_bytes;
+        limit = std::min(limit, vectors_in_page);
       }
       if (address_reg != base || displacement != first_displacement + stores * vector_bytes) break;
       sources[stores++] = ((operand >> 3) & 7U) | ((rex & 4U) << 1);
@@ -52,9 +57,8 @@ inline unsigned Cpu::try_xmm_store_batch(unsigned budget, XmmStoreBatch kind) {
       pos = next;
     }
 
-    const auto linear = regs[base] + std::uint64_t(first_displacement);
     const auto bytes = stores * vector_bytes;
-    if (stores < 2 || linear % vector_bytes) return 0;
+    if (stores < 2) return 0;
     const auto target = counted_loop_ram_address((base & 7U) == EBP ? SS : DS, linear, bytes, Access::Write);
     if (!target || memory.may_touch_page_tables(*target, bytes) ||
         (!streaming && !memory.resident_ram_span(*target, bytes, false)) ||

@@ -201,6 +201,8 @@ class Cpu {
 #endif
   struct EtherArm64Stats {
     std::uint64_t translated = 0, hits = 0, blocks = 0, steps = 0;
+    std::uint64_t expanded_blocks = 0;
+    unsigned largest_block_instructions = 0;
     std::uint64_t protected32_steps = 0;
     std::uint64_t invalidated = 0, data_fallbacks = 0;
     std::uint64_t compiled_evictions = 0, native_compile_ns = 0;
@@ -606,7 +608,7 @@ class Cpu {
   }
   bool affine_ram_rotate_loop_candidate() const noexcept {
     return opcode_ == 0x75 && ip_written_ && start_cs_ == segments[CS] &&
-        cursor_ > eip && cursor_ - eip >= 13 && cursor_ - eip <= ether_arm64::Block::kMaxBytes &&
+        cursor_ > eip && cursor_ - eip >= 13 && cursor_ - eip <= ether_arm64::Block::kNarrowMaxBytes &&
         start_ip_ == cursor_ - 2 && decoded_.size() == 2 && cursor_ - eip == 0x100U - decoded_[1] &&
         eip <= last_variable_rotate_ip_ && last_variable_rotate_ip_ < start_ip_ && is_long_mode();
   }
@@ -628,7 +630,7 @@ class Cpu {
       if (!is_long_mode()) return false;
       if (sse_memory_loop_tail(length, branch_bytes) ||
           (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())) return true;
-      if (length > ether_arm64::Block::kMaxBytes ||
+      if (length > ether_arm64::Block::kNarrowMaxBytes ||
           last_relative_call_return_ip_ <= eip || last_relative_call_return_ip_ >= start_ip_) return false;
       const auto counter_bytes = start_ip_ - last_relative_call_return_ip_;
       return counter_bytes >= 3 && counter_bytes <= 7;
@@ -649,7 +651,7 @@ class Cpu {
   }
   bool state_vector_batch_candidate() const noexcept {
     return ip_written_ && start_cs_ == segments[CS] && eip < start_ip_ &&
-        start_ip_ < cursor_ && cursor_ - eip <= ether_arm64::Block::kMaxBytes &&
+        start_ip_ < cursor_ && cursor_ - eip <= ether_arm64::Block::kNarrowMaxBytes &&
         (opcode_ == 0x75 || opcode_ == 0x0f85 || opcode_ == 0x7f || opcode_ == 0x0f8f);
   }
   // Use the same ownership as step() and stop at the caller's device boundary.
@@ -1065,6 +1067,7 @@ class Cpu {
   bool nmi_blocked_ = false;
   unsigned last_rep_batch_bytes_ = 0;
   unsigned last_rep_direct_page_copy_bytes_ = 0;
+  unsigned try_rep_page_batch(unsigned budget);
   std::array<IdtAttempt, Fault::kMaxIdtAttempts> failed_idt_attempts_{};
   unsigned failed_idt_count_ = 0;
   std::optional<IdtLoad> last_idt_load_;
@@ -1161,7 +1164,7 @@ class Cpu {
     bool rip_relative = false;
   };
   struct CountedCallLoop {
-    std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code{};
+    std::array<std::uint8_t, ether_arm64::Block::kNarrowMaxBytes> code{};
     std::array<std::uint8_t, 12> callee{};
     std::array<ether_arm64::Instruction, 4> stores{};
     std::uint64_t entry, target, delta, multiplier;
@@ -1267,7 +1270,8 @@ class Cpu {
   const ether_arm64::Cache::Entry* cached_ether_arm64_work(EtherLoopAccess access, bool loop_only) const noexcept;
   unsigned retire_ether_arm64_block(unsigned budget, unsigned loop_budget, std::unique_lock<std::mutex>* bus,
                                     ether_arm64::ResidentReadPages& resident,
-                                    bool* continue_on_bus = nullptr, bool projection_only = false);
+                                    bool* continue_on_bus = nullptr, bool projection_only = false,
+                                    bool short_variant = false);
   struct EtherRamView;
   unsigned run_ether_ram_view(const ether_arm64::Cache::Entry& entry, ether_arm64::Frame& frame,
                               unsigned rounds, std::unique_lock<std::mutex>& bus, unsigned& off_bus_steps);
@@ -4137,6 +4141,21 @@ inline void Cpu::capture_interrupt_origin() noexcept {
 inline unsigned Cpu::try_rep_batch(unsigned budget) {
   last_rep_batch_bytes_ = 0;
   last_rep_direct_page_copy_bytes_ = 0;
+  constexpr unsigned max_ram_spans = 4;
+  const bool port_io = opcode_ >= 0x6c && opcode_ <= 0x6f;
+  const auto span_limit = a20_enabled && !port_io ? max_ram_spans : 1U;
+  unsigned retired = 0;
+  // Each span commits independently and checks code, RAM, and mappings
+  // again. A rejected span leaves its first element to the interpreter.
+  for (unsigned span = 0; span < span_limit && budget - retired >= 2; ++span) {
+    const auto completed = try_rep_page_batch(budget - retired);
+    if (!completed) break;
+    retired += completed;
+  }
+  return retired;
+}
+
+inline unsigned Cpu::try_rep_page_batch(unsigned budget) {
   if (budget < 2 || !rep_batch_candidate() || fault || halted || transaction_ ||
       interrupt_shadow_ || (eflags & kScalarExecutionFlags) ||
       (cpl() != 0 && cpl() != 3) || step_trace_hook || irq_trace_hook || lock_prefix_)
@@ -4240,7 +4259,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
       if (overlaps(target, bytes, source, bytes)) return 0;
       if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
       if (mundo_x::ether_next::copy_ram_block(memory, source, target, bytes))
-        last_rep_direct_page_copy_bytes_ = bytes;
+        last_rep_direct_page_copy_bytes_ += bytes;
       put_index(ESI, src + (backward ? -std::uint64_t(bytes) : bytes));
     } else {
       if (paged && memory.may_touch_page_tables(target, bytes)) return 0;
@@ -4254,7 +4273,7 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
     if (remaining == elements) eip = cursor_ & code_mask();
     eflags |= 2;
     instructions += elements;
-    last_rep_batch_bytes_ = bytes;
+    last_rep_batch_bytes_ += bytes;
     return elements;
   } catch (const std::exception&) {
     // Range checks, or the all-or-nothing preparation of one destination
@@ -4299,7 +4318,7 @@ inline unsigned Cpu::try_state_vector_batch(unsigned budget) {
     return 0;
 
   const auto length = unsigned(cursor_ - eip);
-  std::array<std::uint8_t, ether_arm64::Block::kMaxBytes> code;
+  std::array<std::uint8_t, ether_arm64::Block::kNarrowMaxBytes> code;
   try {
     // Validate the current executable bytes, including edits made since the backedge.
     const auto linear = segment_linear(CS, eip, length, Access::Execute);
