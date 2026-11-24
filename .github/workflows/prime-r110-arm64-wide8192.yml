@@ -61,6 +61,9 @@ jobs:
             grep -Ex '^PRIME_ETHER_ARM64_WIDE8192_PASS guest_instructions=8192 guest_bytes=20480 guest_pages=5 native_entries=1 bounded_grant=1 trap_flag=1 debug_hook=1 code_edit=1 absent_page=1 nx_page=1 scalar_state=1 machine_run=1 noncontiguous=1 interrupt_flag=1 late_fault_retired=[1-9][0-9]*' \
               "evidence/$variant.log" > "evidence/$variant-one-native-block.txt"
             test "$(wc -l < "evidence/$variant-one-native-block.txt")" -eq 1
+            grep -Ex '^PRIME_ETHER_ARM64_WIDE8192_STRESS remap_unchanged_source_version=1 remap_flags=1 cross_instruction=1 split_pages=6 split_absent=1 split_nx=1' \
+              "evidence/$variant.log" > "evidence/$variant-stress.txt"
+            test "$(wc -l < "evidence/$variant-stress.txt")" -eq 1
           done
           grep -Eq '^PRIME_ETHER_ARM64_WIDE1024_PASS guest_instructions=1024 guest_bytes=[1-9][0-9]* native_entries=1 ' \
             evidence/coexist.log

@@ -2837,10 +2837,11 @@ void wide_native_block_contract() {
 #endif
 
 #if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+constexpr std::uint64_t wide8192_entry = 0x200000;
 void wide8192_native_block_contract() {
   constexpr unsigned instructions = 8192;
   constexpr auto page = cosmic_pc::MemoryFabric::kPageSize;
-  constexpr std::uint64_t entry = 0x200000, pde = 0x3008, pte = 0x4000;
+  constexpr std::uint64_t entry = wide8192_entry, pde = 0x3008, pte = 0x4000;
   constexpr std::array<std::uint64_t, 6> physical{0x50000, 0x54000, 0x52000, 0x59000, 0x51000, 0x58000};
   constexpr auto body_pages = physical.size() - 1;
   constexpr auto body_bytes = body_pages * page;
@@ -2877,8 +2878,8 @@ void wide8192_native_block_contract() {
     emit(cpu, physical.back(), {0xf4});  // HALT remains outside the five translated pages.
   }
 
-  const auto initialize = [](Cpu& cpu) {
-    cpu.eip = entry;
+  const auto initialize = [](Cpu& cpu, std::uint64_t start = wide8192_entry) {
+    cpu.eip = start;
     cpu.halted = false;
     for (unsigned i = 0; i < cpu.regs.size(); ++i)
       cpu.regs[i] = 0xfedcba98ffffffffULL - i * 0x1010111ULL;
@@ -2891,19 +2892,19 @@ void wide8192_native_block_contract() {
     state.steps -= initial;
     return state;
   };
-  const auto run_scalar = [&](unsigned steps, bool interruptible = false) {
-    const auto before = initialize(scalar.cpu);
+  const auto run_scalar = [&](unsigned steps, bool interruptible = false, std::uint64_t start = wide8192_entry) {
+    const auto before = initialize(scalar.cpu, start);
     if (interruptible) scalar.cpu.eflags |= Cpu::IF;
     for (unsigned i = 0; i < steps; ++i)
       require(scalar.cpu.step() == StepResult::Executed, "8192 scalar reference faulted");
     return normalized(scalar.cpu, before);
   };
-  const auto run_wide = [&] {
-    const auto before = initialize(native.cpu);
+  const auto run_wide = [&](std::uint64_t start = wide8192_entry) {
+    const auto before = initialize(native.cpu, start);
     const auto stats = native.cpu.ether_arm64_stats();
     native.run(instructions);
     const auto& after = native.cpu.ether_arm64_stats();
-    require(native.cpu.instructions - before == instructions && native.cpu.eip == body_end &&
+    require(native.cpu.instructions - before == instructions && native.cpu.eip == start + body_bytes &&
                 !native.cpu.halted && !native.cpu.fault && after.wide8192_native_invocations ==
                     stats.wide8192_native_invocations + 1 && after.blocks == stats.blocks + 1 &&
                 after.wide8192_steps - stats.wide8192_steps == instructions &&
@@ -2951,26 +2952,47 @@ void wide8192_native_block_contract() {
   require(native.cpu.step() == StepResult::Halted && scalar.cpu.step() == StepResult::Halted,
           "8192 native block included a HALT outside its decoded guest body");
 
-  const auto run_fault = [&](PcMachine& machine, bool nx) {
+  constexpr std::uint64_t replacement = 0x55000;
+  const auto original_version = native.cpu.memory.code_page_version(physical[last_page]);
+  std::array<std::uint8_t, page> replacement_bytes{};
+  std::copy_n(program.data() + last_page * page, page, replacement_bytes.begin());
+  // Replace ADD and SUB with XOR RBX,RBX and MOV EDX,0x001234a6 without changing the body size or count.
+  const std::array<std::uint8_t, 8> set_zero{0x48, 0x31, 0xdb, 0xba, 0xa6, 0x34, 0x12, 0x00};
+  std::copy(set_zero.begin(), set_zero.end(), replacement_bytes.end() - set_zero.size());
+  for (auto* machine : {&native, &scalar}) {
+    machine->cpu.memory.write_block(replacement, replacement_bytes.data(), replacement_bytes.size());
+    machine->cpu.write64(pte + last_page * 8, replacement | ready_entry);
+  }
+  const auto remapped = run_wide();
+  require(original_version && native.cpu.memory.code_page_version(physical[last_page]) == original_version &&
+              remapped.regs[Cpu::EBX] == 0 && !(edited.flags & Cpu::ZF) && (remapped.flags & Cpu::ZF) &&
+              remapped == run_scalar(instructions),
+          "changing only the later PTE reused a native block with the old register result or flags");
+  for (auto* machine : {&native, &scalar})
+    machine->cpu.write64(pte + last_page * 8, physical[last_page] | ready_entry);
+
+  const auto run_fault = [&](PcMachine& machine, unsigned denied_page, bool nx,
+                             std::uint64_t start, std::uint64_t fault_ip, unsigned preceding) {
     auto& cpu = machine.cpu;
     gate(machine, 14);
     emit(cpu, irq_handler, {0xf4});
-    cpu.write64(pte + last_page * 8, nx ? physical[last_page] | ready_entry | (1ULL << 63) : 0);
-    const auto before = initialize(cpu);
+    cpu.write64(pte + denied_page * 8, nx ? physical[denied_page] | ready_entry | (1ULL << 63) : 0);
+    const auto before = initialize(cpu, start);
     const auto calls = cpu.ether_arm64_stats().wide8192_native_invocations;
     machine.run(instructions + 2);
     const auto frame = cpu.regs[Cpu::ESP];
-    require(cpu.halted && !cpu.fault && cpu.cr2 == late_fault &&
-                cpu.read64(frame + 8) == late_fault && cpu.read64(frame) == (nx ? 17U : 16U) &&
-                cpu.instructions - before == before_fault + 2 &&
+    require(cpu.halted && !cpu.fault && cpu.cr2 == entry + denied_page * page &&
+                cpu.read64(frame + 8) == fault_ip && cpu.read64(frame) == (nx ? 17U : 16U) &&
+                cpu.instructions - before == preceding + 2 &&
                 cpu.ether_arm64_stats().wide8192_native_invocations == calls,
             "late absent or NX page was not rejected at the exact x86 fetch fault");
-    cpu.write64(pte + last_page * 8, physical[last_page] | ready_entry);
+    cpu.write64(pte + denied_page * 8, physical[denied_page] | ready_entry);
     return normalized(cpu, before);
   };
   for (const bool nx : {false, true}) {
-    const auto routed = run_fault(native, nx);
-    require(routed == run_fault(scalar, nx), "wide dispatch changed state before a late fetch fault");
+    const auto routed = run_fault(native, last_page, nx, entry, late_fault, before_fault);
+    require(routed == run_fault(scalar, last_page, nx, entry, late_fault, before_fault),
+            "wide dispatch changed state before a late fetch fault");
   }
   run_wide();
   std::cout << "PRIME_ETHER_ARM64_WIDE8192_PASS guest_instructions=" << instructions << " guest_bytes=" << body_bytes
@@ -3026,6 +3048,31 @@ void wide8192_native_block_contract() {
               << ",\"wide_ns\":" << samples[1].elapsed_ns << ",\"ordinary_entries\":" << samples[0].entries
               << ",\"wide_entries\":" << samples[1].entries << "}\n";
   }
+
+  // Moving the entry one byte makes a two-byte SUB cross the first page:
+  // the 29 opcode is in the outgoing page and CB ModR/M in the next page.
+  std::array<std::uint8_t, body_bytes + 2> shifted{};
+  shifted.front() = 0xcc;
+  std::copy(program.begin(), program.end(), shifted.begin() + 1);
+  shifted.back() = 0xf4;
+  require(shifted[page - 1] == 0x29 && shifted[page] == 0xcb, "split fixture did not straddle a guest instruction");
+  scalar.cpu.enable_ether_arm64_blocks(false);
+  for (auto* machine : {&native, &scalar}) {
+    for (std::size_t i = 0; i < physical.size(); ++i) {
+      const auto offset = i * page;
+      machine->cpu.memory.write_block(physical[i], shifted.data() + offset, std::min(page, shifted.size() - offset));
+    }
+  }
+  constexpr auto split_entry = entry + 1;
+  const auto split = run_wide(split_entry);
+  require(split == run_scalar(instructions, false, split_entry), "six-page split decode changed guest state");
+  for (const bool nx : {false, true}) {
+    const auto routed = run_fault(native, 1, nx, split_entry, entry + page - 1, page / 2 - 1);
+    require(routed == run_fault(scalar, 1, nx, split_entry, entry + page - 1, page / 2 - 1),
+            "split x86 fetch fault rip, cr2 or effects differed from the interpreter");
+  }
+  std::cout << "PRIME_ETHER_ARM64_WIDE8192_STRESS remap_unchanged_source_version=1 remap_flags=1"
+               " cross_instruction=1 split_pages=6 split_absent=1 split_nx=1\n";
 }
 #endif
 }  // namespace
