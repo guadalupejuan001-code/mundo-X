@@ -17,6 +17,11 @@ inline bool Cpu::ether_arm64_block_candidate() const noexcept {
 inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (budget < 2 || !ether_arm64_dispatch_ready()) return 0;
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+  if (ether_arm64_wide8192_enabled_ && !bus && budget >= ether_arm64::Wide8192Block::kMaxInstructions) {
+    if (const auto retired = try_ether_arm64_wide8192()) return retired;
+  }
+#endif
 #if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
   if (ether_arm64_wide_enabled_ && !bus && budget >= ether_arm64::WideBlock::kMaxInstructions) {
     if (const auto retired = try_ether_arm64_wide1024()) return retired;
@@ -216,12 +221,35 @@ inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
          !step_trace_hook && !irq_trace_hook;
 }
 
-#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
-inline unsigned Cpu::try_ether_arm64_wide1024() {
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT) || defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+inline bool Cpu::private_ether_arm64_grant() const noexcept {
   // The experimental grant is private to a single vCPU. Keep the ordinary
   // dispatch for active interrupts, debugging and all shared-bus execution.
-  if (!is_long_mode() || topology_.logical_processors() != 1 || flag(IF) ||
-      nmi_shadow_ || (eflags & (1U << 16)) || (dr7_ & 0xffU)) return 0;
+  return is_long_mode() && topology_.logical_processors() == 1 && !flag(IF) &&
+         !nmi_shadow_ && !(eflags & (1U << 16)) && !(dr7_ & 0xffU);
+}
+
+template <class Block>
+inline unsigned Cpu::run_private_ether_arm64_block(const Block& block, const std::uint8_t* code,
+                                                    const ether_arm64::NativeCode& native,
+                                                    std::uint64_t& invocations, std::uint64_t& steps) {
+  const auto& last = block.instructions[block.count - 1];
+  decoded_.reserve(last.end - last.begin);
+  ether_arm64::Frame frame{};
+  frame.regs = regs;
+  frame.guest_regs = frame.regs.data();
+  ++invocations;
+  const auto outcome = native.run(frame);
+  if (outcome != 1) return 0;
+  const auto retired = commit_ether_arm64_result(block, code, eip, frame, 1, outcome, false, false);
+  steps += retired;
+  return retired;
+}
+#endif
+
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+inline unsigned Cpu::try_ether_arm64_wide1024() {
+  if (!private_ether_arm64_grant()) return 0;
   constexpr auto page_bytes = MemoryFabric::kPageSize;
   static_assert(ether_arm64::WideBlock::kMaxBytes == page_bytes);
   const auto origin = eip;
@@ -269,20 +297,102 @@ inline unsigned Cpu::try_ether_arm64_wide1024() {
 
     const auto& entry = *ether_arm64_wide_;
     if (!entry.native) return 0;
-    const auto& last = entry.block.instructions[entry.block.count - 1];
-    decoded_.reserve(last.end - last.begin);
-    ether_arm64::Frame frame{};
-    frame.regs = regs;
-    frame.guest_regs = frame.regs.data();
-    ++ether_arm64_stats_.wide_native_invocations;
-    const auto outcome = entry.native.run(frame);
-    if (outcome != 1) return 0;
-    const auto retired = commit_ether_arm64_result(entry.block, entry.bytes.data(), origin,
-                                                  frame, 1, outcome, false, false);
-    ether_arm64_stats_.wide_steps += retired;
-    return retired;
+    return run_private_ether_arm64_block(entry.block, entry.bytes.data(), entry.native,
+                                        ether_arm64_stats_.wide_native_invocations,
+                                        ether_arm64_stats_.wide_steps);
   } catch (const std::exception&) {
     // Speculative fetch or compilation failed before publishing guest state.
+    return 0;
+  }
+}
+#endif
+
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+inline bool Cpu::ether_arm64_wide8192_pages_current(const EtherWide8192Entry& entry) {
+  try {
+    for (unsigned i = 0; i < entry.page_count; ++i) {
+      const auto& page = entry.pages[i];
+      bool ordinary_page = false;
+      if (translate_instruction(entry.rip + page.offset, ordinary_page, true) != page.physical ||
+          !ordinary_page || memory.code_page_version(page.physical) != page.version) return false;
+    }
+    return true;
+  } catch (const Trap&) {
+    return false;
+  }
+}
+
+inline unsigned Cpu::try_ether_arm64_wide8192() {
+  if (!private_ether_arm64_grant()) return 0;
+  constexpr auto max_bytes = ether_arm64::Wide8192Block::kMaxBytes;
+  constexpr unsigned page_bytes = MemoryFabric::kPageSize;
+  static_assert(max_bytes % page_bytes == 0);
+  const auto origin = eip;
+  if (origin > UINT64_MAX - max_bytes || !canonical(origin) || !canonical(origin + max_bytes - 1)) return 0;
+
+  try {
+    const auto* cached = ether_arm64_wide8192_.get();
+    const auto privilege = cpl();
+    const bool same_site = cached && cached->rip == origin && cached->cr3 == cr3 && cached->cpl == privilege;
+    if (same_site && ether_arm64_wide8192_pages_current(*cached)) {
+      ++ether_arm64_stats_.hits;
+      ++ether_arm64_stats_.code_version_hits;
+    } else {
+      if (cached) {
+        if (same_site) ++ether_arm64_stats_.invalidated;
+        else ++ether_arm64_stats_.compiled_evictions;
+        ether_arm64_wide8192_.reset();
+      }
+      auto entry = std::make_unique<EtherWide8192Entry>();
+      unsigned bytes = 0;
+      while (bytes < max_bytes) {
+        const auto linear = origin + bytes;
+        const auto length = std::min(max_bytes - bytes, page_bytes - unsigned(linear % page_bytes));
+        bool ordinary_page = false;
+        std::uint64_t physical;
+        try {
+          // Speculative translation verifies execute rights without setting
+          // accessed bits or reporting faults for instructions not yet run.
+          physical = translate_instruction(linear, ordinary_page, true);
+        } catch (const Trap&) {
+          break;
+        }
+        if (!ordinary_page || !memory.try_read_present_ram_block(physical, entry->bytes.data() + bytes, length))
+          break;
+        entry->pages[entry->page_count++] = {physical, 0, bytes};
+        bytes += length;
+      }
+      ++ether_arm64_stats_.code_byte_checks;
+      ether_arm64_stats_.code_bytes_read += bytes;
+      if (!ether_arm64::decode_wide8192(entry->block, entry->bytes.data(), bytes, origin)) return 0;
+      entry->rip = origin;
+      entry->cr3 = cr3;
+      entry->cpl = privilege;
+      // Guard only the pages actually consumed by the accepted block,
+      // including every page occupied by an instruction crossing a boundary.
+      while (entry->pages[entry->page_count - 1].offset >= entry->block.size) --entry->page_count;
+      for (unsigned i = 0; i < entry->page_count; ++i) {
+        auto& page = entry->pages[i];
+        page.version = memory.watch_code_page(page.physical);
+        if (!page.version) return 0;
+      }
+      if (!ether_arm64_wide8192_pages_current(*entry)) return 0;
+      const auto start = std::chrono::steady_clock::now();
+      const bool built = entry->native.build(entry->block);
+      ether_arm64_stats_.native_compile_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - start).count();
+      if (!built) return 0;
+      ++ether_arm64_stats_.translated;
+      ether_arm64_wide8192_ = std::move(entry);
+    }
+
+    const auto& entry = *ether_arm64_wide8192_;
+    return run_private_ether_arm64_block(entry.block, entry.bytes.data(), entry.native,
+                                        ether_arm64_stats_.wide8192_native_invocations,
+                                        ether_arm64_stats_.wide8192_steps);
+  } catch (const std::exception&) {
+    // No guest state was published. The ordinary route observes any fault
+    // at the instruction which actually accesses the unavailable page.
     return 0;
   }
 }

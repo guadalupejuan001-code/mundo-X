@@ -1,0 +1,100 @@
+name: Prime R110 ARM64 8192-instruction block
+
+on:
+  push:
+    branches: [experiment/r110-arm64-8192-blocks]
+    paths:
+      - .github/workflows/prime-r110-arm64-wide8192.yml
+      - pc-android/native/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the exact ARM64 test for control, 8192 and both modes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p out evidence
+          {
+            git rev-parse HEAD
+            uname -a
+            c++ --version
+            lscpu
+          } > evidence/runner.txt
+          flags=(-O2 -DNDEBUG -DMUNDO_X_PC_STATE_RAM=1 -std=c++17 -frounding-math -pthread -I native/include)
+          test_source=pc-android/native/tests/x86_ether_arm64_test.cpp
+          c++ "${flags[@]}" "$test_source" -o out/control
+          c++ "${flags[@]}" -DMUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT=1 "$test_source" -o out/wide8192
+          c++ "${flags[@]}" -DMUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT=1 \
+            -DMUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT=1 "$test_source" -o out/coexist
+          sha256sum "$test_source" pc-android/native/{x86_cpu.hpp,x86_ether_arm64.hpp,x86_ether_arm64.inc} \
+            out/{control,wide8192,coexist} > evidence/sha256.txt
+          file out/{control,wide8192,coexist} > evidence/binaries.txt
+      - name: Verify one native entry across guest pages on a single ARM64 CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          cpu="$(python3 -c 'import os; print(min(os.sched_getaffinity(0)))')"
+          printf 'pinned_cpu=%s\n' "$cpu" >> evidence/runner.txt
+          for variant in control wide8192 coexist; do
+            /usr/bin/time -v -o "evidence/$variant.time" taskset -c "$cpu" "out/$variant" \
+              | tee "evidence/$variant.log"
+            grep -q '^PRIME_C03_ARM64_PASS ' "evidence/$variant.log"
+          done
+          if grep -Eq '^PRIME_ETHER_ARM64_WIDE(1024|8192)_PASS ' evidence/control.log ||
+             grep -q '^PRIME_ETHER_ARM64_WIDE1024_PASS ' evidence/wide8192.log; then
+            echo 'A binary reported an experiment that was not enabled' >&2
+            exit 1
+          fi
+          for variant in wide8192 coexist; do
+            grep -Ex '^PRIME_ETHER_ARM64_WIDE8192_PASS guest_instructions=8192 guest_bytes=20480 guest_pages=5 native_entries=1 bounded_grant=1 trap_flag=1 debug_hook=1 code_edit=1 absent_page=1 nx_page=1 scalar_state=1 machine_run=1 noncontiguous=1 interrupt_flag=1 late_fault_retired=[1-9][0-9]*' \
+              "evidence/$variant.log" > "evidence/$variant-one-native-block.txt"
+            test "$(wc -l < "evidence/$variant-one-native-block.txt")" -eq 1
+          done
+          grep -Eq '^PRIME_ETHER_ARM64_WIDE1024_PASS guest_instructions=1024 guest_bytes=[1-9][0-9]* native_entries=1 ' \
+            evidence/coexist.log
+      - name: Compare equal-work timings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from statistics import median
+
+          evidence = Path("evidence")
+          tag = "PRIME_ETHER_ARM64_WIDE8192_AB "
+          pairs = [json.loads(line.removeprefix(tag))
+                   for line in (evidence / "wide8192.log").read_text().splitlines()
+                   if line.startswith(tag)]
+          assert [pair["trial"] for pair in pairs] == list(range(1, 6))
+          assert all(pair["ordinary_ns"] > 0 and pair["wide_ns"] > 0 and
+                     pair["guest_steps"] == 131072 and pair["ordinary_entries"] == 8192 and
+                     pair["wide_entries"] == 16 for pair in pairs)
+          result = {
+              "scope": "equal-work synthetic x86 register body on native Linux ARM64",
+              "ordinary_median_ns": median(pair["ordinary_ns"] for pair in pairs),
+              "wide_median_ns": median(pair["wide_ns"] for pair in pairs),
+              "paired_wide_vs_ordinary": median(pair["ordinary_ns"] / pair["wide_ns"] for pair in pairs),
+              "pairs": pairs,
+          }
+          output = json.dumps(result, indent=2) + "\n"
+          (evidence / "timings.json").write_text(output)
+          print(output, end="")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prime-r110-arm64-wide8192
+          path: evidence
+          if-no-files-found: error

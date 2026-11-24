@@ -2835,6 +2835,199 @@ void wide_native_block_contract() {
   }
 }
 #endif
+
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+void wide8192_native_block_contract() {
+  constexpr unsigned instructions = 8192;
+  constexpr auto page = cosmic_pc::MemoryFabric::kPageSize;
+  constexpr std::uint64_t entry = 0x200000, pde = 0x3008, pte = 0x4000;
+  constexpr std::array<std::uint64_t, 6> physical{0x50000, 0x54000, 0x52000, 0x59000, 0x51000, 0x58000};
+  constexpr auto body_pages = physical.size() - 1;
+  constexpr auto body_bytes = body_pages * page;
+  constexpr auto body_end = entry + body_bytes;
+  constexpr auto last_page = body_pages - 1;
+  constexpr auto late_fault = entry + last_page * page;
+  constexpr unsigned before_fault = 3 * (page / 2) + page / 4;
+  static_assert(3 * (page / 2) + 2 * (page / 4) == instructions);
+  std::array<std::uint8_t, body_bytes> program{};
+  constexpr std::array<std::uint8_t, 8> short_group{0x89,0xc1, 0x31,0xd3, 0x01,0xd0, 0x29,0xcb};
+  for (unsigned offset = 0; offset < 3 * page; offset += short_group.size())
+    std::copy(short_group.begin(), short_group.end(), program.begin() + offset);
+  for (unsigned offset = 3 * page; offset < body_bytes; offset += 16) {
+    const std::array<std::uint8_t, 16> long_group{
+        0x66,0x48,0x89,0xc1,                                        // MOV RCX,RAX, REX.W dominates 66.
+        0x48,0x83,0xf3,0x17,                                        // XOR RBX,23.
+        0x48,0x83,0xc0,std::uint8_t(1 + ((offset / 16) * 19U) % 254), // ADD RAX,signed imm8.
+        0x48,0x83,0xeb,0x6d};                                       // SUB RBX,109.
+    std::copy(long_group.begin(), long_group.end(), program.begin() + offset);
+  }
+
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  native.cpu.enable_ether_arm64_wide8192();
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    cpu.efer |= 0x800U;  // NXE, including the instruction-fetch fault bit.
+    cpu.write64(pde, pte | ready_entry);
+    for (unsigned i = 0; i < physical.size(); ++i) {
+      cpu.write64(pte + i * 8, physical[i] | ready_entry);  // Mark mapped code pages accessed.
+      if (i < body_pages) cpu.memory.write_block(physical[i], program.data() + i * page, page);
+    }
+    emit(cpu, physical.back(), {0xf4});  // HALT remains outside the five translated pages.
+  }
+
+  const auto initialize = [](Cpu& cpu) {
+    cpu.eip = entry;
+    cpu.halted = false;
+    for (unsigned i = 0; i < cpu.regs.size(); ++i)
+      cpu.regs[i] = 0xfedcba98ffffffffULL - i * 0x1010111ULL;
+    cpu.regs[Cpu::ESP] = stack;
+    cpu.eflags = 2 | Cpu::CF | Cpu::DF | Cpu::AF | Cpu::OF;
+    return cpu.instructions;
+  };
+  const auto normalized = [](Cpu& cpu, std::uint64_t initial) {
+    auto state = capture(cpu);
+    state.steps -= initial;
+    return state;
+  };
+  const auto run_scalar = [&](unsigned steps, bool interruptible = false) {
+    const auto before = initialize(scalar.cpu);
+    if (interruptible) scalar.cpu.eflags |= Cpu::IF;
+    for (unsigned i = 0; i < steps; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "8192 scalar reference faulted");
+    return normalized(scalar.cpu, before);
+  };
+  const auto run_wide = [&] {
+    const auto before = initialize(native.cpu);
+    const auto stats = native.cpu.ether_arm64_stats();
+    native.run(instructions);
+    const auto& after = native.cpu.ether_arm64_stats();
+    require(native.cpu.instructions - before == instructions && native.cpu.eip == body_end &&
+                !native.cpu.halted && !native.cpu.fault && after.wide8192_native_invocations ==
+                    stats.wide8192_native_invocations + 1 && after.blocks == stats.blocks + 1 &&
+                after.wide8192_steps - stats.wide8192_steps == instructions &&
+                after.steps - stats.steps == instructions,
+            "normal VM dispatch must retire the complete 8192-op body in one AArch64 entry");
+    return normalized(native.cpu, before);
+  };
+
+  const auto original = run_wide();
+  require(original == run_scalar(instructions), "8192-op guest state differs from the interpreter");
+  const auto translated = native.cpu.ether_arm64_stats().translated;
+  require(run_wide() == original && native.cpu.ether_arm64_stats().translated == translated,
+          "warm 8192-op body recompiled or changed guest state");
+
+  const auto invocations = native.cpu.ether_arm64_stats().wide8192_native_invocations;
+  for (const bool interruptible : {false, true}) {
+    const auto before = initialize(native.cpu);
+    if (interruptible) native.cpu.eflags |= Cpu::IF;
+    const auto grant = interruptible ? instructions : instructions - 1;
+    const auto retired = native.cpu.try_ether_arm64_block(grant);
+    require(retired < instructions && retired <= grant && native.cpu.instructions - before == retired &&
+                native.cpu.ether_arm64_stats().wide8192_native_invocations == invocations &&
+                normalized(native.cpu, before) == run_scalar(retired, interruptible),
+            "short or interruptible grant entered the 8192 body or changed scalar state");
+  }
+  initialize(native.cpu);
+  native.cpu.eflags |= Cpu::TF;
+  const auto stepping = capture(native.cpu);
+  require(native.cpu.try_ether_arm64_block(instructions) == 0 && capture(native.cpu) == stepping,
+          "8192 native execution skipped trap-flag instruction boundaries");
+  initialize(native.cpu);
+  native.cpu.step_trace_hook = [](const auto&) {};
+  const auto tracing = capture(native.cpu);
+  require(native.cpu.try_ether_arm64_block(instructions) == 0 && capture(native.cpu) == tracing &&
+              native.cpu.ether_arm64_stats().wide8192_native_invocations == invocations,
+          "8192 native execution bypassed a guest execution trace");
+  native.cpu.step_trace_hook = {};
+
+  constexpr auto edit = page - 16 + 11; // ADD immediate in the last guest instruction group.
+  for (auto* machine : {&native, &scalar})
+    machine->cpu.write8(physical[last_page] + edit, program[last_page * page + edit] ^ 0x40);
+  const auto edited = run_wide();
+  require(edited.regs[Cpu::EAX] != original.regs[Cpu::EAX] && edited == run_scalar(instructions),
+          "editing the last mapped code page reused stale native bytes");
+  require(native.cpu.step() == StepResult::Halted && scalar.cpu.step() == StepResult::Halted,
+          "8192 native block included a HALT outside its decoded guest body");
+
+  const auto run_fault = [&](PcMachine& machine, bool nx) {
+    auto& cpu = machine.cpu;
+    gate(machine, 14);
+    emit(cpu, irq_handler, {0xf4});
+    cpu.write64(pte + last_page * 8, nx ? physical[last_page] | ready_entry | (1ULL << 63) : 0);
+    const auto before = initialize(cpu);
+    const auto calls = cpu.ether_arm64_stats().wide8192_native_invocations;
+    machine.run(instructions + 2);
+    const auto frame = cpu.regs[Cpu::ESP];
+    require(cpu.halted && !cpu.fault && cpu.cr2 == late_fault &&
+                cpu.read64(frame + 8) == late_fault && cpu.read64(frame) == (nx ? 17U : 16U) &&
+                cpu.instructions - before == before_fault + 2 &&
+                cpu.ether_arm64_stats().wide8192_native_invocations == calls,
+            "late absent or NX page was not rejected at the exact x86 fetch fault");
+    cpu.write64(pte + last_page * 8, physical[last_page] | ready_entry);
+    return normalized(cpu, before);
+  };
+  for (const bool nx : {false, true}) {
+    const auto routed = run_fault(native, nx);
+    require(routed == run_fault(scalar, nx), "wide dispatch changed state before a late fetch fault");
+  }
+  run_wide();
+  std::cout << "PRIME_ETHER_ARM64_WIDE8192_PASS guest_instructions=" << instructions << " guest_bytes=" << body_bytes
+            << " guest_pages=" << body_pages << " native_entries=1 bounded_grant=1 trap_flag=1 debug_hook=1"
+               " code_edit=1 absent_page=1 nx_page=1 scalar_state=1 machine_run=1 noncontiguous=1 interrupt_flag=1"
+            << " late_fault_retired=" << before_fault << '\n';
+
+  // Prime only the actual ordinary block starts so neither timed path recompiles.
+  scalar.cpu.enable_ether_arm64_blocks(true);
+  constexpr auto ordinary_width = arm64::Block::kMaxInstructions;
+  static_assert((page / 4) % ordinary_width == 0);
+  initialize(scalar.cpu);
+  for (unsigned i = 0; i < body_pages; ++i) {
+    const auto stride = ordinary_width * (i < 3 ? 2U : 4U);
+    for (unsigned offset = 0; offset < page; offset += stride)
+      warm_block(scalar.cpu, entry + i * page + offset, ordinary_width);
+  }
+  constexpr unsigned bodies = 16;
+  constexpr auto work = bodies * instructions;
+  struct Measurement { std::int64_t elapsed_ns; std::uint64_t entries; };
+  const auto measure = [&](Cpu& cpu, bool wide) {
+    const auto initial = cpu.instructions;
+    const auto stats = cpu.ether_arm64_stats();
+    const auto start = PcMachine::RunClock::now();
+    for (unsigned i = 0; i < bodies; ++i) {
+      initialize(cpu);
+      for (unsigned left = instructions; left;) {
+        const auto done = cpu.try_ether_arm64_block(left);
+        require(done && done <= left, "warm 8192 comparison missed native code or exceeded its grant");
+        left -= done;
+      }
+    }
+    const auto elapsed = PcMachine::RunClock::now() - start;
+    const auto& after = cpu.ether_arm64_stats();
+    const auto entries = after.blocks - stats.blocks;
+    require(cpu.eip == body_end && cpu.instructions - initial == work && after.steps - stats.steps == work &&
+                after.translated == stats.translated && entries == (wide ? bodies : work / ordinary_width) &&
+                after.wide8192_native_invocations - stats.wide8192_native_invocations == (wide ? bodies : 0U),
+            "8192 comparison did not keep exact guest work and warmed native dispatch");
+    return Measurement{std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count(), entries};
+  };
+  const std::array<Cpu*, 2> paths{&scalar.cpu, &native.cpu};
+  for (unsigned trial = 0; trial < 5; ++trial) {
+    std::array<Measurement, 2> samples{};
+    for (unsigned offset = 0; offset < paths.size(); ++offset) {
+      const auto path = (trial + offset) % paths.size();
+      samples[path] = measure(*paths[path], path != 0);
+    }
+    require(normalized(native.cpu, native.cpu.instructions) == normalized(scalar.cpu, scalar.cpu.instructions),
+            "8192 comparison finished with different guest state");
+    std::cout << "PRIME_ETHER_ARM64_WIDE8192_AB {\"trial\":" << (trial + 1)
+              << ",\"guest_steps\":" << work << ",\"ordinary_ns\":" << samples[0].elapsed_ns
+              << ",\"wide_ns\":" << samples[1].elapsed_ns << ",\"ordinary_entries\":" << samples[0].entries
+              << ",\"wide_entries\":" << samples[1].entries << "}\n";
+  }
+}
+#endif
 }  // namespace
 
 static void ram_view_contract() {
@@ -2884,6 +3077,9 @@ int main() {
     require(native.stats.steps > 4000 && native.stats.hits > 0, "ARM64 loop did not execute");
 #if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
     wide_native_block_contract();
+#endif
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+    wide8192_native_block_contract();
 #endif
     boot_hot_instruction_contract();
     register_state_vector_contract();

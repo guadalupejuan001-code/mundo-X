@@ -85,6 +85,13 @@ struct Instruction {
   }
 };
 
+inline bool straight_register_instruction(const Instruction& op) noexcept {
+  return !op.lhs.memory && !op.rhs.memory &&
+      (op.kind == Instruction::Move || op.kind == Instruction::Nop ||
+       op.kind == Instruction::Xor || op.kind == Instruction::Add ||
+       op.kind == Instruction::Subtract);
+}
+
 template<unsigned MaxBytes, unsigned MaxInstructions>
 struct BasicBlock {
   static constexpr unsigned kMaxBytes = MaxBytes, kMaxInstructions = MaxInstructions;
@@ -130,6 +137,9 @@ struct BasicBlock {
 using Block = BasicBlock<64, 16>;
 #if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
 using WideBlock = BasicBlock<4096, 1024>;
+#endif
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+using Wide8192Block = BasicBlock<32768, 8192>;
 #endif
 
 template<class DecodedBlock>
@@ -413,10 +423,7 @@ inline void decode_block(DecodedBlock& block, const std::uint8_t* bytes, unsigne
       block.target = long_mode ? target : std::uint32_t(target);
     }
     if constexpr (StraightRegisters) {
-      if (op.lhs.memory || op.rhs.memory ||
-          (op.kind != Instruction::Move && op.kind != Instruction::Nop &&
-           op.kind != Instruction::Xor && op.kind != Instruction::Add &&
-           op.kind != Instruction::Subtract)) break;
+      if (!straight_register_instruction(op)) break;
     }
     // Keep legacy stores terminal except for ordinary DWORD MOVs to a fixed
     // ESP offset. Never extend their staged chain through a stack-base change
@@ -517,14 +524,29 @@ inline Block decode(const std::uint8_t* bytes, unsigned size, std::uint64_t rip,
   return block;
 }
 
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT) || defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+// The caller owns a fresh candidate and verifies all executable guest bytes.
+// A short prefix is left to ordinary blocks.
+template<class DecodedBlock>
+inline bool decode_straight_register_block(DecodedBlock& block, const std::uint8_t* bytes,
+                                            unsigned size, std::uint64_t rip) {
+  if (block.count || size < DecodedBlock::kMaxInstructions || size > DecodedBlock::kMaxBytes) return false;
+  decode_block<DecodedBlock, true>(block, bytes, size, rip, true, false);
+  return block.count == DecodedBlock::kMaxInstructions;
+}
+#endif
+
 #if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
-// The caller owns a fresh candidate and ensures the bytes are in one verified
-// executable guest page. A short prefix is left to ordinary blocks.
 inline bool decode_wide(WideBlock& block, const std::uint8_t* bytes, unsigned size,
                         std::uint64_t rip) {
-  if (block.count || size < WideBlock::kMaxInstructions || size > WideBlock::kMaxBytes) return false;
-  decode_block<WideBlock, true>(block, bytes, size, rip, true, false);
-  return block.count == WideBlock::kMaxInstructions;
+  return decode_straight_register_block(block, bytes, size, rip);
+}
+#endif
+
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+inline bool decode_wide8192(Wide8192Block& block, const std::uint8_t* bytes, unsigned size,
+                            std::uint64_t rip) {
+  return decode_straight_register_block(block, bytes, size, rip);
 }
 #endif
 
@@ -1186,8 +1208,12 @@ class NativeCode {
   template<class DecodedBlock>
   bool build(const DecodedBlock& block) {
     if constexpr (DecodedBlock::kMaxInstructions > Block::kMaxInstructions) {
+      // The extended body cannot contain RAM callbacks or native branches
+      // to a shared exit. Those encodings are sized for ordinary blocks.
       if (!block.register_only || block.writes || block.repeats ||
-          block.count != DecodedBlock::kMaxInstructions) return false;
+          block.count != DecodedBlock::kMaxInstructions ||
+          !std::all_of(block.instructions.begin(), block.instructions.end(),
+                       straight_register_instruction)) return false;
     }
     const Emitter emitter(block);
     const auto& words = emitter.words();

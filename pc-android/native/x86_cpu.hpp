@@ -220,6 +220,9 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
     std::uint64_t wide_native_invocations = 0, wide_steps = 0;
 #endif
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+    std::uint64_t wide8192_native_invocations = 0, wide8192_steps = 0;
+#endif
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -276,6 +279,16 @@ class Cpu {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     ether_arm64_wide_enabled_ = enabled;
     if (!enabled) ether_arm64_wide_.reset();
+#else
+    (void)enabled;
+#endif
+  }
+#endif
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+  void enable_ether_arm64_wide8192(bool enabled = true) noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    ether_arm64_wide8192_enabled_ = enabled;
+    if (!enabled) ether_arm64_wide8192_.reset();
 #else
     (void)enabled;
 #endif
@@ -497,6 +510,9 @@ class Cpu {
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
 #if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
     ether_arm64_wide_.reset();
+#endif
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+    ether_arm64_wide8192_.reset();
 #endif
 #endif
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0; wbinvd_retired = 0;
@@ -1288,6 +1304,13 @@ class Cpu {
   unsigned commit_ether_arm64_result(const Block& block, const std::uint8_t* code, std::uint64_t origin,
                                       const ether_arm64::Frame& frame, unsigned rounds,
                                       unsigned outcome, bool direct_regs, bool private_frame);
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT) || defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+  bool private_ether_arm64_grant() const noexcept;
+  template <class Block>
+  unsigned run_private_ether_arm64_block(const Block& block, const std::uint8_t* code,
+                                        const ether_arm64::NativeCode& native,
+                                        std::uint64_t& invocations, std::uint64_t& steps);
+#endif
 #if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
   struct EtherWideEntry {
     ether_arm64::WideBlock block;
@@ -1299,6 +1322,24 @@ class Cpu {
   std::unique_ptr<EtherWideEntry> ether_arm64_wide_;
   bool ether_arm64_wide_enabled_ = false;
   unsigned try_ether_arm64_wide1024();
+#endif
+#if defined(MUNDO_X_ETHER_ARM64_WIDE8192_EXPERIMENT)
+  struct EtherWide8192Entry {
+    struct Page {
+      std::uint64_t physical, version;
+      unsigned offset;
+    };
+    ether_arm64::Wide8192Block block;
+    std::array<std::uint8_t, ether_arm64::Wide8192Block::kMaxBytes> bytes;
+    std::array<Page, ether_arm64::Wide8192Block::kMaxBytes / MemoryFabric::kPageSize + 1> pages;
+    ether_arm64::NativeCode native;
+    std::uint64_t rip = 0, cr3 = 0;
+    unsigned cpl = 0, page_count = 0;
+  };
+  std::unique_ptr<EtherWide8192Entry> ether_arm64_wide8192_;
+  bool ether_arm64_wide8192_enabled_ = false;
+  bool ether_arm64_wide8192_pages_current(const EtherWide8192Entry& entry);
+  unsigned try_ether_arm64_wide8192();
 #endif
   template <bool ParallelRead = false>
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
