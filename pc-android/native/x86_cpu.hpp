@@ -480,6 +480,7 @@ class Cpu {
     last_immediate_rotate_ip_ = UINT64_MAX;
     last_variable_rotate_ip_ = UINT64_MAX;
     last_movntdq_end_ip_ = UINT64_MAX;
+    streaming_sse_triplet_steps_ = 0;
     last_mxcsr_save_end_ip_ = UINT64_MAX;
     counted_call_loop_.reset();
     affine_ram_rotate_block_.reset();
@@ -587,11 +588,14 @@ class Cpu {
   }
   unsigned try_forward_copy_loop_batch(unsigned step_budget);
   bool streaming_sse_fill_loop_batch_candidate() const noexcept {
-    return opcode_ == 0x75 && ip_written_ && last_movntdq_end_ip_ == start_ip_ &&
-        decoded_.size() == 2 && decoded_[1] == 0xd1 && cursor_ > eip &&
-        cursor_ - eip == kStreamingSseFillLoopBytes && page_translation_cache_enabled_ &&
-        is_long_mode() && start_cs_ == segments[CS];
+    if (opcode_ != 0x75 || !ip_written_ || decoded_.size() != 2 || cursor_ <= eip ||
+        !page_translation_cache_enabled_ || !is_long_mode() || start_cs_ != segments[CS]) return false;
+    const auto length = cursor_ - eip;
+    return (length == kStreamingSseFillLoopBytes && decoded_[1] == 0xd1 && last_movntdq_end_ip_ == start_ip_) ||
+        (length == kStreamingSseTripletBytes && decoded_[1] == 0xe9 && start_ip_ >= 7 &&
+         last_movntdq_end_ip_ == start_ip_ - 7);
   }
+  std::uint64_t streaming_sse_triplet_steps() const noexcept { return streaming_sse_triplet_steps_; }
   bool movntdq_store_batch_candidate() const noexcept {
     const bool adjacent = opcode_ == 0x0fe7 && cursor_ == eip;
     const bool after_arithmetic = (opcode_ == 0x03 || opcode_ == 0xff) &&
@@ -1085,6 +1089,7 @@ class Cpu {
   std::uint64_t last_immediate_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_variable_rotate_ip_ = UINT64_MAX;
   std::uint64_t last_movntdq_end_ip_ = UINT64_MAX;
+  std::uint64_t streaming_sse_triplet_steps_ = 0;
   std::uint64_t last_mxcsr_save_end_ip_ = UINT64_MAX;
   unsigned near_calls_written_ = 0, near_calls_count_ = 0;
 
@@ -1183,6 +1188,7 @@ class Cpu {
   std::optional<CountedCallLoop> decode_counted_call_loop(const std::uint8_t* code, unsigned length);
   std::uint64_t try_counted_call_loop_batch(std::uint64_t step_budget);
   static constexpr unsigned kSseFillLoopBytes = 43, kStreamingSseFillLoopBytes = 47;
+  static constexpr unsigned kStreamingSseTripletBytes = 23;
   static constexpr unsigned kSseCopyLoopBytes = 47, kStreamingSseCopyLoopBytes = 52;
   bool sse_memory_loop_tail(std::uint64_t length, unsigned branch_bytes) const noexcept {
     return branch_bytes == 2 &&
@@ -1190,6 +1196,7 @@ class Cpu {
           last_xmm_memory_loop_end_ip_ == start_ip_) || streaming_sse_fill_loop_batch_candidate());
   }
   std::uint64_t try_sse_memory_loop_batch(std::uint64_t step_budget, unsigned length);
+  std::uint64_t try_sse_triplet_batch(std::uint64_t step_budget);
   static constexpr unsigned kWideMultiplyLoopBytes = 31;
   std::uint64_t try_wide_multiply_loop_batch(std::uint64_t step_budget);
   std::uint64_t try_rotate_xor_loop_batch(std::uint64_t step_budget);
@@ -4414,6 +4421,8 @@ inline std::uint64_t Cpu::try_counter_loop_batch(std::uint64_t step_budget) {
   const auto length = unsigned(cursor_ - eip);
   if (length >= 12 && length <= 17 && rotate_xor_loop_batch_candidate())
     return try_rotate_xor_loop_batch(step_budget);
+  if (length == kStreamingSseTripletBytes && streaming_sse_fill_loop_batch_candidate())
+    return try_sse_triplet_batch(step_budget);
   if (sse_memory_loop_tail(length, unsigned(decoded_.size())))
     return try_sse_memory_loop_batch(step_budget, length);
   if (length == kWideMultiplyLoopBytes && wide_multiply_loop_batch_candidate())

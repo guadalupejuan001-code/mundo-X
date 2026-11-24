@@ -1,3 +1,49 @@
+inline std::uint64_t Cpu::try_sse_triplet_batch(std::uint64_t step_budget) {
+  // Store three independent vectors, advance RCX, then compare it to R8.
+  static constexpr std::array<std::uint8_t, kStreamingSseTripletBytes> body{
+      0x66,0x0f,0xe7,0x11, 0x66,0x0f,0xe7,0x49,0x10, 0x66,0x0f,0xe7,0x41,0x20,
+      0x48,0x83,0xc1,0x30, 0x49,0x3b,0xc8, 0x75,0xe9};
+  constexpr unsigned vector_bytes = 16, round_bytes = 3 * vector_bytes, steps_per_round = 6;
+  constexpr unsigned page_bytes = MemoryFabric::kPageSize;
+  const auto destination = regs[ECX], end = regs[R8];
+  if (!can_cache_translations() || destination % vector_bytes || end <= destination ||
+      (end - destination) % round_bytes) return 0;
+  const auto rounds = std::min({(end - destination) / round_bytes, step_budget / steps_per_round,
+      std::uint64_t((page_bytes - destination % page_bytes) / round_bytes)});
+  if (rounds < 2) return 0;
+  const auto bytes = unsigned(rounds) * round_bytes;
+  try {
+    require_sse_state();
+    const auto code = counted_loop_ram_address(CS, eip, body.size(), Access::Execute);
+    if (!code) return 0;
+    std::array<std::uint8_t, body.size()> guest;
+    memory.read_block(*code, guest.data(), guest.size());
+    if (guest != body) return 0;
+    const auto physical = counted_loop_ram_address(DS, destination, bytes, Access::Write);
+    if (!physical || (*physical < *code + body.size() && *code < *physical + bytes) ||
+        memory.may_touch_page_tables(*physical, bytes)) return 0;
+
+    std::array<std::uint8_t, page_bytes> data;
+    for (unsigned i = 0; i < 3; ++i)
+      std::copy(xmm[2 - i].begin(), xmm[2 - i].end(), data.begin() + i * vector_bytes);
+    for (unsigned copied = round_bytes; copied < bytes; copied *= 2)
+      std::copy_n(data.begin(), std::min(copied, bytes - copied), data.begin() + copied);
+    const auto pins = memory.pin_writes();
+    memory.prepare_write(*physical, bytes);
+    memory.write_block(*physical, data.data(), bytes);
+    regs[ECX] = destination + bytes;
+    alu(7, regs[ECX], end, 8); // The final CMP sets every arithmetic flag.
+    ip_written_ = regs[ECX] != end;
+    if (!ip_written_) eip = cursor_;
+    const auto steps = rounds * steps_per_round;
+    instructions += steps;
+    streaming_sse_triplet_steps_ += steps;
+    return steps;
+  } catch (const std::exception&) {
+    return 0; // Scalar execution exposes the original fault.
+  }
+}
+
 inline std::uint64_t Cpu::try_sse_memory_loop_batch(std::uint64_t step_budget, unsigned length) {
   // Eight aligned stores repeat XMM0 without changing any vector register.
   static constexpr std::array<std::uint8_t, kSseFillLoopBytes> cached_fill{

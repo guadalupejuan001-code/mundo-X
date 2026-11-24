@@ -2344,7 +2344,7 @@ void observed_flags_contract() {
   constexpr std::array<std::uint64_t, 8> values{
       0, 1, 3, 0x80, 0x100, 0x80000000ULL, 0x8000000000000000ULL, UINT64_MAX};
   for (unsigned cc = 0; cc < 16; ++cc) {
-    for (unsigned variant = 0; variant < 9; ++variant) {
+    for (unsigned variant = 0; variant < 12; ++variant) {
       const auto branch = std::uint8_t(0x70 | cc);
       for (auto* machine : {&native, &scalar}) {
         auto& cpu = machine->cpu;
@@ -2358,6 +2358,9 @@ void observed_flags_contract() {
         case 6: emit(cpu, code, {0x48,0xff,0xc1,branch,0x08}); break; // INC RCX
         case 7: emit(cpu, code, {0xff,0xc9,branch,0x08}); break; // DEC ECX
         case 8: emit(cpu, code, {0x44,0x8d,0x88,0x00,0x80,0xff,0xff,branch,0x08}); break;
+        case 9: emit(cpu, code, {0x48,0x85,0xd9,branch,0x08}); break; // TEST RCX,RBX
+        case 10: emit(cpu, code, {0x48,0x85,0x08,branch,0x08}); break; // TEST [RAX],RCX
+        case 11: emit(cpu, code, {0x48,0xf7,0xc1,1,0,0,0,branch,0x08}); break; // TEST RCX,1
         }
       }
       for (const auto value : values) {
@@ -2367,6 +2370,7 @@ void observed_flags_contract() {
           cpu.eflags = 2 | Cpu::IF | Cpu::AF | Cpu::OF | (value & 1 ? Cpu::CF : 0);
           cpu.regs[Cpu::EAX] = nodes;
           cpu.regs[Cpu::ECX] = cpu.regs[Cpu::R9] = value;
+          cpu.regs[Cpu::EBX] = value ^ 1;
           cpu.write64(nodes, value);
         }
         warm_block(native.cpu, code, 2);
@@ -2388,6 +2392,22 @@ void observed_flags_contract() {
     require(scalar.cpu.step() == StepResult::Executed, "scalar CMP/TEST/branch failed");
   require(capture(native.cpu) == capture(scalar.cpu) && native.cpu.flag(Cpu::AF),
           "Translated TEST lost AF established by CMP");
+
+  for (auto* machine : {&native, &scalar}) {
+    auto& cpu = machine->cpu;
+    emit(cpu, code, {0x83,0xe9,0x01, 0x85,0xc9, 0x75,0xf9}); // SUB; TEST; JNZ.
+    cpu.eip = code;
+    cpu.eflags = 2;
+    cpu.regs[Cpu::ECX] = 13;
+  }
+  warm_block(native.cpu, code, 3);
+  require(native.cpu.try_ether_arm64_block(17) == 15 && native.cpu.eip == code,
+          "translated TEST loop crossed a bounded grant");
+  require(native.cpu.try_ether_arm64_block(32) == 21 && native.cpu.eip == code + 7,
+          "translated TEST loop did not exit at zero");
+  for (unsigned i = 0; i < 39; ++i)
+    require(scalar.cpu.step() == StepResult::Executed, "scalar TEST loop faulted");
+  require(capture(native.cpu) == capture(scalar.cpu), "repeated TEST changed the retired state");
 }
 
 void rotation_contract() {

@@ -141,7 +141,7 @@ struct DecodedBlock {
     if (rotate_carry_index != kNoFlagSource) return uses_add_rotate_zero_condition();
     const auto& last = instructions[count - 1];
     if (last.kind != Instruction::Conditional || last.condition >= 16) return false;
-    return flag_op == Instruction::Compare || flag_op == Instruction::Subtract ||
+    return flag_op == Instruction::Compare || flag_op == Instruction::Subtract || flag_op == Instruction::Test ||
         (flag_op == Instruction::Decrement && (last.opcode & 15) == 5);
   }
 };
@@ -988,6 +988,15 @@ class Emitter {
       load(9, offsetof(Frame, left), block.flag_width);
       if (block.flag_op == Instruction::Decrement) {
         emit(block.flag_width == 8 ? 0xf100053f : 0x7100053f); // CMP X/W9,#1 before DEC.
+      } else if (block.flag_op == Instruction::Test) {
+        const auto& test = block.instructions[block.flag_index];
+        const bool wide = block.flag_width == 8;
+        if (test.lhs.memory || test.rhs.immediate || test.rhs.memory || test.lhs.reg != test.rhs.reg) {
+          load(10, offsetof(Frame, right), block.flag_width);
+          emit(wide ? 0x8a0a0129 : 0x0a0a0129); // AND X/W9,X/W9,X/W10
+        }
+        // TEST clears x86 CF and OF. Our condition map uses inverse carry.
+        emit(wide ? 0xf100013f : 0x7100013f); // CMP X/W9,#0
       } else {
         load(10, offsetof(Frame, right), block.flag_width);
         if (block.flag_op == Instruction::Add) emit(0xab0a013f); // CMN X9,X10
