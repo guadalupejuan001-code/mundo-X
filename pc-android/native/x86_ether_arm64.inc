@@ -17,6 +17,11 @@ inline bool Cpu::ether_arm64_block_candidate() const noexcept {
 inline unsigned Cpu::try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus) {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   if (budget < 2 || !ether_arm64_dispatch_ready()) return 0;
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+  if (ether_arm64_wide_enabled_ && !bus && budget >= ether_arm64::WideBlock::kMaxInstructions) {
+    if (const auto retired = try_ether_arm64_wide1024()) return retired;
+  }
+#endif
 
   // Keep short chains for different RIPs. A guarded backedge can use more
   // of the caller's budget without looking up a second block.
@@ -210,6 +215,78 @@ inline bool Cpu::ether_arm64_dispatch_ready() const noexcept {
          !(eflags & (TF | 0x20000U)) && (cpl() == 0 || cpl() == 3) &&
          !step_trace_hook && !irq_trace_hook;
 }
+
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+inline unsigned Cpu::try_ether_arm64_wide1024() {
+  // The experimental grant is private to a single vCPU. Keep the ordinary
+  // dispatch for active interrupts, debugging and all shared-bus execution.
+  if (!is_long_mode() || topology_.logical_processors() != 1 || flag(IF) ||
+      nmi_shadow_ || (eflags & (1U << 16)) || (dr7_ & 0xffU)) return 0;
+  constexpr auto page_bytes = MemoryFabric::kPageSize;
+  static_assert(ether_arm64::WideBlock::kMaxBytes == page_bytes);
+  const auto origin = eip;
+  const auto width = page_bytes - unsigned(origin % page_bytes);
+  if (width < ether_arm64::WideBlock::kMaxInstructions || origin > UINT64_MAX - width ||
+      !canonical(origin) || !canonical(origin + width - 1)) return 0;
+
+  try {
+    bool ordinary_page = false;
+    const auto physical = translate_instruction(origin, ordinary_page, true);
+    if (!ordinary_page) return 0;
+    const auto privilege = cpl();
+    const auto version = memory.code_page_version(physical);
+    const auto* cached = ether_arm64_wide_.get();
+    const bool same_site = cached && cached->rip == origin && cached->physical == physical &&
+                           cached->cr3 == cr3 && cached->cpl == privilege;
+    if (same_site && version && version == cached->version) {
+      ++ether_arm64_stats_.code_version_hits;
+      if (cached->native) ++ether_arm64_stats_.hits;
+    } else {
+      if (cached && cached->native) {
+        if (same_site) ++ether_arm64_stats_.invalidated;
+        else ++ether_arm64_stats_.compiled_evictions;
+      }
+      ether_arm64_wide_.reset();
+      auto entry = std::make_unique<EtherWideEntry>();
+      if (!memory.try_read_present_ram_block(physical, entry->bytes.data(), width)) return 0;
+      ++ether_arm64_stats_.code_byte_checks;
+      ether_arm64_stats_.code_bytes_read += width;
+      entry->version = memory.watch_code_page(physical);
+      if (!entry->version) return 0;
+      entry->rip = origin;
+      entry->physical = physical;
+      entry->cr3 = cr3;
+      entry->cpl = privilege;
+      if (ether_arm64::decode_wide(entry->block, entry->bytes.data(), width, origin)) {
+        const auto start = std::chrono::steady_clock::now();
+        const bool built = entry->native.build(entry->block);
+        ether_arm64_stats_.native_compile_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        if (built) ++ether_arm64_stats_.translated;
+      }
+      ether_arm64_wide_ = std::move(entry);
+    }
+
+    const auto& entry = *ether_arm64_wide_;
+    if (!entry.native) return 0;
+    const auto& last = entry.block.instructions[entry.block.count - 1];
+    decoded_.reserve(last.end - last.begin);
+    ether_arm64::Frame frame{};
+    frame.regs = regs;
+    frame.guest_regs = frame.regs.data();
+    ++ether_arm64_stats_.wide_native_invocations;
+    const auto outcome = entry.native.run(frame);
+    if (outcome != 1) return 0;
+    const auto retired = commit_ether_arm64_result(entry.block, entry.bytes.data(), origin,
+                                                  frame, 1, outcome, false, false);
+    ether_arm64_stats_.wide_steps += retired;
+    return retired;
+  } catch (const std::exception&) {
+    // Speculative fetch or compilation failed before publishing guest state.
+    return 0;
+  }
+}
+#endif
 
 // The first round resolves permissions, addresses and original values under
 // the motherboard bus. Subsequent rounds may only use this private view.
@@ -521,9 +598,16 @@ inline unsigned Cpu::retire_ether_arm64_block(unsigned budget, unsigned loop_bud
 inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry,
                                              const ether_arm64::Frame& frame, unsigned rounds,
                                              unsigned outcome, bool direct_regs, bool private_frame) {
-  const auto& block = entry.block;
+  return commit_ether_arm64_result(entry.block, entry.bytes.data(), entry.rip, frame,
+                                   rounds, outcome, direct_regs, private_frame);
+}
+
+template <class Block>
+inline unsigned Cpu::commit_ether_arm64_result(const Block& block, const std::uint8_t* code,
+                                             std::uint64_t origin, const ether_arm64::Frame& frame,
+                                             unsigned rounds, unsigned outcome,
+                                             bool direct_regs, bool private_frame) {
   const auto& last = block.instructions[block.count - 1];
-  const auto origin = entry.rip;
   const auto long_mode = block.long_mode;
   const auto retired = rounds * block.count;
   if (!direct_regs) regs = frame.regs;
@@ -560,7 +644,7 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
     case ether_arm64::Instruction::Increment:
     case ether_arm64::Instruction::Decrement: {
       bool carry = flag(CF);
-      if (block.decrement_carry_index != ether_arm64::Block::kNoFlagSource) {
+      if (block.decrement_carry_index != Block::kNoFlagSource) {
         const auto& source = block.instructions[block.decrement_carry_index];
         if (ether_arm64::Instruction::logical(source.kind)) {
           carry = false;
@@ -580,7 +664,7 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
     }
     default: break;
   }
-  if (block.auxiliary_index != ether_arm64::Block::kNoFlagSource &&
+  if (block.auxiliary_index != Block::kNoFlagSource &&
       block.auxiliary_index != block.flag_index) {
     const auto kind = block.instructions[block.auxiliary_index].kind;
     const auto left = frame.auxiliary_left;
@@ -590,14 +674,14 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
         kind == ether_arm64::Instruction::Increment ? left + right : left - right;
     set_flag(AF, ((left ^ right ^ result) & 0x10U) != 0);
   }
-  if (block.rotate_carry_index != ether_arm64::Block::kNoFlagSource) {
+  if (block.rotate_carry_index != Block::kNoFlagSource) {
     const auto& op = block.instructions[block.rotate_carry_index];
     if (op.rhs.immediate || (frame.rotate_count & (op.width * 8 - 1))) {
       const auto carry = op.kind == ether_arm64::Instruction::RotateLeft ? 1 : sign_bit(op.width);
       set_flag(CF, (frame.rotate_carry_result & carry) != 0);
     }
   }
-  if (block.rotate_overflow_index != ether_arm64::Block::kNoFlagSource) {
+  if (block.rotate_overflow_index != Block::kNoFlagSource) {
     const auto& op = block.instructions[block.rotate_overflow_index];
     if (op.rhs.immediate || (frame.rotate_count & (op.width * 8 - 1)) == 1) {
       const auto value = block.rotate_overflow_index == block.rotate_carry_index
@@ -615,7 +699,7 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
   // Byte arithmetic, parity and inherited flags use the x86 condition.
   const bool taken = last.kind == ether_arm64::Instruction::Conditional && !block.uses_arm_condition()
       ? condition(last.opcode & 15) : outcome == 2;
-  retire_ether_decoded_block(block, entry.bytes.data(), origin, taken, retired);
+  retire_ether_decoded_block(block, code, origin, taken, retired);
   ++ether_arm64_stats_.blocks;
   ether_arm64_stats_.steps += retired;
   if (block.ram_adds) ether_arm64_stats_.ram_add_steps += std::uint64_t(rounds) * block.ram_adds;
@@ -627,9 +711,9 @@ inline unsigned Cpu::commit_ether_arm64_result(const ether_arm64::Cache::Entry& 
   }
   if (block.rotates) ether_arm64_stats_.rotate_steps += rounds * block.rotates;
   if (block.variable_rotates) ether_arm64_stats_.variable_rotate_steps += rounds * block.variable_rotates;
-  if (block.last_wide_rotate_offset != ether_arm64::Block::kMaxBytes)
+  if (block.last_wide_rotate_offset != Block::kMaxBytes)
     last_immediate_rotate_ip_ = origin + block.last_wide_rotate_offset;
-  if (block.last_variable_rotate_offset != ether_arm64::Block::kMaxBytes)
+  if (block.last_variable_rotate_offset != Block::kMaxBytes)
     last_variable_rotate_ip_ = origin + block.last_variable_rotate_offset;
   if (!long_mode) ether_arm64_stats_.protected32_steps += retired;
   ether_arm64_stats_.resident_read_hits += frame.resident_read_hits;

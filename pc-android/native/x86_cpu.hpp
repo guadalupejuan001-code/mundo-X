@@ -217,6 +217,9 @@ class Cpu {
     std::uint64_t private_loop_steps = 0;
     std::uint64_t state_vector_dispatches = 0, state_vector_steps = 0;
     std::uint64_t protected32_state_vector_steps = 0;
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+    std::uint64_t wide_native_invocations = 0, wide_steps = 0;
+#endif
   };
   static constexpr bool ether_arm64_host() noexcept {
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
@@ -268,6 +271,16 @@ class Cpu {
   }
   bool ether_arm64_block_candidate() const noexcept;
   unsigned try_ether_arm64_block(unsigned budget, std::unique_lock<std::mutex>* bus = nullptr);
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+  void enable_ether_arm64_wide1024(bool enabled = true) noexcept {
+#if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
+    ether_arm64_wide_enabled_ = enabled;
+    if (!enabled) ether_arm64_wide_.reset();
+#else
+    (void)enabled;
+#endif
+  }
+#endif
   enum class EtherLoopAccess { Registers, ReadOnlyRam };
   unsigned ether_arm64_loop_length(EtherLoopAccess access) const noexcept;
   unsigned ether_arm64_register_loop_length() const noexcept {
@@ -482,6 +495,9 @@ class Cpu {
     state_vector_interpreter_stats_ = {};
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
     if (ether_arm64_cache_) ether_arm64_cache_->clear();
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+    ether_arm64_wide_.reset();
+#endif
 #endif
     a20_enabled = false; halted = false; fault.reset(); instructions = 0; page_walks = 0; wbinvd_retired = 0;
     crc32c_retired = 0;
@@ -1251,7 +1267,8 @@ class Cpu {
     std::uint16_t cs = 0;
     unsigned repeats = 0;
   } pause_wait_;
-  void retire_ether_decoded_block(const ether_arm64::Block& block, const std::uint8_t* code,
+  template <class Block>
+  void retire_ether_decoded_block(const Block& block, const std::uint8_t* code,
                                   std::uint64_t origin, bool taken, unsigned retired);
 #if defined(MUNDO_X_ETHER_ARM64_BLOCKS)
   std::unique_ptr<mundo_x::ether_virtual::Space> ether_arm64_space_;
@@ -1267,6 +1284,22 @@ class Cpu {
                               unsigned rounds, std::unique_lock<std::mutex>& bus, unsigned& off_bus_steps);
   unsigned commit_ether_arm64_result(const ether_arm64::Cache::Entry& entry, const ether_arm64::Frame& frame,
                                       unsigned rounds, unsigned outcome, bool direct_regs, bool private_frame);
+  template <class Block>
+  unsigned commit_ether_arm64_result(const Block& block, const std::uint8_t* code, std::uint64_t origin,
+                                      const ether_arm64::Frame& frame, unsigned rounds,
+                                      unsigned outcome, bool direct_regs, bool private_frame);
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+  struct EtherWideEntry {
+    ether_arm64::WideBlock block;
+    std::array<std::uint8_t, ether_arm64::WideBlock::kMaxBytes> bytes;
+    ether_arm64::NativeCode native;
+    std::uint64_t rip = 0, physical = 0, cr3 = 0, version = 0;
+    unsigned cpl = 0;
+  };
+  std::unique_ptr<EtherWideEntry> ether_arm64_wide_;
+  bool ether_arm64_wide_enabled_ = false;
+  unsigned try_ether_arm64_wide1024();
+#endif
   template <bool ParallelRead = false>
   static unsigned ether_arm64_read(ether_arm64::Frame* frame, std::uint64_t address,
                                   unsigned width) noexcept;
@@ -4264,7 +4297,8 @@ inline unsigned Cpu::try_rep_batch(unsigned budget) {
 #include "x86_rotate_xor_loop.inc"
 #include "x86_affine_ram_rotate_loop.inc"
 
-inline void Cpu::retire_ether_decoded_block(const ether_arm64::Block& block, const std::uint8_t* code,
+template <class Block>
+inline void Cpu::retire_ether_decoded_block(const Block& block, const std::uint8_t* code,
                                             std::uint64_t origin, bool taken, unsigned retired) {
   const auto& last = block.instructions[block.count - 1];
   start_cs_ = segments[CS];

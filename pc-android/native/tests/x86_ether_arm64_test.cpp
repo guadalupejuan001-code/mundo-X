@@ -2643,6 +2643,198 @@ void benchmark() {
             << ",\"translated_blocks\":" << first.stats.translated
             << ",\"native_steps\":" << first.stats.steps << "}\n";
 }
+
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+void wide_native_block_contract() {
+  constexpr unsigned instructions = 1024;
+  constexpr unsigned bytes_per_group = 10;
+  constexpr unsigned groups = instructions / 4;
+  constexpr unsigned body_bytes = groups * bytes_per_group;
+  constexpr auto page_bytes = cosmic_pc::MemoryFabric::kPageSize;
+  static_assert(code % page_bytes == 0 && body_bytes + 1 <= page_bytes);
+  std::array<std::uint8_t, body_bytes + 1> program{};
+  for (unsigned i = 0; i < groups; ++i) {
+    const std::array<std::uint8_t, bytes_per_group> group{
+        0x89, 0xc1,                                      // MOV ECX,EAX.
+        0x31, 0xd3,                                      // XOR EBX,EDX.
+        0x83, 0xc0, std::uint8_t(1 + (i * 19U) % 254U), // ADD EAX, signed imm8.
+        0x48, 0x29, 0xcb};                               // SUB RBX,RCX.
+    std::copy(group.begin(), group.end(), program.begin() + i * bytes_per_group);
+  }
+  program.back() = 0xf4;  // HALT is separate from the translated body.
+
+  PcMachine native, scalar;
+  boot(native, true);
+  boot(scalar, false);
+  native.cpu.enable_ether_arm64_wide1024();
+  for (auto* machine : {&native, &scalar})
+    machine->cpu.memory.write_block(code, program.data(), program.size());
+
+  const auto initialize = [](Cpu& cpu, std::uint64_t address = code) {
+    cpu.eip = address;
+    cpu.halted = false;
+    for (unsigned i = 0; i < cpu.regs.size(); ++i)
+      cpu.regs[i] = 0xfedcba98ffffffffULL - i * 0x1010111ULL;
+    cpu.regs[Cpu::ESP] = stack;
+    cpu.eflags = 2 | Cpu::DF | Cpu::CF | Cpu::AF | Cpu::OF;
+    return cpu.instructions;
+  };
+  const auto normalized = [](Cpu& cpu, std::uint64_t before) {
+    auto state = capture(cpu);
+    state.steps -= before;
+    return state;
+  };
+  const auto run_scalar = [&](unsigned count) {
+    const auto before = initialize(scalar.cpu);
+    for (unsigned i = 0; i < count; ++i)
+      require(scalar.cpu.step() == StepResult::Executed, "wide block scalar reference faulted");
+    return normalized(scalar.cpu, before);
+  };
+  const auto run_native = [&] {
+    for (unsigned attempt = 0; attempt < 8; ++attempt) {
+      const auto before = initialize(native.cpu);
+      const auto stats = native.cpu.ether_arm64_stats();
+      const auto retired = native.cpu.try_ether_arm64_block(instructions);
+      const auto after = native.cpu.ether_arm64_stats();
+      if (after.wide_native_invocations == stats.wide_native_invocations) {
+        require(retired < instructions, "wide grant was counted without an AArch64 entry");
+        continue;
+      }
+      require(after.wide_native_invocations - stats.wide_native_invocations == 1 &&
+                  after.blocks - stats.blocks == 1 && after.steps - stats.steps == instructions &&
+                  retired == instructions && native.cpu.instructions - before == instructions &&
+                  native.cpu.eip == code + body_bytes && !native.cpu.halted && !native.cpu.fault,
+              "one native invocation must retire precisely the complete wide body");
+      return normalized(native.cpu, before);
+    }
+    throw std::runtime_error("the 1024-instruction block never entered native code");
+  };
+
+  const auto original = run_native();
+  require(original == run_scalar(instructions), "wide native and scalar guest state differ");
+  const auto warm = native.cpu.ether_arm64_stats();
+  require(run_native() == original && native.cpu.ether_arm64_stats().translated == warm.translated,
+          "wide native body changed on a warm cache hit");
+  const auto machine_before = initialize(native.cpu);
+  const auto machine_stats = native.cpu.ether_arm64_stats();
+  native.run(instructions);
+  require(normalized(native.cpu, machine_before) == original &&
+              native.cpu.ether_arm64_stats().wide_native_invocations == machine_stats.wide_native_invocations + 1,
+          "normal machine dispatch did not retire the same wide native body once");
+
+  const auto before = initialize(native.cpu);
+  const auto invocations = native.cpu.ether_arm64_stats().wide_native_invocations;
+  const auto short_retired = native.cpu.try_ether_arm64_block(instructions - 1);
+  require(short_retired < instructions && native.cpu.instructions - before == short_retired &&
+              native.cpu.ether_arm64_stats().wide_native_invocations == invocations &&
+              normalized(native.cpu, before) == run_scalar(short_retired),
+          "short grant entered the wide body, exceeded its budget or changed guest state");
+
+  initialize(native.cpu);
+  native.cpu.eflags |= Cpu::TF;
+  const auto stepping = capture(native.cpu);
+  require(native.cpu.try_ether_arm64_block(instructions) == 0 && capture(native.cpu) == stepping,
+          "trap-flag execution bypassed scalar instruction boundaries");
+  initialize(native.cpu);
+  native.cpu.step_trace_hook = [](const auto&) {};
+  const auto tracing = capture(native.cpu);
+  require(native.cpu.try_ether_arm64_block(instructions) == 0 && capture(native.cpu) == tracing &&
+              native.cpu.ether_arm64_stats().wide_native_invocations == invocations,
+          "debug tracing entered native code or changed guest state");
+  native.cpu.step_trace_hook = {};
+
+  constexpr auto edited_byte = (groups - 1) * bytes_per_group + 6;
+  for (auto* machine : {&native, &scalar})
+    machine->cpu.write8(code + edited_byte, program[edited_byte] ^ 0x40);
+  const auto edited = run_native();
+  require(edited.regs[Cpu::EAX] != original.regs[Cpu::EAX] && edited == run_scalar(instructions),
+          "editing a late guest instruction reused stale native code");
+  require(native.cpu.step() == StepResult::Halted && scalar.cpu.step() == StepResult::Halted,
+          "the terminal HALT was not left for the following guest step");
+
+  const auto run_irq = [&](PcMachine& machine) {
+    auto& cpu = machine.cpu;
+    const auto initial = initialize(cpu);
+    const auto entries = cpu.ether_arm64_stats().wide_native_invocations;
+    cpu.eflags |= Cpu::IF;
+    constexpr unsigned irq_at = 513;
+    unsigned ticks = 0, delivered = 0;
+    gate(machine, 0x40);
+    emit(cpu, irq_handler, {0x49, 0xff, 0xc7, 0x48, 0xcf});  // INC R15; IRETQ.
+    machine.device_step_hook = [&] {
+      if (++ticks != irq_at) return;
+      require(cpu.instructions - initial == irq_at - 1 &&
+                  cpu.eip == code + ((irq_at - 1) / 4) * bytes_per_group && cpu.raise_external_irq(0x40),
+              "the guest IRQ missed its instruction boundary");
+      ++delivered;
+    };
+    machine.device_batch_limit_hook = [&](unsigned budget) {
+      return ticks < irq_at ? std::min(budget, irq_at - ticks) : budget;
+    };
+    machine.device_batch_advance_hook = [&](unsigned retired) { ticks += retired; };
+    machine.run(instructions + 3);
+    machine.device_step_hook = {};
+    machine.device_batch_limit_hook = {};
+    machine.device_batch_advance_hook = {};
+    require(delivered == 1 && cpu.halted && !cpu.fault && cpu.instructions - initial == instructions + 3 &&
+                cpu.ether_arm64_stats().wide_native_invocations == entries,
+            "interruptible guest execution admitted the wide body or lost the IRQ");
+    return normalized(cpu, initial);
+  };
+  const auto irq_native = run_irq(native);
+  require(irq_native == run_irq(scalar), "IRQ handling changed the guest state under native translation");
+  std::cout << "PRIME_ETHER_ARM64_WIDE1024_PASS guest_instructions=" << instructions
+            << " guest_bytes=" << body_bytes << " native_entries=1 bounded_grant=1"
+               " trap_flag=1 debug_hook=1 code_edit=1 irq_boundary=1 scalar_state=1 machine_run=1\n";
+
+  // Compare the same body after both engines compile and retain their cache.
+  scalar.cpu.enable_ether_arm64_blocks(true);
+  constexpr auto ordinary_width = arm64::Block::kMaxInstructions;
+  static_assert(ordinary_width % 4 == 0 && instructions % ordinary_width == 0);
+  initialize(scalar.cpu);
+  for (unsigned offset = 0; offset < instructions; offset += ordinary_width)
+    warm_block(scalar.cpu, code + (offset / 4) * bytes_per_group, ordinary_width);
+  struct Measurement { std::int64_t elapsed_ns; std::uint64_t entries, wide_entries; };
+  const auto measure = [&](Cpu& cpu, unsigned bodies) {
+    const auto initial = cpu.instructions;
+    const auto stats = cpu.ether_arm64_stats();
+    const auto start = PcMachine::RunClock::now();
+    for (unsigned i = 0; i < bodies; ++i) {
+      initialize(cpu);
+      for (unsigned left = instructions; left;) {
+        const auto done = cpu.try_ether_arm64_block(left);
+        require(done && done <= left, "warm comparison missed a native block or exceeded its grant");
+        left -= done;
+      }
+    }
+    const auto elapsed = PcMachine::RunClock::now() - start;
+    const auto& after = cpu.ether_arm64_stats();
+    require(cpu.eip == code + body_bytes && cpu.instructions - initial == std::uint64_t(bodies) * instructions &&
+                after.steps - stats.steps == std::uint64_t(bodies) * instructions && after.translated == stats.translated,
+            "native comparison changed the work or missed the warm native path");
+    return Measurement{std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count(),
+                       after.blocks - stats.blocks, after.wide_native_invocations - stats.wide_native_invocations};
+  };
+  constexpr unsigned bodies = 128;
+  const std::array<Cpu*, 2> paths{&scalar.cpu, &native.cpu};
+  for (unsigned trial = 0; trial < 5; ++trial) {
+    std::array<Measurement, 2> samples{};
+    for (unsigned offset = 0; offset < paths.size(); ++offset) {
+      const auto path = (trial + offset) % paths.size();
+      samples[path] = measure(*paths[path], bodies);
+    }
+    const auto equivalent = normalized(native.cpu, native.cpu.instructions) ==
+                            normalized(scalar.cpu, scalar.cpu.instructions);
+    require(samples[0].entries == bodies * instructions / ordinary_width && samples[0].wide_entries == 0 &&
+                samples[1].entries == bodies && samples[1].wide_entries == bodies && equivalent,
+            "warm comparison changed the guest result or number of native entries");
+    std::cout << "PRIME_ETHER_ARM64_WIDE1024_AB {\"trial\":" << (trial + 1)
+              << ",\"guest_steps\":" << bodies * instructions << ",\"ordinary_ns\":" << samples[0].elapsed_ns
+              << ",\"wide_ns\":" << samples[1].elapsed_ns << ",\"ordinary_entries\":" << samples[0].entries
+              << ",\"wide_entries\":" << samples[1].entries << "}\n";
+  }
+}
+#endif
 }  // namespace
 
 static void ram_view_contract() {
@@ -2690,6 +2882,9 @@ int main() {
       return 0;
     }
     require(native.stats.steps > 4000 && native.stats.hits > 0, "ARM64 loop did not execute");
+#if defined(MUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT)
+    wide_native_block_contract();
+#endif
     boot_hot_instruction_contract();
     register_state_vector_contract();
     live_signed_loop_projection_contract();

@@ -1,0 +1,94 @@
+name: Prime R110 ARM64 1024-instruction block
+
+on:
+  push:
+    branches: [experiment/r110-arm64-1024-blocks]
+    paths:
+      - .github/workflows/prime-r110-arm64-wide1024.yml
+      - pc-android/native/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the exact ARM64 test with and without the experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p out evidence
+          {
+            git rev-parse HEAD
+            uname -a
+            c++ --version
+            lscpu
+          } > evidence/runner.txt
+          flags=(-O2 -DNDEBUG -DMUNDO_X_PC_STATE_RAM=1 -std=c++17 -frounding-math -pthread -I native/include)
+          test_source=pc-android/native/tests/x86_ether_arm64_test.cpp
+          c++ "${flags[@]}" "$test_source" -o out/control
+          c++ "${flags[@]}" -DMUNDO_X_ETHER_ARM64_WIDE1024_EXPERIMENT=1 "$test_source" -o out/wide1024
+          sha256sum "$test_source" pc-android/native/{x86_cpu.hpp,x86_ether_arm64.hpp,x86_ether_arm64.inc} \
+            out/{control,wide1024} > evidence/sha256.txt
+          file out/{control,wide1024} > evidence/binaries.txt
+      - name: Run both variants on the same native ARM64 CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          cpu="$(python3 -c 'import os; print(min(os.sched_getaffinity(0)))')"
+          printf 'pinned_cpu=%s\n' "$cpu" >> evidence/runner.txt
+          for variant in control wide1024; do
+            /usr/bin/time -v -o "evidence/$variant.time" taskset -c "$cpu" "out/$variant" \
+              | tee "evidence/$variant.log"
+            grep -q '^PRIME_C03_ARM64_PASS ' "evidence/$variant.log"
+          done
+          if grep -q '^PRIME_ETHER_ARM64_WIDE1024_PASS ' evidence/control.log; then
+            echo 'The unflagged control reported the experimental path' >&2
+            exit 1
+          fi
+          grep -Ex '^PRIME_ETHER_ARM64_WIDE1024_PASS guest_instructions=1024 guest_bytes=[1-9][0-9]* native_entries=1 bounded_grant=1 trap_flag=1 debug_hook=1 code_edit=1 irq_boundary=1 scalar_state=1 machine_run=1' \
+            evidence/wide1024.log > evidence/one-native-block.txt
+          test "$(wc -l < evidence/one-native-block.txt)" -eq 1
+      - name: Compare the equal-work timings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from statistics import median
+
+          evidence = Path("evidence")
+          tag = "PRIME_ETHER_ARM64_WIDE1024_AB "
+          pairs = [json.loads(line.removeprefix(tag))
+                   for line in (evidence / "wide1024.log").read_text().splitlines()
+                   if line.startswith(tag)]
+          assert [pair["trial"] for pair in pairs] == list(range(1, 6))
+          assert len({pair["guest_steps"] for pair in pairs}) == 1
+          assert all(pair["ordinary_ns"] > 0 and pair["wide_ns"] > 0
+                     and pair["ordinary_entries"] > pair["wide_entries"] > 0
+                     and pair["wide_entries"] * 1024 == pair["guest_steps"] for pair in pairs)
+          result = {
+              "scope": "equal-work synthetic x86 register body on native Linux ARM64",
+              "ordinary_median_ns": median(pair["ordinary_ns"] for pair in pairs),
+              "wide_median_ns": median(pair["wide_ns"] for pair in pairs),
+              "paired_speedup": median(pair["ordinary_ns"] / pair["wide_ns"] for pair in pairs),
+              "pairs": pairs,
+          }
+          output = json.dumps(result, indent=2) + "\n"
+          (evidence / "timings.json").write_text(output)
+          print(output, end="")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prime-r110-arm64-wide1024
+          path: evidence
+          if-no-files-found: error
