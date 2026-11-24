@@ -514,6 +514,47 @@ void nonmaskable_interrupts() {
   std::cout << "X86_NMI_PASS mov_ss=1 wake_if_clear=1 nested_block=1 iret=1 iret_fault=1 gate_fault=1 init=1\n";
 }
 
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+void observe_guest_faults() {
+  Cpu cpu(4U << 20);
+  configure(cpu);
+  cpu.configure_topology({2, 2}, 2);
+  constexpr std::uint64_t idt = 0x1b000, handler = 0xb000, missing = 0x200000;
+  cpu.idtr = {0xfff, idt};
+  for (const auto vector : {2U, 14U, 0xd1U}) {
+    cpu.write64(idt + 16 * vector, handler | (std::uint64_t(cpu.segments[Cpu::CS]) << 16) | (0x8eULL << 40));
+    cpu.write64(idt + 16 * vector + 8, 0);
+  }
+  program(cpu, {0x48, 0x8b, 0x03}); // MOV RAX, [RBX].
+  cpu.regs[Cpu::EBX] = missing;
+  cpu.regs[Cpu::ESP] = kStack;
+  cpu.set_apic_task_priority(0xe0);
+  cpu.set_flag(Cpu::IF, true);
+  static std::array<Cpu::ExceptionEvent, 4> events{};
+  static unsigned count = 0;
+  Cpu::exception_event_hook = [](const Cpu::ExceptionEvent& event) noexcept {
+    if (count < events.size()) events[count++] = event;
+  };
+  struct RemoveHook { ~RemoveHook() { Cpu::exception_event_hook = nullptr; } } remove_hook;
+  step(cpu);
+  const auto& page = events[0];
+  check(count == 1 && page.delivered && !page.hardware && page.apic_id == 2 && page.vector == 14 &&
+            page.original_vector == 14 && page.error == 0 && page.rip == kKernel &&
+            page.handler_rip == handler && page.handler_rsp == cpu.regs[Cpu::ESP] && page.linear == missing &&
+            page.cr2 == missing && page.cr3 == cpu.cr3 && page.cr8 == 14 && (page.rflags & Cpu::IF) &&
+            page.gs_base == kUserGs && page.kernel_gs_base == kKernelGs && page.regs[Cpu::EBX] == missing &&
+            page.regs[Cpu::ESP] == kStack && page.byte_count == 3 && page.bytes[0] == 0x48 && !cpu.fault,
+        "event records the handled #PF and its pre-dispatch CPU state");
+  check(cpu.raise_nmi() && count == 2 && events[1].hardware && events[1].delivered &&
+            events[1].vector == 2 && events[1].rip == handler && !(events[1].rflags & Cpu::IF) &&
+            events[1].byte_count == 0, "event records actual NMI delivery with IF clear");
+  cpu.set_flag(Cpu::IF, true);
+  check(cpu.raise_external_irq(0xd1) && count == 2 && !cpu.step_trace_hook && !cpu.irq_trace_hook,
+        "event observer does not collect ordinary IRQs or depend on full tracing");
+  std::cout << "X86_EXCEPTION_EVENTS_PASS apic=2 pf=1 cr8=14 nmi=1 ordinary_irq_filtered=1\n";
+}
+#endif
+
 void load_segment_limit() {
   Cpu cpu(4U << 20);
   configure(cpu);
@@ -623,6 +664,9 @@ int main() {
     tsc_adjust_register();
     cache_writeback();
     nonmaskable_interrupts();
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+    observe_guest_faults();
+#endif
     load_segment_limit();
     Cpu debug_cpu(4U << 20);
     boot(debug_cpu);
