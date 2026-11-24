@@ -625,6 +625,119 @@ void streaming_sse_fill_rounds() {
     std::cout << "ETHER_STREAMING_SSE_FILL_PASS full_batch_steps=66 mid_grant=1 partial_page_fault=1 sfence=1\n";
 }
 
+void streaming_sse_triplet_rounds() {
+    constexpr unsigned rounds = 8, round_steps = 6, round_bytes = 48;
+    constexpr std::uint64_t page_boundary = 0x2d000;
+    constexpr auto destination = page_boundary - 3 * round_bytes;
+    constexpr std::uint8_t guest[]{
+        0x66,0x0f,0xe7,0x11, 0x66,0x0f,0xe7,0x49,0x10, 0x66,0x0f,0xe7,0x41,0x20,
+        0x48,0x83,0xc1,0x30, 0x49,0x3b,0xc8, 0x75,0xe9, 0x0f,0xae,0xf8,0xf4};
+    constexpr unsigned body_bytes = sizeof(guest) - 4;
+    const auto seed = [&](PcMachine& pc, unsigned count, std::uint64_t start) {
+        prepare_movntdq(pc, count, start);
+        auto& cpu = pc.cpu;
+        cpu.memory.write_block(entry, guest, sizeof(guest));
+        cpu.regs[Cpu::R8] = start + count * round_bytes;
+        for (unsigned lane = 0; lane < 3; ++lane)
+            for (unsigned byte = 0; byte < 16; ++byte)
+                cpu.xmm[lane][byte] = std::uint8_t(0x20 + lane * 0x30 + byte);
+        for (unsigned i = 0; i < round_steps; ++i)
+            require(cpu.step() == StepResult::Executed, "could not seed the streaming SSE triplet");
+        require(cpu.eip == entry && cpu.streaming_sse_fill_loop_batch_candidate(),
+                "streaming SSE triplet did not recognize the taken backedge");
+    };
+
+    PcMachine fast(4U << 20), scalar(4U << 20);
+    for (auto* pc : {&fast, &scalar}) {
+        seed(*pc, rounds, destination);
+        pc->cpu.write8(destination - 1, 0x23);
+        pc->cpu.write8(destination + rounds * round_bytes, 0x86);
+    }
+    auto& cpu = fast.cpu;
+    const auto& expected = scalar.cpu;
+    const auto retired_before = cpu.instructions;
+    const auto untouched = cpu.regs[Cpu::ECX];
+    const auto rejected = [&](unsigned budget) {
+        const auto registers = cpu.regs;
+        const auto flags = cpu.eflags;
+        require(!cpu.try_counter_loop_batch(budget) && cpu.instructions == retired_before &&
+                    cpu.regs == registers && cpu.eflags == flags && cpu.eip == entry && !cpu.fault &&
+                    cpu.read64(untouched) == 0,
+                "a rejected streaming SSE triplet changed architectural state or memory");
+    };
+    rejected(2 * round_steps - 1);
+    ++cpu.regs[Cpu::R8];
+    rejected(2 * round_steps);
+    --cpu.regs[Cpu::R8];
+    cpu.cr0 |= 8U;
+    rejected(2 * round_steps);
+    cpu.cr0 &= ~8U;
+    cpu.write8(entry + 3, 0x09); // Change XMM2 to XMM1 without changing the backedge.
+    rejected(2 * round_steps);
+    cpu.write8(entry + 3, guest[3]);
+
+    unsigned ticks = 0, device_grant = 4 * round_steps;
+    fast.enable_boot_acceleration();
+    fast.device_step_hook = [&] { ++ticks; };
+    fast.device_batch_limit_hook = [&](unsigned grant) { return std::min(grant, device_grant); };
+    fast.device_batch_advance_hook = [&](unsigned extra) {
+        require(extra < device_grant, "streaming SSE triplet crossed its device grant");
+        ticks += extra;
+    };
+    const auto run = [&](unsigned steps) {
+        const auto prior_steps = cpu.instructions;
+        const auto prior_ticks = ticks;
+        fast.run(steps);
+        scalar.run(steps);
+        require(cpu.instructions - prior_steps == steps && ticks - prior_ticks == steps &&
+                    cpu.clock_cycles() == expected.clock_cycles() && cpu.eip == expected.eip &&
+                    cpu.regs == expected.regs && cpu.eflags == expected.eflags && cpu.xmm == expected.xmm &&
+                    cpu.last_decoded_bytes() == expected.last_decoded_bytes() && !cpu.fault && !expected.fault,
+                "streaming SSE triplet changed x86 state or device accounting");
+        std::array<std::uint8_t, rounds * round_bytes + 2> actual, oracle;
+        cpu.memory.read_block(destination - 1, actual.data(), actual.size());
+        expected.memory.read_block(destination - 1, oracle.data(), oracle.size());
+        require(actual == oracle && actual.front() == 0x23 && actual.back() == 0x86,
+                "streaming SSE triplet changed destination or guard bytes");
+    };
+    run(2 * round_steps);
+    require(cpu.regs[Cpu::ECX] == page_boundary &&
+                fast.boot_acceleration().streaming_sse_fill_loop_steps == 2 * round_steps,
+            "streaming SSE triplet missed two complete rounds at the end of a page");
+    device_grant = 7;
+    run(7);
+    require(cpu.eip == entry + 4 && fast.boot_acceleration().streaming_sse_fill_loop_steps == 2 * round_steps,
+            "streaming SSE triplet failed to fall back inside a short device grant");
+    run(5);
+    require(cpu.eip == entry, "streaming SSE triplet did not resume on the next backedge");
+    device_grant = 4 * round_steps;
+    run(3 * round_steps);
+    require(cpu.eip == entry + body_bytes && cpu.regs[Cpu::ECX] == cpu.regs[Cpu::R8] &&
+                cpu.flag(Cpu::ZF) && fast.boot_acceleration().streaming_sse_fill_loop_steps == 5 * round_steps,
+            "streaming SSE triplet consumed the tail or retired the wrong rounds");
+    for (unsigned i = 0; i < rounds * round_bytes; ++i)
+        require(cpu.read8(destination + i) == cpu.xmm[2 - (i % round_bytes) / 16][i % 16],
+                "streaming SSE triplet wrote the wrong XMM lane");
+    run(1); // SFENCE remains the next ordinary instruction.
+    require(cpu.eip == entry + body_bytes + 3, "streaming SSE triplet skipped SFENCE");
+
+    PcMachine boundary(4U << 20);
+    constexpr std::uint64_t end = 0x200000;
+    seed(boundary, 6, end - round_bytes - 32);
+    auto& edge = boundary.cpu;
+    edge.write64(0x3008, 0); // Third store of the next triplet encounters an absent mapping.
+    const auto edge_steps = edge.instructions;
+    require(!edge.try_counter_loop_batch(4 * round_steps) && edge.instructions == edge_steps &&
+                edge.eip == entry && edge.read64(end - 32) == 0,
+            "streaming SSE triplet committed a rejected cross-page round");
+    require(edge.step() == StepResult::Executed && edge.step() == StepResult::Executed &&
+                edge.read64(end - 32) != 0 && edge.read64(end - 16) != 0 &&
+                edge.step() == StepResult::Faulted && edge.fault && edge.fault->eip == entry + 9 &&
+                edge.cr2 == end && edge.read64(end) == 0,
+            "streaming SSE triplet did not preserve the precise cross-page fault and prior stores");
+    std::cout << "ETHER_STREAMING_SSE_TRIPLET_PASS full_batch_steps=30 lanes=3 device_bound=1 data_fault=1\n";
+}
+
 void movntdq_store_batches() {
     PcMachine scalar(4U << 20), fast(4U << 20);
     for (auto* pc : {&scalar, &fast}) {
@@ -1271,6 +1384,7 @@ int main(int argc, char** argv) {
         sse_copy_loops();
         sse_fill_loop();
         streaming_sse_fill_rounds();
+        streaming_sse_triplet_rounds();
         movntdq_store_batches();
         mixed_movntdq_registers();
         wide_movntdq_batch();
