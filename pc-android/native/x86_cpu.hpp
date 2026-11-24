@@ -380,6 +380,23 @@ class Cpu {
   };
   std::function<void(const IrqTrace&)> irq_trace_hook;
 
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+  struct ExceptionEvent {
+    unsigned apic_id, vector, original_vector, error, cr8;
+    std::uint16_t cs, opcode;
+    std::uint64_t rip, handler_rip, linear, cr2, cr3, rflags, gs_base, kernel_gs_base, steps, handler_rsp;
+    std::array<std::uint64_t, 16> regs;
+    bool hardware, delivered;
+    std::array<std::uint8_t, 15> bytes;
+    unsigned byte_count;
+    std::array<std::uint8_t, 128> caller_stack;
+    unsigned caller_stack_bytes;
+  };
+  // Diagnostic builds install this observer before running any vCPU and clear
+  // it after all workers have stopped. Callbacks can arrive from multiple CPUs.
+  inline static void (*exception_event_hook)(const ExceptionEvent&) noexcept = nullptr;
+#endif
+
   // true: the host BIOS handled INT, with EIP already past the instruction.
   // false: execute the guest IVT handler with a real interrupt stack frame.
   std::function<bool(Cpu&, std::uint8_t)> interrupt_hook;
@@ -934,6 +951,9 @@ class Cpu {
             transaction_ = false; clear_write_journal();
             if (!retired) ++instructions;
             delivered_vector = vector;
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+            publish_exception_event(saved, vector, vector, t.error, t.address, false, true);
+#endif
             fault.reset();
             return StepResult::Executed;
           }
@@ -966,6 +986,9 @@ class Cpu {
             delivered_vector = vector;
             delivered_error = error;
             delivered_linear = address;
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+            publish_exception_event(saved, vector, exception_vector(t.code), error, address, false, true);
+#endif
             fault.reset();
             return StepResult::Executed;
           } catch (const Trap& nested) {
@@ -992,6 +1015,9 @@ class Cpu {
                       t.reason + (shutdown ? " (guest IDT delivery failed; triple fault)"
                                            : " (guest IDT delivery stopped)"), t.address, t.error};
         attach_idt_attempts();
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+        publish_exception_event(saved, vector, exception_vector(t.code), error, address, false, false);
+#endif
         return StepResult::Faulted;
       }
     } catch (const MemoryFabric::BudgetExceeded& e) {
@@ -1055,6 +1081,9 @@ class Cpu {
       halted=false;
       pause_wait_.repeats = 0;
       transaction_=false;clear_write_journal();
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+      if (nmi) publish_exception_event(before, vector, vector, 0, 0, true, true);
+#endif
       if(irq_trace_hook) {
         try {
           irq_trace_hook(IrqTrace{vector,before.segments[CS],segments[CS],
@@ -1071,6 +1100,9 @@ class Cpu {
       fault=Fault{FaultCode::HostError,start_cs_,start_ip_,0,{},std::string(description)+e.what()};
     }
     attach_idt_attempts();
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+    if (nmi) publish_exception_event(before, vector, vector, fault->error_code, fault->linear_address, true, false);
+#endif
     return false;
   }
 
@@ -1171,6 +1203,46 @@ class Cpu {
             fpu_control, fpu_status, fpu_tags, fpu_opcode, fpu_cs, fpu_ds, fpu_ip, fpu_dp,
             tsc_offset_, apic_base_, apic_task_priority_};
   }
+#if defined(MUNDO_X_PC_EXCEPTION_EVENTS)
+  void publish_exception_event(const Snapshot& before, unsigned vector, unsigned original_vector,
+                               unsigned error, std::uint64_t linear,
+                               bool hardware, bool delivered) noexcept {
+    if (!exception_event_hook) return;
+    ExceptionEvent event{};
+    event.apic_id = apic_id();
+    event.vector = vector;
+    event.original_vector = original_vector;
+    event.error = error;
+    event.cr8 = before.apic_task_priority >> 4;
+    event.cs = before.segments[CS];
+    event.opcode = hardware ? 0 : opcode_;
+    event.rip = start_ip_;
+    event.handler_rip = delivered ? eip : 0;
+    event.linear = linear;
+    event.cr2 = cr2;
+    event.cr3 = before.cr3;
+    event.rflags = before.eflags;
+    event.gs_base = before.gs_base;
+    event.kernel_gs_base = before.system_call_msrs.kernel_gs_base;
+    event.steps = instructions;
+    event.handler_rsp = delivered ? regs[ESP] : 0;
+    event.regs = before.regs;
+    event.hardware = hardware;
+    event.delivered = delivered;
+    if (!hardware) {
+      event.byte_count = std::min(decoded_.size(), event.bytes.size());
+      std::copy_n(decoded_.begin(), event.byte_count, event.bytes.begin());
+      // Capture the interrupted kernel frame only when a page fault occurs
+      // at elevated priority and the handler retains the guest address space.
+      if (vector == 14 && event.cr8 >= 2 && (event.cs & 3) == 0 && cpl() == 0 &&
+          before.cache[CS].long_code && is_long_mode() && before.cr3 == cr3) {
+        event.caller_stack_bytes = read_inspected_ram(before.regs[ESP], event.caller_stack.data(),
+                                                      event.caller_stack.size(), Access::Read);
+      }
+    }
+    exception_event_hook(event);
+  }
+#endif
   struct Operand {
     bool is_register = false;
     unsigned index = 0;
@@ -1218,6 +1290,8 @@ class Cpu {
   std::uint8_t apic_task_priority_ = 0;
   static constexpr std::uint64_t kApicBsp = 1U << 8, kApicEnable = 1U << 11;
   enum class Access { Read, Write, Execute };
+  unsigned read_inspected_ram(std::uint64_t start, std::uint8_t* bytes, unsigned count,
+                              Access access) noexcept;
   std::optional<std::uint64_t> counted_loop_ram_address(unsigned segment, std::uint64_t offset,
                                                         unsigned bytes, Access access);
   std::uint64_t apic_base_ = kLocalApicAddress | kApicBsp | kApicEnable;
@@ -4153,6 +4227,24 @@ inline std::uint64_t Cpu::translate(std::uint64_t address, Access access, bool* 
 
 #include "x86_platform_profile.inc"
 
+inline unsigned Cpu::read_inspected_ram(std::uint64_t start, std::uint8_t* bytes, unsigned count,
+                                        Access access) noexcept {
+  unsigned done = 0;
+  try {
+    for (; done < count && start <= UINT64_MAX - done;) {
+      const auto address = start + done;
+      const auto chunk = std::min(count - done, 4096U - unsigned(address & 0xfffU));
+      const auto physical = translate<true>(address, access);
+      if (!bulk_ram_range(physical, chunk)) break;
+      memory.read_block(bus_address(physical), bytes + done, chunk);
+      done += chunk;
+    }
+  } catch (const std::exception&) {
+    // Preserve the readable prefix and the previously reported guest fault.
+  }
+  return done;
+}
+
 inline void Cpu::capture_interrupt_origin() noexcept {
   auto& origin = fault->interrupt_origin.emplace();
   origin.rip = fault->eip;
@@ -4163,24 +4255,8 @@ inline void Cpu::capture_interrupt_origin() noexcept {
       recent_near_calls_.size();
   for (unsigned i = 0; i < origin.call_count; ++i)
     origin.recent_calls[i] = recent_near_calls_[(first + i) % recent_near_calls_.size()];
-  const auto read = [&](std::uint64_t start, std::uint8_t* bytes, unsigned count, Access access) {
-    unsigned done = 0;
-    try {
-      for (; done < count && start <= UINT64_MAX - done;) {
-        const auto address = start + done;
-        const auto chunk = std::min(count - done, 4096U - unsigned(address & 0xfffU));
-        const auto physical = translate<true>(address, access);
-        if (!bulk_ram_range(physical, chunk)) break;
-        memory.read_block(bus_address(physical), bytes + done, chunk);
-        done += chunk;
-      }
-    } catch (const std::exception&) {
-      // Preserve any readable prefix and the original terminal fault.
-    }
-    return done;
-  };
-  origin.code_bytes = read(origin.rip, origin.code.data(), origin.code.size(), Access::Execute);
-  origin.stack_bytes = read(origin.rsp, origin.stack.data(), origin.stack.size(), Access::Read);
+  origin.code_bytes = read_inspected_ram(origin.rip, origin.code.data(), origin.code.size(), Access::Execute);
+  origin.stack_bytes = read_inspected_ram(origin.rsp, origin.stack.data(), origin.stack.size(), Access::Read);
 }
 
 inline unsigned Cpu::try_rep_batch(unsigned budget) {
