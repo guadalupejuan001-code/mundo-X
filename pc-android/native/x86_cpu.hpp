@@ -5738,6 +5738,7 @@ inline void Cpu::extended() {
       const auto subleaf = std::uint32_t(regs[ECX]);
       std::uint32_t eax=0,ebx=0,ecx=0,edx=0;
       const auto logical = topology_.logical_processors();
+      constexpr std::uint32_t cache_line_bytes = 64;
       const auto word=[](const char* text) {
         return std::uint32_t(std::uint8_t(text[0])) |
             (std::uint32_t(std::uint8_t(text[1])) << 8) |
@@ -5754,7 +5755,7 @@ inline void Cpu::extended() {
         // TSC, MSR, PAE, CX8, CMOV, MMX, FXSR, SSE and SSE2.
         edx=(1U<<4)|(1U<<5)|(1U<<6)|(1U<<8)|(1U<<15)|(1U<<23)|(1U<<24)|(1U<<25)|(1U<<26);
         if (windows_x64_profile_) {
-          ebx |= 8U << 8; // CLFLUSH line size in units of eight bytes.
+          ebx |= (cache_line_bytes / 8) << 8; // CLFLUSH size in units of eight bytes.
           // x87, DE, PSE, MCE, MTRR, PGE, MCA, PAT and CLFLUSH.
           edx |= (1U<<0)|(1U<<2)|(1U<<3)|(1U<<7)|(1U<<12)|(1U<<13)|
                  (1U<<14)|(1U<<16)|(1U<<19);
@@ -5763,6 +5764,28 @@ inline void Cpu::extended() {
         if (logical > 1) edx |= 1U << 28; // Logical processors share the package.
         ecx=(1U<<13); // CMPXCHG16B guest primitive
 
+      }else if(leaf==4){
+        struct VirtualCache {
+          std::uint32_t type, level, ways, sets;
+          bool package_shared;
+        };
+        // Guest cache geometry is fixed and independent of the host CPU.
+        // L1 data, L1 instruction, unified L2 and package-wide unified L3.
+        static constexpr std::array<VirtualCache, 4> caches{{
+          {1, 1,  8,   64, false}, // 32 KiB
+          {2, 1,  8,   64, false}, // 32 KiB
+          {3, 2,  8,  512, false}, // 256 KiB
+          {3, 3, 16, 8192, true},  // 8 MiB
+        }};
+        if (subleaf < caches.size()) {
+          const auto& cache = caches[subleaf];
+          const auto sharing = cache.package_shared ? logical : topology_.threads_per_core;
+          eax = cache.type | (cache.level << 5) | (1U << 8) |
+                ((sharing - 1U) << 14) | ((topology_.cores - 1U) << 26);
+          // One physical partition, encoded as zero in EBX[21:12].
+          ebx = (cache_line_bytes - 1U) | ((cache.ways - 1U) << 22);
+          ecx = cache.sets - 1U;
+        }
       }else if(leaf==0x0bU && logical > 1) {
         edx=apic_id_;
         ecx=subleaf & 255U;
